@@ -1,0 +1,118 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Скафандр астронавигатора</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#0d0f13;--card:#15181e;--ink:#e6e9ee;--mute:#8e97a2;--red:#c8372d}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,Segoe UI,sans-serif;margin:0;padding:16px}
+h1{font-size:20px;margin:0 0 4px}.lead{color:var(--mute);max-width:1050px;margin:0 0 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;max-width:1500px}
+.card{background:var(--card);border-radius:12px;padding:12px 14px}
+.card h2{font-size:16px;margin:0}.card h2 small{color:var(--mute);font-weight:400}
+.fig{background:linear-gradient(#232833,#12151b);border-radius:8px;margin:8px 0}
+.fig svg{width:100%;height:auto;display:block}
+ul{margin:4px 0;padding-left:18px}li{margin:2px 0}
+.rig{font-size:12.5px;color:#c3ccd6;border-left:3px solid var(--red);padding:2px 8px;margin-top:6px}
+</style></head><body>
+<h1>Скафандр астронавигатора «Тантры» — эскизы, вариант 2</h1>
+<p class="lead">Красно-белый. Без ретрофутуризма и без шаров: рабочая одежда, а не костюм для плаката. Основа у всех вариантов — механическое противодавление (упругая ткань держит давление на теле, газ только в шлеме; реальная линия — MIT BioSuit). От «Интерстеллара» — практичность: ткань, модули, компактный шлем. Инженерный упор: вход сзади через ранец-люк, рубленый пульт на груди с физическими переключателями, зеркальце на запястье, ремонтопригодность в поле. Никаких флагов и стран — только знак экспедиции: «37 ЗВЁЗДНАЯ». Фигура — девушка-астронавигатор, рост 1,70 м, спереди, сбоку и сзади в одном масштабе.</p>
+<div class="grid" id="root"></div>
+<script>
+const NS='http://www.w3.org/2000/svg';
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+const W='#ece9e4',W2='#d6d2cc',R='#c8372d',R2='#9e2a22',G='#3a3f46',G2='#262a30',VIS='rgba(150,200,235,0.22)';
+// female skeleton, metres (x lateral, y up, z forward)
+const SK={head:[0,1.555,0.02],neck:[0,1.44,0],sh:[0.175,1.38,0],el:[0.205,1.10,-0.02],wr:[0.215,0.86,0.04],
+  hip:[0.095,0.90,0],kn:[0.10,0.48,0.03],an:[0.095,0.08,-0.01]};
+const S=180,TOP=1.8;
+const X=(v,ox)=>ox+v*S, Y=v=>(TOP-v)*S;
+function cap(g,a,b,w,col,ox,side){const ax=side?a[2]:a[0],bx=side?b[2]:b[0];el('line',{x1:X(ax,ox),y1:Y(a[1]),x2:X(bx,ox),y2:Y(b[1]),stroke:col,'stroke-width':w*S,'stroke-linecap':'round'},g);}
+const mir=p=>[-p[0],p[1],p[2]];
+// torso outline (front): shoulders, bust, waist, hips
+function torsoFront(g,ox,col){const pts=[[-0.17,1.40],[-0.19,1.33],[-0.165,1.20],[-0.13,1.08],[-0.15,0.98],[-0.165,0.90],[-0.12,0.82],[0,0.80],[0.12,0.82],[0.165,0.90],[0.15,0.98],[0.13,1.08],[0.165,1.20],[0.19,1.33],[0.17,1.40],[0.06,1.45],[-0.06,1.45]];
+  el('path',{d:'M'+pts.map(p=>X(p[0],ox)+','+Y(p[1])).join(' L')+' Z',fill:col,'stroke-linejoin':'round',stroke:col,'stroke-width':4},g);}
+function torsoSide(g,ox,col){const pts=[[-0.07,1.44],[-0.10,1.36],[-0.095,1.20],[-0.075,1.08],[-0.10,0.95],[-0.085,0.82],[0.06,0.80],[0.085,0.92],[0.06,1.06],[0.10,1.20],[0.11,1.28],[0.07,1.40],[0.03,1.45]];
+  el('path',{d:'M'+pts.map(p=>X(p[0],ox)+','+Y(p[1])).join(' L')+' Z',fill:col,'stroke-linejoin':'round',stroke:col,'stroke-width':4},g);}
+function figure(g,ox,view,c){const side=view==='side';
+  const legs=()=>{[1,-1].forEach(sd=>{const f=p=>sd>0?p:mir(p);cap(g,f(SK.hip),f(SK.kn),0.12,c.leg,ox,side);cap(g,f(SK.kn),f(SK.an),0.09,c.leg,ox,side);
+    const a=f(SK.an);el('path',{d:side?`M${X(-0.06,ox)},${Y(0.02)} L${X(0.13,ox)},${Y(0.02)} L${X(0.10,ox)},${Y(0.09)} L${X(-0.05,ox)},${Y(0.12)} Z`:`M${X(a[0]-0.055,ox)},${Y(0.0)} L${X(a[0]+0.055,ox)},${Y(0.0)} L${X(a[0]+0.05,ox)},${Y(0.12)} L${X(a[0]-0.05,ox)},${Y(0.12)} Z`,fill:c.boot},g);
+    if(c.knee){const k=f(SK.kn);el('circle',{cx:X(side?k[2]+0.03:k[0],ox),cy:Y(k[1]),r:0.045*S,fill:c.knee},g);}});};
+  const arms=()=>{[1,-1].forEach(sd=>{const f=p=>sd>0?p:mir(p);cap(g,f(SK.sh),f(SK.el),0.075,c.arm,ox,side);cap(g,f(SK.el),f(SK.wr),0.065,c.arm,ox,side);
+    const w=f(SK.wr);el('ellipse',{cx:X(side?w[2]+0.01:w[0]*1.02,ox),cy:Y(w[1]-0.06),rx:0.033*S,ry:0.052*S,fill:c.glove},g);
+    el('line',{x1:X(side?w[2]-0.04:w[0]-0.04,ox),y1:Y(w[1]+0.02),x2:X(side?w[2]+0.04:w[0]+0.04,ox),y2:Y(w[1]+0.02),stroke:c.cuff,'stroke-width':0.03*S},g);});};
+  legs();if(side)torsoSide(g,ox,c.torso);else torsoFront(g,ox,c.torso);arms();}
+// compact helmet: hard shell back/top, clear visor front and top
+function helmet(g,ox,view,c){const side=view==='side',back=view==='back';const cx=X(side?0.015:0,ox),cy=Y(1.56);
+  const rw=(side?0.125:0.115)*S,rh=0.14*S;
+  el('rect',{x:cx-rw,y:cy-rh,width:2*rw,height:2*rh+0.02*S,rx:rw*0.85,fill:c.shell},g);
+  if(!back){ // face
+    el('ellipse',{cx:cx+(side?0.02*S:0),cy:cy+0.005*S,rx:(side?0.07:0.068)*S,ry:0.09*S,fill:'#d8b39a'},g);
+    el('path',{d:side?`M${cx-0.08*S},${cy-0.05*S} Q${cx+0.02*S},${cy-0.12*S} ${cx+0.08*S},${cy-0.06*S} L${cx-0.02*S},${cy+0.06*S} Z`:`M${cx-0.075*S},${cy+0.03*S} Q${cx-0.07*S},${cy-0.11*S} ${cx},${cy-0.105*S} Q${cx+0.07*S},${cy-0.11*S} ${cx+0.075*S},${cy+0.03*S} L${cx+0.06*S},${cy-0.04*S} L${cx-0.06*S},${cy-0.04*S} Z`,fill:'#8a3b24'},g);
+    const vx=side?cx-0.01*S:cx-rw*0.82,vw=side?rw*1.1:rw*1.64;
+    el('rect',{x:vx,y:cy-rh*0.82,width:vw,height:rh*1.55,rx:rw*0.6,fill:VIS,stroke:'rgba(220,240,255,0.8)','stroke-width':1.2},g);
+    el('path',{d:`M${vx+vw*0.18},${cy-rh*0.55} Q${vx+vw*0.4},${cy-rh*0.78} ${vx+vw*0.72},${cy-rh*0.7}`,stroke:'rgba(255,255,255,0.75)','stroke-width':2,fill:'none','stroke-linecap':'round'},g);}
+  el('rect',{x:cx-rw*0.9,y:cy-rh*1.02,width:rw*1.8,height:0.018*S,rx:3,fill:c.stripe},g);   // red crown stripe
+  el('rect',{x:cx-0.13*S,y:Y(1.435),width:0.26*S,height:0.03*S,rx:4,fill:G},g);                 // neck ring
+  if(c.lamp&&!back){el('rect',{x:cx+(side?0.09:0.085)*S,y:cy-0.03*S,width:0.02*S,height:0.045*S,rx:2,fill:'#fff3c4'},g);}}
+function marking(g,ox,y,txt,col,size){const t=el('text',{x:X(0,ox),y:Y(y),'text-anchor':'middle',fill:col,'font-size':size||9,'font-weight':700,'font-family':'Segoe UI, Arial'},g);t.textContent=txt;}
+function panel(g,ox,c){const x=X(-0.075,ox),y=Y(1.27);el('rect',{x,y,width:0.15*S,height:0.09*S,rx:3,fill:G,stroke:W2,'stroke-width':0.8},g);
+  [0,1,2].forEach(i=>el('rect',{x:x+6+i*0.042*S,y:y+5,width:0.03*S,height:0.02*S,rx:1.5,fill:i===1?R:'#8fd0e0'},g));
+  el('rect',{x:x+6,y:y+0.05*S,width:0.13*S-6,height:0.012*S,fill:'#556',rx:1},g);}
+function beltStripes(g,ox,view){const side=view==='side';el('rect',{x:X(side?-0.09:-0.14,ox),y:Y(0.86),width:(side?0.18:0.28)*S,height:0.035*S,fill:G2},g);}
+function backpack(g,ox,view,c){if(view==='side'){el('rect',{x:X(-0.23,ox),y:Y(1.40),width:0.14*S,height:0.44*S,rx:8,fill:c.pack,stroke:W2,'stroke-width':0.8},g);
+    el('rect',{x:X(-0.235,ox),y:Y(1.27),width:0.02*S,height:0.18*S,fill:R},g);}
+  if(view==='back'){el('rect',{x:X(-0.16,ox),y:Y(1.42),width:0.32*S,height:0.46*S,rx:10,fill:c.pack,stroke:W2,'stroke-width':1},g);
+    // Orlan-style rear entry hatch: hinge on the side, locking lever
+    el('rect',{x:X(-0.13,ox),y:Y(1.37),width:0.26*S,height:0.36*S,rx:8,fill:'none',stroke:G,'stroke-width':1.4,'stroke-dasharray':'4 3'},g);
+    el('rect',{x:X(0.10,ox),y:Y(1.22),width:0.02*S,height:0.08*S,rx:2,fill:R},g);
+    marking(g,ox,1.13,'37',R,22);marking(g,ox,1.06,'ЗВЁЗДНАЯ',R,8);}}
+function card(o){const d=document.createElement('div');d.className='card';
+  d.innerHTML=`<h2>${o.n}. ${o.t} <small>— ${o.sub}</small></h2><div class="fig"></div><ul>${o.pts.map(x=>'<li>'+x+'</li>').join('')}</ul><div class="rig">${o.rig}</div>`;
+  const Wd=1.5*S;const svg=el('svg',{viewBox:`0 0 ${Wd} ${1.9*S}`},d.querySelector('.fig'));
+  [['front',0.25],['side',0.75],['back',1.25]].forEach(([v,x])=>{const g=el('g',{},svg);o.draw(g,x*S,v);
+    el('text',{x:x*S,y:1.87*S,'text-anchor':'middle',fill:'#6f7883','font-size':11},svg).textContent={front:'спереди',side:'сбоку',back:'сзади'}[v];});
+  document.getElementById('root').appendChild(d);}
+
+// 1
+card({n:1,t:'«Навигатор»',sub:'основной выходной скафандр',
+ pts:['Белая ткань противодавления, красные силовые пояса-ленты по линиям нерастяжения (они же — опознавание издалека)','Шлем компактный, чуть больше головы: твёрдый затылок, прозрачное забрало на всё лицо и темя; красная полоса по гребню','Вход сзади через ранец-люк: надевается за минуту без помощника','Пульт на груди — физические переключатели в перчатке, крупные; зеркальце на левом запястье'],
+ rig:'Ткань — скиннинг по всему телу; шлем, пульт, ранец — жёсткие на костях «голова» и «грудь». Колени и локти обязательны.',
+ draw:(g,ox,v)=>{const c={leg:W,arm:W,torso:W,boot:G,glove:G,cuff:R,knee:W2,shell:W,stripe:R,pack:W,lamp:1,mark:'37'};
+   if(v!=='front')backpack(g,ox,v,c);figure(g,ox,v,c);
+   [[0.60,0.10],[0.30,0.10],[1.02,0.19]].forEach(([y,x])=>{[1,-1].forEach(sd=>{if(v==='side'&&sd<0)return;const xx=v==='side'?0.0:sd*x;el('rect',{x:X(xx-0.06,ox),y:Y(y),width:0.12*S,height:0.02*S,rx:2,fill:R},g);});});
+   beltStripes(g,ox,v);if(v==='front')panel(g,ox,c);helmet(g,ox,v,c);if(v==='back')backpack(g,ox,v,c);}});
+
+// 2
+card({n:2,t:'«Бортовой»',sub:'на корабле, шлем в воротнике',
+ pts:['Повседневный комбинезон: та же ткань в «спящем» режиме (не натянута), белый с красной окантовкой','При разгерметизации волокна стягиваются за секунды, шлем разворачивается из воротника двумя створками','Для центрального поста: ничего не мешает у экранов и пультов','Автономность 30–60 мин, дальше — шланг от бортовой магистрали'],
+ rig:'Цельный меш со скиннингом; шлем — анимация «сложен / раскрыт» на кости «шея».',
+ draw:(g,ox,v)=>{const c={leg:W,arm:W,torso:W,boot:G2,glove:W2,cuff:R,shell:W,stripe:R};figure(g,ox,v,c);
+   el('rect',{x:X(v==='side'?-0.1:-0.17,ox),y:Y(1.455),width:(v==='side'?0.2:0.34)*S,height:0.045*S,rx:6,fill:W2,stroke:R,'stroke-width':1.2},g);
+   const cx=X(0,ox),cy=Y(1.56);el('ellipse',{cx:cx+(v==='side'?0.02*S:0),cy,rx:(v==='side'?0.07:0.066)*S,ry:0.088*S,fill:v==='back'?'#8a3b24':'#d8b39a'},g);
+   el('path',{d:`M${cx-0.075*S},${cy+0.02*S} Q${cx-0.07*S},${cy-0.11*S} ${cx},${cy-0.105*S} Q${cx+0.07*S},${cy-0.11*S} ${cx+0.075*S},${cy+0.02*S} L${cx+0.06*S},${cy-0.04*S} L${cx-0.06*S},${cy-0.04*S} Z`,fill:'#8a3b24'},g);
+   el('line',{x1:X(v==='side'?0.07:-0.0,ox),y1:Y(1.40),x2:X(v==='side'?0.07:0,ox),y2:Y(0.85),stroke:R,'stroke-width':2.2},g);
+   if(v==='front'){marking(g,ox,1.30,'37',R,14);marking(g,ox,1.255,'ЗВЁЗДНАЯ',R,6);}}});
+
+// 3
+card({n:3,t:'«Каркас»',sub:'для планеты с 2,5 g',
+ pts:['Скафандр «Навигатор» + лёгкий силовой каркас: красные стержни вдоль ног и спины, приводы в бедре, колене, голеностопе','Каркас снимает до 60 % веса; стопы каркаса — широкие, с шипами для рыхлого грунта','Снимается за секунды, в невесомости не нужен','Ранец висит на каркасе, а не на плечах'],
+ rig:'Каркас — жёсткие элементы на костях (как Z2), тело — скиннинг. Голеностоп как отдельная кость — наш Gait его уже считает.',
+ draw:(g,ox,v)=>{const c={leg:W,arm:W,torso:W,boot:G,glove:G,cuff:R,shell:W,stripe:R,pack:W,lamp:1,mark:'37'};
+   if(v!=='front')backpack(g,ox,v,c);figure(g,ox,v,c);
+   const side=v==='side';[1,-1].forEach(sd=>{if(side&&sd<0)return;const off=side?-0.075:sd*0.075;const f=p=>sd>0?p:mir(p);
+     const pt=p=>[X((side?p[2]:p[0])+(side?off:sd*0.07),ox),Y(p[1])];const h=pt(f(SK.hip)),k=pt(f(SK.kn)),a=pt(f(SK.an));
+     el('polyline',{points:[h,k,a].map(q=>q.join(',')).join(' '),stroke:R,'stroke-width':4,fill:'none','stroke-linejoin':'round'},g);
+     [h,k,a].forEach(q=>el('circle',{cx:q[0],cy:q[1],r:5.5,fill:G,stroke:R,'stroke-width':2},g));
+     el('rect',{x:a[0]-0.07*S,y:Y(0.0),width:0.14*S,height:0.02*S,fill:R},g);});
+   if(v!=='front'){const x=X(side?-0.09:0,ox);el('line',{x1:x,y1:Y(1.42),x2:x,y2:Y(0.9),stroke:R,'stroke-width':5},g);}
+   el('rect',{x:X(side?-0.1:-0.17,ox),y:Y(0.93),width:(side?0.2:0.34)*S,height:0.03*S,fill:R},g);
+   if(v==='front')panel(g,ox,c);helmet(g,ox,v,c);if(v==='back')backpack(g,ox,v,c);}});
+
+// 4
+card({n:4,t:'«Высшая защита»',sub:'тонкая сплошная оболочка',
+ pts:['Поверх противодавления — оболочка из тонких перекрывающихся щитков (композит 2–3 мм), белая с красными кантами, отражающее покрытие','Шлем с дополнительным внешним забралом, которое темнеет от света; в покое прозрачное','Фонари в плечах, пояс с источником, крепления для инструмента на бёдрах','Для выходов у «чёрной планеты», у «Паруса», при опасности'],
+ rig:'Щитки — жёсткие группы на костях, скиннинг только в паху, подмышках и на шее.',
+ draw:(g,ox,v)=>{const c={leg:W2,arm:W2,torso:W2,boot:G,glove:G,cuff:R,knee:W,shell:W,stripe:R,pack:W2,lamp:1,mark:'37'};
+   if(v!=='front')backpack(g,ox,v,c);figure(g,ox,v,c);
+   const side=v==='side';[[1.30,0.30],[1.06,0.22],[0.66,0.20],[0.26,0.16]].forEach(([y,w])=>{const ww=side?w*0.6:w;el('rect',{x:X(-ww/2,ox),y:Y(y),width:ww*S,height:0.1*S,rx:6,fill:W,stroke:R,'stroke-width':1},g);});
+   if(!side)[1,-1].forEach(sd=>{el('circle',{cx:X(sd*0.17,ox),cy:Y(1.37),r:4,fill:'#fff3c4'},g);});
+   beltStripes(g,ox,v);helmet(g,ox,v,c);if(v==='back')backpack(g,ox,v,c);}});
+</script></body></html>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Orbiter 2016 SDK property sheet (created for building UACS / Tantra with VS2022). -->
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="UserMacros">
+    <OrbiterDir>$(MSBuildThisFileDirectory)..\..\</OrbiterDir>
+    <SDKDir>$(OrbiterDir)Orbitersdk\</SDKDir>
+    <SDKIncludeDir>$(SDKDir)include</SDKIncludeDir>
+    <SDKLibDir>$(SDKDir)lib</SDKLibDir>
+    <ModuleDir>$(OrbiterDir)Modules</ModuleDir>
+    <PluginDir>$(OrbiterDir)Modules\Plugin</PluginDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(SDKIncludeDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(SDKLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>orbiter.lib;Orbitersdk.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>

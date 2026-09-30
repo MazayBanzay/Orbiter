@@ -1,0 +1,42 @@
+# Whitelist: this repository lives in the root of an Orbiter 2016 installation.
+# Everything is ignored except the Tantra project files listed below.
+/*
+!/.gitignore
+!/README.md
+
+# --- design: Blender scripts, sketches (tools and generated outputs stay local) ---
+!/Tantra_Design/
+/Tantra_Design/assets/
+/Tantra_Design/bx/
+/Tantra_Design/mpfbu/
+/Tantra_Design/blender/renders/
+/Tantra_Design/blender/textures/
+__pycache__/
+*.blend
+*.blend1
+*.log
+
+# --- SDK property sheet used to build UACS / Tantra with VS2022 ---
+!/Orbitersdk/
+/Orbitersdk/*
+!/Orbitersdk/resources/
+/Orbitersdk/resources/*
+!/Orbitersdk/resources/Orbiter.props
+
+# --- test scenarios ---
+!/Scenarios/
+/Scenarios/*
+!/Scenarios/UACS/
+/Scenarios/UACS/*
+!/Scenarios/UACS/Tantra*.scn
+
+# --- UACS astronaut config with the walking rig ---
+!/Config/
+/Config/*
+!/Config/Vessels/
+/Config/Vessels/*
+!/Config/Vessels/UACS/
+/Config/Vessels/UACS/*
+!/Config/Vessels/UACS/Astronauts/
+/Config/Vessels/UACS/Astronauts/*
+!/Config/Vessels/UACS/Astronauts/Z2.cfg
