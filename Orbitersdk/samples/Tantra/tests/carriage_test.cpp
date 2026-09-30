@@ -14,8 +14,10 @@ static double Len(Vec3 a) { return std::sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
 int main() {
     Carriage c;
     CarriageGeometry g;
-    g.legRestX = 17.7;
+    g.legRestX = 17.0;
     g.legRestS = 5.0;
+    const double a[4][2] = {{0.694, 0.720}, {-0.694, 0.720}, {-0.817, -0.577}, {0.817, -0.577}};  // stern corners
+    for (int i = 0; i < 4; ++i) g.standFoot[i] = {a[i][0] * g.standR, a[i][1] * g.standR, 0.0};
     c.SetGeometry(g);
     const double sCG = 38.0, dt = 0.02;
     c.Update(0.0, sCG);
@@ -43,6 +45,11 @@ int main() {
             // CG height above the contact plane equals the trunnion height.
             const double h = -(p.touch[0].x * n.x + p.touch[0].y * n.y + p.touch[0].z * n.z) / Len(n);
             if (std::fabs(h - p.trunnionH) > 0.05) { std::printf("t=%.1f P=%.3f h=%.2f trunnion=%.2f\n", t, c.Progress(), h, p.trunnionH); check(false, "CG height"); break; }
+            // Every contact of the set lies in the plane of the first three (one ground).
+            for (int i = 3; i < p.nTouch; ++i) {
+                const double hi = -(p.touch[i].x * n.x + p.touch[i].y * n.y + p.touch[i].z * n.z) / Len(n);
+                if (std::fabs(hi - h) > 0.02) { std::printf("t=%.1f P=%.3f contact %d off plane %.3f\n", t, c.Progress(), i, hi - h); check(false, "coplanar contacts"); break; }
+            }
             // Orbiter cares about the contact plane (height and tilt of the ship), not the points
             // sliding inside it: compare plane distance and normal with the previous step.
             const Vec3 pn = Cross(Sub(prev[2], prev[0]), Sub(prev[1], prev[0]));

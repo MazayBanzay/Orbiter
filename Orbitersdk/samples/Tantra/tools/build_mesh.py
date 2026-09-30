@@ -2,7 +2,7 @@
 
     python tools/build_mesh.py [--preview out.png] [--no-blender]
 
-Writes Meshes/Tantra/Tantra.msh and orbiter2010/MeshLayout.h. The Blender pass only adds local
+Writes Meshes/Tantra/Tantra.msh and orbiter2016/MeshLayout.h. The Blender pass only adds local
 detail; verify_mesh() fails the build if a group is missing, reordered or has moved.
 Blender is started through the Microsoft Store launcher, which returns immediately: the
 refinement script reports through a marker file.
@@ -84,7 +84,7 @@ def main():
     os.makedirs(BUILD, exist_ok=True)
     raw = os.path.join(BUILD, "tantra_raw.json")
     gm.write_json(raw_groups, raw)
-    gm.write_layout(legs, comps, os.path.join(HERE, "..", "orbiter2010", "MeshLayout.h"))
+    gm.write_layout(legs, comps, os.path.join(HERE, "..", "orbiter2016", "MeshLayout.h"))
     os.makedirs(os.path.dirname(MSH), exist_ok=True)
     trap = gm.Group("trap", gm.MAT["trap_shell"])     # stand-alone container vessel mesh (TantraTrap)
     gm.trap_geom(trap, 0.0, 0.0, -12.4 - gm.STERN_Z, 12.4 - gm.STERN_Z)
@@ -103,25 +103,7 @@ def main():
     os.replace(tmp, MSH)
     print(f"verified, installed {MSH}")
     if "--preview" in sys.argv:
-        mid = (38.0 - gm.CAR_S0) / (gm.CAR_S1 - gm.CAR_S0)
-        k = 1 - 0.3 / gm.MAST_LMAX
-        rest = {"lid_port": 1, "lid_starboard": 1, "track_port": mid, "track_starboard": mid}
-        for s in ("port", "starboard"):
-            rest[f"mast_len_{s}"] = (gm.MAST_LMAX - 18.8) / (gm.MAST_LMAX - gm.MAST_SEG)
-        for i, g in enumerate(legs):
-            if g["lower"]:
-                rest.update({f"leg{i}_swing": g["phi_rest"] / g["phi_stand"], f"leg{i}_ext": g["e_rest"] / 10,
-                             f"leg{i}_foot_rest": 1})
-        turn = {"lid_port": 1, "lid_starboard": 1, "track_port": mid, "track_starboard": mid, "crest_lateral": 1,
-                "crest_dorsal": 1, "pod_retract": 1, "pitch_port": 0.5, "pitch_starboard": 0.5}
-        for s in ("port", "starboard"):
-            turn[f"mast_len_{s}"] = (gm.MAST_LMAX - 52.8) / (gm.MAST_LMAX - gm.MAST_SEG)
-        stand = {"slide_port": 1, "slide_starboard": 1, "mast_len_port": 1, "mast_len_starboard": 1,
-                 "track_port": mid, "track_starboard": mid, "crest_lateral": 1, "crest_dorsal": 1, "pod_retract": 1}
-        for i, g in enumerate(legs):
-            stand.update({f"leg{i}_swing": 1, f"leg{i}_ext": g["e_stand"] / 10, f"leg{i}_foot_stand": 1})
-        poses = [("resting level", rest, 0, 0, (10, -120)), ("turning 45 deg", turn, 45, 34, (8, -80)),
-                 ("standing", stand, 90, 30, (8, -60))]
+        poses = gm.preview_poses(legs)
         gm.preview(groups, comps, sys.argv[sys.argv.index("--preview") + 1], poses)
 
 

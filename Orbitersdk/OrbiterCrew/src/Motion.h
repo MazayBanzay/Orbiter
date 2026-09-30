@@ -26,6 +26,8 @@ namespace ocrew
 		double effort{};               // 0..1 metabolic load
 		double fatigue{};              // 0..1
 		double breathRate{ 13 };       // breaths per minute
+		bool suited{};                 // space suit: arms out, wider stance, heavy footfall
+		double bound{};                // 0..1 servo boost bounding
 	};
 
 	class Motion
@@ -34,6 +36,8 @@ namespace ocrew
 		Motion();
 		// build the pose for this step and deform the skin
 		void Update(const MotionInput& in, const ClipSet& clips, Skin& skin);
+		int Footfalls() const { return footfalls; }   // foot contacts in the last Update
+		double RunWeight() const { return wRun; }
 		void Reset() { wMove = wRun = 0; pitch = pitchV = roll = rollV = crouch = crouchV = 0; settling = false; }
 
 	private:
@@ -45,14 +49,17 @@ namespace ocrew
 		const Skin* bound{};
 		int bHips{ -1 }, bLowerBack{ -1 }, bSpine{ -1 }, bSpine1{ -1 }, bNeck1{ -1 }, bHead{ -1 };
 		int bLShoulder{ -1 }, bRShoulder{ -1 }, bLArm{ -1 }, bRArm{ -1 };
+		int bLFingers{ -1 }, bRFingers{ -1 }, bLForeArm{ -1 }, bRForeArm{ -1 }, bLHand{ -1 }, bRHand{ -1 };
 		int bLUpLeg{ -1 }, bRUpLeg{ -1 }, bLLeg{ -1 }, bRLeg{ -1 }, bLFoot{ -1 }, bRFoot{ -1 };
 
 		double phase{}, wMove{}, wRun{}, lastRate{}, dir{ 1 };
 		bool settling{};
+		int footfalls{};
 		double settleTarget{};
 		double strideVar{ 1 }, strideVarTarget{ 1 };
 		double time{}, breathPhase{};
 		double pitch{}, pitchV{}, roll{}, rollV{}, crouch{}, crouchV{}, tuck{}, headYaw{};
+		double suitW{}, bounce{};
 		double seeds[12]{};
 		std::mt19937 rng;
 		Pose pIdle, pWalk, pRun, pLoco, pOut;

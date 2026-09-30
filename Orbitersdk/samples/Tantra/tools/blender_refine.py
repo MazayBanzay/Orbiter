@@ -23,12 +23,13 @@ argv = sys.argv[sys.argv.index("--") + 1:]
 RAW, OUT, DONE = argv[0], argv[1], argv[2]
 
 BEVEL = {  # group name prefix -> (width, segments)
-    "carriage_": (0.18, 2), "pod_": (0.15, 2), "pylon_": (0.12, 2), "cfoot_": (0.15, 2), "crest_root": (0.10, 1),
+    "carriage_": (0.18, 2), "hip_": (0.15, 2), "thigh_": (0.25, 2), "pad_": (0.2, 2), "ankle_": (0.1, 1),
+    "pod_": (0.15, 2), "pylon_": (0.12, 2), "crest_root": (0.10, 1),
     "hatches": (0.05, 1), "airlock": (0.08, 1), "rover_platform": (0.06, 1), "leg_hinges": (0.15, 2),
-    "crest_dorsal": (0.12, 1), "crest_port": (0.10, 1), "crest_starboard": (0.10, 1), "mast_": (0.22, 2),
+    "crest_dorsal": (0.12, 1), "crest_port": (0.10, 1), "crest_starboard": (0.10, 1), "shin_": (0.12, 1),
     "shuttle": (0.05, 1),
 }
-SOLIDIFY = {"lid_": 0.35, "door_": 0.25}
+SOLIDIFY = {"door_": 0.25}
 SHARP_DEG = 40.0
 
 
@@ -122,12 +123,12 @@ def detail_leg(ob, stage):
 
 def prepare(ob):
     name = ob.name
-    if name.startswith("mast_"):
-        detail_mast(ob)
-    elif name.startswith("leg") and name.endswith("_casing"):
-        detail_leg(ob, stage=False)
-    elif name.startswith("leg") and name.endswith("_stage"):
-        detail_leg(ob, stage=True)
+    if name.startswith("leg") and "_" in name:   # stern legs: same bevels as the carriage legs
+        part = name.split("_", 1)[1]
+        w = {"thigh": 0.25, "pad": 0.2, "ankle": 0.1, "shin0": 0.12, "shin1": 0.12, "shin2": 0.12}.get(part)
+        if w:
+            m = ob.modifiers.new("bevel", "BEVEL")
+            m.width, m.segments, m.limit_method, m.angle_limit = w, 1, "ANGLE", math.radians(35.0)
     me = ob.data
     for p in me.polygons:
         p.use_smooth = True

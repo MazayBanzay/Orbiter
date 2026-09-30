@@ -122,10 +122,16 @@ void Tantra::DefineGear() {
     g.restAxisH = sp::kAxisHeight;
     g.turnClear = sp::kTurnClear;
     g.standClear = sp::kStandClear;
-    g.columnX = sp::kColumnX;
-    g.footHalf = sp::kColumnFootHalf;
-    g.standR = sp::kStandR;
-    g.mastMin = tantra::mesh::kMastSeg;  // telescope collapsed to one section
+    namespace m = tantra::mesh;
+    g.columnX = m::kHipXOut;
+    g.footHalf = m::kPadHalfL;
+    g.footH = m::kFootH;
+    g.legMin = m::kLegLMin;
+    g.trackS0 = m::kCarS0;
+    g.trackS1 = m::kCarS1;
+    g.stowS = m::kStowS;
+    g.standR = m::kStandR;
+    for (int i = 0; i < 4; ++i) g.standFoot[i] = {m::kLegs[i].radial.x * m::kStandR, m::kLegs[i].radial.y * m::kStandR, 0.0};
     TantraGear::LegRestFoot(g.legRestX, g.legRestS);
     carriage_.SetGeometry(g);
     gear_ = new TantraGear(this, meshIdx_);
@@ -185,9 +191,9 @@ void Tantra::DefineMassAndShape() {
 
     // Touchdown points follow the carriage every step (UpdateGear); start resting level.
     const double ground = -sp::kAxisHeight;
-    const VECTOR3 t0[3] = {_V(0.0, ground, sp::kColumnFootHalf), _V(-sp::kColumnX, ground, -sp::kColumnFootHalf),
+    const VECTOR3 t0[3] = {_V(sp::kColumnX, ground, sp::kColumnFootHalf), _V(-sp::kColumnX, ground, sp::kColumnFootHalf),
                            _V(sp::kColumnX, ground, -sp::kColumnFootHalf)};
-    SetSuspension(t0);
+    SetSuspension(t0, 3);
 
     SetCameraOffset(_V(0.0, 3.0, sp::Z(sp::kControlPostS)));  // central control post
 }
@@ -304,7 +310,7 @@ void Tantra::DefineAerodynamics() {
     CreateAirfoil3(LIFT_HORIZONTAL, _V(0, 0, 0), BodyHorizontal, nullptr, sp::kLength, frontal, 0.1);
     // Crests of equilibrium: dorsal fin holds heading, lateral fins hold pitch.
     CreateAirfoil3(LIFT_HORIZONTAL, _V(0, 24.0, sp::Z(22.0)), Fin, &kDorsalFin, 28.0, 650.0, kDorsalFin.aspect);
-    CreateAirfoil3(LIFT_VERTICAL, _V(0, -1.0, sp::Z(15.0)), Fin, &kLateralFins, 22.0, 560.0, kLateralFins.aspect);
+    CreateAirfoil3(LIFT_VERTICAL, _V(0, -1.0, sp::Z(16.5)), Fin, &kLateralFins, 16.5, 445.0, kLateralFins.aspect);
 }
 
 void Tantra::DefineCrew() {
@@ -631,6 +637,12 @@ void Tantra::clbkPreStep(double, double simdt, double) {
 void Tantra::clbkPostStep(double, double simdt, double) {
     properTime_ += simdt * ProperTimeRate(beta_);
 
+    // Settling after a start on the ground: count the time at rest on the contacts.
+    if (settleTimer_ > 0.0) settleTimer_ -= simdt;
+    VECTOR3 vg;
+    const bool still = GroundContact() && GetGroundspeedVector(FRAME_HORIZON, vg) && length(vg) < 0.05;
+    settledFor_ = still ? settledFor_ + simdt : (GroundContact() ? 0.0 : settledFor_);
+
     VECTOR3 t, l, d;
     GetThrustVector(t);
     GetLiftVector(l);
@@ -808,29 +820,36 @@ void Tantra::UpdateGear(double simdt) {
     if (gear_) gear_->Apply(carriage_.Pose(), sp::kOriginS, ex);
 
     const tantra::CarriagePose& p = carriage_.Pose();
-    VECTOR3 t[3];
-    bool changed = std::fabs(GetMass() - touchMass_) > 0.05 * touchMass_;  // retune the suspension to the mass
-    for (int i = 0; i < 3; ++i) {
+    VECTOR3 t[tantra::CarriagePose::kMaxTouch];
+    // Retune the suspension to the mass (cassettes in / out) and when the settling period ends.
+    bool changed = std::fabs(GetMass() - touchMass_) > 0.05 * touchMass_ || p.nTouch != nTouch_ ||
+                   (settleTimer_ <= 0.0) != touchSettled_;
+    for (int i = 0; i < p.nTouch; ++i) {
         t[i] = _V(p.touch[i].x, p.touch[i].y, p.touch[i].z);
-        if (length(t[i] - touch_[i]) > 1e-4) changed = true;
+        if (i >= nTouch_ || length(t[i] - touch_[i]) > 1e-4) changed = true;
     }
     if (changed) {
-        SetSuspension(t);
-        for (int i = 0; i < 3; ++i) touch_[i] = t[i];
+        SetSuspension(t, p.nTouch);
+        for (int i = 0; i < p.nTouch; ++i) touch_[i] = t[i];
+        nTouch_ = p.nTouch;
     }
     // The airlock lift stands on the ground under the door, whatever height the gear holds the ship at.
-    crew_.SetLiftFoot(_V(kEvaPos.x, t[0].y + 0.93, kEvaPos.z));
+    crew_.SetLiftFoot(_V(kEvaPos.x, -p.trunnionH + 0.93, kEvaPos.z));
 }
 
-// Orbiter 2016 touchdown vertices: the three support points of the current gear pose are elastic
-// (suspension: the dish pads on MR-fluid cushions and the leg bands), the hull points around them are
-// stiff and only matter in a crash. Stiffness gives kSag of static compression at the design gravity,
-// damping is a fraction of critical, so the ship settles and sways a little on its legs.
-void Tantra::SetSuspension(const VECTOR3 t[3]) {
-    const double m = GetMass(), kSag = 0.25, kGref = 1.7 * G0, kZeta = 0.3, kMu = 0.8;
-    const double k = m * kGref / (3.0 * kSag);
-    const double c = 2.0 * kZeta * std::sqrt(k * m / 3.0);
-    const double kHull = 20.0 * k, cHull = 2.0 * 0.7 * std::sqrt(kHull * m / 3.0);
+// Orbiter 2016 touchdown vertices: the pads of the current gear pose are elastic (MR-fluid cushions
+// under the pads and the leg bands), the hull points around them are stiff and only matter in a crash.
+// Stiffness gives kSag of static compression at the design gravity, damping is a fraction of critical,
+// so the ship settles and sways a little on its legs. Right after the scenario is loaded (or the ship is
+// put down somewhere) the damping is overdamped for a few seconds: Orbiter drops the ship onto its
+// contacts and it must not bounce.
+void Tantra::SetSuspension(const VECTOR3* t, int n) {
+    const double m = GetMass(), kSag = 0.25, kGref = 1.7 * G0, kMu = 0.8;
+    const double kZeta = settleTimer_ > 0.0 ? 1.5 : 0.3;
+    touchSettled_ = settleTimer_ <= 0.0;
+    const double k = m * kGref / (n * kSag);
+    const double c = 2.0 * kZeta * std::sqrt(k * m / n);
+    const double kHull = 20.0 * k * n / 3.0, cHull = 2.0 * 0.7 * std::sqrt(kHull * m / 3.0);
     const double zs = sp::kSternZ, zn = sp::kNoseZ;
     const VECTOR3 hull[] = {
         {0, 0, zn},                                         // nose tip
@@ -839,11 +858,11 @@ void Tantra::SetSuspension(const VECTOR3 t[3]) {
         {14.0, 0, sp::Z(30.0)}, {-14.0, 0, sp::Z(30.0)}, {0, 14.0, sp::Z(30.0)}, {0, -9.5, sp::Z(30.0)},
         {8.6, 0, sp::Z(100.0)}, {-8.6, 0, sp::Z(100.0)}, {0, 8.6, sp::Z(100.0)}, {0, -8.6, sp::Z(100.0)},
     };
-    TOUCHDOWNVTX v[3 + sizeof hull / sizeof hull[0]];
-    for (int i = 0; i < 3; ++i) v[i] = {t[i], k, c, kMu, kMu};
-    int n = 3;
-    for (const VECTOR3& h : hull) v[n++] = {h, kHull, cHull, 0.5, 0.5};
-    SetTouchdownPoints(v, n);
+    TOUCHDOWNVTX v[tantra::CarriagePose::kMaxTouch + sizeof hull / sizeof hull[0]];
+    for (int i = 0; i < n; ++i) v[i] = {t[i], k, c, kMu, kMu};
+    int nv = n;
+    for (const VECTOR3& h : hull) v[nv++] = {h, kHull, cHull, 0.5, 0.5};
+    SetTouchdownPoints(v, nv);
     touchMass_ = m;
 }
 

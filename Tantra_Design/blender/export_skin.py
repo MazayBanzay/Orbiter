@@ -9,10 +9,17 @@ from mathutils import Matrix, Vector, Quaternion
 HERE = os.path.dirname(__file__); ROOT = os.path.dirname(HERE); sys.path.insert(0, HERE)
 from pose_util import idle_pose
 ORBITER = os.path.abspath(os.path.join(ROOT, ".."))
-MESH_OUT = os.path.join(ORBITER, "Meshes", "Tantra", "AstronavigatorSkin.msh")
-CFG_DIR = os.path.join(ORBITER, "Config", "Tantra"); CLIP_DIR = os.path.join(CFG_DIR, "anim")
+# variant: coverall (BodySkin) or suit (SuitSkin); both share the skeleton and get their own grounded clips
+VARIANT = os.environ.get("TANTRA_VARIANT", "coverall")
+BLEND, MESH_NAME, SKIN_NAME, CLIP_SUB = {"coverall": ("astronavigator_coverall.blend", "AstronavigatorSkin", "Astronavigator", "anim"),
+                                         "suit": ("astronavigator_suit.blend", "AstronavigatorSuit", "AstronavigatorSuit", "anim_suit")}[VARIANT]
+MESH_OUT = os.path.join(ORBITER, "Meshes", "Tantra", MESH_NAME + ".msh")
+CFG_DIR = os.path.join(ORBITER, "Config", "Tantra"); CLIP_DIR = os.path.join(CFG_DIR, CLIP_SUB)
 os.makedirs(CLIP_DIR, exist_ok=True)
 TEX_SUB = "Tantra\\Astronavigator"; ORIGIN_H = 0.93
+SUIT_TEX_SUB = "Tantra\\AstronavigatorSuit"      # textures that belong to the suit; the body keeps its own
+BODY_LABELS = {"Skin", "Brows", "Lashes", "Eyes", "Hair", "Boots"}
+MANIFEST = os.path.join(HERE, "export_%s.json" % MESH_NAME); new_textures = []
 EYE_TEX = os.path.join(ROOT, "mpfbu", "data", "eyes", "materials", "brown_eye.png")
 CLIPS = [("walk", "35_01"), ("run", "09_01")]
 LOG = os.path.join(HERE, "export_skin.log"); log = []
@@ -35,7 +42,15 @@ def hierarchy(arm):
 def short_name(o, mat):
     base = o.name.split('.')[-1]
     s = {"female1605": "Skin", "eyebrow001": "Brows", "eyelashes01": "Lashes", "low-poly": "Eyes", "shoes03": "Boots"}.get(base, "Hair" if ("bob" in base or "hair" in base) else base[:10])
-    return (s + ("_" + mat.name.split('.')[-1].replace("Coverall", "") if base == "Coverall" and mat else ""))[:20], s
+    if base == "Coverall" and mat: return (s + "_" + mat.name.split('.')[-1].replace("Coverall", ""))[:20], s
+    if s not in BODY_LABELS and len(o.material_slots) > 1 and mat: return (s + "_" + mat.name.split('.')[-1][:9])[:20], s
+    return s[:20], s
+
+def alpha_of(mat):
+    if mat and mat.use_nodes:
+        for n in mat.node_tree.nodes:
+            if n.type == 'BSDF_PRINCIPLED': return n.inputs["Alpha"].default_value
+    return 1.0
 
 def image_of(mat):
     if not mat or not mat.use_nodes: return None
@@ -90,8 +105,12 @@ def export_bind(arm, bones):
             mat = o.material_slots[mi].material if mi < len(o.material_slots) else None
             lname, s = short_name(o, mat)
             img = EYE_TEX if s == "Eyes" else image_of(mat)
-            tex = tex_index(TEX_SUB + "\\" + lname + ".dds") if img and os.path.exists(img) else 0
-            mat_i = mat_index(lname, (1, 1, 1, 1) if tex else base_color(mat))
+            sub = TEX_SUB if s in BODY_LABELS or VARIANT == "coverall" else SUIT_TEX_SUB
+            tname = os.path.splitext(os.path.basename(img))[0] if (img and sub == SUIT_TEX_SUB) else lname   # suit: one file per image
+            tex = tex_index(sub + "\\" + tname + ".dds") if img and os.path.exists(img) else 0
+            if tex and sub == SUIT_TEX_SUB and not any(t["src"] == img for t in new_textures): new_textures.append({"src": img, "dds": sub + "\\" + tname + ".dds", "alpha": False})
+            a = alpha_of(mat)
+            mat_i = mat_index(lname, ((1, 1, 1) if tex else base_color(mat)[:3]) + (a,))
             verts, index, faces = [], {}, []
             for t in tris:
                 face = []
@@ -114,12 +133,13 @@ def export_bind(arm, bones):
         f.write("MATERIALS %d\n" % len(materials))
         for k, _ in materials: f.write(k + "\n")
         for k, (r, g_, b, _a) in materials:
-            f.write("MATERIAL %s\n%.3f %.3f %.3f 1\n%.3f %.3f %.3f 1\n0.1 0.1 0.1 1 8\n0 0 0 1\n" % (k, r, g_, b, r, g_, b))
+            spec = "0.5 0.5 0.5 1 40" if _a < 1 else "0.1 0.1 0.1 1 8"
+            f.write("MATERIAL %s\n%.3f %.3f %.3f %.3f\n%.3f %.3f %.3f %.3f\n%s\n0 0 0 1\n" % (k, r, g_, b, _a, r, g_, b, _a, spec))
         f.write("TEXTURES %d\n" % len(textures))
         for t in textures: f.write(t + "\n")
     # skin file
-    with open(os.path.join(CFG_DIR, "Astronavigator.skin"), "w", newline="\n") as f:
-        f.write("TANTRA_SKIN 1\nMESH Tantra\\AstronavigatorSkin\nBONES %d\n" % len(bones))
+    with open(os.path.join(CFG_DIR, SKIN_NAME + ".skin"), "w", newline="\n") as f:
+        f.write("TANTRA_SKIN 1\nMESH Tantra\\%s\nBONES %d\n" % (MESH_NAME, len(bones)))
         for n in bones:
             b = arm.data.bones[n]; R, t = cm(arm.matrix_world @ b.matrix_local)
             par = bones.index(b.parent.name) if b.parent else -1
@@ -141,11 +161,12 @@ def write_clip(name, frames, fps, stride, speed, loop, bones):
     log.append("clip %s: %d frames, stride %.3f m, speed %.3f m/s" % (name, len(frames), stride, speed))
 
 try:
-    bpy.ops.wm.open_mainfile(filepath=os.path.join(HERE, "astronavigator_coverall.blend"))
+    bpy.ops.wm.open_mainfile(filepath=os.path.join(HERE, BLEND))
     arm = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
     arm.animation_data_clear(); arm.data.pose_position = 'REST'; bpy.context.view_layer.update()
     bones = hierarchy(arm)
     export_bind(arm, bones)
+    import json; json.dump({"textures": new_textures, "orbiter": ORBITER}, open(MANIFEST, "w"), indent=1)
     rest_hips = (arm.matrix_world @ arm.data.bones["Hips"].matrix_local).translation.copy()
     # idle: one frame
     arm.data.pose_position = 'POSE'; idle_pose(arm)
@@ -178,6 +199,21 @@ try:
             for bn, k in (("Head", 0.7), ("Neck1", 0.4)):
                 R, t = fr[bn]; qi = idle_frame[bn][0].to_quaternion(); q = R.to_quaternion()
                 fr[bn] = (q.slerp(qi, k).to_matrix(), t)
+        # coverall only: a loop-aware [1,2,1] filter takes out the jitter left by resampling the 120 fps capture
+        # (the suit has its own layered motion and keeps the raw clips)
+        if VARIANT == "coverall":
+            n_fr = len(frames); smooth = []
+            for i in range(n_fr):
+                out = {}
+                for bn in bones:
+                    (Ra, ta), (Rb, tb), (Rc, tc) = frames[i - 1][bn], frames[i][bn], frames[(i + 1) % n_fr][bn]
+                    qb = Rb.to_quaternion(); acc = [0.0] * 4
+                    for q, w in ((Ra.to_quaternion(), 1), (qb, 2), (Rc.to_quaternion(), 1)):
+                        s = w if q.dot(qb) >= 0 else -w
+                        for c in range(4): acc[c] += s * q[c]
+                    out[bn] = (Quaternion(acc).normalized().to_matrix(), (ta + 2 * tb + tc) / 4)
+                smooth.append(out)
+            frames = smooth
         write_clip(name, frames, fps, stride, stride / T, 1, bones)
         log.append("  %s cycle frames %d..%d (peaks %s)" % (clip, a, b, peaks))
 except Exception:

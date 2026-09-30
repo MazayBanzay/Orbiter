@@ -99,6 +99,15 @@ def ionplume(seed):
     return rgb, alpha
 
 
+def column(seed):
+    r = radius()
+    n = fbm(seed)
+    t = np.clip(0.35 + 0.5 * n + 0.3 * r, 0, 1)
+    rgb = ramp(t, [(0.0, (1.0, 0.96, 0.88)), (0.5, (1.0, 0.8, 0.5)), (1.0, (0.95, 0.5, 0.2))])
+    alpha = np.clip(1.0 - r, 0, 1) ** 0.6 * (0.55 + 0.45 * n) * window() * 0.8
+    return rgb, alpha
+
+
 def atlas(make):
     cells = [make(k) for k in range(4)]
     rgb = np.concatenate([np.concatenate([cells[0][0], cells[1][0]], axis=1),
@@ -112,6 +121,8 @@ TEXTURES = {
     "Tantra_plasma": atlas(lambda k: plasma(11 + k)),
     "Tantra_wake": atlas(lambda k: puff((0.97, 0.95, 0.92), 23 + k, 0.3, 0.5)),
     "Tantra_halo": atlas(halo),
+    # plasma column in air: many overlapping particles - flat turbulent glow, no core
+    "Tantra_column": atlas(lambda k: column(61 + k)),
     # planetary jet in air: plasma mixing with shock-heated air
     "Tantra_ionplume": atlas(lambda k: ionplume(51 + k)),
     "Tantra_dust": atlas(lambda k: puff((0.72, 0.58, 0.43), 37 + k, 0.5, 0.8)),

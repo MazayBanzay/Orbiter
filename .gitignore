@@ -1,10 +1,10 @@
 # Whitelist: this repository lives in the root of an Orbiter 2016 installation.
-# Everything is ignored except the Tantra project files listed below.
+# Everything is ignored except the project files listed below.
 /*
 !/.gitignore
 !/README.md
 
-# --- design: Blender scripts, sketches (tools and generated outputs stay local) ---
+# --- design: Blender scripts, sketches, mocap, audio (tools and generated outputs stay local) ---
 !/Tantra_Design/
 /Tantra_Design/assets/
 /Tantra_Design/bx/
@@ -15,8 +15,9 @@ __pycache__/
 *.blend
 *.blend1
 *.log
+*.bak
 
-# --- SDK property sheet used to build UACS / Tantra with VS2022 ---
+# --- SDK property sheet used to build OrbiterCrew / Tantra with VS2022 ---
 !/Orbitersdk/
 /Orbitersdk/*
 !/Orbitersdk/resources/
@@ -27,28 +28,14 @@ __pycache__/
 !/Orbitersdk/OrbiterCrew/
 /Orbitersdk/OrbiterCrew/build/
 /Orbitersdk/OrbiterCrew/*.user
-
-# --- test scenarios ---
-!/Scenarios/
-/Scenarios/*
-!/Scenarios/UACS/
-/Scenarios/UACS/*
-!/Scenarios/UACS/Tantra*.scn
-
-# --- UACS astronaut config with the walking rig ---
 !/Config/
 /Config/*
 !/Config/Vessels/
 /Config/Vessels/*
-!/Config/Vessels/UACS/
-/Config/Vessels/UACS/*
-!/Config/Vessels/UACS/Astronauts/
-/Config/Vessels/UACS/Astronauts/*
-!/Config/Vessels/UACS/Astronauts/Z2.cfg
-
-# --- OrbiterCrew config and scenarios ---
 !/Config/Vessels/OrbiterCrew/
 !/Config/OrbiterCrew/
+!/Scenarios/
+/Scenarios/*
 !/Scenarios/OrbiterCrew/
 
 # --- starship Tantra: sources, assets, configs, scenarios, sounds (built modules stay local) ---
@@ -56,6 +43,7 @@ __pycache__/
 /Orbitersdk/samples/*
 !/Orbitersdk/samples/Tantra/
 /Orbitersdk/samples/Tantra/build/
+/Orbitersdk/samples/Tantra/docs/PORTING_UACS.md
 !/Meshes/
 /Meshes/*
 !/Meshes/Tantra/

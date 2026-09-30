@@ -19,6 +19,7 @@ namespace ocrew
 		double fps{ 30 }, stride{}, speed{};
 		bool loop{ true };
 		int nb{};
+		bool cubic{};   // Catmull-Rom between frames: no velocity kink at every frame of a 30 fps clip
 		std::vector<float> data;   // frames * nb * 7
 		int Frames() const { return nb ? static_cast<int>(data.size() / (nb * 7)) : 0; }
 		bool Load(const std::string& path);
@@ -52,6 +53,10 @@ namespace ocrew
 		// rotate the whole pose about a model-frame pivot (e.g. the soles when leaning from the ankles)
 		void TurnAll(Pose& pose, const VECTOR3& pivot, const VECTOR3& axis, float angle) const;
 		void Shift(Pose& pose, const VECTOR3& d) const;
+		// put a bone's subtree back in the relation to 'parent' it has in 'ref' (e.g. hands as in the idle pose), weight 0..1
+		void Reattach(Pose& pose, const Pose& ref, int parent, int bone, float weight) const;
+		// the same about an axis given in the bone's own frame (e.g. finger curl)
+		void TurnLocal(Pose& pose, int bone, const VECTOR3& localAxis, float angle) const;
 
 	private:
 		struct BoneInfo { std::string name; int parent{}; float R0[9]{}, T0[3]{}; std::vector<int> subtree; };

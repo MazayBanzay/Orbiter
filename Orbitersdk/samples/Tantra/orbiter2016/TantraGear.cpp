@@ -45,7 +45,7 @@ TantraGear::TantraGear(VESSEL* v, UINT mesh) : v_(v) {
                 trans_[i] = new MGROUP_SCALE(meshIdx, grp, ngrp, ToV(c.ref), ToV(c.vec));
                 break;
         }
-        comp_[i] = v_->AddAnimationComponent(anim_[c.anim], 0.0, 1.0, trans_[i], c.parent >= 0 ? comp_[c.parent] : nullptr);
+        comp_[i] = v_->AddAnimationComponent(anim_[c.anim], c.s0, c.s1, trans_[i], c.parent >= 0 ? comp_[c.parent] : nullptr);
     }
 }
 
@@ -63,7 +63,7 @@ void TantraGear::Set(int anim, double state) {
 void TantraGear::LegRestFoot(double& x, double& s) {
     for (const m::LegRig& L : m::kLegs) {
         if (!L.lower || L.hinge.x < 0.0) continue;
-        const VECTOR3 tip = ToV(L.hinge) + Rotate(_V(0, 0, m::kLegCasing + L.extRest), ToV(L.axis), L.phiRest);
+        const VECTOR3 tip = ToV(L.hinge) + Rotate(_V(0, 0, m::kLegLMinS + L.extRest), ToV(L.axis), L.phiRest);
         x = tip.x;
         s = tip.z + 38.0;  // mesh origin at s = 38
         return;
@@ -82,20 +82,22 @@ void TantraGear::Apply(const tantra::CarriagePose& p, double sCG, const Extras& 
     Set(m::ANIM_ROVER_LIFT, ex.rovers);
     Set(m::ANIM_AIRLOCK_LIFT, ex.airlockUp);
 
-    // Carriages: track follows the CG, slide state 1 = home, mast pitch counter-rotates the hull.
-    const double track = (sCG - m::kCarS0) / (m::kCarS1 - m::kCarS0);
-    const double len = (m::kMastLMax - p.mastLen) / (m::kMastLMax - m::kMastSeg);  // telescope, 1 = collapsed
+    // Carriage legs: hip on the track, slide 1 = in the pocket, pitch 1 = along the hull (aft),
+    // shin 1 = collapsed into the thigh, pad fold 1 = folded against the thigh.
+    (void)sCG;
+    const double track = (p.hipS - m::kCarS0) / (m::kCarS1 - m::kCarS0);
+    const double shin = (m::kLegLMax - p.mastLen) / (m::kLegLMax - m::kLegLMin);
     const double pitch = p.mastPitch / (0.5 * PI);
-    Set(m::ANIM_LID_PORT, p.lid);
-    Set(m::ANIM_LID_STARBOARD, p.lid);
     Set(m::ANIM_TRACK_PORT, track);
     Set(m::ANIM_TRACK_STARBOARD, track);
     Set(m::ANIM_SLIDE_PORT, 1.0 - p.slideOut);
     Set(m::ANIM_SLIDE_STARBOARD, 1.0 - p.slideOut);
     Set(m::ANIM_PITCH_PORT, pitch);
     Set(m::ANIM_PITCH_STARBOARD, pitch);
-    Set(m::ANIM_MAST_LEN_PORT, len);
-    Set(m::ANIM_MAST_LEN_STARBOARD, len);
+    Set(m::ANIM_SHIN_LEN_PORT, shin);
+    Set(m::ANIM_SHIN_LEN_STARBOARD, shin);
+    Set(m::ANIM_PAD_FOLD_PORT, p.padFold);
+    Set(m::ANIM_PAD_FOLD_STARBOARD, p.padFold);
 
     // Anamezon port: doors, trap lifts and empty slots, manipulator joints.
     Set(m::ANIM_BAY_DOORS, ex.bayDoors);

@@ -25,7 +25,9 @@ double TypicalRadius(const ExhaustModel& m, double d) {
     const double p = (std::min)(1.2e17, 1.2e17 * std::pow(10.0, (h - 50000.0) / 10000.0));
     return m.ColumnRadius(p);
 }
-constexpr double kGlowOffset = 80.0;  // starts past the second constriction
+// The four jets (4.4 m off axis, spreading ~5 deg) merge into one past the nozzles:
+// one glow on the ship axis, starting where the nozzle columns end.
+constexpr double kGlowOffset = 30.0;
 
 // D3D9Client blends beacons with alpha, not additively: a darkened colour paints a
 // dark disc. Beacons therefore always get their full colour; brightness goes into size.
@@ -45,6 +47,7 @@ TantraExhaust::TantraExhaust(VESSEL3* vessel, const VECTOR3 mouths[kChambers], c
     texGlow_ = oapiRegisterExhaustTexture(const_cast<char*>("Tantra_exh_glow"));
     texThread_ = oapiRegisterExhaustTexture(const_cast<char*>("Tantra_exh_thread"));
     texPlasma_ = oapiRegisterParticleTexture(const_cast<char*>("Tantra_plasma"));
+    texColumn_ = oapiRegisterParticleTexture(const_cast<char*>("Tantra_column"));
     texWake_ = oapiRegisterParticleTexture(const_cast<char*>("Tantra_wake"));
     texDust_ = oapiRegisterParticleTexture(const_cast<char*>("Tantra_dust"));
     texHalo_ = oapiRegisterParticleTexture(const_cast<char*>("Tantra_halo"));
@@ -87,15 +90,6 @@ TantraExhaust::TantraExhaust(VESSEL3* vessel, const VECTOR3 mouths[kChambers], c
         es.tex = texViolet_;
         v_->AddExhaust(&es);
 
-        for (int g = 0; g < kGlows; ++g) {  // long glow, several lengths
-            es.level = &lvLong_[i][g];
-            es.lsize = kGlowLengths[g];
-            es.wsize = (std::max)(8.0, kGlowLengths[g] * 0.002);
-            es.lofs = kGlowOffset;
-            es.modulate = 0.1;
-            es.tex = texGlow_;
-            v_->AddExhaust(&es);
-        }
         for (int g = 0; g < kGlows; ++g) {  // guide beam thread in air: thin, fading
             es.level = &lvThread_[i][g];
             es.lsize = kGlowLengths[g];
@@ -105,6 +99,22 @@ TantraExhaust::TantraExhaust(VESSEL3* vessel, const VECTOR3 mouths[kChambers], c
             es.tex = texThread_;
             v_->AddExhaust(&es);
         }
+    }
+
+    // Merged jet on the axis: afterglow in vacuum, ionised channel core in air.
+    axisPos_ = _V(0, 0, sternZ_);
+    for (int g = 0; g < kGlows; ++g) {
+        EXHAUSTSPEC es = {};
+        es.lpos = &axisPos_;
+        es.ldir = &thrustDir_;
+        es.flags = EXHAUST_CONSTANTPOS | EXHAUST_CONSTANTDIR;
+        es.level = &lvLong_[g];
+        es.lsize = kGlowLengths[g];
+        es.wsize = (std::max)(16.0, kGlowLengths[g] * 0.003);
+        es.lofs = kGlowOffset;
+        es.modulate = 0.1;
+        es.tex = texGlow_;
+        v_->AddExhaust(&es);
     }
 
     for (int k = 0; k < kMaxKnots; ++k) {
@@ -140,8 +150,8 @@ TantraExhaust::TantraExhaust(VESSEL3* vessel, const VECTOR3 mouths[kChambers], c
         // Emitted aft at a speed that carries each particle to the next emitter (2d)
         // within its life, and kept moving with the ship: a continuous column in the
         // ship's frame instead of blobs at the emitter points.
-        PARTICLESTREAMSPEC fire = {0, r * 0.8, 40.0, d / 1.5, 0.1, 1.5, r * 0.2, 0.0, PARTICLESTREAMSPEC::EMISSIVE,
-                                   PARTICLESTREAMSPEC::LVL_LIN, 0, 1, PARTICLESTREAMSPEC::ATM_FLAT, 1, 1, texPlasma_};
+        PARTICLESTREAMSPEC fire = {0, r * 0.8, 80.0, d / 1.5, 0.1, 1.5, r * 0.2, 0.0, PARTICLESTREAMSPEC::EMISSIVE,
+                                   PARTICLESTREAMSPEC::LVL_LIN, 0, 1, PARTICLESTREAMSPEC::ATM_FLAT, 1, 1, texColumn_};
         v_->AddParticleStream(&fire, pos, back, &lvFire_[e]);
         // Shock wake: hot air and condensation, lingering and slowly spreading. Drawn
         // emissive: D3D9Client shades sunlit particles black on their far side, and this
@@ -153,7 +163,7 @@ TantraExhaust::TantraExhaust(VESSEL3* vessel, const VECTOR3 mouths[kChambers], c
         // Ejecta where the beam reaches the ground: denser, thrown up, settling slower.
         PARTICLESTREAMSPEC dust = {0, r * 0.6, 5.0, r * 0.05, 0.8, 40.0, r * 0.04, 3.0, PARTICLESTREAMSPEC::EMISSIVE,
                                    PARTICLESTREAMSPEC::LVL_LIN, 0, 1, PARTICLESTREAMSPEC::ATM_FLAT, 1, 1, texDust_};
-        v_->AddParticleStream(&dust, pos, _V(0, 1, 0), &lvDust_[e]);
+        v_->AddParticleStream(&dust, pos, _V(0, 0, 1), &lvDust_[e]);
     }
 
     // Gamma halo around the chambers: moves with the ship (no air braking).
@@ -293,10 +303,11 @@ void TantraExhaust::Update(double fieldLevel, double beamLevel, double feed, dou
         lvViolet_[i] = f.columnViolet * beam;
         const double longLv = inAir ? f.longGlow : f.longGlow * beam;
         for (int g = 0; g < kGlows; ++g) {
-            lvLong_[i][g] = g == glow ? longLv : 0.0;
             lvThread_[i][g] = g == thread ? f.thread : 0.0;
         }
     }
+
+    for (int g = 0; g < kGlows; ++g) lvLong_[g] = g == glow ? (inAir ? f.longGlow : f.longGlow * beam) : 0.0;
 
     for (int k = 0; k < kMaxKnots; ++k) {
         BEACONLIGHTSPEC& b = knot_[k];

@@ -48,7 +48,8 @@ private:
     void DefineCrew();
     void DefineGear();
     void UpdateGear(double simdt);
-    void SetSuspension(const VECTOR3 t[3]);  // elastic touchdown vertices (2016)
+    void SetSuspension(const VECTOR3* t, int n);  // elastic touchdown vertices (2016)
+    bool Settled() const { return settleTimer_ <= 0.0 && settledFor_ >= 2.0; }  // gate for load / damage checks
 
     void BindMainGroup(EngineSet set);
     void RebindGroups();              // main: anamezon or stern ring; hover: pods swivelled down
@@ -153,8 +154,14 @@ private:
     tantra::Carriage carriage_;
     TantraGear* gear_ = nullptr;
     UINT meshIdx_ = 0;
-    VECTOR3 touch_[3] = {};
+    VECTOR3 touch_[tantra::CarriagePose::kMaxTouch] = {};
+    int nTouch_ = 0;
     double touchMass_ = 0.0;          // mass the suspension was last tuned for
+    bool touchSettled_ = false;
+    // Settling after a scenario start: overdamped suspension, no load/damage checks until the ship
+    // has come to rest on its contacts (Orbiter puts a landed vessel down with uncompressed contacts).
+    double settleTimer_ = 6.0;        // s of overdamped suspension
+    double settledFor_ = 0.0;         // s at rest on the ground
     bool crestsFolded_ = false;       // manual (interstellar) fold
     double tuck_ = 0.0;               // crests/pods, flight mode part
     double hangar_ = 0.0, hangarT_ = 0.0, rovers_ = 0.0, roversT_ = 0.0;

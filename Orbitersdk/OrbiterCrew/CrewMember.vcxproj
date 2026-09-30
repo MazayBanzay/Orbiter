@@ -15,6 +15,7 @@
     <ClInclude Include="src\LifeSupport.h" />
     <ClInclude Include="src\Motion.h" />
     <ClInclude Include="src\Skin.h" />
+    <ClInclude Include="src\Sound.h" />
     <ClInclude Include="src\Surface.h" />
   </ItemGroup>
   <ItemGroup>
@@ -22,6 +23,7 @@
     <ClCompile Include="src\LifeSupport.cpp" />
     <ClCompile Include="src\Motion.cpp" />
     <ClCompile Include="src\Skin.cpp" />
+    <ClCompile Include="src\Sound.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
@@ -54,17 +56,22 @@
       <AdditionalOptions>/Zc:strictStrings- /utf-8 %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level3</WarningLevel>
+      <AdditionalIncludeDirectories>$(SDKDir)XRSound;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(SDKDir)XRSound;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>XRSound.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
     <ClCompile>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <Optimization>MaxSpeed</Optimization>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
     <ClCompile>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

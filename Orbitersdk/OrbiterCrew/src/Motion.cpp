@@ -56,6 +56,8 @@ namespace ocrew
 		bLShoulder = skin.Bone("LeftShoulder"); bRShoulder = skin.Bone("RightShoulder"); bLArm = skin.Bone("LeftArm"); bRArm = skin.Bone("RightArm");
 		bLUpLeg = skin.Bone("LeftUpLeg"); bRUpLeg = skin.Bone("RightUpLeg"); bLLeg = skin.Bone("LeftLeg"); bRLeg = skin.Bone("RightLeg");
 		bLFoot = skin.Bone("LeftFoot"); bRFoot = skin.Bone("RightFoot");
+		bLFingers = skin.Bone("LeftHandFinger1"); bRFingers = skin.Bone("RightHandFinger1");
+		bLForeArm = skin.Bone("LeftForeArm"); bRForeArm = skin.Bone("RightForeArm"); bLHand = skin.Bone("LeftHand"); bRHand = skin.Bone("RightHand");
 	}
 
 	void Motion::Update(const MotionInput& in, const ClipSet& clips, Skin& skin)
@@ -94,6 +96,8 @@ namespace ocrew
 			phase = dir > 0 ? (std::min)(phase + rate * dt, settleTarget) : (std::max)(phase - rate * dt, settleTarget);
 		}
 		phase -= std::floor(phase);
+		// a foot touches down at every half cycle (phase 0: left foot forward, 0.5: right), also on the last settling step
+		footfalls = in.grounded && wMove > 0.2 && std::floor(before * 2) != std::floor(phase * 2) ? 1 : 0;
 		// a new step: pick a slightly different stride so no two steps are identical
 		if (std::floor(before * 2) != std::floor(phase * 2) && !settling)
 			strideVarTarget = std::uniform_real_distribution<double>(0.965, 1.035)(rng);
@@ -128,6 +132,28 @@ namespace ocrew
 		skin.Turn(pOut, bHead, AX_LAT, F(rest * (0.05 * Noise(2, time * 0.19) + 0.10 * in.fatigue)));
 		skin.Turn(pOut, bHead, AX_FWD, F(rest * 0.03 * Noise(3, time * 0.15)));
 
+		// ---- suit: arms held clear of the pack and struts, wider stance, a heavy footfall at every step ----
+		suitW = Follow(suitW, in.suited ? 1.0 : 0.0, 0.5, dt);
+		if (suitW > 1e-3)
+		{
+			skin.Turn(pOut, bLArm, AX_FWD, F(-0.13 * suitW)); skin.Turn(pOut, bRArm, AX_FWD, F(0.13 * suitW));     // left arm is on -x
+			skin.Turn(pOut, bLUpLeg, AX_FWD, F(-0.035 * suitW)); skin.Turn(pOut, bRUpLeg, AX_FWD, F(0.035 * suitW));
+			skin.Turn(pOut, bLFoot, AX_FWD, F(0.035 * suitW)); skin.Turn(pOut, bRFoot, AX_FWD, F(-0.035 * suitW));  // soles stay flat
+			if (in.grounded && std::floor(before * 2) != std::floor(phase * 2) && !settling)
+				crouchV += suitW * (0.25 + 0.12 * (std::min)(speed, 6.0));                                                 // the step lands: knees give
+		}
+
+		// ---- coverall: a living body, not a bare mocap replay (fades out in the suit, which has its own layer) ----
+		const double u = 1 - suitW;
+		if (u > 1e-3)
+		{
+			// hands: the capture has no real hand data; keep the relaxed hands of the idle pose on the moving forearms
+			skin.Reattach(pOut, pIdle, bLForeArm, bLHand, F(u));
+			skin.Reattach(pOut, pIdle, bRForeArm, bRHand, F(u));
+			// weight acceptance: the knee gives a little as each foot takes the body
+			if (footfalls && !settling) crouchV += u * (0.3 + 0.1 * (std::min)(speed, 5.0));
+		}
+
 		// ---- crouch: absorbs landings, tucks the legs in the air ----
 		if (in.landing > 0) crouchV += (std::min)(in.landing, 6.0) * 0.9;
 		crouch = std::clamp(crouch + crouchV * dt, 0.0, 0.9);
@@ -141,6 +167,10 @@ namespace ocrew
 			skin.Turn(pOut, bLowerBack, AX_LAT, F(0.5 * knee));
 			if (in.grounded) skin.Shift(pOut, _V(0, -(THIGH + SHIN) * (1 - std::cos(crouch)), 0));   // the hips drop, the soles stay down
 		}
+
+		// ---- servo boost: bounding stride, the body rises between footfalls (contacts are at phase 0 and 0.5) ----
+		bounce = Follow(bounce, in.bound, 0.3, dt);
+		if (bounce > 1e-3 && in.grounded) skin.Shift(pOut, _V(0, bounce * 0.07 * (0.5 - 0.5 * std::cos(4 * PI * phase)), 0));
 
 		// ---- dynamic lean: only while the speed changes, upper body only; bank into turns ----
 		// the clips already carry the natural posture of walking and running, so there is no standing tilt here;

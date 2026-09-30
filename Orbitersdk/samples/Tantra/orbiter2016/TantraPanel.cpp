@@ -624,7 +624,7 @@ bool Tantra::RedrawLower(int id, SURFHANDLE s) {
             PanelText(s, r[0] + 6, r[1] + 6, buf, FONT_WHITE);
             std::snprintf(buf, sizeof buf, "цапфы %.1f м", cp.trunnionH);
             PanelText(s, r[0] + 6, r[1] + 32, buf, FONT_AMBER);
-            std::snprintf(buf, sizeof buf, "мачты %.1f м", cp.mastLen);
+            std::snprintf(buf, sizeof buf, "нога %.1f м", cp.mastLen);
             PanelText(s, r[0] + 6, r[1] + 58, buf, FONT_AMBER);
             std::snprintf(buf, sizeof buf, "фаза %.2f / 6", carriage_.Progress());
             PanelText(s, r[0] + 6, r[1] + 84, buf, FONT_AMBER);

@@ -66,13 +66,37 @@ namespace ocrew
 		const int n = Frames();
 		out.q.resize(nb * 4); out.t.resize(nb * 3);
 		const double x = (n > 1 && loop) ? (ph - std::floor(ph)) * n : 0;
-		const int f0 = static_cast<int>(x) % n, f1 = loop ? (f0 + 1) % n : f0;
+		const int f1 = static_cast<int>(x) % n, f2 = loop ? (f1 + 1) % n : f1;
 		const float t = static_cast<float>(x - std::floor(x));
-		const float* a = &data[f0 * nb * 7]; const float* b = &data[f1 * nb * 7];
+		const float* a = &data[f1 * nb * 7]; const float* b = &data[f2 * nb * 7];
+		if (!cubic || !loop || n < 4)
+		{
+			for (int i = 0; i < nb; ++i)
+			{
+				Nlerp(a + i * 7, b + i * 7, t, &out.q[i * 4]);
+				for (int k = 0; k < 3; ++k) out.t[i * 3 + k] = a[i * 7 + 4 + k] * (1 - t) + b[i * 7 + 4 + k] * t;
+			}
+			return;
+		}
+		// Catmull-Rom through the neighbouring frames; quaternions sign-aligned to the segment start, then normalised
+		const float* p0 = &data[((f1 - 1 + n) % n) * nb * 7]; const float* p3 = &data[((f1 + 2) % n) * nb * 7];
+		const float t2 = t * t, t3 = t2 * t;
+		const float w0 = -0.5f * t3 + t2 - 0.5f * t, w1 = 1.5f * t3 - 2.5f * t2 + 1, w2 = -1.5f * t3 + 2 * t2 + 0.5f * t, w3 = 0.5f * t3 - 0.5f * t2;
 		for (int i = 0; i < nb; ++i)
 		{
-			Nlerp(a + i * 7, b + i * 7, t, &out.q[i * 4]);
-			for (int k = 0; k < 3; ++k) out.t[i * 3 + k] = a[i * 7 + 4 + k] * (1 - t) + b[i * 7 + 4 + k] * t;
+			const float* q[4] = { p0 + i * 7, a + i * 7, b + i * 7, p3 + i * 7 };
+			float r[4] = {}, n2 = 0;
+			const float w[4] = { w0, w1, w2, w3 };
+			for (int j = 0; j < 4; ++j)
+			{
+				const float d = q[j][0] * q[1][0] + q[j][1] * q[1][1] + q[j][2] * q[1][2] + q[j][3] * q[1][3];
+				const float s = d < 0 ? -w[j] : w[j];
+				for (int c = 0; c < 4; ++c) r[c] += s * q[j][c];
+			}
+			for (int c = 0; c < 4; ++c) n2 += r[c] * r[c];
+			n2 = 1.0f / std::sqrt((std::max)(n2, 1e-12f));
+			for (int c = 0; c < 4; ++c) out.q[i * 4 + c] = r[c] * n2;
+			for (int k = 0; k < 3; ++k) out.t[i * 3 + k] = w0 * q[0][4 + k] + w1 * q[1][4 + k] + w2 * q[2][4 + k] + w3 * q[3][4 + k];
 		}
 	}
 
@@ -245,6 +269,44 @@ namespace ocrew
 		};
 		if (set) for (int i : *set) rot(i);
 		else for (int i = 0; i < static_cast<int>(bones.size()); ++i) rot(i);
+	}
+
+	void Skin::Reattach(Pose& pose, const Pose& ref, int parent, int bone, float weight) const
+	{
+		if (parent < 0 || bone < 0 || weight <= 0) return;
+		// D = q_parent(now) * conj(q_parent(ref)): carries the reference relation onto the current parent
+		const float* a = &pose.q[parent * 4]; const float* r = &ref.q[parent * 4];
+		const float rc[4] = { r[0], -r[1], -r[2], -r[3] };
+		float D[4] = { a[0], a[1], a[2], a[3] };
+		{ const float w = D[0], x = D[1], y = D[2], z = D[3];   // D = a * rc
+		  D[0] = w * rc[0] - x * rc[1] - y * rc[2] - z * rc[3]; D[1] = w * rc[1] + x * rc[0] + y * rc[3] - z * rc[2];
+		  D[2] = w * rc[2] - x * rc[3] + y * rc[0] + z * rc[1]; D[3] = w * rc[3] + x * rc[2] - y * rc[1] + z * rc[0]; }
+		float M[9]; QuatToMat(D, M);
+		const float* pa = &pose.t[parent * 3]; const float* pr = &ref.t[parent * 3];
+		for (int i : bones[bone].subtree)
+		{
+			float q[4] = { ref.q[i * 4], ref.q[i * 4 + 1], ref.q[i * 4 + 2], ref.q[i * 4 + 3] };
+			PreRotate(q, D);
+			const float dx = ref.t[i * 3] - pr[0], dy = ref.t[i * 3 + 1] - pr[1], dz = ref.t[i * 3 + 2] - pr[2];
+			const float t[3] = { pa[0] + M[0] * dx + M[1] * dy + M[2] * dz, pa[1] + M[3] * dx + M[4] * dy + M[5] * dz, pa[2] + M[6] * dx + M[7] * dy + M[8] * dz };
+			if (weight >= 1) { for (int c = 0; c < 4; ++c) pose.q[i * 4 + c] = q[c]; for (int c = 0; c < 3; ++c) pose.t[i * 3 + c] = t[c]; }
+			else
+			{
+				float out[4]; Nlerp(&pose.q[i * 4], q, weight, out);
+				for (int c = 0; c < 4; ++c) pose.q[i * 4 + c] = out[c];
+				for (int c = 0; c < 3; ++c) pose.t[i * 3 + c] += (t[c] - pose.t[i * 3 + c]) * weight;
+			}
+		}
+	}
+
+	void Skin::TurnLocal(Pose& pose, int bone, const VECTOR3& a, float angle) const
+	{
+		if (bone < 0 || angle == 0) return;
+		float R[9]; QuatToMat(&pose.q[bone * 4], R);
+		VECTOR3 m = _V(R[0] * a.x + R[1] * a.y + R[2] * a.z, R[3] * a.x + R[4] * a.y + R[5] * a.z, R[6] * a.x + R[7] * a.y + R[8] * a.z);
+		const double l = std::sqrt(m.x * m.x + m.y * m.y + m.z * m.z);
+		if (l < 1e-9) return;
+		Turn(pose, bone, m / l, angle);
 	}
 
 	void Skin::Shift(Pose& pose, const VECTOR3& d) const

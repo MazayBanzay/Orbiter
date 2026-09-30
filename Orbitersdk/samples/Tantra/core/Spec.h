@@ -18,14 +18,14 @@ constexpr double Z(double s) { return s - kOriginS; }
 constexpr double kAftHalfWidth = 14.0;          // aft body, s 0..52
 constexpr double kAftTop = 14.0, kAftBottom = -9.5;
 constexpr double kForeRadius = 8.6;             // fore body, s 62..122 (hangar, crew)
-constexpr double kAxisHeight = 20.0;            // hull axis above ground, resting level
+constexpr double kAxisHeight = 14.0;            // hull axis above ground, resting level
 constexpr double kWellRadius = 10.5;            // armoured engine well at the stern
 constexpr double kWellCentreY = 0.0;             // thrust lines through the CG axis
 
 // Undercarriage: carriage columns and stern legs (core/Carriage, orbiter2010/MeshLayout.h).
-constexpr double kColumnX = 17.5;                // trunnion plane
-constexpr double kColumnFootHalf = 13.0;         // column feet 26 m along the axis
-constexpr double kStandR = 21.0;                 // stern feet circle
+constexpr double kColumnX = 19.0;                // hips of the carriage legs (deployed)
+constexpr double kColumnFootHalf = 8.0;          // carriage-leg pads 16 x 6 m (fore-aft)
+constexpr double kStandR = 26.0;                 // stern pads circle
 constexpr double kTurnClear = 16.0, kStandClear = 12.0;
 
 // Stations.

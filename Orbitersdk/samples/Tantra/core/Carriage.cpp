@@ -78,18 +78,7 @@ void Carriage::BuildPose(double sCG) {
     const double hStand = sCG + (port_ ? 7.0 : g.standClear);
     const bool standingSet = p_ >= 6.0;
     const bool levelSet = p_ <= 0.0;
-
-    // --- the gear itself (flight deploy/stow) ---
-    const double gr = gear_;
-    double lid = 0, slide = 0, mastFrac = 0, legRest = 0, legStand = 0;
-    if (levelSet) {  // columns out and down to the resting length, lower legs across
-        lid = Ease(gr / 0.25);
-        slide = Ease((gr - 0.2) / 0.3);
-        mastFrac = Ease((gr - 0.45) / 0.55);
-        legRest = Ease((gr - 0.3) / 0.7);
-    } else if (standingSet) {
-        legStand = port_ ? 0.0 : Ease(gr);
-    }
+    const double hipS = std::min(g.trackS1, std::max(g.trackS0, sCG));  // the trunnion follows the CG on its track
 
     // --- erection ---
     o.tuck = Ease(ph(0));
@@ -99,70 +88,77 @@ void Carriage::BuildPose(double sCG) {
     o.theta = 0.5 * kPi * Ease(ph(2));
     if (standingSet) o.theta = 0.5 * kPi;
 
-    const double restLen = g.restAxisH - g.footT;
+    // --- carriage legs ---
+    // Deploy from the pocket (t 0..1): hip out, leg swings down from along the hull while the hip runs
+    // to the CG, pad unfolds; the shin length is set separately.
+    auto deploy = [&](double t) {
+        o.slideOut = Ease(t / 0.2);
+        const double sw = Ease((t - 0.2) / 0.35);
+        o.mastPitch = 0.5 * kPi * (1.0 - sw);
+        o.hipS = Lerp(g.stowS, hipS, sw);
+        o.padFold = 1.0 - Ease((t - 0.5) / 0.25);
+    };
+    const double gr = gear_;
+    const double restLen = g.restAxisH - g.footH;
+    o.legRest = o.legStand = 0.0;
     if (levelSet) {
-        o.lid = lid;
-        o.slideOut = slide;
-        o.mastLen = Lerp(g.mastMin, restLen, mastFrac);
-        o.mastPitch = 0.0;
-        o.legRest = legRest;
-        o.legStand = 0.0;
-    } else if (standingSet) {
-        o.lid = 0.0;
-        o.slideOut = 0.0;
-        o.mastLen = g.mastMin;
-        o.mastPitch = 0.0;
-        o.legRest = 0.0;
-        o.legStand = legStand;
+        deploy(gr);
+        o.mastLen = Lerp(g.legMin, restLen, Ease((gr - 0.7) / 0.3));
+        o.legRest = Ease((gr - 0.3) / 0.7);
+    } else if (standingSet) {       // carriage legs in their pockets, the stern legs carry the ship
+        deploy(0.0);
+        o.mastLen = g.legMin;
+        o.legStand = port_ ? 0.0 : Ease(gr);
         o.tuck = 1.0;
-    } else {
-        const double c = ph(5);  // collect: reel in, swing the mast home, carriage in, lid shut
-        o.lid = 1.0 - Ease((c - 0.9) / 0.1);
-        o.slideOut = 1.0 - Ease((c - 0.75) / 0.15);
-        o.mastLen = Lerp(o.trunnionH - g.footT, g.mastMin, Ease(c / 0.5));
-        o.mastPitch = o.theta * (1.0 - Ease((c - 0.5) / 0.25));
-        o.legRest = 1.0 - Ease(ph(1) * 4.0);  // lower legs home in the first quarter of the lift
+    } else {                        // legs hang plumb under the trunnions while the ship turns
+        o.slideOut = 1.0;
+        o.mastPitch = o.theta;
+        o.hipS = hipS;
+        o.padFold = 0.0;
+        o.mastLen = o.trunnionH - g.footH;
+        const double c = ph(5);     // collect: shin in, pad folded, hip up the track, into the pocket
+        o.mastLen = Lerp(o.mastLen, g.legMin, Ease(c / 0.4));
+        o.padFold = Ease((c - 0.35) / 0.25);
+        o.hipS = Lerp(hipS, g.stowS, Ease((c - 0.55) / 0.25));
+        o.slideOut = 1.0 - Ease((c - 0.8) / 0.2);
+        o.legRest = 1.0 - Ease(ph(1) * 4.0);   // lower stern legs home in the first quarter of the lift
         o.legStand = port_ ? 0.0 : Ease(ph(3));
     }
 
-    // --- load sharing and touchdown points (ship frame, origin = CG = trunnion) ---
+    // --- load sharing and ground contacts (ship frame, origin = CG = trunnion) ---
     o.columnShare = 1.0;
     if (levelSet) o.columnShare = gr >= 1.0 ? 0.95 : 1.0;
     else if (standingSet || p_ >= 5.0) o.columnShare = 0.0;
     else if (p_ < 1.0) o.columnShare = 0.95;
     else if (ph(4) > 0.8) o.columnShare = 1.0 - (ph(4) - 0.8) / 0.2;
 
-    const double h = o.trunnionH, th = o.theta;
+    const double h = o.trunnionH, th = o.theta, X = g.columnX, fh = g.footHalf;
     const Vec3 down = V(0, -std::cos(th), -std::sin(th)), fwd = V(0, -std::sin(th), std::cos(th));
-    const Vec3 up = V(0, std::cos(th), std::sin(th));
-    Vec3 col[3] = {Add(Mul(down, h), Mul(fwd, g.footHalf)),
-                   Add(V(-g.columnX, 0, 0), Add(Mul(down, h), Mul(fwd, -g.footHalf))),
-                   Add(V(g.columnX, 0, 0), Add(Mul(down, h), Mul(fwd, -g.footHalf)))};
-    Vec3 rest[3] = {V(0, -h, g.footHalf), V(-g.legRestX, -h, g.legRestS - sCG), V(g.legRestX, -h, g.legRestS - sCG)};
-    Vec3 stand[3];
-    for (int i = 0; i < 3; ++i) {
-        const double a = kPi / 2 + i * 2 * kPi / 3;
-        stand[i] = V(g.standR * std::cos(a), g.standR * std::sin(a), -h);  // coplanar with the columns while lowering
-    }
+    // Pads of the carriage legs: fore and aft end of each pad, on the ground under the hips.
+    auto pad = [&](double side, double end) { return Add(V(side * X, 0, 0), Add(Mul(down, h), Mul(fwd, end * fh))); };
+    Vec3 col[4] = {pad(1, 1), pad(-1, 1), pad(1, -1), pad(-1, -1)};
+    Vec3 rest[6] = {pad(1, 1), pad(-1, 1), V(g.legRestX, -h, g.legRestS - sCG), V(-g.legRestX, -h, g.legRestS - sCG),
+                    pad(1, -1), pad(-1, -1)};
+    Vec3 stand[4];
+    for (int i = 0; i < 4; ++i) stand[i] = V(g.standFoot[i].x, g.standFoot[i].y, -h);  // coplanar with the pads while lowering
     Vec3 belly[3] = {V(0, g.bellyY, g.bellySNose - sCG), V(-g.bellyX, g.bellyY, g.bellySTail - sCG),
                      V(g.bellyX, g.bellyY, g.bellySTail - sCG)};
-    Orient(col, up);
+    Orient(col, V(0, std::cos(th), std::sin(th)));
     Orient(rest, V(0, 1, 0));
     Orient(stand, V(0, 0, 1));
     Orient(belly, V(0, 1, 0));
 
-    o.onColumns = false;
-    for (int i = 0; i < 3; ++i) {
-        Vec3 p;
-        if (levelSet) p = gr > 0.5 ? rest[i] : belly[i];
-        else if (standingSet) p = gr > 0.5 ? stand[i] : belly[i];
-        // Rest/columns and columns/legs triangles lie in the same ground plane at the switch,
-        // so switching between them does not move the ship.
-        else if (p_ < 1.0) p = rest[i];
-        else if (p_ < 4.95) p = col[i];
-        else p = stand[i];
-        o.touch[i] = p;
-    }
+    auto use = [&](const Vec3* p, int n) {
+        for (int i = 0; i < n; ++i) o.touch[i] = p[i];
+        o.nTouch = n;
+    };
+    // Rest/pads and pads/stern-legs sets lie in the same ground plane at the switch, so switching between
+    // them does not move the ship.
+    if (levelSet) { if (gr > 0.5) use(rest, 6); else use(belly, 3); }
+    else if (standingSet) { if (gr > 0.5) use(stand, 4); else use(belly, 3); }
+    else if (p_ < 1.0) use(rest, 6);
+    else if (p_ < 4.95) use(col, 4);
+    else use(stand, 4);
     o.onColumns = !levelSet && !standingSet && p_ < 5.0;
 }
 
@@ -171,7 +167,7 @@ Carriage::Loads Carriage::Statics(double weight, double cgError) const {
     l.columnEach = pose_.columnShare * weight / 2.0;
     l.legs = (1.0 - pose_.columnShare) * weight;
     l.driveMoment = (p_ > 2.0 && p_ < 3.0) ? weight * cgError : 0.0;
-    const double L = pose_.trunnionH;
+    const double L = pose_.mastLen;
     l.columnFL2 = l.columnEach * L * L;
     return l;
 }

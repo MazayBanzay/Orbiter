@@ -1,6 +1,8 @@
 # Offline check of the skin/clip files: CPU skinning in numpy, exactly as the UACS runtime will do it.
 import numpy as np, os, sys
 O = r"C:\Games\Orbiter 2016"
+VARIANT = os.environ.get("TANTRA_VARIANT", "coverall")
+MESH, SKIN, CLIPS = {"coverall": ("AstronavigatorSkin", "Astronavigator", "anim"), "suit": ("AstronavigatorSuit", "AstronavigatorSuit", "anim_suit")}[VARIANT]
 def read_msh(p):
     L = open(p).read().split('\n'); i = 0; G = []
     while i < len(L):
@@ -50,12 +52,12 @@ def skin(bones, groups, G, frame):
             acc += w * (np.einsum('nij,nj->ni', Rs, P) + Ts)
         out.append(acc)
     return np.vstack(out)
-G = read_msh(os.path.join(O, r"Meshes\Tantra\AstronavigatorSkin.msh")); bones, groups = read_skin(os.path.join(O, r"Config\Tantra\Astronavigator.skin"))
+G = read_msh(os.path.join(O, "Meshes", "Tantra", MESH + ".msh")); bones, groups = read_skin(os.path.join(O, "Config", "Tantra", SKIN + ".skin"))
 print("groups mesh/skin", len(G), len(groups), "verts match", all(len(a) == len(b) for a, b in zip(G, groups)))
 bind = np.vstack([V[:, :3] for V in G]); print("bind bbox", bind.min(0).round(3), bind.max(0).round(3))
 static = np.vstack([V[:, :3] for V in read_msh(os.path.join(O, r"Meshes\Tantra\Astronavigator.msh"))])
 for name in ("idle", "walk", "run"):
-    hdr, frames = read_clip(os.path.join(O, r"Config\Tantra\anim", name + ".clip"))
+    hdr, frames = read_clip(os.path.join(O, "Config", "Tantra", CLIPS, name + ".clip"))
     P = skin(bones, groups, G, frames[0])
     ys = [skin(bones, groups, G, f)[:, 1].min() for f in frames[::max(1, len(frames) // 6)]]
     print("%-5s frames %2d  frame0 bbox %s .. %s  min-y over cycle %s" % (name, len(frames), P.min(0).round(3), P.max(0).round(3), np.round(ys, 3)))
@@ -65,7 +67,7 @@ print("static idle bbox", static.min(0).round(3), static.max(0).round(3))
 if "--ground" in sys.argv:
     GROUND = -0.93
     for name in ("idle", "walk", "run"):
-        p = os.path.join(O, r"Config\Tantra\anim", name + ".clip"); hdr, frames = read_clip(p)
+        p = os.path.join(O, "Config", "Tantra", CLIPS, name + ".clip"); hdr, frames = read_clip(p)
         lows = [skin(bones, groups, G, f)[:, 1].min() for f in frames]
         # the lowest point in each frame is the stance sole; use the median of per-frame minima for the idle/walk,
         # and the minimum for the run (airborne frames lift the median)

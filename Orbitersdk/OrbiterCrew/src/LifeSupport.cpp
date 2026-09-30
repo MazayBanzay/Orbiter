@@ -54,12 +54,24 @@ namespace ocrew
 		return a;
 	}
 
-	void Suit::Step(double dt, double o2Use, double co2Made)
+	double Suit::Step(double dt, double o2Use, double co2Made, double driveDemandW, double bodyHeatW, double tEnv)
 	{
-		const bool power = batt > 0;
+		const bool power = Powered();
+
+		// heat to move: her own heat plus what leaks in (+) or out (-) through the insulation
+		const double net = bodyHeatW + conductance * (tEnv - 295);
+		double residual = net;
+		thermalW = driveW = 0;
+		if (power)
+		{
+			if (net > 0) { const double q = (std::min)(net, coolMaxW); thermalW = q / copCool; residual = net - q; }
+			else { const double q = (std::min)(-net, heatMaxW); thermalW = q; residual = net + q; }
+			if (drivesOn) driveW = driveDemandW;
+		}
+		drawW = power ? lifeW + thermalW + driveW : 0;
 		batt = (std::max)(0.0, batt - drawW * dt);
 
-		if (o2 > 0) { o2 = (std::max)(0.0, o2 - o2Use * dt); ppO2 = pressure; }
+		if (power && o2 > 0) { o2 = (std::max)(0.0, o2 - o2Use * dt); ppO2 = pressure; }
 		else ppO2 = (std::max)(0.0, ppO2 - o2Use * dt * KPaPerKg(0.032, volume));
 
 		if (power && sorbUsed < sorbCap)
@@ -68,12 +80,17 @@ namespace ocrew
 			ppCO2 += (0.05 - ppCO2) * (1 - std::exp(-dt / 20));   // the fans scrub the helmet down within a minute
 		}
 		else ppCO2 += co2Made * dt * KPaPerKg(0.044, volume);
+		return residual;
 	}
 
-	void Body::Step(double dt, double activityW, double ppO2, double ppCO2, double ambientP, bool suited)
+	void Body::Step(double dt, double activityW, double ppO2, double ppCO2, double ambientP, bool suited, double heatW)
 	{
 		warning.clear();
 		if (state == DEAD) { met = pulse = breath = 0; return; }
+
+		// core temperature: 62 kg at ~3.5 kJ/kg/K; her own thermoregulation handles small imbalances
+		coreT += heatW * dt / (mass * 3500);
+		if (std::abs(heatW) < 60) coreT += (310.15 - coreT) * (1 - std::exp(-dt / 1800));
 
 		// metabolism follows the demand within a few seconds
 		const double demand = 90 + (state == OK ? activityW : 0);
@@ -91,6 +108,10 @@ namespace ocrew
 		if (ppCO2 > 7) drain += (ppCO2 - 7) / 5 / 30;
 		const bool exposed = !suited && ambientP < 6.3;
 		if (exposed) { drain += 1.0 / 10; injury += dt / 90; }
+		const double c = coreT - 273.15;
+		if (c > 41) drain += (c - 41) / 2 / 60;          // heat stroke
+		if (c < 32) drain += (32 - c) / 4 / 60;          // deep hypothermia
+		if (c > 43 || c < 26) injury += dt / 300;
 		reserve = drain > 0 ? reserve - drain * dt : reserve + dt / 20;
 		reserve = std::clamp(reserve, 0.0, 1.0);
 
@@ -105,6 +126,8 @@ namespace ocrew
 		if (state == UNCONSCIOUS) breath = (std::min)(breath, 8.0);
 
 		if (exposed) warning = "VACUUM - NO SUIT";
+		else if (c > 39.5) warning = "OVERHEATING";
+		else if (c < 35) warning = "HYPOTHERMIA";
 		else if (ppO2 < 10) warning = "HYPOXIA";
 		else if (ppO2 < 14) warning = "LOW OXYGEN";
 		else if (ppCO2 > 7) warning = "CO2 NARCOSIS";

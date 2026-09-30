@@ -42,6 +42,7 @@ namespace ocrew
 		double v;
 		if (oapiReadItem_string(cfg, const_cast<char*>("Name"), buf)) name = buf;
 		if (oapiReadItem_string(cfg, const_cast<char*>("Role"), buf)) role = buf;
+		if (oapiReadItem_string(cfg, const_cast<char*>("Voice"), buf)) voice = buf;
 		if (oapiReadItem_float(cfg, const_cast<char*>("BodyMass"), v)) bio.mass = v;
 		if (oapiReadItem_float(cfg, const_cast<char*>("VO2max"), v)) bio.vo2max = v;
 		oapiReadItem_float(cfg, const_cast<char*>("SuitMass"), suitMass);
@@ -65,6 +66,7 @@ namespace ocrew
 			SetMeshVisibilityMode(f.mesh, MESHVIS_NEVER);
 		};
 		load(bodyFig, "BodySkin", "BodyClips");
+		bodyFig.clips.walk.cubic = bodyFig.clips.run.cubic = true;   // coverall: smooth interpolation between mocap frames
 		load(suitFig, "SuitSkin", "SuitClips");
 		if (!bodyFig.ok) oapiWriteLogV("OrbiterCrew: %s has no usable BodySkin/BodyClips", GetClassNameA());
 
@@ -126,6 +128,7 @@ namespace ocrew
 		SetEmptyMass(Mass());
 		ShowFigure();
 		if (!suitFig.ok) oapiWriteLogV("OrbiterCrew: %s has no suit figure yet, the coverall stands in for it", name.c_str());
+		sound.Init(this, voice);
 	}
 
 	void CrewMember::clbkVisualCreated(VISHANDLE v, int)
@@ -145,9 +148,13 @@ namespace ocrew
 	void CrewMember::ShowFigure()
 	{
 		Figure& on = Active();
-		if (bodyFig.ok) SetMeshVisibilityMode(bodyFig.mesh, &on == &bodyFig ? MESHVIS_ALWAYS : MESHVIS_NEVER);
-		if (suitFig.ok) SetMeshVisibilityMode(suitFig.mesh, &on == &suitFig ? MESHVIS_ALWAYS : MESHVIS_NEVER);
+		if (bodyFig.ok) SetMeshVisibilityMode(bodyFig.mesh, &on == &bodyFig ? MESHVIS_ALWAYS | MESHVIS_VC : MESHVIS_NEVER);
+		if (suitFig.ok) SetMeshVisibilityMode(suitFig.mesh, &on == &suitFig ? MESHVIS_ALWAYS | MESHVIS_VC : MESHVIS_NEVER);
 	}
+
+	// without the suit there is nothing between her eyes and the world: the "virtual cockpit" is just her head,
+	// with no instruments and no HUD. The suit gets its own helmet display later.
+	bool CrewMember::clbkLoadVC(int) { return !suitOn; }
 
 	void CrewMember::SetSuit(bool on)
 	{
@@ -215,8 +222,12 @@ namespace ocrew
 	void CrewMember::Drive(double dt, double g)
 	{
 		const Keys k = keysFresh ? keys : Keys{};
-		const double walkV = walkSpeed * (suitOn ? 0.9 : 1.0);
-		const double runV = (std::min)(runSpeed, bio.RunLimit()) * (suitOn ? 0.8 : 1.0);
+		// three profiles: coverall; suit with live drives (Shift = servo boost); suit with a flat battery (dead weight)
+		const bool drives = suitOn && suit.Drives();
+		double walkV = walkSpeed, runV = (std::min)(runSpeed, bio.RunLimit());
+		if (drives) runV = 4.2 + 2.3 * std::sqrt(bio.wbal);
+		else if (suitOn) { walkV = 1.0; runV = (std::min)(2.2, bio.RunLimit()); }
+		boost = drives && k.run && k.fwd;
 
 		// forward: accelerate within the grip of the soles, stop fast, brake hard on the opposite key
 		double target = 0;
@@ -226,13 +237,14 @@ namespace ocrew
 		double nf;
 		if (braking)
 		{
-			nf = fwd - Sign(fwd) * (std::min)(7.5, 0.85 * g) * dt;
+			nf = fwd - Sign(fwd) * (std::min)(drives ? 9.0 : 7.5, 0.85 * g) * dt;   // live drives lock the knees into the brake
 			if (nf * fwd <= 0) nf = 0;
 		}
 		else
 		{
 			const bool speedingUp = std::abs(target) > std::abs(fwd) && target * fwd >= 0;
-			const double rate = speedingUp ? (std::min)(k.run ? 3.2 : 2.0, 0.5 * g) : (std::min)(5.0, 0.7 * g);
+			const double push = boost ? 4.5 : k.run ? 3.2 : 2.0;   // the drives add thrust at the push-off
+			const double rate = speedingUp ? (std::min)(push, 0.5 * g * (boost ? 1.4 : 1.0)) : (std::min)(5.0, 0.7 * g);
 			nf = Approach(fwd, target, rate, dt);
 		}
 		accel = (nf - fwd) / dt;
@@ -268,7 +280,8 @@ namespace ocrew
 		const VECTOR3 up = unit(rpos);
 		MATRIX3 R; GetRotationMatrix(R);
 		const VECTOR3 f = mul(R, _V(0, 0, 1)), r = mul(R, _V(1, 0, 0));
-		const double v0 = 2.5 * (0.55 + 0.45 * bio.wbal) * (suitOn ? 0.85 : 1.0);
+		const bool drives = suitOn && suit.Drives();
+		const double v0 = suitOn ? (drives ? 3.4 : 1.6) : 2.5 * (0.55 + 0.45 * bio.wbal);   // live drives jump higher than legs alone
 
 		VESSELSTATUS2 s;
 		memset(&s, 0, sizeof(s));
@@ -282,7 +295,39 @@ namespace ocrew
 
 		airborne = true;
 		fallSpeed = 0;
-		bio.Spend(0.5 * Mass() * v0 * v0 / 0.25);   // muscles are about 25 % efficient
+		if (drives) { suit.batt = (std::max)(0.0, suit.batt - 0.5 * Mass() * v0 * v0 / 0.85); bio.Spend(300); }
+		else bio.Spend(0.5 * Mass() * v0 * v0 / 0.25);   // muscles are about 25 % efficient
+	}
+
+	Thermal CrewMember::Surroundings() const
+	{
+		const double SIGMA = 5.670e-8, ALPHA = 0.20, EPS = 0.85;   // white outer layer: absorbs little sunlight, radiates well
+		Thermal t;
+		OBJHANDLE sun = oapiGetGbodyByIndex(0), ref = GetSurfaceRef();
+		VECTOR3 p, s, c{};
+		GetGlobalPos(p); oapiGetGlobalPos(sun, &s);
+		const VECTOR3 d = s - p; const double dist = length(d); const VECTOR3 u = d / dist;
+		t.sunFlux = 3.828e26 / (4 * PI * dist * dist);
+		double elev = PI05;
+		if (ref)
+		{
+			oapiGetGlobalPos(ref, &c);
+			const double R = oapiGetSize(ref), along = dotp(c - p, u);
+			if (along > 0 && length((c - p) - u * along) < R) t.sunlit = false;   // the planet is between her and the Sun
+			elev = std::asin(dotp(unit(p - c), u));
+		}
+		if (air.p > 1) { t.tEnv = air.T + (t.sunlit ? 6 : 0); return t; }   // in air the suit mostly exchanges heat with the gas
+		double q = t.sunlit ? ALPHA * t.sunFlux * 0.3 : 0;   // about a third of her surface faces the Sun
+		if (ref && ((GetFlightStatus() & 1) || GetAltitude() < 1000))
+		{
+			// airless ground: hot regolith by day, cold by night; she sees it with half of her surface
+			const double scale = std::pow(t.sunFlux / 1361, 0.25);
+			t.groundT = t.sunlit && elev > 0 ? 100 + 290 * std::pow(std::sin(elev), 0.25) * scale : 100;
+			q += 0.5 * 0.95 * SIGMA * std::pow(t.groundT, 4);
+		}
+		q += 0.5 * SIGMA * std::pow(2.7, 4);
+		t.tEnv = std::pow(q / (EPS * SIGMA), 0.25);
+		return t;
 	}
 
 	void CrewMember::Land()
@@ -306,9 +351,26 @@ namespace ocrew
 		const bool landed = (GetFlightStatus() & 1) != 0;
 
 		// ---- life support ----
-		const double activity = LocomotionPower(Mass(), std::hypot(fwd, lat), g) * (suitOn ? 1.25 : 1.0) + (turn ? 25 : 0);
-		bio.Step(dt, activity, suitOn ? suit.ppO2 : air.ppO2, suitOn ? suit.ppCO2 : air.ppCO2, air.p, suitOn);
-		if (suitOn) suit.Step(dt, bio.O2Use(), bio.CO2Made());
+		// her legs pay for what the drives do not carry; the drives pay in watts (motors ~85 %, muscle ~25 % efficient)
+		const double v = std::hypot(fwd, lat);
+		const bool drives = suitOn && suit.Drives();
+		driveDemandW = 0;
+		if (!suitOn) humanW = LocomotionPower(Mass(), v, g);
+		else if (drives)
+		{
+			const double carried = LocomotionPower(Mass(), v, g), own = LocomotionPower(bio.mass, (std::min)(v, 3.2), g);
+			humanW = own; driveDemandW = 25 + (std::max)(0.0, carried - own) * 0.3;
+		}
+		else humanW = LocomotionPower(Mass(), v, g) * 1.35;   // dead drives: extra mass and stiff joints
+		thermal = Surroundings();
+		double heat;
+		if (suitOn) heat = suit.Step(dt, bio.O2Use(), bio.CO2Made(), driveDemandW, bio.Heat(), thermal.tEnv);
+		else
+		{
+			const double net = bio.Heat() + 8 * (air.p > 1 ? air.T - 295 : 0);   // unsuited: her own regulation covers +-150 W
+			heat = net > 150 ? net - 150 : net < -150 ? net + 150 : 0;
+		}
+		bio.Step(dt, humanW + (turn ? 25 : 0), suitOn ? suit.ppO2 : air.ppO2, suitOn ? suit.ppCO2 : air.ppCO2, air.p, suitOn, heat);
 
 		// ---- posture and movement ----
 		if (airborne)
@@ -328,7 +390,13 @@ namespace ocrew
 		else fwd = lat = turn = accel = 0;
 		keysFresh = false;
 
+		// ---- no HUD without the suit (the generic cockpit has one; switch it off, give it back with the suit) ----
+		const bool inHead = oapiCameraInternal() && oapiCameraTarget() == GetHandle();
+		if (inHead && !suitOn && !hudHidden && oapiGetHUDMode() != HUD_NONE) { oapiSetHUDMode(HUD_NONE); hudHidden = true; }
+		else if (hudHidden && (suitOn || !inHead)) { if (suitOn && inHead) oapiSetHUDMode(HUD_SURFACE); hudHidden = false; }
+
 		// ---- animation ----
+		int footfalls = 0;
 		Figure& fig = Active();
 		if (vis && fig.ok && fig.skin.Attached())
 		{
@@ -337,11 +405,21 @@ namespace ocrew
 			in.grounded = !airborne && landed && !lying;
 			in.landing = landingSpeed;
 			in.effort = (std::min)(1.0, bio.Effort()); in.fatigue = bio.Fatigue(); in.breathRate = bio.breath;
+			in.suited = suitOn; in.bound = boost ? std::clamp((std::hypot(fwd, lat) - 3.5) / 2.5, 0.0, 1.0) : 0.0;
 			const bool firstPerson = oapiCameraInternal() && oapiCameraTarget() == GetHandle();
 			fig.skin.SetHideHead(firstPerson);
 			motion.Update(in, fig.clips, fig.skin);
+			footfalls = motion.Footfalls();
 			if (firstPerson) SetCameraOffset(fig.skin.Point(fig.skin.Bone("Head"), eye));   // the camera rides the head
 		}
+		// ---- sound ----
+		CrewSound::Input si;
+		si.dt = dt; si.footfalls = footfalls; si.runWeight = motion.RunWeight(); si.speed = std::hypot(fwd, lat);
+		si.landing = landingSpeed; si.suited = suitOn; si.vacuum = air.p < 1; si.fanOn = suit.Powered();
+		si.alive = bio.state != Body::DEAD; si.breathRate = bio.breath;
+		si.intensity = std::clamp(0.8 * bio.Effort() + 0.5 * bio.Fatigue() + 0.6 * (1 - bio.reserve), 0.0, 1.0);
+		sound.Update(si);
+
 		landingSpeed = 0;
 		if (messageTime > 0) messageTime -= dt;
 	}
@@ -368,9 +446,18 @@ namespace ocrew
 		line(NORMAL, b);
 		if (suitOn)
 		{
-			snprintf(b, sizeof b, "Suit: O2 %d%% (%.1f h)   Sorbent %d%%   Battery %d%%", static_cast<int>(100 * suit.o2 / suit.o2Cap), suit.HoursLeft(bio.O2Use()),
-				static_cast<int>(100 * (1 - suit.sorbUsed / suit.sorbCap)), static_cast<int>(100 * suit.batt / suit.battCap));
+			snprintf(b, sizeof b, "Suit: O2 %d%% (%.1f h)   Sorbent %d%%   Core %.1f C", static_cast<int>(100 * suit.o2 / suit.o2Cap), suit.HoursLeft(bio.O2Use()),
+				static_cast<int>(100 * (1 - suit.sorbUsed / suit.sorbCap)), bio.coreT - 273.15);
 			line(NORMAL, b);
+			snprintf(b, sizeof b, "Power %d W (life %d, thermal %d, drives %d)   Battery %d%% (%.1f h)%s", static_cast<int>(suit.drawW),
+				static_cast<int>(suit.Powered() ? suit.lifeW : 0), static_cast<int>(suit.thermalW), static_cast<int>(suit.driveW),
+				static_cast<int>(100 * suit.batt / suit.battCap), suit.BattHours(), boost ? "   BOOST" : "");
+			line(suit.Powered() ? NORMAL : ALERT, b);
+			char ground[48] = "";
+			if (thermal.groundT > 0) snprintf(ground, sizeof ground, "   ground %d C", static_cast<int>(thermal.groundT - 273.15));
+			snprintf(b, sizeof b, "Surroundings %d C (rated %d..%d C)   %s%s", static_cast<int>(thermal.tEnv - 273.15), static_cast<int>(suit.tMin - 273.15),
+				static_cast<int>(suit.tMax - 273.15), thermal.sunlit ? "sun" : "shadow", ground);
+			line(suit.InSpec(thermal.tEnv) ? DIM : ALERT, b);
 		}
 		std::string why;
 		const bool ok = air.Breathable(&why);
@@ -383,7 +470,8 @@ namespace ocrew
 		std::string alert = bio.warning;
 		if (alert.empty() && suitOn)
 		{
-			if (suit.batt <= 0) alert = "SUIT BATTERY DEAD - NO CO2 SCRUBBING";
+			if (suit.batt <= 0) alert = "SUIT BATTERY DEAD - NO LIFE SUPPORT, NO DRIVES";
+			else if (!suit.InSpec(thermal.tEnv)) alert = "SURROUNDINGS OUTSIDE THE SUIT RATING";
 			else if (suit.o2 <= 0) alert = "SUIT O2 TANK EMPTY";
 			else if (suit.o2 < 0.1 * suit.o2Cap) alert = "SUIT O2 LOW";
 			else if (suit.sorbUsed >= suit.sorbCap) alert = "SORBENT SATURATED";
@@ -392,7 +480,7 @@ namespace ocrew
 		if (!alert.empty()) line(ALERT, alert.c_str());
 		if (messageTime > 0) line(NORMAL, message.c_str());
 		y += dy / 2;
-		line(DIM, "W/S move  A/D turn  Q/E step  Shift run  Space jump  K suit");
+		line(DIM, suitOn ? "W/S move  A/D turn  Q/E step  Shift boost  Space jump  K suit" : "W/S move  A/D turn  Q/E step  Shift run  Space jump  K suit");
 		return true;
 	}
 }

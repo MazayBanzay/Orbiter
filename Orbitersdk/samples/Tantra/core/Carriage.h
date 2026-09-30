@@ -1,15 +1,16 @@
 // Tantra core: undercarriage and erection sequence («лафет»). No Orbiter dependencies,
 // so the same logic serves the 2010 adapter and a later 2016 port.
 //
-// Two gear sets:
-//   * carriage columns: two band masts on trunnion carriages at the CG line. They hold the
-//     ship level, lift it and turn it about the trunnions (the CG), so the turning moment is
-//     only m*g*(CG error) - no engines are used;
-//   * four stern legs on long feet: the lower pair backs the stern while level, all four
-//     carry the standing ship.
+// Two gear sets, one leg design (hip, flat thigh with band drums, band-mast shin, two-axis
+// ankle, flat pad that folds against the thigh and closes the pocket in flight):
+//   * two carriage legs hanging from trunnion carriages at the CG line (flank pockets). They
+//     hold the ship level, lift it and turn it about the trunnions (the CG), so the turning
+//     moment is only m*g*(CG error) - no engines are used;
+//   * four stern legs in the aft corner pockets: the lower pair backs the stern while level,
+//     all four carry the standing ship.
 // Erection progress P runs 0 (level) .. 6 (standing):
 //   0-1 prepare (crests tucked, pods sunk), 1-2 lift on the columns, 2-3 turn 90 deg,
-//   3-4 stern legs out, 4-5 lower onto the legs, 5-6 masts reeled in, carriages home.
+//   3-4 stern legs out, 4-5 lower onto the legs, 5-6 carriage legs collected into the pockets.
 // In flight the gear is stowed; deploying it prepares either the level set (columns + lower
 // legs) or the standing set (four stern legs) for a tail-first landing.
 #pragma once
@@ -19,32 +20,38 @@ namespace tantra {
 struct Vec3 { double x = 0, y = 0, z = 0; };
 
 struct CarriageGeometry {       // ship frame: x starboard, y up, z along the axis; z = s - sCG
-    double restAxisH = 20.0;    // hull axis above ground while level [m]
+    double restAxisH = 14.0;    // hull axis above ground while level [m]
     double turnClear = 16.0;    // stern clearance while turning [m]
     double standClear = 12.0;   // stern above ground when standing on the legs [m]
-    double columnX = 17.5;      // trunnion plane
-    double footHalf = 13.0;     // half length of the column feet
-    double standR = 21.0;       // radius of the stern feet circle
+    double columnX = 19.0;      // hip plane of the carriage legs (deployed)
+    double footHalf = 8.0;      // half length of the carriage-leg pads (fore-aft)
+    double standR = 26.0;       // radius of the stern feet circle
+    Vec3 standFoot[4] = {};     // stern pads while standing (x, y; z unused), set by the adapter
+    double trackS0 = 32.0, trackS1 = 46.0;  // hip (trunnion) track along the flank pocket
+    double stowS = 46.0;        // hip station with the leg stowed
     double legRestX = 17.7;     // lower-leg feet while level (lateral), set by the adapter
     double legRestS = 5.0;      // their station s
     double bellyY = -9.5;       // belly contact points with the gear stowed
     double bellySNose = 110.0, bellySTail = 8.0, bellyX = 12.0;
-    double footT = 1.2;         // foot thickness
-    double mastMin = 0.3;       // reeled-in mast
+    double footH = 1.6;         // ankle centre above the ground
+    double legMin = 8.8;        // hip -> ankle with the shin collapsed into the thigh
 };
 
 struct CarriagePose {
     double theta = 0.0;         // ship pitch against the ground [rad]
     double trunnionH = 20.0;    // trunnion (CG) height above ground [m]
     double tuck = 0.0;          // crests folded / pods sunk, 0..1
-    double lid = 0.0;           // flank lids open 0..1
-    double slideOut = 0.0;      // carriages out of the hull 0..1
-    double mastLen = 0.3;       // trunnion -> foot top [m]
-    double mastPitch = 0.0;     // mast counter-rotation against the hull [rad]
+    double slideOut = 0.0;      // hips out of the pockets 0..1
+    double hipS = 46.0;         // hip station on the track [m]
+    double mastLen = 8.8;       // carriage legs: hip -> ankle [m]
+    double mastPitch = 1.5708;  // carriage legs against the hull: 0 hanging down, pi/2 along it, aft [rad]
+    double padFold = 1.0;       // carriage-leg pads: 0 open, 1 folded against the thigh
     double legRest = 0.0;       // lower legs in the level pose 0..1
     double legStand = 0.0;      // all legs in the standing pose 0..1
     double columnShare = 0.0;   // weight carried by the columns 0..1 (rest: legs)
-    Vec3 touch[3];              // Orbiter touchdown points, "up" = (p3-p1) x (p2-p1)
+    static constexpr int kMaxTouch = 8;
+    Vec3 touch[kMaxTouch];      // ground contacts (one per pad end / pad), all in one plane;
+    int nTouch = 3;             // the first three: "up" = (p3-p1) x (p2-p1)
     bool onColumns = false;     // columns are the ground contact
 };
 

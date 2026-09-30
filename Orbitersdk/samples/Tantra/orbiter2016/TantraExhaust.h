@@ -57,11 +57,12 @@ private:
     VECTOR3 packetCol_[kMaxPackets] = {};
 
     // Billboards: grey guide beam, violet flow, long glow (per chamber).
-    double lvGrey_[kChambers] = {}, lvViolet_[kChambers] = {}, lvLong_[kChambers][kGlows] = {};
+    double lvGrey_[kChambers] = {}, lvViolet_[kChambers] = {}, lvLong_[kGlows] = {};
+    VECTOR3 axisPos_ = {0, 0, 0};  // merged jet: on the ship axis at the stern
     double lvThread_[kChambers][kGlows] = {};  // guide beam thread in air
     SURFHANDLE texViolet_ = nullptr, texGrey_ = nullptr, texGlow_ = nullptr;
     SURFHANDLE texThread_ = nullptr;
-    SURFHANDLE texPlasma_ = nullptr, texWake_ = nullptr, texDust_ = nullptr;  // particle textures
+    SURFHANDLE texColumn_ = nullptr, texPlasma_ = nullptr, texWake_ = nullptr, texDust_ = nullptr;  // particle textures
 
     // Atmosphere: plasma column from the stern, its light, and particle emitters
     // (hot plasma, shock wake, ejecta) at fixed distances along the axis.

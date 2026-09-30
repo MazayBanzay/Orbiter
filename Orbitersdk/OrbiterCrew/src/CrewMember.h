@@ -2,12 +2,14 @@
 // Ground controls (focus on her, on the surface):
 //   W / S       forward / back; S while moving forward is a hard, friction-limited brake
 //   A / D       turn            Q / E   side step
-//   Shift       run             Space   jump
+//   Shift       run; in the suit: servo boost (faster, bounding stride, paid from the battery)
+//   Space       jump
 //   K           put on / take off the suit (off only in breathable air)
 #pragma once
 #include "LifeSupport.h"
 #include "Motion.h"
 #include "Skin.h"
+#include "Sound.h"
 #include <string>
 
 namespace ocrew
@@ -27,6 +29,7 @@ namespace ocrew
 		int clbkConsumeBufferedKey(DWORD key, bool down, char* kstate) override;
 		void clbkPreStep(double simt, double simdt, double mjd) override;
 		bool clbkDrawHUD(int mode, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp) override;
+		bool clbkLoadVC(int id) override;
 
 	private:
 		struct Figure { UINT mesh{}; Skin skin; ClipSet clips; bool ok{}; };
@@ -40,12 +43,15 @@ namespace ocrew
 		void SetSuit(bool on);
 		void Place(bool lying);
 		void Drive(double dt, double g);
+		Thermal Surroundings() const;
 		void Jump();
 		void Land();
 
 		std::string name{ "Crew member" }, role{ "crew" };
 		Figure bodyFig, suitFig;
 		Motion motion;
+		CrewSound sound;
+		std::string voice{ "female1" };
 		VISHANDLE vis{};
 		VECTOR3 eye{ 0, 0.69, 0.17 };
 		double height{ 0.93 };
@@ -56,6 +62,9 @@ namespace ocrew
 		Suit suit;
 		Body bio;
 		Air air;
+		Thermal thermal;
+		bool boost{};                        // servo boost (suit, live drives, Shift)
+		double humanW{}, driveDemandW{};     // who pays for the movement: her muscles / the drives
 
 		Keys keys;
 		bool keysFresh{};
@@ -63,6 +72,7 @@ namespace ocrew
 		bool airborne{}, lying{}, placed{};
 		double fallSpeed{}, landingSpeed{}, jumpHeading{};
 
+		bool hudHidden{};   // we switched Orbiter's HUD off (no suit, generic cockpit)
 		std::string message;
 		double messageTime{};
 	};
