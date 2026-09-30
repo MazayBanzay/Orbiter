@@ -61,13 +61,17 @@ namespace ocrew
 		// heat to move: her own heat plus what leaks in (+) or out (-) through the insulation
 		const double net = bodyHeatW + conductance * (tEnv - 295);
 		double residual = net;
-		thermalW = driveW = 0;
+		thermalW = driveW = heatW = 0;
 		if (power)
 		{
-			if (net > 0) { const double q = (std::min)(net, coolMaxW); thermalW = q / copCool; residual = net - q; }
-			else { const double q = (std::min)(-net, heatMaxW); thermalW = q; residual = net + q; }
+			if (net > 0) { const double q = (std::min)(net, coolMaxW); thermalW = q / copCool; residual = net - q; heatW = q; }
+			else { const double q = (std::min)(-net, heatMaxW); thermalW = q; residual = net + q; heatW = -q; }
 			if (drivesOn) driveW = driveDemandW;
 		}
+		// inside: held at the set point while the control keeps up; what it cannot move warms or cools the inside
+		if (std::abs(residual) < 5 && power) tIn += (tSet - tIn) * (1 - std::exp(-dt / 90));
+		else tIn += residual * dt / cIn;
+		tIn = std::clamp(tIn, 200.0, 400.0);
 		drawW = power ? lifeW + thermalW + driveW + lampW : 0;
 		batt = (std::max)(0.0, batt - drawW * dt);
 

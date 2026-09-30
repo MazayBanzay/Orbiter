@@ -348,6 +348,24 @@ try:
     basemesh = next(o for o in bpy.data.objects if o.name.endswith('.body'))
     boots = AssetService.find_asset_absolute_path("shoes03/shoes03.mhclo", asset_subdir="clothes")
     if boots: HumanService.add_mhclo_asset(boots, basemesh, asset_type="Clothes", subdiv_levels=0, material_type="MAKESKIN"); log.append("boots added")
+    # hair: short, voluminous, curly copper (user's pick: cortu_strawberry_cloud_hair, CC0) instead of the sleek bob
+    HAIR = None   # the curly cortu_strawberry_cloud_hair was rejected (2026-10-01); the base figure keeps toigo_curled_under_bob
+    if HAIR:
+        for o in list(bpy.data.objects):
+            if o.type == 'MESH' and ('bob' in o.name.lower() or ('hair' in o.name.lower() and HAIR not in o.name)):
+                bpy.data.objects.remove(o, do_unlink=True)
+        hp = AssetService.find_asset_absolute_path("%s/%s.mhclo" % (HAIR, HAIR), asset_subdir="hair")
+        HumanService.add_mhclo_asset(hp, basemesh, asset_type="Hair", subdiv_levels=0, material_type="MAKESKIN")
+        hair = next(o for o in bpy.data.objects if o.type == 'MESH' and HAIR in o.name)
+        img = None
+        for slot in hair.material_slots:
+            if slot.material and slot.material.use_nodes:
+                for nd in slot.material.node_tree.nodes:
+                    if nd.type == 'TEX_IMAGE' and nd.image and "normal" not in nd.image.name.lower() and img is None: img = bpy.path.abspath(nd.image.filepath)
+        import json
+        json.dump({"textures": [{"src": img, "dds": r"Tantra\Astronavigator\Hair.dds", "alpha": True}], "orbiter": os.path.abspath(os.path.join(HERE, "..", ".."))},
+                  open(os.path.join(HERE, "hair_texture.json"), "w"), indent=1)
+        log.append("hair %s: %d verts, texture %s" % (HAIR, len(hair.data.vertices), img))
 
     tris = sum(len(p.vertices) - 2 for p in cov.data.polygons); log.append("coverall tris %d" % tris)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "astronavigator_coverall.blend"))

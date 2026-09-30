@@ -275,7 +275,7 @@ try:
         for i in range(a, b):
             line = hips[a] + span * ((i - a) / (b - a)); off = Matrix.Translation(Vector((rest_hips.x - line.x, rest_hips.y - line.y, 0)))
             frames.append({n: cm(heading @ off @ mats[i][n]) for n in bones})
-        if VARIANT == "coverall" and b < len(mats):   # loop seam: both coverall clips (the run jumped at the end)
+        if (VARIANT == "coverall" or os.environ.get("TANTRA_SUIT_SEAM") == "1") and b < len(mats):   # loop seam: coverall clips; suit only on request (its clips are pinned, the seam fix is applied to them as a delta)
             # close the loop: the next cycle's first frame never matches this one exactly (the head jumped 18 mm and
             # 2 deg at the seam, "a missing frame"). Spread that difference evenly over the cycle.
             off_b = Matrix.Translation(Vector((rest_hips.x - (hips[a] + span).x, rest_hips.y - (hips[a] + span).y, 0)))

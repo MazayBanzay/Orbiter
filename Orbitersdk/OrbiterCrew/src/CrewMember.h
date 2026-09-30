@@ -8,6 +8,7 @@
 //   V           helmet sun shade: gold mirror visor against glare and radiation      L   helmet lamps
 //   B           take / leave the jet pack (suit on, pack within 2.5 m); its own keys: see JetPack.h
 #pragma once
+#include "Autopilot.h"
 #include "JetPack.h"
 #include "LifeSupport.h"
 #include "Motion.h"
@@ -21,6 +22,9 @@ namespace ocrew
 {
 	class CrewMember : public VESSEL4
 	{
+	public:
+		const std::string& DisplayName() const { return name; }
+		~CrewMember();
 	public:
 		CrewMember(OBJHANDLE hVessel, int fModel);
 
@@ -107,6 +111,10 @@ namespace ocrew
 		std::string message;
 		double messageTime{};
 		SuitHud hud;
+		Autopilot ap;
+		bool mouseWasDown{};
+		void ApRequest(int req);
+		double suitResidual{};   // heat the suit could not move, W (+ in, - out)
 
 		// helmet: sun shade (V) and lamps (L)
 		double shade{}, shadeTarget{};        // 0 raised over the crown .. 1 lowered over the visor

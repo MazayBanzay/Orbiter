@@ -45,6 +45,9 @@ namespace ocrew
 		void Apply(const Pose& pose);
 		// first person: collapse the head (hair, face, lashes) so the camera does not see it from inside
 		void SetHideHead(bool hide) { hideHead = hide; }
+		// hair on springs (the group labelled "Hair"): call every step with the body's acceleration in the model frame
+		// (not counting the animation, which the skin measures itself) and gravity; without calls the hair stays rigid
+		void SetHairDrive(double dt, const VECTOR3& bodyAccel, double g);
 		// blend a shape from the .skin file (MORPH lines, e.g. "fist") into the bind mesh, weight 0..1
 		void SetMorph(const char* name, float weight);
 		// a rest-pose point carried by a bone (e.g. the eye point on the head), after the last Apply
@@ -86,6 +89,17 @@ namespace ocrew
 		bool hideHead{};
 		int headBone{ -1 };
 		std::vector<float> S;   // last skin matrices, 12 floats per bone
+		struct Hair
+		{
+			int group{ -1 }; bool driven{}, primed{};
+			std::vector<float> free, w;          // per vertex: freedom 0 (root) .. 1 (tips); 4 node weights
+			float c[3]{};                        // head-local centre of the hair volume (rest pose)
+			double dt{}, g{ 9.81 }, ax{}, ay{}, az{};
+			double p[3]{}, v[3]{};               // last centre position / velocity (model frame)
+			double o[4][3]{}, ov[4][3]{};        // node offsets and velocities (head frame)
+		} hair;
+		void SetupHair();
+		void StepHair(const float* sHead);
 		void Rotate(Pose& pose, const std::vector<int>* set, VECTOR3 pivot, const VECTOR3& axis, float angle) const;   // set = nullptr: all bones
 	};
 }

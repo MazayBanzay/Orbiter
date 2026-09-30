@@ -35,6 +35,7 @@ struct CarriageGeometry {       // ship frame: x starboard, y up, z along the ax
     double bellySNose = 110.0, bellySTail = 8.0, bellyX = 12.0;
     double footH = 1.6;         // ankle centre above the ground
     double legMin = 8.8;        // hip -> ankle with the shin collapsed into the thigh
+    double cgError = 0.0;       // CG ahead of the trunnion axis (real ship: never exactly on it) [m]
 };
 
 struct CarriagePose {

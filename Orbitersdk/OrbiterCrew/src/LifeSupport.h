@@ -65,6 +65,9 @@ namespace ocrew
 		double tMin{ 116 }, tMax{ 394 };              // K: rated environment -157..+121 C
 		double ppO2{ 30 }, ppCO2{ 0.05 };             // helmet gas
 		double driveW{}, thermalW{}, drawW{};         // last step
+		double heatW{};                               // last step: heat moved, + cooling, - heating
+		double tIn{ 295.15 }, tSet{ 295.15 };          // K: the air and the cooling garment inside, and what the control holds
+		double cIn{ 15000 };                          // J/K: garment water loop, air, underwear
 		bool drivesOn{ true };
 
 		bool Powered() const { return batt > 0; }

@@ -375,4 +375,33 @@ constexpr RigComp kRig[kRigCount] = {
     {ANIM_TRAP3_HIDE, 2, 117, {-5.55000, 7.00000, -4.10000}, {0.00100, 0.00100, 0.00100}, 0.000000, 129, 0.000, 1.000},
 };
 
+// Debris vessels (tools/gen_mesh.py write_debris): class, spawn point = centroid in the mesh frame.
+struct DebrisDef { const char* name; const char* cls; V centre; double mass; };
+constexpr int kDebrisCount = 23;
+constexpr DebrisDef kDebris[kDebrisCount] = {
+    {"crest_port", "Tantra\\Debris_crest_port", {-20.74887, -4.00000, -21.04511}, 20000},
+    {"crest_starboard", "Tantra\\Debris_crest_starboard", {20.74887, -4.00000, -21.04511}, 20000},
+    {"fin", "Tantra\\Debris_fin", {0.00000, 24.25000, -13.50000}, 20000},
+    {"pod_0", "Tantra\\Debris_pod_0", {-12.53522, -5.73972, -8.00000}, 19000},
+    {"pod_1", "Tantra\\Debris_pod_1", {12.53522, -5.73972, -8.00000}, 19000},
+    {"pod_2", "Tantra\\Debris_pod_2", {-6.73509, -5.60208, 38.00000}, 19000},
+    {"pod_3", "Tantra\\Debris_pod_3", {6.73509, -5.60208, 38.00000}, 19000},
+    {"leg_port", "Tantra\\Debris_leg_port", {-19.00000, -37.75000, -6.00000}, 80000},
+    {"leg_starboard", "Tantra\\Debris_leg_starboard", {19.00000, -37.75000, -6.00000}, 80000},
+    {"sternleg_0", "Tantra\\Debris_sternleg_0", {5.86978, 11.55217, -31.10000}, 30000},
+    {"sternleg_1", "Tantra\\Debris_sternleg_1", {-5.86978, 11.55217, -31.10000}, 30000},
+    {"sternleg_2", "Tantra\\Debris_sternleg_2", {-12.09203, -5.83268, -31.10000}, 30000},
+    {"sternleg_3", "Tantra\\Debris_sternleg_3", {12.09203, -5.83268, -31.10000}, 30000},
+    {"door_top_port", "Tantra\\Debris_door_top_port", {-3.04774, 6.62841, 52.00000}, 6000},
+    {"door_top_starboard", "Tantra\\Debris_door_top_starboard", {3.04774, 6.62841, 52.00000}, 6000},
+    {"door_bottom_port", "Tantra\\Debris_door_bottom_port", {-2.00000, -8.70000, 52.00000}, 6000},
+    {"door_bottom_starboard", "Tantra\\Debris_door_bottom_starboard", {2.00000, -8.70000, 52.00000}, 6000},
+    {"bay_door_port", "Tantra\\Debris_bay_door_port", {-5.54036, -9.35864, -4.10000}, 10000},
+    {"bay_door_starboard", "Tantra\\Debris_bay_door_starboard", {5.54036, -9.35864, -4.10000}, 10000},
+    {"hull_aft", "Tantra\\Debris_hull_aft", {-0.00000, 3.52943, -15.87500}, 1300000},
+    {"hull_mid", "Tantra\\Debris_hull_mid", {-0.00000, 3.49057, 25.42500}, 320000},
+    {"hull_fore", "Tantra\\Debris_hull_fore", {0.00000, -0.32783, 63.00000}, 420000},
+    {"hull_nose", "Tantra\\Debris_hull_nose", {0.00000, -0.32783, 95.39204}, 263000},
+};
+
 }  // namespace tantra::mesh

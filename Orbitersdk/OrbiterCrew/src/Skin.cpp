@@ -217,6 +217,7 @@ namespace ocrew
 			g.bind.assign(mg->Vtx, mg->Vtx + mg->nVtx); g.base = g.bind; g.work = g.base;
 			ApplyMorphs(static_cast<int>(gi));
 		}
+		SetupHair();
 	}
 
 	void Skin::Apply(const Pose& pose)
@@ -234,6 +235,7 @@ namespace ocrew
 				s[9 + r] = pose.t[i * 3 + r] - (s[r * 3] * T0[0] + s[r * 3 + 1] * T0[1] + s[r * 3 + 2] * T0[2]);
 		}
 		if (!dev) return;
+		if (hair.driven && headBone >= 0) StepHair(&S[headBone * 12]);
 		for (DWORD gi = 0; gi < groups.size(); ++gi)
 		{
 			auto& g = groups[gi];
@@ -276,6 +278,21 @@ namespace ocrew
 					py = s[3] * T0[0] + s[4] * T0[1] + s[5] * T0[2] + s[10];
 					pz = s[6] * T0[0] + s[7] * T0[1] + s[8] * T0[2] + s[11];
 				}
+				if (static_cast<int>(gi) == hair.group && hair.driven && headBone >= 0 && !hideHead)
+				{
+					// displacement in the head frame: the nodes' offsets, weighted, scaled by how free this vertex is;
+					// nothing that would push into the head
+					const float f = hair.free[v]; const float* wv = &hair.w[v * 4];
+					double d[3] = { 0, 0, 0 };
+					for (int k = 0; k < 4; ++k) for (int c = 0; c < 3; ++c) d[c] += f * wv[k] * hair.o[k][c];
+					double r[3] = { b.x - hair.c[0], b.y - hair.c[1], b.z - hair.c[2] };
+					const double rl = std::sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]) + 1e-9, dr = (d[0] * r[0] + d[1] * r[1] + d[2] * r[2]) / rl;
+					if (dr < 0) for (int c = 0; c < 3; ++c) d[c] -= 0.85 * dr * r[c] / rl;
+					const float* s = &S[headBone * 12];
+					px += static_cast<float>(s[0] * d[0] + s[1] * d[1] + s[2] * d[2]);
+					py += static_cast<float>(s[3] * d[0] + s[4] * d[1] + s[5] * d[2]);
+					pz += static_cast<float>(s[6] * d[0] + s[7] * d[1] + s[8] * d[2]);
+				}
 				const float nl = 1.0f / std::sqrt((std::max)(nx * nx + ny * ny + nz * nz, 1e-12f));
 				o.x = px; o.y = py; o.z = pz; o.nx = nx * nl; o.ny = ny * nl; o.nz = nz * nl;
 			}
@@ -283,6 +300,75 @@ namespace ocrew
 			ges.flags = GRPEDIT_VTXCRD | GRPEDIT_VTXNML; ges.Vtx = g.work.data(); ges.nVtx = static_cast<DWORD>(g.work.size());
 			oapiEditMeshGroup(dev, gi, &ges);
 		}
+	}
+
+	void Skin::SetupHair()
+	{
+		hair.group = -1;
+		for (int gi = 0; gi < static_cast<int>(groups.size()); ++gi) if (groups[gi].label == "Hair" && !groups[gi].bind.empty()) hair.group = gi;
+		if (hair.group < 0) return;
+		const auto& B = groups[hair.group].bind; const size_t n = B.size();
+		float ymin = 1e9f, ymax = -1e9f, cx = 0, cz = 0;
+		for (const auto& p : B) { ymin = (std::min)(ymin, p.y); ymax = (std::max)(ymax, p.y); cx += p.x; cz += p.z; }
+		cx /= n; cz /= n;
+		hair.c[0] = cx; hair.c[1] = ymax - 0.11f; hair.c[2] = cz;          // about the middle of the skull
+		hair.free.assign(n, 0); hair.w.assign(n * 4, 0);
+		const float span = (std::max)(0.05f, ymax - ymin - 0.03f);
+		static const float DX[4] = { 0, -1, 1, 0 }, DZ[4] = { -1, 0, 0, 1 };   // back, left, right, front
+		for (size_t v = 0; v < n; ++v)
+		{
+			float t = std::clamp((ymax - 0.03f - B[v].y) / span, 0.0f, 1.0f);
+			hair.free[v] = std::pow(t * t * (3 - 2 * t), 1.2f);                 // roots at the crown fixed, curls free
+			const float x = B[v].x - cx, z = B[v].z - cz, l = std::sqrt(x * x + z * z) + 1e-6f;
+			float sum = 0;
+			for (int k = 0; k < 4; ++k) { float d = (std::max)(0.0f, (x * DX[k] + z * DZ[k]) / l); d *= d; hair.w[v * 4 + k] = d; sum += d; }
+			for (int k = 0; k < 4; ++k) hair.w[v * 4 + k] = sum > 0 ? hair.w[v * 4 + k] / sum : 0.25f;
+		}
+		hair.primed = false;
+	}
+
+	void Skin::SetHairDrive(double dt, const VECTOR3& a, double g)
+	{
+		hair.driven = hair.group >= 0 && dt > 0;
+		hair.dt = dt; hair.g = g; hair.ax = a.x; hair.ay = a.y; hair.az = a.z;
+	}
+
+	void Skin::StepHair(const float* s)
+	{
+		const double dt = hair.dt;
+		// the centre of the hair in the model frame, and its acceleration from the animation (bob, nods, turns)
+		double p[3] = { s[0] * hair.c[0] + s[1] * hair.c[1] + s[2] * hair.c[2] + s[9],
+		                s[3] * hair.c[0] + s[4] * hair.c[1] + s[5] * hair.c[2] + s[10],
+		                s[6] * hair.c[0] + s[7] * hair.c[1] + s[8] * hair.c[2] + s[11] };
+		double acc[3] = { 0, 0, 0 };
+		if (hair.primed)
+		{
+			for (int c = 0; c < 3; ++c)
+			{
+				const double v = (p[c] - hair.p[c]) / dt;
+				acc[c] = std::clamp((v - hair.v[c]) / dt, -60.0, 60.0);
+				hair.v[c] = v;
+			}
+		}
+		else { for (int c = 0; c < 3; ++c) hair.v[c] = 0; hair.primed = true; }
+		for (int c = 0; c < 3; ++c) hair.p[c] = p[c];
+		// what the hair feels: gravity minus acceleration, in the head frame, relative to standing still upright
+		const double f[3] = { -(acc[0] + hair.ax), -hair.g - (acc[1] + hair.ay), -(acc[2] + hair.az) };
+		const double fh[3] = { s[0] * f[0] + s[3] * f[1] + s[6] * f[2], s[1] * f[0] + s[4] * f[1] + s[7] * f[2], s[2] * f[0] + s[5] * f[1] + s[8] * f[2] };
+		const double F[3] = { fh[0], fh[1] + hair.g, fh[2] };
+		// four springs, slightly different so the curls do not move as one block; underdamped: a bounce, then rest
+		static const double W[4] = { 14.0, 15.5, 16.0, 17.5 };
+		const double zeta = 0.2, gain = 0.4, LIM = 0.03;
+		const int n = (std::max)(1, static_cast<int>(std::ceil(dt / 0.004))); const double h = dt / n;
+		for (int k = 0; k < 4; ++k)
+			for (int i = 0; i < n; ++i)
+				for (int c = 0; c < 3; ++c)
+				{
+					double& o = hair.o[k][c]; double& v = hair.ov[k][c];
+					v += (gain * F[c] - W[k] * W[k] * o - 2 * zeta * W[k] * v) * h;
+					o += v * h;
+					if (o > LIM) { o = LIM; v = (std::min)(v, 0.0); } else if (o < -LIM) { o = -LIM; v = (std::max)(v, 0.0); }
+				}
 	}
 
 	static bool HasPrefix(const std::string& s, const char* p) { return s.rfind(p, 0) == 0; }

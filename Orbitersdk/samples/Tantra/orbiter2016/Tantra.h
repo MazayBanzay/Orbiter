@@ -8,6 +8,7 @@
 #include "TantraCrew.h"
 
 #include "../core/Carriage.h"
+#include "../core/Damage.h"
 #include "../core/Drive.h"
 #include "../core/Ignition.h"
 #include "../core/Params.h"
@@ -25,6 +26,8 @@ public:
 
     void clbkSetClassCaps(FILEHANDLE cfg) override;
     void clbkPostCreation() override;
+    void clbkVisualCreated(VISHANDLE vis, int refcount) override;
+    void clbkVisualDestroyed(VISHANDLE vis, int refcount) override;
     void clbkLoadStateEx(FILEHANDLE scn, void* status) override;
     void clbkSaveState(FILEHANDLE scn) override;
     void clbkPreStep(double simt, double simdt, double mjd) override;
@@ -138,6 +141,7 @@ private:
     bool podMachWarned_ = false;
     double podShare_[2] = {1.0, 1.0};          // thrust of the aft / fore pair (pitch balance)
     bool podAssist_ = false;                   // pods help the carriage stand the ship up / lay it down
+    bool podAimed_ = false;                    // doors fully out and every cup on its commanded angle
     double podAssistLevel_ = 0.0;
     double gust_ = 0.0, windForce_ = 0.0;      // gust part of the wind [m/s], wind force on the broadside [N]
     double podSideForce_ = 0.0, podTilt_ = 0.0;  // gust compensation by the pods [N], cup deflection [rad]
@@ -151,19 +155,56 @@ private:
     bool orbiterWind_ = false;                 // wind comes from Orbiter (air data non-zero)
     double windSpeed_ = 0.0;                   // measured horizontal wind [m/s]
     double legLoad_ = 0.0, legRatio_ = 0.0;    // most loaded leg [N] and its share of the rating
+    double colRatio_ = 0.0, sternRatio_ = 0.0; // carriage legs / stern legs: load over rating
+    // Damage (core/Damage): heating by zones, loads on the exposed parts, g, touchdowns, leg overloads.
+    tantra::damage::Model damage_;
+    bool wasContact_ = false;
+    double lastVy_ = 0.0;                      // vertical speed of the last airborne step [m/s]
+    bool destroyedWarned_ = false;
+    double structG_ = 0.0;                     // structural load factor, smoothed [g]
+    void UpdateDamage(double dt);
+    // Damage on the mesh: lost parts are not rendered (group flag 0x2, no shadow 0x1), hot shields glow.
+    void UpdateDamageVisual(bool force);
+    VISHANDLE vis_ = nullptr;
+    // Broken parts leave the ship as vessels of their own (MeshLayout kDebris): where they were, with the
+    // ship's velocity plus a separation push and a tumble. The destroyed hull breaks into four chunks.
+    void SpawnDebris(const char* name, const VECTOR3* posLocal, const VECTOR3& pushLocal, double tumble);
+    void BreakPart(int part);
+    void BreakUp();
+    int debrisCount_ = 0;
+    bool shipGone_ = false, shownGone_ = false;
+    bool shownLost_[tantra::damage::kPartCount] = {};
+    double glowT_[2] = {-1.0, -1.0};
+    bool TouchPointLost(int i, const tantra::CarriagePose& p) const;
     double tipWind_ = 0.0;                     // wind that would overturn the ship now [m/s]
     const char* legName_ = "";
     void UpdateWind(double dt);
     void GuardAgainstLaunch(double dt);  // a contact bounce must never throw the ship off the ground
-    void Reland();                       // put the ship back down where it is (Orbiter's landed status)
+    double bounceDamp_ = 0.0;            // s left of the bounce damping (forces, no state reset)
+    // Orbiter's frames are left-handed: a force F at r gives the torque F x r (GetTorqueVector,
+    // GetAngularVel use it). torqueSign_ = +1 assumes that; the ship checks it against GetTorqueVector
+    // while the pods thrust and flips it if Orbiter disagrees.
+    double torqueSign_ = 1.0;
+    VECTOR3 podTorquePred_ = {0, 0, 0};  // pods' torque predicted last step (F x r)
+    int torqueDisagree_ = 0;
+    double compOff_ = 0.0;               // s: wind/sway compensation off (the ship began to turn)
     double sinceContact_ = 1e9, relandCool_ = 0.0;
     int relands_ = 0;
     void WatchTerrain();                 // Orbiter refines the terrain under a resting ship: follow it
     bool terrainInit_ = false;
     double terrainLng_[5] = {}, terrainLat_[5] = {}, terrainElev_[5] = {};
+    double terrainOfs_ = 0.0;
+    VECTOR3 touchOfs_ = {0, 0, 0};            // touchdown points raised to a refined terrain, relaxing to 0 [m]
     void UpdateLegLoads(const VECTOR3& windForceH);
     double frameS_ = tantra::spec::kOriginS;   // station of the vessel frame origin (= CG)
-    AIRFOILHANDLE foil_[4] = {};
+    AIRFOILHANDLE foil_[5] = {};             // body pitch, body yaw, dorsal fin, lateral crests, gear/pods
+    // Aerodynamic state read by the coefficient callbacks: availability of the fin and crests (folded or
+    // retracted = 0) and the frontal area of the gear and pods in the flow [m^2].
+    double aeroFin_ = 1.0, aeroCrest_ = 1.0, aeroGearArea_ = 0.0;
+    // Carriage drives: the two legs never lift in step. Each side lags the commanded trunnion motion by its own
+    // servo time and carries a little noise; the error is worked off in ~2 s once the motion stops.
+    double driveLag_[2] = {0.0, 0.0}, driveNoise_[2] = {0.0, 0.0}, lastTrunnionH_ = -1.0;
+    unsigned driveRng_ = 11235813u;
     CTRLSURFHANDLE ctrl_[4] = {};              // elevator, two ailerons (elevons), body flap
     bool ctrlOn_ = false;
     double elevon_[2] = {0.0, 0.0}, bodyFlap_ = 0.5;  // mesh states (port, starboard; flap 0..1 = 0..25 deg)

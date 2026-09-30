@@ -56,6 +56,7 @@ constexpr double kPodSwivelMaxDeg = 100.0;      // 0 = thrust forward (aft-point
 constexpr double kPodSwivelRate = 15.0;         // deg/s
 constexpr double kPodSwingTime = 12.0;          // s, door arm out / in
 constexpr double kPodMaxMach = 0.8;             // doors stay shut above: the pods would be torn off
+constexpr bool kPodAssistOn = false;            // pods help the carriage: off until the pod model is proven
 constexpr double kPodAssistShare = 0.5;         // standing up / laying down: pods carry up to this share of the weight
 constexpr double kPodTvcDeg = 7.0;              // pod cups: lateral jet deflection (gust compensation)
 

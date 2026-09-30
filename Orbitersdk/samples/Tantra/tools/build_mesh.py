@@ -84,6 +84,7 @@ def main():
     os.makedirs(BUILD, exist_ok=True)
     raw = os.path.join(BUILD, "tantra_raw.json")
     gm.write_json(raw_groups, raw)
+    gm.write_debris(raw_groups, ROOT)                 # debris meshes + vessel configs (raw geometry is enough)
     gm.write_layout(legs, comps, os.path.join(HERE, "..", "orbiter2016", "MeshLayout.h"))
     os.makedirs(os.path.dirname(MSH), exist_ok=True)
     trap = gm.Group("trap", gm.MAT["trap_shell"])     # stand-alone container vessel mesh (TantraTrap)

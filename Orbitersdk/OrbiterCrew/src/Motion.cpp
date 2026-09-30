@@ -171,6 +171,8 @@ namespace ocrew
 				crouchV += u * (0.06 + wRun * (0.08 + 0.06 * (std::min)(speed, 6.0)));                          // the step lands: knees give
 			// fingers: the mesh carries a relaxed hand (fingers together, softly curled); running closes it into a fist
 			skin.SetMorph("fist", F(u * wRun));
+			// hair on springs: driven by the body's own acceleration (speed changes, turns) and gravity
+			skin.SetHairDrive(dt, _V(in.fwd * in.turn, 0, in.accel), in.g);
 			skin.Reattach(pOut, pWalk, bLHand, bLFingerBase, F(u)); skin.Reattach(pOut, pWalk, bLHand, bLThumb, F(u));
 			skin.Reattach(pOut, pWalk, bRHand, bRFingerBase, F(u)); skin.Reattach(pOut, pWalk, bRHand, bRThumb, F(u));
 		}
@@ -189,15 +191,18 @@ namespace ocrew
 		//      and limbs that lag behind the thrust (underdamped springs: they swing and settle) ----
 		floatW = Follow(floatW, in.floating ? 1.0 : 0.0, 0.8, dt);
 		{
-			const double K = 0.55, KR = 0.45, LIM = 0.35;   // rad per m/s^2 (and per rad/s^2): visible on the suit RCS, capped for strong packs
-			auto spring = [dt](double& x, double& v, double target)
+			// rad per m/s^2 (and per rad/s^2). Without the pack (suit RCS, free float): as it was, the user likes it.
+			// With the pack: a body that holds itself under 1000 N, not a doll (user: too loose) - blended by jetW
+			const double j = jetW;
+			const double K = Lerp(0.55, 0.2, j), KR = Lerp(0.45, 0.15, j), LIM = Lerp(0.35, 0.18, j), KW = Lerp(0.35, 0.12, j);
+			auto spring = [dt, j](double& x, double& v, double target)
 			{
-				const double w = 5.0, z = 0.45;   // muscles hold the limbs: one soft swing, then they settle
+				const double w = Lerp(5.0, 6.0, j), z = Lerp(0.45, 0.85, j);   // muscles hold the limbs (with the pack: barely any swing back)
 				const int n = (std::max)(1, static_cast<int>(std::ceil(dt * w / 0.2))); const double h = dt / n;
 				for (int i = 0; i < n; ++i) { v += (w * w * (target - x) - 2 * z * w * v) * h; x += v * h; }
 			};
-			spring(swayZ, swayZV, in.floating ? std::clamp(K * in.thrustAcc.z + KR * in.angAcc.x + 0.35 * in.angVel.x, -LIM, LIM) : 0.0);    // forward thrust / pitch: limbs trail
-			spring(swayX, swayXV, in.floating ? std::clamp(-K * in.thrustAcc.x - KR * in.angAcc.y - 0.35 * in.angVel.y - 0.35 * in.angVel.z, -LIM, LIM) : 0.0);   // sideways / yaw: the other way
+			spring(swayZ, swayZV, in.floating ? std::clamp(K * in.thrustAcc.z + KR * in.angAcc.x + KW * in.angVel.x, -LIM, LIM) : 0.0);    // forward thrust / pitch: limbs trail
+			spring(swayX, swayXV, in.floating ? std::clamp(-K * in.thrustAcc.x - KR * in.angAcc.y - KW * in.angVel.y - KW * in.angVel.z, -LIM, LIM) : 0.0);   // sideways / yaw: the other way
 			spring(swayY, swayYV, in.floating ? std::clamp(-K * in.thrustAcc.y, -LIM, LIM) : 0.0);
 		}
 		// under thrust she hangs from the pack: the felt acceleration (thrust, not gravity) straightens the legs downwards

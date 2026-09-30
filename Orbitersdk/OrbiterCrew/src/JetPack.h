@@ -33,7 +33,9 @@ namespace ocrew
 	class JetPack
 	{
 	public:
-		static constexpr double DRY = 16, FUEL = 12, ISP = 2900, POD_F = 150, RCS_F = 10, TILT = 20 * RAD;
+		// thrust: 2 x 500 N gives T/W ~4.7 on the Moon, ~2 on Mars (132 kg with her); on Earth it only eases jumps (0.77).
+		// The delta-v stays 2900 * ln(132/120) ~ 280 m/s: thrust changes how hard it pushes, not how far it goes.
+		static constexpr double DRY = 16, FUEL = 12, ISP = 2900, POD_F = 500, RCS_F = 20, TILT = 20 * RAD, YAW_TILT = 5 * RAD;
 
 		void Setup(VESSEL4* vessel);
 		bool Worn() const { return worn; }
@@ -52,6 +54,14 @@ namespace ocrew
 		double DeltaV() const;
 		std::string Hud() const;
 		void Fill(HudData& d) const;       // the suit computer's jet pack page
+		// the autopilot's levers: the height hold, the landing, hands off
+		int ModeId() const { return static_cast<int>(mode); }   // 0 manual, 1 height hold, 2 landing
+		void SetHold(double alt) { if (worn && surfaceMode) { mode = HOLD; altTarget = alt; } }
+		void SetDescent() { if (worn) mode = DESCENT; }
+		void SetManual() { mode = MANUAL; }
+		double AltTarget() const { return altTarget; }
+		double AltNow() const { return tAlt; }
+		double MaxTilt() const { return tMaxTilt; }
 		const RcsSet& Rcs() const { return rcs; }
 		PROPELLANT_HANDLE Propellant() const { return prop; }
 		double Deploy() const { return deploy; }
@@ -78,6 +88,6 @@ namespace ocrew
 		// telemetry for the helmet display
 		double tLeanF{}, tLeanR{}, tWantF{}, tWantR{}, tVs{}, tVsCmd{}, tAlt{}, tGs{};
 		bool tFlying{}, tBoost{}, tProtect{}, tTerrain{}, tLimited{}, holdingAttitude{};
-		double altTarget{ 1.5 }, tMaxTilt{ 30 * RAD };
+		double altTarget{ 1.5 }, tMaxTilt{ 30 * RAD }, tUpright{ 1 };
 	};
 }

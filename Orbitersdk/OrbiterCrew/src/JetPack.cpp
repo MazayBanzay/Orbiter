@@ -91,12 +91,14 @@ namespace ocrew
 		worn = true;
 		v->SetPropellantMass(prop, std::clamp(fuel, 0.0, FUEL));
 		deploy = deployTarget = 0; cmd = 0; mode = MANUAL; manualDeploy = false; tilt[0] = tilt[1] = 0;
+		v->SetPMI(_V(0.17, 0.05, 0.16));   // the pack and the booms far out: slower to pitch, and much slower to turn
 	}
 
 	double JetPack::Remove()
 	{
 		const double f = Fuel();
 		worn = false;
+		v->SetPMI(_V(0.15, 0.03, 0.15));
 		for (THRUSTER_HANDLE t : pod) v->SetThrusterLevel(t, 0);
 		cmd = 0;
 		v->SetPropellantMass(prop, 0);
@@ -148,8 +150,13 @@ namespace ocrew
 		VECTOR3 rpos, rG, uG, fG; v->GetRelativePos(ref, rpos);
 		const VECTOR3 up = unit(rpos);
 		v->GlobalRot(_V(1, 0, 0), rG); v->GlobalRot(_V(0, 1, 0), uG); v->GlobalRot(_V(0, 0, 1), fG);
-		const double leanF = std::asin(std::clamp(-dotp(up, fG), -1.0, 1.0));    // + leaning forward
-		const double leanR = std::asin(std::clamp(-dotp(up, rG), -1.0, 1.0));    // + leaning to her right
+		// how far from upright, as a rotation in her own frame: right at any angle (lying, head down), not only small leans
+		MATRIX3 Rm; v->GetRotationMatrix(Rm);
+		const VECTOR3 ax = crossp(uG, up); const double sn = length(ax), cs = dotp(uG, up);
+		const double tiltAng = std::atan2(sn, cs);
+		const VECTOR3 rb = sn > 1e-6 ? tmul(Rm, ax * (tiltAng / sn)) : (cs < 0 ? _V(-PI, 0, 0) : _V(0, 0, 0));   // head down: pitch over
+		const double leanF = -rb.x;    // + leaning forward (rad, up to pi)
+		const double leanR = rb.z;     // + leaning to her right
 		double hdg = 0; oapiGetHeading(v->GetHandle(), &hdg);
 		if (prevValid)
 		{
@@ -196,7 +203,7 @@ namespace ocrew
 					if (rise + 1.5 > altTarget) { altTarget = rise + 1.5; tTerrain = true; }
 				}
 			}
-			const double aCmd = std::clamp(1.0 * (altTarget - altFeet) - 1.6 * hv.y, -3.0, 3.0);
+			const double aCmd = std::clamp(1.5 * (altTarget - altFeet) - 2.0 * hv.y, -3.0, 4.0);
 			cmd = std::clamp(m * (g + aCmd) / (tmax * cosAll), 0.0, 1.0);
 		}
 		else   // DESCENT: sink slower the lower she is, touch down at 0.5 m/s
@@ -216,6 +223,8 @@ namespace ocrew
 				tProtect = true;
 			}
 		}
+		if (surfaceMode && free) cmd *= std::clamp((cs - 0.3) / 0.4, 0.0, 1.0);   // full up to 45 deg of lean, none past 72
+		tUpright = cs;
 		level = cmd;
 
 		// ---- booms: out when the pods are wanted, folded again after a while idle on the ground ----
@@ -227,13 +236,13 @@ namespace ocrew
 		const bool ready = deploy > 0.98 && canFly;
 
 		// ---- the pods: W swings the jets aft (push forward), S forward (brake, back); A/D against each other (turn) ----
-		const double tYaw = 12 * RAD * in.yaw;
+		const double tYaw = YAW_TILT * in.yaw;
 		const double sideMax = (std::min)(in.boost ? 35 * RAD : 20 * RAD, maxTilt + 1e-6);
 		side += std::clamp((ready ? sideMax * in.strafe : 0.0) - side, -dt * 90 * RAD, dt * 90 * RAD);
 		for (int i = 0; i < 2; ++i)
 		{
-			const double side = i == 0 ? 1 : -1;   // +1: the pod on her right
-			const double target = ready ? std::clamp(maxTilt * in.pitch - side * tYaw, -maxTilt - 12 * RAD, maxTilt + 12 * RAD) : 0.0;
+			const double sgn = i == 0 ? 1 : -1;   // +1: the pod on her right (not the sideways gimbal angle 'side')
+			const double target = ready ? std::clamp(maxTilt * in.pitch - sgn * tYaw, -maxTilt - YAW_TILT, maxTilt + YAW_TILT) : 0.0;
 			tilt[i] += std::clamp(target - tilt[i], -dt * 90 * RAD, dt * 90 * RAD);
 			v->SetThrusterDir(pod[i], _V(std::sin(side), std::cos(side) * std::cos(tilt[i]), std::cos(side) * std::sin(tilt[i])));
 			v->SetThrusterLevel(pod[i], ready ? level : 0.0);
@@ -243,8 +252,8 @@ namespace ocrew
 		// ---- the body stays upright: the pack's small ports hold her attitude near a surface ----
 		if (free && surfaceMode && canFly && Fuel() > 0)
 		{
-			const double p = std::clamp(2.5 * leanF + 1.0 * leanFRate, -1.0, 1.0);    // leaning forward -> nose up
-			const double r = std::clamp(2.5 * leanR + 1.0 * leanRRate, -1.0, 1.0);    // leaning right -> roll left
+			const double p = std::clamp(4.0 * leanF + 2.0 * leanFRate, -1.0, 1.0);    // leaning forward -> nose up
+			const double r = std::clamp(4.0 * leanR + 2.0 * leanRRate, -1.0, 1.0);    // leaning right -> roll left
 			const double y = in.yaw ? 0.0 : std::clamp(1.5 * yawRate, -1.0, 1.0);    // no turn asked: stop turning
 			v->SetThrusterGroupLevel(THGROUP_ATT_PITCHUP, p > 0 ? p : 0); v->SetThrusterGroupLevel(THGROUP_ATT_PITCHDOWN, p < 0 ? -p : 0);
 			v->SetThrusterGroupLevel(THGROUP_ATT_BANKLEFT, r > 0 ? r : 0); v->SetThrusterGroupLevel(THGROUP_ATT_BANKRIGHT, r < 0 ? -r : 0);
@@ -311,7 +320,7 @@ namespace ocrew
 		d.jet = worn;
 		if (!worn) return;
 		d.jetFlying = tFlying; d.jetSurface = surfaceMode; d.jetLimited = tLimited; d.jetProtect = tProtect; d.jetTerrain = tTerrain;
-		d.jetFuel = Fuel() / FUEL; d.jetDv = DeltaV(); d.jetThrottle = level; d.jetTilt[0] = tilt[0]; d.jetTilt[1] = tilt[1];
+		d.jetFuel = Fuel() / FUEL; d.jetDv = DeltaV(); d.jetThrottle = level; d.jetFlow = Thrust() / ISP; d.jetTilt[0] = tilt[0]; d.jetTilt[1] = tilt[1];
 		d.jetMaxTilt = tMaxTilt; d.jetDeploy = deploy; d.jetAltHold = altTarget; d.alt = tAlt; d.vs = tVs; d.gs = tGs;
 		d.leanF = tLeanF; d.leanR = tLeanR; d.jetMode = static_cast<int>(mode); d.boost = tBoost;
 	}

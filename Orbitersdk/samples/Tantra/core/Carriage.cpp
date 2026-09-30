@@ -78,7 +78,7 @@ void Carriage::BuildPose(double sCG) {
     const double hStand = sCG + (port_ ? 7.0 : g.standClear);
     const bool standingSet = p_ >= 6.0;
     const bool levelSet = p_ <= 0.0;
-    const double hipS = std::min(g.trackS1, std::max(g.trackS0, sCG));  // the trunnion follows the CG on its track
+    const double hipS = std::min(g.trackS1, std::max(g.trackS0, sCG - g.cgError));  // trunnions follow the CG (off by cgError)
 
     // --- erection ---
     o.tuck = Ease(ph(0));

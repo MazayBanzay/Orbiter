@@ -33,7 +33,9 @@ namespace ocrew
 		const DWORD MOVE_KEYS[] = { OAPI_KEY_W, OAPI_KEY_S, OAPI_KEY_A, OAPI_KEY_D, OAPI_KEY_Q, OAPI_KEY_E, OAPI_KEY_LSHIFT, OAPI_KEY_RSHIFT };
 	}
 
-	CrewMember::CrewMember(OBJHANDLE hVessel, int fModel) : VESSEL4(hVessel, fModel) {}
+	namespace { std::vector<CrewMember*> everyone; }   // for the suit computer: names of the other crew
+	CrewMember::CrewMember(OBJHANDLE hVessel, int fModel) : VESSEL4(hVessel, fModel) { everyone.push_back(this); }
+	CrewMember::~CrewMember() { everyone.erase(std::remove(everyone.begin(), everyone.end(), this), everyone.end()); }
 
 	void CrewMember::clbkSetClassCaps(FILEHANDLE cfg)
 	{
@@ -117,6 +119,7 @@ namespace ocrew
 			else if (key == "RESERVE") ss >> bio.reserve;
 			else if (key == "SHADE") { ss >> shadeTarget; shade = shadeTarget; }
 			else if (key == "LAMP") ss >> lampOn;
+			else if (key == "HUD") { std::string rest; std::getline(ss, rest); hud.Load(rest); }
 			else if (key == "JETPACK") ss >> jetFromScenario;
 			else if (key == "BODY") { int st; ss >> st; bio.state = static_cast<Body::State>(std::clamp(st, 0, 2)); }
 			else ParseScenarioLineEx(line, status);
@@ -138,6 +141,7 @@ namespace ocrew
 		oapiWriteScenario_int(scn, const_cast<char*>("BODY"), static_cast<int>(bio.state));
 		oapiWriteScenario_float(scn, const_cast<char*>("SHADE"), shadeTarget);
 		oapiWriteScenario_int(scn, const_cast<char*>("LAMP"), lampOn);
+		oapiWriteScenario_string(scn, const_cast<char*>("HUD"), const_cast<char*>(hud.Save().c_str()));
 		oapiWriteScenario_int(scn, const_cast<char*>("JETPACK"), jet.Worn());
 	}
 
@@ -260,6 +264,12 @@ namespace ocrew
 		{
 			if (down) jet.Key(key, (GetFlightStatus() & 1) != 0);
 			return 1;
+		}
+		// with the pack the flight keys are ours everywhere (Orbiter's A = hold altitude, [ ] = prograde/retrograde...)
+		if (jet.Worn())
+		{
+			if (key == OAPI_KEY_SPACE) return 1;
+			for (DWORD k : MOVE_KEYS) if (key == k) return 1;
 		}
 		if (!(GetFlightStatus() & 1) && !airborne) return 0;
 		if (key == OAPI_KEY_SPACE)
@@ -666,7 +676,7 @@ namespace ocrew
 		else humanW = LocomotionPower(Mass(), v, g) * 1.35;   // dead drives: extra mass and stiff joints
 		thermal = Surroundings();
 		double heat;
-		if (suitOn) heat = suit.Step(dt, bio.O2Use(), bio.CO2Made(), driveDemandW, bio.Heat(), thermal.tEnv);
+		if (suitOn) heat = suitResidual = suit.Step(dt, bio.O2Use(), bio.CO2Made(), driveDemandW, bio.Heat(), thermal.tEnv);
 		else
 		{
 			const double net = bio.Heat() + 8 * (air.p > 1 ? air.T - 295 : 0);   // unsuited: her own regulation covers +-150 W
@@ -676,7 +686,11 @@ namespace ocrew
 
 		// ---- jet pack ----
 		const double altFeet = GetAltitude(ALTMODE_GROUND) - height;
-		jet.Update(dt, landed, suitOn && bio.CanAct() && suit.Powered(), g, altFeet, flightFresh ? flight : FlightInput{});
+		const int req = hud.TakeRequest();
+		if (req >= 0) ApRequest(req);
+		FlightInput fin = flightFresh ? flight : FlightInput{};
+		ap.Step(this, jet, dt, g, landed, suitOn && bio.CanAct() && suit.Powered(), fin.pitch != 0 || fin.yaw != 0 || fin.strafe != 0, fin);
+		jet.Update(dt, landed, suitOn && bio.CanAct() && suit.Powered(), g, altFeet, fin);
 		flightFresh = false;
 		freeT = (!landed && !airborne) ? freeT + dt : 0;
 		if (!landed && !airborne && freeT > 0.3 && jet.SurfaceMode()) GroundContactCheck(dt);
@@ -762,12 +776,19 @@ namespace ocrew
 		d.o2 = suit.o2 / suit.o2Cap; d.o2Hours = suit.HoursLeft(bio.O2Use()); d.sorbent = 1 - suit.sorbUsed / suit.sorbCap;
 		d.batt = suit.batt / suit.battCap; d.battHours = suit.BattHours(); d.powerW = suit.drawW; d.lifeW = suit.Powered() ? suit.lifeW : 0;
 		d.thermalW = suit.thermalW; d.driveW = suit.driveW; d.powered = suit.Powered();
+		d.lampW = suitOn ? suit.lampW : 0; d.heatW = suit.heatW; d.residualW = suitResidual; d.battKWh = suit.batt / 3.6e6; d.o2Flow = bio.O2Use();
+		d.sorbHours = bio.CO2Made() > 0 ? (suit.sorbCap - suit.sorbUsed) / bio.CO2Made() / 3600 : 0;
+		d.landed = (GetFlightStatus() & 1) != 0; d.servo = boost;
+		d.tInC = suit.tIn - 273.15;
+		d.apMode = static_cast<int>(ap.Get()); d.apStatus = ap.Status(); d.apCmd = ap.CmdHorizon();
+		if (air.p > 1) { VECTOR3 gsv, asv; GetGroundspeedVector(FRAME_HORIZON, gsv); GetAirspeedVector(FRAME_HORIZON, asv); d.wind = gsv - asv; }
 		d.envC = thermal.tEnv - 273.15; d.ratedMinC = suit.tMin - 273.15; d.ratedMaxC = suit.tMax - 273.15; d.sunlit = thermal.sunlit;
 		d.inSpec = suit.InSpec(thermal.tEnv); d.hasGround = thermal.groundT > 0; d.groundC = thermal.groundT - 273.15;
 		d.body = air.body; d.vacuum = air.body.empty() || air.p < 0.01; d.airKPa = air.p; d.airC = air.T - 273.15; d.breathable = air.Breathable();
 		d.n2 = n2 ? GetPropellantMass(n2) / 1.5 : 0; d.n2Dv = RcsDeltaV();
 		d.rcs = rcsLive ? 1 : ((GetFlightStatus() & 1) || airborne) ? 0 : 2;
-		d.shadeDown = shadeTarget > 0.5; d.lampsOn = lampOn && suit.Powered();
+		d.shadeDown = shadeTarget > 0.5; d.lampsOn = lampOn && suit.Powered(); d.shade = shade;
+		d.firstPerson = oapiCameraInternal() && oapiCameraTarget() == GetHandle();
 		d.speed = std::hypot(fwd, lat); d.simt = oapiGetSimTime();
 		jet.Fill(d);
 		std::string w = bio.warning;
@@ -783,8 +804,52 @@ namespace ocrew
 		for (const auto& p : WARN) if (w == p.first) w = p.second;
 		d.warning = w;
 		if (messageTime > 0) d.message = message;
-		hud.Draw(skp, hps, d);
+		const bool down = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+		if (down && !mouseWasDown && suitOn)
+		{
+			POINT p; GetCursorPos(&p);
+			HWND w = WindowFromPoint(p); DWORD pid = 0;
+			if (w) GetWindowThreadProcessId(w, &pid);
+			RECT rc{};
+			if (w && pid == GetCurrentProcessId() && ScreenToClient(w, &p) && GetClientRect(w, &rc) && rc.right > 0 && rc.bottom > 0 &&
+				std::abs(static_cast<double>(rc.right) / rc.bottom - static_cast<double>(hps->W) / hps->H) < 0.03)
+				hud.Click(p.x * static_cast<double>(hps->W) / rc.right, p.y * static_cast<double>(hps->H) / rc.bottom);
+		}
+		mouseWasDown = down;
+		hud.Draw(skp, hps, d, this);
 		return true;
+	}
+}
+
+namespace ocrew
+{
+	// a button of the suit computer: the pack's height hold and landing, or one of the autopilots on the selected target
+	void CrewMember::ApRequest(int req)
+	{
+		if (req == SuitHud::AP_ALT)
+		{
+			if (!jet.Worn()) return;
+			if (ap.Get() != Autopilot::OFF) ap.Off(this, "удержание высоты");
+			else if (jet.ModeId() == 1) jet.SetManual();
+			else jet.SetHold((std::max)(1.5, jet.AltNow()));
+			return;
+		}
+		if (req == SuitHud::AP_LAND)
+		{
+			if (!jet.Worn()) return;
+			ap.Off(this, "посадка");
+			if (jet.ModeId() == 2) jet.SetManual(); else jet.SetDescent();
+			return;
+		}
+		if (req == SuitHud::AP_SHADE) { if (suitOn) { shadeTarget = shadeTarget > 0.5 ? 0 : 1; Say(shadeTarget > 0.5 ? "Щиток опущен" : "Щиток поднят"); } return; }
+		if (req == SuitHud::AP_LAMP) { if (suitOn) { lampOn = !lampOn; Say(lampOn ? "Фонари включены" : "Фонари выключены"); } return; }
+		if (req >= Autopilot::HOVER && req <= Autopilot::DOCK) ap.Engage(static_cast<Autopilot::Mode>(req), hud.SelectedTarget(), this);
+	}
+
+	std::string CrewDisplayName(OBJHANDLE h)
+	{
+		for (CrewMember* c : everyone) if (c->GetHandle() == h) return c->DisplayName();
+		return std::string();
 	}
 }
 

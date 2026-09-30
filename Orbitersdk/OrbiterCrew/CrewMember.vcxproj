@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\CrewMember.h" />
+    <ClInclude Include="src\Autopilot.h" />
     <ClInclude Include="src\JetPack.h" />
     <ClInclude Include="src\SuitHud.h" />
     <ClInclude Include="src\LifeSupport.h" />
@@ -22,6 +23,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\CrewMember.cpp" />
+    <ClCompile Include="src\Autopilot.cpp" />
     <ClCompile Include="src\JetPack.cpp" />
     <ClCompile Include="src\SuitHud.cpp" />
     <ClCompile Include="src\LifeSupport.cpp" />
@@ -64,7 +66,7 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(SDKDir)XRSound;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>XRSound.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>XRSound.lib;gcAPI.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">

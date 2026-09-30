@@ -108,6 +108,34 @@ def coverall_layer(fr, wrun):
     return fr
 
 
+class HairSim:
+    """the same springs as Skin::StepHair (OrbiterCrew), for previews"""
+    def __init__(self, V):
+        P = V[:, :3]; ymin, ymax = P[:, 1].min(), P[:, 1].max()
+        self.c = np.array([P[:, 0].mean(), ymax - 0.11, P[:, 2].mean()])
+        t = np.clip((ymax - 0.03 - P[:, 1]) / max(0.05, ymax - ymin - 0.03), 0, 1); self.free = (t * t * (3 - 2 * t)) ** 1.2
+        x = P[:, 0] - self.c[0]; z = P[:, 2] - self.c[2]; l = np.hypot(x, z) + 1e-6
+        D = np.array([[0, -1], [-1, 0], [1, 0], [0, 1]], float)
+        w = np.maximum(0, (np.outer(x, D[:, 0]) + np.outer(z, D[:, 1])) / l[:, None]) ** 2
+        self.w = w / np.maximum(w.sum(1, keepdims=True), 1e-9); self.P = P
+        self.o = np.zeros((4, 3)); self.ov = np.zeros((4, 3)); self.p = None; self.v = np.zeros(3)
+    def step(self, Rh, th, dt, g=9.81):
+        p = Rh @ self.c + th
+        acc = np.zeros(3)
+        if self.p is not None:
+            v = (p - self.p) / dt; acc = np.clip((v - self.v) / dt, -60, 60); self.v = v
+        self.p = p
+        f = np.array([0, -g, 0]) - acc; F = Rh.T @ f; F[1] += g
+        W = np.array([14.0, 15.5, 16.0, 17.5]); n = max(1, int(np.ceil(dt / 0.004))); h = dt / n
+        for _ in range(n):
+            self.ov += (0.4 * F[None, :] - (W ** 2)[:, None] * self.o - 2 * 0.2 * W[:, None] * self.ov) * h
+            self.o += self.ov * h
+            hit = np.abs(self.o) > 0.03; self.o = np.clip(self.o, -0.03, 0.03); self.ov[hit] = 0
+    def disp(self):
+        d = self.free[:, None] * (self.w @ self.o); r = self.P - self.c; rl = np.linalg.norm(r, axis=1, keepdims=True) + 1e-9
+        dr = (d * r).sum(1, keepdims=True) / rl; d = d - np.where(dr < 0, 0.85 * dr * r / rl, 0); return d
+
+
 def to_blender(P):   # Orbiter (x right, y up, z fwd, origin 0.93 m above the soles) -> Blender (z up, -y forward)
     return np.stack([-P[:, 0], -P[:, 2], P[:, 1] + 0.93], 1)
 
@@ -179,6 +207,11 @@ try:
         raise SystemExit
     n = 0
     bind = [g['V'].copy() for g in groups]
+    labels = []
+    for l in open(os.path.join(O, "Config", "Tantra", SKIN + ".skin")).read().splitlines():
+        t = l.split()
+        if t and t[0] == "LABEL": labels.append(t[2])
+    hg = labels.index("Hair") if "Hair" in labels else -1
     for clip in ("walk", "run"):
         hdr, frames = read_clip(os.path.join(O, "Config", "Tantra", CLIPS, clip + ".clip"))
         for g, b in zip(groups, bind): g['V'] = b.copy()
@@ -188,6 +221,15 @@ try:
         for k, fr in enumerate(frames):
             if VARIANT == "coverall": fr = coverall_layer(fr, 1.0 if clip == "run" else 0.0)
             P = skinned(bones, W, groups, fr)
+            if hg >= 0 and VARIANT == "coverall":
+                hb = NAMES.index("Head"); R0, T0 = bones[hb]; Rh = qmat(fr[hb, :4]) @ R0.T; th = fr[hb, 4:7] - Rh @ T0
+                if k == 0:   # settle the springs over two loops first
+                    sim = HairSim(groups[hg]['V'])
+                    for _ in range(2):
+                        for fr2 in frames:
+                            Rq = qmat(fr2[hb, :4]) @ R0.T; sim.step(Rq, fr2[hb, 4:7] - Rq @ T0, 1 / 30)
+                sim.step(Rh, th, 1 / 30)
+                P[hg] = P[hg] + (Rh @ sim.disp().T).T
             for ob, p in zip(objs, P):
                 ob.data.vertices.foreach_set("co", to_blender(p).ravel()); ob.data.update()
             for vn, loc in views.items():

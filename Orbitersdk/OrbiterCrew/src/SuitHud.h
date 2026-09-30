@@ -30,10 +30,16 @@ namespace ocrew
 		double n2{}, n2Dv{}; int rcs{};  // 0 safe on the ground, 1 ready, 2 no power
 		// helmet
 		bool shadeDown{}, lampsOn{}, boost{};
+		double shade{};                  // the sun shade's position, 0 up .. 1 down
+		bool firstPerson{};              // the view is from her eyes (the visor effects apply)
 		// jet pack
 		bool jet{}, jetFlying{}, jetSurface{}, jetLimited{}, jetProtect{}, jetTerrain{};
 		double jetFuel{}, jetDv{}, jetThrottle{}, jetFlow{}, jetTilt[2]{}, jetMaxTilt{}, jetDeploy{}, jetAltHold{}, alt{}, vs{}, gs{}, leanF{}, leanR{};
 		int jetMode{};                   // 0 manual, 1 height hold, 2 landing
+		// autopilot (Autopilot::Mode) and what it says; its commanded acceleration, horizon frame
+		int apMode{}; std::string apStatus; VECTOR3 apCmd{};
+		// inside the suit, and the wind (Orbiter's own: ground speed minus air speed, horizon frame x east z north)
+		double tInC{ 22 }; VECTOR3 wind{};
 		// walking
 		bool landed{}, servo{}; double speed{};
 		// talk
@@ -68,7 +74,11 @@ namespace ocrew
 	public:
 		~SuitHud();
 		void Draw(oapi::Sketchpad* skp, const HUDPAINTSPEC* hps, const HudData& d, VESSEL* v);
-		bool Key(DWORD key);                   // the computer's keys; true = used
+		void Click(double x, double y);        // a left click in the view, pixels of the HUD surface
+		// requests for the crew member: an autopilot button (AP_*) and the target it applies to; -1 = none
+		enum { AP_ALT = 100, AP_LAND = 101, AP_SHADE = 102, AP_LAMP = 103 };
+		int TakeRequest() { const int r = request; request = -1; return r; }
+		OBJHANDLE SelectedTarget() const { return sel; }
 		std::string Save() const;              // one scenario line
 		void Load(const std::string& line);
 
@@ -85,7 +95,7 @@ namespace ocrew
 			bool pack{}, crew{}, landed{};
 		};
 
-	private:
+	// state below is read by the MFD pages (SuitHud.cpp)
 		void SetMode(int m, bool manual);
 		void Nav(VESSEL* v, const HudData& d);
 		void Terrain(VESSEL* v);
@@ -114,11 +124,21 @@ namespace ocrew
 		std::vector<std::pair<double, double>> rrHist;  // range, closing rate
 		double lastRR{ -1 };
 
+		// what can be clicked, from the last frame (pixels)
+		enum HitKind { H_LTAB, H_RTAB, H_LFOLD, H_RFOLD, H_TGT, H_AP, H_PAL, H_ZOOM, H_MODE, H_NVG, H_NEXT };
+		struct Hit { double x0, y0, x1, y1; int kind, arg; };
+		std::vector<Hit> hits;
+		int request{ -1 };
+		// night vision: the D3D9 client's custom camera renders her view into a texture, shown amplified in green
+		bool nvg{}, gcTried{}, gcOk{}; SURFHANDLE nvSrf{}; void* nvCam{}; int nvW{}, nvH{}; std::string nvNote;
+		void NightVision(oapi::Sketchpad* skp, VESSEL* v, double W, double H);
 		HudText glyphs;
 		bool glyphsTried{};
 		std::map<unsigned long long, oapi::Pen*> pens;       // fallback without Sketchpad2
 		std::map<unsigned long long, oapi::Brush*> brushes;
+		std::map<int, oapi::Font*> fonts;
 		friend class Gfx;
+		friend struct Ctx;
 	};
 
 	// UTF-8 -> the system code page, for the fallback text
