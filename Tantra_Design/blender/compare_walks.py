@@ -57,10 +57,11 @@ try:
         for k in range(len(cyc) if allf else NSHOT):
             f = F[cyc[k]] if allf else F[cyc[int(k * len(cyc) / NSHOT)]]
             h = M(f, "Hips").translation
-            cam.location = h + fwd * 4.6; cam.location.z = 1.0; cam.data.lens = 55
-            cam.rotation_mode = 'QUATERNION'; cam.rotation_quaternion = (Vector((h.x, h.y, 0.88)) - Vector(cam.location)).to_track_quat('-Z', 'Y')
-            sc.frame_set(f)
-            sc.render.filepath = os.path.join(OUT, ("all_%s_%02d.png" if allf else "%s_%d.png") % (clip, k)); bpy.ops.render.render(write_still=True)
+            for vn, dirv in (("", fwd), ("side_", side)) if allf else (("", fwd),):
+                cam.location = h + dirv * 4.6; cam.location.z = 1.0; cam.data.lens = 55
+                cam.rotation_mode = 'QUATERNION'; cam.rotation_quaternion = (Vector((h.x, h.y, 0.88)) - Vector(cam.location)).to_track_quat('-Z', 'Y')
+                sc.frame_set(f)
+                sc.render.filepath = os.path.join(OUT, ("all_%s%s_%02d.png" % (vn, clip, k)) if allf else "%s_%d.png" % (clip, k)); bpy.ops.render.render(write_still=True)
 except Exception:
     log.append(traceback.format_exc())
 open(LOG, "w").write("\n".join(log))

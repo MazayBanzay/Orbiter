@@ -16,12 +16,12 @@ namespace ocrew
 	bool Air::Breathable(std::string* reason) const
 	{
 		auto no = [&](const char* r) { if (reason) *reason = r; return false; };
-		if (p < 6.3) return no("vacuum");
-		if (ppO2 < 16) return no("too little oxygen");
-		if (ppO2 > 60) return no("oxygen toxic");
-		if (ppCO2 > 1.0) return no("too much CO2");
-		if (T < 243) return no("too cold");
-		if (T > 323) return no("too hot");
+		if (p < 6.3) return no("вакуум");
+		if (ppO2 < 16) return no("мало кислорода");
+		if (ppO2 > 60) return no("избыток кислорода");
+		if (ppCO2 > 1.0) return no("много CO2");
+		if (T < 243) return no("слишком холодно");
+		if (T > 323) return no("слишком жарко");
 		return true;
 	}
 
@@ -68,7 +68,7 @@ namespace ocrew
 			else { const double q = (std::min)(-net, heatMaxW); thermalW = q; residual = net + q; }
 			if (drivesOn) driveW = driveDemandW;
 		}
-		drawW = power ? lifeW + thermalW + driveW : 0;
+		drawW = power ? lifeW + thermalW + driveW + lampW : 0;
 		batt = (std::max)(0.0, batt - drawW * dt);
 
 		if (power && o2 > 0) { o2 = (std::max)(0.0, o2 - o2Use * dt); ppO2 = pressure; }
@@ -126,6 +126,7 @@ namespace ocrew
 		if (state == UNCONSCIOUS) breath = (std::min)(breath, 8.0);
 
 		if (exposed) warning = "VACUUM - NO SUIT";
+		else if (injury > 0.05) warning = "INJURED";
 		else if (c > 39.5) warning = "OVERHEATING";
 		else if (c < 35) warning = "HYPOTHERMIA";
 		else if (ppO2 < 10) warning = "HYPOXIA";
@@ -133,6 +134,15 @@ namespace ocrew
 		else if (ppCO2 > 7) warning = "CO2 NARCOSIS";
 		else if (ppCO2 > 2) warning = "HIGH CO2";
 		else if (wbal < 0.15) warning = "EXHAUSTED";
+	}
+
+	void Body::Impact(double v)
+	{
+		if (state == DEAD || v <= 7.0) return;
+		if (v >= 14.0) { state = DEAD; return; }
+		injury += (v - 7.0) / 7.0;          // hard landings add up
+		reserve = (std::max)(0.0, reserve - 0.3 * (v - 7.0) / 7.0);
+		if (injury >= 1) state = DEAD;
 	}
 
 	double LocomotionPower(double mass, double v, double g)

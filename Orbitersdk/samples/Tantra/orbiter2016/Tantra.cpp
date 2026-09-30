@@ -41,17 +41,25 @@ const CrewSeed kCrew[] = {
     {"Astronomer Two", 45, 66, 70, "APhy"},  // unnamed in the novel
 };
 
-// Port airlock; the small lift stands on the ground 12.5 m off the axis.
-const double kDoorZ = sp::Z(sp::kDoorS);
-const VECTOR3 kEvaPos = {-12.5, -sp::kAxisHeight + 1.5, kDoorZ};
+// Crew to the ground: the hangar floor platform (s 81.5..98.5) lowers to the ground; the crew steps off
+// beside it. The port airlock door serves in space.
+const double kCrewLiftS = 90.0;
+const VECTOR3 kEvaPos = {4.5, -sp::kAxisHeight + 1.5, sp::Z(kCrewLiftS)};
 
 // Attitude micro-motor blocks.
 const double kAttNoseZ = sp::Z(sp::kAttNoseS), kAttTailZ = sp::Z(sp::kAttTailS);
 const double kAttNoseR = sp::kAttNoseR, kAttTailR = sp::kAttTailR;
 
-// Cup offsets on the aft face of an auxiliary pod (one row of three), pod-local y.
-const double kCupDY[sp::kCupsPerPod] = {-0.9, 0.0, 0.9};
-const double kPodFaceDZ = -3.1;  // aft face relative to the pod centre
+// Right-handed rotation of `p` about the unit `axis` (the mesh rig convention).
+VECTOR3 RotateAbout(const VECTOR3& p, const VECTOR3& axis, double ang) {
+    const double c = std::cos(ang), s = std::sin(ang);
+    return p * c + crossp(axis, p) * s + axis * (dotp(axis, p) * (1.0 - c));
+}
+VECTOR3 V3(const tantra::mesh::V& a) { return _V(a.x, a.y, a.z); }
+
+// Hull stations of the airfoil references: body (Newtonian centre of pressure near the planform centroid),
+// dorsal fin 7, lateral crests.
+const double kAeroS[4] = {55.0, 55.0, 23.0, 16.5};
 
 // --- Aerodynamic coefficients -------------------------------------------------
 
@@ -135,7 +143,7 @@ void Tantra::DefineGear() {
     TantraGear::LegRestFoot(g.legRestX, g.legRestS);
     carriage_.SetGeometry(g);
     gear_ = new TantraGear(this, meshIdx_);
-    carriage_.Update(0.0, sp::kOriginS);
+    carriage_.Update(0.0, frameS_);
 }
 
 // Every tunable can be overridden in Config\Vessels\Tantra.cfg ("Key = value").
@@ -224,13 +232,12 @@ void Tantra::DefinePropulsion() {
         plan_[i] = CreateThruster(pos, fwd, prm_.planThrustTotal / sp::kPlanCount, ion_, prm_.planExhaust);
         AddExhaust(plan_[i], 40.0, 1.8);
     }
-    // Two small swivelling pods on the shoulder (hover of the light ship). Thrust acts on the CG
-    // line (see Spec.h); the flame is drawn at the real cups, which move with the pod.
+    // Four planetary pods x 3 cups on the lower chines (MeshLayout kPods). The cups are placed every step
+    // by UpdatePods from the rig: door arm swing, pod swivel, vessel frame.
     for (int p = 0; p < sp::kPodCount; ++p) {
-        const double side = p == 0 ? -1.0 : 1.0;
         for (int c = 0; c < sp::kCupsPerPod; ++c) {
             const int k = p * sp::kCupsPerPod + c;
-            pod_[k] = CreateThruster(_V(side * sp::kPodX, kCupDY[c], 0.0), fwd, prm_.podThrustTotal / sp::kPodCups, ion_,
+            pod_[k] = CreateThruster(V3(tantra::mesh::kPods[p].cup[c]), fwd, prm_.podThrustTotal / sp::kPodCups, ion_,
                                      prm_.planExhaust);
             EXHAUSTSPEC& es = podExh_[k];
             es.th = pod_[k];
@@ -305,12 +312,48 @@ void Tantra::ScaleAttitudeThrust() {
 }
 
 void Tantra::DefineAerodynamics() {
-    const double frontal = PI * sp::kAftHalfWidth * 0.5 * (sp::kAftTop - sp::kAftBottom);
-    CreateAirfoil3(LIFT_VERTICAL, _V(0, 0, 0), BodyVertical, nullptr, sp::kLength, frontal, 0.1);
-    CreateAirfoil3(LIFT_HORIZONTAL, _V(0, 0, 0), BodyHorizontal, nullptr, sp::kLength, frontal, 0.1);
-    // Crests of equilibrium: dorsal fin holds heading, lateral fins hold pitch.
-    CreateAirfoil3(LIFT_HORIZONTAL, _V(0, 24.0, sp::Z(22.0)), Fin, &kDorsalFin, 28.0, 650.0, kDorsalFin.aspect);
-    CreateAirfoil3(LIFT_VERTICAL, _V(0, -1.0, sp::Z(16.5)), Fin, &kLateralFins, 16.5, 445.0, kLateralFins.aspect);
+    const double frontal = 0.8 * 2.0 * sp::kAftHalfWidth * (sp::kAftTop - sp::kAftBottom);  // rounded-polygon section
+    // Airfoils act at hull stations: kAero[] keeps them, UpdateCG moves the refs with the vessel frame.
+    foil_[0] = CreateAirfoil3(LIFT_VERTICAL, _V(0, 0, Zf(kAeroS[0])), BodyVertical, nullptr, sp::kLength, frontal, 0.1);
+    foil_[1] = CreateAirfoil3(LIFT_HORIZONTAL, _V(0, 0, Zf(kAeroS[1])), BodyHorizontal, nullptr, sp::kLength, frontal, 0.1);
+    // Crests of equilibrium: dorsal fin 7 (611 m2) holds heading, lateral crests (2 x 212 m2) hold pitch.
+    foil_[2] = CreateAirfoil3(LIFT_HORIZONTAL, _V(0, 22.0, Zf(kAeroS[2])), Fin, &kDorsalFin, 28.0, 611.0, kDorsalFin.aspect);
+    foil_[3] = CreateAirfoil3(LIFT_VERTICAL, _V(0, -4.0, Zf(kAeroS[3])), Fin, &kLateralFins, 16.0, 424.0, kLateralFins.aspect);
+}
+
+// Elevons on the outer 60 % of the lateral crests (2 x 36 m2, -30..+40 deg) and the body flap under the
+// stern (18 x 5 m, 0..25 deg). Removed while the crests are folded.
+void Tantra::DefineControlSurfaces(bool on) {
+    if (on == ctrlOn_) return;
+    for (CTRLSURFHANDLE& h : ctrl_) {
+        if (h) DelControlSurface(h);
+        h = nullptr;
+    }
+    if (on) {
+        ctrl_[0] = CreateControlSurface3(AIRCTRL_ELEVATOR, 72.0, 1.2, _V(0, -4.0, Zf(12.5)), AIRCTRL_AXIS_XPOS, 1.0);
+        ctrl_[1] = CreateControlSurface3(AIRCTRL_AILERON, 36.0, 1.2, _V(23.5, -4.0, Zf(13.0)), AIRCTRL_AXIS_XPOS, 1.0);
+        ctrl_[2] = CreateControlSurface3(AIRCTRL_AILERON, 36.0, 1.2, _V(-23.5, -4.0, Zf(13.0)), AIRCTRL_AXIS_XNEG, 1.0);
+        ctrl_[3] = CreateControlSurface3(AIRCTRL_ELEVATORTRIM, 90.0, 0.8, _V(0, -9.6, Zf(0.0)), AIRCTRL_AXIS_XPOS, 1.5);
+    }
+    ctrlOn_ = on;
+}
+
+// Mesh follows the control inputs: elevons = elevator +- aileron (trailing edge up for nose up), body
+// flap from the elevator trim (neutral trim = 12.5 deg, the entry trim at 45..55 deg angle of attack).
+void Tantra::UpdateControlSurfaces() {
+    namespace m = tantra::mesh;
+    const double up = m::kElevonUpDeg, dn = m::kElevonDownDeg;
+    const double e = ctrlOn_ ? GetControlSurfaceLevel(AIRCTRL_ELEVATOR) : 0.0;
+    const double a = ctrlOn_ ? GetControlSurfaceLevel(AIRCTRL_AILERON) : 0.0;
+    const double t = ctrlOn_ ? GetControlSurfaceLevel(AIRCTRL_ELEVATORTRIM) : 1.0;
+    auto state = [&](double cmd) {
+        cmd = (std::max)(-1.0, (std::min)(1.0, cmd));
+        const double deg = cmd > 0.0 ? -cmd * up : -cmd * dn;  // trailing edge down positive
+        return (deg + up) / (up + dn);
+    };
+    elevon_[0] = state(e - a);
+    elevon_[1] = state(e + a);
+    bodyFlap_ = (std::max)(0.0, (std::min)(1.0, 0.5 * (1.0 - t)));
 }
 
 void Tantra::DefineCrew() {
@@ -319,6 +362,8 @@ void Tantra::DefineCrew() {
 }
 
 void Tantra::clbkPostCreation() {
+    UpdateCG(true);   // the loaded propellant sets the CG before the first step
+    UpdatePods(0.0);
     UpdateGear(0.0);  // mesh pose and touchdown points from the loaded state
     sound_ = XRSound::CreateInstance(this);
     if (!sound_ || !sound_->IsPresent()) return;
@@ -352,7 +397,7 @@ void Tantra::clbkSaveState(FILEHANDLE scn) {
     oapiWriteScenario_string(scn, const_cast<char*>("GLIMIT"), buf);
     oapiWriteScenario_int(scn, const_cast<char*>("HOTSTART_OVERRIDE"), hotStartOverride_ ? 1 : 0);
     oapiWriteScenario_float(scn, const_cast<char*>("SHIPTIME"), properTime_);
-    std::snprintf(buf, sizeof buf, "%.1f %.1f", podAngle_, podTarget_);
+    std::snprintf(buf, sizeof buf, "%.1f %.1f %.3f %d", podAngle_, podTarget_, podOut_, podsWanted_ ? 1 : 0);
     oapiWriteScenario_string(scn, const_cast<char*>("PODS"), buf);
     {
         double p, pT, g, gT;
@@ -391,6 +436,15 @@ void Tantra::clbkLoadStateEx(FILEHANDLE scn, void* status) {
             properTime_ = d;
         } else if (!_strnicmp(line, "PODS", 4) && std::sscanf(line + 4, "%lf %lf", &d, &podTarget_) >= 1) {
             podAngle_ = d;
+            double out = 0.0;
+            int want = 0;
+            if (std::sscanf(line + 4, "%*lf %*lf %lf %d", &out, &want) == 2) {
+                podOut_ = out;
+                podsWanted_ = want != 0;
+            } else {
+                podOut_ = podAngle_ > 1.0 ? 1.0 : 0.0;  // older scenarios: swivelled pods are out
+                podsWanted_ = podOut_ > 0.5;
+            }
         } else if (!_strnicmp(line, "FIELDSTORE", 10) && std::sscanf(line + 10, "%lf", &d) == 1) {
             drive_.SetStoreFraction(d);
         } else if (!_strnicmp(line, "CARRIAGE", 8)) {
@@ -414,7 +468,7 @@ void Tantra::clbkLoadStateEx(FILEHANDLE scn, void* status) {
     BindMainGroup(engineSet_);
     UpdatePods(0.0);
     SelectActiveTrap();
-    carriage_.Update(0.0, sp::kOriginS);
+    carriage_.Update(0.0, frameS_);
     tuck_ = crestsFolded_ ? 1.0 : 0.0;
     UpdateGear(0.0);
 }
@@ -436,7 +490,7 @@ bool Tantra::AnaIsMain() const { return engineSet_ == EngineSet::Anamezon && ign
 void Tantra::RebindGroups() {
     const bool anaMain = AnaIsMain();
     const int want = anaMain ? 0 : 1;
-    const bool hover = podAngle_ >= 45.0 && tuck_ < 0.5 && carriage_.Pose().tuck < 0.5;
+    const bool hover = podOut_ >= 1.0 && podAngle_ >= 45.0 && !podAssist_;
     const bool mainIsAna = GetGroupThrusterCount(THGROUP_MAIN) == sp::kAnaCount;
     if (want != planGroup_ || anaMain != mainIsAna) {
         DelThrusterGroup(THGROUP_MAIN);
@@ -454,32 +508,319 @@ void Tantra::RebindGroups() {
     }
 }
 
+// Pods: the bay door is the swing arm (out 0..1 in kPodSwingTime), the pod turns only while fully out,
+// and swings in only with the cups aft. The doors stay shut above Mach 0.8 and with the crests folded
+// or the ship being stood up. Cup positions and directions follow the mesh rig exactly.
 void Tantra::UpdatePods(double dt) {
+    namespace m = tantra::mesh;
+    const bool fast = GetAtmDensity() > 1e-6 && GetMachNumber() > sp::kPodMaxMach;
+    // Standing up / laying down: the pods come out and hold their thrust world-vertical (cups swivel by 90 deg
+    // minus the ship's pitch); the crests fold, the pods stay out (tantra_c148.html, «Подъём на корму»).
+    const double P = carriage_.Progress();
+    // Only while the carriage actually lifts, turns or lowers the ship (not while the crests fold, not once
+    // it stands on the stern legs).
+    podAssist_ = !fast && tuck_ < 0.5 && GroundContact() && carriage_.Busy() && P > 1.0 && P < 4.9;
+    const bool allowed = !fast && tuck_ < 0.5 && (podAssist_ || carriage_.Pose().tuck < 0.5);
+    if (podsWanted_ && fast && podOut_ < 1.0 && !podMachWarned_) {
+        Message("Гондолы: створки откроются ниже М %.1f", "Pods: the doors open below Mach %.1f", sp::kPodMaxMach);
+        podMachWarned_ = true;
+    }
+    if (!fast) podMachWarned_ = false;
+    const bool out = (podsWanted_ || podAssist_) && allowed;
+    const double assistSwivel = (std::max)(0.0, (std::min)(sp::kPodSwivelMaxDeg, 90.0 - carriage_.Pose().theta * DEG));
+    const double swivelTarget = out && podOut_ >= 1.0 ? (podAssist_ ? assistSwivel : podTarget_) : 0.0;
     const double step = sp::kPodSwivelRate * dt;
-    if (podAngle_ < podTarget_) podAngle_ = (std::min)(podTarget_, podAngle_ + step);
-    else if (podAngle_ > podTarget_) podAngle_ = (std::max)(podTarget_, podAngle_ - step);
-    const double a = podAngle_ * RAD, cant = sp::kPodCantDeg * RAD;
-    const double sunk = (std::max)(tuck_, carriage_.Pose().tuck);
-    const double x = sp::kPodX + (sp::kPodXIn - sp::kPodX) * sunk;
+    if (podAngle_ < swivelTarget) podAngle_ = (std::min)(swivelTarget, podAngle_ + step);
+    else if (podAngle_ > swivelTarget) podAngle_ = (std::max)(swivelTarget, podAngle_ - step);
+    const double sw = dt / sp::kPodSwingTime;
+    if (out) podOut_ = (std::min)(1.0, podOut_ + sw);
+    else if (podAngle_ < 0.5) podOut_ = (std::max)(0.0, podOut_ - sw);
+
+    const VECTOR3 dz = _V(0, 0, MeshDZ());
+    const double swivel = podAngle_ / sp::kPodSwivelMaxDeg * m::kPodSwivelMax;
     for (int p = 0; p < sp::kPodCount; ++p) {
-        const double side = p == 0 ? -1.0 : 1.0;
-        // Cups canted outboard: the jet leaves outward, the thrust leans inward.
-        const VECTOR3 dir = _V(-side * std::sin(cant), std::sin(a) * std::cos(cant), std::cos(a) * std::cos(cant));
+        const m::PodRig& r = m::kPods[p];
+        const VECTOR3 hinge = V3(r.hinge), pivot = V3(r.pivot), ax = V3(r.swivelAxis), zax = _V(0, 0, 1);
+        const double swing = r.swing * podOut_;
+        auto place = [&](const VECTOR3& q) {
+            const VECTOR3 a = RotateAbout(q - pivot, ax, swivel) + pivot;
+            return RotateAbout(a - hinge, zax, swing) + hinge + dz;
+        };
+        VECTOR3 dir = RotateAbout(RotateAbout(_V(0, 0, 1), ax, swivel), zax, swing);  // cups face aft at 0
         for (int c = 0; c < sp::kCupsPerPod; ++c) {
             const int k = p * sp::kCupsPerPod + c;
-            SetThrusterDir(pod_[k], dir);
-            // Cup on the aft face, turned with the pod about its lateral axis (mesh: pod_swivel).
-            const double cy = kCupDY[c], cz = kPodFaceDZ;
-            podExhPos_[k] = _V(side * x, cy * std::cos(a) - cz * std::sin(a), sp::Z(sp::kPodS) + cy * std::sin(a) + cz * std::cos(a));
+            podExhPos_[k] = place(V3(r.cup[c]));
             podExhDir_[k] = dir;
+            SetThrusterRef(pod_[k], podExhPos_[k]);
+            SetThrusterDir(pod_[k], dir);
         }
     }
+    // Pitch: the thrust centre of the two pairs sits on the CG.
+    const double sA = m::kPods[0].s, sF = m::kPods[2].s;
+    const double fore = (std::max)(0.0, (std::min)(1.0, (frameS_ - sA) / (sF - sA)));
+    const double big = (std::max)(fore, 1.0 - fore);
+    podShare_[0] = (1.0 - fore) / big;
+    podShare_[1] = fore / big;
     RebindGroups();
+}
+
+void Tantra::ActPods(bool hover) {
+    const bool outNow = podsWanted_ && podTarget_ >= 45.0;
+    if (hover && outNow) {  // B again: cups aft, then in
+        podsWanted_ = false;
+        podTarget_ = 0.0;
+        Message("Гондолы: чаши назад, в отсеки", "Pods: cups aft, into the bays");
+        return;
+    }
+    podsWanted_ = true;
+    podTarget_ = hover ? 90.0 : 0.0;
+    Message(hover ? "Гондолы: наружу, чаши вниз (висение)" : "Гондолы: наружу, чаши назад (тяга вперёд)",
+            hover ? "Pods: out, cups down (hover)" : "Pods: out, cups aft (forward thrust)");
 }
 
 void Tantra::ActPodsTo(double deg) {
     podTarget_ = (std::max)(0.0, (std::min)(sp::kPodSwivelMaxDeg, deg));
+    if (podTarget_ > 0.0) podsWanted_ = true;
     Message("Гондолы планетарных: поворот на %.0f°", "Planetary pods: swivel to %.0f deg", podTarget_);
+}
+
+// Wind near the ground. The ship measures it (air data: groundspeed - airspeed); with Orbiter's wind on, its
+// aerodynamics apply the force and we only read it; with Orbiter's wind off (or zero), our own gust model
+// pushes the broadside. The ship sways on its elastic contacts; thrusting pods lean their jets (<= 7 deg)
+// against the wind force and the sway velocity. HUD: wind, CG sway, compensation, leg loads.
+void Tantra::UpdateWind(double dt) {
+    windForce_ = podSideForce_ = windSpeed_ = 0.0;
+    legLoad_ = legRatio_ = tipWind_ = 0.0;
+    const double rho = GetAtmDensity();
+    if (rho < 0.01 || GetAltitude(ALTMODE_GROUND) > 1000.0 || dt <= 0.0) {
+        gust_ = sway_ = 0.0;
+        windFh_ = _V(0, 0, 0);
+        return;
+    }
+    VECTOR3 up;                                  // world up in the ship frame
+    HorizonInvRot(_V(0, 1, 0), up);
+    auto horiz = [&up](const VECTOR3& v) { return v - up * dotp(v, up); };
+    // Air data: the air's velocity over the ground = groundspeed - airspeed (ship frame).
+    VECTOR3 gs, as;
+    GetGroundspeedVector(FRAME_LOCAL, gs);
+    GetAirspeedVector(FRAME_LOCAL, as);
+    const VECTOR3 wind = horiz(gs - as);
+    windSpeed_ = length(wind);
+    orbiterWind_ = orbiterWind_ || windSpeed_ > 0.3;
+    VECTOR3 fh = _V(0, 0, 0);                    // horizontal wind force on the ship
+    if (orbiterWind_) {
+        VECTOR3 d, l;
+        GetDragVector(d);
+        GetLiftVector(l);
+        fh = horiz(d + l);                       // Orbiter's aerodynamics already apply it
+        windForce_ = length(fh);
+    } else {
+        auto uniform = [this]() {
+            windRng_ = windRng_ * 1664525u + 1013904223u;
+            return (windRng_ >> 8) * (1.0 / 16777216.0);
+        };
+        const double n = std::sqrt(-2.0 * std::log((std::max)(1e-9, uniform()))) * std::cos(2.0 * PI * uniform());
+        const double hh = (std::min)(dt, 0.1);
+        gust_ += -gust_ / sp::kGustTau * hh + sp::kGustSigma * std::sqrt(2.0 * hh / sp::kGustTau) * n;
+        windSpeed_ = sp::kWindMean + gust_;
+        windForce_ = 0.5 * rho * windSpeed_ * std::fabs(windSpeed_) * sp::kSideCd * sp::kSideArea;
+        fh = horiz(_V(1, 0, 0)) * windForce_;    // broadside
+        AddForce(fh, _V(0, 0, 0));
+    }
+    // Sway: the CG off its rest point, horizontally (ground contact frame).
+    VECTOR3 vh = horiz(gs);
+    sway_ = std::asin((std::max)(-1.0, (std::min)(1.0, up.x))) * carriage_.Pose().trunnionH;
+    swayMaxT_ -= dt;
+    if (std::fabs(sway_) > swayMax_ || swayMaxT_ <= 0.0) {
+        swayMax_ = std::fabs(sway_);
+        swayMaxT_ = 10.0;
+    }
+    windFh_ = fh;                                // the pods answer it with a moment (PodAssistLevels)
+    UpdateLegLoads(fh);
+}
+
+// Loads on the most loaded leg with the wind: weight less the pods' lift, plus the overturning moment of
+// the horizontal wind force at the CG height, against the rating (strength and buckling, x1.5).
+void Tantra::UpdateLegLoads(const VECTOR3& fh) {
+    const tantra::CarriagePose& p = carriage_.Pose();
+    if (!GroundContact() || carriage_.Gear() <= 0.0) return;
+    VECTOR3 up;
+    HorizonInvRot(_V(0, 1, 0), up);
+    double lift = 0.0;
+    for (THRUSTER_HANDLE th : pod_) {
+        VECTOR3 d;
+        GetThrusterDir(th, d);
+        lift += GetThrusterLevel(th) * GetThrusterMax0(th) * dotp(d, up);
+    }
+    const double W = (std::max)(0.0, GetMass() * LocalG() - lift);
+    const double F = length(fh), h = p.trunnionH, M = F * h;
+    const double rho = GetAtmDensity();
+    auto pcr = [](double I, double L) { return PI * PI * sp::kCntE * I / (L * L); };
+    const double colShare = p.columnShare, sternShare = 1.0 - colShare;
+    double worst = 0.0, ratio = 0.0, tipF = 1e30;
+    if (colShare > 0.0) {       // two carriage legs, 38 m apart
+        const double X = tantra::mesh::kHipXOut;
+        const double n = colShare * W / 2.0 + M / (2.0 * X);
+        const double cap = (std::min)(sp::kCntSigma * sp::kLafShinA, pcr(sp::kLafShinI, (std::max)(8.0, p.mastLen))) / sp::kSafety;
+        worst = n;
+        ratio = n / cap;
+        legName_ = russian_ ? "нога лафета" : "carriage leg";
+        tipF = (std::min)(tipF, colShare * W * X / (std::max)(1.0, h));
+    }
+    if (sternShare > 0.0) {     // four stern legs, splay ~16 deg
+        const double r = sp::kStandInradius;
+        const double n = (sternShare * W / 4.0 + M / (2.0 * r)) / std::cos(16.0 * RAD);
+        const double cap = (std::min)(sp::kCntSigma * sp::kSternShinA, pcr(sp::kSternShinI, 26.5)) / sp::kSafety;
+        if (n / cap > ratio) {
+            worst = n;
+            ratio = n / cap;
+            legName_ = russian_ ? "кормовая нога" : "stern leg";
+        }
+        tipF = (std::min)(tipF, sternShare * W * r / (std::max)(1.0, h));
+    }
+    legLoad_ = worst;
+    legRatio_ = ratio;
+    if (rho > 0.0 && tipF < 1e29) tipWind_ = std::sqrt(2.0 * tipF / (rho * sp::kSideCd * sp::kSideArea));
+}
+
+// Pods helping the carriage: every cup's thrust is world-vertical; its moment about the CG is r x up T.
+// The levels are set so that the pods' total moment equals the one wanted: nothing of their own, minus the
+// wind's overturning moment (force at the CG height), minus a damping of the sway rate. Borne out of
+// differential thrust - port against starboard, fore against aft - never a sideways lean of the jets (the
+// pods hang 9.8 m under the axis: a lean would itself be a moment). When the attitude leaves no balance
+// (all pods on one side of the CG as the ship comes upright), the thrust fades out: the legs carry all.
+void Tantra::PodAssistLevels(double simdt, double podMax) {
+    const int n = sp::kPodCups;
+    const double target = podAssist_ && podOut_ >= 1.0 && podMax > 0.0
+                              ? (std::min)(1.0, sp::kPodAssistShare * GetMass() * LocalG() / podMax) : 0.0;
+    const double was = podAssistLevel_;
+    podAssistLevel_ += (std::max)(-0.2 * simdt, (std::min)(0.2 * simdt, target - podAssistLevel_));
+    podCouple_ = 0.0;
+    if (podAssistLevel_ <= 0.0) {
+        if (was > 0.0)
+            for (THRUSTER_HANDLE th : pod_) SetThrusterLevel(th, 0.0);
+        podBalanceLost_ = false;
+        return;
+    }
+    VECTOR3 up;
+    HorizonInvRot(_V(0, 1, 0), up);
+    VECTOR3 a[sp::kPodCups];
+    for (int k = 0; k < n; ++k) {
+        VECTOR3 r;
+        GetThrusterRef(pod_[k], r);
+        a[k] = crossp(r, up) * GetThrusterMax0(pod_[k]);  // moment per unit level
+    }
+    VECTOR3 w;
+    GetAngularVel(w);
+    w = w - up * dotp(w, up);
+    const double h = carriage_.Pose().trunnionH;
+    const VECTOR3 want = crossp(up * h, windFh_) * -1.0 - w * (GetMass() * sp::kPmiPitch * 0.6);
+    // Least change of each cup's level from the common level L0 that gives exactly the wanted moment,
+    // cups at their limits (0 or 1) held there (active set). No solution: lower L0; none at all: off.
+    auto allocate = [&](double L0, double* lv) {
+        bool fixed[sp::kPodCups] = {};
+        for (int k = 0; k < n; ++k) lv[k] = L0;
+        for (int it = 0; it <= n; ++it) {
+            double M[3][3] = {}, r[3];
+            VECTOR3 rhs = want;
+            int free = 0;
+            for (int k = 0; k < n; ++k) {
+                rhs = rhs - a[k] * lv[k];
+                if (fixed[k]) continue;
+                ++free;
+                const double v[3] = {a[k].x, a[k].y, a[k].z};
+                for (int i = 0; i < 3; ++i)
+                    for (int j = 0; j < 3; ++j) M[i][j] += v[i] * v[j];
+            }
+            if (!free) break;
+            const double eps = 1e-9 * (M[0][0] + M[1][1] + M[2][2]);
+            for (int i = 0; i < 3; ++i) M[i][i] += eps;
+            r[0] = rhs.x, r[1] = rhs.y, r[2] = rhs.z;
+            // 3x3 solve (Cramer)
+            auto det = [](double m[3][3]) {
+                return m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+                       m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+            };
+            const double d = det(M);
+            if (std::fabs(d) < 1e-300) break;
+            double x[3];
+            for (int c = 0; c < 3; ++c) {
+                double t[3][3];
+                for (int i = 0; i < 3; ++i)
+                    for (int j = 0; j < 3; ++j) t[i][j] = j == c ? r[i] : M[i][j];
+                x[c] = det(t) / d;
+            }
+            bool bad = false;
+            for (int k = 0; k < n; ++k) {
+                if (fixed[k]) continue;
+                lv[k] += a[k].x * x[0] + a[k].y * x[1] + a[k].z * x[2];
+                if (lv[k] < 0.0 || lv[k] > 1.0) {
+                    lv[k] = (std::max)(0.0, (std::min)(1.0, lv[k]));
+                    fixed[k] = bad = true;
+                }
+            }
+            if (!bad) break;
+        }
+        VECTOR3 got = _V(0, 0, 0);
+        for (int k = 0; k < n; ++k) got = got + a[k] * lv[k];
+        return length(got - want) <= 0.05 * length(want) + 1e5;
+    };
+    double L0 = podAssistLevel_, lv[sp::kPodCups] = {};
+    bool ok = false;
+    for (int it = 0; it < 40 && !ok; ++it, L0 *= 0.85) ok = allocate(L0, lv);
+    podBalanceLost_ = !ok;
+    for (int k = 0; k < n; ++k) SetThrusterLevel(pod_[k], ok ? lv[k] : 0.0);
+    if (ok) podCouple_ = length(want);
+    else podAssistLevel_ = (std::max)(0.0, podAssistLevel_ - 0.5 * simdt);  // fade out, the legs take it
+}
+
+// Mass budget -> CG station; the vessel frame follows it in steps of 0.2 m. ShiftCG moves the meshes,
+// thrusters, attachments, lights and the camera; the airfoils, control surfaces, exhaust positions and
+// touchdown points are ours to move.
+void Tantra::UpdateCG(bool force) {
+    double m = prm_.dryMass, ms = prm_.dryMass * sp::kDryCGS;
+    for (int i = 0; i < sp::kTrapCount; ++i) {
+        const double t = (trapPresent_[i] ? prm_.trapStructMass : 0.0) + GetPropellantMass(trap_[i]);
+        m += t;
+        ms += t * sp::kTrapCGS;
+    }
+    const double ion = GetPropellantMass(ion_);
+    m += ion;
+    ms += ion * sp::kIonCGS;
+    const double s = ms / m, d = s - frameS_;
+    if (!force && std::fabs(d) < 0.2) return;
+    if (std::fabs(d) < 1e-6) return;
+    ShiftCG(_V(0, 0, d));
+    frameS_ = s;
+    if (exhaust_) exhaust_->Shift(d);
+    static const double kS[4] = {kAeroS[0], kAeroS[1], kAeroS[2], kAeroS[3]};
+    static const double kY[4] = {0.0, 0.0, 22.0, -4.0};
+    for (int i = 0; i < 4; ++i)
+        if (foil_[i]) EditAirfoil(foil_[i], 0x01, _V(0, kY[i], Zf(kS[i])), nullptr, 0, 0, 0);
+    if (ctrlOn_) {
+        DefineControlSurfaces(false);
+        DefineControlSurfaces(true);
+    }
+    nTouch_ = -1;  // touchdown points are rebuilt for the new frame
+}
+
+// The stern chambers and the ring steer their jets by the field of the magnetic nozzle so that the
+// thrust line passes through the CG (the well sits 2.2 m over the axis; УВТ, no hinges).
+void Tantra::AimThroughCG() {
+    const double lim = std::cos(sp::kTvcMaxDeg * RAD);
+    auto aim = [&](THRUSTER_HANDLE th) {
+        VECTOR3 p;
+        GetThrusterRef(th, p);
+        VECTOR3 d = _V(-p.x, -p.y, (std::max)(1.0, -p.z));
+        d = d / length(d);
+        if (d.z < lim) {  // clamp to the nozzle's reach
+            const double r = std::sqrt(d.x * d.x + d.y * d.y), k = std::sqrt(1.0 - lim * lim) / r;
+            d = _V(d.x * k, d.y * k, lim);
+        }
+        SetThrusterDir(th, d);
+    };
+    for (THRUSTER_HANDLE th : ana_) aim(th);
+    for (THRUSTER_HANDLE th : plan_) aim(th);
 }
 
 void Tantra::SelectActiveTrap() {
@@ -571,6 +912,12 @@ void Tantra::ApplyThrottleLimits() {
 }
 
 void Tantra::clbkPreStep(double, double simdt, double) {
+    WatchTerrain();   // first: a refined terrain tile must not bury the pads for even one step
+    UpdateCG(false);
+    AimThroughCG();
+    UpdateWind(simdt);
+    DefineControlSurfaces(tuck_ < 0.5 && carriage_.Pose().tuck < 0.5);
+    UpdateControlSurfaces();
     VECTOR3 v;
     GetRelativeVel(GetGravityRef(), v);
     beta_ = length(v) / C_LIGHT;
@@ -584,11 +931,15 @@ void Tantra::clbkPreStep(double, double simdt, double) {
         SetThrusterMax0(th, prm_.planThrustTotal / sp::kPlanCount * f);
         SetThrusterIsp(th, prm_.planExhaust * f);
     }
-    for (THRUSTER_HANDLE th : pod_) {  // sunk pods give no thrust
-        const double sunk = (std::max)(tuck_, carriage_.Pose().tuck);
-        SetThrusterMax0(th, sunk > 0.5 ? 0.0 : prm_.podThrustTotal / sp::kPodCups * f);
-        SetThrusterIsp(th, prm_.planExhaust * f);
+    double podMax = 0.0;
+    for (int k = 0; k < sp::kPodCups; ++k) {  // pods in the bays give no thrust; the pairs share it for pitch
+        const double share = podAssist_ ? 1.0 : podShare_[k / (2 * sp::kCupsPerPod)];  // assist: moments set per cup
+        const double mx = podOut_ < 1.0 ? 0.0 : prm_.podThrustTotal / sp::kPodCups * f * share;
+        SetThrusterMax0(pod_[k], mx);
+        SetThrusterIsp(pod_[k], prm_.planExhaust * f);
+        podMax += mx;
     }
+    PodAssistLevels(simdt, podMax);
     ScaleAttitudeThrust();
     UpdateGear(simdt);
     UpdatePort(simdt);
@@ -654,7 +1005,83 @@ void Tantra::clbkPostStep(double, double simdt, double) {
     if (crew_.Process(simdt) == TantraCrew::Event::Returned)
         Message("%s вернулся на борт", "%s is back aboard", crew_.LastName());
 
+    GuardAgainstLaunch(simdt);
     if (messageTimer_ > 0.0) messageTimer_ -= simdt;
+}
+
+// Orbiter first puts a landed ship on coarse terrain, then loads finer elevation tiles: the ground under
+// the pads jumps by metres and the contacts, suddenly buried, fire the ship off the planet. While the ship
+// rests, the elevation is sampled at five points fixed on the ground (CG, both sides, fore and aft); when a
+// tile refinement moves any of them, the ship is set down on the new ground before the physics step.
+void Tantra::WatchTerrain() {
+    OBJHANDLE ref = GetSurfaceRef();
+    const bool resting = carriage_.Gear() >= 0.5 && (GroundContact() || sinceContact_ < 5.0);
+    if (!ref || !resting) {
+        terrainInit_ = false;
+        return;
+    }
+    if (!terrainInit_) {
+        const VECTOR3 pts[5] = {_V(0, 0, 0), _V(20, 0, 0), _V(-20, 0, 0), _V(0, 0, 40), _V(0, 0, -40)};
+        for (int i = 0; i < 5; ++i) {
+            VECTOR3 g;
+            double rad;
+            Local2Global(pts[i], g);
+            oapiGlobalToEqu(ref, g, &terrainLng_[i], &terrainLat_[i], &rad);
+            terrainElev_[i] = oapiSurfaceElevation(ref, terrainLng_[i], terrainLat_[i]);
+        }
+        terrainInit_ = true;
+        return;
+    }
+    double jump = 0.0;
+    for (int i = 0; i < 5; ++i) {
+        const double e = oapiSurfaceElevation(ref, terrainLng_[i], terrainLat_[i]);
+        jump = (std::max)(jump, std::fabs(e - terrainElev_[i]));
+        terrainElev_[i] = e;
+    }
+    if (jump > 0.05) {
+        Reland();
+        Message("Рельеф уточнён (%.1f м): корабль переставлен на грунт", "Terrain refined (%.1f m): ship set down on it", jump);
+    }
+}
+
+// The ship's computer watches the contacts: with the gear out, just off the ground, no engine able to
+// lift it and yet climbing (or spinning on its pads) - that is a contact bounce, not flight. It puts
+// the ship straight back down where it is, with the same heading, and settles the suspension again.
+void Tantra::GuardAgainstLaunch(double dt) {
+    const bool contact = GroundContact();
+    sinceContact_ = contact ? 0.0 : sinceContact_ + dt;
+    if (relandCool_ > 0.0) relandCool_ -= dt;
+    if (carriage_.Gear() < 0.5 || relandCool_ > 0.0) return;
+    VECTOR3 v, w;
+    GetGroundspeedVector(FRAME_HORIZON, v);
+    GetAngularVel(w);
+    const bool engines = thrustAccel_ > 0.8 * LocalG();
+    const bool thrown = !contact && sinceContact_ < 5.0 && v.y > 3.0 && !engines;
+    const bool spinning = contact && !carriage_.Busy() && length(w) > 0.35 && !engines;
+    if (!thrown && !spinning) return;
+    Reland();
+    relandCool_ = 2.0;
+    ++relands_;
+    Message("Опоры: отскок подавлен, корабль возвращён на грунт", "Gear: bounce suppressed, ship put back down");
+}
+
+void Tantra::Reland() {
+    VESSELSTATUS2 vs;
+    std::memset(&vs, 0, sizeof vs);
+    vs.version = 2;
+    vs.flag = 0;
+    double lng = 0.0, lat = 0.0, rad = 0.0, hdg = 0.0;
+    GetEquPos(lng, lat, rad);
+    oapiGetHeading(GetHandle(), &hdg);
+    vs.rbody = GetSurfaceRef();
+    vs.status = 1;  // landed: Orbiter places the ship on its touchdown points
+    vs.surf_lng = lng;
+    vs.surf_lat = lat;
+    vs.surf_hdg = hdg;
+    DefSetStateEx(&vs);
+    settleTimer_ = 6.0;
+    settledFor_ = 0.0;
+    nTouch_ = -1;  // retune the suspension (settling damping)
 }
 
 void Tantra::UpdateSound(IgnStage prev) {
@@ -762,6 +1189,11 @@ void Tantra::ActToggleAirlock() {
 }
 
 void Tantra::ActEva() {
+    if (GroundContact() && rovers_ < 0.99) {
+        Message("Выход на грунт - с платформы ангара: откройте ангар (O) и опустите платформу (Shift+O)",
+                "Ground EVA from the hangar platform: open the hangar (O) and lower the platform (Shift+O)");
+        return;
+    }
     switch (crew_.Eva(selectedCrew_)) {
         case TantraCrew::EvaResult::Ok:
             Message("%s вышел наружу", "%s is outside", crew_.LastName());
@@ -769,7 +1201,7 @@ void Tantra::ActEva() {
             break;
         case TantraCrew::EvaResult::NoOne: Message("На борту никого нет", "Nobody aboard"); break;
         case TantraCrew::EvaResult::AirlockClosed: Message("Шлюз закрыт - сначала откройте", "Airlock closed - open it first"); break;
-        case TantraCrew::EvaResult::NotLanded: Message("Выход - только на грунте (подъёмник шлюза)", "EVA from the ground lift only"); break;
+        case TantraCrew::EvaResult::NotLanded: Message("Выход - только на грунте (платформа ангара)", "EVA from the hangar platform on the ground only"); break;
         default: Message("Выход невозможен", "EVA not possible"); break;
     }
 }
@@ -791,7 +1223,7 @@ void Tantra::ActSelectCrew(int delta) {
 void Tantra::UpdateGear(double simdt) {
     // The carriage moves the touchdown points; keep every step small (time warp included).
     const double dt = (std::min)(simdt, 0.05);
-    carriage_.Update(dt, sp::kOriginS);
+    carriage_.Update(dt, frameS_);
     auto step = [dt](double v, double t, double rate) {
         return v < t ? (std::min)(t, v + rate * dt) : (std::max)(t, v - rate * dt);
     };
@@ -808,6 +1240,10 @@ void Tantra::UpdateGear(double simdt) {
     TantraGear::Extras ex;
     ex.tuck = tuck_;
     ex.podSwivel = podAngle_ / sp::kPodSwivelMaxDeg;
+    ex.podStow = 1.0 - podOut_;
+    ex.elevon[0] = elevon_[0];
+    ex.elevon[1] = elevon_[1];
+    ex.bodyFlap = bodyFlap_;
     ex.irisAna = irisAna_;
     ex.irisPlan = irisPlan_;
     ex.hangar = hangar_;
@@ -817,7 +1253,7 @@ void Tantra::UpdateGear(double simdt) {
     for (int i = 0; i < 4; ++i) ex.trapHidden[i] = !trapPresent_[i];
     ex.liftY[0] = liftY_[0];
     ex.liftY[1] = liftY_[1];
-    if (gear_) gear_->Apply(carriage_.Pose(), sp::kOriginS, ex);
+    if (gear_) gear_->Apply(carriage_.Pose(), frameS_, ex);
 
     const tantra::CarriagePose& p = carriage_.Pose();
     VECTOR3 t[tantra::CarriagePose::kMaxTouch];
@@ -834,29 +1270,30 @@ void Tantra::UpdateGear(double simdt) {
         nTouch_ = p.nTouch;
     }
     // The airlock lift stands on the ground under the door, whatever height the gear holds the ship at.
-    crew_.SetLiftFoot(_V(kEvaPos.x, -p.trunnionH + 0.93, kEvaPos.z));
+    crew_.SetLiftFoot(_V(kEvaPos.x, -p.trunnionH + 0.93, Zf(kCrewLiftS)));   // beside the lowered hangar platform
 }
 
 // Orbiter 2016 touchdown vertices: the pads of the current gear pose are elastic (MR-fluid cushions
-// under the pads and the leg bands), the hull points around them are stiff and only matter in a crash.
+// under the pads and the leg bands); the hull points around them only matter in a belly landing.
 // Stiffness gives kSag of static compression at the design gravity, damping is a fraction of critical,
-// so the ship settles and sways a little on its legs. Right after the scenario is loaded (or the ship is
-// put down somewhere) the damping is overdamped for a few seconds: Orbiter drops the ship onto its
-// contacts and it must not bounce.
+// so the ship settles and sways a little on its legs. Orbiter integrates the contacts explicitly: a spring
+// or a damper that is too stiff for the time step pumps energy in and throws the ship off the planet (the
+// first frames after loading have long steps, time warp even longer). So: hull points no stiffer than the
+// legs, damping 2*zeta*omega kept under ~6 1/s (zeta 0.35 settling, 0.3 after), and GuardAgainstLaunch.
 void Tantra::SetSuspension(const VECTOR3* t, int n) {
     const double m = GetMass(), kSag = 0.25, kGref = 1.7 * G0, kMu = 0.8;
-    const double kZeta = settleTimer_ > 0.0 ? 1.5 : 0.3;
+    const double kZeta = settleTimer_ > 0.0 ? 0.35 : 0.3;
     touchSettled_ = settleTimer_ <= 0.0;
     const double k = m * kGref / (n * kSag);
     const double c = 2.0 * kZeta * std::sqrt(k * m / n);
-    const double kHull = 20.0 * k * n / 3.0, cHull = 2.0 * 0.7 * std::sqrt(kHull * m / 3.0);
-    const double zs = sp::kSternZ, zn = sp::kNoseZ;
+    const double kHull = k, cHull = 2.0 * 0.35 * std::sqrt(kHull * m / 3.0);
+    const double zs = Zf(0.0), zn = Zf(sp::kLength - 1.2);
     const VECTOR3 hull[] = {
-        {0, 0, zn},                                         // nose tip
-        {0, 13.0, zs}, {0, -9.0, zs}, {12.0, 0, zs}, {-12.0, 0, zs},       // stern plane
-        {0, 0, zs - 4.0},                                  // engine well rim, on the axis
-        {14.0, 0, sp::Z(30.0)}, {-14.0, 0, sp::Z(30.0)}, {0, 14.0, sp::Z(30.0)}, {0, -9.5, sp::Z(30.0)},
-        {8.6, 0, sp::Z(100.0)}, {-8.6, 0, sp::Z(100.0)}, {0, 8.6, sp::Z(100.0)}, {0, -8.6, sp::Z(100.0)},
+        {0, 0, zn},                                                        // nose tip
+        {0, 14.0, zs}, {0, -9.6, zs}, {14.0, -4.0, zs}, {-14.0, -4.0, zs},  // stern plane
+        {0, 2.2, zs - 4.0}, {0, -9.3, zs - 4.0},                           // engine well rim
+        {14.6, -4.0, Zf(30.0)}, {-14.6, -4.0, Zf(30.0)}, {0, 14.4, Zf(30.0)}, {0, -9.6, Zf(30.0)},
+        {9.0, -3.8, Zf(100.0)}, {-9.0, -3.8, Zf(100.0)}, {0, 8.9, Zf(100.0)}, {0, -8.7, Zf(100.0)},
     };
     TOUCHDOWNVTX v[tantra::CarriagePose::kMaxTouch + sizeof hull / sizeof hull[0]];
     for (int i = 0; i < n; ++i) v[i] = {t[i], k, c, kMu, kMu};
@@ -905,8 +1342,8 @@ void Tantra::ActGearSet() {
 
 void Tantra::ActCrests() {
     crestsFolded_ = !crestsFolded_;
-    Message(crestsFolded_ ? "Гребни сложены в тень брони, гондолы утоплены" : "Гребни раскрыты, гондолы выдвинуты",
-            crestsFolded_ ? "Crests folded, pods sunk" : "Crests out, pods out");
+    Message(crestsFolded_ ? "Гребни сложены в ниши, перо убрано, гондолы в отсеках" : "Гребни раскрыты, перо выдвинуто",
+            crestsFolded_ ? "Crests folded into their recesses, fin down, pods in the bays" : "Crests out, fin up");
 }
 
 void Tantra::ActHangar() {
@@ -959,7 +1396,7 @@ int Tantra::clbkConsumeBufferedKey(DWORD key, bool down, char* kstate) {
         return 1;
     }
     if (key == OAPI_KEY_Y && !shift && !ctrl) { ActNextTrap(); return 1; }
-    if (key == OAPI_KEY_B && !ctrl) { ActPodsTo(shift ? 0.0 : 90.0); return 1; }
+    if (key == OAPI_KEY_B && !ctrl) { ActPods(!shift); return 1; }
     if (key == OAPI_KEY_N && !ctrl) { if (shift) ActGearSet(); else ActGear(); return 1; }
     if (key == OAPI_KEY_U && !shift) { if (ctrl) ActPort(); else ActErect(); return 1; }
     if (key == OAPI_KEY_C && !shift && !ctrl) { ActCrests(); return 1; }
@@ -1043,8 +1480,24 @@ bool Tantra::clbkDrawHUD(int mode, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp
     line(L("Ловушки: %.0f%% %.0f%% %.0f%% %.0f%%  подача из %d", "Traps: %.0f%% %.0f%% %.0f%% %.0f%%  feed %d"), pct[0],
          pct[1], pct[2], pct[3], activeTrap_ + 1);
     line(L("Ионные заряды: %.1f%%", "Ion charges: %.1f%%"), 100.0 * GetPropellantMass(ion_) / prm_.ionChargeMass);
-    line(L("Гондолы: %.0f° (цель %.0f°) - %s", "Pods: %.0f deg (target %.0f) - %s"), podAngle_, podTarget_,
-         podHover_ ? L("висение", "HOVER") : L("не в группе", "idle"));
+    line(L("Гондолы: %s  поворот %.0f°  %s", "Pods: %s  swivel %.0f deg  %s"),
+         podOut_ <= 0.0 ? L("в отсеках", "in the bays") : podOut_ < 1.0 ? L("выход...", "swinging...") : L("снаружи", "out"),
+         podAngle_,
+         podAssist_ ? L("ПОМОЩЬ ЛАФЕТУ", "ASSISTING THE CARRIAGE") : podHover_ ? L("висение", "HOVER") : "");
+    if (podAssist_ || windForce_ != 0.0)
+        line(L("Ветер %.0f м/с [%s] %.1f МН  раскачка ЦМ %.2f м (пик %.2f)  гондолы: %.0f%% веса, момент %.0f МН·м",
+               "Wind %.0f m/s [%s] %.1f MN  CG sway %.2f m (peak %.2f)  pods: %.0f%% of weight, moment %.0f MN m"),
+             windSpeed_, orbiterWind_ ? L("Орбитер", "Orbiter") : L("модель", "model"), windForce_ / 1e6, sway_, swayMax_,
+             100.0 * [&] { double t = 0; for (THRUSTER_HANDLE th : pod_) t += GetThrusterLevel(th) * GetThrusterMax0(th); return t; }() /
+                 (GetMass() * LocalG()),
+             podCouple_ / 1e6);
+    if (podAssist_ && podBalanceLost_)
+        line(L("Гондолы: баланс вокруг ЦМ невозможен в этом положении - тяга снимается, держат ноги",
+               "Pods: no balance about the CG in this attitude - thrust fades, the legs carry the ship"));
+    if (legLoad_ > 0.0)
+        line(L("Нагрузка: %s %.0f МН = %.0f%% допуска (x1,5)  опрокинет ветер %.0f м/с",
+               "Load: %s %.0f MN = %.0f%% of rating (x1.5)  overturning wind %.0f m/s"),
+             legName_, legLoad_ / 1e6, 100.0 * legRatio_, tipWind_);
     {
         static const char* kPhRu[] = {"лежит", "подготовка", "подъём на колоннах", "поворот", "лапы выходят", "опускание",
                                       "сбор мачт", "стоит на корме"};

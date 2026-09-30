@@ -39,7 +39,7 @@ struct CarriageGeometry {       // ship frame: x starboard, y up, z along the ax
 
 struct CarriagePose {
     double theta = 0.0;         // ship pitch against the ground [rad]
-    double trunnionH = 20.0;    // trunnion (CG) height above ground [m]
+    double trunnionH = 20.0;    // CG (ship origin) height above ground; the trunnions sit on the CG unless at a track end [m]
     double tuck = 0.0;          // crests folded / pods sunk, 0..1
     double slideOut = 0.0;      // hips out of the pockets 0..1
     double hipS = 46.0;         // hip station on the track [m]

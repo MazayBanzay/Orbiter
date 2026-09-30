@@ -115,7 +115,7 @@ void Carriage::BuildPose(double sCG) {
         o.mastPitch = o.theta;
         o.hipS = hipS;
         o.padFold = 0.0;
-        o.mastLen = o.trunnionH - g.footH;
+        o.mastLen = o.trunnionH + (hipS - sCG) * std::sin(o.theta) - g.footH;  // the hip may sit off the CG (track end)
         const double c = ph(5);     // collect: shin in, pad folded, hip up the track, into the pocket
         o.mastLen = Lerp(o.mastLen, g.legMin, Ease(c / 0.4));
         o.padFold = Ease((c - 0.35) / 0.25);
@@ -125,7 +125,7 @@ void Carriage::BuildPose(double sCG) {
         o.legStand = port_ ? 0.0 : Ease(ph(3));
     }
 
-    // --- load sharing and ground contacts (ship frame, origin = CG = trunnion) ---
+    // --- load sharing and ground contacts (ship frame, origin = CG; trunnionH = CG height) ---
     o.columnShare = 1.0;
     if (levelSet) o.columnShare = gr >= 1.0 ? 0.95 : 1.0;
     else if (standingSet || p_ >= 5.0) o.columnShare = 0.0;
@@ -134,8 +134,14 @@ void Carriage::BuildPose(double sCG) {
 
     const double h = o.trunnionH, th = o.theta, X = g.columnX, fh = g.footHalf;
     const Vec3 down = V(0, -std::cos(th), -std::sin(th)), fwd = V(0, -std::sin(th), std::cos(th));
-    // Pads of the carriage legs: fore and aft end of each pad, on the ground under the hips.
-    auto pad = [&](double side, double end) { return Add(V(side * X, 0, 0), Add(Mul(down, h), Mul(fwd, end * fh))); };
+    // Pads of the carriage legs: fore and aft end of each pad, on the ground under the hips. The hips run
+    // on their track to the CG but stop at its ends (an empty ship's CG lies ahead of the track).
+    const Vec3 up = V(0, std::cos(th), std::sin(th));
+    auto pad = [&](double side, double end) {
+        const Vec3 hip = V(side * X, 0, o.hipS - sCG);
+        const double drop = h + (hip.x * up.x + hip.y * up.y + hip.z * up.z);
+        return Add(hip, Add(Mul(down, drop), Mul(fwd, end * fh)));
+    };
     Vec3 col[4] = {pad(1, 1), pad(-1, 1), pad(1, -1), pad(-1, -1)};
     Vec3 rest[6] = {pad(1, 1), pad(-1, 1), V(g.legRestX, -h, g.legRestS - sCG), V(-g.legRestX, -h, g.legRestS - sCG),
                     pad(1, -1), pad(-1, -1)};

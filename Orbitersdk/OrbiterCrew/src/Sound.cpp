@@ -132,9 +132,15 @@ namespace ocrew
 		}
 		else breathClock = 0;
 
-		// ---- suit ventilation ----
+		// ---- suit ventilation: always on in a powered suit, louder under thermal load (heard inside only) ----
 		const bool fan = in.suited && in.fanOn && in.alive && fanId;
-		if (fan && !fanPlaying) { xr->PlayWav(fanId, true, 0.35f); fanPlaying = true; }
-		else if (!fan && fanPlaying) { xr->StopWav(fanId); fanPlaying = false; }
+		if (fan)
+		{
+			const double target = 0.25 + 0.55 * std::clamp(in.fanLoad, 0.0, 1.0);
+			fanVolume += (target - fanVolume) * (std::min)(1.0, in.dt / 1.5);   // the fan spins up and down over a second or two
+			if (!fanPlaying || std::abs(target - fanVolume) > 0.01) xr->PlayWav(fanId, true, static_cast<float>(fanVolume));
+			fanPlaying = true;
+		}
+		else if (fanPlaying) { xr->StopWav(fanId); fanPlaying = false; fanVolume = 0.25; }
 	}
 }

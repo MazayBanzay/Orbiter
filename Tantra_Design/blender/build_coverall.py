@@ -33,7 +33,7 @@ def pattern(P, N):
     # shoulder yoke with ribbing
     yoke = (z > 1.31) & (nz > 0.20) & (ax > 0.07)
     col[yoke] = PANEL
-    rib = yoke & ((np.floor(z / 0.012) % 2) == 0); col[rib] = PANEL * 0.82
+    rib = yoke & ((np.floor(z / 0.012) % 2) == 0); col[rib] = PANEL * 0.93
     # waist band
     band = (np.abs(z - 1.025) < 0.022) & (ax < 0.22)
     col[band] = DARK
@@ -53,7 +53,31 @@ def pattern(P, N):
     col = col * (1 + 0.025 * (np.random.default_rng(1).random((len(P), 1)) - 0.5))
     return np.clip(col, 0, 1)
 
-def paint_uv(obj, mat_index=0):
+def relief(P, N):
+    """height of the cloth surface in metres (+ up from the cloth): seams sink, piping and band rise, ribs, zip, weave.
+    Same regions as pattern(); returned as (n,3) so it rasterizes like a colour."""
+    x, y, z = P[:, 0], P[:, 1], P[:, 2]; ax = np.abs(x); nx, ny, nz = N[:, 0], N[:, 1], N[:, 2]
+    h = np.zeros(len(P))
+    front = ny < -0.15; back = ny > 0.15
+    # side panel edges: a sewn seam (groove) along both edges of the side panel
+    for e in (0.55, 0.62):
+        h -= 0.0008 * np.exp(-((np.abs(nx) - e) / 0.012) ** 2) * ((z > 0.10) & (z < 1.33))
+    h += 0.0007 * np.exp(-((np.abs(np.abs(nx) - 0.585)) / 0.012) ** 2) * ((z > 0.12) & (z < 1.32))   # piping cord
+    yoke = (z > 1.31) & (nz > 0.20) & (ax > 0.07)
+    h += yoke * 0.00025 * (0.5 + 0.5 * np.cos(2 * np.pi * z / 0.012))                                  # ribbed yoke
+    band = np.abs(z - 1.025) < 0.022
+    h += (band & (ax < 0.22)) * 0.0012; h -= 0.0006 * np.exp(-((np.abs(z - 1.025) - 0.022) / 0.002) ** 2) * (ax < 0.22)
+    sx = 0.068 + 0.03 * np.clip(1.25 - z, 0, 0.35)
+    h -= 0.0007 * np.exp(-((ax - sx) / 0.0025) ** 2) * ((z > 0.86) & (z < 1.36) & (front | back))     # princess seams
+    zp = (ax < 0.0045) & front & (z > 0.78) & (z < 1.50)
+    h += zp * (0.0006 + 0.0006 * (np.floor(z / 0.004) % 2))                                            # zip teeth
+    knee = (np.abs(z - 0.50) < 0.065) & (ny < -0.35) & (ax > 0.03)
+    h += knee * 0.00025 * (0.5 + 0.5 * np.cos(2 * np.pi * (z - 0.50) / 0.02))
+    # (no weave: at ~0.8 mm per texel a woven pattern aliases into stripes and moire)
+    return np.stack([h, h, h], 1)
+
+
+def paint_uv(obj, mat_index=0, fn=None):
     """Rasterize the pattern into the object's UV space."""
     me = obj.data; me.calc_loop_triangles()
     uv = me.uv_layers.active.data
@@ -77,7 +101,7 @@ def paint_uv(obj, mat_index=0):
         if not m.any(): continue
         W = np.stack([w0[m], w1[m], w2[m]], 1)
         P = W @ p; Nn = W @ n; Nn /= np.linalg.norm(Nn, axis=1, keepdims=True) + 1e-9
-        c_ = pattern(P, Nn)
+        c_ = (fn or pattern)(P, Nn)
         iy, ix = (gy[m] - 0.5).astype(int), (gx[m] - 0.5).astype(int)
         img[iy, ix] = c_; filled[iy, ix] = True
     # dilate islands a few pixels to avoid dark seams in mip levels
@@ -126,6 +150,18 @@ try:
     for m in list(cov.modifiers):
         if m.type != 'ARMATURE': cov.modifiers.remove(m)
     cov.data.materials.clear()
+    # one level of Catmull-Clark: the body proxy is low-poly (1605 verts) and the garment showed it as square
+    # shoulders; weights and UVs are interpolated by the modifier. The skin underneath is masked, so the slight
+    # shrink of the smooth surface cannot let it poke through.
+    arm_mods = [(m.name, m.object) for m in cov.modifiers if m.type == 'ARMATURE']
+    for m in list(cov.modifiers): cov.modifiers.remove(m)
+    if cov.data.shape_keys: cov.shape_key_clear()
+    for o in bpy.context.view_layer.objects: o.select_set(False)
+    bpy.context.view_layer.objects.active = cov; cov.select_set(True)
+    sub = cov.modifiers.new("Smooth", 'SUBSURF'); sub.levels = 1; sub.render_levels = 1
+    bpy.ops.object.modifier_apply(modifier=sub.name)
+    for n_, ob in arm_mods: cov.modifiers.new(n_, 'ARMATURE').object = ob
+    log.append("coverall subdivided: %d verts" % len(cov.data.vertices))
 
     HEAD = {'head', 'Head', 'Neck1', 'lips', 'ears'}; HANDS = lambda n: n and (n.startswith('hand_') or any(n.startswith(f) for f in ('index', 'middle', 'pinky', 'ring', 'thumb')))
     FEET = lambda n: n and (n.startswith('foot_') or n.startswith('ball_'))
@@ -135,12 +171,36 @@ try:
     W = lambda b: arm.matrix_world @ arm.data.bones[b].head_local
     wrist = {s: (W(RIG['hand_' + s]), (W(RIG['hand_' + s]) - W(RIG['lowerarm_' + s])).normalized()) for s in ('l', 'r')}
     ankle_z = W(RIG['foot_l']).z
+    # neckline: an elliptic cylinder around the neck axis (neck base -> head), not a horizontal plane.
+    # A plane cuts the trapezius far out towards the shoulders and leaves a wide ragged ring ("wings").
+    a0 = W('Neck' if 'Neck' in BN else 'neck_01'); a1 = W('Head' if 'Head' in BN else 'head')
+    # the hole is a VERTICAL cylinder: the neck leans forward, and a cylinder along it would reach down into the upper back
+    nneck = (a1 - a0).normalized()
+    nu = Vector((0, 0, 1)); ex = Vector((1, 0, 0)); ey = nu.cross(ex)
+    def ncoord(p): d = Vector(p) - a0; return d.dot(nu), d.dot(ex), d.dot(ey)
+    nk = []
+    for v in body.data.vertices:
+        if not v.groups: continue
+        if names[max(v.groups, key=lambda g: g.weight).group] in ('Neck', 'Neck1', 'neck_01'):
+            c = ncoord(v.co)
+            if 0.0 < c[0] < 0.05: nk.append(c)
+    nk = np.array(nk)
+    NCY = float(np.median(nk[:, 2]))
+    NA = float(np.percentile(np.abs(nk[:, 1]), 90)) + 0.011; NB = float(np.percentile(np.abs(nk[:, 2] - NCY), 90)) + 0.011
+    log.append("neck hole: half-width %.3f, half-depth %.3f, centre offset %.3f (from %d neck verts)" % (NA, NB, NCY, len(nk)))
+    def neck_r(p):
+        s_, x, y = ncoord(p); return s_, math.hypot(x / NA, (y - NCY) / NB), math.atan2((y - NCY) / NB, x / NA)
+    def neck_point(th, s_, grow, h=0.0):
+        # on the hole's ellipse at height s_, then h up along the leaning neck (the collar stands along the neck)
+        return a0 + nu * s_ + nneck * h + ex * ((NA + grow) * math.cos(th)) + ey * (NCY + (NB + grow) * math.sin(th))
     kill = []
     for v in bm.verts:
         d = dict(v[deform]); dom = names[max(d, key=d.get)] if d else None
         side = 'l' if v.co.x > 0 else 'r'; wp, wd = wrist[side]
         beyond_wrist = (v.co - wp).dot(wd) > 0.015 and abs(v.co.x) > 0.20 and v.co.z > 0.75   # hands never reach below 0.9 m in the rest pose
-        if dom in HEAD or v.co.z > neck_z + 0.035 or beyond_wrist or v.co.z < ankle_z - 0.012: kill.append(v)
+        ns, nr, _ = neck_r(v.co)
+        in_neck = (ns > -0.12 and nr < 1.0) or ns > 0.05   # deep enough that the cut is the cylinder all round (the nape too)
+        if dom in HEAD or in_neck or beyond_wrist or v.co.z < ankle_z - 0.012: kill.append(v)
         # flatten nipples before offsetting
     bmesh.ops.delete(bm, geom=kill, context='VERTS')
     nip = [v for v in bm.verts if any(names[k] == 'nipples' and w > 0.05 for k, w in v[deform].items())]
@@ -149,7 +209,9 @@ try:
             nb = [e.other_vert(v).co for e in v.link_edges]
             if nb: v.co = v.co.lerp(sum(nb, Vector()) / len(nb), 0.6)
     bm.normal_update()
-    for v in bm.verts: v.co += v.normal * OFFSET
+    for v in bm.verts:
+        # the trousers go over the boot shafts (shoes03 reaches 0.24 m and is wider than the shin + offset)
+        v.co += v.normal * (OFFSET + 0.013 * float(smooth01(0.30, 0.22, v.co.z)))
     bm.normal_update()
 
     # boundary loops: neck (highest), wrists, ankles
@@ -188,24 +250,78 @@ try:
         if weights: set_weights(nv, weights)
         return [g for g in r['geom'] if isinstance(g, bmesh.types.BMEdge) and g.is_boundary]
 
-    # stand collar: 38 mm up with slight flare, red piping at the top edge
+    # stand collar, built as its own smooth band with thickness: outer wall, red top edge, inner wall.
+    # The neckline ring keeps the garment's weights (no tearing from the shoulders); the upper part follows the neck base.
     neck_loop = info[0][1]
-    # collar follows the neck base, not the shoulders: re-weight the neck ring and everything extruded from it
     NECKW = {'Neck': 0.35, 'Spine1': 0.65} if 'Neck' in gidx else {'neck_01': 0.35, 'spine_03': 0.65}
-    set_weights({v for e in neck_loop for v in e.verts}, NECKW)
-    top = extrude(neck_loop, 0.036, 0.003, 1, NECKW)
-    extrude(top, 0.004, 0.0, 2, NECKW)
+    base = sorted({v for e in neck_loop for v in e.verts}, key=lambda v: neck_r(v.co)[2])
+    th = [neck_r(v.co)[2] for v in base]; S = [neck_r(v.co)[0] for v in base]; n_ = len(base)
+    for _ in range(10):   # a smooth neckline height around the neck
+        S = [(S[i - 1] + 2 * S[i] + S[(i + 1) % n_]) / 4 for i in range(n_)]
+    for v, t, s_ in zip(base, th, S): v.co = neck_point(t, s_, 0.0)
+    def ring(h, grow, wmix):
+        out = []
+        for v, t, s_ in zip(base, th, S):
+            nv = bm.verts.new(neck_point(t, s_, grow, h))
+            bw = dict(v[deform]); d = nv[deform]
+            for gi, w in bw.items(): d[gi] = w * (1 - wmix)
+            for nm, w in NECKW.items():
+                if nm in gidx: d[gidx[nm]] = d.get(gidx[nm], 0) + w * wmix
+            out.append(nv)
+        return out
+    H = 0.036
+    mid, top_o = ring(0.018, 0.001, 0.5), ring(H, 0.002, 1.0)
+    top_i, bot_i = ring(H, -0.002, 1.0), ring(-0.004, -0.004, 0.0)
+    def band(lo, hi, mat, flip=False):
+        for i in range(n_):
+            j = (i + 1) % n_
+            q = (lo[i], lo[j], hi[j], hi[i]) if not flip else (hi[i], hi[j], lo[j], lo[i])
+            bm.faces.new(q).material_index = mat
+    band(base, mid, 1); band(mid, top_o, 1)                  # outer wall
+    band(top_o, top_i, 2)                                    # red top edge (faces up)
+    band(bot_i, top_i, 1, flip=True)                         # inner wall (faces the neck)
     # cuffs at the wrists (the two loops closest to the hand height)
     hz = W(RIG['hand_l']).z
     wrists = sorted(info[1:], key=lambda t: abs(t[0] - hz))[:2]
     for _, l in wrists:
         c, vs = centre(l)
+        # a clean cuff line: flatten the ragged cut onto the plane across the forearm
+        side = 'l' if c.x > 0 else 'r'; wp, wd = wrist[side]; p0 = wp + wd * 0.015
+        for v in vs: v.co -= wd * (v.co - p0).dot(wd)
         # direction along the forearm, from the elbow region to the wrist
-        top_loop = extrude(l, 0.0, 0.004, 3)
-        extrude(top_loop, -0.012, 0.0, 3)
+        # cuff: a 3 mm step out from the forearm axis, then a 15 mm band back towards the elbow
+        axis_c = sum((v.co for v in vs), Vector()) / len(vs)
+        r1 = bmesh.ops.extrude_edge_only(bm, edges=l)
+        v1 = [g for g in r1['geom'] if isinstance(g, bmesh.types.BMVert)]
+        for f in [g for g in r1['geom'] if isinstance(g, bmesh.types.BMFace)]: f.material_index = 3
+        for v in v1:
+            rad = v.co - axis_c; rad -= wd * rad.dot(wd); v.co += rad.normalized() * 0.003
+        e1 = [g for g in r1['geom'] if isinstance(g, bmesh.types.BMEdge) and g.is_boundary]
+        r2 = bmesh.ops.extrude_edge_only(bm, edges=e1)
+        for f in [g for g in r2['geom'] if isinstance(g, bmesh.types.BMFace)]: f.material_index = 3
+        for v in [g for g in r2['geom'] if isinstance(g, bmesh.types.BMVert)]: v.co -= wd * 0.015
+    # clean trouser hems: flatten the ankle cuts onto a level line
+    for zc, l in info[1:]:
+        if zc < 0.4:
+            _, vs = centre(l)
+            for v in vs: v.co.z = ankle_z - 0.012
     bm.to_mesh(cov.data); bm.free()
 
     fabric_img = make_image("coverall_diffuse", paint_uv(cov, 0))
+    # normal map from the relief, in the same UV space (tangent space: +x along u, +y along v - D3D9Client *_norm)
+    H = paint_uv(cov, 0, relief)[..., 0]
+    # soften: a small blur so seams read as rounded grooves, not steps; slopes limited to ~35 deg
+    k = np.exp(-0.5 * (np.arange(-4, 5) / 1.5) ** 2); k /= k.sum()     # separable gaussian, sigma 1.5 px
+    H = np.apply_along_axis(lambda r: np.convolve(r, k, 'same'), 0, H)
+    H = np.apply_along_axis(lambda r: np.convolve(r, k, 'same'), 1, H)
+    texel = 1.6 / TEX                      # ~metres per texel on the body (the UV layout spans ~1.6 m of cloth)
+    gy, gx = np.gradient(H, texel)
+    gx = np.clip(gx, -0.7, 0.7); gy = np.clip(gy, -0.7, 0.7)
+    nrm = np.stack([-gx, -gy, np.ones_like(H)], -1); nrm /= np.linalg.norm(nrm, axis=-1, keepdims=True)
+    im_n = bpy.data.images.new("coverall_diffuse_norm", TEX, TEX, alpha=False)
+    im_n.pixels.foreach_set(np.concatenate([nrm * 0.5 + 0.5, np.ones((TEX, TEX, 1))], 2).astype(np.float32).ravel())
+    im_n.filepath_raw = os.path.join(TEX_DIR, "coverall_diffuse_norm.png"); im_n.file_format = 'PNG'; im_n.save()
+    log.append("normal map: relief %.1f..%.1f mm" % (H.min() * 1000, H.max() * 1000))
     for m in (material("CoverallFabric", image=fabric_img), material("CoverallCollar", color=tuple(FABRIC)),
               material("CoverallRed", color=tuple(RED), rough=0.5), material("CoverallCuff", color=tuple(PANEL * 0.85))):
         cov.data.materials.append(m)
@@ -218,7 +334,9 @@ try:
         if not v.groups: continue
         g = max(v.groups, key=lambda g: g.weight); n = names[g.group]
         far_hand = v.co.z > 0.75 and any((Vector(v.co) - wrist[s][0]).dot(wrist[s][1]) > 0.0 and abs(v.co.x) > 0.2 for s in ('l', 'r'))
-        if not (n in HEAD or far_hand or n in ('neck_01', 'Neck') or v.co.z < ankle_z - 0.01) and v.co.z < neck_z + 0.02: idx.append(v.index)
+        ns, nr, _ = neck_r(v.co)
+        inside_collar = ns > -0.12 and nr < 1.08       # the neck inside the collar stays visible (no hole at the nape)
+        if not (n in HEAD or far_hand or n in ('neck_01', 'Neck') or inside_collar or v.co.z < ankle_z - 0.01) and v.co.z < neck_z + 0.02: idx.append(v.index)
     covered.add(idx, 1.0, 'REPLACE')
     mk = body.modifiers.new("HideUnderCoverall", 'MASK'); mk.vertex_group = covered.name; mk.invert_vertex_group = True
 

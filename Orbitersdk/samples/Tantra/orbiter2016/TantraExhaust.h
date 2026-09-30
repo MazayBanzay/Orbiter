@@ -29,6 +29,10 @@ public:
 
     const tantra::ExhaustFrame& Frame() const { return frame_; }
 
+    // The vessel frame moved by +dz along the axis (ShiftCG): move the positions we own. Orbiter moves
+    // the lights; the particle emitters stay (metres against their kilometres of column).
+    void Shift(double dz);
+
 private:
     // Integrates the air column along the beam from the stern (planet atmosphere model).
     tantra::AirPath TraceBeam() const;

@@ -45,8 +45,16 @@ namespace ocrew
 		void Apply(const Pose& pose);
 		// first person: collapse the head (hair, face, lashes) so the camera does not see it from inside
 		void SetHideHead(bool hide) { hideHead = hide; }
+		// blend a shape from the .skin file (MORPH lines, e.g. "fist") into the bind mesh, weight 0..1
+		void SetMorph(const char* name, float weight);
 		// a rest-pose point carried by a bone (e.g. the eye point on the head), after the last Apply
 		VECTOR3 Point(int bone, const VECTOR3& restPoint) const;
+		// turn a labelled mesh group (e.g. "SunShade") about a rest-pose pivot before skinning; false if no such group
+		bool MovePart(const char* label, const VECTOR3& pivot, const VECTOR3& axis, float angle);
+		// general rest-pose transform p' = R p + T for every group whose label starts with 'prefix'
+		bool SetPartTransform(const char* prefix, const float R[9], const float T[3]);
+		// hide (collapse) every group whose label starts with 'prefix', e.g. "Jet" while the pack is not worn
+		bool SetPartHidden(const char* prefix, bool hide);
 
 		// rotate a bone and everything below it about the bone's joint; axis in model frame, unit length
 		void Turn(Pose& pose, int bone, const VECTOR3& axis, float angle) const;
@@ -60,10 +68,19 @@ namespace ocrew
 
 	private:
 		struct BoneInfo { std::string name; int parent{}; float R0[9]{}, T0[3]{}; std::vector<int> subtree; };
-		struct Group { std::vector<unsigned short> b; std::vector<float> w; std::vector<NTVERTEX> base, work; std::vector<char> head; };
+		struct Group
+		{
+			std::vector<unsigned short> b; std::vector<float> w; std::vector<NTVERTEX> bind, base, work; std::vector<char> head;   // base = bind + morphs
+			std::string label;                  // mesh group label (LABEL lines in the .skin)
+			bool moved{}; float move[12]{};     // rest-pose transform of a movable part: R (3x3) then T (last 3), p' = R p + T
+			bool hidden{}, hiddenDone{};        // part not shown (collapsed once)
+		};
 
 		std::vector<BoneInfo> bones;
 		std::vector<Group> groups;
+		struct Morph { std::string name; int group{}; float weight{}; std::vector<int> idx; std::vector<float> d; };   // d: 6 per vertex
+		std::vector<Morph> morphs;
+		void ApplyMorphs(int group);
 		std::string meshName;
 		DEVMESHHANDLE dev{};
 		bool hideHead{};

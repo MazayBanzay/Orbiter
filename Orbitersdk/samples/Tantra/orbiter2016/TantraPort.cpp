@@ -41,7 +41,7 @@ ATTACHMENTHANDLE ContainerAttach(OBJHANDLE h) {
 void Tantra::DefinePort() {
     for (int c = 0; c < 2; ++c) {
         liftY_[c] = liftYT_[c] = m::kLiftY0;
-        grip_[c] = CreateAttachment(false, _V(ColumnX(c), m::kLiftY0, m::kTrapZ), _V(0, -1, 0), _V(0, 0, 1), "TTRAP");
+        grip_[c] = CreateAttachment(false, _V(ColumnX(c), m::kLiftY0, TrapZ()), _V(0, -1, 0), _V(0, 0, 1), "TTRAP");
     }
 }
 
@@ -89,7 +89,7 @@ OBJHANDLE Tantra::FindContainer(int c, Vec3& centre) const {
         VECTOR3 gpos, loc;
         oapiGetGlobalPos(h, &gpos);
         Global2Local(gpos, loc);
-        if (std::fabs(loc.x - ColumnX(c)) > kWindowX || std::fabs(loc.z - m::kTrapZ) > kWindowZ || loc.y > kBelly) continue;
+        if (std::fabs(loc.x - ColumnX(c)) > kWindowX || std::fabs(loc.z - TrapZ()) > kWindowZ || loc.y > kBelly) continue;
         if (m::kLiftY0 - loc.y > m::kLiftTravel) continue;  // lower than the heads can go
         MATRIX3 rc;
         v->GetRotationMatrix(rc);
@@ -223,7 +223,7 @@ void Tantra::UpdatePort(double simdt) {
             vs.ndockinfo = 0;
             vs.dockinfo = nullptr;
             VECTOR3 gpos, bpos;
-            Local2Global(_V(ColumnX(c), liftY_[c], m::kTrapZ), gpos);
+            Local2Global(_V(ColumnX(c), liftY_[c], TrapZ()), gpos);
             oapiGetGlobalPos(vs.rbody, &bpos);
             vs.rpos = gpos - bpos;
             GetRelativeVel(vs.rbody, vs.rvel);
@@ -264,5 +264,8 @@ void Tantra::UpdatePort(double simdt) {
             break;
     }
     for (int k = 0; k < 2; ++k)
-        if (grip_[k]) SetAttachmentParams(grip_[k], _V(ColumnX(k), liftY_[k], m::kTrapZ), _V(0, -1, 0), _V(0, 0, 1));
+        if (grip_[k]) SetAttachmentParams(grip_[k], _V(ColumnX(k), liftY_[k], TrapZ()), _V(0, -1, 0), _V(0, 0, 1));
 }
+
+// Trap columns are fixed in the mesh; the vessel frame follows the CG.
+double Tantra::TrapZ() const { return tantra::mesh::kTrapZ + MeshDZ(); }

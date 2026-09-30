@@ -196,6 +196,17 @@ TantraExhaust::TantraExhaust(VESSEL3* vessel, const VECTOR3 mouths[kChambers], c
     v_->SetVisibilityLimit(1e-6, 1e-3);
 }
 
+void TantraExhaust::Shift(double dz) {
+    sternZ_ -= dz;
+    for (int i = 0; i < kChambers; ++i) {
+        mouth_[i].z -= dz;
+        for (VECTOR3& p : bcnPos_[i]) p.z -= dz;
+    }
+    axisPos_.z -= dz;
+    for (VECTOR3& p : knotPos_) p.z -= dz;
+    for (VECTOR3& p : packetPos_) p.z -= dz;
+}
+
 TantraExhaust::~TantraExhaust() {
     for (auto& row : bcn_) v_->DelBeacon(&row[0]);
     for (auto& b : knot_) v_->DelBeacon(&b);

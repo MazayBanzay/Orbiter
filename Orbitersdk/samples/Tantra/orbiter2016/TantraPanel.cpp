@@ -744,7 +744,7 @@ bool Tantra::RedrawLower(int id, SURFHANDLE s) {
             PanelClear(s, id);
             std::snprintf(buf, sizeof buf, "створки %.0f%%   платформа %.0f%%", hangar_ * 100, rovers_ * 100);
             PanelText(s, r[0] + 8, r[1] + 8, buf, FONT_AMBER);
-            std::snprintf(buf, sizeof buf, "лифт шлюза: %s", airlockUp_ < 0.01 ? "у грунта" : airlockUp_ > 0.99 ? "поднят" : "...");
+            std::snprintf(buf, sizeof buf, "платформа ангара: %s", rovers_ > 0.99 ? "у грунта" : rovers_ < 0.01 ? "поднята" : "...");
             PanelText(s, r[0] + 8, r[1] + 34, buf, FONT_AMBER);
             return true;
         }

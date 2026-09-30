@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Компьютер скафандра: варианты</title>
+<style>
+  :root { --bg:#0e1013; --card:#15181c; --ink:#e7e5e0; --dim:#9aa0a8; --line:#2c3137; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 "DejaVu Sans", "Segoe UI", system-ui, sans-serif; }
+  main { max-width:1320px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:22px; margin:0 0 4px; } .sub { color:var(--dim); margin:0 0 18px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:18px; }
+  h2 { font-size:18px; margin:0 0 2px; } .k { color:var(--dim); margin:0 0 10px; font-size:14px; }
+  svg { width:100%; height:auto; display:block; border-radius:6px; }
+  ul { margin:8px 0 0; padding-left:18px; font-size:14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Компьютер скафандра — три варианта экрана шлема</h1>
+  <p class="sub">Один и тот же момент: она висит на ранце над Луной, 3,2 м, удержание высоты, гондолы на +12°. Всё только по-русски. Текст в игре — из собственного атласа букв (работает на любой Windows).</p>
+  <div id="root"></div>
+</main>
+<script>
+const C = '#40e0ff', W = '#f0f8ff', A = '#ffb030', R = '#ff4848', D = '#5f9ab8';
+const F = 'font-family="DejaVu Sans, Segoe UI, sans-serif"';
+const t = (x, y, s, c = C, sz = 16, anc = 'start', w = 400) => `<text x="${x}" y="${y}" fill="${c}" font-size="${sz}" font-weight="${w}" text-anchor="${anc}" ${F} filter="url(#g)">${s}</text>`;
+const ln = (x1, y1, x2, y2, c = C, w = 1.5, o = 1) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c}" stroke-width="${w}" opacity="${o}" filter="url(#g)"/>`;
+const bar = (x, y, w, f, c = C, h = 9) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="${D}" stroke-width="1"/><rect x="${x + 1}" y="${y + 1}" width="${(w - 2) * f}" height="${h - 2}" fill="${c}" opacity="0.9" filter="url(#g)"/>`;
+const br = (x0, y0, x1, y1, c = C) => { const k = 14; return [ln(x0, y0, x0 + k, y0, c, 2), ln(x0, y0, x0, y0 + k, c, 2), ln(x1, y0, x1 - k, y0, c, 2), ln(x1, y0, x1, y0 + k, c, 2), ln(x0, y1, x0 + k, y1, c, 2), ln(x0, y1, x0, y1 - k, c, 2), ln(x1, y1, x1 - k, y1, c, 2), ln(x1, y1, x1, y1 - k, c, 2)].join(''); };
+const arcPath = (cx, cy, r, a0, a1) => { const p = a => [cx + r * Math.cos(a), cy + r * Math.sin(a)]; const [x0, y0] = p(a0), [x1, y1] = p(a1); return `M${x0},${y0} A${r},${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${x1},${y1}`; };
+const ring = (cx, cy, r, f, c = C, label = '', val = '') => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${D}" stroke-width="5" opacity="0.35"/>
+  <path d="${arcPath(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(f, 0.999))}" fill="none" stroke="${c}" stroke-width="5" stroke-linecap="round" filter="url(#g)"/>
+  ${t(cx, cy + 5, val, W, 15, 'middle', 600)}${t(cx, cy + r + 18, label, D, 12, 'middle')}`;
+
+// the scene behind the visor
+const scene = `<defs>
+  <filter id="g" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#05070a"/></linearGradient>
+  <linearGradient id="gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6d6d6f"/><stop offset="1" stop-color="#9a9a9c"/></linearGradient>
+  <radialGradient id="vis" cx="0.5" cy="0.5" r="0.75"><stop offset="0.7" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.55"/></radialGradient></defs>
+  <rect width="1280" height="720" fill="url(#sky)"/>
+  <path d="M0,400 C180,370 330,392 520,380 C760,365 930,398 1280,372 L1280,720 L0,720 Z" fill="url(#gr)"/>
+  <path d="M0,470 C300,450 620,500 1280,455" stroke="#5c5c5e" stroke-width="3" fill="none" opacity="0.6"/>
+  <ellipse cx="880" cy="560" rx="120" ry="22" fill="#5a5a5c" opacity="0.5"/>
+  <rect width="1280" height="720" fill="url(#vis)"/>`;
+
+// ---------- variant 1: panels ----------
+function v1() {
+  let s = scene;
+  s += t(640, 42, 'Низа Крит · астронавигатор', C, 17, 'middle') + ln(470, 52, 810, 52);
+  s += br(24, 80, 330, 330) + t(40, 108, 'ОРГАНИЗМ', C, 20, 'start', 700);
+  [['Пульс', '96 уд/мин'], ['Дыхание', '22 в мин'], ['Кислород (вдох)', '30,0 кПа'], ['CO2 (вдох)', '0,05 кПа'], ['Температура тела', '37,1 °C']].forEach(([a, b], i) => { s += t(40, 140 + i * 26, a) + t(314, 140 + i * 26, b, W, 16, 'end'); });
+  s += t(40, 272, 'Нагрузка') + bar(150, 262, 110, 0.35) + t(314, 272, '35 %', W, 16, 'end') + t(40, 298, 'Выносливость') + bar(150, 288, 110, 0.92) + t(314, 298, '92 %', W, 16, 'end');
+  s += br(950, 80, 1256, 330) + t(966, 108, 'СКАФАНДР', C, 20, 'start', 700);
+  [['Кислород', 0.97, '97 %  27 ч'], ['Поглотитель', 0.96, '96 %'], ['Батарея', 0.82, '82 %  31 ч']].forEach(([a, f, b], i) => { s += t(966, 140 + i * 26, a) + bar(1070, 130 + i * 26, 90, f) + t(1240, 140 + i * 26, b, W, 16, 'end'); });
+  s += t(966, 218, 'Потребление') + t(1240, 218, '196 Вт', W, 16, 'end') + t(978, 238, '60 жизнеобесп. · 50 тепло · 86 приводы', D, 12);
+  s += t(966, 264, 'Среда') + t(1240, 264, '47 °C (допуск −157…121)', W, 16, 'end') + t(966, 290, 'Снаружи: вакуум', C) + t(966, 314, 'Азот РСУ 100 % · 7,8 м/с', D, 13);
+  s += br(310, 530, 970, 700) + t(328, 560, 'РАНЕЦ', C, 22, 'start', 700) + t(954, 560, 'УДЕРЖАНИЕ ВЫСОТЫ  3,0 м', A, 16, 'end');
+  s += `<rect x="330" y="582" width="18" height="100" fill="none" stroke="${D}"/><rect x="331" y="624" width="16" height="57" fill="${C}" filter="url(#g)"/>` + t(339, 696, '57 %', W, 11, 'middle');
+  s += t(372, 600, 'Топливо') + bar(460, 590, 150, 0.83) + t(620, 600, '83 %   запас 229 м/с', W);
+  s += t(372, 628, 'Высота 3,2 м     верт. +0,1 м/с     гориз. 2,4 м/с', W) + t(372, 652, 'Балки: раскрыты', D, 13);
+  [[820, 'правая'], [900, 'левая']].forEach(([x, n]) => { s += `<circle cx="${x}" cy="640" r="8" fill="none" stroke="${C}" stroke-width="2" filter="url(#g)"/>` + ln(x, 640, x - 26 * Math.sin(0.21), 640 + 26 * Math.cos(0.21), A, 2.5) + t(x, 686, '+12°', W, 12, 'middle') + t(x, 622, n, D, 11, 'middle'); });
+  s += ln(560, 360, 610, 362) + ln(670, 362, 720, 364) + ln(632, 362, 648, 362, C, 1) + ln(640, 354, 640, 370, C, 1);
+  s += t(24, 700, 'W/S вектор · A/D поворот · Shift полный вектор · J высота · C посадка', D, 12);
+  return s;
+}
+
+// ---------- variant 2: visor edge ----------
+function v2() {
+  let s = scene;
+  // the information sits on the visor's rim, curved; the middle stays clear
+  s += `<path id="la" d="${arcPath(640, 880, 660, Math.PI * 1.19, Math.PI * 1.39)}" fill="none"/><path id="ra" d="${arcPath(640, 880, 660, Math.PI * 1.61, Math.PI * 1.81)}" fill="none"/>`;
+  s += `<path d="${arcPath(640, 880, 630, Math.PI * 1.18, Math.PI * 1.40)}" fill="none" stroke="${C}" stroke-width="1.5" opacity="0.6" filter="url(#g)"/>`;
+  s += `<path d="${arcPath(640, 880, 630, Math.PI * 1.60, Math.PI * 1.82)}" fill="none" stroke="${C}" stroke-width="1.5" opacity="0.6" filter="url(#g)"/>`;
+  s += `<text ${F} font-size="15" fill="${C}" filter="url(#g)"><textPath href="#la">ПУЛЬС 96 · ДЫХАНИЕ 22 · O2 30,0 кПа · CO2 0,05 · 37,1 °C</textPath></text>`;
+  s += `<text ${F} font-size="15" fill="${C}" filter="url(#g)"><textPath href="#ra">КИСЛОРОД 97 % · БАТАРЕЯ 82 % · 196 Вт · 47 °C</textPath></text>`;
+  // top: name and a single status word
+  s += t(640, 36, 'НИЗА КРИТ', C, 15, 'middle', 700) + t(640, 56, 'все системы в норме', D, 12, 'middle');
+  // left and right: tall vertical scales on the rim
+  const vscale = (x, f, c, name, val) => { let q = `<rect x="${x}" y="190" width="10" height="220" fill="none" stroke="${D}"/>`; q += `<rect x="${x + 1}" y="${191 + 218 * (1 - f)}" width="8" height="${218 * f}" fill="${c}" filter="url(#g)"/>`; return q + t(x + 5, 430, name, D, 11, 'middle') + t(x + 5, 180, val, W, 13, 'middle'); };
+  s += vscale(28, 0.97, C, 'O2', '97') + vscale(56, 0.96, C, 'CO2', '96') + vscale(84, 0.82, C, 'БАТ', '82');
+  s += vscale(1186, 0.83, C, 'ТОПЛ', '83') + vscale(1214, 0.57, A, 'ТЯГА', '57') + vscale(1242, 0.92, C, 'СИЛЫ', '92');
+  // bottom rim: flight
+  s += `<path d="${arcPath(640, -260, 1000, Math.PI * 0.40, Math.PI * 0.60)}" fill="none" stroke="${C}" stroke-width="1.5" opacity="0.6" filter="url(#g)"/>`;
+  s += t(640, 690, 'ВЫСОТА 3,2 м   ·   ↑ +0,1 м/с   ·   → 2,4 м/с   ·   ЗАПАС 229 м/с', W, 16, 'middle');
+  s += t(640, 666, 'УДЕРЖАНИЕ ВЫСОТЫ 3,0 м', A, 13, 'middle');
+  [[520, 'П'], [760, 'Л']].forEach(([x, n]) => { s += `<circle cx="${x}" cy="620" r="7" fill="none" stroke="${C}" stroke-width="2" filter="url(#g)"/>` + ln(x, 620, x - 22 * Math.sin(0.21), 620 + 22 * Math.cos(0.21), A, 2.5) + t(x + 14, 615, n + ' +12°', W, 12); });
+  // centre: reticle + horizon only
+  s += ln(540, 360, 610, 362) + ln(670, 362, 740, 364) + `<circle cx="640" cy="362" r="4" fill="none" stroke="${C}" filter="url(#g)"/>`;
+  return s;
+}
+
+// ---------- variant 3: ring gauges ----------
+function v3() {
+  let s = scene;
+  s += t(640, 40, 'Низа Крит · астронавигатор', C, 16, 'middle');
+  // top-left: body as rings
+  s += ring(70, 110, 30, 0.45, C, 'пульс', '96') + ring(150, 110, 30, 0.35, C, 'нагрузка', '35 %') + ring(230, 110, 30, 0.92, C, 'силы', '92 %');
+  s += t(40, 188, 'O2 30,0 кПа · CO2 0,05 кПа · 37,1 °C', W, 14);
+  // top-right: suit as rings
+  s += ring(1050, 110, 30, 0.97, C, 'кислород', '97 %') + ring(1130, 110, 30, 0.82, C, 'батарея', '82 %') + ring(1210, 110, 30, 0.96, C, 'поглот.', '96 %');
+  s += t(1240, 188, '196 Вт · среда 47 °C · вакуум', W, 14, 'end');
+  // bottom-centre: the flight cluster around a big ring
+  s += `<circle cx="640" cy="600" r="80" fill="none" stroke="${D}" stroke-width="6" opacity="0.3"/>`;
+  s += `<path d="${arcPath(640, 600, 80, Math.PI * 0.75, Math.PI * 0.75 + Math.PI * 1.5 * 0.57)}" fill="none" stroke="${A}" stroke-width="6" stroke-linecap="round" filter="url(#g)"/>`;
+  s += `<path d="${arcPath(640, 600, 94, Math.PI * 0.75, Math.PI * 0.75 + Math.PI * 1.5 * 0.83)}" fill="none" stroke="${C}" stroke-width="3" stroke-linecap="round" filter="url(#g)"/>`;
+  s += t(640, 592, '3,2 м', W, 26, 'middle', 700) + t(640, 616, '↑ +0,1   → 2,4 м/с', W, 13, 'middle') + t(640, 640, 'тяга 57 % · топливо 83 %', D, 12, 'middle');
+  s += t(640, 505, 'УДЕРЖАНИЕ ВЫСОТЫ 3,0 м', A, 13, 'middle');
+  [[520, 'правая'], [760, 'левая']].forEach(([x, n]) => { s += `<circle cx="${x}" cy="600" r="10" fill="none" stroke="${C}" stroke-width="2" filter="url(#g)"/>` + ln(x, 600, x - 30 * Math.sin(0.21), 600 + 30 * Math.cos(0.21), A, 3) + t(x, 650, '+12°', W, 13, 'middle') + t(x, 580, n, D, 11, 'middle'); });
+  s += t(1240, 700, 'запас 229 м/с', D, 13, 'end');
+  s += ln(560, 362, 610, 363) + ln(670, 363, 720, 364) + ln(632, 363, 648, 363, C, 1) + ln(640, 355, 640, 371, C, 1);
+  return s;
+}
+
+const variants = [
+  ['1 · «Панели»', 'уточнённый нынешний: три стеклянных блока — организм, скафандр, ранец', v1,
+   ['Всё видно сразу, цифры и полосы, легко читать.', 'Минус: занимает углы и низ, много текста.']],
+  ['2 · «Кромка визора»', 'информация по краю стекла шлема, дугами; середина свободна', v2,
+   ['Как настоящее проекционное стекло: взгляд на мир не перекрыт.', 'Кратко: главное — вертикальные шкалы и одна строка полёта; детали — по запросу.', 'Минус: мелкий текст на дуге читается хуже.']],
+  ['3 · «Кольца»', 'кольцевые шкалы вместо полос; полётный блок — кольцо внизу по центру', v3,
+   ['Состояние читается по форме колец, не по цифрам — быстро, «приборно».', 'Высота крупно в центре полётного кольца, тяга и топливо — дугами.', 'Минус: точные значения мельче.']],
+];
+const root = document.getElementById('root');
+for (const [h, k, fn, li] of variants)
+  root.insertAdjacentHTML('beforeend', `<section><h2>${h}</h2><p class="k">${k}</p><svg viewBox="0 0 1280 720">${fn()}</svg><ul>${li.map(x => `<li>${x}</li>`).join('')}</ul></section>`);
+</script>
+</body>
+</html>

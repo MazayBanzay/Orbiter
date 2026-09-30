@@ -63,7 +63,7 @@ void TantraGear::Set(int anim, double state) {
 void TantraGear::LegRestFoot(double& x, double& s) {
     for (const m::LegRig& L : m::kLegs) {
         if (!L.lower || L.hinge.x < 0.0) continue;
-        const VECTOR3 tip = ToV(L.hinge) + Rotate(_V(0, 0, m::kLegLMinS + L.extRest), ToV(L.axis), L.phiRest);
+        const VECTOR3 tip = ToV(L.hinge) + Rotate(_V(0, 0, -(m::kLegLMinS + L.extRest)), ToV(L.axis), L.phiRest);  // stowed along -z
         x = tip.x;
         s = tip.z + 38.0;  // mesh origin at s = 38
         return;
@@ -74,13 +74,15 @@ void TantraGear::Apply(const tantra::CarriagePose& p, double sCG, const Extras& 
     const double tuck = (std::max)(p.tuck, ex.tuck);
     Set(m::ANIM_CREST_DORSAL, tuck);
     Set(m::ANIM_CREST_LATERAL, tuck);
-    Set(m::ANIM_POD_RETRACT, tuck);
+    Set(m::ANIM_POD_RETRACT, ex.podStow);
+    Set(m::ANIM_ELEVON_PORT, ex.elevon[0]);
+    Set(m::ANIM_ELEVON_STARBOARD, ex.elevon[1]);
+    Set(m::ANIM_BODY_FLAP, ex.bodyFlap);
     Set(m::ANIM_POD_SWIVEL, ex.podSwivel);
     Set(m::ANIM_IRIS_ANA, ex.irisAna);
     Set(m::ANIM_IRIS_PLAN, ex.irisPlan);
     Set(m::ANIM_HANGAR, ex.hangar);
     Set(m::ANIM_ROVER_LIFT, ex.rovers);
-    Set(m::ANIM_AIRLOCK_LIFT, ex.airlockUp);
 
     // Carriage legs: hip on the track, slide 1 = in the pocket, pitch 1 = along the hull (aft),
     // shin 1 = collapsed into the thigh, pad fold 1 = folded against the thigh.
@@ -115,8 +117,10 @@ void TantraGear::Apply(const tantra::CarriagePose& p, double sCG, const Extras& 
     for (int i = 0; i < 4; ++i) {
         const m::LegRig& L = m::kLegs[i];
         const double wr = L.lower ? p.legRest : 0.0, ws = p.legStand;
-        Set(kSwing[i], (wr * L.phiRest + ws * L.phiStand) / L.phiStand);
-        Set(kExt[i], (wr * L.extRest + ws * L.extStand) / m::kLegExtMax);
+        Set(kSwing[i], (wr * L.phiRest + ws * L.phiStand) / L.phiMax);
+        // the shin runs out only once the swing has lifted the leg clear of the stern
+        auto ext = [](double w) { return Clamp01((w - m::kLegExtDelay) / (1.0 - m::kLegExtDelay)); };
+        Set(kExt[i], (ext(wr) * L.extRest + ext(ws) * L.extStand) / m::kLegExtMax);
         Set(kRest[i], wr);
         Set(kStand[i], ws);
     }

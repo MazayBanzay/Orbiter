@@ -5,12 +5,17 @@
 //   Shift       run; in the suit: servo boost (faster, bounding stride, paid from the battery)
 //   Space       jump
 //   K           put on / take off the suit (off only in breathable air)
+//   V           helmet sun shade: gold mirror visor against glare and radiation      L   helmet lamps
+//   B           take / leave the jet pack (suit on, pack within 2.5 m); its own keys: see JetPack.h
 #pragma once
+#include "JetPack.h"
 #include "LifeSupport.h"
 #include "Motion.h"
 #include "Skin.h"
+#include "SuitHud.h"
 #include "Sound.h"
 #include <string>
+#include <vector>
 
 namespace ocrew
 {
@@ -29,6 +34,7 @@ namespace ocrew
 		int clbkConsumeBufferedKey(DWORD key, bool down, char* kstate) override;
 		void clbkPreStep(double simt, double simdt, double mjd) override;
 		bool clbkDrawHUD(int mode, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp) override;
+		void clbkRenderHUD(int mode, const HUDPAINTSPEC* hps, SURFHANDLE hTex) override {}   // no default HUD: the suit computer draws
 		bool clbkLoadVC(int id) override;
 
 	private:
@@ -36,7 +42,7 @@ namespace ocrew
 		struct Keys { bool fwd{}, back{}, left{}, right{}, stepL{}, stepR{}, run{}; };
 
 		Figure& Active() { return suitOn && suitFig.ok ? suitFig : bodyFig; }
-		double Mass() const { return bio.mass + (suitOn ? suitMass : 0); }
+		double Mass() const { return bio.mass + (suitOn ? suitMass : 0) + (jet.Worn() ? JetPack::DRY : 0); }
 		double Gravity() const;
 		void Say(const std::string& text) { message = text; messageTime = 6; }
 		void ShowFigure();
@@ -45,6 +51,7 @@ namespace ocrew
 		void Drive(double dt, double g);
 		Thermal Surroundings() const;
 		void Jump();
+		void Liftoff();
 		void Land();
 
 		std::string name{ "Crew member" }, role{ "crew" };
@@ -72,8 +79,41 @@ namespace ocrew
 		bool airborne{}, lying{}, placed{};
 		double fallSpeed{}, landingSpeed{}, jumpHeading{};
 
+		// suit RCS: SAFER-class cold-gas unit in the pack (self-rescue, ~10 m/s); off on the ground and without power
+		PROPELLANT_HANDLE n2{};
+		std::vector<THRUSTER_HANDLE> rcs;
+		bool rcsLive{};
+		RcsSet rcsN2;
+		int rcsState{ -1 };                  // live / which set, to switch only on change
+		void BuildAttGroups(const RcsSet& set);
+
+		// jet pack
+		JetPack jet;
+		bool jetFromScenario{}, wasFree{};
+		double freeVy{}, freeT{};
+		FlightInput flight{};
+		bool flightFresh{};
+		void Touchdown();
+		void GroundContactCheck(double dt);
+		void Fall(double impact, const char* why);
+		double fallenT{};
+		void TakePack();
+		void DropPack();
+		double ShellHalf() const { return jet.ShellHalfHeight(); }
+		void SetupRcs();
+		void UpdateRcs(bool free);
+		double RcsDeltaV() const;
 		bool hudHidden{};   // we switched Orbiter's HUD off (no suit, generic cockpit)
 		std::string message;
 		double messageTime{};
+		SuitHud hud;
+
+		// helmet: sun shade (V) and lamps (L)
+		double shade{}, shadeTarget{};        // 0 raised over the crown .. 1 lowered over the visor
+		bool lampOn{};
+		SpotLight* lamps[2]{};
+		BEACONLIGHTSPEC lampGlow[2]{};          // the lamp glass itself, glowing when the lamps are on
+		VECTOR3 lampGlowPos[2]{}, lampGlowCol{ 1.0, 0.96, 0.85 };
+		void UpdateHelmet(double dt, Figure& fig);
 	};
 }

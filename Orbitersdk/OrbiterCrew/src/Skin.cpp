@@ -129,6 +129,18 @@ namespace ocrew
 					for (float& v : b.T0) f >> v;
 				}
 			}
+			else if (tok == "LABEL")
+			{
+				int gi; std::string name; f >> gi >> name;
+				if (static_cast<int>(groups.size()) <= gi) groups.resize(gi + 1);
+				groups[gi].label = name;
+			}
+			else if (tok == "MORPH")
+			{
+				Morph m; int n; f >> m.name >> m.group >> n; m.idx.resize(n); m.d.resize(n * 6);
+				for (int k = 0; k < n; ++k) { f >> m.idx[k]; for (int c = 0; c < 6; ++c) f >> m.d[k * 6 + c]; }
+				morphs.push_back(std::move(m));
+			}
 			else if (tok == "GROUP")
 			{
 				int gi, nv; f >> gi >> nv;
@@ -160,6 +172,31 @@ namespace ocrew
 		return true;
 	}
 
+	void Skin::SetMorph(const char* name, float weight)
+	{
+		for (auto& m : morphs)
+			if (m.name == name && std::abs(m.weight - weight) > 0.01f) { m.weight = weight; ApplyMorphs(m.group); }
+	}
+
+	void Skin::ApplyMorphs(int gi)
+	{
+		if (gi < 0 || gi >= static_cast<int>(groups.size())) return;
+		auto& g = groups[gi];
+		if (g.bind.empty()) return;
+		g.base = g.bind;
+		for (const auto& m : morphs)
+		{
+			if (m.group != gi || m.weight <= 0) continue;
+			for (size_t k = 0; k < m.idx.size(); ++k)
+			{
+				const int v = m.idx[k]; if (v < 0 || v >= static_cast<int>(g.base.size())) continue;
+				const float* d = &m.d[k * 6]; NTVERTEX& o = g.base[v];
+				o.x += m.weight * d[0]; o.y += m.weight * d[1]; o.z += m.weight * d[2];
+				o.nx += m.weight * d[3]; o.ny += m.weight * d[4]; o.nz += m.weight * d[5];
+			}
+		}
+	}
+
 	int Skin::Bone(const char* name) const
 	{
 		for (int i = 0; i < static_cast<int>(bones.size()); ++i) if (bones[i].name == name) return i;
@@ -177,7 +214,8 @@ namespace ocrew
 			MESHGROUP* mg = oapiMeshGroup(tmpl, gi);
 			auto& g = groups[gi];
 			if (!mg || mg->nVtx * 4 != g.b.size()) { oapiWriteLogV("OrbiterCrew: %s group %d does not match the skin", meshName.c_str(), static_cast<int>(gi)); dev = nullptr; return; }
-			g.base.assign(mg->Vtx, mg->Vtx + mg->nVtx); g.work = g.base;
+			g.bind.assign(mg->Vtx, mg->Vtx + mg->nVtx); g.base = g.bind; g.work = g.base;
+			ApplyMorphs(static_cast<int>(gi));
 		}
 	}
 
@@ -200,9 +238,24 @@ namespace ocrew
 		{
 			auto& g = groups[gi];
 			if (g.base.empty()) continue;
+			if (g.hidden)   // a part not worn (e.g. the jet pack): all its vertices collapse to one point, nothing is drawn
+			{
+				if (g.hiddenDone) continue;
+				for (auto& o : g.work) { o.x = o.y = o.z = 0; }
+				GROUPEDITSPEC hs{}; hs.flags = GRPEDIT_VTXCRD; hs.Vtx = g.work.data(); hs.nVtx = static_cast<DWORD>(g.work.size());
+				oapiEditMeshGroup(dev, gi, &hs); g.hiddenDone = true; continue;
+			}
+			g.hiddenDone = false;
 			for (size_t v = 0; v < g.base.size(); ++v)
 			{
-				const NTVERTEX& b = g.base[v]; NTVERTEX& o = g.work[v];
+				NTVERTEX moved;
+				if (g.moved)   // a movable part (e.g. the sun shade): turned in the rest pose first, then skinned
+				{
+					const NTVERTEX& r = g.base[v]; const float* M = g.move; moved = r;   // p' = R p + T
+					moved.x = M[0] * r.x + M[1] * r.y + M[2] * r.z + M[9]; moved.y = M[3] * r.x + M[4] * r.y + M[5] * r.z + M[10]; moved.z = M[6] * r.x + M[7] * r.y + M[8] * r.z + M[11];
+					moved.nx = M[0] * r.nx + M[1] * r.ny + M[2] * r.nz; moved.ny = M[3] * r.nx + M[4] * r.ny + M[5] * r.nz; moved.nz = M[6] * r.nx + M[7] * r.ny + M[8] * r.nz;
+				}
+				const NTVERTEX& b = g.moved ? moved : g.base[v]; NTVERTEX& o = g.work[v];
 				float px = 0, py = 0, pz = 0, nx = 0, ny = 0, nz = 0;
 				for (int k = 0; k < 4; ++k)
 				{
@@ -230,6 +283,38 @@ namespace ocrew
 			ges.flags = GRPEDIT_VTXCRD | GRPEDIT_VTXNML; ges.Vtx = g.work.data(); ges.nVtx = static_cast<DWORD>(g.work.size());
 			oapiEditMeshGroup(dev, gi, &ges);
 		}
+	}
+
+	static bool HasPrefix(const std::string& s, const char* p) { return s.rfind(p, 0) == 0; }
+
+	bool Skin::SetPartTransform(const char* prefix, const float R[9], const float T[3])
+	{
+		bool found = false;
+		for (auto& g : groups)
+		{
+			if (!HasPrefix(g.label, prefix)) continue;
+			found = true; g.moved = true;
+			for (int i = 0; i < 9; ++i) g.move[i] = R[i];
+			for (int i = 0; i < 3; ++i) g.move[9 + i] = T[i];
+		}
+		return found;
+	}
+
+	bool Skin::SetPartHidden(const char* prefix, bool hide)
+	{
+		bool found = false;
+		for (auto& g : groups) if (HasPrefix(g.label, prefix)) { found = true; g.hidden = hide; }
+		return found;
+	}
+
+	bool Skin::MovePart(const char* label, const VECTOR3& pivot, const VECTOR3& axis, float angle)
+	{
+		const float h = 0.5f * angle, sh = std::sin(h);
+		const float q[4] = { std::cos(h), static_cast<float>(axis.x) * sh, static_cast<float>(axis.y) * sh, static_cast<float>(axis.z) * sh };
+		float R[9]; QuatToMat(q, R);
+		const float px = static_cast<float>(pivot.x), py = static_cast<float>(pivot.y), pz = static_cast<float>(pivot.z);
+		const float T[3] = { px - (R[0] * px + R[1] * py + R[2] * pz), py - (R[3] * px + R[4] * py + R[5] * pz), pz - (R[6] * px + R[7] * py + R[8] * pz) };
+		return SetPartTransform(label, R, T);
 	}
 
 	VECTOR3 Skin::Point(int b, const VECTOR3& r) const

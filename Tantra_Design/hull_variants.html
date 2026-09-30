@@ -1,0 +1,236 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Тантра: корпус, варианты</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#f4f2ee;--text:#1b1b1b;--muted:#5a5a5a;--accent:#3b6fd6;--border:#c9c5bd}
+body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;margin:16px}
+h1{font-size:18px;margin:0 0 8px}h2{font-size:16px;margin:18px 0 6px}
+#wrap{position:relative;border-radius:12px;overflow:hidden;background:#0b0c10}
+#c3{width:100%;height:520px}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+.b{font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text);cursor:pointer}
+.b.on{border:2px solid var(--accent);padding:5px 11px}
+canvas.pl{background:#15161a;border-radius:10px;margin-top:10px;width:100%;max-width:1150px}
+table{border-collapse:collapse;font-size:13px;max-width:1150px}td,th{border:1px solid var(--border);padding:4px 8px;text-align:left;vertical-align:top}th{background:#e9e5de}
+td.best{background:#dff0d8}td.bad{background:#f6dcd6}
+.note{font-size:13px;color:var(--muted);margin-top:10px;line-height:1.5;max-width:1150px}.note b{color:var(--text)}
+</style></head><body>
+<h1>«Тантра» — корпус: три варианта, одна методика</h1>
+<div id="wrap"><div id="c3"></div></div>
+<div class="row" id="vb"></div>
+<div class="row">
+  <button class="b" data-v="q">3/4</button><button class="b" data-v="side">Сбоку</button><button class="b" data-v="top">Сверху</button>
+  <button class="b" data-v="aft">С кормы</button><button class="b" data-v="front">С носа</button><button class="b" id="xr">Рентген</button><button class="b" id="rot">Вращение</button>
+</div>
+<canvas class="pl" id="sil" width="1150" height="430"></canvas>
+<h2>Короткий расчёт (посадочная масса 2,9 кт, ЦМ s 53, вход брюхом)</h2>
+<div id="tab"></div>
+<div class="note" id="concl"></div>
+<div class="note"><b>Методика.</b> Одинаковая для всех: ньютоновская модель по панелям поверхности (гиперзвук), поток снизу-спереди под углом атаки; баланс — сначала элевоны (−30…+40°), затем щиток днища (−15…+25°). Площади и объём — по сечениям корпуса без гребней. Обтекатель — 10 кг/м² по поверхности, множитель гружёной массы ~26 (как в замыкании масс). Нагрев брюха — масштаб от расчёта C-147 (1150 °C на Земле) как √β. Кассеты, колодец/двигательный блок и ангар проверяются на вхождение в сечения (с обручами кассет).</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+const D=Math.PI/180, L_SHIP=146, NS=96, MASS=2.9e6, SCG=53;
+const sm5=t=>{t=Math.max(0,Math.min(1,t));return t*t*t*(t*(6*t-15)+10);};
+function lerpP(a,b,t){const o={};for(const k in a){o[k]=Array.isArray(a[k])?[a[k][0]+(b[k][0]-a[k][0])*t,a[k][1]+(b[k][1]-a[k][1])*t]:a[k]+(b[k]-a[k])*t;}return o;}
+function fillet(pts,rad,n){const out=[],m=pts.length;
+  for(let i=0;i<m;i++){const p0=pts[(i-1+m)%m],p1=pts[i],p2=pts[(i+1)%m];
+    let ax=p0[0]-p1[0],ay=p0[1]-p1[1],bx=p2[0]-p1[0],by=p2[1]-p1[1];const la=Math.hypot(ax,ay),lb=Math.hypot(bx,by);ax/=la;ay/=la;bx/=lb;by/=lb;
+    const ang=Math.acos(Math.max(-1,Math.min(1,ax*bx+ay*by)));let r=rad[i];if(r<=0||ang>Math.PI-1e-3){out.push(p1);continue;}
+    let t=Math.min(r/Math.tan(ang/2),0.49*la,0.49*lb);r=t*Math.tan(ang/2);const q0=[p1[0]+ax*t,p1[1]+ay*t],q1=[p1[0]+bx*t,p1[1]+by*t];
+    let hx=ax+bx,hy=ay+by;const hl=Math.hypot(hx,hy);hx/=hl;hy/=hl;const d=r/Math.sin(ang/2),c=[p1[0]+hx*d,p1[1]+hy*d];
+    const t0=Math.atan2(q0[1]-c[1],q0[0]-c[0]),t1=Math.atan2(q1[1]-c[1],q1[0]-c[0]);let dt=t1-t0;while(dt>Math.PI)dt-=2*Math.PI;while(dt<-Math.PI)dt+=2*Math.PI;
+    for(let k=0;k<=n;k++){const th=t0+dt*k/n;out.push([c[0]+r*Math.cos(th),c[1]+r*Math.sin(th)]);}}return out;}
+function polyOf(P){const pts=[P.B,P.C,P.T,[0,P.ya],[-P.T[0],P.T[1]],[-P.C[0],P.C[1]],[-P.B[0],P.B[1]]];return fillet(pts,[P.rb,P.rc,P.rt,P.ra,P.rt,P.rc,P.rb],10);}
+function resample(poly,N){const m=poly.length;let i0=0,best=1e9;for(let i=0;i<m;i++){if(poly[i][1]<0&&Math.abs(poly[i][0])<best){best=Math.abs(poly[i][0]);i0=i;}}
+  const pts=[];for(let k=0;k<=m;k++)pts.push(poly[(i0+k)%m]);pts[0]=[0,poly[i0][1]];pts[m]=pts[0];
+  const cum=[0];for(let k=1;k<=m;k++)cum.push(cum[k-1]+Math.hypot(pts[k][0]-pts[k-1][0],pts[k][1]-pts[k-1][1]));
+  const tot=cum[m],out=[];let j=0;for(let k=0;k<N;k++){const d=tot*k/N;while(cum[j+1]<d)j++;const f=(d-cum[j])/(cum[j+1]-cum[j]||1);out.push([pts[j][0]+(pts[j+1][0]-pts[j][0])*f,pts[j][1]+(pts[j+1][1]-pts[j][1])*f]);}
+  if(out[1][0]<0)out.reverse(),out.unshift(out.pop());return out;}
+function inside(poly,x,y){let c=false;for(let i=0,n=poly.length;i<n;i++){const [x1,y1]=poly[i],[x2,y2]=poly[(i+1)%n];if((y1>y)!==(y2>y)&&x<(x2-x1)*(y-y1)/(y2-y1)+x1)c=!c;}return c;}
+const areaOf=sec=>{let a=0;for(let i=0;i<sec.length;i++){const p=sec[i],q=sec[(i+1)%sec.length];a+=p[0]*q[1]-q[0]*p[1];}return Math.abs(a)/2;};
+function octs(cs){const o=[];cs.forEach(([cx,cy])=>{const h=5.05,ch=3.25;o.push([cx-h+ch,cy-h],[cx+h-ch,cy-h],[cx+h,cy-h+ch],[cx+h,cy+h-ch],[cx+h-ch,cy+h],[cx-h+ch,cy+h],[cx-h,cy+h-ch],[cx-h,cy-h+ch]);});return o;}
+
+// ---------------- the variants ----------------
+const FORE={B:[5.4,-8.7],C:[8.9,-3.4],T:[6.8,5.0],ya:8.9,rb:1.6,rc:2.5,rt:4.5,ra:5.6};
+const FORE_SHARP={B:[5.4,-8.7],C:[9.0,-3.8],T:[6.8,5.0],ya:8.9,rb:1.6,rc:0.8,rt:4.5,ra:5.6};
+const CASS22=[[5.55,-3.15],[-5.55,-3.15],[5.55,7],[-5.55,7]], CASS4=[[5.1,-1.5],[-5.1,-1.5],[15.3,-1.5],[-15.3,-1.5]];
+const HANGAR=[[6.6,3.2],[-6.6,3.2],[7.5,1.4],[-7.5,1.4],[0,6.2],[4.2,-8.3],[-4.2,-8.3],[4.2,-3.0],[2.0,5.5],[-2.0,5.5]];
+const V=[
+ {id:'c147',name:'C-147 (сейчас, «утюг»)',col:'#c9b27a',
+  keys:[[0,{B:[10.5,-12.3],C:[13.0,-5.0],T:[11.8,8.5],ya:13.2,rb:3,rc:2,rt:5,ra:12}],[8,{B:[11.0,-9.6],C:[14.2,-4.2],T:[13.0,10.0],ya:15.2,rb:3,rc:2,rt:5,ra:10}],
+        [47,{B:[11.0,-9.6],C:[14.2,-4.2],T:[13.0,10.0],ya:15.2,rb:3,rc:2,rt:5,ra:10}],[62,FORE],[122,FORE]],
+  cass:CASS22, stern:{type:'well'}, crest:{x0:13.9,x1:25.5,y:-4.2,le0:28,le1:21,te0:6,te1:11}, flap:{half:7,ch:3}, dorsal:true, lifts:2},
+ {id:'b',name:'Б: 2×2 облагороженный',col:'#8fc0a0',
+  keys:[[0,{B:[10.8,-12.3],C:[13.4,-4.6],T:[10.4,10.2],ya:12.8,rb:3,rc:0.8,rt:3,ra:7}],[8,{B:[11.2,-9.6],C:[14.6,-4.0],T:[11.0,12.0],ya:14.4,rb:3,rc:0.8,rt:3,ra:6}],
+        [47,{B:[11.2,-9.6],C:[14.6,-4.0],T:[11.0,12.0],ya:14.4,rb:3,rc:0.8,rt:3,ra:6}],[75,FORE_SHARP],[122,FORE_SHARP]],
+  cass:CASS22, stern:{type:'well'}, crest:{x0:14.3,x1:27.4,y:-4.0,le0:28,le1:21,te0:6,te1:11}, flap:{half:7,ch:3}, dorsal:true, lifts:2},
+ {id:'a',name:'А: «скат» (кассеты в ряд)',col:'#8fa8d8',
+  keys:[[0,{B:[17.0,-7.8],C:[22.0,-1.8],T:[18.0,4.8],ya:7.2,rb:3,rc:0.8,rt:3,ra:16}],[8,{B:[17.5,-7.4],C:[23.2,-1.8],T:[19.0,4.8],ya:7.4,rb:3,rc:0.8,rt:3,ra:16}],
+        [46,{B:[17.5,-7.4],C:[23.2,-1.8],T:[19.0,4.8],ya:7.4,rb:3,rc:0.8,rt:3,ra:16}],[79,FORE_SHARP],[122,FORE_SHARP]],
+  cass:CASS4, stern:{type:'block',w:34,h:9,y:-1}, crest:null, edgeEl:{x0:17.5,x1:23,ch:5,y:-1.8}, flap:{half:9,ch:3}, fins:true, lifts:4}];
+
+// ---------------- geometry per variant ----------------
+function makeSections(v){const K=v.keys,NB=K[K.length-1][0];
+  const base=resample(polyOf(K[K.length-1][1]),NS);const yMin=Math.min(...base.map(p=>p[1])),yMax=Math.max(...base.map(p=>p[1])),Y0=(yMin+yMax)/2,RN=(yMax-yMin)/2;
+  const NL=L_SHIP-NB,RHO=(RN*RN+NL*NL)/(2*RN),rn=1.8,XS=NL-Math.sqrt((RHO-rn)**2-(RHO-RN)**2),XT=XS-rn*(NL-XS)/(RHO-rn),TIP=XS-rn;
+  const f=x=>x<=TIP?0:(x<XT?Math.sqrt(Math.max(0,rn*rn-(x-XS)**2))/RN:(Math.sqrt(RHO*RHO-(NL-x)**2)+RN-RHO)/RN);
+  const at=s=>{if(s<=NB){for(let i=0;i<K.length-1;i++){const[a,pa]=K[i],[b,pb]=K[i+1];if(s<=b)return resample(polyOf(lerpP(pa,pb,sm5((s-a)/(b-a)))),NS);}}
+    const k=f(L_SHIP-s);return base.map(p=>[p[0]*k,Y0+(p[1]-Y0)*k]);};
+  const st=[];for(let s=0;s<NB;s+=1)st.push(s);for(let s=NB;s<L_SHIP-TIP-2;s+=0.75)st.push(s);for(let k=0;k<=12;k++)st.push(L_SHIP-(TIP+2*(1-k/12)));
+  return {at,st,tip:[L_SHIP-TIP,Y0]};}
+V.forEach(v=>{v.S=makeSections(v);});
+
+// ---------------- scene ----------------
+const el=document.getElementById('c3');const R=new THREE.WebGLRenderer({antialias:true});R.setPixelRatio(Math.min(2,window.devicePixelRatio||1));el.appendChild(R.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0xbfcad6);const cam=new THREE.PerspectiveCamera(32,1,1,5000);const ctl=new THREE.OrbitControls(cam,R.domElement);ctl.enableDamping=true;
+scene.add(new THREE.HemisphereLight(0xe6ecf4,0x5b4a3a,0.7));const sun=new THREE.DirectionalLight(0xffffff,0.95);sun.position.set(-120,200,140);scene.add(sun);const sun2=new THREE.DirectionalLight(0x9aa6bb,0.35);sun2.position.set(150,-60,-100);scene.add(sun2);
+function resize(){const w=Math.max(1,el.clientWidth),h=Math.max(1,el.clientHeight);R.setSize(w,h,false);R.domElement.style.width='100%';R.domElement.style.height='100%';cam.aspect=w/h;cam.updateProjectionMatrix();}resize();window.addEventListener('resize',resize);
+const grid=new THREE.GridHelper(400,40,0x8a8f99,0xa3a8b1);grid.position.set(73,-24,0);scene.add(grid);
+const M=(c,o)=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:0.6,metalness:0.3},o||{}));
+const V3=(x,y,z)=>new THREE.Vector3(x,y,z);
+function plateGeom(q,t){const e1=new THREE.Vector3().subVectors(q[2],q[0]),e2=new THREE.Vector3().subVectors(q[3],q[1]),n=new THREE.Vector3().crossVectors(e1,e2).normalize().multiplyScalar(t/2);
+  const v=[];q.forEach(p=>v.push(p.x+n.x,p.y+n.y,p.z+n.z));q.forEach(p=>v.push(p.x-n.x,p.y-n.y,p.z-n.z));const f=[0,1,2,0,2,3,4,6,5,4,7,6,0,4,5,0,5,1,1,5,6,1,6,2,2,6,7,2,7,3,3,7,4,3,4,0];
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));g.setIndex(f);g.computeVertexNormals();return g;}
+function zoneColor(s,nb){const lac=[0.73,0.70,0.65],ir=[0.80,0.76,0.66],sh=[0.55,0.54,0.52];const w=(a,b,e)=>sm5((s-a)/e)*(1-sm5((s-b)/e));
+  const kn=sm5((s-(nb-0.5))/1.0),ks=w(48,63,0.6),c=lac.slice();for(let i=0;i<3;i++)c[i]=c[i]*(1-kn-ks)+ir[i]*kn+sh[i]*ks;return c;}
+// control surface corners (ship coords): trailing edge down by d (deg)
+function crestFns(c){const LE=x=>c.le0+(c.le1-c.le0)*(x-c.x0)/(c.x1-c.x0),TE=x=>c.te0+(c.te1-c.te0)*(x-c.x0)/(c.x1-c.x0),H=x=>TE(x)+0.3*(LE(x)-TE(x));return {LE,TE,H};}
+function elevonCorners(v,sg,d){const c=Math.cos(d*D),s=Math.sin(d*D);
+  if(v.crest){const k=v.crest,f=crestFns(k),xa=k.x0+(k.x1-k.x0)*0.4,xb=k.x1;const P=(x,t)=>{const h=f.H(x);if(!t)return V3(h,k.y,sg*x);const dd=h-f.TE(x);return V3(h-dd*c,k.y-dd*s,sg*x);};return [P(xa,0),P(xb,0),P(xb,1),P(xa,1)];}
+  const e=v.edgeEl;return [V3(0,e.y,sg*e.x0),V3(0,e.y,sg*e.x1),V3(-e.ch*c,e.y-e.ch*s,sg*e.x1),V3(-e.ch*c,e.y-e.ch*s,sg*e.x0)];}
+function flapCorners(v,d){const yH=v.S.at(2).reduce((m,p)=>Math.min(m,p[1]),1e9),h=v.flap.half,ch=v.flap.ch,c=Math.cos(d*D),s=Math.sin(d*D);
+  return [V3(2,yH,-h),V3(2,yH,h),V3(2-ch*c,yH-ch*s,h),V3(2-ch*c,yH-ch*s,-h)];}
+function buildModel(v){const g=new THREE.Group();const S=v.S,nb=v.keys[v.keys.length-1][0];
+  const pos=[],col=[],idx=[];S.st.forEach(s=>{const sec=S.at(s),c=zoneColor(s,nb);sec.forEach(p=>{pos.push(s,p[1],p[0]);col.push(...c);});});
+  for(let i=0;i<S.st.length-1;i++)for(let k=0;k<NS;k++){const a=i*NS+k,b=i*NS+(k+1)%NS,c2=(i+1)*NS+(k+1)%NS,d=(i+1)*NS+k;idx.push(a,b,d,b,c2,d);}
+  const tI=pos.length/3;pos.push(S.tip[0],S.tip[1],0);col.push(0.8,0.76,0.66);const last=(S.st.length-1)*NS;for(let k=0;k<NS;k++)idx.push(last+k,last+(k+1)%NS,tI);
+  const hg=new THREE.BufferGeometry();hg.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));hg.setAttribute('color',new THREE.Float32BufferAttribute(col,3));hg.setIndex(idx);hg.computeVertexNormals();
+  v.hullMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.55,metalness:0.25,side:THREE.DoubleSide});g.add(new THREE.Mesh(hg,v.hullMat));
+  // stern face
+  const sec=S.at(0),sh=new THREE.Shape();sec.forEach((p,i)=>i?sh.lineTo(p[0],p[1]):sh.moveTo(p[0],p[1]));
+  if(v.stern.type==='well'){const hole=new THREE.Path();hole.absarc(0,0,11.8,0,2*Math.PI,true);sh.holes.push(hole);
+    const w=new THREE.Mesh(new THREE.CylinderGeometry(11.8,11.8,4.2,64,1,true),M(0x5d646e,{side:THREE.DoubleSide}));w.rotation.z=Math.PI/2;w.position.x=-1.9;g.add(w);
+    const bp=new THREE.Mesh(new THREE.CircleGeometry(11.8,64),M(0x23262b));bp.rotation.y=-Math.PI/2;bp.position.x=0.1;g.add(bp);
+    [[4.4,4.4],[-4.4,4.4],[4.4,-4.4],[-4.4,-4.4]].forEach(([y,z])=>{const c=new THREE.Mesh(new THREE.CircleGeometry(3.2,24),M(0x6a58b0,{emissive:0x1a1040}));c.rotation.y=-Math.PI/2;c.position.set(-0.5,y,z);g.add(c);});}
+  else{const b=v.stern,hole=new THREE.Path();hole.moveTo(-b.w/2,b.y-b.h/2);hole.lineTo(-b.w/2,b.y+b.h/2);hole.lineTo(b.w/2,b.y+b.h/2);hole.lineTo(b.w/2,b.y-b.h/2);sh.holes.push(hole);
+    const box=new THREE.Mesh(new THREE.BoxGeometry(3.5,b.h,b.w),M(0x5d646e,{side:THREE.DoubleSide}));box.position.set(-1.6,b.y,0);g.add(box);
+    [-13.2,-4.4,4.4,13.2].forEach(z=>{const c=new THREE.Mesh(new THREE.CircleGeometry(3.2,24),M(0x6a58b0,{emissive:0x1a1040}));c.rotation.y=-Math.PI/2;c.position.set(-3.4,b.y,z);g.add(c);});
+    [-15.5,-11,-6.6,-2.2,2.2,6.6,11,15.5].forEach(z=>{[b.y+3.7,b.y-3.7].forEach(y=>{const c=new THREE.Mesh(new THREE.CircleGeometry(0.75,12),M(0xc0a0f0,{emissive:0x302050}));c.rotation.y=-Math.PI/2;c.position.set(-3.4,y,z);g.add(c);});});}
+  const face=new THREE.Mesh(new THREE.ShapeGeometry(sh,4),M(0x2e3136,{side:THREE.DoubleSide}));face.rotation.y=Math.PI/2;g.add(face);
+  const mC=M(0x4a4640,{roughness:0.45}),mF=M(0x5a554d,{roughness:0.4});v.el=[];
+  if(v.crest){const k=v.crest,f=crestFns(k),o=k.x0,xa=o+(k.x1-o)*0.4;[-1,1].forEach(sg=>{const s2=new THREE.Shape();
+      s2.moveTo(f.TE(o),0);s2.lineTo(f.LE(o),0);s2.lineTo(f.LE(k.x1),k.x1-o);s2.lineTo(f.H(k.x1),k.x1-o);s2.lineTo(f.H(xa),xa-o);s2.lineTo(f.TE(xa),xa-o);s2.lineTo(f.TE(o),0);
+      const cg=new THREE.ExtrudeGeometry(s2,{depth:0.7,bevelEnabled:true,bevelThickness:0.25,bevelSize:0.45,bevelSegments:3});cg.translate(0,0,-0.35);
+      const m=new THREE.Mesh(cg,mC);m.rotation.x=Math.PI/2*sg;m.position.set(0,k.y,sg*o);g.add(m);});}
+  [-1,1].forEach(sg=>{const m=new THREE.Mesh(plateGeom(elevonCorners(v,sg,0),0.5),mF);g.add(m);v.el.push({sg,m});});
+  v.fl=new THREE.Mesh(plateGeom(flapCorners(v,0),0.5),mF);g.add(v.fl);
+  if(v.dorsal){const s3=new THREE.Shape();s3.moveTo(4,0);s3.lineTo(44,0);s3.lineTo(33,20);s3.lineTo(12,20);s3.lineTo(4,0);const dg=new THREE.ExtrudeGeometry(s3,{depth:0.6,bevelEnabled:true,bevelThickness:0.3,bevelSize:0.45,bevelSegments:3});dg.translate(0,0,-0.3);
+    const m=new THREE.Mesh(dg,mC);m.position.y=v.keys[1][1].ya-0.8;g.add(m);}
+  if(v.fins){[-1,1].forEach(sg=>{const s3=new THREE.Shape();s3.moveTo(2,0);s3.lineTo(24,0);s3.lineTo(16,11);s3.lineTo(7,11);s3.lineTo(2,0);const dg=new THREE.ExtrudeGeometry(s3,{depth:0.5,bevelEnabled:true,bevelThickness:0.25,bevelSize:0.4,bevelSegments:3});dg.translate(0,0,-0.25);
+    const m=new THREE.Mesh(dg,mC);m.position.set(0,3.2,sg*18.5);m.rotation.x=-sg*20*D;g.add(m);});}   // twin fins canted outboard, over the wing roots
+  // x-ray payload
+  const xr=new THREE.Group();xr.visible=false;g.add(xr);const gh=c=>new THREE.MeshStandardMaterial({color:c,transparent:true,opacity:0.55});
+  v.cass.forEach(([x,y])=>{const h=4.9,ch=3.2,s4=new THREE.Shape();[[x-h+ch,y-h],[x+h-ch,y-h],[x+h,y-h+ch],[x+h,y+h-ch],[x+h-ch,y+h],[x-h+ch,y+h],[x-h,y+h-ch],[x-h,y-h+ch]].forEach((p,i)=>i?s4.lineTo(p[0],p[1]):s4.moveTo(p[0],p[1]));
+    const m=new THREE.Mesh(new THREE.ExtrudeGeometry(s4,{depth:24.8,bevelEnabled:false}),gh(0x7080a8));m.rotation.y=Math.PI/2;m.position.x=21.5;xr.add(m);});
+  {const s5=new THREE.Mesh(new THREE.CylinderGeometry(2,2,18,20),gh(0xd8d0b8));s5.rotation.z=Math.PI/2;s5.position.set(90,3.9,0);xr.add(s5);const rb=new THREE.Mesh(new THREE.BoxGeometry(17,5.3,8.4),gh(0x9a8f7a));rb.position.set(90,-5.65,0);xr.add(rb);}
+  v.xr=xr;v.group=g;return g;}
+V.forEach(v=>{scene.add(buildModel(v));v.group.visible=false;});
+let cur=V[0];cur.group.visible=true;
+
+// ---------------- Newtonian panels and trim ----------------
+function panelsOf(v){const P=[],S=v.S,st=S.st.filter(s=>s<L_SHIP-1);
+  for(let i=0;i<st.length-1;i++){const a=S.at(st[i]),b=S.at(st[i+1]);for(let k=0;k<NS;k++){const k1=(k+1)%NS;let q=[[st[i],a[k][1],a[k][0]],[st[i],a[k1][1],a[k1][0]],[st[i+1],b[k1][1],b[k1][0]],[st[i+1],b[k][1],b[k][0]]];
+    const e1=[q[2][0]-q[0][0],q[2][1]-q[0][1],q[2][2]-q[0][2]],e2=[q[3][0]-q[1][0],q[3][1]-q[1][1],q[3][2]-q[1][2]];const n=[e1[1]*e2[2]-e1[2]*e2[1],e1[2]*e2[0]-e1[0]*e2[2],e1[0]*e2[1]-e1[1]*e2[0]];
+    const c=[(q[0][1]+q[2][1])/2,(q[0][2]+q[2][2])/2];if(n[1]*c[0]+n[2]*c[1]<0)q=[q[0],q[3],q[2],q[1]];P.push(q);}}return P;}
+function down(q){const e1=[q[2][0]-q[0][0],0,q[2][2]-q[0][2]],e2=[q[3][0]-q[1][0],0,q[3][2]-q[1][2]];const e1y=q[2][1]-q[0][1],e2y=q[3][1]-q[1][1];
+  const ny=(q[2][2]-q[0][2])*(q[3][0]-q[1][0])-(q[2][0]-q[0][0])*(q[3][2]-q[1][2]);return ny>0?[q[0],q[3],q[2],q[1]]:q;}
+function ctrlPanels(v,de,db){const P=[];const arr=a=>a.map(p=>[p.x,p.y,p.z]);
+  if(v.crest){const k=v.crest,f=crestFns(k),xa=k.x0+(k.x1-k.x0)*0.4;[-1,1].forEach(sg=>{const y=k.y;
+    P.push(down([[f.TE(k.x0),y,sg*k.x0],[f.LE(k.x0),y,sg*k.x0],[f.LE(xa),y,sg*xa],[f.TE(xa),y,sg*xa]]));P.push(down([[f.H(xa),y,sg*xa],[f.LE(xa),y,sg*xa],[f.LE(k.x1),y,sg*k.x1],[f.H(k.x1),y,sg*k.x1]]));});}
+  [-1,1].forEach(sg=>P.push(down(arr(elevonCorners(v,sg,de)))));P.push(down(arr(flapCorners(v,db))));return P;}
+function force(P,al){const u=[-Math.cos(al),Math.sin(al),0];let Fx=0,Fy=0,My=0;
+  for(const p of P){const e1=[p[2][0]-p[0][0],p[2][1]-p[0][1],p[2][2]-p[0][2]],e2=[p[3][0]-p[1][0],p[3][1]-p[1][1],p[3][2]-p[1][2]];
+    let n=[e1[1]*e2[2]-e1[2]*e2[1],e1[2]*e2[0]-e1[0]*e2[2],e1[0]*e2[1]-e1[1]*e2[0]];const A=0.5*Math.hypot(n[0],n[1],n[2]);if(A<1e-9)continue;n=n.map(x=>x/(2*A));
+    const un=n[0]*u[0]+n[1]*u[1];if(un>=0)continue;const cp=2*un*un,cx=(p[0][0]+p[1][0]+p[2][0]+p[3][0])/4,cy=(p[0][1]+p[1][1]+p[2][1]+p[3][1])/4;
+    const fx=-cp*A*n[0],fy=-cp*A*n[1];Fx+=fx;Fy+=fy;My+=(cx-SCG)*fy-cy*fx;}
+  const c=Math.cos(al),s=Math.sin(al);return {Fx,Fy,cp:SCG+My/Fy,L:Fx*s+Fy*c,D:-Fx*c+Fy*s};}
+function trim(v,al){const B=v.P;const f=(de,db)=>force(B.concat(ctrlPanels(v,de,db)),al).cp-SCG;
+  const solve=(g,lo,hi)=>{let fl=g(lo),fh=g(hi);if(fl*fh>0)return null;for(let i=0;i<24;i++){const m=(lo+hi)/2,fm=g(m);if(fl*fm<=0){hi=m;fh=fm;}else{lo=m;fl=fm;}}return (lo+hi)/2;};
+  let de=solve(d=>f(d,0),-30,40);if(de!==null)return {de,db:0};const dlim=f(40,0)>0?40:-30;const db=solve(d=>f(dlim,d),-15,25);return db===null?null:{de:dlim,db};}
+
+// ---------------- metrics ----------------
+function metrics(v){const S=v.S;let wet=0,vol=0,plan=0,maxA=0;const st=S.st;
+  for(let i=0;i<st.length-1;i++){const a=S.at(st[i]),b=S.at(st[i+1]),ds=st[i+1]-st[i];let per=0;for(let k=0;k<NS;k++){const p=a[k],q=a[(k+1)%NS];per+=Math.hypot(p[0]-q[0],p[1]-q[1]);}
+    const A=areaOf(a);wet+=per*ds;vol+=A*ds;plan+=2*Math.max(...a.map(p=>p[0]))*ds;if(st[i]<60)maxA=Math.max(maxA,A);}
+  v.P=panelsOf(v);const f40=force(v.P.concat(ctrlPanels(v,0,0)),40*D),f50=force(v.P.concat(ctrlPanels(v,0,0)),50*D);
+  const beta=MASS/f50.D; // D per unit q -> m/(Cd A)
+  const tr=[40,50,60].map(a=>trim(v,a*D));
+  const cassOK=v.cass.length&&octs(v.cass).every(([x,y])=>inside(S.at(34),x,y));
+  const hangOK=HANGAR.every(([x,y])=>inside(S.at(90),x,y));
+  let sternOK;if(v.stern.type==='well'){sternOK=[...Array(24)].every((_,i)=>{const t=i/24*2*Math.PI;return inside(S.at(0.2),11.8*Math.cos(t),11.8*Math.sin(t));});}
+  else{const b=v.stern;sternOK=[[b.w/2,b.y+b.h/2],[-b.w/2,b.y+b.h/2],[b.w/2,b.y-b.h/2],[-b.w/2,b.y-b.h/2]].every(([x,y])=>inside(S.at(0.2),x,y));}
+  const fore=areaOf(S.at(100)),H=Math.max(...S.at(30).map(p=>p[1]))-Math.min(...S.at(30).map(p=>p[1])),W=2*Math.max(...S.at(30).map(p=>p[0]));
+  return {maxA,fore,wet,vol,plan,beta,ld40:f40.L/f40.D,ld50:f50.L/f50.D,cp50:f50.cp-SCG,tr,cassOK,hangOK,sternOK,H,W};}
+V.forEach(v=>{v.m=metrics(v);});
+
+// ---------------- table ----------------
+(function(){const b0=V[0].m.beta,T0=1150+273;
+  const rows=[
+   ['Корма: ширина × высота (s 30)',v=>`${v.m.W.toFixed(0)} × ${v.m.H.toFixed(0)} м`,null],
+   ['Сечение кормы (пылевой щит плеча)',v=>`${v.m.maxA.toFixed(0)} м²`,v=>-v.m.maxA],
+   ['Сечение носа (иридиевый щит)',v=>`${v.m.fore.toFixed(0)} м²`,v=>-v.m.fore],
+   ['Омываемая поверхность',v=>`${(v.m.wet/1000).toFixed(1)} тыс. м²`,v=>-v.m.wet],
+   ['Масса обтекателя (10 кг/м²) → к гружёной ×26',v=>`${(v.m.wet*0.01).toFixed(0)} т → ${(v.m.wet*0.01*26/1000).toFixed(1)} кт`,v=>-v.m.wet],
+   ['Объём корпуса',v=>`${(v.m.vol/1000).toFixed(0)} тыс. м³`,null],
+   ['Площадь в плане',v=>`${v.m.plan.toFixed(0)} м²`,v=>v.m.plan],
+   ['Баллистический коэф. β при 50°',v=>`${v.m.beta.toFixed(0)} кг/м²`,v=>-v.m.beta],
+   ['Нагрев брюха (Земля), ~√β',v=>`~${(T0*Math.pow(Math.sqrt(v.m.beta/b0),0.25)-273).toFixed(0)} °C`,v=>-v.m.beta],
+   ['Качество L/D при 40° / 50°',v=>`${v.m.ld40.toFixed(2)} / ${v.m.ld50.toFixed(2)}`,v=>v.m.ld40],
+   ['Центр давления − ЦМ при 50°, рули в нуле',v=>`${v.m.cp50>=0?'+':''}${v.m.cp50.toFixed(1)} м ${v.m.cp50>0?'(задирает нос)':'(устойчив брюхом)'}`,v=>-Math.abs(v.m.cp50)],
+   ['Диапазон балансировки (углы атаки)',v=>{const ok=[];for(let a=30;a<=70;a+=5)if(trim(v,a*D))ok.push(a);return ok.length?`${ok[0]}–${ok[ok.length-1]}°`:'нет';},v=>{let n=0;for(let a=30;a<=70;a+=5)if(trim(v,a*D))n++;return n;}],
+   ['Баланс 40° / 50° / 60° (элевоны, щиток)',v=>v.m.tr.map(t=>t?`${t.de.toFixed(0)}°${t.db?'/'+t.db.toFixed(0)+'°':''}`:'нет').join(' · '),v=>v.m.tr.filter(t=>t).length*100-v.m.tr.reduce((a,t)=>a+(t?Math.abs(t.de)+Math.abs(t.db):0),0)],
+   ['Кассеты / двигатели / ангар помещаются',v=>`${v.m.cassOK?'да':'НЕТ'} / ${v.m.sternOK?'да':'НЕТ'} / ${v.m.hangOK?'да':'НЕТ'}`,null],
+   ['Люков и подъёмников кассет',v=>`${v.lifts}`,v=>-v.lifts],
+   ['Гребни / оперение',v=>v.crest?`боковые ${(2*v.crest.x1).toFixed(0)} м + спинной (размах подобран под баланс)`:'двойные кили, элевоны на кромке «крыльев» 5,5×5 м, щиток 18×3 м',null]];
+  let h='<table><tr><th></th>'+V.map(v=>`<th style="border-bottom:3px solid ${v.col}">${v.name}</th>`).join('')+'</tr>';
+  rows.forEach(([n,f,score])=>{let cls=V.map(()=>'');if(score){const sc=V.map(score),mx=Math.max(...sc),mn=Math.min(...sc);if(mx!==mn)cls=sc.map(s=>s===mx?'best':(s===mn?'bad':''));}
+    h+=`<tr><td>${n}</td>${V.map((v,i)=>`<td class="${cls[i]}">${f(v)}</td>`).join('')}</tr>`;});
+  document.getElementById('tab').innerHTML=h+'</table>';})();
+
+// ---------------- silhouettes ----------------
+(function(){const cv=document.getElementById('sil'),g=cv.getContext('2d');const sc=6.6,x0=40;
+  g.fillStyle='#e8e4dc';g.font='13px system-ui';g.fillText('Сверху (план)',x0,22);g.fillText('Сбоку',x0,300);g.fillText('Сечения: s 30 (корма) и s 90 (ангар)',1000-40,22);
+  V.forEach(v=>{g.strokeStyle=v.col;g.lineWidth=2;const S=v.S,st=S.st;
+    // top view
+    g.beginPath();st.forEach((s,i)=>{const w=Math.max(...S.at(s).map(p=>p[0]));const X=x0+s*sc,Y=150-w*sc/1.6;i?g.lineTo(X,Y):g.moveTo(X,Y);});
+    [...st].reverse().forEach(s=>{const w=Math.max(...S.at(s).map(p=>p[0]));g.lineTo(x0+s*sc,150+w*sc/1.6);});g.closePath();g.stroke();
+    if(v.crest){const k=v.crest,f=crestFns(k);[-1,1].forEach(sg=>{g.beginPath();g.moveTo(x0+f.TE(k.x0)*sc,150-sg*k.x0*sc/1.6);g.lineTo(x0+f.LE(k.x0)*sc,150-sg*k.x0*sc/1.6);g.lineTo(x0+f.LE(k.x1)*sc,150-sg*k.x1*sc/1.6);g.lineTo(x0+f.TE(k.x1)*sc,150-sg*k.x1*sc/1.6);g.closePath();g.stroke();});}
+    // side view
+    g.beginPath();st.forEach((s,i)=>{const t=Math.max(...S.at(s).map(p=>p[1]));const X=x0+s*sc,Y=365-t*sc/1.6;i?g.lineTo(X,Y):g.moveTo(X,Y);});
+    [...st].reverse().forEach(s=>{const b=Math.min(...S.at(s).map(p=>p[1]));g.lineTo(x0+s*sc,365-b*sc/1.6);});g.closePath();g.stroke();
+    // sections
+    [[30,1030,120],[90,1030,330]].forEach(([s,cx,cy])=>{g.beginPath();S.at(s).forEach((p,i)=>{const X=cx+p[0]*2.2,Y=cy-p[1]*2.2;i?g.lineTo(X,Y):g.moveTo(X,Y);});g.closePath();g.stroke();});});
+  V.forEach((v,i)=>{g.fillStyle=v.col;g.fillRect(x0+i*260,405,14,10);g.fillStyle='#e8e4dc';g.fillText(v.name,x0+20+i*260,415);});})();
+
+// ---------------- conclusion from the numbers ----------------
+(function(){const [a,b,c]=V.map(v=>v.m);const txt=[];
+  txt.push(`<b>Итог по расчёту.</b> Пылевой щит почти одинаковый: сечение кормы ${a.maxA.toFixed(0)} / ${b.maxA.toFixed(0)} / ${c.maxA.toFixed(0)} м². `+
+   `Обтекатель к гружёной массе: ${(a.wet*0.26/1000).toFixed(2)} / ${(b.wet*0.26/1000).toFixed(2)} / ${(c.wet*0.26/1000).toFixed(2)} кт — «скат» тяжелее на ${((c.wet-a.wet)*0.26).toFixed(0)} т (+${((c.wet/a.wet-1)*100).toFixed(0)} % поверхности). `+
+   `β ${a.beta.toFixed(0)} / ${b.beta.toFixed(0)} / ${c.beta.toFixed(0)} кг/м² и качество при 40° ${a.ld40.toFixed(2)} / ${b.ld40.toFixed(2)} / ${c.ld40.toFixed(2)}: «скат» лучше, но на единицы процентов, нагрев брюха ниже на ~40 °C.`);
+  txt.push(`<b>Балансировка решает.</b> C-147 и «Б» держатся брюхом на всём диапазоне своими гребнями (Б — при размахе 55 м). «Скат» слишком устойчив: широкая корма уводит центр давления назад, и он балансируется только на малых углах (35–40°); для 50–60° ему нужны передние рули-утки на «голове» — ещё детали в горячем потоке. Плюс 4 люка и подъёмника кассет вместо 2 и перестройка колодца в линейный блок.`);
+  txt.push(`<b>Вывод:</b> «утюг» близок к оптимуму по массе и простоте, «скат» даёт несколько процентов аэродинамики за +${((c.wet-a.wet)*0.26).toFixed(0)} т и сложность. Разумный путь — «Б»: та же начинка и простота, а изящество — от завала бортов, пологого плеча и сквозных острых скул; при необходимости Б можно сплющить сильнее (кассеты 2×2 допускают высоту до ~23 м).`);
+  document.getElementById('concl').innerHTML=txt.join('<br>');})();
+
+// ---------------- ui ----------------
+const vb=document.getElementById('vb');V.forEach(v=>{const bt=document.createElement('button');bt.className='b'+(v===cur?' on':'');bt.textContent=v.name;bt.style.borderLeft='6px solid '+v.col;
+  bt.onclick=()=>{cur.group.visible=false;cur=v;v.group.visible=true;[...vb.children].forEach(x=>x.classList.toggle('on',x===bt));};vb.appendChild(bt);});
+const VIEWS={q:[[170,70,190],[70,0,0]],side:[[73,10,260],[73,0,0]],top:[[73,260,1],[73,0,0]],aft:[[-120,20,40],[10,0,0]],front:[[260,10,30],[100,0,0]]};
+function view(k){const w=VIEWS[k];cam.position.set(...w[0]);ctl.target.set(...w[1]);ctl.update();}view('q');
+document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>view(b.dataset.v));
+document.getElementById('xr').onclick=e=>{const on=!cur.xr.visible;V.forEach(v=>{v.xr.visible=on;v.hullMat.transparent=on;v.hullMat.opacity=on?0.25:1;v.hullMat.depthWrite=!on;});e.target.classList.toggle('on',on);};
+document.getElementById('rot').onclick=e=>{ctl.autoRotate=!ctl.autoRotate;e.target.classList.toggle('on',ctl.autoRotate);};
+window.__v=V;window.__trim=trim;window.__force=force;window.__ctrl=ctrlPanels;
+(function loop(){ctl.update();R.render(scene,cam);requestAnimationFrame(loop);})();
+})();
+</script></body></html>

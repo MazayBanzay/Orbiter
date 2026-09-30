@@ -58,6 +58,7 @@ namespace ocrew
 		double pressure{ 30 };                        // kPa, regulated helmet O2
 		double volume{ 0.12 };                        // m^3 of gas around the body
 		double lifeW{ 60 };                           // fans, pumps, regulator, sorbent regeneration, radio
+		double lampW{};                               // helmet lamps when on
 		double conductance{ 1.5 };                    // W/K through the insulation to the environment
 		double heatMaxW{ 400 }, coolMaxW{ 700 };      // thermal control capacity
 		double copCool{ 3 };                          // heat pump to the radiator
@@ -95,6 +96,8 @@ namespace ocrew
 		// activityW: metabolic cost of what she does beyond standing; heatW: heat reaching the body from outside control
 		void Step(double dt, double activityW, double ppO2, double ppCO2, double ambientP, bool suited, double heatW);
 		void Spend(double joules) { wbal = (std::max)(0.0, wbal - joules / WCAP); }
+		// touchdown at 'v' m/s (vertical): the suit and its frame take the first 7 m/s; beyond, injury; above 14, fatal
+		void Impact(double v);
 		double O2Use() const { return state == DEAD ? 0 : met / 14.07e6; }       // kg/s, 14.07 MJ per kg O2
 		double CO2Made() const { return O2Use() * 1.169; }                       // kg/s at RQ 0.85
 		double Heat() const { return state == DEAD ? 0 : 0.8 * met; }            // W released as heat

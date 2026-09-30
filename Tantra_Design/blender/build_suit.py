@@ -30,9 +30,10 @@ HC = Vector((0.0, -0.045, 1.625)); HR = Vector((0.142, 0.162, 0.182)); CUT_Z = 1
 def smooth01(e0, e1, x): t = np.clip((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t)
 
 # hard parts get a small tiled surface set (colour + _norm relief + _refl reflectivity) for D3D9Client
-SURF = {"SuitPlate": "plate", "Pack": "plate", "HelmetShell": "plate", "Frame": "frame", "Housing": "frame", "HelmMetal": "metal", "Bolt": "metal"}
+SURF = {"JetShell": "plate", "JetBoom": "plate", "JetPod": "plate", "JetPlug": "metal", "SunShade": "gold", "SuitPlate": "plate", "Pack": "plate", "HelmetShell": "plate", "Frame": "frame", "Housing": "frame", "HelmMetal": "metal", "Bolt": "metal"}
 SURF_SPEC = {  # base colour, reflectivity (0..1), relief kind
     "plate": ((0.90, 0.90, 0.88), 0.10, "composite"),
+    "gold": ((0.92, 0.72, 0.26), 0.90, "smooth"),
     "frame": ((0.36, 0.38, 0.41), 0.40, "brushed"),
     "metal": ((0.55, 0.57, 0.60), 0.55, "brushed"),
 }
@@ -47,7 +48,7 @@ def save_png(name, arr, size):
 def surface_image(kind, size=512):
     if kind in _surf_cache: return _surf_cache[kind]
     col, refl, relief = SURF_SPEC[kind]
-    rng = np.random.default_rng({"plate": 11, "frame": 12, "metal": 13}[kind])
+    rng = np.random.default_rng({"plate": 11, "frame": 12, "metal": 13, "gold": 14}[kind])
     yy, xx = np.mgrid[0:size, 0:size] / size
     def tile_noise(freq, n=6):      # periodic (tiles seamlessly) smooth noise
         acc = np.zeros((size, size))
@@ -55,7 +56,9 @@ def surface_image(kind, size=512):
             kx, ky = rng.integers(-freq, freq + 1, 2); ph = rng.uniform(0, 6.28)
             acc += np.sin(2 * np.pi * (kx * xx + ky * yy) + ph)
         return acc / n
-    if relief == "composite":       # moulded composite: a faint weave and soft casting ripples
+    if relief == "smooth":          # polished coating
+        h = 0.5 + 0.002 * tile_noise(2); shade = np.ones((size, size))
+    elif relief == "composite":       # moulded composite: a faint weave and soft casting ripples
         h = 0.5 + 0.10 * tile_noise(3) + 0.05 * np.sin(2 * np.pi * 64 * xx) * np.sin(2 * np.pi * 64 * yy)
         shade = 1 + 0.015 * tile_noise(5)
     else:                           # brushed metal: fine streaks along u
@@ -68,7 +71,7 @@ def surface_image(kind, size=512):
     img = save_png("surf_" + kind, base, size)
     gy, gx = np.gradient(h, 1.0 / size)
     depth = 0.0015 if relief == "composite" else 0.001      # relief depth (m) over a 0.25 m tile
-    n = np.stack([-gx * depth / 0.25, gy * depth / 0.25, np.ones_like(h)], -1); n /= np.linalg.norm(n, axis=-1, keepdims=True)
+    n = np.stack([-gx * depth / 0.25, -gy * depth / 0.25, np.ones_like(h)], -1); n /= np.linalg.norm(n, axis=-1, keepdims=True)
     save_png("surf_" + kind + "_norm", n * 0.5 + 0.5, size)
     save_png("surf_" + kind + "_refl", np.full((size, size, 3), refl) * (1 + 0.1 * tile_noise(4))[..., None], size)
     _surf_cache[kind] = img
@@ -146,6 +149,40 @@ def rounded_box(bm, center, size, bev, mat=0):
     for v in vs: v.co = center + Vector((v.co.x * size.x, v.co.y * size.y, v.co.z * size.z))
     for f in {f for v in vs for f in v.link_faces}: f.material_index = mat
     bmesh.ops.bevel(bm, geom=list({e for v in vs for e in v.link_edges}), offset=bev, segments=2, profile=0.5, affect='EDGES')
+
+def slit_ports(bm, center, normal, along, mat, n=3, L=0.030, W=0.0045, gap=0.0085, proud=0.0012):
+    """flush thruster ports: a row of dark slots in a surface (no bells), centred on 'center', facing 'normal'"""
+    nrm = normal.normalized(); al = (along - nrm * along.dot(nrm)).normalized(); cr = nrm.cross(al).normalized()
+    for k in range(n):
+        c = center + cr * ((k - (n - 1) / 2) * gap) + nrm * proud
+        V = [bm.verts.new(c + al * (sa * L / 2) + cr * (sb * W / 2)) for sa, sb in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        f = bm.faces.new(V); f.material_index = mat
+        f.normal_update()
+        if f.normal.dot(nrm) < 0: f.normal_flip()
+
+def sweep_rr(bm, path, w, h, upv, mat=0, scales=None, caps=True):
+    """sweep a rounded-rectangle profile (w x h) along a path; 'upv' orients its height; optional per-point scale"""
+    rings = []
+    for k, P in enumerate(path):
+        T = (path[min(k + 1, len(path) - 1)] - path[max(k - 1, 0)]).normalized()
+        Nn = (upv - T * upv.dot(T)).normalized(); Bn = T.cross(Nn).normalized()
+        sc = scales[k] if scales else 1.0
+        ring = []
+        for j in range(16):
+            t = 2 * math.pi * j / 16; c, s_ = math.cos(t), math.sin(t)
+            x = w / 2 * sc * math.copysign(abs(c) ** 0.5, c); y = h / 2 * sc * math.copysign(abs(s_) ** 0.5, s_)
+            ring.append(P + Bn * x + Nn * y)
+        rings.append(ring)
+    V = ring_loft(bm, rings, mat, closed=False)
+    if caps:
+        bm.faces.new(V[0]).material_index = mat; bm.faces.new(V[-1][::-1]).material_index = mat
+    bmesh.ops.recalc_face_normals(bm, faces=[f for f in bm.faces])
+
+def soft_box(bm, center, size, bev, mat=0, segs=5):
+    res = bmesh.ops.create_cube(bm, size=1.0); vs = res['verts']
+    for v in vs: v.co = center + Vector((v.co.x * size.x, v.co.y * size.y, v.co.z * size.z))
+    for f in {f for v in vs for f in v.link_faces}: f.material_index = mat
+    bmesh.ops.bevel(bm, geom=list({e for v in vs for e in v.link_edges}), offset=bev, segments=segs, profile=0.5, affect='EDGES')
 
 def actuator(bm, center, axis, R, depth, back, mats):
     """rotary joint drive: finned housing, red end ring, dark hub with bolts, and the motor can behind it"""
@@ -238,7 +275,7 @@ def height_factory(elbows, wrists, knees, joints):
 def normal_map(hgt, strength=12.0):
     """height (rows = v in Blender, bottom first) -> tangent-space normal map, +u = red, +v(D3D, down the file) = green"""
     gy, gx = np.gradient(hgt)
-    n = np.stack([-strength * gx, strength * gy, np.ones_like(hgt)], -1)
+    n = np.stack([-strength * gx, -strength * gy, np.ones_like(hgt)], -1)   # D3D9Client: green = +v of the file as Blender stores it
     n /= np.linalg.norm(n, axis=-1, keepdims=True)
     return n * 0.5 + 0.5
 
@@ -353,7 +390,7 @@ try:
     joints.append((np.array((0, -0.02, 1.06)), np.array((0, 0, 1.0)), 0.16, 0.036, 0.12))            # waist
     hgt = paint_uv(suit, height_factory(elbows, wrists, knees, joints))[:, :, 0]
     nmap = normal_map(hgt); make_image("suit_diffuse_norm", nmap)
-    gl = nmap.copy(); gl[:, :, 1] = 1 - gl[:, :, 1]                     # Blender preview wants OpenGL green
+    gl = nmap                                                            # same convention as Blender's preview
     prev = make_image("suit_preview_norm_gl", gl); prev.colorspace_settings.name = 'Non-Color'
     SUIT_NORMAL_PREVIEW = prev
     fm = material("SuitFabric", image=fabric, rough=0.85); suit.data.materials.append(fm)
@@ -495,8 +532,29 @@ try:
     b = build_helmet(lambda pm, tm: in_visor(pm, tm), 0.99, lambda p, t: 0.0, lambda pm, tm: 0)
     new_object("Visor", b, [material("Visor", (0.62, 0.76, 0.86), rough=0.05, alpha=0.22)], SPINE1, arm)
     # sun shade: an outer tinted visor, parked half raised
-    b = build_helmet(lambda pm, tm: abs(pm) < PHV + 0.05 and T2 - 0.16 < tm < T2 + RIM + 0.24, 1.10, lambda p, t: 0.0, lambda pm, tm: 0)
-    new_object("SunShade", b, [material("SunShade", (0.55, 0.40, 0.12), rough=0.05, alpha=0.55, metal=0.6)], SPINE1, arm)
+    # sun shade: a surface of revolution about the hinge axis (lateral, through the helmet centre), so raising it slides
+    # it over itself and never through the shell; modelled lowered over the visor, the game swings it up over the crown
+    SR, SA, SX = HR.z * 1.09, HR.x * 1.16, 0.132          # radius round the axis, half-length along it, half-width of the glass
+    def sp(x, al, r=1.0):                                  # al: angle round the axis from the front (-y), + up
+        rho = SR * r * math.sqrt(max(0.0, 1 - (x / SA) ** 2))
+        return Vector((HC.x + x, HC.y - rho * math.cos(al), HC.z + rho * math.sin(al)))
+    xs = np.linspace(-SX, SX, 23); als = np.linspace(-0.62, 0.66, 19)
+    b = bmesh.new(); G_ = [[b.verts.new(sp(x, al)) for al in als] for x in xs]
+    for i in range(len(xs) - 1):
+        for j in range(len(als) - 1): b.faces.new((G_[i][j], G_[i + 1][j], G_[i + 1][j + 1], G_[i][j + 1]))
+    bmesh.ops.recalc_face_normals(b, faces=b.faces[:])
+    for f in b.faces:
+        f.normal_update()
+        if f.normal.dot(f.calc_center_median() - HC) < 0: f.normal_flip()
+    new_object("SunShade", b, [material("SunShade", rough=0.05, alpha=0.82, metal=0.8)], SPINE1, arm)
+    # hinge arms: from the shade edges to the hubs in the side pods (on the hinge axis, so they turn with the shade)
+    b = bmesh.new()
+    for sg in (-1, 1):
+        hub = Vector((HC.x + sg * 0.150, HC.y, HC.z))
+        for al in (-0.35, 0.40):
+            box_beam(b, sp(sg * (SX - 0.004), al), hub, 0.014, 0.005, Vector((sg, 0, 0)), 0)
+        cylinder(b, hub - Vector((sg * 0.004, 0, 0)), hub + Vector((sg * 0.010, 0, 0)), 0.016, 16, 0)
+    new_object("ShadeArms", b, [material("ShadeArm", METAL, rough=0.3, metal=0.7)], SPINE1, arm)
 
     hmetal = material("HelmMetal", METAL, rough=0.3, metal=0.6); hdark = material("HelmDark", DARK, rough=0.6)
     hred = material("HelmRed", RED, rough=0.45); lamp = material("HelmLamp", (0.97, 0.96, 0.88), rough=0.1)
@@ -563,6 +621,11 @@ try:
     for sx in (-1, 1):
         for zz in (pz0 + 0.035, pz1 - 0.035):
             cylinder(b, Vector((sx * (PW / 2 - 0.005), py0 + PD * 0.55, zz)), Vector((sx * (PW / 2 + 0.035), py0 + PD * 0.55, zz)), 0.022, 12, 1)
+            # nozzle cluster: a block at the end with bell nozzles facing outwards, up, down, fore and aft
+            E = Vector((sx * (PW / 2 + 0.050), py0 + PD * 0.55, zz))
+            rounded_box(b, E, Vector((0.026, 0.026, 0.026)), 0.004, 1)
+            for d in (Vector((sx, 0, 0)), Vector((0, 0, 1)), Vector((0, 0, -1)), Vector((0, 1, 0)), Vector((0, -1, 0))):
+                slit_ports(b, E + d * 0.013, d, Vector((0, 0, 1)) if abs(d.z) < 0.5 else Vector((0, 1, 0)), 1, n=2, L=0.016, W=0.003, gap=0.006)
     new_object("Pack", b, [material("Pack", SHELL, rough=0.4), material("PackRCS", DARK, rough=0.6)], {'Spine1': 0.85, 'Spine': 0.15}, arm)
     b = text_mesh("37 ЗВЁЗДНАЯ", 0.044)
     ty = py0 + PD + 0.0015; tz = pz0 + PH * 0.80
@@ -674,6 +737,89 @@ try:
         new_object("Cable" + L, b, [strap], lambda co: {'Spine': 0.7, 'Hips': 0.3} if co.z > zb + 0.03 else {'Hips': 1.0}, arm)
     log.append("legs: " + "; ".join("%s hip %s knee %s ankle %s" % (s, tuple(round(c, 3) for c in h), tuple(round(c, 3) for c in k), tuple(round(c, 3) for c in a)) for s, _, h, k, a in legs))
 
+
+    # ================= jet pack «Наплечный», integrated: a moulded shell round the life-support pack is the propellant tank
+    #                   (12 kg), slot main engines in a block on the hip ring behind the pelvis (thrust line through the
+    #                   centre of mass), smooth shoulder fairings with flush RCS ports. No bottles, no bells, no pipes.
+    #                   All objects are named Jet*: the game shows them only while the pack is worn. =================
+    JAWS = lambda co: {'Spine1': 0.85, 'Spine': 0.15}
+    jshell = material("JetShell", PLATE, rough=0.3); jdark = material("JetDark", DARK, rough=0.6)
+    jred = material("JetRed", RED, rough=0.45); jseam = material("JetSeam", FRAME, rough=0.4, metal=0.5)
+    SW, SD = PW + 0.030, PD + 0.085
+    sy0 = py0 + 0.004; SC = Vector((0, sy0 + SD / 2, (pz0 + pz1) / 2 + 0.005)); SH = PH + 0.035
+    b = bmesh.new()
+    soft_box(b, SC, Vector((SW, SD, SH)), 0.05, 0, 6)
+    # a seam groove round the shell and a thin red line under it
+    for dz, m_, t_ in ((0.10, 1, 0.006), (0.088, 2, 0.003)):
+        zz = SC.z + dz
+        for sx in (-1, 1):
+            box_beam(b, Vector((sx * (SW / 2 + 0.0015), sy0 + 0.05, zz)), Vector((sx * (SW / 2 + 0.0015), sy0 + SD - 0.05, zz)), t_, 0.002, Vector((sx, 0, 0)), m_)
+        box_beam(b, Vector((-SW / 2 + 0.05, sy0 + SD + 0.0015, zz)), Vector((SW / 2 - 0.05, sy0 + SD + 0.0015, zz)), t_, 0.002, Vector((0, 1, 0)), m_)
+    new_object("JetShell", b, [jshell, jseam, jred], JAWS, arm)
+    yb_shell = sy0 + SD
+    b = text_mesh("37 ЗВЁЗДНАЯ", 0.040)
+    for v in b.verts: v.co = Vector((-v.co.x, yb_shell + 0.0015, SC.z + 0.03 + v.co.y))
+    bmesh.ops.triangulate(b, faces=b.faces[:])
+    for f in b.faces:
+        f.normal_update()
+        if f.normal.y < 0: f.normal_flip()
+    new_object("JetMark", b, [material("JetMarkRed", RED, rough=0.5)], JAWS, arm, smooth=False)
+    # side engine pods: two tilting nacelles on short booms from the shell's upper corners, pivot axis lateral.
+    # Thrust above the centre of mass (pendulum-stable hover); tilt 0..90 deg: jets down (hover) .. aft (cruise);
+    # opposite tilt = yaw, differential thrust = roll. Annular exits, no bells. Pods are separate objects (JetPodL/R)
+    # so the game can turn them about the pivot.
+    # folding booms: a hinge knuckle at the shell's upper corner (vertical axis), the boom carries the propellant line
+    # inside, the pod turns on a rotary joint at its end. Modelled deployed; the game folds them back along the shell.
+    pivots, hinges = [], []
+    for sx, L in ((-1, "L"), (1, "R")):
+        b = bmesh.new()
+        HG = Vector((sx * (SW / 2 + 0.004), SC.y - 0.030, pz1 - 0.030))          # hinge on the shell's side, near the top
+        PV = Vector((sx * 0.440, SC.y - 0.040, pz1 + 0.005))                     # pod pivot
+        sweep_rr(b, [HG + Vector((sx * 0.012, 0, 0)), HG.lerp(PV, 0.5) + Vector((0, 0, 0.012)), PV - Vector((sx * 0.050, 0, 0))], 0.046, 0.030, Vector((0, 0, 1)), 0, [1.0, 0.92, 0.85])
+        cylinder(b, PV - Vector((sx * 0.052, 0, 0)), PV - Vector((sx * 0.040, 0, 0)), 0.024, 24, 1)       # rotary joint to the pod
+        new_object("JetBoom" + L, b, [material("JetBoom", PLATE, rough=0.3), jseam], JAWS, arm)
+        b = bmesh.new()                                                              # the hinge knuckle stays on the shell
+        cylinder(b, HG - Vector((0, 0, 0.028)), HG + Vector((0, 0, 0.028)), 0.017, 20, 0)
+        cylinder(b, HG - Vector((0, 0, 0.031)), HG - Vector((0, 0, 0.026)), 0.019, 20, 1)
+        new_object("JetHinge" + L, b, [jseam, jred], JAWS, arm)
+        pivots.append(PV); hinges.append(HG)
+    # flush RCS ports at the shell's corners (the small thrusters stay in the shell)
+    b = bmesh.new(); ports = []
+    for sx in (-1, 1):
+        for sz in (-1, 1):
+            c = Vector((sx * (SW / 2 - 0.035), SC.y + 0.02, SC.z + sz * (SH / 2 + 0.0008)))
+            slit_ports(b, c, Vector((0, 0, sz)), Vector((0, 1, 0)), 0); ports.append(c)
+            c2 = Vector((sx * (SW / 2 + 0.0008), SC.y + 0.035, SC.z + sz * (SH / 2 - 0.045) - (0.03 if sz > 0 else 0)))
+            slit_ports(b, c2, Vector((sx, 0, 0)), Vector((0, 1, 0)), 0)
+            c3 = Vector((sx * (SW / 2 - 0.045), yb_shell + 0.0008, SC.z + sz * (SH / 2 - 0.045)))
+            slit_ports(b, c3, Vector((0, 1, 0)), Vector((0, 0, 1)), 0)
+    new_object("JetPorts", b, [jdark], JAWS, arm)
+    # the nacelles: a teardrop of revolution about the vertical, exit at the bottom as a ring round a central plug
+    for sx, PV, L in ((-1, pivots[0], "L"), (1, pivots[1], "R")):
+        b = bmesh.new()
+        prof = [(0.080, 0.000), (0.074, 0.020), (0.060, 0.033), (0.035, 0.041), (0.000, 0.043), (-0.040, 0.043),
+                (-0.080, 0.041), (-0.110, 0.036), (-0.132, 0.030), (-0.140, 0.029)]      # (height from pivot, radius)
+        rings = [[PV + Vector((r * math.cos(2 * math.pi * j / 24), r * math.sin(2 * math.pi * j / 24), h)) for j in range(24)] for h, r in prof if r > 0]
+        V = ring_loft(b, rings, 0, closed=False)
+        top = b.verts.new(PV + Vector((0, 0, prof[0][0] + 0.004)))
+        for j in range(24): b.faces.new((V[0][(j + 1) % 24], V[0][j], top)).material_index = 0
+        # annular exit: dark ring between the lip and the plug, the plug a short cone
+        hb = prof[-1][0]; ro, ri = prof[-1][1], 0.013
+        ring_o = V[-1]; ring_i = [b.verts.new(PV + Vector((ri * math.cos(2 * math.pi * j / 24), ri * math.sin(2 * math.pi * j / 24), hb + 0.004))) for j in range(24)]
+        for j in range(24): b.faces.new((ring_o[j], ring_o[(j + 1) % 24], ring_i[(j + 1) % 24], ring_i[j])).material_index = 1
+        tip = b.verts.new(PV + Vector((0, 0, hb - 0.012)))
+        for j in range(24): b.faces.new((ring_i[j], ring_i[(j + 1) % 24], tip)).material_index = 2
+        # red band and the pivot boss on the inner side
+        cylinder(b, PV + Vector((0, 0, 0.012)), PV + Vector((0, 0, 0.020)), 0.0438, 24, 3)
+        cylinder(b, PV - Vector((sx * 0.050, 0, 0)), PV - Vector((sx * 0.036, 0, 0)), 0.019, 20, 2)
+        slit_ports(b, PV + Vector((0, -0.0435, 0.03)), Vector((0, -1, 0)), Vector((0, 0, 1)), 1, n=2)     # forward RCS in the pod nose
+        bmesh.ops.recalc_face_normals(b, faces=b.faces[:])
+        new_object("JetPod" + L, b, [material("JetPod", PLATE, rough=0.28), jdark, material("JetPlug", METAL, rough=0.3, metal=0.7), jred], JAWS, arm)
+    log.append("jet pack: pod pivots %s, boom hinges %s (Blender), shell back y %.3f" % ([tuple(round(c, 3) for c in v) for v in pivots], [tuple(round(c, 3) for c in v) for v in hinges], yb_shell))
+    import json
+    json.dump({"hinges": [list(v) for v in hinges], "pivots": [list(v) for v in pivots], "exit_dz": -0.150,
+               "shell_c": list(SC), "shell_size": [SW, SD, SH]}, open(os.path.join(HERE, "jetpack_geo.json"), "w"), indent=1)
+
     # ================= hide what the suit covers: keep only the head (face behind the visor) =================
     keep = body.vertex_groups.new(name="covered_by_suit")
     idx = [v.index for v in body.data.vertices if not (v.groups and names[max(v.groups, key=lambda g: g.weight).group] in HEADG) and v.co.z < 1.50]
@@ -695,6 +841,12 @@ try:
     import sys; sys.path.insert(0, HERE); import render_util
     cam = render_util.setup_stage()
     render_util.shoot(cam, OUT, render_util.standard_shots("suit", 1.84) + [("suit_side", (-4.2, -0.4, 1.1), 0.95, 70), ("suit_helmet", (0.5, -1.2, 1.62), 1.55, 60)], log)
+    # preview only (after saving): the booms folded back along the shell, as for walking, airlocks and docking
+    for L, sx in (("L", -1), ("R", 1)):
+        HG = hinges[0 if sx < 0 else 1]
+        M = Matrix.Translation(HG) @ Matrix.Rotation(sx * math.pi / 2, 4, 'Z') @ Matrix.Translation(-HG)
+        for n in ("JetBoom" + L, "JetPod" + L): bpy.data.objects[n].matrix_world = M @ bpy.data.objects[n].matrix_world
+    render_util.shoot(cam, OUT, [("suit_back_folded", (-2.2, 4.6, 1.3), 1.1, 70), ("suit_side_folded", (-4.2, -0.4, 1.1), 0.95, 70)], log)
 except Exception:
     log.append(traceback.format_exc())
 open(LOG, "w", encoding="utf-8").write("\n".join(log))

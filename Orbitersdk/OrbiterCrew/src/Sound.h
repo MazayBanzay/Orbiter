@@ -25,6 +25,7 @@ namespace ocrew
 			double speed{};           // m/s
 			double landing{};         // touchdown speed after a jump, m/s
 			bool suited{}, vacuum{}, fanOn{};
+			double fanLoad{};         // 0..1 thermal control load: the fan runs harder when heating or cooling
 			bool alive{ true };
 			double breathRate{ 13 };  // per minute
 			double intensity{};       // 0..1: how hard she breathes
@@ -44,6 +45,7 @@ namespace ocrew
 		Set walk, run, suit, suitVac, breath, helmetBreath;
 		int fanId{};
 		bool fanPlaying{};
+		double fanVolume{};
 		double breathClock{};
 		std::mt19937 rng{ std::random_device{}() };
 	};

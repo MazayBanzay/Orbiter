@@ -12,6 +12,10 @@ public:
     struct Extras {
         double tuck = 0.0;        // crests folded / pods sunk (max of erection and flight mode)
         double podSwivel = 0.0;   // pods 0..1 (0 = thrust forward, 1 = 100 deg)
+        double podStow = 1.0;     // pods 1 = in the bays, doors shut .. 0 = hanging out
+        double elevon[2] = {tantra::mesh::kElevonUpDeg / (tantra::mesh::kElevonUpDeg + tantra::mesh::kElevonDownDeg),
+                            tantra::mesh::kElevonUpDeg / (tantra::mesh::kElevonUpDeg + tantra::mesh::kElevonDownDeg)};
+        double bodyFlap = 0.0;    // 0..1 = 0..25 deg trailing edge down
         double irisAna = 0.0;     // anamezon cups open 0..1
         double irisPlan = 1.0;    // planetary cups open 0..1
         double hangar = 0.0;      // hangar doors open 0..1

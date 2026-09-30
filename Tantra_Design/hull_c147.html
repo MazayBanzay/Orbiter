@@ -19,8 +19,10 @@ h1{font-size:18px;margin:0 0 8px}
 <div class="row">
   <button class="b" id="xr">Рентген: начинка</button>
   <button class="b" id="cr">Гребни: раскрыты</button>
-  <button class="b" id="sp">Размах гребней: 61 м</button>
-  <label style="font-size:13px">Раскрытие гребней <input id="ext" type="range" min="0" max="100" step="1" value="75" style="vertical-align:middle"> <span id="extv">75 %</span></label>
+  <button class="b" id="sp">Размах гребней: 51 м</button>
+  <button class="b" id="au">Элевоны: авто-балансировка</button>
+  <label style="font-size:13px">Элевоны <input id="el" type="range" min="-30" max="40" step="1" value="0" style="vertical-align:middle"> <span id="elv">0°</span></label>
+  <label style="font-size:13px">Щиток днища <input id="bf" type="range" min="-15" max="25" step="1" value="0" style="vertical-align:middle"> <span id="bfv">0°</span></label>
   <button class="b" id="ms">ЦМ: посадочная масса (s 53)</button>
   <label style="font-size:13px">Угол атаки <input id="aoa" type="range" min="20" max="80" step="1" value="50" style="vertical-align:middle"> <span id="aoav"></span></label>
 </div>
@@ -36,9 +38,15 @@ h1{font-size:18px;margin:0 0 8px}
 <div class="note">
 <b>Сечения</b> (внизу, в масштабе; пунктир — начинка): корма s 8–47 — скруглённая трапеция 584 м²: плоское днище 22 м, скулы на y −4, плоские борта (8,8 м ровного участка — пяты ног ложатся заподлицо и могут быть шире), скруглённый верх; кассеты 2×2 с обручами внутри. Носовая часть s 62–122 — 231 м², как прежний круг Ø17,2 (масса щита та же): плоский киль 11 м под роверным отсеком, скруглённые скулы, стенки сходятся к скруглённому верху; ангар с челноком и роверный отсек внутри. Сильнее уплощать нос нельзя: подъёмная сила спереди уводит центр давления вперёд (плоский «треугольник» 250 м² даёт ЦД на 10 м впереди ЦМ — корабль брюхом не держится, гребни не выправляют). Срез кормы опущен до −12,3 — колодец Ø23,6 внутри обвода.
 <br><b>Гладкость:</b> одна поверхность от кормы до носа. Параметры сечения переходят между опорными станциями по кривой с нулевой первой и второй производной (C2), плечо и нос — зоны цвета на той же поверхности, без накладных поясов. Нос — касательная оживала с притуплением радиусом 1,8 м (нагрев острия на входе).
-<br><b>Гребни — хвост и рули балансировки</b>, продолжение скул кормы: корень 1,2 м, скруглённые кромки (R 0,4–0,5), телескоп из 4 секций + прижатие корня к борту. На входе брюхом они раскрыты частично: раскрытие телескопа сдвигает центр давления (как щитки Starship) — это и есть «усиленное крыло». При размахе 55 м балансируется только от ~50° и при 90–100 % раскрытия (запаса нет); при 61 м — весь диапазон 40–60° при 70–85 % (запас в обе стороны). Поэтому в макете размах 61 м. Убираются полностью только в межзвёздном полёте.
+<br><b>Гребни — хвост и рули.</b> Спинной гребень (20 м, курс) — одно перо, в межзвёздном полёте уходит вниз в щель между колоннами кассет (1,3 м). Боковые — цельные, продолжение скул кормы, корень 1,2 м, скруглённые кромки; один шарнир у корня — прижимаются к борту только в межзвёздном полёте (в атмосфере и на грунте раскрыты: кормовые ноги проходят выше и ниже их плоскости). Телескоп отвергнут: щели в горячем потоке. Балансировка — элевонами (внешние 60 % размаха, 30 % хорды) и щитком на задней кромке кормового днища, как у Шаттла и X-37B; шарниры на подветренной стороне. Размах подобран расчётом: 51 м (переключается на 55) — с элевонами и щитком хода −15…+25° корабль балансируется на 40–60° с запасом в обе стороны; бóльший размах (61 м) делает хвост слишком тяжёлым — рулям не хватает хода.
 <br><b>Балансировка</b> (справа): ньютоновская модель по панелям поверхности, поток снизу-спереди под углом атаки; ЦМ посадочной массы s 53 (гружёный s 35,3 — вход с полной массой не предусмотрен). «Прежний корпус» — тот же расчёт для круглых сечений C-146.
 </div>
+<h2 style="font-size:16px;margin:18px 0 6px">Нагрев на входе брюхом (50°) и что его держит</h2>
+<div id="heat"></div>
+<h2 style="font-size:16px;margin:18px 0 6px">Материалы обшивки: предел задаёт окисление, а не плавление</h2>
+<table id="mat"></table>
+<div class="note">Кубический нитрид бора (боразон) — сверхтвёрдый, но в кислороде держит ~1200–1300 °C, в вакууме около 1550 °C переходит в гексагональный. Гексагональный BN в инертной среде выдерживает ~2000 °C (вакуум) — ~2900 °C (азот), но в кислороде окисляется с ~900 °C. Высокие «керамические» цифры дают бориды циркония и гафния (плавление 3250–3380 °C); их рабочий предел в горячем кислородном потоке 2000–2400 °C — пока жива защитная стеклянная плёнка. «Боразоно-циркониевый лак» корабля: наружный слой HfB₂/ZrB₂–SiC с нитридом бора, расчётная точка 2000 °C, пик 2400 °C; в бескислородных атмосферах предел выше. Где этого мало — проточное охлаждение пиковых зон (нос, кромки), магнитная оболочка (поле катушки дефлектора отодвигает ионизованный ударный слой) и торможение двигателями до входа.</div>
+<style>#heat table,#mat{border-collapse:collapse;font-size:13px;margin-top:4px;max-width:1100px}#heat td,#heat th,#mat td,#mat th{border:1px solid var(--border);padding:4px 8px;text-align:left}#heat th,#mat th{background:#e9e5de}</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script>
@@ -118,22 +126,50 @@ const M=(c,o)=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:0
  const w=new THREE.Mesh(new THREE.CylinderGeometry(11.8,11.8,4.2,64,1,true),M(0x5d646e,{side:THREE.DoubleSide}));w.rotation.z=Math.PI/2;w.position.x=-1.9;ship.add(w);
  const bp=new THREE.Mesh(new THREE.CircleGeometry(11.8,64),M(0x23262b));bp.rotation.y=-Math.PI/2;bp.position.x=0.1;ship.add(bp);
  [[4.4,4.4],[-4.4,4.4],[4.4,-4.4],[-4.4,-4.4]].forEach(([y,z])=>{const c=new THREE.Mesh(new THREE.SphereGeometry(3.2,24,12,0,2*Math.PI,0,Math.PI/2),M(0x6a58b0,{emissive:0x1a1040,side:THREE.DoubleSide}));c.rotation.z=Math.PI/2;c.scale.set(0.55,1,1);c.position.set(-0.2,y,z);ship.add(c);});}
-// chine line of the aft body -> lateral crests (tail), reinforced plates with rounded edges
-const CREST={x0:13.9,x1:30.4,f0:6,f1:11,r0:28,r1:21};let crestExt=0.75;
+// chine line of the aft body -> lateral crests (tail): one piece each on a root hinge (folded only in
+// interstellar flight), elevons on the outer 60 % of the trailing edge; body flap on the aft bottom edge.
+const CREST={x0:13.9,x1:25.5,f0:6,f1:11,r0:28,r1:21,elSpan:0.4,elChord:0.3};
 function crestFront(x){return CREST.f0+(CREST.f1-CREST.f0)*(x-CREST.x0)/(CREST.x1-CREST.x0);}
 function crestRear(x){return CREST.r0+(CREST.r1-CREST.r0)*(x-CREST.x0)/(CREST.x1-CREST.x0);}
-const crests=[];let DX=(CREST.x1-CREST.x0)/4;
-function buildCrests(){crests.forEach(c=>ship.remove(c.root));crests.length=0;DX=(CREST.x1-CREST.x0)/4;
-[-1,1].forEach(sg=>{const root=new THREE.Group();ship.add(root);const secs=[];
-  for(let k=0;k<4;k++){const xa=CREST.x0+k*DX-(k?0.3:0),xb=CREST.x0+(k+1)*DX;const sh=new THREE.Shape();
-    sh.moveTo(crestFront(xa),xa-CREST.x0);sh.lineTo(crestRear(xa),xa-CREST.x0);sh.lineTo(crestRear(xb),xb-CREST.x0);sh.lineTo(crestFront(xb),xb-CREST.x0);sh.lineTo(crestFront(xa),xa-CREST.x0);
-    const t=1.2-0.2*k,g=new THREE.ExtrudeGeometry(sh,{depth:t-0.5,bevelEnabled:true,bevelThickness:0.25,bevelSize:0.4,bevelSegments:3});
-    g.translate(0,0,-(t-0.5)/2);const m=new THREE.Mesh(g,M(0x4a4640,{roughness:0.45}));m.rotation.x=Math.PI/2*sg;   // plane: x=s, spanwise along +-z
-    const holder=new THREE.Group();holder.add(m);root.add(holder);secs.push(holder);}
-  root.position.set(0,-4.2,sg*CREST.x0);crests.push({sg,root,secs});});}
+// s grows towards the nose: crestRear() is the LEADING edge (forward), crestFront() the TRAILING edge (aft)
+const LE=x=>crestRear(x), TE=x=>crestFront(x);
+function crestHinge(x){return TE(x)+CREST.elChord*(LE(x)-TE(x));}   // elevon hinge line (s), 30 % chord ahead of the trailing edge
+let delE=0, delB=0, autoTrim=true;
+const crests=[];
+function plateGeom(q,t){// q: 4 corners (ship/local coords) of a thin plate, t: thickness
+  const e1=new THREE.Vector3().subVectors(q[2],q[0]),e2=new THREE.Vector3().subVectors(q[3],q[1]),n=new THREE.Vector3().crossVectors(e1,e2).normalize().multiplyScalar(t/2);
+  const v=[];q.forEach(p=>v.push(p.x+n.x,p.y+n.y,p.z+n.z));q.forEach(p=>v.push(p.x-n.x,p.y-n.y,p.z-n.z));
+  const f=[0,1,2,0,2,3,4,6,5,4,7,6,0,4,5,0,5,1,1,5,6,1,6,2,2,6,7,2,7,3,3,7,4,3,4,0];
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));g.setIndex(f);g.computeVertexNormals();return g;}
+const V3=(x,y,z)=>new THREE.Vector3(x,y,z);
+function elevonCorners(sg,local){// hinge-line points and trailing points rotated trailing edge down by delE
+  const xa=CREST.x0+(CREST.x1-CREST.x0)*CREST.elSpan,xb=CREST.x1,c=Math.cos(delE*D),sn=Math.sin(delE*D);
+  const pt=(x,trail)=>{const sh=crestHinge(x),z=sg*(local?x-CREST.x0:x),y0=local?0:-4.2;
+    if(!trail)return V3(sh,y0,z);const d=sh-TE(x);return V3(sh-d*c,y0-d*sn,z);};   // trailing edge (aft) down by delE
+  return [pt(xa,false),pt(xb,false),pt(xb,true),pt(xa,true)];}
+const BF={half:7.0,ch:3.0};
+function bodyFlapCorners(){const yH=paramsAt(2).B[1],half=BF.half,ch=BF.ch,c=Math.cos(delB*D),sn=Math.sin(delB*D);
+  return [V3(2,yH,-half),V3(2,yH,half),V3(2-ch*c,yH-ch*sn,half),V3(2-ch*c,yH-ch*sn,-half)];}
+const mCrest=M(0x4a4640,{roughness:0.45}), mFlap=M(0x5a554d,{roughness:0.4});
+function buildCrests(){crests.forEach(c=>ship.remove(c.root));crests.length=0;
+  [-1,1].forEach(sg=>{const root=new THREE.Group();ship.add(root);
+    const xa=CREST.x0+(CREST.x1-CREST.x0)*CREST.elSpan,sh=new THREE.Shape(),o=CREST.x0;
+    sh.moveTo(TE(o),0);sh.lineTo(LE(o),0);sh.lineTo(LE(CREST.x1),CREST.x1-o);sh.lineTo(crestHinge(CREST.x1),CREST.x1-o);
+    sh.lineTo(crestHinge(xa),xa-o);sh.lineTo(TE(xa),xa-o);sh.lineTo(TE(o),0);   // elevon cut-out on the trailing edge
+    const g=new THREE.ExtrudeGeometry(sh,{depth:0.7,bevelEnabled:true,bevelThickness:0.25,bevelSize:0.45,bevelSegments:3});g.translate(0,0,-0.35);
+    const m=new THREE.Mesh(g,mCrest);m.rotation.x=Math.PI/2*sg;root.add(m);
+    const el=new THREE.Mesh(plateGeom(elevonCorners(sg,true),0.5),mFlap);root.add(el);
+    root.position.set(0,-4.2,sg*CREST.x0);crests.push({sg,root,el});});}
 buildCrests();
-// dorsal crest root fairing
-{const g=new THREE.BoxGeometry(40,1.4,1.8);const m=new THREE.Mesh(g,M(0x4a4640));m.position.set(24,14.5,0);ship.add(m);}
+const bflap=new THREE.Mesh(plateGeom(bodyFlapCorners(),0.5),mFlap);ship.add(bflap);
+function updateSurfaces(){crests.forEach(c=>{c.el.geometry.dispose();c.el.geometry=plateGeom(elevonCorners(c.sg,true),0.5);});
+  bflap.geometry.dispose();bflap.geometry=plateGeom(bodyFlapCorners(),0.5);}
+// dorsal crest: one blade (course stability), slides straight down into the slot between the two trap
+// columns (1.3 m gap) for interstellar flight - no gaps in the flow when it is out
+const dorsal=new THREE.Group();ship.add(dorsal);
+{const sh=new THREE.Shape();sh.moveTo(4,0);sh.lineTo(44,0);sh.lineTo(33,20);sh.lineTo(12,20);sh.lineTo(4,0);
+ const g=new THREE.ExtrudeGeometry(sh,{depth:0.6,bevelEnabled:true,bevelThickness:0.3,bevelSize:0.45,bevelSegments:3});g.translate(0,0,-0.3);
+ const m=new THREE.Mesh(g,M(0x4a4640,{roughness:0.45}));dorsal.add(m);dorsal.position.y=14.4;}
 // x-ray payload
 const xray=new THREE.Group();ship.add(xray);xray.visible=false;
 const ghost=c=>new THREE.MeshStandardMaterial({color:c,transparent:true,opacity:0.55,roughness:0.6});
@@ -145,6 +181,7 @@ function octPrism(cx,cy,s0,s1,mat){const h=4.9,ch=3.2,sh=new THREE.Shape();[[cx-
  const rb=new THREE.Mesh(new THREE.BoxGeometry(17,5.3,8.4),ghost(0x9a8f7a));rb.position.set(90,-5.65,0);xray.add(rb);
  const cm=new THREE.Mesh(new THREE.CylinderGeometry(5.2,5.2,16,24),ghost(0x8fb0a0));cm.rotation.z=Math.PI/2;cm.position.set(112,0.5,0);xray.add(cm);}
 
+const $=id=>document.getElementById(id);
 // ---------------- Newtonian trim (surface panels) ----------------
 function hullPanelsFrom(secFn,stations){const P=[];for(let i=0;i<stations.length-1;i++){const s0=stations[i],s1=stations[i+1],a=secFn(s0),b=secFn(s1),n=a.length;
     for(let k=0;k<n;k++){const k1=(k+1)%n;const p=[[s0,a[k][1],a[k][0]],[s0,a[k1][1],a[k1][0]],[s1,b[k1][1],b[k1][0]],[s1,b[k][1],b[k][0]]];P.push(p);}}return P;}
@@ -167,26 +204,45 @@ const OLDK=[[0,12,13,-9],[8,13.5,14,-9.5],[47,14,14,-9.5],[53,11.6,12,-9],[58,9.
 function oldSec(s){let w=0.15,t=0.15,b=-0.15;for(let i=0;i<OLDK.length-1;i++){const a=OLDK[i],c=OLDK[i+1];if(s>=a[0]&&s<=c[0]){let f=(s-a[0])/(c[0]-a[0]);f=f*f*(3-2*f);w=a[1]+(c[1]-a[1])*f;t=a[2]+(c[2]-a[2])*f;b=a[3]+(c[3]-a[3])*f;}}
   const o=[];for(let k=0;k<NS;k++){const th=-Math.PI/2+2*Math.PI*k/NS,cth=Math.cos(th),sn=Math.sin(th);o.push([w*cth,(sn>=0?t:-b)*sn]);}return o;}
 const OLD=orient(hullPanelsFrom(oldSec,trimSt));
-function crestPanels(ext){const P=[];ext=ext===undefined?crestExt:ext;if(!crestsOut||ext<=0)return P;[-1,1].forEach(sg=>{const x0=CREST.x0,x1=CREST.x0+(CREST.x1-CREST.x0)*ext;
-  const q=[[crestFront(x0),-4.2,sg*x0],[crestRear(x0),-4.2,sg*x0],[crestRear(x1),-4.2,sg*x1],[crestFront(x1),-4.2,sg*x1]];
-  const e1=[q[2][0]-q[0][0],0,q[2][2]-q[0][2]],e2=[q[3][0]-q[1][0],0,q[3][2]-q[1][2]];const ny=e1[2]*e2[0]-e1[0]*e2[2];
-  P.push(ny>0?[q[0],q[3],q[2],q[1]]:q);});return P;}   // lower face (normal down)
+function down(q){// panel with its normal pointing down (the windward lower face)
+  const e1=[q[2][0]-q[0][0],q[2][1]-q[0][1],q[2][2]-q[0][2]],e2=[q[3][0]-q[1][0],q[3][1]-q[1][1],q[3][2]-q[1][2]];
+  const ny=e1[2]*e2[0]-e1[0]*e2[2];return ny>0?[q[0],q[3],q[2],q[1]]:q;}
+function crestPanels(){const P=[];if(!crestsOut)return P;const xa=CREST.x0+(CREST.x1-CREST.x0)*CREST.elSpan;
+  [-1,1].forEach(sg=>{const x0=CREST.x0,x1=CREST.x1,y=-4.2;
+    P.push(down([[TE(x0),y,sg*x0],[LE(x0),y,sg*x0],[LE(xa),y,sg*xa],[TE(xa),y,sg*xa]]));
+    P.push(down([[crestHinge(xa),y,sg*xa],[LE(xa),y,sg*xa],[LE(x1),y,sg*x1],[crestHinge(x1),y,sg*x1]]));
+    P.push(down(elevonCorners(sg,false).map(v=>[v.x,v.y,v.z])));});
+  P.push(down(bodyFlapCorners().map(v=>[v.x,v.y,v.z])));
+  return P;}
 let crestsOut=true, sCG=53.0, alpha=50*D;
 function cpOf(P){const f=panelForce(P,alpha,sCG);const c=Math.cos(alpha),sn=Math.sin(alpha);
   const L=f.Fx*sn+f.Fy*c, Dr=-f.Fx*c+f.Fy*sn;   // lift across the flow, drag along it (air moves (-cos a, sin a))
   return {s:sCG+f.My/(f.Fy||1e-9),Fy:f.Fy,Fx:f.Fx,LD:L/Math.max(1e-9,Dr)};}
+function trimElevon(){// elevon angle that puts the centre of pressure on the CG (null if out of range)
+  const keep=delE;let lo=-30,hi=40,best=null;
+  const f=d=>{delE=d;return cpOf(NEW.concat(crestPanels())).s-sCG;};
+  let fl=f(lo),fh=f(hi);if(fl*fh<=0){for(let i=0;i<30;i++){const m=(lo+hi)/2,fm=f(m);if(fl*fm<=0){hi=m;fh=fm;}else{lo=m;fl=fm;}}best=(lo+hi)/2;}
+  delE=keep;return best;}
+function trimAuto(){// elevons first; if they run out, park them at the limit and trim with the body flap
+  delB=0;let t=trimElevon();
+  if(t===null){delE=40;const hi=cpOf(NEW.concat(crestPanels())).s-sCG;delE=hi>0?40:-30;
+    const keep=delE;let lo=-15,up=25;const f=d=>{delB=d;return cpOf(NEW.concat(crestPanels())).s-sCG;};let fl=f(lo),fu=f(up);
+    if(fl*fu<=0){for(let i=0;i<30;i++){const m=(lo+up)/2,fm=f(m);if(fl*fm<=0){up=m;fu=fm;}else{lo=m;fl=fm;}}delB=Math.round((lo+up)/2);}else delB=Math.abs(fl)<Math.abs(fu)?-15:25;delE=keep;}
+  else delE=Math.round(t);
+  $('el').value=delE;$('elv').textContent=delE+'°';$('bf').value=delB;$('bfv').textContent=delB+'°';updateSurfaces();}
 function readout(){
+  if(autoTrim&&crestsOut)trimAuto();
   const cN=cpOf(NEW.concat(crestPanels())),cO=cpOf(OLD.concat(crestPanels()));
-  const q=18e3, M=q*cN.Fy*(cN.s-sCG);
-  let need=null;for(let e=0;e<=1.0001;e+=0.01){if(cpOf(NEW.concat(crestPanels(e))).s-sCG<=0){need=e;break;}}
+  const q=18e3, M=q*cN.Fy*(cN.s-sCG), need=crestsOut?trimElevon():null;
   const sgn=v=>(v>=0?'+':'')+v.toFixed(1);
   let t=`угол атаки ${(alpha/D).toFixed(0)}° · ЦМ s ${sCG.toFixed(1)}\n`;
-  t+=`гребни: размах ${(2*CREST.x1).toFixed(0)} м, ${crestsOut?'раскрыты на '+(crestExt*100).toFixed(0)+' %':'убраны'}\n\n`;
+  t+=`гребни: размах ${(2*CREST.x1).toFixed(0)} м, ${crestsOut?'раскрыты':'убраны'} · элевоны ${delE}° · щиток ${delB}°\n\n`;
   t+=`центр давления − ЦМ: ${sgn(cN.s-sCG)} м   (прежний корпус ${sgn(cO.s-sCG)})\n`;
   t+=`  + = ЦД впереди ЦМ: нос задирается, корабль уходит кормой вперёд\n`;
   t+=`  − = ЦД позади ЦМ: брюхом вперёд устойчиво\n`;
-  t+=`баланс при раскрытии гребней: ${need===null?'не достигается (нужен больший размах)':(need*100).toFixed(0)+' %'}\n`;
-  t+=`момент при 18 кПа: ${(Math.abs(M)/1e6).toFixed(0)} МН·м ${cN.s>sCG?'на кабрирование':'на пикирование'}\n`;
+  t+=`балансировка: ${Math.abs(cN.s-sCG)<0.15?'есть':'нет'} · элевоны ${delE}° (−30…+40), щиток ${delB}° (−15…+25), вниз +
+`;
+  t+=`остаточный момент при 18 кПа: ${(Math.abs(M)/1e6).toFixed(0)} МН·м\n`;
   t+=`нормальная сила ×${(cN.Fy/cO.Fy).toFixed(2)} к прежней · L/D ≈ ${cN.LD.toFixed(2)} (было ${cO.LD.toFixed(2)})\n\n`;
   t+=`площадь сечения: нос ${SEC_AREA.fore.toFixed(0)} м² (было 232) · корма ${SEC_AREA.aft.toFixed(0)} м² (было 517)\n`;
   t+=`в плане: ${PLAN.toFixed(0)} м² · днище плоское: корма 22 м, киль носа 11 м`;
@@ -209,23 +265,44 @@ function drawSections(){const cv=document.getElementById('sec'),g=cv.getContext(
 drawSections();
 
 // ---------------- ui ----------------
-const $=id=>document.getElementById(id);
 const VIEWS={q:[[170,70,190],[70,0,0]],side:[[73,10,260],[73,0,0]],below:[[120,-150,120],[70,0,0]],front:[[260,10,30],[100,0,0]],aft:[[-120,20,40],[10,0,0]]};
 function view(k){const v=VIEWS[k];cam.position.set(...v[0]);ctl.target.set(...v[1]);ctl.update();}view('q');
 document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>view(b.dataset.v));
 $('xr').onclick=()=>{xray.visible=!xray.visible;hullMat.transparent=xray.visible;hullMat.opacity=xray.visible?0.25:1;hullMat.depthWrite=!xray.visible;$('xr').classList.toggle('on',xray.visible);};
 let crestT=0;$('cr').onclick=()=>{crestsOut=!crestsOut;$('cr').textContent='Гребни: '+(crestsOut?'раскрыты':'убраны (межзвёздный)');readout();};
-$('ext').oninput=e=>{crestExt=+e.target.value/100;$('extv').textContent=e.target.value+' %';readout();};
-$('sp').onclick=()=>{CREST.x1=CREST.x1<28?30.4:27.4;$('sp').textContent='Размах гребней: '+(2*CREST.x1).toFixed(0)+' м';buildCrests();readout();};
+$('au').onclick=()=>{autoTrim=!autoTrim;$('au').classList.toggle('on',autoTrim);$('au').textContent='Элевоны: '+(autoTrim?'авто-балансировка':'вручную');readout();};$('au').classList.add('on');
+$('el').oninput=e=>{autoTrim=false;$('au').classList.remove('on');$('au').textContent='Элевоны: вручную';delE=+e.target.value;$('elv').textContent=delE+'°';updateSurfaces();readout();};
+$('bf').oninput=e=>{delB=+e.target.value;$('bfv').textContent=delB+'°';updateSurfaces();readout();};
+$('sp').onclick=()=>{CREST.x1=CREST.x1<26?27.4:25.5;$('sp').textContent='Размах гребней: '+(2*CREST.x1).toFixed(0)+' м';buildCrests();readout();};
+const $$=$;
 $('ms').onclick=()=>{sCG=sCG>50?35.3:53.0;$('ms').textContent='ЦМ: '+(sCG>50?'посадочная масса (s 53)':'гружёный (s 35,3)');readout();};
 $('aoa').oninput=e=>{alpha=+e.target.value*D;$('aoav').textContent=e.target.value+'°';readout();};$('aoav').textContent='50°';
 $('rot').onclick=()=>{ctl.autoRotate=!ctl.autoRotate;$('rot').classList.toggle('on',ctl.autoRotate);};
 readout();
-window.__hull={sectionAt,areaOf,cpOf:()=>[cpOf(NEW),cpOf(OLD)]};
-let extShow=crestExt;
-function loop(){const tgt=crestsOut?0:1;crestT+=(tgt-crestT)*0.06;extShow+=(crestExt-extShow)*0.1;
-  crests.forEach(({sg,root,secs})=>{const tel=Math.max(Math.min(1,crestT*2),1-extShow),fold=Math.max(0,crestT*2-1);
-    secs.forEach((h,k)=>{h.position.z=-sg*k*DX*tel;});root.rotation.x=-sg*fold*Math.PI/2;});
+// ---------------- heating by planet ----------------
+(function(){const sig=5.67e-8,eps=0.85,T=q=>Math.pow(q*1e4/(eps*sig),0.25)-273;
+  const ref={belly:19.6,edge:48,nose:50};   // W/cm2, Earth, glide from 7.8 km/s (belly-first 50 deg, beta ~1650)
+  const qOf=(v,g,k)=>ref[k]*Math.pow(v/7.8,3)*Math.sqrt(g/9.81);
+  const qAllow=eps*sig*Math.pow(2273,4)/1e4;  // 2000 C
+  const pl=[["Земля (Эль Хомра в симуляторе)",7.8,9.81,"азот/кислород"],["Венера",7.3,8.87,"CO₂, плотная"],["Марс",3.55,3.71,"CO₂, тонкая: торможения почти нет — финал на двигателях"],
+            ["планета Железной звезды",25.5,24.5,"1,4 атм; круговая скорость 25,5 км/с"]];
+  let h='<table><tr><th>Планета</th><th>вход, км/с</th><th>брюхо</th><th>кромки R 0,5</th><th>нос R 1,8</th><th>что держит</th></tr>';
+  pl.forEach(([n,v,g,note])=>{const qe=qOf(v,g,'edge');const vA=7.8*Math.pow(qAllow/(ref.edge*Math.sqrt(g/9.81)),1/3),vF=vA*Math.pow(2,1/3);
+    const cell=k=>{const q=qOf(v,g,k);return `${q<10?q.toFixed(1):q.toFixed(0)} Вт/см² · ${T(q).toFixed(0)} °C`;};
+    let verdict=qe<=qAllow?'обшивка (≤ 2000 °C)':(qe<=eps*sig*Math.pow(2673,4)/1e4?'обшивка на пике + проточное охлаждение кромок':
+      `не держит ничто: нужно торможение до ~${vA.toFixed(0)} км/с (Δv ≈ ${(v-vA).toFixed(0)} км/с), с магнитной оболочкой (−50 %) до ~${vF.toFixed(0)} км/с`);
+    if(v>10)verdict+='; выше 10 км/с добавляется излучение ударного слоя — у большого корабля оно растёт с размером';
+    h+=`<tr><td>${n}<br><span style="color:var(--muted)">${note}</span></td><td>${v}</td><td>${cell('belly')}</td><td>${cell('edge')}</td><td>${cell('nose')}</td><td>${verdict}</td></tr>`;});
+  document.getElementById('heat').innerHTML=h+'</table><div class="note">Конвективный поток по земному расчёту планирующего входа, масштаб ~V³·√g; излучение ударного слоя не учтено (при 25 км/с оно больше конвекции). Равновесная температура при излучательной способности 0,85.</div>';
+  const mats=[["Боразон (кубический BN)","~1200–1300 °C","~1550 °C (переходит в гексагональный)","—"],["Гексагональный BN","~900–1100 °C (окисление)","~2000 °C вакуум, ~2900 °C азот","разложение ~2970 °C"],
+    ["ZrB₂–SiC","1800–2000 °C","2400 °C и выше","3246 °C"],["HfB₂–SiC (+ редкоземельные)","2000–2400 °C кратковременно","2600 °C и выше","3380 °C"],
+    ["HfC, TaC","~1800–2000 °C","3000 °C и выше","~3900 °C"],["Углерод-углерод","~600 °C, с SiC-покрытием ~1650 °C","3000 °C и выше","возгонка ~3650 °C"],["Иридий (щит носа)","~1000–1100 °C (летучий IrO₃)","2200 °C и выше","2446 °C"]];
+  let m='<tr><th>Материал</th><th>в горячем кислородном потоке</th><th>в инертной среде / вакууме</th><th>плавление</th></tr>';mats.forEach(r=>m+=`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`);document.getElementById('mat').innerHTML=m;})();
+window.__hull={sectionAt,areaOf,cpOf:()=>[cpOf(NEW),cpOf(OLD)],
+  study:(x1,bh,bc,a,de,db)=>{const k=[CREST.x1,BF.half,BF.ch,alpha,delE,delB];CREST.x1=x1;BF.half=bh;BF.ch=bc;alpha=a*D;delE=de;delB=db;
+    const r=cpOf(NEW.concat(crestPanels())).s-sCG;[CREST.x1,BF.half,BF.ch,alpha,delE,delB]=k;return r;}};
+function loop(){const tgt=crestsOut?0:1;crestT+=(tgt-crestT)*0.05;
+  crests.forEach(({sg,root})=>{root.rotation.x=-sg*sm5(crestT)*Math.PI/2;});dorsal.position.y=14.4-21*sm5(crestT);
   ctl.update();R.render(scene,cam);requestAnimationFrame(loop);}
 loop();
 })();

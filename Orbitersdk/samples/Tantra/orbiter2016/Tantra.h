@@ -12,6 +12,7 @@
 #include "../core/Ignition.h"
 #include "../core/Params.h"
 #include "../core/Spec.h"
+#include "MeshLayout.h"
 
 class TantraExhaust;  // TantraExhaust.h: anamezon exhaust visuals
 class TantraSafety;   // TantraSafety.h: radiation safety interlock
@@ -55,7 +56,15 @@ private:
     void RebindGroups();              // main: anamezon or stern ring; hover: pods swivelled down
     bool AnaIsMain() const;           // anamezon chambers hold the main throttle (only while feeding)
     void UpdatePods(double dt);
+    void ActPods(bool hover);          // B: pods out and cups down / cups aft and pods in; Shift+B: out, cups aft
     void ActPodsTo(double deg);
+    void UpdateCG(bool force);         // shifts the vessel frame to the CG of the mass budget
+    void AimThroughCG();               // stern cups: the magnetic nozzles steer the jet through the CG (<= 7 deg)
+    void DefineControlSurfaces(bool on);
+    void UpdateControlSurfaces();
+    double Zf(double s) const { return s - frameS_; }                     // hull station -> vessel frame z
+    double MeshDZ() const { return tantra::spec::kOriginS - frameS_; }    // mesh frame -> vessel frame (z)
+    double TrapZ() const;              // trap column centre (vessel frame z)
     void SelectActiveTrap();
     void ScaleAttitudeThrust();
     double HotStartLevelCap() const;  // 1 = no limit
@@ -124,6 +133,40 @@ private:
     VECTOR3 podExhPos_[tantra::spec::kPodCups] = {}, podExhDir_[tantra::spec::kPodCups] = {};
     EXHAUSTSPEC podExh_[tantra::spec::kPodCups] = {};
     bool podHover_ = false;
+    double podOut_ = 0.0;                      // pods: 0 in the bays (doors shut) .. 1 hanging out
+    bool podsWanted_ = false;                  // pilot wants the pods out
+    bool podMachWarned_ = false;
+    double podShare_[2] = {1.0, 1.0};          // thrust of the aft / fore pair (pitch balance)
+    bool podAssist_ = false;                   // pods help the carriage stand the ship up / lay it down
+    double podAssistLevel_ = 0.0;
+    double gust_ = 0.0, windForce_ = 0.0;      // gust part of the wind [m/s], wind force on the broadside [N]
+    double podSideForce_ = 0.0, podTilt_ = 0.0;  // gust compensation by the pods [N], cup deflection [rad]
+    VECTOR3 podTiltV_ = {0, 0, 0};               // (unused: a lean of the jets makes a moment on the 9.8 m arm)
+    VECTOR3 windFh_ = {0, 0, 0};                 // horizontal wind force (ship frame) [N]
+    double podCouple_ = 0.0;                     // moment the pods apply against wind and sway [N m]
+    bool podBalanceLost_ = false;                // pods cannot balance about the CG in this attitude
+    void PodAssistLevels(double simdt, double podMax);
+    double sway_ = 0.0, swayMax_ = 0.0, swayMaxT_ = 0.0;  // lateral sway of the CG [m], its recent peak
+    unsigned windRng_ = 20260930u;
+    bool orbiterWind_ = false;                 // wind comes from Orbiter (air data non-zero)
+    double windSpeed_ = 0.0;                   // measured horizontal wind [m/s]
+    double legLoad_ = 0.0, legRatio_ = 0.0;    // most loaded leg [N] and its share of the rating
+    double tipWind_ = 0.0;                     // wind that would overturn the ship now [m/s]
+    const char* legName_ = "";
+    void UpdateWind(double dt);
+    void GuardAgainstLaunch(double dt);  // a contact bounce must never throw the ship off the ground
+    void Reland();                       // put the ship back down where it is (Orbiter's landed status)
+    double sinceContact_ = 1e9, relandCool_ = 0.0;
+    int relands_ = 0;
+    void WatchTerrain();                 // Orbiter refines the terrain under a resting ship: follow it
+    bool terrainInit_ = false;
+    double terrainLng_[5] = {}, terrainLat_[5] = {}, terrainElev_[5] = {};
+    void UpdateLegLoads(const VECTOR3& windForceH);
+    double frameS_ = tantra::spec::kOriginS;   // station of the vessel frame origin (= CG)
+    AIRFOILHANDLE foil_[4] = {};
+    CTRLSURFHANDLE ctrl_[4] = {};              // elevator, two ailerons (elevons), body flap
+    bool ctrlOn_ = false;
+    double elevon_[2] = {0.0, 0.0}, bodyFlap_ = 0.5;  // mesh states (port, starboard; flap 0..1 = 0..25 deg)
     EngineSet engineSet_ = EngineSet::Planetary;
     double podAngle_ = 0.0, podTarget_ = 0.0;  // deg: 0 thrust forward, 90 thrust up
     int planGroup_ = -1;                       // main throttle: 0 anamezon, 1 planetary stern ring

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Реактивный ранец: 4 концепта</title>
+<style>
+  :root { --bg:#eceae6; --card:#fbfaf8; --ink:#23262b; --dim:#6b6f76; --line:#d6d3cd; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#16181b; --card:#1f2226; --ink:#e6e4df; --dim:#9aa0a8; --line:#33373d; } }
+  :root[data-theme="dark"] { --bg:#16181b; --card:#1f2226; --ink:#e6e4df; --dim:#9aa0a8; --line:#33373d; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, "Segoe UI", sans-serif; }
+  main { max-width:1180px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--dim); margin:0 0 20px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 14px 16px; }
+  .card h2 { font-size:17px; margin:0 0 2px; }
+  .card .k { color:var(--dim); font-size:13px; margin:0 0 8px; }
+  svg { width:100%; height:auto; display:block; }
+  table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+  td { padding:3px 4px; border-top:1px solid var(--line); }
+  td:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+  ul { margin:8px 0 0; padding-left:18px; font-size:14px; }
+  li { margin:2px 0; }
+  .note { margin-top:18px; color:var(--dim); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Реактивный ранец «Каркаса» — 4 концепта</h1>
+  <p class="sub">Съёмный модуль поверх встроенного азотного блока (10 м/с). Общее: однокомпонентное топливо (зелёный монотопливный двигатель, Isp ≈ 250 с), ~9 кг топлива → 170–175 м/с для неё со скафандром. Белый, красный ≤ 20 %. Крепится к несущему каркасу: спинные рейки и силовой пояс — вес идёт на таз. Сзади · сбоку.</p>
+  <div class="grid" id="grid"></div>
+  <p class="note">В Orbiter ранец — отдельный аппарат: лежит у шлюза, заправляется, передаётся. Надетый — его топливо и сопла переходят к ней, снятый — остаток возвращается ранцу.</p>
+</main>
+<script>
+const W = '#f4f3ef', W2 = '#d9d8d3', R = '#c8322a', INK = '#2b2e33', FR = '#5b6068', DK = '#34373c', SUIT = '#c9c9c4';
+const S = 2.0, cm = v => v * S;
+const P = (d, f = W, sw = 1.2) => `<path d="${d}" fill="${f}" stroke="${INK}" stroke-width="${sw}" stroke-linejoin="round"/>`;
+const rect = (x, y, w, h, f = W, rx = 4) => `<rect x="${cm(x)}" y="${cm(y)}" width="${cm(w)}" height="${cm(h)}" rx="${rx}" fill="${f}" stroke="${INK}" stroke-width="1.2"/>`;
+const circ = (x, y, r, f = W) => `<circle cx="${cm(x)}" cy="${cm(y)}" r="${cm(r)}" fill="${f}" stroke="${INK}" stroke-width="1.1"/>`;
+const line = (x1, y1, x2, y2, w, c = FR) => `<line x1="${cm(x1)}" y1="${cm(y1)}" x2="${cm(x2)}" y2="${cm(y2)}" stroke="${INK}" stroke-width="${cm(w) + 2}" stroke-linecap="round"/><line x1="${cm(x1)}" y1="${cm(y1)}" x2="${cm(x2)}" y2="${cm(y2)}" stroke="${c}" stroke-width="${cm(w)}" stroke-linecap="round"/>`;
+const puff = (x, y, dx, dy) => `<path d="M${cm(x)},${cm(y)} l${cm(dx * 6 - dy * 1.5)},${cm(dy * 6 + dx * 1.5)} l${cm(dy * 3)},${cm(-dx * 3)} Z" fill="rgba(160,190,230,0.55)"/>`;
+const nozzle = (x, y, dx, dy) => `<path d="M${cm(x)},${cm(y)} l${cm(dx * 2 - dy * 0.6)},${cm(dy * 2 + dx * 0.6)} l${cm(dy * 1.2)},${cm(-dx * 1.2)} Z" fill="${DK}" stroke="${INK}" stroke-width="0.8"/>`;
+
+// the suited figure, back and side, as a grey silhouette
+function figBack() {
+  return `<g opacity="0.95">
+    ${circ(0, 12, 13, SUIT)}
+    ${P(`M${cm(-20)},${cm(33)} L${cm(20)},${cm(33)} L${cm(17)},${cm(92)} L${cm(-17)},${cm(92)} Z`, SUIT)}
+    ${line(-20, 36, -26, 88, 7.5, SUIT)}${line(20, 36, 26, 88, 7.5, SUIT)}
+    ${line(-9, 92, -10, 168, 10, SUIT)}${line(9, 92, 10, 168, 10, SUIT)}
+    ${line(-22, 95, -19, 165, 2.2, FR)}${line(22, 95, 19, 165, 2.2, FR)}
+    ${rect(-19, 86, 38, 6, FR, 3)}</g>`;
+}
+function figSide() {
+  return `<g opacity="0.95">
+    ${circ(2, 12, 13, SUIT)}
+    ${P(`M${cm(-9)},${cm(33)} L${cm(12)},${cm(35)} L${cm(10)},${cm(92)} L${cm(-10)},${cm(92)} Z`, SUIT)}
+    ${line(3, 38, 8, 88, 7, SUIT)}
+    ${line(0, 92, 2, 168, 10, SUIT)}
+    ${line(-2, 95, 1, 165, 2.2, FR)}${rect(-11, 86, 22, 6, FR, 3)}</g>`;
+}
+
+const concepts = [
+  { t: '1 · «Кресло»', k: 'наследник MMU 1984 года: подлокотники с ручками управления',
+    back: () => `${rect(-24, 30, 48, 58, W)}${rect(-19, 36, 38, 22, W2, 3)}
+        ${[[-26,31],[22,31],[-26,83],[22,83]].map(([x,y]) => rect(x, y, 5, 6, DK, 2) + nozzle(x + (x < 0 ? 0 : 5), y + 3, x < 0 ? -1 : 1, 0)).join('')}
+        ${rect(-6, 80, 12, 6, R, 2)}${line(-24, 70, -34, 74, 2.4, W2)}${line(24, 70, 34, 74, 2.4, W2)}
+        ${circ(-35, 75, 3, DK)}${circ(35, 75, 3, DK)}${puff(-31, 34, -1, 0)}`,
+    side: () => `${rect(-26, 30, 16, 58, W)}${line(-14, 70, 16, 72, 2.4, W2)}${circ(17, 72, 3, DK)}
+        ${rect(-29, 31, 5, 6, DK, 2)}${rect(-29, 81, 5, 6, DK, 2)}${nozzle(-29, 34, -1, 0)}${nozzle(-29, 84, -1, 0)}${rect(-25, 40, 4, 30, R, 2)}`,
+    spec: [['Сухая масса', '19 кг'], ['Топливо', '9 кг'], ['Δv', '≈ 173 м/с'], ['Сопла', '24 × 12 Н'], ['Маршевый', 'нет — только РСУ'], ['Красного', '≈ 12 %']],
+    li: ['Узнаваемая классика: две ручки на подлокотниках — левая сдвиг, правая поворот. Руки видны за работой в кадре.',
+         'Сопла в четырёх угловых башенках, как у MMU. Разгон тем же РСУ, только сильнее.',
+         'Минус: подлокотники мешают рукам работать с грузом.'] },
+  { t: '2 · «Маршевый»', k: 'компактный корпус, два маршевых сопла и выносные штанги РСУ',
+    back: () => `${rect(-20, 30, 40, 54, W)}${rect(-15, 36, 30, 16, W2, 3)}
+        ${line(-20, 34, -34, 28, 2.2, FR)}${line(20, 34, 34, 28, 2.2, FR)}${line(-20, 80, -34, 86, 2.2, FR)}${line(20, 80, 34, 86, 2.2, FR)}
+        ${[[-37,25],[31,25],[-37,83],[31,83]].map(([x,y]) => rect(x, y, 6, 6, DK, 2)).join('')}
+        ${circ(-8, 70, 5.5, DK)}${circ(8, 70, 5.5, DK)}${circ(-8, 70, 3, R)}${circ(8, 70, 3, R)}`,
+    side: () => `${rect(-24, 30, 14, 54, W)}${line(-18, 34, -26, 28, 2.2, FR)}${line(-18, 80, -26, 86, 2.2, FR)}
+        ${rect(-29, 25, 6, 6, DK, 2)}${rect(-29, 83, 6, 6, DK, 2)}
+        ${P(`M${cm(-24)},${cm(64)} L${cm(-33)},${cm(61)} L${cm(-33)},${cm(79)} L${cm(-24)},${cm(76)} Z`, DK)}${puff(-33, 70, -1, 0)}`,
+    spec: [['Сухая масса', '21 кг'], ['Топливо', '9 кг'], ['Δv', '≈ 170 м/с'], ['Маршевые', '2 × 60 Н'], ['РСУ', '16 × 8 Н на штангах'], ['Красного', '≈ 8 %']],
+    li: ['Разгон и торможение — маршевыми соплами вдоль спины, «лечу вперёд». Точная работа — РСУ на выносных штангах: длинное плечо, мягкий поворот.',
+         'Руки свободны: управление через скафандр, клавиатура как у корабля.',
+         'Самый «транспортный»: для перелётов корабль — станция — астероид.'] },
+  { t: '3 · «Пояс»', k: 'кольцо сопел на силовом поясе экзоскелета + баки на спине',
+    back: () => `${rect(-17, 32, 34, 46, W)}${rect(-13, 38, 26, 12, W2, 3)}${rect(-13, 54, 26, 12, W2, 3)}
+        ${P(`M${cm(-30)},${cm(82)} Q${cm(0)},${cm(76)} ${cm(30)},${cm(82)} L${cm(30)},${cm(92)} Q${cm(0)},${cm(86)} ${cm(-30)},${cm(92)} Z`, W)}
+        ${[-26, -13, 0, 13, 26].map(x => rect(x - 2.5, 80 - Math.abs(x) * 0.02, 5, 4, DK, 1.5)).join('')}
+        ${rect(-4, 88, 8, 4, R, 1.5)}${line(-17, 44, -30, 44, 1.8, FR)}${line(17, 44, 30, 44, 1.8, FR)}${rect(-33, 41, 5, 6, DK, 2)}${rect(28, 41, 5, 6, DK, 2)}`,
+    side: () => `${rect(-22, 32, 12, 46, W)}${P(`M${cm(-24)},${cm(82)} L${cm(16)},${cm(84)} L${cm(16)},${cm(93)} L${cm(-24)},${cm(92)} Z`, W)}
+        ${rect(-26, 83, 5, 5, DK, 1.5)}${rect(12, 85, 5, 5, DK, 1.5)}${rect(-25, 41, 5, 6, DK, 2)}${puff(17, 87, 1, 0)}`,
+    spec: [['Сухая масса', '17 кг'], ['Топливо', '9 кг'], ['Δv', '≈ 176 м/с'], ['Сопла пояса', '12 × 10 Н'], ['Сопла плеч', '8 × 6 Н'], ['Красного', '≈ 6 %']],
+    li: ['Сопла вокруг центра масс (таз): сдвиг без закрутки, поворот — парами пояс/плечи.',
+         'Продолжение экзоскелета: силовой пояс уже есть, кольцо сопел садится на него, баки — на спинные рейки.',
+         'Самый новый, «3000 год». Минус: сопла у бёдер — струи вдоль ног, надо беречь инструмент и соседей.'] },
+  { t: '4 · «Наплечный»', k: 'рама вокруг нашего ранца жизнеобеспечения: баки по бокам, маршевые на поясе, головки РСУ над плечами (идея Дэна)',
+    back: () => `${line(-26, 30, -26, 84, 1.8, FR)}${line(26, 30, 26, 84, 1.8, FR)}${line(-26, 30, 26, 30, 1.8, FR)}
+        ${rect(-19, 32, 38, 52, W2)}${rect(-15, 38, 30, 14, '#bdbcb6', 3)}
+        ${rect(-33, 44, 9, 26, W, 5)}${rect(24, 44, 9, 26, W, 5)}${rect(-32, 52, 7, 3, R, 1.5)}${rect(25, 52, 7, 3, R, 1.5)}
+        ${P(`M${cm(-24)},${cm(30)} L${cm(-30)},${cm(22)} L${cm(-20)},${cm(18)} L${cm(-14)},${cm(28)} Z`, W)}${P(`M${cm(24)},${cm(30)} L${cm(30)},${cm(22)} L${cm(20)},${cm(18)} L${cm(14)},${cm(28)} Z`, W)}
+        ${rect(-32, 16, 7, 6, DK, 2)}${rect(25, 16, 7, 6, DK, 2)}${nozzle(-32, 19, -1, 0)}${nozzle(32, 19, 1, 0)}${nozzle(-28.5, 16, 0, -1)}${nozzle(28.5, 16, 0, -1)}
+        ${circ(-9, 89, 4.5, DK)}${circ(9, 89, 4.5, DK)}${circ(-9, 89, 2.4, R)}${circ(9, 89, 2.4, R)}${rect(-31, 86, 5, 5, DK, 1.5)}${rect(26, 86, 5, 5, DK, 1.5)}`,
+    side: () => `${line(-27, 30, -27, 84, 1.8, FR)}${rect(-24, 32, 13, 52, W2)}${rect(-30, 44, 9, 26, W, 5)}
+        ${P(`M${cm(-18)},${cm(30)} L${cm(-6)},${cm(20)} L${cm(4)},${cm(20)} L${cm(0)},${cm(28)} Z`, W)}${rect(1, 17, 6, 6, DK, 2)}${nozzle(7, 20, 1, 0)}${nozzle(4, 17, 0, -1)}
+        ${P(`M${cm(-12)},${cm(85)} L${cm(-22)},${cm(83)} L${cm(-22)},${cm(95)} L${cm(-12)},${cm(93)} Z`, DK)}${puff(-22, 89, -1, 0)}`,
+    spec: [['Сухая масса', '22 кг'], ['Топливо', '9 кг'], ['Δv', '≈ 169 м/с'], ['Маршевые', '2 × 60 Н, на поясе, через центр масс'], ['РСУ', 'наплечные головки 2 × 6 + пояс 4 × 2 (× 8 Н)'], ['Красного', '≈ 7 %']],
+    li: ['Не заменяет ранец жизнеобеспечения — обнимает его рамой на спинных рейках и силовом поясе; ранец остаётся внутри.',
+         'Маршевые сопла на поясе за тазом: тяга проходит через центр масс человека — разгон без кувырка.',
+         'Наплечные головки РСУ, как у Дэна: большое плечо от плеч до таза — мягкий, точный поворот. Питание клапанов — от батареи скафандра.'] },
+
+];
+const grid = document.getElementById('grid');
+for (const c of concepts) {
+  const svg = `<svg viewBox="${cm(-45)} ${cm(-4)} ${cm(140)} ${cm(176)}" role="img" aria-label="${c.t}">
+     <g transform="translate(0,0)">${figBack()}${c.back()}</g>
+     <g transform="translate(${cm(75)},0)">${figSide()}${c.side()}</g></svg>`;
+  const rows = c.spec.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
+  grid.insertAdjacentHTML('beforeend', `<section class="card"><h2>${c.t}</h2><p class="k">${c.k}</p>${svg}<table>${rows}</table><ul>${c.li.map(x => `<li>${x}</li>`).join('')}</ul></section>`);
+}
+</script>
+</body>
+</html>

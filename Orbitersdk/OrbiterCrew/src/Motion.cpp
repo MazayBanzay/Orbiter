@@ -58,6 +58,7 @@ namespace ocrew
 		bLFoot = skin.Bone("LeftFoot"); bRFoot = skin.Bone("RightFoot");
 		bLFingers = skin.Bone("LeftHandFinger1"); bRFingers = skin.Bone("RightHandFinger1");
 		bLForeArm = skin.Bone("LeftForeArm"); bRForeArm = skin.Bone("RightForeArm"); bLHand = skin.Bone("LeftHand"); bRHand = skin.Bone("RightHand");
+		bLFingerBase = skin.Bone("LeftFingerBase"); bRFingerBase = skin.Bone("RightFingerBase"); bLThumb = skin.Bone("LThumb"); bRThumb = skin.Bone("RThumb");
 	}
 
 	void Motion::Update(const MotionInput& in, const ClipSet& clips, Skin& skin)
@@ -72,13 +73,25 @@ namespace ocrew
 		const double speed = in.grounded ? std::abs(in.fwd) + 0.5 * std::abs(in.lat) + 0.3 * std::abs(in.turn) : 0;
 		if (std::abs(in.fwd) > 0.05) dir = in.fwd < 0 ? -1 : 1;
 		const double tMove = in.grounded ? Smooth(0.03, 0.6 * walk.speed, speed) : wMove;
-		const double tRun = Smooth(1.3 * walk.speed, 0.9 * run.speed, speed);
+		// suit: blend by the clips' own speeds (unchanged). Coverall: walking (no Shift) is the walk clip at any speed up
+		// to the top walking speed; the run takes over only above it - never a half-walk, half-run mix while walking
+		const double tRunSuit = Smooth(1.3 * walk.speed, 0.9 * run.speed, speed);
+		const double top = in.walkTop > 0 ? in.walkTop : walk.speed;
+		const double tRunCov = Smooth(1.04 * top, 1.04 * top + 0.6, speed);
+		const double tRun = Lerp(tRunSuit, tRunCov, 1 - suitW);
 		wMove = Follow(wMove, tMove, tMove > wMove ? 0.12 : 0.22, dt);
 		wRun = Follow(wRun, tRun, 0.30, dt);
 
 		strideVar = Follow(strideVar, strideVarTarget, 0.4, dt);
 		const double vref = Lerp(walk.speed, run.speed, wRun);
-		const double stride = Lerp(walk.stride, run.stride, wRun) * (speed > vref ? std::sqrt(speed / vref) : 1.0) * strideVar;
+		// stride ~ sqrt(speed) around the clip's own speed, as people do: faster means longer steps and quicker cadence.
+		// Coverall: below the clip speed the step shortens too, instead of the same stride at a floating, slow cadence
+		// (the suit keeps its full stride and its own layer)
+		const double slower = Lerp(1.0, std::sqrt((std::max)(0.6, speed / vref)), 1 - suitW);
+		// above the clip speed: suit sqrt (as before); coverall grows the stride faster (the Neutral run is a jog, and
+		// people reach 5 m/s mostly with longer strides, not a frantic cadence)
+		const double grow = speed > vref ? std::pow(speed / vref, Lerp(0.5, 0.72, 1 - suitW)) : slower;
+		const double stride = Lerp(walk.stride, run.stride, wRun) * grow * strideVar;
 		const double effStride = stride * (std::max)(0.35, wMove);
 		const double before = phase;
 
@@ -128,7 +141,7 @@ namespace ocrew
 
 		// the head looks around at rest and into turns while moving
 		headYaw = Follow(headYaw, std::clamp(0.35 * in.turn, -0.35, 0.35), 0.25, dt);
-		skin.Turn(pOut, bNeck1, AX_UP, F(headYaw + rest * 0.22 * Noise(1, time * 0.12) + wMove * 0.04 * Noise(1, time * 0.5)));
+		skin.Turn(pOut, bNeck1, AX_UP, F(headYaw + rest * 0.22 * Noise(1, time * 0.12) + wMove * (1 - wRun * (1 - suitW)) * 0.04 * Noise(1, time * 0.5)));
 		skin.Turn(pOut, bHead, AX_LAT, F(rest * (0.05 * Noise(2, time * 0.19) + 0.10 * in.fatigue)));
 		skin.Turn(pOut, bHead, AX_FWD, F(rest * 0.03 * Noise(3, time * 0.15)));
 
@@ -143,22 +156,98 @@ namespace ocrew
 				crouchV += suitW * (0.25 + 0.12 * (std::min)(speed, 6.0));                                                 // the step lands: knees give
 		}
 
-		// ---- coverall: a living body, not a bare mocap replay (fades out in the suit, which has its own layer) ----
+		// ---- coverall: the suit's motion (same clips), lighter - she carries no suit: arms half as far out,
+		//      a narrower stance, a softer knee at each footfall. Fades out in the suit, which has its own layer ----
 		const double u = 1 - suitW;
 		if (u > 1e-3)
 		{
-			// hands: the capture has no real hand data; keep the relaxed hands of the idle pose on the moving forearms
-			skin.Reattach(pOut, pIdle, bLForeArm, bLHand, F(u));
-			skin.Reattach(pOut, pIdle, bRForeArm, bRHand, F(u));
-			// weight acceptance: the knee gives a little as each foot takes the body
-			if (footfalls && !settling) crouchV += u * (0.3 + 0.1 * (std::min)(speed, 5.0));
+			// walking: arms by the body, an ordinary stance (the clean-up is in the walk clip); running: the suit's
+			// arms-out and stance, halved
+			const double arms = u * (0.01 + 0.05 * wRun), stance = u * 0.015 * wRun;
+			skin.Turn(pOut, bLArm, AX_FWD, F(-arms)); skin.Turn(pOut, bRArm, AX_FWD, F(arms));                  // left arm is on -x
+			skin.Turn(pOut, bLUpLeg, AX_FWD, F(-stance)); skin.Turn(pOut, bRUpLeg, AX_FWD, F(stance));
+			skin.Turn(pOut, bLFoot, AX_FWD, F(stance)); skin.Turn(pOut, bRFoot, AX_FWD, F(-stance));            // soles stay flat
+			if (in.grounded && std::floor(before * 2) != std::floor(phase * 2) && !settling)
+				crouchV += u * (0.06 + wRun * (0.08 + 0.06 * (std::min)(speed, 6.0)));                          // the step lands: knees give
+			// fingers: the mesh carries a relaxed hand (fingers together, softly curled); running closes it into a fist
+			skin.SetMorph("fist", F(u * wRun));
+			skin.Reattach(pOut, pWalk, bLHand, bLFingerBase, F(u)); skin.Reattach(pOut, pWalk, bLHand, bLThumb, F(u));
+			skin.Reattach(pOut, pWalk, bRHand, bRFingerBase, F(u)); skin.Reattach(pOut, pWalk, bRHand, bRThumb, F(u));
+		}
+
+		// ---- blinking: every 2-6 s; the lid closes in 70 ms and opens in 120 ms (MORPH "blink", if the skin has it) ----
+		if (blinkT < 0 && (blinkIn -= dt) <= 0) { blinkT = 0; blinkIn = std::uniform_real_distribution<double>(2.0, 6.0)(rng); }
+		if (blinkT >= 0)
+		{
+			blinkT += dt;
+			const double w = blinkT < 0.07 ? blinkT / 0.07 : blinkT < 0.10 ? 1.0 : 1.0 - (blinkT - 0.10) / 0.12;
+			skin.SetMorph("blink", F(std::clamp(w, 0.0, 1.0)));
+			if (blinkT > 0.22) { blinkT = -1; skin.SetMorph("blink", 0.0f); }
+		}
+
+		// ---- weightlessness: the neutral body posture of people in orbit, slow drift of the limbs,
+		//      and limbs that lag behind the thrust (underdamped springs: they swing and settle) ----
+		floatW = Follow(floatW, in.floating ? 1.0 : 0.0, 0.8, dt);
+		{
+			const double K = 0.55, KR = 0.45, LIM = 0.35;   // rad per m/s^2 (and per rad/s^2): visible on the suit RCS, capped for strong packs
+			auto spring = [dt](double& x, double& v, double target)
+			{
+				const double w = 5.0, z = 0.45;   // muscles hold the limbs: one soft swing, then they settle
+				const int n = (std::max)(1, static_cast<int>(std::ceil(dt * w / 0.2))); const double h = dt / n;
+				for (int i = 0; i < n; ++i) { v += (w * w * (target - x) - 2 * z * w * v) * h; x += v * h; }
+			};
+			spring(swayZ, swayZV, in.floating ? std::clamp(K * in.thrustAcc.z + KR * in.angAcc.x + 0.35 * in.angVel.x, -LIM, LIM) : 0.0);    // forward thrust / pitch: limbs trail
+			spring(swayX, swayXV, in.floating ? std::clamp(-K * in.thrustAcc.x - KR * in.angAcc.y - 0.35 * in.angVel.y - 0.35 * in.angVel.z, -LIM, LIM) : 0.0);   // sideways / yaw: the other way
+			spring(swayY, swayYV, in.floating ? std::clamp(-K * in.thrustAcc.y, -LIM, LIM) : 0.0);
+		}
+		// under thrust she hangs from the pack: the felt acceleration (thrust, not gravity) straightens the legs downwards
+		hangW = Follow(hangW, in.floating ? std::clamp(length(in.thrustAcc) / 2.5, 0.0, 1.0) : 0.0, 0.5, dt);
+		jetW = Follow(jetW, in.jet && in.floating ? 1.0 : 0.0, 0.6, dt);
+		if (jetW > 1e-3)   // hands forward and in, elbows bent, as on handles: clear of the pods' jets
+			for (int sd = 0; sd < 2; ++sd)
+			{
+				const float out = sd ? 1.0f : -1.0f;
+				skin.Turn(pOut, sd ? bRArm : bLArm, AX_LAT, F(-0.15 * jetW));                 // a little forward
+				skin.Turn(pOut, sd ? bRArm : bLArm, AX_FWD, F(out * 0.14 * jetW));            // a little out, clear of the hips
+				skin.Turn(pOut, sd ? bRForeArm : bLForeArm, AX_LAT, F(-0.35 * jetW));         // elbows soft
+			}
+		if (hangW > 1e-3)   // hanging under the pack: knees soft, legs never quite still, they answer every turn
+			for (int sd = 0; sd < 2; ++sd)
+			{
+				const double h = hangW * floatW, n1 = Noise(sd + 1, time * 0.9 + 3 * sd), n2 = Noise(sd + 3, time * 1.3 + 7 * sd);
+				skin.Turn(pOut, sd ? bRUpLeg : bLUpLeg, AX_LAT, F(h * (-0.10 + 0.06 * n1) + swayZ * 0.9));
+				skin.Turn(pOut, sd ? bRLeg : bLLeg, AX_LAT, F(h * (0.22 + 0.08 * n2) + swayZ * 0.5));
+				skin.Turn(pOut, sd ? bRUpLeg : bLUpLeg, AX_FWD, F((sd ? 1.0 : -1.0) * h * 0.03 + swayX * 0.8));
+				skin.Turn(pOut, sd ? bRFoot : bLFoot, AX_LAT, F(h * (0.25 + 0.1 * n2)));   // toes drop when the feet hang
+			}
+		if (floatW > 1e-3)
+		{
+			const double fw = floatW * (1 - hangW);
+			for (int sd = 0; sd < 2; ++sd)
+			{
+				const int up = sd ? bRUpLeg : bLUpLeg, lo = sd ? bRLeg : bLLeg, ft = sd ? bRFoot : bLFoot;
+				const int ar = sd ? bRArm : bLArm, fa = sd ? bRForeArm : bLForeArm;
+				const float out = sd ? 1.0f : -1.0f;   // left limbs are on -x
+				// legs are never still in weightlessness: hips, knees and feet each drift on their own slow rhythm
+				const double dl = 0.14 * Noise(sd, time * 0.33 + 3 * sd), da = 0.09 * Noise(sd + 2, time * 0.19 + 5 * sd);
+				const double dk = 0.20 * Noise(sd + 1, time * 0.41 + 7 * sd), df = 0.18 * Noise(sd + 3, time * 0.53 + 11 * sd);
+				skin.Turn(pOut, up, AX_LAT, F(fw * (-0.40 + dl) + swayZ * 0.8));
+				skin.Turn(pOut, up, AX_FWD, F(out * fw * 0.06 + swayX * 0.6));
+				skin.Turn(pOut, lo, AX_LAT, F(fw * (0.75 + dk) + swayZ * 0.6));
+				skin.Turn(pOut, ft, AX_LAT, F(fw * (-0.25 + df) + swayZ * 0.3));
+				skin.Turn(pOut, ft, AX_FWD, F(out * fw * 0.5 * df));
+				skin.Turn(pOut, ar, AX_FWD, F(out * fw * (1 - jetW) * (0.30 + da) + swayX * (1 - 0.6 * jetW) + out * swayY * 0.5));
+				skin.Turn(pOut, ar, AX_LAT, F(fw * (1 - jetW) * (-0.30 + da) + swayZ * (1 - 0.6 * jetW)));
+				skin.Turn(pOut, fa, AX_LAT, F(fw * -0.35 + swayZ * 0.5));
+			}
+			skin.Turn(pOut, bLowerBack, AX_LAT, F(fw * 0.10 - swayZ * 0.3));   // a slight forward hunch, the trunk lags too
 		}
 
 		// ---- crouch: absorbs landings, tucks the legs in the air ----
 		if (in.landing > 0) crouchV += (std::min)(in.landing, 6.0) * 0.9;
 		crouch = std::clamp(crouch + crouchV * dt, 0.0, 0.9);
 		crouchV += (-81 * crouch - 12.6 * crouchV) * dt;   // w 9 rad/s, damping 0.7
-		tuck = Follow(tuck, in.grounded ? 0.0 : 0.45, in.grounded ? 0.08 : 0.15, dt);
+		tuck = Follow(tuck, in.grounded || in.floating ? 0.0 : 0.45, in.grounded ? 0.08 : 0.15, dt);
 		const double knee = (std::max)(crouch, tuck);
 		if (knee > 1e-3)
 		{

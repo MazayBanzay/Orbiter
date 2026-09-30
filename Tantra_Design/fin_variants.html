@@ -1,0 +1,229 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Тантра: спинной гребень</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#f4f2ee;--text:#1b1b1b;--muted:#5a5a5a;--accent:#3b6fd6;--border:#c9c5bd}
+body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;margin:16px}
+h1{font-size:18px;margin:0 0 8px}h2{font-size:16px;margin:18px 0 6px}
+#wrap{position:relative;border-radius:12px;overflow:hidden;background:#0b0c10}
+#c3{width:100%;height:520px}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+.b{font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text);cursor:pointer}
+.b.on{border:2px solid var(--accent);padding:5px 11px}
+canvas.pl{background:#15161a;border-radius:10px;margin-top:10px;width:100%;max-width:1150px}
+table{border-collapse:collapse;font-size:13px;max-width:1150px}td,th{border:1px solid var(--border);padding:4px 8px;text-align:left;vertical-align:top}th{background:#e9e5de}
+td.best{background:#dff0d8}td.bad{background:#f6dcd6}
+.note{font-size:13px;color:var(--muted);margin-top:10px;line-height:1.5;max-width:1150px}.note b{color:var(--text)}
+</style></head><body>
+<h1>«Тантра», корпус Б — спинной гребень (он же радиатор): семь вариантов</h1>
+<div id="wrap"><div id="c3"></div></div>
+<div class="row" id="vb"></div>
+<div class="row">
+  <button class="b" data-v="q">3/4</button><button class="b" data-v="side">Сбоку</button><button class="b" data-v="top">Сверху</button>
+  <button class="b" data-v="aft">С кормы</button><button class="b" data-v="front">С носа</button><button class="b" id="xr">Рентген</button><button class="b" id="rot">Вращение</button>
+</div>
+<canvas class="pl" id="sil" width="1150" height="330"></canvas>
+<h2>Короткий расчёт</h2>
+<div id="tab"></div>
+<div class="note" id="concl"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+const D=Math.PI/180, L_SHIP=146, NS=96, MASS=2.9e6, SCG=53;
+const sm5=t=>{t=Math.max(0,Math.min(1,t));return t*t*t*(t*(6*t-15)+10);};
+function lerpP(a,b,t){const o={};for(const k in a){o[k]=Array.isArray(a[k])?[a[k][0]+(b[k][0]-a[k][0])*t,a[k][1]+(b[k][1]-a[k][1])*t]:a[k]+(b[k]-a[k])*t;}return o;}
+function fillet(pts,rad,n){const out=[],m=pts.length;
+  for(let i=0;i<m;i++){const p0=pts[(i-1+m)%m],p1=pts[i],p2=pts[(i+1)%m];
+    let ax=p0[0]-p1[0],ay=p0[1]-p1[1],bx=p2[0]-p1[0],by=p2[1]-p1[1];const la=Math.hypot(ax,ay),lb=Math.hypot(bx,by);ax/=la;ay/=la;bx/=lb;by/=lb;
+    const ang=Math.acos(Math.max(-1,Math.min(1,ax*bx+ay*by)));let r=rad[i];if(r<=0||ang>Math.PI-1e-3){out.push(p1);continue;}
+    let t=Math.min(r/Math.tan(ang/2),0.49*la,0.49*lb);r=t*Math.tan(ang/2);const q0=[p1[0]+ax*t,p1[1]+ay*t],q1=[p1[0]+bx*t,p1[1]+by*t];
+    let hx=ax+bx,hy=ay+by;const hl=Math.hypot(hx,hy);hx/=hl;hy/=hl;const d=r/Math.sin(ang/2),c=[p1[0]+hx*d,p1[1]+hy*d];
+    const t0=Math.atan2(q0[1]-c[1],q0[0]-c[0]),t1=Math.atan2(q1[1]-c[1],q1[0]-c[0]);let dt=t1-t0;while(dt>Math.PI)dt-=2*Math.PI;while(dt<-Math.PI)dt+=2*Math.PI;
+    for(let k=0;k<=n;k++){const th=t0+dt*k/n;out.push([c[0]+r*Math.cos(th),c[1]+r*Math.sin(th)]);}}return out;}
+function polyOf(P){const pts=[P.B,P.C,P.T,[0,P.ya],[-P.T[0],P.T[1]],[-P.C[0],P.C[1]],[-P.B[0],P.B[1]]];return fillet(pts,[P.rb,P.rc,P.rt,P.ra,P.rt,P.rc,P.rb],10);}
+function resample(poly,N){const m=poly.length;let i0=0,best=1e9;for(let i=0;i<m;i++){if(poly[i][1]<0&&Math.abs(poly[i][0])<best){best=Math.abs(poly[i][0]);i0=i;}}
+  const pts=[];for(let k=0;k<=m;k++)pts.push(poly[(i0+k)%m]);pts[0]=[0,poly[i0][1]];pts[m]=pts[0];
+  const cum=[0];for(let k=1;k<=m;k++)cum.push(cum[k-1]+Math.hypot(pts[k][0]-pts[k-1][0],pts[k][1]-pts[k-1][1]));
+  const tot=cum[m],out=[];let j=0;for(let k=0;k<N;k++){const d=tot*k/N;while(cum[j+1]<d)j++;const f=(d-cum[j])/(cum[j+1]-cum[j]||1);out.push([pts[j][0]+(pts[j+1][0]-pts[j][0])*f,pts[j][1]+(pts[j+1][1]-pts[j][1])*f]);}
+  if(out[1][0]<0)out.reverse(),out.unshift(out.pop());return out;}
+function inside(poly,x,y){let c=false;for(let i=0,n=poly.length;i<n;i++){const [x1,y1]=poly[i],[x2,y2]=poly[(i+1)%n];if((y1>y)!==(y2>y)&&x<(x2-x1)*(y-y1)/(y2-y1)+x1)c=!c;}return c;}
+const areaOf=sec=>{let a=0;for(let i=0;i<sec.length;i++){const p=sec[i],q=sec[(i+1)%sec.length];a+=p[0]*q[1]-q[0]*p[1];}return Math.abs(a)/2;};
+function octs(cs){const o=[];cs.forEach(([cx,cy])=>{const h=5.05,ch=3.25;o.push([cx-h+ch,cy-h],[cx+h-ch,cy-h],[cx+h,cy-h+ch],[cx+h,cy+h-ch],[cx+h-ch,cy+h],[cx-h+ch,cy+h],[cx-h,cy+h-ch],[cx-h,cy-h+ch]);});return o;}
+
+// ---------------- the variants ----------------
+const FORE={B:[5.4,-8.7],C:[8.9,-3.4],T:[6.8,5.0],ya:8.9,rb:1.6,rc:2.5,rt:4.5,ra:5.6};
+const FORE_SHARP={B:[5.4,-8.7],C:[9.0,-3.8],T:[6.8,5.0],ya:8.9,rb:1.6,rc:0.8,rt:4.5,ra:5.6};
+const CASS22=[[5.55,-3.15],[-5.55,-3.15],[5.55,7],[-5.55,7]], CASS4=[[5.1,-1.5],[-5.1,-1.5],[15.3,-1.5],[-15.3,-1.5]];
+const HANGAR=[[6.6,3.2],[-6.6,3.2],[7.5,1.4],[-7.5,1.4],[0,6.2],[4.2,-8.3],[-4.2,-8.3],[4.2,-3.0],[2.0,5.5],[-2.0,5.5]];
+const V=[
+ {id:'c147',name:'C-147 (сейчас, «утюг»)',col:'#c9b27a',
+  keys:[[0,{B:[10.5,-12.3],C:[13.0,-5.0],T:[11.8,8.5],ya:13.2,rb:3,rc:2,rt:5,ra:12}],[8,{B:[11.0,-9.6],C:[14.2,-4.2],T:[13.0,10.0],ya:15.2,rb:3,rc:2,rt:5,ra:10}],
+        [47,{B:[11.0,-9.6],C:[14.2,-4.2],T:[13.0,10.0],ya:15.2,rb:3,rc:2,rt:5,ra:10}],[62,FORE],[122,FORE]],
+  cass:CASS22, stern:{type:'well'}, crest:{x0:13.9,x1:25.5,y:-4.2,le0:28,le1:21,te0:6,te1:11}, flap:{half:7,ch:3}, dorsal:true, lifts:2},
+ {id:'b',name:'Б: 2×2 облагороженный',col:'#8fc0a0',
+  keys:[[0,{B:[10.8,-12.3],C:[13.4,-4.6],T:[10.4,10.2],ya:12.8,rb:3,rc:0.8,rt:3,ra:7}],[8,{B:[11.2,-9.6],C:[14.6,-4.0],T:[11.0,12.0],ya:14.4,rb:3,rc:0.8,rt:3,ra:6}],
+        [47,{B:[11.2,-9.6],C:[14.6,-4.0],T:[11.0,12.0],ya:14.4,rb:3,rc:0.8,rt:3,ra:6}],[75,FORE_SHARP],[122,FORE_SHARP]],
+  cass:CASS22, stern:{type:'well'}, crest:{x0:14.3,x1:27.4,y:-4.0,le0:28,le1:21,te0:6,te1:11}, flap:{half:7,ch:3}, dorsal:true, lifts:2},
+ {id:'a',name:'А: «скат» (кассеты в ряд)',col:'#8fa8d8',
+  keys:[[0,{B:[17.0,-7.8],C:[22.0,-1.8],T:[18.0,4.8],ya:7.2,rb:3,rc:0.8,rt:3,ra:16}],[8,{B:[17.5,-7.4],C:[23.2,-1.8],T:[19.0,4.8],ya:7.4,rb:3,rc:0.8,rt:3,ra:16}],
+        [46,{B:[17.5,-7.4],C:[23.2,-1.8],T:[19.0,4.8],ya:7.4,rb:3,rc:0.8,rt:3,ra:16}],[79,FORE_SHARP],[122,FORE_SHARP]],
+  cass:CASS4, stern:{type:'block',w:34,h:9,y:-1}, crest:null, edgeEl:{x0:17.5,x1:23,ch:5,y:-1.8}, flap:{half:9,ch:3}, fins:true, lifts:4}];
+
+// ---------------- geometry per variant ----------------
+function makeSections(v){const K=v.keys,NB=K[K.length-1][0];
+  const base=resample(polyOf(K[K.length-1][1]),NS);const yMin=Math.min(...base.map(p=>p[1])),yMax=Math.max(...base.map(p=>p[1])),Y0=(yMin+yMax)/2,RN=(yMax-yMin)/2;
+  const NL=L_SHIP-NB,RHO=(RN*RN+NL*NL)/(2*RN),rn=1.8,XS=NL-Math.sqrt((RHO-rn)**2-(RHO-RN)**2),XT=XS-rn*(NL-XS)/(RHO-rn),TIP=XS-rn;
+  const f=x=>x<=TIP?0:(x<XT?Math.sqrt(Math.max(0,rn*rn-(x-XS)**2))/RN:(Math.sqrt(RHO*RHO-(NL-x)**2)+RN-RHO)/RN);
+  const at=s=>{if(s<=NB){for(let i=0;i<K.length-1;i++){const[a,pa]=K[i],[b,pb]=K[i+1];if(s<=b)return resample(polyOf(lerpP(pa,pb,sm5((s-a)/(b-a)))),NS);}}
+    const k=f(L_SHIP-s);return base.map(p=>[p[0]*k,Y0+(p[1]-Y0)*k]);};
+  const st=[];for(let s=0;s<NB;s+=1)st.push(s);for(let s=NB;s<L_SHIP-TIP-2;s+=0.75)st.push(s);for(let k=0;k<=12;k++)st.push(L_SHIP-(TIP+2*(1-k/12)));
+  return {at,st,tip:[L_SHIP-TIP,Y0]};}
+V.forEach(v=>{v.S=makeSections(v);});
+
+// ---------------- scene ----------------
+const el=document.getElementById('c3');const R=new THREE.WebGLRenderer({antialias:true});R.setPixelRatio(Math.min(2,window.devicePixelRatio||1));el.appendChild(R.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0xbfcad6);const cam=new THREE.PerspectiveCamera(32,1,1,5000);const ctl=new THREE.OrbitControls(cam,R.domElement);ctl.enableDamping=true;
+scene.add(new THREE.HemisphereLight(0xe6ecf4,0x5b4a3a,0.7));const sun=new THREE.DirectionalLight(0xffffff,0.95);sun.position.set(-120,200,140);scene.add(sun);const sun2=new THREE.DirectionalLight(0x9aa6bb,0.35);sun2.position.set(150,-60,-100);scene.add(sun2);
+function resize(){const w=Math.max(1,el.clientWidth),h=Math.max(1,el.clientHeight);R.setSize(w,h,false);R.domElement.style.width='100%';R.domElement.style.height='100%';cam.aspect=w/h;cam.updateProjectionMatrix();}resize();window.addEventListener('resize',resize);
+const grid=new THREE.GridHelper(400,40,0x8a8f99,0xa3a8b1);grid.position.set(73,-24,0);scene.add(grid);
+const M=(c,o)=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:0.6,metalness:0.3},o||{}));
+const V3=(x,y,z)=>new THREE.Vector3(x,y,z);
+function plateGeom(q,t){const e1=new THREE.Vector3().subVectors(q[2],q[0]),e2=new THREE.Vector3().subVectors(q[3],q[1]),n=new THREE.Vector3().crossVectors(e1,e2).normalize().multiplyScalar(t/2);
+  const v=[];q.forEach(p=>v.push(p.x+n.x,p.y+n.y,p.z+n.z));q.forEach(p=>v.push(p.x-n.x,p.y-n.y,p.z-n.z));const f=[0,1,2,0,2,3,4,6,5,4,7,6,0,4,5,0,5,1,1,5,6,1,6,2,2,6,7,2,7,3,3,7,4,3,4,0];
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));g.setIndex(f);g.computeVertexNormals();return g;}
+function zoneColor(s,nb){const lac=[0.73,0.70,0.65],ir=[0.80,0.76,0.66],sh=[0.55,0.54,0.52];const w=(a,b,e)=>sm5((s-a)/e)*(1-sm5((s-b)/e));
+  const kn=sm5((s-(nb-0.5))/1.0),ks=w(48,63,0.6),c=lac.slice();for(let i=0;i<3;i++)c[i]=c[i]*(1-kn-ks)+ir[i]*kn+sh[i]*ks;return c;}
+// control surface corners (ship coords): trailing edge down by d (deg)
+function crestFns(c){const LE=x=>c.le0+(c.le1-c.le0)*(x-c.x0)/(c.x1-c.x0),TE=x=>c.te0+(c.te1-c.te0)*(x-c.x0)/(c.x1-c.x0),H=x=>TE(x)+0.3*(LE(x)-TE(x));return {LE,TE,H};}
+function elevonCorners(v,sg,d){const c=Math.cos(d*D),s=Math.sin(d*D);
+  if(v.crest){const k=v.crest,f=crestFns(k),xa=k.x0+(k.x1-k.x0)*0.4,xb=k.x1;const P=(x,t)=>{const h=f.H(x);if(!t)return V3(h,k.y,sg*x);const dd=h-f.TE(x);return V3(h-dd*c,k.y-dd*s,sg*x);};return [P(xa,0),P(xb,0),P(xb,1),P(xa,1)];}
+  const e=v.edgeEl;return [V3(0,e.y,sg*e.x0),V3(0,e.y,sg*e.x1),V3(-e.ch*c,e.y-e.ch*s,sg*e.x1),V3(-e.ch*c,e.y-e.ch*s,sg*e.x0)];}
+function flapCorners(v,d){const yH=v.S.at(2).reduce((m,p)=>Math.min(m,p[1]),1e9),h=v.flap.half,ch=v.flap.ch,c=Math.cos(d*D),s=Math.sin(d*D);
+  return [V3(2,yH,-h),V3(2,yH,h),V3(2-ch*c,yH-ch*s,h),V3(2-ch*c,yH-ch*s,-h)];}
+function buildModel(v){const g=new THREE.Group();const S=v.S,nb=v.keys[v.keys.length-1][0];
+  const pos=[],col=[],idx=[];S.st.forEach(s=>{const sec=S.at(s),c=zoneColor(s,nb);sec.forEach(p=>{pos.push(s,p[1],p[0]);col.push(...c);});});
+  for(let i=0;i<S.st.length-1;i++)for(let k=0;k<NS;k++){const a=i*NS+k,b=i*NS+(k+1)%NS,c2=(i+1)*NS+(k+1)%NS,d=(i+1)*NS+k;idx.push(a,b,d,b,c2,d);}
+  const tI=pos.length/3;pos.push(S.tip[0],S.tip[1],0);col.push(0.8,0.76,0.66);const last=(S.st.length-1)*NS;for(let k=0;k<NS;k++)idx.push(last+k,last+(k+1)%NS,tI);
+  const hg=new THREE.BufferGeometry();hg.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));hg.setAttribute('color',new THREE.Float32BufferAttribute(col,3));hg.setIndex(idx);hg.computeVertexNormals();
+  v.hullMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.55,metalness:0.25,side:THREE.DoubleSide});g.add(new THREE.Mesh(hg,v.hullMat));
+  // stern face
+  const sec=S.at(0),sh=new THREE.Shape();sec.forEach((p,i)=>i?sh.lineTo(p[0],p[1]):sh.moveTo(p[0],p[1]));
+  if(v.stern.type==='well'){const hole=new THREE.Path();hole.absarc(0,0,11.8,0,2*Math.PI,true);sh.holes.push(hole);
+    const w=new THREE.Mesh(new THREE.CylinderGeometry(11.8,11.8,4.2,64,1,true),M(0x5d646e,{side:THREE.DoubleSide}));w.rotation.z=Math.PI/2;w.position.x=-1.9;g.add(w);
+    const bp=new THREE.Mesh(new THREE.CircleGeometry(11.8,64),M(0x23262b));bp.rotation.y=-Math.PI/2;bp.position.x=0.1;g.add(bp);
+    [[4.4,4.4],[-4.4,4.4],[4.4,-4.4],[-4.4,-4.4]].forEach(([y,z])=>{const c=new THREE.Mesh(new THREE.CircleGeometry(3.2,24),M(0x6a58b0,{emissive:0x1a1040}));c.rotation.y=-Math.PI/2;c.position.set(-0.5,y,z);g.add(c);});}
+  else{const b=v.stern,hole=new THREE.Path();hole.moveTo(-b.w/2,b.y-b.h/2);hole.lineTo(-b.w/2,b.y+b.h/2);hole.lineTo(b.w/2,b.y+b.h/2);hole.lineTo(b.w/2,b.y-b.h/2);sh.holes.push(hole);
+    const box=new THREE.Mesh(new THREE.BoxGeometry(3.5,b.h,b.w),M(0x5d646e,{side:THREE.DoubleSide}));box.position.set(-1.6,b.y,0);g.add(box);
+    [-13.2,-4.4,4.4,13.2].forEach(z=>{const c=new THREE.Mesh(new THREE.CircleGeometry(3.2,24),M(0x6a58b0,{emissive:0x1a1040}));c.rotation.y=-Math.PI/2;c.position.set(-3.4,b.y,z);g.add(c);});
+    [-15.5,-11,-6.6,-2.2,2.2,6.6,11,15.5].forEach(z=>{[b.y+3.7,b.y-3.7].forEach(y=>{const c=new THREE.Mesh(new THREE.CircleGeometry(0.75,12),M(0xc0a0f0,{emissive:0x302050}));c.rotation.y=-Math.PI/2;c.position.set(-3.4,y,z);g.add(c);});});}
+  const face=new THREE.Mesh(new THREE.ShapeGeometry(sh,4),M(0x2e3136,{side:THREE.DoubleSide}));face.rotation.y=Math.PI/2;g.add(face);
+  const mC=M(0x4a4640,{roughness:0.45}),mF=M(0x5a554d,{roughness:0.4});v.el=[];
+  if(v.crest){const k=v.crest,f=crestFns(k),o=k.x0,xa=o+(k.x1-o)*0.4;[-1,1].forEach(sg=>{const s2=new THREE.Shape();
+      s2.moveTo(f.TE(o),0);s2.lineTo(f.LE(o),0);s2.lineTo(f.LE(k.x1),k.x1-o);s2.lineTo(f.H(k.x1),k.x1-o);s2.lineTo(f.H(xa),xa-o);s2.lineTo(f.TE(xa),xa-o);s2.lineTo(f.TE(o),0);
+      const cg=new THREE.ExtrudeGeometry(s2,{depth:0.7,bevelEnabled:true,bevelThickness:0.25,bevelSize:0.45,bevelSegments:3});cg.translate(0,0,-0.35);
+      const m=new THREE.Mesh(cg,mC);m.rotation.x=Math.PI/2*sg;m.position.set(0,k.y,sg*o);g.add(m);});}
+  [-1,1].forEach(sg=>{const m=new THREE.Mesh(plateGeom(elevonCorners(v,sg,0),0.5),mF);g.add(m);v.el.push({sg,m});});
+  v.fl=new THREE.Mesh(plateGeom(flapCorners(v,0),0.5),mF);g.add(v.fl);
+  if(v.dorsal){const s3=new THREE.Shape();s3.moveTo(4,0);s3.lineTo(44,0);s3.lineTo(33,20);s3.lineTo(12,20);s3.lineTo(4,0);const dg=new THREE.ExtrudeGeometry(s3,{depth:0.6,bevelEnabled:true,bevelThickness:0.3,bevelSize:0.45,bevelSegments:3});dg.translate(0,0,-0.3);
+    const m=new THREE.Mesh(dg,mC);m.position.y=v.keys[1][1].ya-0.8;g.add(m);}
+  if(v.fins){[-1,1].forEach(sg=>{const s3=new THREE.Shape();s3.moveTo(2,0);s3.lineTo(24,0);s3.lineTo(16,11);s3.lineTo(7,11);s3.lineTo(2,0);const dg=new THREE.ExtrudeGeometry(s3,{depth:0.5,bevelEnabled:true,bevelThickness:0.25,bevelSize:0.4,bevelSegments:3});dg.translate(0,0,-0.25);
+    const m=new THREE.Mesh(dg,mC);m.position.set(0,3.2,sg*18.5);m.rotation.x=-sg*20*D;g.add(m);});}   // twin fins canted outboard, over the wing roots
+  // x-ray payload
+  const xr=new THREE.Group();xr.visible=false;g.add(xr);const gh=c=>new THREE.MeshStandardMaterial({color:c,transparent:true,opacity:0.55});
+  v.cass.forEach(([x,y])=>{const h=4.9,ch=3.2,s4=new THREE.Shape();[[x-h+ch,y-h],[x+h-ch,y-h],[x+h,y-h+ch],[x+h,y+h-ch],[x+h-ch,y+h],[x-h+ch,y+h],[x-h,y+h-ch],[x-h,y-h+ch]].forEach((p,i)=>i?s4.lineTo(p[0],p[1]):s4.moveTo(p[0],p[1]));
+    const m=new THREE.Mesh(new THREE.ExtrudeGeometry(s4,{depth:24.8,bevelEnabled:false}),gh(0x7080a8));m.rotation.y=Math.PI/2;m.position.x=21.5;xr.add(m);});
+  {const s5=new THREE.Mesh(new THREE.CylinderGeometry(2,2,18,20),gh(0xd8d0b8));s5.rotation.z=Math.PI/2;s5.position.set(90,3.9,0);xr.add(s5);const rb=new THREE.Mesh(new THREE.BoxGeometry(17,5.3,8.4),gh(0x9a8f7a));rb.position.set(90,-5.65,0);xr.add(rb);}
+  v.xr=xr;v.group=g;return g;}
+V.forEach(v=>{scene.add(buildModel(v));v.group.visible=false;});
+let cur=V[0];cur.group.visible=true;
+
+// ---------------- dorsal crest variants on hull B ----------------
+const HB=V[1]; HB.dorsal=false; scene.remove(HB.group); scene.add(buildModel(HB)); HB.group.visible=true; cur=HB;
+V.forEach(v=>{if(v!==HB)v.group.visible=false;});
+const topY=s=>Math.max(...HB.S.at(Math.max(0,Math.min(145,s))).map(p=>p[1]));
+const topAtX=(s,x)=>{const sec=HB.S.at(s);let best=-1e9;for(let i=0;i<sec.length;i++){const p=sec[i],q=sec[(i+1)%sec.length];if((p[0]-x)*(q[0]-x)<=0&&p[1]>0){const t=(x-p[0])/((q[0]-p[0])||1e-9);best=Math.max(best,p[1]+(q[1]-p[1])*t);}}return best;};
+const mFin=M(0x4a4640,{roughness:0.45}), mSpine=M(0x9a958b,{roughness:0.5,metalness:0.3});
+// outline in (s, h above the hull top); h = 0 on the root
+const FINS=[
+ {id:'trap',name:'1. Трапеция (сейчас)',pts:[[4,0],[44,0],[33,20],[12,20]]},
+ {id:'swept',name:'2. Стреловидный, кромка от плеча',pts:[[3,0],[46,0],[20,19],[9,19]],note:'передняя кромка начинается у излома плеча (s 46) и идёт назад под ~55°'},
+ {id:'shark',name:'3. Серповидный («плавник»)',curve:true,note:'вогнутая передняя кромка, скруглённая вершина, задняя кромка с подрезом'},
+ {id:'spine',name:'4. Стреловидный + хребет по плечу',pts:[[3,0],[46,0],[20,19],[9,19]],spine:true,note:'передняя кромка продолжается низким хребтом по склону плеча до носовой части — одна линия'},
+ {id:'low',name:'5. Низкий длинный гребень',pts:[[3,0],[46,0],[30,13],[10,13]],note:'та же площадь при меньшей высоте'},
+ {id:'twin',name:'6. Два наклонных киля',twin:true,note:'на верхних скулах, развал 20° наружу; в межзвёздном полёте ложатся на спину'},
+ {id:'wide',name:'7. Стреловидный широкий (площадь трапеции)',pts:[[3,0],[46,0],[36,6],[27,20.5],[6,20.5]],spine:true,note:'передняя кромка с наплывом от плеча, широкая вершина — площадь радиатора как у трапеции, линия продолжается хребтом'}];
+function sharkPts(){const P=[];const q=(a,b,c,t)=>[(1-t)*(1-t)*a[0]+2*(1-t)*t*b[0]+t*t*c[0],(1-t)*(1-t)*a[1]+2*(1-t)*t*b[1]+t*t*c[1]];
+  for(let i=0;i<=16;i++)P.push(q([46,0],[26,3],[13,19.5],i/16));          // concave leading edge
+  for(let i=1;i<=8;i++)P.push(q([13,19.5],[9,21],[7.5,17],i/8));           // rounded tip
+  for(let i=1;i<=10;i++)P.push(q([7.5,17],[9,8],[3,0],i/10));              // trailing edge with a notch line
+  return P;}
+FINS.forEach(f=>{if(f.curve)f.pts=sharkPts();});
+function finMesh(f){const g=new THREE.Group();
+  const shapeOf=(pts,x0)=>{const sh=new THREE.Shape();pts.forEach(([s,h],i)=>{const y=h+topAtX(s,x0)-0.4;i?sh.lineTo(s,y):sh.moveTo(s,y);});sh.closePath();return sh;};
+  if(!f.twin){const geo=new THREE.ExtrudeGeometry(shapeOf(f.pts,0),{depth:0.6,bevelEnabled:true,bevelThickness:0.3,bevelSize:0.45,bevelSegments:3});geo.translate(0,0,-0.3);g.add(new THREE.Mesh(geo,mFin));}
+  else{const pts=[[4,0],[40,0],[26,13],[12,13]];[-1,1].forEach(sg=>{const sh=new THREE.Shape();pts.forEach(([s,h],i)=>i?sh.lineTo(s,h):sh.moveTo(s,h));sh.closePath();
+    const geo=new THREE.ExtrudeGeometry(sh,{depth:0.5,bevelEnabled:true,bevelThickness:0.25,bevelSize:0.4,bevelSegments:3});geo.translate(0,0,-0.25);
+    const m=new THREE.Mesh(geo,mFin);const x=9.0;m.position.set(0,topAtX(20,x)-0.3,sg*x);m.rotation.x=-sg*20*D;g.add(m);});}
+  if(f.spine){const pos=[],idx=[];const N=40;for(let i=0;i<=N;i++){const s=46+i*34/N,h=2.4*(1-i/N)**1.3,y=topY(s);
+      [[-1.2*(1-i/N)-0.3,y-0.3],[0,y+h],[1.2*(1-i/N)+0.3,y-0.3]].forEach(([z,yy])=>pos.push(s,yy,z));}
+    for(let i=0;i<N;i++){const a=i*3,b=(i+1)*3;idx.push(a,b,a+1,a+1,b,b+1,a+1,b+1,a+2,a+2,b+1,b+2);}
+    const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setIndex(idx);geo.computeVertexNormals();
+    g.add(new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0xb9b3a7,roughness:0.55,metalness:0.25,side:THREE.DoubleSide})));}
+  return g;}
+FINS.forEach(f=>{f.group=finMesh(f);f.group.visible=false;scene.add(f.group);});
+let curFin=FINS[3];curFin.group.visible=true;
+
+// ---------------- short calculation ----------------
+function polyArea(p){let a=0,cs=0,ch=0;for(let i=0;i<p.length;i++){const[x1,y1]=p[i],[x2,y2]=p[(i+1)%p.length];const c=x1*y2-x2*y1;a+=c;cs+=(x1+x2)*c;ch+=(y1+y2)*c;}a/=2;return {A:Math.abs(a),s:cs/(6*a),h:ch/(6*a)};}
+FINS.forEach(f=>{const P=f.twin?[[4,0],[40,0],[26,13],[12,13]]:f.pts,g=polyArea(P);const n=f.twin?2:1;
+  const eff=f.twin?Math.cos(20*D)**2:1;           // side force of a canted fin ~ cos^2
+  f.A=g.A*n;f.sc=g.s;f.hc=g.h;f.H=Math.max(...P.map(p=>p[1]));f.vol=g.A*n*eff*(SCG-g.s);
+  const le=P.reduce((m,p)=>p[0]>m[0]?p:m,P[0]);f.root=[Math.min(...P.filter(p=>p[1]<0.01).map(p=>p[0])),Math.max(...P.filter(p=>p[1]<0.01).map(p=>p[0]))];
+  f.retract=f.twin?'складываются на спину (шарнир у корня)':(f.H<=21&&f.root[0]>=2&&f.root[1]<=46.5?`вниз в щель между кассетами (высота ${f.H.toFixed(0)} м ≤ 21)`:'НЕ помещается в щель');});
+const base=FINS[0].vol;
+// radiator: both faces, view factor to space (centre fin sees the hull top, canted twins see the hull and each other)
+const rad=(f,T)=>2*f.A*(f.twin?0.8:0.9)*0.85*5.67e-8*T**4/1e6;
+let h='<table><tr><th>Вариант</th><th>Площадь пера</th><th>Высота</th><th>Радиатор: сброс при 700 K / 1000 K / 1500 K</th><th>Курс (площадь × плечо), к трапеции</th><th>Уборка</th><th>Особенность</th></tr>';
+FINS.forEach(f=>{h+=`<tr><td>${f.name}</td><td>${f.A.toFixed(0)} м²</td><td>${f.H.toFixed(0)} м</td><td>${rad(f,700).toFixed(0)} / ${rad(f,1000).toFixed(0)} / ${rad(f,1500).toFixed(0)} МВт</td><td>${(f.vol/base*100).toFixed(0)} %</td><td>${f.retract}</td><td>${f.note||'—'}</td></tr>`;});
+document.getElementById('tab').innerHTML=h+'</table>';
+// ---- strength: design case = ascent max-q nose-first (q 40 kPa) with 5 deg sideslip (wind shear); hot radiator skin
+{const q=40e3,beta=5*D,sig=300e6,depth=1.1;
+ let t='<h2>Прочность пера (расчётный случай: подъём, скоростной напор 40 кПа, скольжение 5°, обшивка горячая)</h2><table><tr><th>Вариант</th><th>Удлинение (с корпусом)</th><th>Боковая сила</th><th>Момент в корне</th><th>Нужная обшивка коробки (σ 300 МПа при 1500 K)</th></tr>';
+ FINS.forEach(f=>{const P=f.twin?[[4,0],[40,0],[26,13],[12,13]]:f.pts,n=f.twin?2:1,S=f.A/n,Hh=f.H,A=2*Hh*Hh/S,cla=Math.PI*A/(1+Math.sqrt(1+(A/2)**2));
+   const F=q*cla*beta*S,M=F*f.hc,cr=f.root[1]-f.root[0],ts=M/(sig*0.7*cr*depth);
+   f.F=F;f.M=M;t+=`<tr><td>${f.name}</td><td>${A.toFixed(2)}</td><td>${(F/1e6).toFixed(1)} МН${n>1?' на киль':''}</td><td>${(M/1e6).toFixed(0)} МН·м</td><td>${(ts*1000).toFixed(1)} мм + теплотрубки</td></tr>`;});
+ document.getElementById('tab').insertAdjacentHTML('beforeend',t+'</table>');}
+// ---- flight: directional stability of the whole ship at low angle of attack (slender-body Munk moment vs fin)
+{const vol=HB.m?HB.m.vol:53000;let volB=0;const st=HB.S.st;for(let i=0;i<st.length-1;i++)volB+=areaOf(HB.S.at(st[i]))*(st[i+1]-st[i]);
+ const munk=2*volB;   // destabilising yaw moment per rad per unit q, m^3
+ let t='<h2>Полёт: устойчивость по курсу при малом угле атаки (подъём носом вперёд)</h2><table><tr><th>Вариант</th><th>Восстанавливающий момент гребня (на рад, на q)</th><th>к дестабилизирующему моменту корпуса</th><th>Нужная площадь пера для статической устойчивости</th></tr>';
+ FINS.forEach(f=>{const n=f.twin?2:1,S=f.A/n,A=2*f.H*f.H/S,cla=Math.PI*A/(1+Math.sqrt(1+(A/2)**2)),eff=f.twin?Math.cos(20*D)**2:1,arm=SCG-f.sc,rest=n*cla*S*eff*arm;
+   t+=`<tr><td>${f.name}</td><td>${(rest/1000).toFixed(0)} тыс. м³</td><td>${(rest/munk*100).toFixed(0)} %</td><td>~${(f.A*munk/rest).toFixed(0)} м²</td></tr>`;});
+ document.getElementById('tab').insertAdjacentHTML('beforeend',t+`</table><div class="note">Дестабилизирующий момент длинного корпуса (момент Мунка, ~2·объём·q·β): ${(munk/1000).toFixed(0)} тыс. м³ на радиан при объёме ${(volB/1000).toFixed(0)} тыс. м³ — нос на 93 м впереди ЦМ.</div>`);}
+
+document.getElementById('concl').innerHTML=`<b>Летает и садится — по профилю, а не на гребне.</b> Ни один вариант пера не делает корабль статически устойчивым по курсу носом вперёд: длинный корпус дестабилизирует сильнее (таблица выше; нужно перо ~2–3 раза больше). Это обычно для ракет — «Сатурн-5» тоже был неустойчив: <b>на подъёме</b> носом вперёд курс и тангаж держит вектор тяги кормового кольца планетарных (он есть). <b>На входе</b> брюхом (35–70°) тангаж балансируют боковые гребни с элевонами и щиток днища (расчёт в hull_c147/hull_variants), курс — двигатели ориентации и разностные элевоны: перо в тени корпуса. <b>Посадка</b> без переворота: из спуска брюхом вниз гондолы (150 МН > 71 МН веса при 2,5 g) гасят скорость, и корабль садится лёжа на ноги лафета; на корму — только после поворота на тяге. Значит, <b>перо выбирается по радиатору, прочности и уборке</b>, а его аэродинамика вторична.<br><b>Гребень — прежде всего радиатор.</b> Сброс растёт с площадью и как T⁴: при 700 K перо трапеции отдаёт ~${rad(FINS[0],700).toFixed(0)} МВт, при 1500 K (горячий радиатор из гексагонального BN/углерода в вакууме) — ~${(rad(FINS[0],1500)/1000).toFixed(1)} ГВт; вместе с боковыми гребнями (~430 м²) — примерно в 1,7 раза больше. Поэтому площадь пера урезать нельзя: «серповидный» и «низкий» теряют 30–45 % сброса. Из красивых вариантов площадь трапеции сохраняют 7 (стреловидный широкий) и 6 (два киля); 7 при этом держит линию плеча и убирается в щель. <br><b>Физика, общая для всех.</b> На входе брюхом (40–60°) спинной гребень в тени корпуса: по курсу корабль там держат двигатели ориентации и разностное отклонение элевонов (как у Шаттла), гребень работает ниже ~М 3–5. Поэтому его размер задаётся дозвуком и посадкой, а форма — свободой визуала: площадь у всех вариантов, кроме «низкого», сопоставима. Задняя кромка у всех перед срезом кормы (s ≥ 2): струя двигателей не задевает. Хребет (вариант 4) — часть брони плеча, не выступает за контур щита плеча и не убирается; убирается только перо.`;
+
+// ---------------- side views of all fins ----------------
+(function(){const cv=document.getElementById('sil'),g=cv.getContext('2d');g.clearRect(0,0,cv.width,cv.height);const cols=4,W=cv.width/cols,Hh=cv.height/2,sc=W/160;
+  FINS.forEach((f,i)=>{const ox=(i%cols)*W+8,oy=Math.floor(i/cols)*Hh+Hh*0.62;
+    g.strokeStyle='#e8e4dc';g.lineWidth=1.6;g.beginPath();const st=HB.S.st;
+    st.forEach((s,k)=>{const t=Math.max(...HB.S.at(s).map(p=>p[1]));const X=ox+s*sc,Y=oy-t*sc;k?g.lineTo(X,Y):g.moveTo(X,Y);});
+    [...st].reverse().forEach(s=>{const b=Math.min(...HB.S.at(s).map(p=>p[1]));g.lineTo(ox+s*sc,oy-b*sc);});g.closePath();g.stroke();
+    g.fillStyle='#8a847a';g.beginPath();const P=f.twin?[[4,0],[40,0],[26,13*Math.cos(20*D)],[12,13*Math.cos(20*D)]]:f.pts;
+    P.forEach(([s,h],k)=>{const y=h+topY(s)-0.4;const X=ox+s*sc,Y=oy-y*sc;k?g.lineTo(X,Y):g.moveTo(X,Y);});g.closePath();g.fill();
+    if(f.spine){g.strokeStyle='#8a847a';g.lineWidth=3;g.beginPath();for(let k=0;k<=20;k++){const s=46+k*34/20,y=topY(s)+2.4*(1-k/20)**1.3;const X=ox+s*sc,Y=oy-y*sc;k?g.lineTo(X,Y):g.moveTo(X,Y);}g.stroke();}
+    g.fillStyle='#e8e4dc';g.font='13px system-ui';g.fillText(f.name,ox,Math.floor(i/cols)*Hh+18);});})();
+
+// ---------------- ui ----------------
+const vb=document.getElementById('vb');vb.innerHTML='';FINS.forEach(f=>{const bt=document.createElement('button');bt.className='b'+(f===curFin?' on':'');bt.textContent=f.name;
+  bt.onclick=()=>{curFin.group.visible=false;curFin=f;f.group.visible=true;[...vb.children].forEach(x=>x.classList.toggle('on',x===bt));};vb.appendChild(bt);});
+const VIEWS={q:[[170,70,190],[70,0,0]],side:[[60,15,230],[60,5,0]],top:[[73,260,1],[73,0,0]],aft:[[-120,20,40],[10,0,0]],front:[[260,10,30],[100,0,0]]};
+function view(k){const w=VIEWS[k];cam.position.set(...w[0]);ctl.target.set(...w[1]);ctl.update();}view('side');
+document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>view(b.dataset.v));
+document.getElementById('xr').onclick=e=>{const on=!HB.xr.visible;HB.xr.visible=on;HB.hullMat.transparent=on;HB.hullMat.opacity=on?0.25:1;HB.hullMat.depthWrite=!on;e.target.classList.toggle('on',on);};
+document.getElementById('rot').onclick=e=>{ctl.autoRotate=!ctl.autoRotate;e.target.classList.toggle('on',ctl.autoRotate);};
+vb.children[3].click();view('q');
+(function loop(){ctl.update();R.render(scene,cam);requestAnimationFrame(loop);})();
+})();
+</script></body></html>

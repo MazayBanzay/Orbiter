@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Компьютер скафандра · МФД</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&family=Jura:wght@400;500;600;700&family=Play:wght@400;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0b0d10; --card:#13161a; --ink:#e6e4df; --mute:#98a0a8; --line:#2a2f35; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:1320px; margin:0 auto; padding:20px 16px 48px; }
+  h1 { font-size:21px; margin:0 0 4px; } .sub { color:var(--mute); margin:0 0 14px; font-size:14px; }
+  .ctl { display:flex; flex-wrap:wrap; gap:10px 22px; margin:0 0 12px; }
+  .grp { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .grp b { font-size:12px; color:var(--mute); font-weight:500; margin-right:2px; }
+  .grp button { background:#1b1f24; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:5px 10px; font:13px "Segoe UI", sans-serif; cursor:pointer; }
+  .grp button.on { border-color:#ff8a1c; color:#ffb066; background:#2a1d10; }
+  .wrap { position:relative; width:100%; border-radius:8px; overflow:hidden; background:#000; }
+  .stage { position:absolute; left:0; top:0; width:1280px; height:720px; transform-origin:0 0; overflow:hidden; font-family:var(--font), sans-serif; letter-spacing:.03em; }
+  .stage svg.ov, .mfd { filter:drop-shadow(0 0 2px color-mix(in srgb, var(--p) 60%, transparent)); }
+  .blink { animation:bl 1.1s steps(2) infinite; } @keyframes bl { 50% { opacity:.25; } }
+  .mfd { position:absolute; width:330px; color:var(--p); }
+  .fr { background:color-mix(in srgb, var(--p) 6%, rgba(0,8,12,.38)); border:1px solid color-mix(in srgb, var(--p) 32%, transparent); box-shadow:inset 0 0 18px color-mix(in srgb, var(--p) 10%, transparent); position:relative; }
+  .fr i { position:absolute; width:12px; height:12px; border-color:var(--p); border-style:solid; }
+  .fr i:nth-child(1) { left:-2px; top:-2px; border-width:2px 0 0 2px; } .fr i:nth-child(2) { right:-2px; top:-2px; border-width:2px 2px 0 0; }
+  .fr i:nth-child(3) { left:-2px; bottom:-2px; border-width:0 0 2px 2px; } .fr i:nth-child(4) { right:-2px; bottom:-2px; border-width:0 2px 2px 0; }
+  .hd { display:flex; justify-content:space-between; align-items:baseline; padding:6px 9px 4px; font-size:14px; font-weight:600; }
+  .hd span { font-size:11px; color:var(--a); font-weight:600; }
+  .tabs { display:flex; gap:3px; padding:0 7px 4px; border-bottom:1px solid color-mix(in srgb, var(--p) 28%, transparent); }
+  .tab { font-size:11px; padding:2px 7px; color:var(--d); border:1px solid transparent; cursor:pointer; }
+  .tab.on { color:var(--p); border-color:color-mix(in srgb, var(--p) 55%, transparent); background:color-mix(in srgb, var(--p) 13%, transparent); }
+  .mfd svg { display:block; width:100%; height:auto; }
+  .ap { display:grid; grid-template-columns:repeat(4, 1fr); gap:4px; padding:5px 7px 3px; }
+  .ap div { font-size:11px; text-align:center; padding:4px 0; border:1px solid color-mix(in srgb, var(--d) 60%, transparent); color:var(--d); }
+  .ap .act { color:#0b0d10; background:var(--a); border-color:var(--a); font-weight:700; }
+  .ap .arm { color:var(--a); border-color:var(--a); }
+  .ap.off { opacity:.4; }
+  .ft { font-size:10.5px; color:var(--d); padding:2px 9px 6px; display:flex; justify-content:space-between; }
+  .mtab { position:absolute; bottom:34px; width:252px; height:24px; padding-left:10px; font-size:12px; font-weight:600; letter-spacing:.06em; white-space:nowrap; overflow:hidden; color:var(--p); cursor:pointer;
+          border:1px solid color-mix(in srgb, var(--p) 40%, transparent); background:color-mix(in srgb, var(--p) 8%, rgba(0,8,12,.3)); line-height:24px; }
+  section.notes { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 16px; margin-top:16px; font-size:14px; }
+  section.notes h2 { font-size:16px; margin:4px 0 6px; } section.notes ul { margin:0 0 8px; padding-left:18px; }
+  @media (max-width:700px) { .grp button { padding:4px 7px; font-size:12px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Компьютер скафандра — «Кромка визора», нижние МФД, Jura</h1>
+  <p class="sub">Слева карта, справа цели и автопилот (сближение, синхронизация, стыковка, перелёт, посадка). Клавиши: 1–4 — режим, M / N — свернуть или развернуть левый / правый МФД (или клик по заголовку), [ и ] — страницы, T — следующая цель. Цвета — на странице «ОПЦИИ» левого МФД.</p>
+  <div class="ctl" id="ctl"></div>
+  <div class="wrap" id="wrap"><div class="stage" id="stage"></div></div>
+  <section class="notes">
+    <h2>Откуда данные (всё есть в SDK Orbiter 2016)</h2>
+    <ul>
+      <li><b>Цели</b>: список кораблей и дальности — <code>oapiGetVesselCount</code> / <code>oapiGetVesselByIndex</code>, <code>GetRelativePos</code> / <code>GetRelativeVel</code>; скорость сближения — проекция относительной скорости на линию визирования.</li>
+      <li><b>Сближение</b>: LVLH-график (по ходу / к Земле) из относительного положения в орбитальной системе цели; ΔV синхронизации = |Vотн|; коридор скорости — правило «дальность / 100».</li>
+      <li><b>Стыковка</b>: узлы цели — <code>DockCount</code>, <code>GetDockHandle</code>, <code>GetDockParams</code> (положение, ось, «верх») → смещения ΔX/ΔY и углы; для человека это шлюз или поручень.</li>
+      <li><b>Орбита</b>: <code>GetElements</code> / <code>GetApDist</code> / <code>GetPeDist</code>; относительный наклон — по нормалям плоскостей.</li>
+      <li><b>Местная карта и профиль перелёта</b>: рельеф из <code>oapiSurfaceElevation</code> по сетке вокруг (изолинии, крутые склоны), высота Солнца — для тепла.</li>
+    </ul>
+    <h2>В игре</h2>
+    <ul>
+      <li>Выбранный шрифт запекается в наш атлас букв (все четыре — SIL OFL, можно класть в аддон); к цветам атласа добавится оранжевый.</li>
+      <li>Оранжевый — всё, что делает автопилот, выбранная цель и предупреждения; красный — только опасность. Включённый автопилот — залитая кнопка, взведённый — рамка.</li>
+    </ul>
+  </section>
+</main>
+<script>
+const PAL = {
+  cyan:   { n:'Циан + оранж',  p:'#46e2ff', a:'#ff8a1c', w:'#e9f7ff', d:'#5e8ea5', r:'#ff4646' },
+  orange: { n:'Оранж + циан',  p:'#ffa13a', a:'#46e2ff', w:'#fff2e2', d:'#a37b52', r:'#ff4646' },
+  white:  { n:'Белый + оранж', p:'#e3f0ff', a:'#ff8a1c', w:'#ffffff', d:'#7d8d9c', r:'#ff4646' } };
+const FONTS = ['Exo 2', 'Jura', 'Play', 'IBM Plex Sans Condensed'];
+const VARS = { A:'А · Створки', B:'Б · Нижние', C:'В · По вызову' };
+const MODES = [
+  { id:'eva',    n:'ВКД',        k:'1', scene:'moon',  L:'local', R:'targets' },
+  { id:'flight', n:'ПОЛЁТ',      k:'2', scene:'moon',  L:'local', R:'transfer' },
+  { id:'rdv',    n:'СБЛИЖЕНИЕ',  k:'3', scene:'orbit', L:'orbit', R:'approach' },
+  { id:'sys',    n:'СИСТЕМЫ',    k:'4', scene:null,    L:'power', R:'body' } ];
+const LP = [['local', 'МЕСТН'], ['orbit', 'ОРБИТА'], ['power', 'ПИТАНИЕ'], ['opts', 'ОПЦИИ']];
+const RP = { moon:[['targets', 'ЦЕЛИ'], ['transfer', 'ПЕРЕЛЁТ'], ['landing', 'ПОСАДКА'], ['body', 'ОРГАНИЗМ']],
+             orbit:[['targets', 'ЦЕЛИ'], ['approach', 'СБЛИЖ'], ['dock', 'СТЫК'], ['body', 'ОРГАНИЗМ']] };
+const TG = {
+  moon:  [['ТАНТРА', 'звездолёт · на грунте', '142 м', '0,00'], ['ЭРГ НООР', 'скафандр', '64 м', '−0,31'], ['П1', 'точка посадки', '38 м', '—'], ['МАЯК-1', 'радиомаяк', '1,2 км', '—']],
+  orbit: [['МКС', 'станция · шлюз «Квест»', '42,6 м', '−0,21'], ['ЭРГ НООР', 'скафандр', '18,3 м', '+0,02'], ['ТАНТРА', 'звездолёт', '1,24 км', '+0,03']] };
+const S = { cL:true, cR:true, v:'B', font:'Jura', pal:'white', mode:'flight', scene:'moon', L:'local', R:'transfer', tsel:0 };
+
+// ---------- svg helpers (colours are CSS variables, so palettes switch live) ----------
+const c = k => k ? `var(--${k})` : 'none';
+const da = d => d ? ` stroke-dasharray="${d}"` : '';
+const T = (x, y, s, k = 'p', z = 12, a = 'start', w = 500, ex = '') => `<text x="${x}" y="${y}" font-size="${z}" font-weight="${w}" text-anchor="${a}" style="fill:${c(k)}" ${ex}>${s}</text>`;
+const L = (x1, y1, x2, y2, k = 'p', w = 1.2, o = 1, d = '') => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${c(k)}" stroke-width="${w}" opacity="${o}"${da(d)}/>`;
+const P = (p, k = 'p', w = 1.2, o = 1, d = '', f = '', fo = 1) => `<path d="${p}" style="stroke:${c(k)};fill:${c(f)};fill-opacity:${fo}" stroke-width="${w}" opacity="${o}"${da(d)}/>`;
+const C = (x, y, r, k = 'p', w = 1.2, o = 1, d = '', f = '', fo = 1) => `<circle cx="${x}" cy="${y}" r="${r}" style="stroke:${c(k)};fill:${c(f)};fill-opacity:${fo}" stroke-width="${w}" opacity="${o}"${da(d)}/>`;
+const R = (x, y, w, h, k = 'p', sw = 1, o = 1, f = '', fo = 1) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" style="stroke:${c(k)};fill:${c(f)};fill-opacity:${fo}" stroke-width="${sw}" opacity="${o}"/>`;
+const arc = (cx, cy, r, a0, a1) => { const p = a => [cx + r * Math.cos(a), cy + r * Math.sin(a)]; const [x0, y0] = p(a0), [x1, y1] = p(a1); return `M${x0.toFixed(1)},${y0.toFixed(1)} A${r},${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${x1.toFixed(1)},${y1.toFixed(1)}`; };
+const poly = pts => 'M' + pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' L');
+const num = (v, n = 1, plus = false) => (plus && v > 0 ? '+' : '') + v.toFixed(n).replace('.', ',').replace('-', '−');
+const grid = () => { let s = ''; for (let x = 20; x < 340; x += 20) s += L(x, 0, x, 300, 'p', .6, .07); for (let y = 20; y < 300; y += 20) s += L(0, y, 340, y, 'p', .6, .07); return s; };
+const cell = (x, y, lab, val, k = 'w', a = 'start') => T(x, y, lab, 'd', 9.5, a) + T(x, y + 17, val, k, 15, a, 600);
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+// ---------- scenes behind the visor ----------
+function stars(n, yMax) { seed = 11; let s = ''; for (let i = 0; i < n; i++) { const x = rnd() * 1280, y = rnd() * yMax, r = rnd() < .1 ? 1.3 : .7; s += `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${r}" fill="#fff" opacity="${(.35 + rnd() * .6).toFixed(2)}"/>`; } return s; }
+function sceneMoon() {
+  let s = `<defs><linearGradient id="gm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4c4c50"/><stop offset=".35" stop-color="#6e6d6c"/><stop offset="1" stop-color="#9a9896"/></linearGradient>
+    <radialGradient id="ea" cx=".35" cy=".4" r=".7"><stop offset="0" stop-color="#9fd0ff"/><stop offset="1" stop-color="#2a5a9a"/></radialGradient></defs>
+    <rect width="1280" height="720" fill="#000"/>${stars(150, 360)}
+    <circle cx="880" cy="250" r="22" fill="url(#ea)"/><path d="M880,228 A22,22 0 0 0 880,272 A11,22 0 0 1 880,228Z" fill="#000" opacity=".75"/>
+    <path d="M0,374 C140,360 260,368 380,366 C560,362 700,370 860,362 C1000,356 1140,366 1280,360 L1280,720 L0,720 Z" fill="url(#gm)"/>
+    <path d="M0,374 C140,360 260,368 380,366 C560,362 700,370 860,362 C1000,356 1140,366 1280,360" stroke="#8a8986" stroke-width="1" fill="none" opacity=".6"/>`;
+  [[240, 430, 90, 12], [930, 470, 150, 22], [560, 400, 50, 6], [120, 600, 220, 45], [1120, 640, 170, 40], [760, 560, 110, 20]].forEach(([x, y, rx, ry]) => {
+    s += `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="#46464a" opacity=".55"/><ellipse cx="${x}" cy="${y + ry * .25}" rx="${rx * .9}" ry="${ry * .7}" fill="#8f8e8b" opacity=".35"/>`; });
+  // Тантра far away, only a silhouette
+  s += `<path d="M446,368 L448,346 L452,336 L456,346 L458,368 Z M440,368 L446,358 L446,368 Z M458,358 L464,368 L458,368 Z" fill="#b8b8b4" opacity=".85"/>`;
+  return s + `<rect width="1280" height="720" fill="url(#vig)"/>`;
+}
+function sceneOrbit() {
+  let s = `<defs><radialGradient id="er" cx=".5" cy=".2" r=".8"><stop offset="0" stop-color="#3f86c8"/><stop offset=".6" stop-color="#1c4c86"/><stop offset="1" stop-color="#0b2548"/></radialGradient>
+    <linearGradient id="md" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0efe9"/><stop offset=".6" stop-color="#b9b8b2"/><stop offset="1" stop-color="#6d6c68"/></linearGradient></defs>
+    <rect width="1280" height="720" fill="#000"/>${stars(120, 720)}
+    <circle cx="520" cy="1960" r="1500" fill="url(#er)"/><circle cx="520" cy="1960" r="1503" fill="none" stroke="#7cc4ff" stroke-width="7" opacity=".45"/>
+    <path d="M60,620 C240,560 420,600 600,540 C760,500 900,560 1100,520" stroke="#fff" stroke-width="30" opacity=".12" fill="none"/>`;
+  // station
+  s += `<rect x="300" y="244" width="720" height="14" fill="#8e9298"/>`;
+  for (let x = 300; x < 1020; x += 24) s += `<line x1="${x}" y1="244" x2="${x + 12}" y2="258" stroke="#5c6066" stroke-width="1.5"/>`;
+  [[300, 150], [300, 262], [940, 150], [940, 262]].forEach(([x, y]) => { s += `<rect x="${x}" y="${y}" width="80" height="90" fill="#3b2e17" stroke="#9c7a3a" stroke-width="1"/>`; for (let i = 1; i < 4; i++) s += `<line x1="${x}" y1="${y + i * 22.5}" x2="${x + 80}" y2="${y + i * 22.5}" stroke="#9c7a3a" stroke-width=".7"/>`; });
+  s += `<rect x="600" y="160" width="26" height="84" fill="#e4e4e0"/><rect x="690" y="160" width="26" height="84" fill="#e4e4e0"/>`;
+  s += `<rect x="540" y="262" width="300" height="46" rx="10" fill="url(#md)"/><rect x="660" y="300" width="80" height="60" rx="12" fill="url(#md)"/>`;
+  s += `<circle cx="700" cy="340" r="15" fill="#2c2c2c" stroke="#d8d8d2" stroke-width="3"/>`;
+  return s + `<rect width="1280" height="720" fill="url(#vig)"/>`;
+}
+
+// ---------- helmet overlay (the variant 2 rim + the new centre and bottom) ----------
+function vscale(x, f, k, name, val) {   // low, beside the MFDs
+  const y0 = 476, h = 196;
+  return R(x, y0, 10, h, 'd', 1, .8) + R(x + 1, y0 + 1 + (h - 2) * (1 - f), 8, (h - 2) * f, null, 0, 1, k, .9) + T(x + 5, y0 + h + 16, name, 'd', 10, 'middle') + T(x + 5, y0 - 8, val, 'w', 11, 'middle', 600);
+}
+// thermal control (left) and consumption (right): mandatory, always on the upper sides of the visor
+function hbar(x, y, w, f, k) { return R(x, y, w, 6, 'd', 1, .6) + R(x + 1, y + 1, (w - 2) * Math.max(0, Math.min(1, f)), 4, null, 0, 1, k, .9); }
+function thermo(moon, m) {
+  const x = 24, y = 180, w = 230; let s = '';
+  s += T(x, y, 'ТЕРМОКОНТРОЛЬ', 'p', 12.5, 'start', 700) + T(x + w, y, 'НОРМА', 'p', 11, 'end', 700) + L(x, y + 6, x + w, y + 6, 'p', 1, .5);
+  const rows = moon
+    ? [['В скафандре', '22,4 °C', 'w'], ['Тело', '37,1 °C', 'w'], ['Среда', '+47 °C', 'w'], ['Грунт', '+96 °C', 'a'], ['Теплообмен', 'ОХЛАЖДЕНИЕ −84 Вт', 'p']]
+    : [['В скафандре', '21,8 °C', 'w'], ['Тело', '36,9 °C', 'w'], ['Среда', '−38 °C', 'w'], ['Солнце', 'тень через 18 мин', 'a'], ['Теплообмен', 'ОБОГРЕВ +52 Вт', 'p']];
+  rows.forEach(([n, v, k], i) => s += T(x, y + 24 + i * 17, n, 'd', 11) + T(x + w, y + 24 + i * 17, v, k, 11.5, 'end', 600));
+  // inside the suit: comfort band 18..26 °C
+  const yb = y + 118, X = t => x + (t - 10) / 25 * w;
+  s += R(X(18), yb, X(26) - X(18), 6, null, 0, 1, 'p', .25) + L(x, yb + 3, x + w, yb + 3, 'd', 1, .6);
+  s += P(`M${X(moon ? 22.4 : 21.8)},${yb - 1} l-4,-7 h8 z`, 'w', 1, 1, '', 'w') + T(x, yb + 18, '10', 'd', 9) + T(X(18), yb + 18, '18', 'd', 9, 'middle') + T(X(26), yb + 18, '26', 'd', 9, 'middle') + T(x + w, yb + 18, '35 °C', 'd', 9, 'end');
+  // outside: the suit's rated range
+  const yr = yb + 34, Y = t => x + (t + 157) / 278 * w;
+  s += L(x, yr + 3, x + w, yr + 3, 'p', 2, .5) + L(x, yr - 3, x, yr + 9, 'r', 2) + L(x + w, yr - 3, x + w, yr + 9, 'r', 2);
+  s += P(`M${Y(moon ? 47 : -38)},${yr - 1} l-4,-7 h8 z`, 'p', 1, 1, '', 'p');
+  if (moon) s += P(`M${Y(96)},${yr + 7} l-4,7 h8 z`, 'a', 1, 1, '', 'a');
+  s += T(x, yr + 22, '−157', 'd', 9) + T(x + w / 2, yr + 22, 'допуск снаружи', 'd', 9, 'middle') + T(x + w, yr + 22, '+121', 'd', 9, 'end');
+  return s;
+}
+function consumption(moon, m) {
+  const w = 230, x = 1256 - w, y = 180, fly = m === 'flight' || m === 'rdv'; let s = '';
+  s += T(x, y, 'РАСХОД', 'p', 12.5, 'start', 700) + T(x + w, y, 'хватит на 25 ч · батарея', 'a', 11, 'end', 700) + L(x, y + 6, x + w, y + 6, 'p', 1, .5);
+  // power split as one stacked bar
+  const parts = [['ЖО', 60, 1], ['ТЕПЛО', 84, .75], ['ПРИВ', 38, .5], ['ПРОЧ', 14, .3]], tot = 196;
+  s += T(x, y + 24, 'Питание', 'd', 11) + T(x + w, y + 24, tot + ' Вт', 'w', 11.5, 'end', 600);
+  let cx = x; parts.forEach(([n, v, o]) => { const pw = w * v / tot; s += R(cx, y + 31, pw - 2, 7, null, 0, 1, 'p', o); s += T(cx + (pw - 2) / 2, y + 50, n + ' ' + v, 'd', 8.5, 'middle'); cx += pw; });
+  const rows = [
+    ['Батарея', '82 % · 25 ч', .82, 'a', 'первой кончится'],
+    ['Кислород', '0,84 г/мин · 27 ч', .97, 'p'],
+    ['Поглотитель CO₂', '96 % · 31 ч', .96, 'p'],
+    ['Топливо ранца', fly ? '41 г/с · 229 м/с' : '83 % · 229 м/с', .83, fly ? 'a' : 'p'],
+    ['Азот РСУ', '100 % · 7,8 м/с', 1, 'p'] ];
+  rows.forEach(([n, v, f, k, note], i) => {
+    const yy = y + 70 + i * 24;
+    s += T(x, yy, n, 'd', 11) + T(x + w, yy, v, k === 'a' ? 'a' : 'w', 11.5, 'end', 600) + hbar(x, yy + 5, w, f, k);
+  });
+  return s;
+}
+function tape(x, yc, val, step, maj, px, side, fmt, label, tgt) {
+  let s = ''; const h = 150, top = yc - h / 2, bot = yc + h / 2;
+  s += L(x, top, x, bot, 'd', 1, .7);
+  for (let k = Math.ceil((val - h / 2 / px) / step); k <= Math.floor((val + h / 2 / px) / step); k++) {
+    const v = k * step, y = yc - (v - val) * px, big = Math.abs(k) % maj === 0;
+    s += L(x, y, x + side * (big ? 8 : 4), y, 'p', 1, .8);
+    if (big) s += T(x + side * 12, y + 4, fmt(v), 'd', 10, side > 0 ? 'start' : 'end');
+  }
+  s += P(`M${x},${yc} l${side * 8},-10 h${side * 46} v20 h${-side * 46} z`, 'p', 1.2, 1, '', 'bgk', .55) + T(x + side * 31, yc + 5, fmt(val), 'w', 13, 'middle', 600);
+  if (tgt != null) { const y = yc - (tgt - val) * px; s += P(`M${x - side * 1},${y} l${-side * 8},-6 v12 z`, 'a', 1.2, 1, '', 'a'); }
+  return s + T(x, top - 8, label, 'd', 10, 'middle');
+}
+function compass(h) {
+  let s = ''; const x0 = 640, y = 72;
+  for (let d = Math.ceil((h - 30) / 5) * 5; d <= h + 30; d += 5) {
+    const x = x0 + (d - h) * 4, dd = ((d % 360) + 360) % 360, big = dd % 10 === 0;
+    s += L(x, y, x, y - (big ? 8 : 4), 'p', 1, .8);
+    if (big) s += T(x, y - 12, { 0:'С', 90:'В', 180:'Ю', 270:'З' }[dd] ?? String(dd).padStart(3, '0'), 'd', 10, 'middle');
+  }
+  return s + L(520, y, 760, y, 'p', 1, .5) + P(`M${x0 - 24},${y + 4} h48 v18 h-48 z`, 'p', 1.2, 1, '', 'bgk', .5) + T(x0, y + 18, String(h).padStart(3, '0') + '°', 'w', 13, 'middle', 600);
+}
+function td(x, y, w, h, lab) {
+  const k = 9; let s = '';
+  [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]].forEach(([a, b, sx, sy]) => s += P(`M${a + sx * k},${b} H${a} V${b + sy * k}`, 'a', 1.8));
+  return s + T(x + w / 2, y - 7, lab, 'a', 12, 'middle', 600);
+}
+function overlay() {
+  const m = S.mode, sc = S.scene, moon = sc === 'moon';
+  let s = `<defs><path id="rl" d="${arc(640, 1560, 1500, -1.918, -1.678)}"/><path id="rr" d="${arc(640, 1560, 1500, -1.464, -1.224)}"/></defs>`;
+  const tv = (l, v) => `<tspan style="fill:var(--d)">${l}</tspan> <tspan style="fill:var(--w)">${v}</tspan>`;
+  s += P(arc(640, 1560, 1492, -1.925, -1.672), 'p', 1.2, .55) + P(arc(640, 1560, 1492, -1.470, -1.217), 'p', 1.2, .55);
+  s += `<text font-size="13" font-weight="600"><textPath href="#rl" startOffset="50%" text-anchor="middle">${tv('ПУЛЬС', '96')} · ${tv('ДЫХ', '22')} · ${tv('O₂', '30 кПа')} · ${tv('ТЕЛО', '37,1°')}</textPath></text>`;
+  s += `<text font-size="13" font-weight="600"><textPath href="#rr" startOffset="50%" text-anchor="middle">${tv('O₂', '97 %')} · ${tv('БАТ', '82 %')} · ${tv('196', 'Вт')} · ${tv('СРЕДА', moon ? '+47°' : '−38°')}</textPath></text>`;
+  // corners
+  s += T(24, 32, 'НИЗА КРИТ', 'w', 14, 'start', 700) + T(24, 49, 'астронавигатор · «Тантра»', 'd', 11);
+  s += T(1256, 32, 'ВКД 01:42:10', 'w', 14, 'end', 700) + T(1256, 49, moon ? 'Луна · день · вакуум' : 'орбита Земли · тень через 18 мин', 'd', 11, 'end');
+  // modes
+  const xs = [490, 580, 690, 800];
+  MODES.forEach((md, i) => {
+    const on = md.id === m, w = md.n.length * 9 + 16;
+    if (on) s += R(xs[i] - w / 2, 12, w, 22, 'p', 1.2, 1, 'p', .14);
+    s += T(xs[i], 28, md.n, on ? 'p' : 'd', 12.5, 'middle', on ? 700 : 500) + T(xs[i] - w / 2 + 3, 10, md.k, 'd', 8.5);
+  });
+  s += compass(moon ? 47 : 92);
+  // caution / autopilot line
+  const caut = { eva:['▲ ГРУНТ +96 °C · НЕ ЛОЖИТЬСЯ', 'a'], flight:['', ''], rdv:['▲ ЗОНА 30 м · СКОРОСТЬ СБЛИЖЕНИЯ ≤ 0,25 м/с', 'a'], sys:['', ''] }[m];
+  if (caut[0]) s += T(640, 124, caut[0], caut[1], 13, 'middle', 700, 'class="blink"');
+  // side scales
+  s += vscale(30, .97, 'p', 'O₂', '97') + vscale(58, .96, 'p', 'CO₂', '96') + vscale(86, .82, 'p', 'БАТ', '82');
+  const fly = m === 'flight' || m === 'rdv';
+  s += thermo(moon, m) + consumption(moon, m);
+  s += vscale(1184, .83, 'p', 'ТОПЛ', '83') + vscale(1212, fly ? .57 : 0, 'a', 'ТЯГА', fly ? '57' : '0') + vscale(1240, .92, 'p', 'СИЛЫ', '92');
+  // centre
+  const cy = 367;
+  if (moon && m !== 'sys') {
+    s += L(540, cy, 612, cy) + L(668, cy, 740, cy);
+    [-1, 1].forEach(k => { const y = cy - k * 60; s += L(590, y, 616, y, 'p', 1, .6, k < 0 ? '4 3' : '') + L(664, y, 690, y, 'p', 1, .6, k < 0 ? '4 3' : '') + T(584, y + 4, (k * 10) + '', 'd', 10, 'end'); });
+  }
+  s += C(640, cy, 3.5, 'p', 1.3) + L(628, cy, 634, cy, 'p', 1) + L(646, cy, 652, cy, 'p', 1) + L(640, cy - 12, 640, cy - 6, 'p', 1);
+  if (fly) { const fx = 668, fy = cy - 8; s += C(fx, fy, 7, 'w', 1.6) + L(fx - 18, fy, fx - 7, fy, 'w', 1.6) + L(fx + 7, fy, fx + 18, fy, 'w', 1.6) + L(fx, fy - 7, fx, fy - 13, 'w', 1.6); }
+  if (m === 'flight') {
+    s += tape(510, cy, 2.4, .5, 2, 20, -1, v => num(v), 'ГОРИЗ м/с', null);
+    s += tape(770, cy, 3.2, .5, 2, 14, 1, v => num(v), 'ВЫСОТА м', 3.0) + T(800, cy + 104, '↑ +0,1 м/с', 'w', 12, 'middle', 600);
+  }
+  if (m === 'rdv') {
+    s += tape(510, cy, 0.21, .05, 2, 220, -1, v => num(v, 2), 'СБЛИЖ м/с', 0.25);
+    s += tape(770, cy, 42.6, 5, 2, 3, 1, v => num(v, 1), 'ДАЛЬН м', null);
+  }
+  // target designator on the scene
+  if (m !== 'sys') s += moon ? td(434, 326, 36, 50, 'ТАНТРА · 142 м') : td(676, 316, 48, 48, 'ШЛЮЗ · 42,6 м');
+  // bottom strip
+  s += P(arc(640, -260, 1000, Math.PI * .385, Math.PI * .615), 'p', 1.2, .5);
+  const ann = { eva:'', flight:'АП · УДЕРЖАНИЕ ВЫСОТЫ 3,0 м   ▸   ПЕРЕЛЁТ ВЗВЕДЁН', rdv:'АП · СБЛИЖЕНИЕ   ▸   СТЫК ВЗВЕДЁН', sys:'' }[m];
+  if (ann) { const w = ann.length * 7.6 + 24; s += R(640 - w / 2, 618, w, 22, 'a', 1.2, 1, 'a', .12) + T(640, 634, ann, 'a', 12.5, 'middle', 700); }
+  const cells = {
+    eva:    [['СКОРОСТЬ', '1,4 м/с'], ['ПОХОДКА', 'бег'], ['СЕРВО', '40 %'], ['УКЛОН', '6°'], ['ГРУНТ', '+96 °C', 'a']],
+    flight: [['ВЫСОТА', '3,2 м'], ['ВЕРТ', '+0,1 м/с'], ['ГОРИЗ', '2,4 м/с'], ['ТЯГА', '57 %'], ['ЗАПАС Δv', '229 м/с']],
+    rdv:    [['ДАЛЬН', '42,6 м'], ['СБЛИЖ', '−0,21'], ['БОК', '0,04'], ['ΔV СИНХР', '0,34'], ['ЗАПАС Δv', '229 м/с']],
+    sys:    [['БАТАРЕЯ', '82 %'], ['РАСХОД', '196 Вт'], ['ХВАТИТ', '25 ч'], ['O₂', '27 ч'], ['ТЕПЛО', '−84 Вт']] }[m];
+  cells.forEach(([l, v, k], i) => s += cell(460 + i * 90, 664, l, v, k || 'w', 'middle'));
+  if (fly && moon) [[410, 'П'], [870, 'Л']].forEach(([x, n]) => { s += C(x, 668, 7, 'p', 2) + L(x, 668, x - 22 * Math.sin(.21), 668 + 22 * Math.cos(.21), 'a', 2.5) + T(x + (x < 640 ? -14 : 14), 664, n + ' +12°', 'w', 11, x < 640 ? 'end' : 'start'); });
+  const keys = {
+    eva:'WASD — шаг   Shift — серво   B — ранец   V — шторка   L — фонари   M / N — МФД   1–4 — режим',
+    flight:'Пробел / Ctrl — выше / ниже   W/S — вектор   Q/E — вбок   A/D — поворот   Shift — полный вектор   M / N — МФД   T — цель',
+    rdv:'T — цель   Enter — автопилот   Пробел / Ctrl — вверх / вниз   Q/E — вбок   W/S — вперёд / назад   M / N — МФД',
+    sys:'1–4 — режим   M / N — свернуть МФД   [ ] — страницы' }[m];
+  s += T(640, 712, keys, 'd', 11, 'middle');
+  return s;
+}
+
+// ---------- left MFD pages ----------
+function pLocal() {
+  let s = grid();
+  if (S.scene === 'moon') {
+    const cx = 170, cy = 170, k = 1.28, pos = (b, m) => [cx + m * k * Math.sin(b * Math.PI / 180), cy - m * k * Math.cos(b * Math.PI / 180)];
+    s += `<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" style="stroke:var(--a)" stroke-width="1.3"/></pattern></defs>`;
+    for (let i = 0; i < 5; i++) { const pts = []; for (let a = 0; a <= 360; a += 10) { const t = a * Math.PI / 180, r = (26 + i * 24) * (1 + .18 * Math.sin(3 * t + i) + .08 * Math.cos(5 * t + 2 * i)); pts.push([236 + r * Math.cos(t), 118 + r * .8 * Math.sin(t)]); } s += P(poly(pts) + 'Z', 'd', 1, .55); }
+    s += `<path d="M268,52 C296,60 312,96 304,128 C288,120 272,92 258,70 Z" fill="url(#hatch)" opacity=".6"/>` + P('M268,52 C296,60 312,96 304,128 C288,120 272,92 258,70 Z', 'a', 1, .8);
+    s += C(90, 232, 14, 'd', 1, .6) + C(252, 246, 9, 'd', 1, .6) + C(62, 96, 7, 'd', 1, .5);
+    [25, 50, 100].forEach(m => { s += C(cx, cy, m * k, 'p', 1, .35, '3 4'); s += T(cx + m * k * .707 + 3, cy + m * k * .707 + 10, m + ' м', 'd', 9); });
+    for (let i = 1; i <= 8; i++) s += C(cx - 2 * i, cy + 9 * i, 1.3, null, 0, 1, '', 'p', 1 - i * .1);
+    s += L(cx, cy, cx + 10, cy - 44, 'p', 1.2, .9, '4 3');
+    let [x, y] = pos(40, 64); s += C(x, y, 5, 'p', 1.4) + T(x + 9, y + 4, 'ЭРГ НООР 64', 'p', 10);
+    [x, y] = pos(-10, 38); s += R(x - 5, y - 5, 10, 10, 'p', 1.2) + L(x - 5, y - 5, x + 5, y + 5, 'p', 1) + L(x + 5, y - 5, x - 5, y + 5, 'p', 1) + T(x + 9, y + 4, 'П1 38', 'p', 10);
+    [x, y] = pos(-95, 105); s += L(cx, cy, x, y, 'a', 1, .7, '5 4') + P(`M${x},${y - 7} l7,7 l-7,7 l-7,-7 Z`, 'a', 1.6, 1, '', 'a', .3) + T(x - 4, y - 12, '◂ ТАНТРА 142 м', 'a', 10, 'start', 600);
+    s += P(`M${cx},${cy - 9} L${cx + 7},${cy + 7} L${cx},${cy + 3} L${cx - 7},${cy + 7} Z`, 'w', 1.3, 1, '', 'w');
+    s += `<g transform="translate(24,34) rotate(-47)">${P('M0,-12 L5,4 L0,1 L-5,4 Z', 'p', 1.2)}${T(0, -15, 'С', 'p', 10, 'middle', 700)}</g>`;
+    s += T(330, 18, 'КУРС 047° · СЕВЕР ◸', 'd', 10, 'end');
+    s += L(14, 288, 78, 288, 'p', 1.4) + L(14, 284, 14, 292, 'p', 1) + L(78, 284, 78, 292, 'p', 1) + T(46, 282, '50 м', 'd', 9, 'middle');
+    s += `<rect x="238" y="281" width="12" height="9" fill="url(#hatch)"/>` + T(254, 289, 'склон > 15°', 'a', 9.5);
+  } else {
+    s += L(40, 120, 300, 120, 'w', 3, .8);
+    [[40, 92], [260, 92], [40, 124], [260, 124]].forEach(([x, y]) => { s += R(x, y, 40, 24, 'p', 1, .8, 'p', .08); s += L(x, y + 12, x + 40, y + 12, 'p', .7, .5); });
+    s += R(130, 124, 90, 16, 'w', 1.2, .9, 'w', .08) + R(160, 140, 30, 22, 'w', 1.2, .9, 'w', .08);
+    s += C(175, 162, 5, 'a', 1.6) + T(185, 176, 'ШЛЮЗ «КВЕСТ»', 'a', 10, 'start', 600);
+    s += C(170, 130, 70, 'r', 1, .6, '4 3') + T(242, 76, 'зона 30 м', 'r', 9);
+    for (let i = 1; i <= 6; i++) s += C(232 + 6 * i, 236 + 5 * i, 1.3, null, 0, 1, '', 'p', 1 - i * .13);
+    s += L(232, 236, 184, 172, 'a', 1.1, .8, '5 4');
+    s += P('M232,226 L239,242 L232,238 L225,242 Z', 'w', 1.3, 1, '', 'w') + L(232, 236, 214, 212, 'w', 1.4) + T(244, 230, 'Я · 0,21 м/с', 'w', 10);
+    s += C(110, 190, 5, 'p', 1.4) + T(62, 208, 'ЭРГ НООР 18 м', 'p', 10);
+    s += T(330, 18, 'ПЛАН · ОСИ СТАНЦИИ', 'd', 10, 'end') + T(14, 18, '→ по ходу', 'd', 10);
+    s += L(14, 288, 78, 288, 'p', 1.4) + L(14, 284, 14, 292, 'p', 1) + L(78, 284, 78, 292, 'p', 1) + T(46, 282, '20 м', 'd', 9, 'middle');
+  }
+  return s;
+}
+function pOrbit() {
+  let s = grid();
+  if (S.scene === 'moon') {
+    const cx = 170, cy = 140, r = 105;
+    s += C(cx, cy, r, 'p', 1.3, 1, '', 'p', .05) + P(`M${cx},${cy - r} A${r},${r} 0 0 1 ${cx},${cy + r} A${r * .35},${r} 0 0 0 ${cx},${cy - r}Z`, null, 0, 1, '', 'p', .1);
+    [30, 60].forEach(l => { const rx = r * Math.cos(l * Math.PI / 180); s += `<ellipse cx="${cx}" cy="${cy}" rx="${rx.toFixed(1)}" ry="${r}" style="stroke:var(--p);fill:none" stroke-width=".8" opacity=".35"/>`; });
+    s += L(cx, cy - r, cx, cy + r, 'p', .8, .35);
+    [-60, -30, 0, 30, 60].forEach(l => { const y = cy - r * Math.sin(l * Math.PI / 180), w = r * Math.cos(l * Math.PI / 180); s += L(cx - w, y, cx + w, y, 'p', .8, .35); });
+    s += C(176, 98, 4, 'w', 1.5, 1, '', 'w') + C(176, 98, 9, 'a', 1.2) + T(190, 94, 'Я · ТАНТРА', 'a', 10, 'start', 600);
+    s += T(14, 18, 'ЛУНА · НА ПОВЕРХНОСТИ', 'd', 10);
+    s += cell(14, 262, 'ШИРОТА', '23,4° с.') + cell(110, 262, 'ДОЛГОТА', '3,6° в.') + cell(210, 262, 'СОЛНЦЕ', '38° · день 9 сут');
+  } else {
+    const cx = 160, cy = 140, rot = -15 * Math.PI / 180, rp = (x, y) => [cx + (x - cx) * Math.cos(rot) - (y - cy) * Math.sin(rot), cy + (x - cx) * Math.sin(rot) + (y - cy) * Math.cos(rot)];
+    s += C(150, 140, 58, 'p', 1.3, 1, '', 'p', .07) + T(150, 144, 'ЗЕМЛЯ', 'd', 10, 'middle');
+    s += `<g transform="rotate(-15 ${cx} ${cy})"><ellipse cx="${cx}" cy="${cy}" rx="120" ry="100" style="stroke:var(--p);fill:none" stroke-width="1.5"/><ellipse cx="${cx + 1}" cy="${cy}" rx="121" ry="101" style="stroke:var(--a);fill:none" stroke-width="1.2" stroke-dasharray="5 4"/></g>`;
+    const t = 40 * Math.PI / 180; let [x, y] = rp(cx + 120 * Math.cos(t), cy + 100 * Math.sin(t)); s += C(x, y, 4.5, 'w', 1.5, 1, '', 'w') + T(x + 8, y + 14, 'Я + МКС', 'a', 10, 'start', 600);
+    [x, y] = rp(cx + 120, cy); s += C(x, y, 3, 'p', 1.2, 1, '', 'p') + T(x + 6, y - 6, 'Ап 421', 'p', 10);
+    [x, y] = rp(cx - 120, cy); s += C(x, y, 3, 'p', 1.2, 1, '', 'p') + T(x - 6, y + 14, 'Пе 413', 'p', 10, 'end');
+    s += T(14, 18, 'ОРБИТА · ЗЕМЛЯ', 'd', 10) + T(330, 18, '— моя  - - цель', 'd', 10, 'end');
+    s += cell(14, 256, 'ПЕРИОД', '92,6 мин') + cell(110, 256, 'НАКЛОН', '51,64°') + cell(210, 256, 'ОТН. НАКЛОН', '0,00°', 'a');
+  }
+  return s;
+}
+function pPower() {
+  let s = grid();
+  s += T(14, 22, 'БАТАРЕЯ', 'd', 10) + T(326, 22, '4,9 из 6,0 кВт·ч · 25 ч', 'w', 11, 'end', 600);
+  s += R(14, 30, 312, 16, 'p', 1) + R(16, 32, 308 * .82, 12, null, 0, 1, 'p', .85);
+  const rows = [['Жизнеобеспечение', 60], ['Охлаждение (насос)', 84], ['Сервоприводы', 38], ['Компьютер, связь', 14], ['Фонари', 0]];
+  rows.forEach(([n, w], i) => { const y = 72 + i * 25; s += T(14, y + 9, n, w ? 'p' : 'd', 11) + R(150, y, 120, 11, 'd', 1, .6) + R(151, y + 1, 118 * w / 120, 9, null, 0, 1, 'p', .85) + T(326, y + 9, w ? w + ' Вт' : 'выкл', w ? 'w' : 'd', 11, 'end', 600); });
+  s += L(14, 200, 326, 200, 'd', 1, .5) + T(14, 216, 'ИТОГО', 'd', 10) + T(326, 216, '196 Вт', 'w', 13, 'end', 700);
+  // thermal range
+  const x0 = 20, x1 = 320, t0 = -157, t1 = 121, X = t => x0 + (t - t0) / (t1 - t0) * (x1 - x0);
+  s += T(14, 240, 'ТЕПЛО · ДОПУСК −157…+121 °C', 'd', 10);
+  s += L(x0, 262, x1, 262, 'p', 3, .5) + L(x0, 254, x0, 270, 'r', 2) + L(x1, 254, x1, 270, 'r', 2);
+  s += P(`M${X(47)},258 l-5,-8 h10 z`, 'p', 1, 1, '', 'p') + T(X(47), 247, 'среда +47', 'p', 9.5, 'middle');
+  s += P(`M${X(96)},266 l-5,8 h10 z`, 'a', 1, 1, '', 'a') + T(X(96), 288, 'грунт +96', 'a', 9.5, 'middle');
+  s += T(X(-157) + 2, 288, '−157', 'd', 9) + T(X(121) - 2, 247, '+121', 'd', 9, 'end');
+  return s;
+}
+
+// ---------- right MFD pages ----------
+function pTargets() {
+  let s = grid(); const list = TG[S.scene];
+  s += T(14, 20, 'ОБЪЕКТ', 'd', 9.5) + T(250, 20, 'ДАЛЬН', 'd', 9.5, 'end') + T(326, 20, 'V СБЛ', 'd', 9.5, 'end');
+  list.forEach(([n, t, d, v], i) => {
+    const y = 30 + i * 36, on = i === S.tsel % list.length;
+    if (on) s += R(8, y, 324, 32, 'a', 1.2, 1, 'a', .12);
+    s += T(16, y + 15, (on ? '▶ ' : '') + n, on ? 'a' : 'w', 12.5, 'start', 700) + T(16, y + 27, t, 'd', 9.5) + T(250, y + 20, d, on ? 'a' : 'w', 12.5, 'end', 600) + T(326, y + 20, v, 'p', 11.5, 'end');
+  });
+  const sel = list[S.tsel % list.length];
+  s += L(14, 190, 326, 190, 'd', 1, .5) + T(14, 208, 'ВЫБРАНО: ' + sel[0], 'a', 12, 'start', 700);
+  s += cell(14, 224, 'ПЕЛЕНГ', S.scene === 'moon' ? '312°' : '088°') + cell(100, 224, 'УГОЛ МЕСТА', S.scene === 'moon' ? '−1°' : '+6°') + cell(14, 260, 'ОТН. СКОРОСТЬ', S.scene === 'moon' ? '0,00 м/с' : '0,22 м/с');
+  s += cell(120, 260, S.scene === 'moon' ? 'ПОСАДКА' : 'УЗЕЛ', S.scene === 'moon' ? '8 м от борта' : 'шлюз');
+  s += C(284, 248, 32, 'p', 1, .6) + L(284, 212, 284, 284, 'p', .7, .4) + L(248, 248, 320, 248, 'p', .7, .4) + L(284, 248, 264, 232, 'a', 2) + C(264, 232, 3, null, 0, 1, '', 'a');
+  return s;
+}
+function hTerr(d) { return Math.max(0, 1.4 + 1.1 * Math.sin(d / 17) + .7 * Math.sin(d / 7 + 1) + 2.6 * Math.exp(-(((d - 92) / 9) ** 2))); }
+function pTransfer() {
+  let s = grid(); const X = d => 22 + 2 * d, Y = h => 150 - 10 * h;
+  s += T(14, 18, 'ПРОФИЛЬ ПЕРЕЛЁТА · РЕЛЬЕФ ПО ПУТИ', 'd', 10);
+  const g = []; for (let d = 0; d <= 150; d += 2) g.push([X(d), Y(hTerr(d))]);
+  s += P(poly(g) + ` L${X(150)},150 L${X(0)},150 Z`, 'd', 1, .8, '', 'd', .25);
+  const plan = [[0, 3.2], [8, 5], [20, 7], [120, 7], [134, 3.5], [142, hTerr(142)]].map(([d, h]) => [X(d), Y(h)]);
+  s += P(poly(plan), 'a', 1.6, 1, '5 3');
+  s += L(X(92), Y(hTerr(92)), X(92), Y(7), 'p', 1, .7, '2 2') + T(X(92) + 4, Y(5.6), 'зазор 2,1 м', 'p', 9);
+  s += C(X(0), Y(3.2), 4, 'w', 1.5, 1, '', 'w') + T(X(0) + 6, Y(3.2) - 6, 'Я', 'w', 10, 'start', 700);
+  s += L(X(142), Y(hTerr(142)), X(142), Y(hTerr(142)) - 22, 'a', 1.4) + P(`M${X(142)},${Y(hTerr(142)) - 22} l12,4 l-12,4 z`, 'a', 1, 1, '', 'a') + T(X(142) - 4, Y(hTerr(142)) - 26, 'ТАНТРА', 'a', 9.5, 'end', 600);
+  [0, 5, 10].forEach(h => s += T(18, Y(h) + 3, h, 'd', 8.5, 'end'));
+  s += cell(14, 170, 'ДАЛЬНОСТЬ', '142 м') + cell(120, 170, 'ПЕЛЕНГ', '312°') + cell(226, 170, 'ВРЕМЯ', '0:48');
+  s += cell(14, 206, 'ВЫСОТА ПЕРЕЛЁТА', '7,0 м', 'a') + cell(120, 206, 'Δv ПЕРЕЛЁТА', '38 м/с') + cell(226, 206, 'ЗАПАС ПОСЛЕ', '191 м/с');
+  s += L(14, 244, 326, 244, 'd', 1, .5) + T(14, 262, 'ПОСАДКА: 8 м от борта · склон 4° · ровно', 'p', 11) + T(14, 282, 'Enter — пуск перелёта', 'a', 11, 'start', 600);
+  return s;
+}
+function pLanding() {
+  let s = grid(); const cx = 110, cy = 128;
+  s += T(14, 18, 'ТОЧКА ПОСАДКИ · ВИД СВЕРХУ', 'd', 10);
+  [20, 45, 70].forEach(r => s += C(cx, cy, r, 'p', 1, .4, '3 4'));
+  s += L(cx - 10, cy, cx + 10, cy, 'a', 1.6) + L(cx, cy - 10, cx, cy + 10, 'a', 1.6) + C(cx, cy, 16, 'a', 1.4);
+  s += C(128, 114, 5, 'w', 1.6, 1, '', 'w') + L(128, 114, 146, 106, 'w', 1.6) + P('M146,106 l-7,-2 l3,7 z', 'w', 1, 1, '', 'w') + T(150, 104, 'снос 0,3 м/с', 'w', 10);
+  // vertical speed tape with injury limits
+  const Yv = v => 30 + (2 - v) * 11.1;
+  s += R(236, Yv(0), 18, Yv(-1.5) - Yv(0), null, 0, 1, 'p', .3) + R(236, Yv(-1.5), 18, Yv(-7) - Yv(-1.5), null, 0, 1, 'a', .3) + R(236, Yv(-7), 18, Yv(-14) - Yv(-7), null, 0, 1, 'r', .3) + R(236, Yv(-14), 18, Yv(-16) - Yv(-14), null, 0, 1, 'r', .6);
+  s += R(236, Yv(2), 18, Yv(-16) - Yv(2), 'd', 1, .8);
+  [2, 0, -1.5, -7, -14].forEach(v => s += L(254, Yv(v), 262, Yv(v), 'p', 1, .8) + T(266, Yv(v) + 4, num(v, v % 1 ? 1 : 0, true), 'd', 9.5));
+  s += T(300, Yv(-10.5), 'травма', 'a', 9.5) + T(300, Yv(-15) + 3, 'гибель', 'r', 9.5);
+  s += P(`M232,${Yv(-.4)} l-10,-7 v14 z`, 'w', 1, 1, '', 'w') + T(245, 22, 'ВЕРТ м/с', 'd', 9.5, 'middle');
+  s += cell(14, 214, 'ВЫСОТА', '3,2 м') + cell(84, 214, 'ВЕРТ', '−0,4 м/с') + cell(160, 214, 'КАСАНИЕ', '≈ 8 с');
+  s += L(14, 252, 222, 252, 'd', 1, .5) + T(14, 270, 'под ногами: уклон 6° ✓ · грунт твёрдый', 'p', 10.5) + T(14, 288, 'касание ≤ 1,5 м/с · травма > 7 · гибель > 14', 'd', 9.5);
+  return s;
+}
+function pApproach() {
+  let s = grid(); const tx = 232, ty = 82;
+  s += T(14, 18, 'ОТНОСИТЕЛЬНОЕ ДВИЖЕНИЕ (LVLH)', 'd', 10);
+  s += L(10, ty, 330, ty, 'd', 1, .6, '2 3') + L(tx, 26, tx, 150, 'd', 1, .6, '2 3') + T(326, ty - 5, '+V по ходу', 'd', 9, 'end') + T(tx + 4, 148, 'к Земле ↓', 'd', 9);
+  s += P(`M${tx},${ty} L40,${ty - 51} M${tx},${ty} L40,${ty + 51}`, 'a', 1, .5, '6 4');
+  s += C(tx, ty, 43, 'r', 1, .7, '4 3') + T(tx + 30, ty - 38, '30 м', 'r', 9);
+  s += R(tx - 10, ty - 3, 20, 6, 'w', 1.2, 1, 'w', .2) + L(tx - 16, ty, tx + 16, ty, 'w', 1.5);
+  for (let i = 1; i <= 7; i++) s += C(170 - 12 * i, 92 + 1.2 * i * i * .3, 1.3, null, 0, 1, '', 'p', 1 - i * .12);
+  s += P('M170,92 Q186,96 190,84', 'a', 1.6, 1, '4 3') + P('M170,84 L178,96 L170,92 L162,96 Z', 'w', 1.2, 1, '', 'w');
+  s += cell(14, 162, 'ДАЛЬН', '42,6 м') + cell(96, 162, 'V СБЛИЖ', '−0,21', 'a') + cell(186, 162, 'ДО ЦЕЛИ', '3:23') + cell(262, 162, 'ΔV СИНХР', '0,34');
+  // range-rate corridor
+  const X = r => 36 + 96 * Math.log10(r), Y = v => 288 - 88 * v;
+  s += L(36, 288, 326, 288, 'd', 1, .7) + L(36, 196, 36, 288, 'd', 1, .7);
+  const up = [], lo = []; for (let e = 0; e <= 3.0001; e += .1) { const r = 10 ** e; up.push([X(r), Y(Math.min(1, r / 60))]); lo.push([X(r), Y(r / 200 > 1 ? 1 : r / 200)]); }
+  s += P(poly(up.concat(lo.reverse())) + 'Z', null, 0, 1, '', 'p', .16) + P(poly(up.slice()), 'p', .8, .5);
+  const hist = []; for (let e = 2.6; e >= 1.63; e -= .05) { const r = 10 ** e; hist.push([X(r), Y(Math.min(.95, r / 110 + .04 * Math.sin(e * 9)))]); }
+  s += P(poly(hist), 'w', 1.2, .7) + C(X(42.6), Y(.21), 4, 'a', 1.6, 1, '', 'a');
+  [1, 10, 100, 1000].forEach(r => s += L(X(r), 288, X(r), 292, 'd', 1) + T(X(r), 300, r >= 1000 ? '1 км' : r, 'd', 8.5, 'middle'));
+  [0, .5, 1].forEach(v => s += T(32, Y(v) + 3, num(v, v ? 1 : 0), 'd', 8.5, 'end'));
+  s += T(326, 206, 'КОРИДОР СКОРОСТИ', 'p', 9.5, 'end', 600);
+  return s;
+}
+function pDock() {
+  let s = grid(); const cx = 140, cy = 132;
+  s += T(14, 18, 'ЦЕЛЬ: ШЛЮЗ «КВЕСТ» · ПОРУЧЕНЬ', 'a', 10, 'start', 600);
+  s += C(cx, cy, 100, 'd', 1, .5) + C(cx, cy, 60, 'd', 1, .5) + C(cx, cy, 20, 'p', 1, .6, '3 3');
+  s += L(cx - 100, cy, cx - 24, cy, 'p', 1) + L(cx + 24, cy, cx + 100, cy, 'p', 1) + L(cx, cy - 100, cx, cy - 24, 'p', 1) + L(cx, cy + 24, cx, cy + 100, 'p', 1);
+  const px = cx + 18, py = cy - 8; s += C(px, py, 24, 'a', 1.8) + L(px - 8, py, px + 8, py, 'a', 1.4) + L(px, py - 8, px, py + 8, 'a', 1.4);
+  s += L(cx, cy, px, py, 'w', 1, .8, '3 2');
+  s += P(`M${cx + 100 * Math.sin(.02)},${cy - 100} l-5,-9 h10 z`, 'w', 1, 1, '', 'w') + T(cx, cy - 112, 'КРЕН +0,1°', 'd', 9, 'middle');
+  // range tape (log)
+  const Yr = r => 246 - (Math.log10(r) + 1) * 54;
+  s += L(290, Yr(100), 290, Yr(.1), 'd', 1, .8);
+  [100, 10, 1, .1].forEach(r => s += L(290, Yr(r), 298, Yr(r), 'p', 1) + T(302, Yr(r) + 4, num(r, r < 1 ? 1 : 0), 'd', 9));
+  s += P(`M288,${Yr(42.6)} l-10,-7 v14 z`, 'a', 1, 1, '', 'a') + T(274, Yr(42.6) + 4, '42,6', 'w', 11, 'end', 600) + T(290, 26, 'Д, м', 'd', 9.5, 'middle');
+  s += T(274, Yr(42.6) + 20, '−0,21 м/с', 'a', 10, 'end', 600);
+  s += cell(14, 250, 'ΔX', '+0,18 м') + cell(84, 250, 'ΔY', '−0,07 м') + cell(154, 250, 'ТАНГАЖ', '+1,2°') + cell(224, 250, 'РЫСК', '−0,4°');
+  return s;
+}
+function pBody() {
+  let s = grid(); seed = 3;
+  const g = (y, name, val, lo, hi, base, amp, k) => {
+    let q = T(14, y, name, 'd', 10) + T(326, y, val, k || 'w', 12, 'end', 700) + R(14, y + 6, 312, 52, 'd', 1, .4) + R(15, y + 6 + 52 * (1 - hi), 310, 52 * (hi - lo), null, 0, 1, 'p', .1);
+    const pts = []; for (let i = 0; i <= 60; i++) pts.push([15 + i * 5.16, y + 58 - 52 * (base + amp * Math.sin(i / 7) + (rnd() - .5) * amp * .6)]);
+    return q + P(poly(pts), k || 'p', 1.4);
+  };
+  s += g(18, 'ПУЛЬС · 10 мин', '96 уд/мин', .2, .6, .42, .12) + g(98, 'ДЫХАНИЕ', '22 в мин', .2, .55, .45, .1) + g(178, 'ТЕМПЕРАТУРА ТЕЛА', '37,1 °C', .3, .6, .5, .05);
+  s += T(14, 270, 'СИЛЫ', 'd', 10) + R(60, 262, 110, 10, 'd', 1, .7) + R(61, 263, 108 * .92, 8, null, 0, 1, 'p', .85) + T(176, 271, '92 %', 'w', 11, 'start', 600);
+  s += T(14, 290, 'НАГРУЗКА 35 % · ТРАВМ НЕТ · CO₂ 0,05 кПа', 'p', 10.5);
+  return s;
+}
+function pOpts() {
+  let s = grid();
+  s += T(14, 22, 'ЦВЕТ ЭКРАНА', 'd', 10);
+  Object.entries(PAL).forEach(([k, pl], i) => {
+    const y = 34 + i * 58, on = k === S.pal;
+    s += `<g data-pal="${k}" style="cursor:pointer">` + R(10, y, 320, 50, on ? 'a' : 'd', on ? 1.6 : 1, 1, on ? 'a' : null, .1);
+    s += `<rect x="22" y="${y + 13}" width="24" height="24" fill="${pl.p}"/><rect x="50" y="${y + 13}" width="24" height="24" fill="${pl.a}"/>`;
+    s += T(88, y + 23, (on ? '▶ ' : '') + pl.n.toUpperCase(), on ? 'a' : 'w', 12.5, 'start', 700) + T(88, y + 39, ['основной циан, автопилот оранжевый', 'основной оранжевый, автопилот циан', 'основной белый, автопилот оранжевый'][i], 'd', 9.5) + '</g>';
+  });
+  s += L(14, 214, 326, 214, 'd', 1, .5);
+  s += T(14, 234, 'ЯРКОСТЬ', 'd', 10) + hbar(90, 228, 236, .7, 'p');
+  s += T(14, 258, 'СВЕЧЕНИЕ', 'd', 10) + hbar(90, 252, 236, .5, 'p');
+  s += T(14, 286, 'выбор: [ — строка · Enter — принять', 'd', 9.5);
+  return s;
+}
+const LF = { local:pLocal, orbit:pOrbit, power:pPower, opts:pOpts };
+const RF = { targets:pTargets, transfer:pTransfer, landing:pLanding, approach:pApproach, dock:pDock, body:pBody };
+const LT = { local:'КАРТА', orbit:'ОРБИТА', power:'ПИТАНИЕ И ТЕПЛО', opts:'ОПЦИИ' };
+const RT = { targets:'ЦЕЛИ', transfer:'ПЕРЕЛЁТ', landing:'ПОСАДКА', approach:'СБЛИЖЕНИЕ', dock:'СТЫКОВКА', body:'ОРГАНИЗМ' };
+
+function mfd(side) {
+  const left = side === 'L', pages = left ? LP : RP[S.scene], cur = left ? S.L : S.R;
+  const tgt = TG[S.scene][S.tsel % TG[S.scene].length][0];
+  let h = `<div class="fr"><i></i><i></i><i></i><i></i>
+    <div class="hd">${left ? LT[cur] : RT[cur]}<span>${left ? (cur === 'local' ? (S.scene === 'moon' ? 'МАСШТАБ 100 м' : 'МАСШТАБ 40 м') : '') : 'ЦЕЛЬ: ' + tgt}</span></div>
+    <div class="tabs">${pages.map(([id, n]) => `<div class="tab${id === cur ? ' on' : ''}" data-side="${side}" data-p="${id}">${n}</div>`).join('')}</div>
+    <svg viewBox="0 0 340 300">${(left ? LF : RF)[cur]()}</svg>`;
+  if (!left) {
+    const moon = S.scene === 'moon';
+    const ap = moon ? [['УДЕРЖ ВЫС', 'act'], ['ПЕРЕЛЁТ', 'arm'], ['ПОСАДКА', ''], ['ЗАВИС', '']] : [['СБЛИЖ', 'act'], ['СИНХР', ''], ['УДЕРЖ', ''], ['СТЫК', 'arm']];
+    h += `<div class="ap${S.mode === 'eva' ? ' off' : ''}">${ap.map(([n, k]) => `<div class="${S.mode === 'eva' ? '' : k}">${n}</div>`).join('')}</div>`;
+  }
+  h += `<div class="ft"><span>${left ? 'M — свернуть · [ — страница' : 'N — свернуть · ] — стр. · T — цель'}</span><span>${left ? '+ / − масштаб' : (S.mode === 'eva' ? 'ранец не в полёте' : 'Enter — автопилот')}</span></div></div>`;
+  return h;
+}
+
+// ---------- assembly ----------
+const stage = document.getElementById('stage'), wrap = document.getElementById('wrap');
+function render() {
+  const pl = PAL[S.pal];
+  stage.style.cssText += `;--p:${pl.p};--a:${pl.a};--w:${pl.w};--d:${pl.d};--r:${pl.r};--bgk:#000;--font:'${S.font}'`;
+  const vig = `<defs><radialGradient id="vig" cx=".5" cy=".5" r=".72"><stop offset=".72" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".6"/></radialGradient></defs>`;
+  let h = `<svg viewBox="0 0 1280 720" width="1280" height="720" style="position:absolute;left:0;top:0">${vig}${S.scene === 'moon' ? sceneMoon() : sceneOrbit()}</svg>`;
+  h += `<svg class="ov" viewBox="0 0 1280 720" width="1280" height="720" style="position:absolute;left:0;top:0">${overlay()}</svg>`;
+  const pos = { L:'left:112px;bottom:34px;transform:scale(.8);transform-origin:left bottom', R:'left:838px;bottom:34px;transform:scale(.8);transform-origin:right bottom' };
+  const tgt = TG[S.scene][S.tsel % TG[S.scene].length][0];
+  const ap = S.mode === 'eva' ? 'ранец не в полёте' : (S.scene === 'moon' ? 'АП: УДЕРЖ ВЫС' : 'АП: СБЛИЖ');
+  ['L', 'R'].forEach(sd => {
+    if (sd === 'L' ? S.cL : S.cR) h += `<div class="mfd" style="${pos[sd]}" data-close="${sd}">${mfd(sd)}</div>`;
+    else h += `<div class="mtab" data-open="${sd}" style="${sd === 'L' ? 'left:112px' : 'left:904px'}">${sd === 'L' ? 'M ▴ КАРТА · ' + LP.find(p => p[0] === S.L)[1] : 'N ▴ ЦЕЛЬ: ' + tgt + ' · <b style="color:var(--a)">' + ap + '</b>'}</div>`;
+  });
+  stage.innerHTML = h;
+  stage.querySelectorAll('.tab').forEach(e => e.onclick = ev => { ev.stopPropagation(); S[e.dataset.side] = e.dataset.p; render(); });
+  stage.querySelectorAll('[data-open]').forEach(e => e.onclick = () => { S['c' + e.dataset.open] = true; render(); });
+  stage.querySelectorAll('[data-pal]').forEach(e => e.onclick = ev => { ev.stopPropagation(); S.pal = e.dataset.pal; render(); });
+  stage.querySelectorAll('[data-close] .hd').forEach(e => e.onclick = () => { S['c' + e.closest('[data-close]').dataset.close] = false; render(); });
+  controls(); fit();
+}
+function setMode(id) {
+  const md = MODES.find(x => x.id === id); S.mode = id;
+  if (md.scene) S.scene = md.scene;
+  S.L = md.L; S.R = md.R; S.tsel = 0;
+  if (!RP[S.scene].some(p => p[0] === S.R)) S.R = 'targets';
+  render();
+}
+function controls() {
+  const grp = (lab, items, cur, fn) => `<div class="grp"><b>${lab}</b>${items.map(([k, n]) => `<button class="${k === cur ? 'on' : ''}" data-f="${fn}" data-k="${k}">${n}</button>`).join('')}</div>`;
+  document.getElementById('ctl').innerHTML =
+    grp('Режим', MODES.map(m => [m.id, m.k + ' ' + m.n]), S.mode, 'mode') +
+    grp('Место', [['moon', 'Луна'], ['orbit', 'у МКС']], S.scene, 'scene');
+  document.querySelectorAll('#ctl button').forEach(b => b.onclick = () => {
+    const f = b.dataset.f, k = b.dataset.k;
+    if (f === 'mode') return setMode(k);
+    S[f] = k;
+    if (f === 'scene') { if (!RP[k].some(p => p[0] === S.R)) S.R = 'targets'; S.tsel = 0; }
+    render();
+  });
+  document.querySelectorAll('#ctl button').forEach(b => { if (b.dataset.f === 'font') b.style.fontFamily = `'${b.dataset.k}', sans-serif`; });
+}
+function fit() { const k = wrap.clientWidth / 1280; stage.style.transform = `scale(${k})`; wrap.style.height = (720 * k) + 'px'; }
+addEventListener('resize', fit);
+addEventListener('keydown', e => {
+  if (e.key >= '1' && e.key <= '4') return setMode(MODES[+e.key - 1].id);
+  const cyc = (arr, cur) => arr[(arr.findIndex(p => p[0] === cur) + 1) % arr.length][0];
+  if ('mMьЬ'.includes(e.key)) { S.cL = !S.cL; render(); }
+  if ('nNтТ'.includes(e.key)) { S.cR = !S.cR; render(); }
+  if (e.key === '[') { S.L = cyc(LP, S.L); render(); }
+  if (e.key === ']') { S.R = cyc(RP[S.scene], S.R); render(); }
+  if ('tTеЕ'.includes(e.key)) { S.tsel++; render(); }
+});
+document.fonts && document.fonts.ready.then(render);
+render();
+</script>
+</body>
+</html>

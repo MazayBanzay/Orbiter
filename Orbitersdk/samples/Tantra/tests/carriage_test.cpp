@@ -2,6 +2,7 @@
 // smoothness, trunnion height and pitch at key phases. Build: tests\run_carriage_test.bat
 #include <cmath>
 #include <cstdio>
+#include <initializer_list>
 
 #include "../core/Carriage.h"
 
@@ -11,15 +12,20 @@ static Vec3 Sub(Vec3 a, Vec3 b) { return Vec3{a.x - b.x, a.y - b.y, a.z - b.z}; 
 static Vec3 Cross(Vec3 a, Vec3 b) { return Vec3{a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x}; }
 static double Len(Vec3 a) { return std::sqrt(a.x * a.x + a.y * a.y + a.z * a.z); }
 
-int main() {
+// Erect and lay the ship at one CG station; returns the number of failures.
+int RunErect(double sCG) {
+    std::printf("--- CG at s %.1f ---\n", sCG);
     Carriage c;
     CarriageGeometry g;
-    g.legRestX = 17.0;
-    g.legRestS = 5.0;
-    const double a[4][2] = {{0.694, 0.720}, {-0.694, 0.720}, {-0.817, -0.577}, {0.817, -0.577}};  // stern corners
-    for (int i = 0; i < 4; ++i) g.standFoot[i] = {a[i][0] * g.standR, a[i][1] * g.standR, 0.0};
+    g.trackS0 = 32.0;          // C-148: hip track s 32..53, stowed at s 46
+    g.trackS1 = 53.0;
+    g.stowS = 46.0;
+    g.legRestX = 21.6;
+    g.legRestS = -3.5;
+    const double a[4][2] = {{6.85, 17.0}, {-6.85, 17.0}, {-22.3, -11.55}, {22.3, -11.55}};  // stern feet (MeshLayout)
+    for (int i = 0; i < 4; ++i) g.standFoot[i] = {a[i][0], a[i][1], 0.0};
     c.SetGeometry(g);
-    const double sCG = 38.0, dt = 0.02;
+    const double dt = 0.02;
     c.Update(0.0, sCG);
     int fails = 0;
     auto check = [&](bool ok, const char* what) {
@@ -67,6 +73,16 @@ int main() {
     std::printf("max contact-plane change %.3f m per %.2f s step (continuous motion; jump if > 0.25 m)\n", maxStep, dt);
     check(maxStep < 0.25, "no jumps (turning moves the nose ~8 m/s; a jump would be metres)");
     check(c.Progress() == 0.0, "back to level");
+    return fails;
+}
+
+int main() {
+    int fails = 0;
+    auto check = [&](bool ok, const char* what) {
+        if (!ok) { std::printf("FAIL: %s\n", what); ++fails; }
+    };
+    // loaded, old origin, landing (track end), empty (CG ahead of the track)
+    for (double sCG : {35.3, 38.0, 53.0, 56.5}) fails += RunErect(sCG);
     // Took off at the loading height: stowing in flight lowers the carriage first, then the gear.
     {
         Carriage a;
