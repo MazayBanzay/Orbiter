@@ -1,0 +1,55 @@
+BEGIN_DESC
+Загрузка анамезона. «Тантра» лежит на колоннах лафета. Верхние гнёзда ловушек заняты,
+нижние пусты. Под левым и правым люками порта на грунте стоят две кассеты-ловушки
+(9,8 x 24,8 м, по 9,37 кт анамезона).
+
+Нижняя панель (F8, затем Ctrl+Вниз), блок «ПОРТ АНАМЕЗОНА»:
+ПРИНЯТЬ КАССЕТУ - створки, вилки подъёмника опускаются к цапфам кассеты, замыкаются,
+поднимают её в гнездо, разъём замыкается на контур поля. Повторить для второго люка.
+ВЫГРУЗИТЬ ЛОВУШКУ - обратный путь: ловушка уходит на собственный накопитель поля и
+опускается на грунт. Клавиши: Ctrl+O приём, Ctrl+Shift+O выгрузка.
+Кассета должна стоять в окне под люком: 3 м вбок, 5 м вдоль, перекос до 15 градусов.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52000.5
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Tantra
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Tantra
+  MODE Extern
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Tantra:Tantra
+  STATUS Landed Earth
+  POS 12.5000000 29.5000000
+  HEADING 90.00
+  PRPLEVEL 0:0.000 1:0.000 2:1.000 3:1.000 4:1.000
+  ENGSET 0
+  IGNITION 0
+  GLIMIT 1 5.00
+  TRAPSLOTS 0 0 1 1
+END
+TantraTrap1:TantraTrap
+  STATUS Landed Earth
+  POS 12.4999577 29.4999501
+  HEADING 90.00
+  PRPLEVEL 0:1.000
+END
+TantraTrap2:TantraTrap
+  STATUS Landed Earth
+  POS 12.4999577 29.5000499
+  HEADING 90.00
+  PRPLEVEL 0:1.000
+END
+END_SHIPS

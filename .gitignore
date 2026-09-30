@@ -23,6 +23,11 @@ __pycache__/
 /Orbitersdk/resources/*
 !/Orbitersdk/resources/Orbiter.props
 
+# --- OrbiterCrew: own crew system (sources, config, scenarios) ---
+!/Orbitersdk/OrbiterCrew/
+/Orbitersdk/OrbiterCrew/build/
+/Orbitersdk/OrbiterCrew/*.user
+
 # --- test scenarios ---
 !/Scenarios/
 /Scenarios/*
@@ -40,3 +45,36 @@ __pycache__/
 !/Config/Vessels/UACS/Astronauts/
 /Config/Vessels/UACS/Astronauts/*
 !/Config/Vessels/UACS/Astronauts/Z2.cfg
+
+# --- OrbiterCrew config and scenarios ---
+!/Config/Vessels/OrbiterCrew/
+!/Config/OrbiterCrew/
+!/Scenarios/OrbiterCrew/
+
+# --- starship Tantra: sources, assets, configs, scenarios, sounds (built modules stay local) ---
+!/Orbitersdk/samples/
+/Orbitersdk/samples/*
+!/Orbitersdk/samples/Tantra/
+/Orbitersdk/samples/Tantra/build/
+!/Meshes/
+/Meshes/*
+!/Meshes/Tantra/
+!/Textures/
+/Textures/*
+!/Textures/Tantra/
+!/Textures/Tantra_*.dds
+!/Config/Vessels/Tantra.cfg
+!/Config/Vessels/TantraTrap.cfg
+!/Scenarios/Tantra/
+!/XRSound/
+/XRSound/*
+!/XRSound/Tantra/
+
+# --- build artifacts (never committed) ---
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.iobj
+*.ipdb

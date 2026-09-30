@@ -1,0 +1,100 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{background:#fff;font-family:system-ui;margin:16px} :root{--border:#ccc;--radius:8px;--text-primary:#111;--text-secondary:#555}</style></head><body>
+<div id="W">
+<div style="padding:1rem 0">
+  <div class="scene" style="border-radius:12px;overflow:hidden;background:#0b0807">
+    <canvas id="cv" style="display:block;width:100%;height:520px"></canvas>
+  </div>
+  <div style="display:flex;gap:12px;align-items:center;margin-top:12px;flex-wrap:wrap">
+    <button id="pl" class="b"><span>Пауза</span></button>
+    <input id="sl" type="range" min="0" max="1000" step="1" value="0" style="flex:1;min-width:200px">
+  </div>
+  <div id="ph" style="font-size:14px;color:var(--text-primary);margin-top:8px"></div>
+  <div id="ro" style="font-size:13px;color:var(--text-secondary);margin-top:4px"></div>
+</div>
+<style>.b{font:inherit;font-size:13px;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border);background:transparent;color:var(--text-primary);cursor:pointer}</style>
+<script>
+(function(){
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');let W=0,H=0,K=1,OX=0,OY=0;
+function rs(){const r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1;const w=Math.max(1,r.width),h=Math.max(1,r.height);
+  cv.width=Math.round(w*d);cv.height=Math.round(h*d);ctx.setTransform(d,0,0,d,0,0);W=w;H=h;
+  K=Math.max(0.5,Math.min(W/205,(H-24)/168));OX=(W-205*K)/2+66*K;OY=H-24;}
+rs();window.addEventListener('resize',rs);if(window.ResizeObserver)new ResizeObserver(rs).observe(cv);
+const X=x=>OX+x*K, Z=z=>OY-z*K;
+const top=[[0,8],[10,12],[25,14.5],[45,15],[65,13],[85,10],[105,6],[118,3],[126,0]];
+const bot=[[126,0],[118,-3],[110,-5],[100,-7],[80,-8],[60,-8],[40,-8],[20,-8],[8,-7],[0,-5]];
+const keel=[[15,-8],[20,-11],[62,-11],[67,-8]];
+const crest=[[8,12],[16,34],[30,34],[50,14.8]];
+const F=[-10,0];
+const L1=26,L2=26,HIPL=[32,-7],HIPU=[32,7],FOREH=[98,-8];
+function pose(S,phi){const c=Math.cos(phi),s=Math.sin(phi);return p=>[S[0]+p[0]*c-p[1]*s,S[1]+p[0]*s+p[1]*c];}
+function inv(S,phi){const c=Math.cos(phi),s=Math.sin(phi);return q=>{const dx=q[0]-S[0],dz=q[1]-S[1];return [dx*c+dz*s,-dx*s+dz*c];};}
+function ik(Hp,P){const dx=P[0]-Hp[0],dz=P[1]-Hp[1],d0=Math.max(1e-6,Math.hypot(dx,dz)),d=Math.min(d0,L1+L2-0.01);
+  const ux=dx/d0,uz=dz/d0,a=(L1*L1-L2*L2+d*d)/(2*d),h=Math.sqrt(Math.max(0,L1*L1-a*a));
+  const bx=Hp[0]+a*ux,bz=Hp[1]+a*uz,k1=[bx-h*uz,bz+h*ux],k2=[bx+h*uz,bz-h*ux];return k1[1]>k2[1]?k1:k2;}
+const lerp=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+const cl=v=>Math.max(0,Math.min(1,v)),ease=u=>u*u*(3-2*u);
+const stairs=(u,n)=>u-Math.sin(2*Math.PI*n*u)/(2*Math.PI*n);
+function rot(S0,ang){const dx=S0[0]-F[0],dz=S0[1]-F[1],c=Math.cos(ang),s=Math.sin(ang);return [F[0]+dx*c-dz*s,F[1]+dx*s+dz*c];}
+const STOW_L=[-10,-12],STOW_U=[-10,12],LAND_L=[-14,-20],LAND_U=[-14,20];
+let T=0,playing=true,last=performance.now();
+const sl=document.getElementById('sl'),pl=document.getElementById('pl');
+pl.onclick=()=>{playing=!playing;pl.querySelector('span').textContent=playing?'Пауза':'Пуск';};
+sl.oninput=()=>{T=sl.value/1000;};
+function state(t){
+  let phi=Math.PI/2,S=[-30,10],comp=4,deploy=0,fold=0,fore=0,lift=0,fire=0,phase='';
+  if(t<0.16){const h=32*Math.pow(1-t/0.16,1.4);S=[-30,14+h];deploy=ease(cl((t-0.05)/0.09));fire=1;phase='Спуск кормой вниз на планетарных чашах, лапы раскрываются';}
+  else if(t<0.24){comp=4*(1-ease((t-0.16)/0.08));S=[-30,10+comp];deploy=1;fire=Math.max(0,1-(t-0.16)/0.03);phase='Касание: амортизаторы проходят ~4 м хода, чаши гаснут';}
+  else if(t<0.82){const u=(t-0.24)/0.58;phi=Math.PI/2*(1-stairs(u,7));S=rot([-30,10],phi-Math.PI/2);comp=0;deploy=1;
+    fold=ease(cl((Math.PI/2-phi)/(Math.PI/2*0.45)));fore=ease(cl((0.55-phi)/0.5));phase='Нос опускается «короткими толчками»: поворот вокруг кормовых пят';}
+  else if(t<0.88){phi=0;S=[0,20];comp=0;deploy=1;fold=1;fore=1;phase='Носовые стойки приняли нагрузку, корабль в горизонтали';}
+  else{phi=0;S=[0,20];deploy=1;fold=1;fore=1;lift=ease(cl((t-0.88)/0.1));phase='Подъёмник опускается из шлюза';}
+  return {phi,S,comp,deploy,fold,fore,lift,fire,phase};
+}
+function poly(pts,fill,stroke,lw){ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(X(p[0]),Z(p[1])):ctx.moveTo(X(p[0]),Z(p[1])));ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw||1;ctx.stroke();}}
+function seg(a,b,col,w){ctx.strokeStyle=col;ctx.lineWidth=w;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(X(a[0]),Z(a[1]));ctx.lineTo(X(b[0]),Z(b[1]));ctx.stroke();}
+function joint(p,r,col){ctx.fillStyle=col;ctx.beginPath();ctx.arc(X(p[0]),Z(p[1]),r,0,7);ctx.fill();}
+function leg(hip,knee,foot,far,padW){
+  const cMain=far?'#4a4f57':'#9aa0a8',cCyl=far?'#3a3d44':'#c9b27a';
+  seg(hip,knee,cMain,Math.max(4,1.8*K));seg(knee,foot,cMain,Math.max(3.5,1.5*K));
+  seg(lerp(hip,knee,0.18),lerp(knee,foot,0.45),cCyl,Math.max(2,0.7*K));
+  joint(hip,Math.max(3,0.9*K),cMain);joint(knee,Math.max(3,1.0*K),cMain);
+  seg([foot[0]-padW/2,foot[1]],[foot[0]+padW/2,foot[1]],cMain,Math.max(3,0.9*K));
+}
+function draw(now){
+  const dt=Math.min(0.05,Math.max(0,(now-last)/1000));last=now;
+  if(playing){T+=dt/22;if(T>1.08)T=0;sl.value=String(Math.min(1000,Math.round(T*1000)));}
+  const t=Math.min(1,T),st=state(t),P=pose(st.S,st.phi),I=inv(st.S,st.phi);
+  ctx.fillStyle='#0b0807';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#231812';ctx.fillRect(0,Z(0),W,H-Z(0));
+  if(st.fire>0){const dir=[-Math.cos(st.phi),-Math.sin(st.phi)],pulse=0.55+0.45*Math.abs(Math.sin(now/1000*14));
+    for(const oy of [-5,0,5]){const o=P([0,oy]),len=Math.max(1,Math.min(40,o[1]-0.5)),e=[o[0]+dir[0]*len,o[1]+dir[1]*len];
+      ctx.strokeStyle='rgba(200,180,255,'+(0.8*st.fire*pulse).toFixed(3)+')';ctx.lineWidth=Math.max(3,2*K);ctx.beginPath();ctx.moveTo(X(o[0]),Z(o[1]));ctx.lineTo(X(e[0]),Z(e[1]));ctx.stroke();}
+    const s0=P([0,0]),a=Math.min(1,20/Math.max(1,s0[1]))*0.35*st.fire;ctx.fillStyle='rgba(255,140,80,'+a.toFixed(3)+')';
+    ctx.beginPath();ctx.ellipse(X(s0[0]),Z(0),26*K,5*K,0,0,7);ctx.fill();}
+  const hipU=P(HIPU);let footU=P(lerp(lerp(STOW_U,LAND_U,st.deploy),STOW_U,st.fold));
+  if(t>=0.16&&t<0.24)footU=[-50,0];
+  leg(hipU,ik(hipU,footU),footU,true,10);
+  poly(crest.map(p=>P(p)),'#6b3a28','#8a5038',1);
+  poly(top.concat(bot).map(p=>P(p)),'#4d525c','#7c828d',1);
+  poly(keel.map(p=>P(p)),'#41454e','#6c717b',1);
+  for(const oy of [-5,0,5]){const c0=P([0.5,oy]);ctx.strokeStyle='#8f84e0';ctx.lineWidth=Math.max(1.5,0.5*K);ctx.beginPath();ctx.arc(X(c0[0]),Z(c0[1]),Math.max(3,2*K),0,7);ctx.stroke();}
+  poly([[118,3],[126,0],[118,-3],[114,0]].map(p=>P(p)),'#8d8b83',null);
+  const hipL=P(HIPL),footL=(t<0.16)?P(lerp(STOW_L,LAND_L,st.deploy)):F.slice();
+  leg(hipL,ik(hipL,footL),footL,false,10);
+  if(st.fore>0){const fh=P(FOREH),fl=I([98,0]),ft=P(lerp([98,-10],fl,st.fore));
+    seg(fh,ft,'#9aa0a8',Math.max(3.5,1.3*K));seg([ft[0]-3.5,ft[1]],[ft[0]+3.5,ft[1]],'#9aa0a8',Math.max(3,0.9*K));}
+  if(st.lift>0){const al=P([80,-8]),zl=al[1]-(al[1]-0.5)*st.lift;ctx.strokeStyle='#c9b27a';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(X(al[0]),Z(al[1]));ctx.lineTo(X(al[0]),Z(zl));ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#c9b27a';ctx.fillRect(X(al[0]-2),Z(zl)-2,4*K,3);}
+  ctx.fillStyle='#d9a066';ctx.beginPath();ctx.arc(X(F[0]),Z(0),3,0,7);ctx.fill();
+  ctx.font='12px system-ui,sans-serif';ctx.fillStyle='rgba(220,210,200,0.85)';ctx.textAlign='center';ctx.fillText('ось поворота',X(F[0]),Z(0)+16);
+  ctx.strokeStyle='rgba(220,210,200,0.7)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(W-20-20*K,16);ctx.lineTo(W-20,16);ctx.stroke();ctx.textAlign='right';ctx.fillText('20 м',W-20,32);
+  const keelLow=Math.min.apply(null,keel.map(p=>P(p)[1])),stern=Math.min.apply(null,[[0,-5],[0,0],[0,8]].map(p=>P(p)[1]));
+  document.getElementById('ph').textContent=st.phase;
+  document.getElementById('ro').textContent='наклон оси '+Math.round(st.phi*180/Math.PI)+'° · корма над грунтом '+Math.max(0,stern).toFixed(1)+' м · киль над грунтом '+Math.max(0,keelLow).toFixed(1)+' м · лапа шарнир–пята '+Math.hypot(hipL[0]-footL[0],hipL[1]-footL[1]).toFixed(1)+' м';
+}
+function loop(now){try{draw(now);}catch(e){document.getElementById('ph').textContent='Ошибка: '+e.message;}requestAnimationFrame(loop);}
+requestAnimationFrame(loop);
+})();
+</script>
+</div>
+</body></html>

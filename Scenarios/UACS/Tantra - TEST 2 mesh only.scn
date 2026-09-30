@@ -1,0 +1,41 @@
+BEGIN_DESC
+TEST 2: stock Z2 config with our mesh. Crash here = mesh/texture problem.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 58710.6
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+NizaKrit:UACS\Astronauts\TestZ2WithTantraMesh
+  STATUS Landed Earth
+  POS -80.6945000 28.6150000
+  HEADING 0.00
+  ALT 0.930
+  RCSMODE 0
+  AFCMODE 7
+  PRPLEVEL 0:1.000000 1:1.000000
+  NAME Niza Krit
+  ROLE navigator
+  MASS 62.000000
+  ALIVE 1
+  SUIT_ON 1
+END
+END_SHIPS

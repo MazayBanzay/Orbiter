@@ -1,0 +1,386 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Тантра C-146 кольцо</title><style>body{background:#fff;font-family:system-ui;margin:16px}:root{--border:#ccc;--border-accent:#3b6fd6;--radius:8px;--text-primary:#111;--text-secondary:#555}.sr-only{position:absolute;left:-9999px}</style></head><body><h2 class="sr-only">3D-макет Тантры «Копьё» C-146: бронированное плечо со встроенной обмоткой дефлектора (вариант 2 — складное кольцо в тени плеча), складные гребни, центральные планетарные моторы в корме, малые вспомогательные гондолы, вертикальный взлёт на кормовых лапах по сцене «Лебедя».</h2>
+<div style="padding:1rem 0">
+<div style="position:relative;border-radius:12px;overflow:hidden;background:#07080b">
+  <div id="c3" style="width:100%;height:580px"></div>
+  <div id="lg" style="position:absolute;left:10px;top:10px;font:12px system-ui,sans-serif;color:#e4e0da;background:rgba(0,0,0,.5);padding:8px 10px;border-radius:8px;line-height:1.55;display:none"></div>
+  <div id="st" style="position:absolute;right:10px;top:10px;font:12px system-ui,sans-serif;color:#e4e0da;background:rgba(0,0,0,.5);padding:6px 10px;border-radius:8px;max-width:60%"></div>
+  <div id="err" style="position:absolute;left:10px;bottom:10px;font:12px system-ui;color:#f99"></div>
+</div>
+<div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;align-items:stretch">
+  <canvas id="cv" width="300" height="130" style="background:#15161a;border-radius:8px;max-width:100%"></canvas>
+  <div id="ph" style="flex:1 1 320px;font:12px ui-monospace,Consolas,monospace;color:#e4e0da;background:#15161a;padding:8px 10px;border-radius:8px;line-height:1.45;white-space:pre;overflow-x:auto"></div>
+</div>
+<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+  <button class="b" id="xr">Системы (рентген)</button>
+  <button class="b" data-v="all">Общий вид</button>
+  <button class="b" data-v="aft">Корма</button>
+  <button class="b" data-v="nose">Нос</button>
+  <button class="b" data-v="hang">Ангар</button>
+  <button class="b" data-v="far">Издали</button>
+  <button class="b" data-v="stand">Опоры</button>
+  <button class="b" id="md">Режим: в системе</button>
+  <button class="b" id="dv">Дефлектор: складное кольцо (вариант 2)</button>
+  <button class="b" id="hg">Ангар: открыть</button>
+  <button class="b" id="ld">Роверы: выгрузить</button>
+  <button class="b" id="sh">Челнок: вывести</button>
+  <button class="b" id="gr">Шасси: убрать</button>
+  <button class="b" id="rs">Поставить на корму (лафет)</button>
+  <button class="b" id="pt">Порт: дикая планета</button>
+  <button class="b" id="pl">Планета: железная звезда 2.5 g</button>
+  <button class="b" id="ms">Масса: посадочная 2.9 кт</button>
+  <button class="b" id="to">Взлёт («Лебедь»)</button>
+  <button class="b" id="sk">Обшивка: тепловая броня</button>
+  <button class="b" id="ar">Остановить вращение</button>
+</div>
+<div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:10px;font-size:13px;align-items:center">
+  <label>Скорость анимации <input id="spd" type="range" min="-2" max="3.3" step="0.1" value="0" style="vertical-align:middle"> <span id="spdv">×1</span></label>
+  <label>Ветер <input id="wnd" type="range" min="0" max="60" step="1" value="0" style="vertical-align:middle"> <span id="wndv">0 м/с</span></label>
+</div>
+<div style="font-size:13px;color:var(--text-secondary);margin-top:8px">Режимы: <b>атмосфера</b> — гребни раскрыты (стабилизаторы), кольцо варианта 2 убрано; <b>в системе</b> — гребни и кольцо раскрыты (радиаторы, заряд накопителя); <b>межзвёздный</b> — всё в тени брони: боковые гребни прижаты к бортам, спинной втянут, работает только обшивка-радиатор. Взлёт: огни под килем, подъём на кормовые лапы, центральные моторы, «стена пламени», колонна огня.<br><b>Лафет (подъём механикой):</b> корабль держат две колонны за цапфы на линии центра масс. Каретка цапф ездит по бортовому пазу s 38–54 вслед за ЦМ, который сдвигается при загрузке анамезона. Колонны — мачты из жёстких лент («zipper mast»): три ленты из композита на углеродных нанотрубках сматываются с барабанов в каретке и сцепляются в квадратную трубу 4,2 м, поэтому в полёте снаружи ничего нет. Приводы сверхпроводящие, цапфы — на бесконтактных подшипниках с пиннингом потока (фиолетовое кольцо). Каждая колонна стоит на длинной стопе 30 м: она держит продольный момент, а в полёте складывается пополам и уходит в нишу каретки. Ветер: ползунок, допуск считается для каждой фазы с запасом 1,5; выше допуска операция останавливается на тормозах. Двигатели в подъёме не участвуют. Последовательность: гребни и гондолы убираются, колонны поднимают лежащий корабль так, чтобы корма прошла над грунтом (ЦМ + 16 м), затем поворот вокруг цапф. Момент при этом ≈ m·g·δ: только погрешность положения ЦМ и ветер, примерно в 100 раз меньше, чем у «коромысла». Дальше выходят четыре кормовые лапы на длинных радиальных стопах, колонны опускают корабль на них, отпускают цапфы и ложатся вдоль борта. Работает и с полной массой. <b>Порт:</b> вместо лап корма садится на сверхпроводящий стол: пиннинг потока держит её устойчиво без обратной связи, поле создаётся один раз, расход — только криогеника. Вне порта левитация невозможна: грунт почти немагнитен. <b>Корма:</b> анамезонные чаши закрыты ирисовыми заслонками, пока двигатель холодный; бортик отделяет кольцо планетарных.</div>
+</div>
+<style>.b{font:inherit;font-size:13px;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border);background:transparent;color:var(--text-primary);cursor:pointer}.b.on{border:2px solid var(--border-accent);padding:5px 11px}</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+try{
+const el=document.getElementById('c3');
+const R=new THREE.WebGLRenderer({antialias:true});R.setPixelRatio(Math.min(2,window.devicePixelRatio||1));el.appendChild(R.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x07080b);
+const cam=new THREE.PerspectiveCamera(35,1,1,8000);
+const ctl=new THREE.OrbitControls(cam,R.domElement);ctl.enableDamping=true;ctl.autoRotate=true;ctl.autoRotateSpeed=0.7;
+const VIEWS={all:[[180,60,210],[70,-2,0]],aft:[[-80,20,55],[4,0,0]],nose:[[175,20,60],[128,0,0]],hang:[[120,30,60],[90,-4,0]],far:[[300,170,430],[44,60,0]],stand:[[-120,50,190],[44,40,0]]};
+function view(k){const oy=window.__oy||0,p=VIEWS[k][0],t=VIEWS[k][1];cam.position.set(p[0],p[1]+oy,p[2]);ctl.target.set(t[0],t[1]+oy,t[2]);ctl.update();}
+view('all');
+scene.add(new THREE.HemisphereLight(0xc8d2e6,0x2a1d17,0.75));
+const d1=new THREE.DirectionalLight(0xffffff,0.95);d1.position.set(120,200,150);scene.add(d1);
+const d2=new THREE.DirectionalLight(0x8090b0,0.45);d2.position.set(-150,40,-120);scene.add(d2);
+function resize(){const w=Math.max(1,el.clientWidth),h=Math.max(1,el.clientHeight);R.setSize(w,h,false);R.domElement.style.width='100%';R.domElement.style.height='100%';cam.aspect=w/h;cam.updateProjectionMatrix();}
+resize();if(window.ResizeObserver)new ResizeObserver(resize).observe(el);window.addEventListener('resize',resize);
+const GY=-20,D=Math.PI/180;
+const g=new THREE.Mesh(new THREE.PlaneGeometry(1200,1200),new THREE.MeshStandardMaterial({color:0x1b140f,roughness:1}));g.rotation.x=-Math.PI/2;g.position.y=GY;scene.add(g);
+const grid=new THREE.GridHelper(600,60,0x3a2c22,0x2a2019);grid.position.y=GY+0.05;scene.add(grid);
+const skin=[];
+const mk=(o)=>{const m=new THREE.MeshStandardMaterial(Object.assign({side:THREE.DoubleSide,transparent:true},o));skin.push(m);return m;};
+const hullM=mk({color:0x4a4a4c,metalness:0.3,roughness:0.8});
+const darkM=mk({color:0x2c2f36,metalness:0.6,roughness:0.5});
+const shieldM=mk({color:0xa39478,metalness:0.9,roughness:0.22});
+const crestM=mk({color:0x7a3f2a,metalness:0.3,roughness:0.6});
+const cupM=new THREE.MeshStandardMaterial({color:0x9a90e8,emissive:0x281e66,metalness:0.85,roughness:0.2,side:THREE.DoubleSide});
+const legM=new THREE.MeshStandardMaterial({color:0x9aa0a8,metalness:0.7,roughness:0.35});
+const cylM=new THREE.MeshStandardMaterial({color:0xc9b27a,metalness:0.6,roughness:0.35});
+const defM=new THREE.MeshStandardMaterial({color:0x4d6c9e,emissive:0x0c1a33,metalness:0.8,roughness:0.3});
+const sysM=(c)=>new THREE.MeshStandardMaterial({color:c,emissive:c,emissiveIntensity:0.35,metalness:0.2,roughness:0.5});
+const SYS=[['Гермомодули экипажа, анабиоз, библиотека',0x4f8fd6],['Центральный пост (экраны, без окон)',0x6fd6e0],['Вода и заряды: экран от вторичных частиц',0x3fb3a8],['Магнитный дефлектор носа 10–30 Тл',0xd05ad0],['Обмотка дефлектора в броне плеча',0x5a8fe0],['Ловушки анамезона 30 Тл',0x8f6ff0],['Ионные заряды (вокруг ловушек)',0xe0a83a],['Камеры нитрида бора',0xeeeeee],['ВЭУ (реактор) ~300 МВт',0xe0703a],['Накопитель поля камер',0x4fc97a],['Гидроаккумуляторы и насосы',0xe8d45a]];
+const sm={};SYS.forEach(([n,c])=>sm[n]=sysM(c));const S=new THREE.Group();
+const lerp=(a,b,t)=>a+(b-a)*t;
+function sample(keys,s){if(s<=keys[0][0])return keys[0].slice(1);for(let i=0;i<keys.length-1;i++){const a=keys[i],b=keys[i+1];if(s<=b[0]){let t=(s-a[0])/(b[0]-a[0]);t=t*t*(3-2*t);return a.slice(1).map((v,k)=>lerp(v,b[k+1],t));}}return keys[keys.length-1].slice(1);}
+function loftArc(keys,s0,s1,n,a0,a1,seg,mat,off,grow){const pos=[],idx=[];off=off||[0,0,0];grow=grow||0;for(let i=0;i<=n;i++){const s=lerp(s0,s1,i/n);const [w,t,b]=sample(keys,s);
+  for(let j=0;j<=seg;j++){const th=lerp(a0,a1,j/seg),c=Math.cos(th),sn=Math.sin(th);pos.push(s-off[0],(sn>=0?(t+grow)*sn:(Math.abs(b)+grow)*sn)-off[1],(w+grow)*c-off[2]);}}
+  for(let i=0;i<n;i++)for(let j=0;j<seg;j++){const a=i*(seg+1)+j,b=a+seg+1;idx.push(a,b,a+1,b,b+1,a+1);}
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setIndex(idx);geo.computeVertexNormals();return new THREE.Mesh(geo,mat);}
+const loft=(keys,s0,s1,n,seg,mat,grow)=>loftArc(keys,s0,s1,n,0,2*Math.PI,seg,mat,null,grow);
+function extrudeSY(pts,depth,mat){const sh=new THREE.Shape();pts.forEach((p,i)=>i?sh.lineTo(p[0],p[1]):sh.moveTo(p[0],p[1]));const geo=new THREE.ExtrudeGeometry(sh,{depth:depth,bevelEnabled:false});geo.translate(0,0,-depth/2);return new THREE.Mesh(geo,mat);}
+function cylBetween(a,b,r,mat,open){const va=new THREE.Vector3(...a),vb=new THREE.Vector3(...b),d=vb.clone().sub(va),L=d.length();const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,L,24,1,!!open),mat);m.position.copy(va.clone().add(vb).multiplyScalar(0.5));m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return m;}
+function cylX(s0,s1,y,z,r,mat,open){return cylBetween([s0,y,z],[s1,y,z],r,mat,open);}
+function cup(r,x,y,z,mat){const m=new THREE.Mesh(new THREE.SphereGeometry(r,24,10,0,Math.PI*2,0,1.0),mat);m.rotation.z=-Math.PI/2;m.position.set(x,y,z);return m;}
+function sphere(r,x,y,z,mat){const m=new THREE.Mesh(new THREE.SphereGeometry(r,20,14),mat);m.position.set(x,y,z);return m;}
+function box(s0,s1,y0,y1,z0,z1,mat){const m=new THREE.Mesh(new THREE.BoxGeometry(s1-s0,y1-y0,z1-z0),mat);m.position.set((s0+s1)/2,(y0+y1)/2,(z0+z1)/2);return m;}
+// movable strut: unit cylinder re-placed every frame
+function strut(r,mat){const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,1,20),mat);return m;}
+function place(m,a,b){const va=new THREE.Vector3(...a),vb=new THREE.Vector3(...b),d=vb.clone().sub(va),L=Math.max(0.01,d.length());m.position.copy(va.clone().add(vb).multiplyScalar(0.5));m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());m.scale.set(1,L,1);}
+function knee(H,P,pole,L1,L2){const h=new THREE.Vector3(...H),p=new THREE.Vector3(...P),dv=p.clone().sub(h),d=Math.min(dv.length(),L1+L2-0.01),u=dv.clone().normalize();
+  const a=(L1*L1-L2*L2+d*d)/(2*d),hh=Math.sqrt(Math.max(0,L1*L1-a*a));const up=new THREE.Vector3(...pole).normalize();const n=up.clone().sub(u.clone().multiplyScalar(up.dot(u))).normalize();
+  const k=h.clone().add(u.clone().multiplyScalar(a)).add(n.multiplyScalar(hh));return [k.x,k.y,k.z];}
+
+// ---- carriage («лафет»): the ship turns about trunnions on its CG line ----
+// TR = trunnion point (on the hull axis at the CG station s_t); G = ship frame, offset so that s_t sits at TR.
+const X0=-10;                                       // world x of the stern while horizontal
+const TR=new THREE.Group();scene.add(TR);
+const G=new THREE.Group();TR.add(G);
+const HULL=[[0,12,13,-9],[8,13.5,14,-9.5],[44,14,14,-9.5],[52,12,12.5,-9],[58,9.5,9.5,-8.8],[62,8.6,8.6,-8.6],[122,8.6,8.6,-8.6]];
+const NOSE=[[122,8.6,8.6,-8.6],[130,7.4,7.4,-7.4],[138,4.8,4.8,-4.8],[143,2.2,2.2,-2.2],[146,0.15,0.15,-0.15]];
+G.add(loft(HULL,0,79,40,48,hullM));G.add(loft(HULL,101,122,12,48,hullM));G.add(loft(NOSE,122,146,16,48,shieldM));
+// armoured shoulder: the second shield, covering the aft body's frontal annulus
+G.add(loft(HULL,48,63,10,48,shieldM,0.35));
+// hangar s 79..101
+const HS0=79,HS1=101;
+G.add(loftArc(HULL,HS0,HS1,4,150*D,240*D,14,hullM));G.add(loftArc(HULL,HS0,HS1,4,300*D,390*D,14,hullM));
+G.add(loftArc(HULL,HS0,HS0+2,1,30*D,150*D,12,hullM));G.add(loftArc(HULL,HS1-2,HS1,1,30*D,150*D,12,hullM));
+G.add(loftArc(HULL,HS0,HS0+2,1,240*D,300*D,8,hullM));G.add(loftArc(HULL,HS1-2,HS1,1,240*D,300*D,8,hullM));
+G.add(box(HS0+2,HS1-2,1.2,1.6,-7.4,7.4,darkM));G.add(box(HS0+2,HS1-2,-3.3,-2.9,-4,4,darkM));
+const doors=[];
+[[1,30,90],[-1,90,150]].forEach(([sg,a0,a1])=>{const hz=sg*8.6*Math.cos(30*D),hy=8.6*Math.sin(30*D);const P=new THREE.Group();P.position.set(0,hy,hz);
+  P.add(loftArc(HULL,HS0+2,HS1-2,3,a0*D,a1*D,10,hullM,[0,hy,hz]));G.add(P);doors.push({g:P,sign:sg,top:true});});
+[[-1,240,270],[1,270,300]].forEach(([sg,a0,a1])=>{const hz=sg*8.6*Math.cos(60*D),hy=-8.6*Math.sin(60*D);const P=new THREE.Group();P.position.set(0,hy,hz);
+  P.add(loftArc(HULL,HS0+2,HS1-2,3,a0*D,a1*D,6,hullM,[0,hy,hz]));G.add(P);doors.push({g:P,sign:sg,top:false});});
+const shM=new THREE.MeshStandardMaterial({color:0xd8d6cf,metalness:0.35,roughness:0.45});
+const SH=new THREE.Group();
+SH.add(loft([[0,1.2,1.0,-0.9],[3,2.1,1.7,-1.2],[11,2.2,1.8,-1.2],[15,1.3,1.1,-0.9],[17.5,0.2,0.2,-0.2]],0,17.5,20,20,shM));
+const wsh=new THREE.Shape();[[2,0],[10,0],[7,6.3],[4,6.3]].forEach((p,i)=>i?wsh.lineTo(p[0],p[1]):wsh.moveTo(p[0],p[1]));
+[1,-1].forEach(sg=>{const geo=new THREE.ExtrudeGeometry(wsh,{depth:0.35,bevelEnabled:false});geo.rotateX(Math.PI/2);if(sg<0)geo.scale(1,1,-1);const m=new THREE.Mesh(geo,shM);m.position.y=-0.3;SH.add(m);});
+SH.add(extrudeSY([[1,0.8],[3,3.2],[5,3.2],[7,1]],0.3,shM));
+const SH0=[HS0+2.5,2.7,0];SH.position.set(...SH0);G.add(SH);
+const rvM=new THREE.MeshStandardMaterial({color:0x8c7a52,metalness:0.4,roughness:0.55});
+const trM=new THREE.MeshStandardMaterial({color:0x2a2a2e,metalness:0.3,roughness:0.9});
+const cabM=new THREE.MeshStandardMaterial({color:0xc9c4b8,metalness:0.3,roughness:0.5});
+function rover(withCab){const r=new THREE.Group();
+  r.add(box(-4.5,4.5,0,1.3,1.35,2.35,trM));r.add(box(-4.5,4.5,0,1.3,-2.35,-1.35,trM));
+  r.add(box(-4,4,1.1,2.6,-1.5,1.5,rvM));r.add(box(4.4,4.7,0.2,1.9,-2.3,2.3,rvM));
+  if(withCab)r.add(box(-1,3.8,2.6,5,-1.4,1.4,cabM));return r;}
+const PL=new THREE.Group();PL.add(box(HS0+2.5,HS1-2.5,-0.25,0,-3.5,3.5,legM));
+const R1=rover(false),R2=rover(true);R1.position.set(HS0+6.5,0,0);R2.position.set(HS0+15.8,0,0);PL.add(R1);PL.add(R2);
+const PLY0=-8.0;PL.position.y=PLY0;G.add(PL);
+// crests: dorsal telescopes into its root fairing, lateral fold up along the sides (into the shoulder shadow)
+G.add(box(2,44,13.3,14.6,-0.9,0.9,crestM));
+const DC=new THREE.Group();DC.position.y=13.5;DC.add(extrudeSY([[2,0],[10,22.5],[32,22.5],[44,0]],1.2,crestM));G.add(DC);
+const LF=[];[1,-1].forEach(sz=>{const H=new THREE.Group();H.position.set(0,-1,sz*12.5);
+  const sh=new THREE.Shape();[[2,0],[30,0],[22,13.5],[8,13.5]].forEach((p,i)=>i?sh.lineTo(p[0],p[1]):sh.moveTo(p[0],p[1]));
+  const geo=new THREE.ExtrudeGeometry(sh,{depth:0.8,bevelEnabled:false});geo.rotateX(Math.PI/2);if(sz<0)geo.scale(1,1,-1);geo.translate(0,0.4,0);
+  H.add(new THREE.Mesh(geo,crestM));G.add(H);LF.push({g:H,sz});});
+// armoured engine well: 4 anamezon cups + ring of 12 central planetary cups (vectored)
+G.add(cylX(-4,0.2,0,0,11.8,darkM,true));
+const ring=new THREE.Mesh(new THREE.RingGeometry(0.1,11.8,48),darkM);ring.rotation.y=Math.PI/2;ring.position.set(0.25,0,0);G.add(ring);
+const MC=[[4.4,4.4],[4.4,-4.4],[-4.4,4.4],[-4.4,-4.4]];
+MC.forEach(([y,z])=>G.add(cup(3.8,-3.5,y,z,cupM)));
+const pcM=new THREE.MeshStandardMaterial({color:0x9ab4d8,emissive:0x122033,metalness:0.8,roughness:0.25,side:THREE.DoubleSide});
+const pcups=[];for(let i=0;i<12;i++){const a=2*Math.PI*(i+0.5)/12;const c=cup(0.85,-1.0,11*Math.sin(a),11*Math.cos(a),pcM);G.add(c);pcups.push(c);}
+// baffle lip between the anamezon cups and the planetary ring: planetary plumes never cross the well
+G.add(cylX(-1.8,0.3,0,0,10.2,shieldM,true));
+// iris shutters: anamezon cups are closed whenever the drive is cold (landing, planetary burns, ground);
+// planetary cups close during anamezon burns (hard radiation of the main jet)
+const irisA=MC.map(([y,z])=>{const m=new THREE.Mesh(new THREE.CircleGeometry(3.35,32),shieldM);m.rotation.y=-Math.PI/2;m.position.set(-1.5,y,z);G.add(m);return m;});
+const irisP=pcups.map(c=>{const m=new THREE.Mesh(new THREE.CircleGeometry(0.78,16),shieldM);m.rotation.y=-Math.PI/2;m.position.set(-0.6,c.position.y,c.position.z);G.add(m);return m;});
+const jetM=new THREE.MeshBasicMaterial({color:0xcfe0ff,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending});
+const sternJet=new THREE.Mesh(new THREE.ConeGeometry(11,90,32,1,true),jetM);sternJet.rotation.z=Math.PI/2;sternJet.position.set(-47,0,0);G.add(sternJet);
+// auxiliary pods on the shoulder, s=60: 6 m ahead of the landing-mass CG (s=54) -> the ship erects about the aft pads.
+// Swivel 0 = thrust along +s; the pod group rotates about z. In interstellar mode they sink into shoulder recesses.
+const POD_S=60,POD_Z=15,TPODS=1.5e8;
+const pods=[];const podJetM=new THREE.MeshBasicMaterial({color:0xbfd8ff,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending});
+[1,-1].forEach(sz=>{const O=new THREE.Group();O.position.set(POD_S,0,sz*POD_Z);const P=new THREE.Group();O.add(P);
+  P.add(box(-2.8,2.8,-1.5,1.5,-1.5,1.5,hullM));for(let r=0;r<3;r++)P.add(cup(0.6,-3.3,-0.9+r*0.9,0,cupM));
+  const j=new THREE.Mesh(new THREE.ConeGeometry(1.2,20,12,1,true),podJetM);j.rotation.z=Math.PI/2;j.position.set(-13,0,0);P.add(j);
+  const py=box(-1.5,1.5,-0.5,0.5,-2.6,2.6,shieldM);py.position.set(0,0,-sz*3.9);O.add(py);
+  G.add(O);pods.push({O,P,sz});});
+// variant 2: folding deflector ring, deployed only in space and inside the shoulder shadow (R 13.6)
+const RG=new THREE.Group();G.add(RG);const segs=[];
+for(let k=0;k<12;k++){const arc=2*Math.PI/12*0.92;const geo=new THREE.TorusGeometry(12.4,0.6,8,10,arc);geo.rotateZ(Math.PI/2-arc/2);geo.rotateY(Math.PI/2);
+  const grp=new THREE.Group();grp.position.x=56.5;grp.rotation.x=2*Math.PI*k/12;const seg=new THREE.Mesh(geo,defM);const arm=strut(0.3,defM);grp.add(seg);grp.add(arm);RG.add(grp);segs.push({seg,arm});}
+// keel lights
+const kl=new THREE.MeshStandardMaterial({color:0x103018,emissive:0x2aff66,emissiveIntensity:0});
+for(let s=6;s<=120;s+=12){G.add(sphere(0.5,s,s<60?-9.7:-8.8,0,kl));}
+const pdM=new THREE.MeshStandardMaterial({color:0x8a8f96,metalness:0.75,roughness:0.35});
+const V3=a=>new THREE.Vector3(...a);
+const mix=(a,b,t)=>a.map((v,i)=>lerp(v,b[i],t));
+const ez=t=>t*t*(3-2*t);
+const cl=v=>Math.max(0,Math.min(1,v));
+// oriented box: centre c, long axis d, up n (ship frame)
+function orient(m,c,d,n){const x=V3(d).normalize(),y0=V3(n),z=new THREE.Vector3().crossVectors(x,y0).normalize(),y=new THREE.Vector3().crossVectors(z,x);
+  m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x,y,z));m.position.set(...c);}
+// long foot («стопа»): a ground beam with a pad at each end; folds in half against its strut when collected
+function mkFoot(L,W,padR){const g={L,W,beam:new THREE.Mesh(new THREE.BoxGeometry(1,1.2,W),pdM),p1:new THREE.Mesh(new THREE.CylinderGeometry(padR,padR*1.08,0.9,24),pdM),p2:new THREE.Mesh(new THREE.CylinderGeometry(padR,padR*1.08,0.9,24),pdM),hub:sphere(W*0.55,0,0,0,shieldM)};
+  [g.beam,g.p1,g.p2,g.hub].forEach(m=>G.add(m));return g;}
+// open: 0 collected (halves folded along 'along'), 1 spread on the ground along 'dir' with ground normal 'up'
+function footUpdate(f,c,dir,up,along,open,vis){const d=V3(mix(along,dir,open)).normalize(),L=lerp(f.W*1.6,f.L,open);
+  orient(f.beam,c,d.toArray(),up);f.beam.scale.set(L,1,1);
+  const e1=V3(c).add(d.clone().multiplyScalar(L/2)),e2=V3(c).sub(d.clone().multiplyScalar(L/2));
+  [[f.p1,e1],[f.p2,e2]].forEach(([p,e])=>{p.position.copy(e);p.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),V3(up).normalize());p.visible=vis&&open>0.5;});
+  f.hub.position.set(...c);[f.beam,f.hub].forEach(m=>m.visible=vis);}
+// telescope: casing + stages from A along unit dir to length L
+function mkTele(radii,C,S){return {radii,C,S,parts:radii.map(r=>{const m=strut(r,pdM);G.add(m);return m;})};}
+function teleUpdate(t,A,dir,L,vis){const h=V3(A),d=V3(dir).normalize(),P=x=>h.clone().add(d.clone().multiplyScalar(x)).toArray();
+  place(t.parts[0],A,P(Math.min(L,t.C)));t.parts[0].visible=vis;
+  for(let i=1;i<t.parts.length;i++){const a=t.C+(i-1)*t.S-2,b=Math.min(L,t.C+i*t.S);t.parts[i].visible=vis&&b>a+2.2;if(t.parts[i].visible)place(t.parts[i],P(a),P(b));}}
+
+// ---- columns of the carriage: CNT telescopes on superconducting linear drives, trunnions on flux-pinned bearings ----
+const CZ=17.5;                          // column plane z, casing length, stage travel
+const hullHalf=s=>sample(HULL,Math.min(122,Math.max(0,s)))[0];
+const bandM=new THREE.MeshBasicMaterial({color:0x2c2f36,wireframe:true});
+const cols=[1,-1].map(sz=>{const c={sz,mast:new THREE.Mesh(new THREE.CylinderGeometry(2.1,2.1,1,4),pdM),seam:new THREE.Mesh(new THREE.CylinderGeometry(2.15,2.15,1,4,30,true),bandM),
+    drum:new THREE.Mesh(new THREE.CylinderGeometry(3.4,3.4,5.5,28),shieldM),foot:mkFoot(30,2.6,3.2),pin:strut(1.7,shieldM),carr:box(-3.5,3.5,-2.6,2.6,-1.2,1.2,shieldM)};
+  c.drum.rotation.x=Math.PI/2;[c.mast,c.seam,c.drum,c.pin,c.carr].forEach(m=>G.add(m));
+  const gm=new THREE.Mesh(new THREE.TorusGeometry(3.9,0.35,10,32),new THREE.MeshBasicMaterial({color:0xb07cff,transparent:true,opacity:0.8}));G.add(gm);c.glow=gm;return c;});
+// flank track of the trunnion carriage (s 34..56), closed by an armour strip in flight
+[1,-1].forEach(sz=>{G.add(box(34,46,-1.0,1.0,sz>0?13.7:-14.4,sz>0?14.4:-13.7,darkM));});
+// ---- stern legs: four armoured beams on the stern corners, telescopic, each on a long radial foot ----
+const LEGA=[45,135,225,315];
+const sLegs=LEGA.map(a=>{const r=a*D,sy=Math.sin(r),sz=Math.cos(r);const H=[5,sy>0?8.8:-6.8,Math.sign(sz)*9.6];
+  const L={a,sy,sz,H,stow:[H[0]+24,H[1]+Math.sign(sy)*0.6,H[2]+Math.sign(sz)*1.2],tele:mkTele([2.2,1.8,1.45],13,11),foot:mkFoot(16,2.0,2.4),hinge:sphere(2.4,...H,shieldM)};
+  G.add(L.hinge);return L;});
+
+// ---- port: superconducting landing table (magnetic levitation module) ----
+const PORT=new THREE.Group();scene.add(PORT);PORT.visible=false;
+const tblM=new THREE.MeshStandardMaterial({color:0x3a4f6a,metalness:0.7,roughness:0.35});
+{const t=new THREE.Mesh(new THREE.CylinderGeometry(30,32,4,64),tblM);t.position.y=2;PORT.add(t);}
+const fieldM=new THREE.MeshBasicMaterial({color:0xb07cff,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending});
+for(let i=1;i<=4;i++){const t=new THREE.Mesh(new THREE.TorusGeometry(4+i*3.2,0.25,8,64),fieldM);t.rotation.x=Math.PI/2;t.position.y=4.5+i*0.9;PORT.add(t);}
+const pylM=new THREE.MeshStandardMaterial({color:0x7d8894,metalness:0.6,roughness:0.45});
+[90,210,330].forEach(dg=>{const a=dg*D;const m=new THREE.Mesh(new THREE.BoxGeometry(3,150,3),pylM);m.position.set(55*Math.cos(a),75,55*Math.sin(a));PORT.add(m);});
+const liftCar=new THREE.Mesh(new THREE.BoxGeometry(8,4,8),new THREE.MeshStandardMaterial({color:0xc9b27a,metalness:0.5,roughness:0.4}));PORT.add(liftCar);
+const portRing=new THREE.Mesh(new THREE.TorusGeometry(55,0.8,8,64),pylM);portRing.rotation.x=Math.PI/2;portRing.position.y=148;PORT.add(portRing);
+
+// systems (x-ray)
+S.add(cylX(102,113,0,0,5,sm['Гермомодули экипажа, анабиоз, библиотека']));S.add(cylX(114,118,0,0,4.8,sm['Гермомодули экипажа, анабиоз, библиотека']));
+S.add(sphere(3.2,119.5,0,0,sm['Центральный пост (экраны, без окон)']));
+S.add(cylX(123,130,0,0,5.4,sm['Вода и заряды: экран от вторичных частиц']));
+const coil=new THREE.Mesh(new THREE.TorusGeometry(3.4,0.9,12,32),sm['Магнитный дефлектор носа 10–30 Тл']);coil.rotation.y=Math.PI/2;coil.position.set(137,0,0);S.add(coil);
+const sc=new THREE.Mesh(new THREE.TorusGeometry(11.6,0.7,12,64),sm['Обмотка дефлектора в броне плеча']);sc.rotation.y=Math.PI/2;sc.position.set(55,0,0);S.add(sc);
+[[-3.5,5.5],[-3.5,-5.5],[7,5.5],[7,-5.5]].forEach(([y,z])=>S.add(cylX(24,49,y,z,4.9,sm['Ловушки анамезона 30 Тл'])));
+[[6,11.8],[6,-11.8],[-2,11.8],[-2,-11.8]].forEach(([y,z])=>S.add(cylX(24,49,y,z,2.0,sm['Ионные заряды (вокруг ловушек)'])));
+MC.forEach(([y,z])=>S.add(cylX(1.2,22,y,z,2.2,sm['Камеры нитрида бора'])));
+S.add(sphere(3.4,53,0,0,sm['ВЭУ (реактор) ~300 МВт']));
+const tor=new THREE.Mesh(new THREE.TorusGeometry(3.6,0.8,12,32),sm['Накопитель поля камер']);tor.rotation.y=Math.PI/2;tor.position.set(26,0,0);S.add(tor);
+[[28,-8,9],[28,-8,-9],[32,-8,9],[32,-8,-9]].forEach(p=>S.add(sphere(1.5,...p,sm['Гидроаккумуляторы и насосы'])));
+S.visible=false;G.add(S);
+// take-off effects in world space
+const wallM=new THREE.MeshBasicMaterial({color:0xfff1c8,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending});
+const wall=new THREE.Mesh(new THREE.CylinderGeometry(70,35,26,48,1,true),wallM);wall.position.set(-30,GY+13,0);scene.add(wall);
+const spotM=new THREE.MeshBasicMaterial({color:0xff5a1a,transparent:true,opacity:0,depthWrite:false});
+const spot=new THREE.Mesh(new THREE.CircleGeometry(60,48),spotM);spot.rotation.x=-Math.PI/2;spot.position.set(-30,GY+0.12,0);scene.add(spot);
+const flash=new THREE.PointLight(0xfff0d0,0,1200);flash.position.set(-30,GY+8,0);scene.add(flash);
+// UI
+let xray=false;
+const lg=document.getElementById('lg');lg.innerHTML=SYS.map(([n,c])=>'<div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;background:#'+c.toString(16).padStart(6,'0')+'"></span>'+n+'</div>').join('');
+function apply(){S.visible=xray;skin.forEach(m=>{m.opacity=xray?0.13:1;m.depthWrite=!xray;m.needsUpdate=true;});lg.style.display=xray?'block':'none';}
+const xb=document.getElementById('xr');xb.onclick=()=>{xray=!xray;xb.classList.toggle('on',xray);apply();};
+const ab=document.getElementById('ar');ab.onclick=()=>{ctl.autoRotate=!ctl.autoRotate;ab.textContent=ctl.autoRotate?'Остановить вращение':'Вращать';};
+document.querySelectorAll('.b[data-v]').forEach(b=>b.onclick=()=>{view(b.dataset.v);if(b.dataset.v!=='all'){ctl.autoRotate=false;ab.textContent='Вращать';}});
+apply();
+const SKINS=[['тепловая броня',0x4a4a4c,0.3,0.8],['отражающая',0xdfe3ea,1.0,0.1],['после рейса',0x6a5a4c,0.55,0.7]];let sk=0;
+const skb=document.getElementById('sk');function setSkin(){const[n,c,m,r]=SKINS[sk];hullM.color.setHex(c);hullM.metalness=m;hullM.roughness=r;skb.textContent='Обшивка: '+n;}
+skb.onclick=()=>{sk=(sk+1)%3;setSkin();};setSkin();
+const MODES=['атмосфера','в системе','межзвёздный'];let mode=1;const mdb=document.getElementById('md');mdb.onclick=()=>{mode=(mode+1)%3;mdb.textContent='Режим: '+MODES[mode];};
+let ringVar=true;const dvb=document.getElementById('dv');dvb.onclick=()=>{ringVar=!ringVar;dvb.textContent=ringVar?'Дефлектор: складное кольцо (вариант 2)':'Дефлектор: встроенный (основной)';};
+const step=(v,t,dt,sp)=>v+Math.max(-dt*sp,Math.min(dt*sp,t-v));
+let irisK=0,hOpen=0,hT=0,unl=0,uT=0,out=0,oT=0,tk=-1,tv=0,finF=0,podIn=0,dorsal=1,ringD=0,rise=0;
+const hb=document.getElementById('hg'),lb=document.getElementById('ld'),sb=document.getElementById('sh'),tb=document.getElementById('to'),stx=document.getElementById('st');
+hb.onclick=()=>{hT=hT?0:1;if(!hT){uT=0;oT=0;lb.textContent='Роверы: выгрузить';sb.textContent='Челнок: вывести';}hb.textContent=hT?'Ангар: закрыть':'Ангар: открыть';};
+lb.onclick=()=>{if(!hT){hT=1;hb.textContent='Ангар: закрыть';}uT=uT?0:1;lb.textContent=uT?'Роверы: поднять':'Роверы: выгрузить';};
+sb.onclick=()=>{if(!hT){hT=1;hb.textContent='Ангар: закрыть';}oT=oT?0:1;sb.textContent=oT?'Челнок: убрать':'Челнок: вывести';};
+// ---- carriage kinematics and statics ----
+const MASSES=[['посадочная 2.9 кт',2.9e6,54],['полная 44.3 кт',44.3e6,37.6]];let mi=0;
+const PLANETS=[['железная звезда 2.5 g',24.5],['Земля 1 g',9.81]];let pi=0;
+const HR=20,DELTA=0.3,COLCAP=1.9e12;   // rest axis height; CG uncertainty on the trunnion line, m; column F*L^2 rating, N m^2
+let P=0,PT=0,gear=1,gT=1,stowK=0,portOn=false,warn='';
+const st=()=>MASSES[mi][2];
+const Hrot=()=>st()+16, Hstand=()=>st()+lerp(12,7,portK);let portK=0;
+function poseAt(P){const p=[0,1,2,3,4,5].map(k=>cl(P-k));let h=lerp(HR,Hrot(),ez(p[1]));const th=90*ez(p[2]);if(p[4]>0)h=lerp(Hrot(),Hstand(),ez(p[4]));return {p,h,th};}
+function loadsAt(P){const q=poseAt(P);let leg=0;if(P<1)leg=0.05;else if(q.p[4]>0.8)leg=(q.p[4]-0.8)/0.2;if(P>=5)leg=1;
+  return {col:1-leg,leg,torque:(P>2&&P<3)?DELTA:0,h:q.h,th:q.th};}
+const rsb=document.getElementById('rs'),plb=document.getElementById('pl'),msb=document.getElementById('ms'),ptb=document.getElementById('pt'),grb=document.getElementById('gr');
+const idle=()=>P===PT&&(P===0||P===6);
+rsb.onclick=()=>{if(tk>=0||gear<1)return;PT=PT?0:6;rsb.textContent=PT?'Опустить в горизонт':'Поставить на корму (лафет)';};
+grb.onclick=()=>{if(P>0||tk>=0)return;gT=gT?0:1;grb.textContent=gT?'Шасси: убрать':'Шасси: выпустить';};
+plb.onclick=()=>{if(!idle())return;pi=(pi+1)%2;plb.textContent='Планета: '+PLANETS[pi][0];};
+msb.onclick=()=>{if(!idle())return;mi=(mi+1)%2;msb.textContent='Масса: '+MASSES[mi][0];};
+ptb.onclick=()=>{if(!idle())return;portOn=!portOn;ptb.textContent=portOn?'Порт: магнитный стол':'Порт: дикая планета';};
+tb.onclick=()=>{if(tk>=0){tk=-1;rise=0;tb.textContent='Взлёт («Лебедь»)';return;}if(gear<1)return;
+  PT=6;rsb.textContent='Опустить в горизонт';hT=0;uT=0;oT=0;mode=0;mdb.textContent='Режим: атмосфера';tk=0;tv=0;sk=0;setSkin();tb.textContent='Сброс';ctl.autoRotate=false;ab.textContent='Вращать';view('far');};
+// chart: loads over the whole sequence
+const cv=document.getElementById('cv'),cx=cv.getContext('2d');
+function chart(cur){const W=cv.width,H=cv.height,l=28,r=8,t=14,b=20;cx.clearRect(0,0,W,H);
+  const X=q=>l+(W-l-r)*q/6,Y=v=>t+(H-t-b)*(1-Math.min(1.05,Math.max(0,v))/1.05);
+  cx.font='10px system-ui';cx.fillStyle='#9a958c';cx.strokeStyle='#3a3833';cx.lineWidth=1;
+  [0,0.5,1].forEach(v=>{cx.beginPath();cx.moveTo(l,Y(v));cx.lineTo(W-r,Y(v));cx.stroke();cx.fillText(v.toFixed(1),4,Y(v)+3);});
+  ['лежит','подъём','поворот','лапы','опуск.','сбор'].forEach((s,i)=>cx.fillText(s,X(i)+2,H-6));
+  const ser=[['col','#7fb2ff'],['leg','#6fd08a'],['th','#8b8b8b']];
+  ser.forEach(([k,c])=>{cx.strokeStyle=c;cx.lineWidth=k==='th'?1:1.6;cx.setLineDash(k==='th'?[3,3]:[]);cx.beginPath();
+    for(let i=0;i<=120;i++){const q=i/20,L=loadsAt(q),v=k==='th'?L.th/90:L[k];i?cx.lineTo(X(q),Y(v)):cx.moveTo(X(q),Y(v));}cx.stroke();});cx.setLineDash([]);
+  cx.strokeStyle='#ffd23a';cx.beginPath();cx.moveTo(X(cur),t);cx.lineTo(X(cur),H-b);cx.stroke();
+  cx.fillStyle='#7fb2ff';cx.fillText('колонны /mg',l+2,10);cx.fillStyle='#6fd08a';cx.fillText(portOn?'стол':'кормовые лапы',l+72,10);cx.fillStyle='#8b8b8b';cx.fillText('угол /90°',l+160,10);}
+// centre of mass marker and its plumb line
+const cgM=new THREE.MeshBasicMaterial({color:0xffd23a,depthTest:false});
+const cgDot=sphere(1.6,54,0,0,cgM);cgDot.renderOrder=5;G.add(cgDot);
+const plumb=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),new THREE.LineBasicMaterial({color:0xffd23a,depthTest:false,transparent:true,opacity:0.8}));plumb.renderOrder=5;scene.add(plumb);
+const phx=document.getElementById('ph');const wp=new THREE.Vector3();
+const MN=v=>(v/1e6).toFixed(1).padStart(7)+' МН';
+const PHN=()=>portOn?['лежит на колоннах лафета и нижних кормовых лапах','подготовка: гребни сложены, гондолы утоплены','подъём на колоннах, кормовые лапы собраны','поворот вокруг цапф: момент ≈ m·g·δ','корма над магнитным столом, лапы не нужны','стол принимает корму: пиннинг потока','цапфы отпущены, мачты сворачиваются на барабаны','висит над столом (пиннинг потока)']
+  :['лежит на колоннах лафета и нижних кормовых лапах','подготовка: гребни сложены, гондолы утоплены','подъём на колоннах, кормовые лапы собраны','поворот вокруг цапф: момент ≈ m·g·δ','кормовые лапы выходят, стопы раскрываются','колонны опускают корабль на лапы','цапфы отпущены, мачты сворачиваются на барабаны, стопы собраны','стоит на четырёх кормовых лапах'];
+// wind: quasi-static checks with a 1.5 safety factor; above the limit the operation stops and the brakes hold
+const spdI=document.getElementById('spd'),spdV=document.getElementById('spdv'),wndI=document.getElementById('wnd'),wndV=document.getElementById('wndv');
+let speed=1,wind=0;spdI.oninput=()=>{speed=Math.pow(2,+spdI.value);spdV.textContent='×'+(speed<1?speed.toFixed(2):speed.toFixed(1));};
+wndI.oninput=()=>{wind=+wndI.value;wndV.textContent=wind+' м/с';};
+const RHO=[1.7,1.2],CD=0.8,ASIDE=2700,DMEAN=17,SF=1.5;
+function windCheck(v,q,Lo,W){const qd=0.5*RHO[pi]*v*v*CD,F=qd*ASIDE;const s0=st(),Lf=146-s0,La=s0;let m=1e9,what='';
+  // side wind: overturning about the support line, resisted by the whole base (columns at ±CZ, legs at r 15..21, table r 25)
+  const hc=q.h+(73-s0)*Math.sin(q.th*D),rl=portK>0.5?25:(q.th>45?21:15);
+  const kO=W*(Lo.col*CZ+Lo.leg*rl)/Math.max(1,F*hc);if(kO<m){m=kO;what='опрокидывание';}
+  // head wind on the half-turned ship: unequal arms fore/aft of the trunnions load the trunnion drive and the long feet
+  if(q.th>0.5&&q.th<89.5&&Lo.col>0.01){const tw=qd*DMEAN*(Lf*Lf-La*La)/2*Math.abs(Math.cos(q.th*D)),cap=W*Lo.col*15,k=cap/Math.max(1,tw+W*DELTA);if(k<m){m=k;what='момент на цапфах';}}
+  return {F,m,what};}
+function windLimit(q,Lo,W){let a=0,b=150;for(let i=0;i<30;i++){const c=(a+b)/2;if(windCheck(c,q,Lo,W).m>=SF)a=c;else b=c;}return a;}
+let last=performance.now();
+(function loop(now){now=now||performance.now();const dt=Math.min(0.05,Math.max(0,(now-last)/1000))*(window.TS||speed);last=now;
+  {const q0=poseAt(P),L0=loadsAt(P),W0=MASSES[mi][1]*PLANETS[pi][1],wc=windCheck(wind,q0,L0,W0);
+   const hold=P!==PT&&wc.m<SF;warn=hold?('Ветер '+wind+' м/с выше допуска '+windLimit(q0,L0,W0).toFixed(0)+' м/с ('+wc.what+'): операция стоит, корабль держат тормоза цапф и лап'):'';
+   if(!hold)P=step(P,PT,dt,1/12);}
+  const q=poseAt(P),Lo=loadsAt(P),W=MASSES[mi][1]*PLANETS[pi][1],th=q.th*D;
+  gear=step(gear,gT,dt,0.12);
+  // take-off after the ship stands
+  let jet=0,wallA=0,spotA=Math.max(0,spotM.opacity-dt*0.02),msg='';
+  if(tk>=0){tk+=dt;kl.emissiveIntensity=1.2;
+    if(P<6){msg=tk<2?'Под килем загорелись зелёные огни':'';}
+    else{tv+=dt;
+      if(tv<2.5)msg='Круг безопасности очищен · четыре раза вой звездолёта · закройте глаза';
+      else if(tv<4.5){jet=ez((tv-2.5)/2);wallA=jet;msg='Стена пламени вокруг корабля (центральные моторы)';}
+      else{jet=1;const up=tv-4.5;rise=0.5*8*up*up;wallA=Math.max(0,1-up/3);spotA=Math.min(0.85,0.3+up*0.1);msg='Башня огня · колонна · линия · большая звезда в высоте';
+        if(rise>1500){tk=-1;tb.textContent='Взлёт («Лебедь»)';setTimeout(()=>{rise=0;P=0;PT=0;rsb.textContent='Поставить на корму (лафет)';},3000);}}}
+  }else kl.emissiveIntensity=0;
+  stowK=tk>=0?cl(rise/200):0;
+  // ship pose
+  G.position.x=-st();cgDot.position.x=st();
+  TR.position.set(X0+st(),GY+q.h+rise+45*(1-ez(gear)),0);TR.rotation.z=th;window.__oy=45*(1-ez(gear));
+  const up=[Math.sin(th),Math.cos(th),0],wx=[Math.cos(th),-Math.sin(th),0];
+  // columns
+  const wcDir=ez(gear),wcLen=ez(gear)*(1-ez(q.p[5]))*(1-stowK);
+  // carriage slides out of the hull first, then the mast is formed from the band drums straight down to the ground
+  cols.forEach(c=>{const zk=ez(cl(wcLen*4)),T=[st(),0,c.sz*lerp(hullHalf(st())-3.5,CZ,zk)],dn=[-Math.sin(th),-Math.cos(th),0];
+    const L=Math.max(0.05,(q.h-0.9)*cl((wcLen-0.25)/0.75));
+    const E=V3(T).add(V3(dn).multiplyScalar(L)).toArray();place(c.mast,T,E);place(c.seam,T,E);c.mast.visible=c.seam.visible=L>0.3;
+    c.drum.position.set(...T);c.drum.rotation.set(Math.PI/2,0,0);
+    footUpdate(c.foot,L>0.3?E:[T[0],T[1]-1,T[2]],wx,up,[1,0,0],cl((wcLen-0.7)/0.3),true);
+    place(c.pin,[st(),0,c.sz*(hullHalf(st())-0.3)],T);c.carr.position.set(st(),0,c.sz*(hullHalf(st())+0.4));
+    c.glow.position.set(...T);c.glow.visible=zk>0.9;});
+  // stern legs: lower pair holds the stern while horizontal, all four stand the ship; collected for the turn and in flight
+  const standW=ez(q.p[3])*(1-ez(portK))*(1-stowK),restW=ez(gear)*(1-ez(cl(q.p[1]*1.6)));
+  sLegs.forEach(Lg=>{const rest=[0,-19.3,Math.sign(Lg.sz)*15],stand=[-(Hstand()-st())+0.6,Lg.sy*21,Lg.sz*21];
+    const lower=Lg.sy<0,wR=lower?restW:0;let F=Lg.stow,open=0,dir=[0,0,1];
+    if(standW>0.001){F=mix(Lg.stow,stand,standW);open=standW;dir=[0,Lg.sy,Lg.sz];}
+    else if(wR>0.001){F=mix(Lg.stow,rest,wR);open=wR;dir=[0,0,Math.sign(Lg.sz)];}
+    const d=V3(F).sub(V3(Lg.H)),len=d.length();teleUpdate(Lg.tele,Lg.H,d.normalize().toArray(),len,true);Lg.tele.parts[0].material=hullM;
+    footUpdate(Lg.foot,F,dir,up,V3(Lg.H).sub(V3(F)).normalize().toArray(),open,true);});
+  // port table
+  portK=step(portK,portOn?1:0,dt,0.25);PORT.visible=portK>0.01;PORT.scale.set(1,Math.max(0.01,ez(portK)),1);
+  PORT.position.set(X0+st(),GY,0);fieldM.opacity=portOn?0.15+0.55*cl((P-4)*1.5):0;liftCar.position.set(0,8+60*(0.5+0.5*Math.sin(now/4000)),51);
+  // CG plumb line
+  cgDot.getWorldPosition(wp);plumb.geometry.setFromPoints([wp.clone(),new THREE.Vector3(wp.x,GY,wp.z)]);
+  // modes: crests fold and pods sink for the turn as well as in interstellar flight
+  const tuck=mode===2||P>0.01;
+  finF=step(finF,tuck?1:0,dt,0.35);dorsal=step(dorsal,mode===2?0.06:1,dt,0.35);podIn=step(podIn,tuck?1:0,dt,0.35);ringD=step(ringD,(ringVar&&mode===1)?1:0,dt,0.4);
+  LF.forEach(o=>o.g.rotation.x=o.sz*finF*90*D);DC.scale.y=dorsal;pods.forEach(p=>{p.O.position.z=p.sz*lerp(POD_Z,10.6,podIn);});
+  RG.visible=ringVar;segs.forEach(o=>{const Rr=lerp(10.9,16,ez(ringD));o.seg.position.y=Rr-12.4;place(o.arm,[0,9.5,0],[0,Rr-0.3,0]);});
+  irisK=step(irisK,mode===2?1:0,dt,0.5);irisA.forEach(m=>{const k=Math.max(0.001,1-ez(irisK));m.scale.set(k,k,1);});irisP.forEach(m=>{const k=Math.max(0.001,ez(irisK));m.scale.set(k,k,1);});
+  hOpen=step(hOpen,(P===0&&gear>=1&&(hT||unl>0.01||out>0.01))?1:0,dt,0.6);
+  const ok=hOpen>0.97;unl=step(unl,ok?uT:0,dt,0.25);out=step(out,ok?oT:0,dt,0.2);
+  doors.forEach(d=>{d.g.rotation.x=d.sign*hOpen*(d.top?105:95)*D;});
+  PL.position.y=PLY0+(-HR+0.65-PLY0)*ez(unl);SH.position.set(SH0[0],SH0[1]+16*ez(out),SH0[2]);
+  const sx=X0+st();wall.position.set(sx,GY+13,0);spot.position.set(sx,GY+0.12,0);flash.position.set(sx,GY+8,0);
+  jetM.opacity=0.6*jet;wallM.opacity=0.6*wallA;spotM.opacity=spotA;flash.intensity=3*jet;
+  // readout
+  const ph=gear<1?(gear<=0?'в полёте: мачты свёрнуты на барабаны, каретки и лапы в броне':'шасси выпускается/убирается'):PHN()[P>=6?7:Math.floor(P)+(P>0?1:0)];
+  const Fcol=Lo.col*W/2,FL2=Fcol*q.h*q.h,tau=Lo.torque*W,WC=windCheck(wind,q,Lo,W);
+  phx.textContent='угол        '+q.th.toFixed(1).padStart(6)+'°    '+ph+'\n'+
+    'вес m·g   '+MN(W)+'   '+MASSES[mi][0]+', '+PLANETS[pi][0]+'\n'+
+    'цапфы       '+q.h.toFixed(1).padStart(6)+' м    над грунтом (ЦМ на s = '+st().toFixed(1)+')\n'+
+    'колонна   '+MN(Fcol)+'   ×2, изгибная устойчивость '+(FL2/COLCAP*100).toFixed(0)+' % расчёта\n'+
+    (portOn?'стол      ':'кормовые  ')+MN(Lo.leg*W)+'   '+(Lo.leg*100).toFixed(0).padStart(3)+' % веса\n'+
+    'привод цапф '+(tau/1e6).toFixed(0).padStart(6)+' МН·м  (δ ЦМ = '+DELTA+' м), стопы держат '+(Fcol>0?(tau/(2*Fcol*15)*100).toFixed(0):'0')+' % своего момента\n'+
+    'ветер     '+String(wind).padStart(4)+' м/с  сила '+(WC.F/1e6).toFixed(1)+' МН, запас ×'+Math.min(99,WC.m).toFixed(1)+(WC.what?' ('+WC.what+')':'')+', допуск сейчас '+windLimit(q,Lo,W).toFixed(0)+' м/с\n'+
+    'двигатели   не участвуют: механика держит с запасом; при превышении — стоп на тормозах';
+  chart(P);
+  stx.textContent=warn||msg||('Режим: '+MODES[mode]+(ringVar?' · кольцо '+(ringD>0.5?'раскрыто':'убрано'):' · обмотка в броне плеча'));
+  ctl.update();R.render(scene,cam);requestAnimationFrame(loop);})();
+}catch(e){document.getElementById('err').textContent='Ошибка: '+e.message+' '+(e.stack||'').split('\n')[1];}
+})();
+</script>
+</body></html>

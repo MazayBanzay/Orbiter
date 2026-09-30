@@ -1,0 +1,236 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Тантра: тренога</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#f4f2ee;--text:#1b1b1b;--muted:#5a5a5a;--accent:#3b6fd6;--border:#c9c5bd}
+body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;margin:16px}
+h1{font-size:18px;margin:0 0 8px}
+#wrap{position:relative;border-radius:12px;overflow:hidden;background:#0b0c10}
+#c3{width:100%;height:600px}
+#ro{position:absolute;right:10px;top:10px;font:12px ui-monospace,Consolas,monospace;color:#e8e4dc;background:rgba(0,0,0,.6);padding:8px 10px;border-radius:8px;white-space:pre;line-height:1.45}
+#ph{position:absolute;left:10px;bottom:10px;font:13px system-ui;color:#e8e4dc;background:rgba(0,0,0,.6);padding:6px 10px;border-radius:8px;max-width:48%}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+.b{font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text);cursor:pointer}
+.b.on{border:2px solid var(--accent);padding:5px 11px}
+.note{font-size:13px;color:var(--muted);margin-top:10px;line-height:1.5;max-width:1100px}
+.note b{color:var(--text)}
+</style></head><body>
+<h1>«Тантра» — тренога: одна массивная нога снизу, две верхние — элементы корпуса</h1>
+<div id="wrap"><div id="c3"></div><div id="ph"></div><div id="ro"></div></div>
+<div class="row">
+  <button class="b" id="go">Поставить на корму</button>
+  <button class="b" id="ms">Масса</button>
+  <button class="b" id="gv">Тяготение</button>
+  <label style="font-size:13px">Скорость <input id="spd" type="range" min="-1" max="4" step="0.1" value="0.5" style="vertical-align:middle"> <span id="spdv"></span></label>
+</div>
+<div class="row">
+  <button class="b" data-v="side">Сбоку</button>
+  <button class="b" data-v="q">3/4</button>
+  <button class="b" data-v="aft">С кормы</button>
+  <button class="b" data-v="col">Опора крупно</button>
+  <button class="b" id="rot">Вращение камеры</button>
+</div>
+<div class="note">
+<b>Схема (по вашему референсу):</b> три ноги — одна массивная брюшная (шарнир на киле s 62, бедро 40 м, голень 42 м, тарелка Ø18) и две верхние (шарниры на верхних углах кормы s 4, бедро 20, голень 18, тарелки Ø12). В полёте верхние ноги сложены по верху кормы как её обшивка («две сложенные сверху»), массивная — вдоль киля. Лёжа корабль стоит на массивной ноге под брюхом и на верхних, опущенных за корму.
+<br><b>Механика — параллельный механизм 3-RRS</b> (как у современных станков-триподов): шарниры бедра и шаровые пяты пассивны, приводы — только три колена. Тарелки стоят на месте весь подъём: ноги работают как одна пространственная ферма, корабль поднимается лёжа, затем три колена поворачивают его вокруг точки у кормы, и он встаёт над центром треноги. Двигатели не нужны, лафет, каретки, пазы и крышки не нужны — остаётся три ноги.
+<br><b>Колено 3000 года:</b> момент в колене держит не мотор, а пара «мышца — сухожилие», как у живой ноги: пучок искусственной мышцы из скрученной нанотрубочной пряжи вдоль бедра (фиолетовый) и сухожилие-трос из нанотрубок через кулачок колена (латунный). Трос работает на растяжение — самый выгодный режим для нанотрубок. В покое угол держит сверхпроводящий замок на пиннинге потока без затрат энергии. Нагрузки справа считаются на ходу.
+<br>Три опоры статически определимы: все три тарелки нагружены на любом неровном грунте и на склоне, четвёртой ноге «качаться» не на чем.
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+const D=Math.PI/180, G0=9.81;
+const KEYS=[[0,12,13,-9],[8,13.5,14,-9.5],[47,14,14,-9.5],[53,11.6,12,-9],[58,9.5,9.5,-8.8],[62,8.6,8.6,-8.6],[122,8.6,8.6,-8.6],
+            [130,7.4,7.4,-7.4],[138,4.8,4.8,-4.8],[143,2.2,2.2,-2.2],[146,0.15,0.15,-0.15]];
+const COL_X=17.5, H0=14, MAST_A=4.2, MAST_T=0.03, E=0.6e12;
+const MAST_AREA=4*MAST_A*MAST_T, MAST_I=(2/3)*Math.pow(MAST_A,3)*MAST_T;
+const STAND_R=26, TURN_CLEAR=16, STAND_CLEAR=12, WELL_R=11.8, WELL_OUT=4;
+const MASS={land:{m:2.9e6,s:53.0,txt:'посадочная 2,9 кт (ЦМ s 53)'},full:{m:44.0e6,s:35.3,txt:'гружёная 44 кт (ЦМ s 35,3)'}};
+let massK='land', g=2.5, K='A', P=0, PT=0, TS=Math.pow(2,0.5);
+function sec(s){for(let i=0;i<KEYS.length-1;i++){const a=KEYS[i],b=KEYS[i+1];if(s>=a[0]&&s<=b[0]){let t=(s-a[0])/(b[0]-a[0]);t=t*t*(3-2*t);return [a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t];}}return KEYS[KEYS.length-1].slice(1);}
+const ease=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
+const lerp=(a,b,t)=>a+(b-a)*t;
+const V3=(x,y,z)=>new THREE.Vector3(x,y,z);
+
+const el=document.getElementById('c3');
+const R=new THREE.WebGLRenderer({antialias:true});R.setPixelRatio(Math.min(2,window.devicePixelRatio||1));el.appendChild(R.domElement);
+R.shadowMap.enabled=true;
+const scene=new THREE.Scene();scene.background=new THREE.Color(0xbfcad6);scene.fog=new THREE.Fog(0xbfcad6,500,1400);
+const cam=new THREE.PerspectiveCamera(35,1,1,5000);
+const ctl=new THREE.OrbitControls(cam,R.domElement);ctl.enableDamping=true;
+scene.add(new THREE.HemisphereLight(0xdfe6f0,0x6b5440,0.75));
+const sun=new THREE.DirectionalLight(0xffffff,0.9);sun.position.set(-120,220,160);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-160,right:160,top:160,bottom:-160,near:10,far:700});scene.add(sun);
+function resize(){const w=Math.max(1,el.clientWidth),h=Math.max(1,el.clientHeight);R.setSize(w,h,false);R.domElement.style.width='100%';R.domElement.style.height='100%';cam.aspect=w/h;cam.updateProjectionMatrix();}
+resize();window.addEventListener('resize',resize);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(3000,3000),new THREE.MeshLambertMaterial({color:0xc9a57d}));
+ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+const grid=new THREE.GridHelper(400,40,0x9c7f5f,0xb09070);grid.position.y=0.05;scene.add(grid);
+const M=(c,o)=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:0.7,metalness:0.2},o||{}));
+const mHull=M(0xb7b1a5,{roughness:0.85}), mIr=M(0xd8d0b8,{metalness:0.6,roughness:0.35}), mDark=M(0x2d3036), mMech=M(0x6d747e,{metalness:0.5,roughness:0.5});
+const mPad=M(0x4a4f57,{roughness:0.9}), mPin=M(0x8a60d0,{emissive:0x3a2070,metalness:0.4}), mCrest=M(0x3c3a36,{roughness:0.6}), mArm=M(0x5d646e,{metalness:0.45,roughness:0.45});
+function stripeTex(){const c=document.createElement('canvas');c.width=64;c.height=64;const x=c.getContext('2d');
+  x.fillStyle='#39465a';x.fillRect(0,0,64,64);x.fillStyle='#6f7f96';x.fillRect(0,0,64,5);
+  x.fillStyle='#222a36';x.fillRect(20,0,2,64);x.fillRect(42,0,2,64);
+  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
+function add(p,geo,mat,pos){const m=new THREE.Mesh(geo,mat);if(pos)m.position.set(pos[0],pos[1],pos[2]);m.castShadow=m.receiveShadow=true;p.add(m);return m;}
+
+// ---------- ship (built in s coordinates: x = s, y up, z starboard) ----------
+const ship=new THREE.Group();scene.add(ship);           // origin = trunnion = CG
+const hullG=new THREE.Group();ship.add(hullG);           // shifted by -sCG
+(function buildHull(){
+  const N=48, pos=[], idx=[]; const ss=[]; for(let s=0;s<=146;s+=1)ss.push(s);
+  ss.forEach(s=>{const [w,t,b]=sec(s);for(let k=0;k<N;k++){const a=2*Math.PI*k/N,c=Math.cos(a),sn=Math.sin(a);pos.push(s,(sn>=0?t:-b)*sn,w*c);}});
+  for(let i=0;i<ss.length-1;i++)for(let k=0;k<N;k++){const a=i*N+k,b=i*N+(k+1)%N,c=(i+1)*N+(k+1)%N,d=(i+1)*N+k;idx.push(a,d,b,b,d,c);}
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setIndex(idx);geo.computeVertexNormals();
+  const hull=add(hullG,geo,mHull);
+  // groups: nose iridium overlay and shoulder belt as slightly larger lofts
+  function band(s0,s1,grow,mat){const p=[],ix=[],sl=[];for(let s=s0;s<=s1+1e-6;s+=1)sl.push(s);
+    sl.forEach(s=>{const [w,t,b]=sec(s);for(let k=0;k<N;k++){const a=2*Math.PI*k/N,c=Math.cos(a),sn=Math.sin(a);p.push(s,((sn>=0?t:-b)+grow)*sn,(w+grow)*c);}});
+    for(let i=0;i<sl.length-1;i++)for(let k=0;k<N;k++){const a=i*N+k,b=i*N+(k+1)%N,c=(i+1)*N+(k+1)%N,d=(i+1)*N+k;ix.push(a,d,b,b,d,c);}
+    const gg=new THREE.BufferGeometry();gg.setAttribute('position',new THREE.Float32BufferAttribute(p,3));gg.setIndex(ix);gg.computeVertexNormals();add(hullG,gg,mat);}
+  band(122,146,0.05,mIr);band(48,63,0.35,mIr);
+  // stern: bulkhead, well rim, cups
+  const disc=add(hullG,new THREE.CircleGeometry(14,48),mDark,[0,2,0]);disc.rotation.y=-Math.PI/2;disc.scale.set(12/14,11/14,1);
+  const well=add(hullG,new THREE.CylinderGeometry(WELL_R,WELL_R,WELL_OUT,48,1,true),mMech,[-WELL_OUT/2,0,0]);well.rotation.z=Math.PI/2;well.material=well.material.clone();well.material.side=THREE.DoubleSide;
+  [[4.4,4.4],[-4.4,4.4],[4.4,-4.4],[-4.4,-4.4]].forEach(([y,z])=>{const c=add(hullG,new THREE.CircleGeometry(3.2,24),M(0x5b4a9a,{emissive:0x1a1040}),[-1.4,y,z]);c.rotation.y=-Math.PI/2;});
+  // crests folded against the flanks, dorsal retracted into its root fairing, pods sunk
+  [-1,1].forEach(sg=>{const sh=new THREE.Shape();sh.moveTo(2,-1);sh.lineTo(30,-1);sh.lineTo(22,9);sh.lineTo(8,9);sh.lineTo(2,-1);
+    const cr=add(hullG,new THREE.ExtrudeGeometry(sh,{depth:0.8,bevelEnabled:false}),mCrest);cr.position.z=sg*14.2-(sg<0?0.8:0);
+    add(hullG,new THREE.BoxGeometry(6,3,1.2),mMech,[60,0,sg*9.8]);
+    add(hullG,new THREE.BoxGeometry(24,1.6,0.4),mDark,[46,0,sg*14.05]);});           // carriage slot s 34-58
+  add(hullG,new THREE.BoxGeometry(42,1.3,1.8),mCrest,[23,14.0,0]);
+  add(hullG,new THREE.BoxGeometry(22,0.3,9),mDark,[90,-8.55,0]);                         // hangar floor doors
+  add(hullG,new THREE.BoxGeometry(28.4,0.3,10.5),mDark,[33.9,-9.2,5.3]);                 // anamezon port doors
+  add(hullG,new THREE.BoxGeometry(28.4,0.3,10.5),mDark,[33.9,-9.2,-5.3]);
+})();
+const carriages=[-1,1].map(sg=>{const c=new THREE.Group();ship.add(c);add(c,new THREE.BoxGeometry(5,4,2),mMech,[0,0,sg*13.4]);return c;});
+const cgMark=add(ship,new THREE.SphereGeometry(1.1,16,12),M(0xffd24a,{emissive:0x806000}));
+
+
+
+const tex=stripeTex();
+function mkMast(w){const mat=new THREE.MeshStandardMaterial({map:tex.clone(),roughness:0.6,metalness:0.3});mat.map.needsUpdate=true;
+  const m=add(scene,new THREE.BoxGeometry(w||MAST_A,1,w||MAST_A),mat);m.userData.w=w||MAST_A;return m;}
+const up=V3(0,1,0);
+function setMast(m,a,b){const d=V3(0,0,0).subVectors(b,a),L=Math.max(0.01,d.length());m.position.copy(a).addScaledVector(d,0.5);
+  m.quaternion.setFromUnitVectors(up,d.normalize());m.scale.set(1,L,1);if(m.material.map)m.material.map.repeat.set(1,L/4);m.visible=L>0.3;return L;}
+// flat pad geometry helpers
+function halfOval(rx,rz,t,sign){const sh=new THREE.Shape();const n=24;sh.moveTo(0,-rz);
+  for(let i=0;i<=n;i++){const a=-Math.PI/2+Math.PI*i/n;sh.lineTo(sign*rx*Math.cos(a),rz*Math.sin(a));}sh.lineTo(0,-rz);
+  const g=new THREE.ExtrudeGeometry(sh,{depth:t,bevelEnabled:true,bevelThickness:0.25,bevelSize:0.25,bevelSegments:2});g.rotateX(Math.PI/2);g.translate(0,t,0);return g;}
+
+// ---------- the three variants, per side ----------
+// ---------- tripod of jointed legs (3-RRS parallel mechanism): one massive ventral leg + two dorsal
+// legs that fold onto the aft body as hull elements. Hip and ankle passive, the knee is driven by a
+// muscle-tendon pair (twisted-CNT-yarn muscle along the thigh, CNT tendon over the knee cam) and held
+// by a flux-pinning lock at zero power. No telescopes, no drums. ----------
+const LEG={V:{s:62,y:-8.6,z:0,a:40,b:42,rt:3.4,rs:3.0,dish:9,cam:4.0,hint:[1,0,0]},
+           D:{s:4,y:9.5,z:9.0,a:20,b:18,rt:2.3,rs:1.9,dish:6,cam:3.0,hint:[0,1,0.6]}};
+const H_REST=18, H_LIFT=24, D_BACK=6.4, D_OUT=20, ANK_H=2.5;
+const mThigh=M(0x8c877c,{metalness:0.35,roughness:0.55}), mJoint=M(0x55595f,{metalness:0.6,roughness:0.4}),
+      mMuscle=M(0x4b2f6e,{emissive:0x1b0c30,roughness:0.5}), mTendon=M(0xc9b27a,{metalness:0.5,roughness:0.35});
+function dishGeo(R){const pts=[[0.01,0],[R,0],[R,0.5],[R*0.93,0.9],[R*0.45,1.3],[2.0,1.9],[1.6,2.2],[0.01,2.2]].map(p=>new THREE.Vector2(p[0],p[1]));
+  return new THREE.LatheGeometry(pts,40);}
+function seg(m,a,b){const d=V3(0,0,0).subVectors(b,a),L=Math.max(0.01,d.length());m.position.copy(a).addScaledVector(d,0.5);
+  m.quaternion.setFromUnitVectors(up,d.clone().normalize());m.scale.set(1,L,1);return L;}
+function mkLeg(c){const L={c};
+  L.hip=add(scene,new THREE.CylinderGeometry(c.rt+0.6,c.rt+0.6,c.rt*1.6,24),mJoint);
+  L.thigh=add(scene,new THREE.CylinderGeometry(c.rt,c.rt*0.85,1,8),mThigh);
+  L.muscle=add(scene,new THREE.CylinderGeometry(c.rt*0.45,c.rt*0.45,1,12),mMuscle);
+  L.tendon=add(scene,new THREE.CylinderGeometry(c.rt*0.16,c.rt*0.16,1,8),mTendon);
+  L.knee=add(scene,new THREE.CylinderGeometry(c.rt+0.3,c.rt+0.3,c.rt*1.9,24),mJoint);
+  L.shin=add(scene,new THREE.CylinderGeometry(c.rs,c.rs*0.8,1,8),mThigh);
+  L.ankle=add(scene,new THREE.SphereGeometry(c.rs*0.7,20,14),mJoint);
+  L.dish=add(scene,dishGeo(c.dish),mPad);return L;}
+const legV=mkLeg(LEG.V), legD=[1,-1].map(sg=>{const L=mkLeg(LEG.D);L.sg=sg;return L;});
+
+function params(){const ms=MASS[massK];return {m:ms.m,s:ms.s,W:ms.m*g*G0};}
+// Feet stay where they were put down; the ship is lifted level, then turned by the three knees about
+// a point near the stern so that it ends up standing over the centre of the tripod.
+function feet(sCG){const xV=LEG.V.s-sCG, xD=-sCG-D_BACK;return {V:V3(xV,ANK_H,0),D:[V3(xD,ANK_H,D_OUT),V3(xD,ANK_H,-D_OUT)],xV,xD};}
+function pose(){
+  const {s:sCG}=params(), f=feet(sCG);
+  const xAx=(f.xV+2*f.xD)/3, y1=sCG+12, qa=(xAx-y1+H_LIFT)/2, qb=y1+qa;
+  let cx=0,cy,th=0;
+  if(P<=1){cy=lerp(H_REST,H_LIFT,ease(P));}
+  else{th=Math.PI/2*ease(P-1);cx=qa+Math.cos(th)*(0-qa)-Math.sin(th)*(H_LIFT-qb);cy=qb+Math.sin(th)*(0-qa)+Math.cos(th)*(H_LIFT-qb);}
+  return {sCG,cx,cy,th,f,xAx,q:[qa,qb]};
+}
+function shipPt(p,s,y,z){const X=s-p.sCG,c=Math.cos(p.th),sn=Math.sin(p.th);return V3(p.cx+X*c-y*sn,p.cy+X*sn+y*c,z);}
+function shipDir(p,v){const c=Math.cos(p.th),sn=Math.sin(p.th);return V3(v[0]*c-v[1]*sn,v[0]*sn+v[1]*c,v[2]);}
+function solveLeg(L,H,F,hint){
+  const c=L.c,d0=V3(0,0,0).subVectors(F,H),d=Math.min(c.a+c.b-0.01,Math.max(Math.abs(c.a-c.b)+0.01,d0.length())),u=d0.clone().normalize();
+  const x=(c.a*c.a-c.b*c.b+d*d)/(2*d),r=Math.sqrt(Math.max(0,c.a*c.a-x*x));
+  const pr=hint.clone().addScaledVector(u,-hint.dot(u)).normalize();
+  const K=H.clone().addScaledVector(u,x).addScaledVector(pr,r);
+  return {K,e:r*d/Math.hypot(x,r)*0+r*(1)/1,d:d0.length(),r};
+}
+const qId=new THREE.Quaternion();
+const ST={};
+function placeLeg(L,H,F,hintW,axisW){
+  const s=solveLeg(L,H,F,hintW),K=s.K;
+  const ax=V3(0,0,0).subVectors(F,H).cross(hintW).normalize();   // hip and knee axes: normal of the leg plane
+  L.hip.position.copy(H);L.hip.quaternion.setFromUnitVectors(up,ax);
+  L.knee.position.copy(K);L.knee.quaternion.setFromUnitVectors(up,ax);
+  seg(L.thigh,H,K);seg(L.shin,K,F);
+  // muscle along the back of the thigh, tendon from the muscle to the knee cam
+  const back=hintW.clone().multiplyScalar(-1), off=L.c.rt*0.9;
+  const t=V3(0,0,0).subVectors(K,H).normalize(), bk=back.clone().addScaledVector(t,-back.dot(t)).normalize();
+  const m0=H.clone().addScaledVector(t,L.c.a*0.12).addScaledVector(bk,off), m1=H.clone().addScaledVector(t,L.c.a*0.72).addScaledVector(bk,off);
+  seg(L.muscle,m0,m1);seg(L.tendon,m1,K.clone().addScaledVector(bk,L.c.cam*0.8));
+  L.ankle.position.copy(F);L.dish.position.set(F.x,0,F.z);
+  // knee offset from the hip-foot line (the lever of the load about the knee)
+  const hf=V3(0,0,0).subVectors(F,H),n=hf.clone().normalize(),kv=V3(0,0,0).subVectors(K,H);
+  return {len:hf.length(),e:kv.addScaledVector(n,-kv.dot(n)).length(),dir:n};
+}
+function apply(){
+  const p=pose();
+  ship.position.set(p.cx,p.cy,0);ship.rotation.z=p.th;hullG.position.x=-p.sCG;
+  const HV=shipPt(p,LEG.V.s,LEG.V.y,0);
+  ST.V=placeLeg(legV,HV,p.f.V,shipDir(p,LEG.V.hint).normalize(),V3(0,0,1));
+  ST.D=legD.map((L,i)=>{const sg=L.sg,H=shipPt(p,LEG.D.s,LEG.D.y,sg*LEG.D.z);
+    const hint=shipDir(p,[0,1,sg*0.6]).normalize();
+    const ax=shipDir(p,[1,0,0]).normalize();
+    return placeLeg(L,H,p.f.D[i],hint,ax);});
+  return p;
+}
+const f0=x=>(x/1e6).toFixed(0), fP=x=>(x/1e6).toFixed(2), fE=x=>x.toExponential(1).replace('e+','·10^');
+function readout(p){
+  const {m,W}=params(), f=p.f;
+  const sV=Math.max(0,Math.min(1,(p.cx-f.xD)/(f.xV-f.xD))), sD=(1-sV)/2;
+  const inside=p.cx>f.xD&&p.cx<f.xV;
+  let t=`масса ${(m/1e6).toFixed(1)} кт · ${g} g · вес ${f0(W)} МН\nЦМ s ${p.sCG.toFixed(1)} · высота ЦМ ${p.cy.toFixed(1)} м · наклон ${(p.th/D).toFixed(0)}°\n`;
+  t+=`проекция ЦМ ${inside?'внутри':'ВНЕ'} треугольника опор\n\n`;
+  const leg=(nm,share,st,c)=>{const Fv=share*W,F=Fv/Math.max(0.05,-st.dir.y),Mk=F*st.e,T=Mk/c.cam;
+    return `${nm}: ${(share*100).toFixed(0)} % · ${f0(F)} МН по ноге\n  колено: плечо ${st.e.toFixed(1)} м · момент ${fE(Mk)} Н·м\n  сухожилие ${f0(T)} МН (нанотрубки 3 ГПа: ${(T/3e9).toFixed(2)} м²)\n  тарелка Ø${c.dish*2}: грунт ${fP(Fv/(Math.PI*c.dish*c.dish))} МПа\n`;};
+  t+=leg('массивная нога',sV,ST.V,LEG.V);
+  t+=leg('верхние ноги (каждая)',sD,ST.D[0],LEG.D);
+  if(P<=0.001){const w=D_OUT*(f.xV-p.cx)/(f.xV-f.xD);t+=`\nопора по крену у ЦМ ±${w.toFixed(1)} м + тарелка Ø18\n`;}
+  t+=`\nгрунт: песок 0,2–0,4 · гравий 0,6 · скала/порт 5–20 МПа`;
+  document.getElementById('ro').textContent=t;
+  document.getElementById('ph').textContent=P<=0.001?'лежит: массивная нога под брюхом, верхние ноги за кормой':P>=1.999?'стоит на корме над центром треноги':
+    (P<1?'подъём лёжа (колени разгибаются)':'поворот: три колена ведут корабль, ноги стоят на месте');
+}
+
+const $=id=>document.getElementById(id);
+const VIEWS={side:[[-10,40,260],[-15,25,0]],q:[[120,70,200],[-15,25,0]],aft:[[-230,40,60],[-20,30,0]],col:[[60,20,80],[20,8,0]]};
+function view(k){const p=pose(),dy=(p.cy-18)*0.6,v=VIEWS[k];cam.position.set(v[0][0],v[0][1]+dy,v[0][2]);ctl.target.set(v[1][0],v[1][1]+dy,v[1][2]);ctl.update();}
+view('q');
+document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>view(b.dataset.v));
+$('go').onclick=()=>{PT=PT<1?2:0;};
+const msTxt=()=>$('ms').textContent='Масса: '+MASS[massK].txt;msTxt();
+$('ms').onclick=()=>{massK=massK==='land'?'full':'land';msTxt();};
+const gvTxt=()=>$('gv').textContent='Тяготение: '+(g===1?'1 g (Земля)':'2,5 g (планета Железной звезды)');gvTxt();
+$('gv').onclick=()=>{g=g===2.5?1:2.5;gvTxt();};
+$('rot').onclick=()=>{ctl.autoRotate=!ctl.autoRotate;$('rot').classList.toggle('on',ctl.autoRotate);};
+const spd=$('spd');const sv=()=>{TS=Math.pow(2,+spd.value);$('spdv').textContent='×'+TS.toFixed(1);};spd.oninput=sv;sv();
+window.__legs={set:v=>{P=PT=v;}};  // debug hook
+let last=performance.now();
+function loop(now){const dt=Math.min(0.1,(now-last)/1000);last=now;
+  const step=dt*TS/12;P=P<PT?Math.min(PT,P+step):Math.max(PT,P-step);
+  $('go').textContent=PT>=2?(P>=2?'Уложить в горизонт':'Идёт подъём… (нажать — назад)'):(P<=0?'Поставить на корму':'Идёт укладка… (нажать — вверх)');
+  const p=apply();readout(p);ctl.update();R.render(scene,cam);requestAnimationFrame(loop);}
+requestAnimationFrame(loop);
+})();
+</script></body></html>

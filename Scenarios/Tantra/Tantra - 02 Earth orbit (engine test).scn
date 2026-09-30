@@ -1,0 +1,36 @@
+BEGIN_DESC
+«Тантра» на низкой околоземной орбите. Полные ловушки анамезона.
+Для испытания: K - переключить на анамезон, трижды J - поле камер,
+луч К-частиц, подача. Затем тяга. Следите за перегрузкой (G).
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52000.5
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Tantra
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Tantra
+  MODE Extern
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Tantra:Tantra
+  STATUS Orbiting Earth
+  RPOS -6145074.65 -2114583.93 1790272.82
+  RVEL -2825.928 7003.850 -1428.170
+  AROT 110.00 -10.00 80.00
+  PRPLEVEL 0:1.000 1:1.000 2:1.000 3:1.000 4:1.000
+  ENGSET 1
+  IGNITION 0
+  GLIMIT 1 5.00
+END
+END_SHIPS

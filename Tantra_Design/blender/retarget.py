@@ -12,6 +12,7 @@ os.makedirs(OUT, exist_ok=True); os.makedirs(ANIM, exist_ok=True)
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 CLIP = argv[0] if argv else "35_01"; FPS = int(argv[1]) if len(argv) > 1 else 30
 LOG = os.path.join(HERE, "retarget_%s.log" % CLIP); log = []
+HAND = {"LeftHand", "LeftFingerBase", "LeftHandFinger1", "LThumb", "RightHand", "RightFingerBase", "RightHandFinger1", "RThumb"}
 
 def hierarchy(arm):
     order = []
@@ -66,11 +67,14 @@ try:
         posed = {}
         for n in hierarchy(tgt):
             pb = tgt.pose.bones[n]
-            if n in S:
+            p = parent[n]
+            if n in S and n not in HAND:
                 q = (S[n].to_quaternion() @ S0[n].to_quaternion().inverted()) @ Tt[n].to_quaternion()
+            elif p is not None:
+                # hands/fingers (noisy or missing in CMU): keep the T-pose orientation relative to the parent
+                q = posed[p].to_quaternion() @ (Tt[p].to_quaternion().inverted() @ Tt[n].to_quaternion())
             else:
                 q = Tt[n].to_quaternion()
-            p = parent[n]
             if p is None:
                 head = Tt[n].translation + (S[n].translation - S0[n].translation) * ratio if n in S else Tt[n].translation
                 want = Matrix.LocRotScale(head, q, None)

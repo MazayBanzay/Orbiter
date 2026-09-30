@@ -139,7 +139,7 @@ try:
     for v in bm.verts:
         d = dict(v[deform]); dom = names[max(d, key=d.get)] if d else None
         side = 'l' if v.co.x > 0 else 'r'; wp, wd = wrist[side]
-        beyond_wrist = (v.co - wp).dot(wd) > 0.015 and abs(v.co.x) > 0.20
+        beyond_wrist = (v.co - wp).dot(wd) > 0.015 and abs(v.co.x) > 0.20 and v.co.z > 0.75   # hands never reach below 0.9 m in the rest pose
         if dom in HEAD or v.co.z > neck_z + 0.035 or beyond_wrist or v.co.z < ankle_z - 0.012: kill.append(v)
         # flatten nipples before offsetting
     bmesh.ops.delete(bm, geom=kill, context='VERTS')
@@ -171,7 +171,13 @@ try:
     info = sorted([(centre(l)[0].z, l) for l in loops], key=lambda t: -t[0])
     log.append("boundary loops: %s" % [round(z, 3) for z, _ in info])
 
-    def extrude(loop, up, out, mat):
+    gidx = {g.name: g.index for g in cov.vertex_groups}
+    def set_weights(verts, wmap):
+        for v in verts:
+            d = v[deform]; d.clear()
+            for n, w in wmap.items():
+                if n in gidx: d[gidx[n]] = w
+    def extrude(loop, up, out, mat, weights=None):
         c, _ = centre(loop)
         r = bmesh.ops.extrude_edge_only(bm, edges=loop)
         nv = [g for g in r['geom'] if isinstance(g, bmesh.types.BMVert)]
@@ -179,12 +185,16 @@ try:
             radial = (v.co - c); radial.z = 0; radial.normalize() if radial.length > 1e-6 else None
             v.co += Vector((0, 0, up)) + radial * out
         for f in [g for g in r['geom'] if isinstance(g, bmesh.types.BMFace)]: f.material_index = mat
+        if weights: set_weights(nv, weights)
         return [g for g in r['geom'] if isinstance(g, bmesh.types.BMEdge) and g.is_boundary]
 
     # stand collar: 38 mm up with slight flare, red piping at the top edge
     neck_loop = info[0][1]
-    top = extrude(neck_loop, 0.036, 0.003, 1)
-    extrude(top, 0.004, 0.0, 2)
+    # collar follows the neck base, not the shoulders: re-weight the neck ring and everything extruded from it
+    NECKW = {'Neck': 0.35, 'Spine1': 0.65} if 'Neck' in gidx else {'neck_01': 0.35, 'spine_03': 0.65}
+    set_weights({v for e in neck_loop for v in e.verts}, NECKW)
+    top = extrude(neck_loop, 0.036, 0.003, 1, NECKW)
+    extrude(top, 0.004, 0.0, 2, NECKW)
     # cuffs at the wrists (the two loops closest to the hand height)
     hz = W(RIG['hand_l']).z
     wrists = sorted(info[1:], key=lambda t: abs(t[0] - hz))[:2]
@@ -207,7 +217,7 @@ try:
     for v in body.data.vertices:
         if not v.groups: continue
         g = max(v.groups, key=lambda g: g.weight); n = names[g.group]
-        far_hand = any((Vector(v.co) - wrist[s][0]).dot(wrist[s][1]) > 0.0 and abs(v.co.x) > 0.2 for s in ('l', 'r'))
+        far_hand = v.co.z > 0.75 and any((Vector(v.co) - wrist[s][0]).dot(wrist[s][1]) > 0.0 and abs(v.co.x) > 0.2 for s in ('l', 'r'))
         if not (n in HEAD or far_hand or n in ('neck_01', 'Neck') or v.co.z < ankle_z - 0.01) and v.co.z < neck_z + 0.02: idx.append(v.index)
     covered.add(idx, 1.0, 'REPLACE')
     mk = body.modifiers.new("HideUnderCoverall", 'MASK'); mk.vertex_group = covered.name; mk.invert_vertex_group = True

@@ -1,5 +1,6 @@
 # Shared preview lighting and camera shots for the astronavigator renders.
 import bpy, os
+FLOOR = tuple(float(x) for x in os.environ.get("TANTRA_FLOOR", "0.12,0.13,0.15,1").split(","))
 from mathutils import Vector
 
 def setup_stage():
@@ -21,7 +22,7 @@ def setup_stage():
     light("Key", (2.0, -2.5, 2.4), 320, 2.0); light("Fill", (-2.5, -1.5, 1.6), 110, 3.0, (0.85, 0.9, 1.0)); light("Rim", (0.5, 3.0, 2.5), 260, 1.5, (0.8, 0.88, 1.0))
     floor = bpy.data.meshes.new("Floor"); floor.from_pydata([(-5, -5, 0), (5, -5, 0), (5, 5, 0), (-5, 5, 0)], [], [(0, 1, 2, 3)])
     fo = bpy.data.objects.new("Floor", floor); sc.collection.objects.link(fo)
-    fm = bpy.data.materials.new("FloorM"); fm.use_nodes = False; fm.diffuse_color = (0.12, 0.13, 0.15, 1); floor.materials.append(fm)
+    fm = bpy.data.materials.new("FloorM"); fm.use_nodes = False; fm.diffuse_color = FLOOR; floor.materials.append(fm)
     cam_d = bpy.data.cameras.new("Cam"); cam = bpy.data.objects.new("Cam", cam_d); sc.collection.objects.link(cam); sc.camera = cam
     return cam
 
