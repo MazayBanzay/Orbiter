@@ -88,7 +88,8 @@ def main():
     gm.write_layout(legs, comps, os.path.join(HERE, "..", "orbiter2016", "MeshLayout.h"))
     os.makedirs(os.path.dirname(MSH), exist_ok=True)
     trap = gm.Group("trap", gm.MAT["trap_shell"])     # stand-alone container vessel mesh (TantraTrap)
-    gm.trap_geom(trap, 0.0, 0.0, -12.4 - gm.STERN_Z, 12.4 - gm.STERN_Z)
+    half = (gm.CASS_S1 - gm.CASS_S0) / 2
+    gm.trap_geom(trap, 0.0, 0.0, -half - gm.STERN_Z, half - gm.STERN_Z)
     gm.write_msh([trap], os.path.join(os.path.dirname(MSH), "TantraTrap.msh"))
     if "--no-blender" in sys.argv:
         gm.write_msh(raw_groups, MSH)

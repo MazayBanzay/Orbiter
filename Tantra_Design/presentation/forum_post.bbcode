@@ -1,0 +1,128 @@
+[B][SIZE=6]OrbiterCrew — living crew for Orbiter 2016 (alpha preview)[/SIZE][/B]
+[I]English below / русский текст ниже[/I]
+
+[IMG]01_coverall.jpg[/IMG]
+
+OrbiterCrew is a new crew system for Orbiter 2016, written from scratch (GPL-3.0). The focus is people that look and move like people, and a life support model that is physics, not a timer. The first crew member is Niza Krit, astronavigator of the 37th Star Expedition.
+
+[B]Look[/B]
+[LIST]
+[*]Realistic human figure (MakeHuman/MPFB, CC0 assets), skinned mesh with a 31-bone skeleton, deformed every frame.
+[*]Two outfits: shipboard coverall (breathable air) and the «Frame» space suit with a powered exoskeleton. [B]K[/B] puts the suit on / takes it off — only where the air is breathable.
+[*]Coverall with sewn panels, piping, zip and a normal map; stand collar; relaxed hands.
+[/LIST]
+
+[B]Animation[/B]
+[IMG]02_walk.jpg[/IMG]
+[IMG]03_run.jpg[/IMG]
+[LIST]
+[*]Motion-capture walk and run, retargeted onto the figure (aim-based retarget: straight standing knee, natural pelvis, no foot skating).
+[*]Walk without Shift, run with Shift — never a half-walk, half-run mix. Stride grows with speed.
+[*]Fast, friction-limited stop; S while running is a hard brake. Lean into acceleration and braking, bank into turns.
+[*]Fists when running, relaxed hands when walking. Blinking every 2–6 s. Hair on springs (sways with steps, stops and turns).
+[*]Breathing animation driven by the physiology: deeper and faster with effort and fatigue.
+[*]Jumps (Space) — ballistic flight in Orbiter's physics, crouch on landing.
+[/LIST]
+[IMG]04_details.jpg[/IMG]
+[IMG]05_ingame_walk.jpg[/IMG]
+
+[B]Life support (all computed live)[/B]
+[LIST]
+[*]Atmosphere composition per planet (O₂ / CO₂), not just pressure: you can't take the helmet off on Mars.
+[*]Metabolic power from activity → O₂ use, CO₂ output, pulse, breathing rate.
+[*]Stamina (anaerobic reserve) limits the running speed; hypoxia, CO₂ narcosis and vacuum exposure lead to unconsciousness and death.
+[*]Suit: one battery for everything (O₂ regulation, CO₂ sorbent, fans, heating/cooling, drives, lamps); thermal control rated −157…+121 °C, sun/shade and hot ground taken into account.
+[/LIST]
+
+[B]Space suit and jet pack[/B]
+[IMG]06_suit.jpg[/IMG] [IMG]07_helmet.jpg[/IMG]
+[LIST]
+[*]Exoskeleton servo boost on Shift: longer, faster stride at the battery's cost; flat battery — the drives are dead weight.
+[*]Helmet: gold sun visor ([B]V[/B]), two lamps ([B]L[/B]).
+[*]Nitrogen RCS of the suit for zero-g work; weightless body posture, limbs lag behind the thrust.
+[*]Jet pack ([B]B[/B] take / drop; a separate object): two pods on folding booms with thrust vectoring, ~280 m/s Δv, 2 × 500 N. Flies on the Moon, Mars and in space (on Earth thrust < weight).
+[/LIST]
+[IMG]08_pack_open.jpg[/IMG] [IMG]09_pack_folded.jpg[/IMG]
+[IMG]10_ingame_pack_moon.jpg[/IMG]
+
+[B]Suit computer[/B] [I](layout mock-up; in the game it is drawn by the module)[/I]
+[IMG]11_helmet_computer_mockup.jpg[/IMG]
+[LIST]
+[*]Holographic helmet display: vitals and resources along the visor rim, thermal control, consumption.
+[*]Two MFDs, mouse-driven: terrain map (contours, steep slopes), orbit, power, targets (vessels, crew, dropped packs), transfer profile, landing, rendezvous (relative-motion plot, speed corridor), docking, body.
+[*]Autopilots: near the ground — altitude hold, hover, hop to target, landing; in space — sync, hold, approach, dock.
+[*]Night vision (on-screen button).
+[/LIST]
+
+[B]Sound[/B] (XRSound, optional): footsteps on the gait's foot contacts, heavy suit steps, muffled steps in vacuum, breathing paced by the physiology, suit fan following the thermal load.
+
+[B]Controls on the ground:[/B] W/S move (S brakes), A/D turn, Q/E side step, Shift run / servo boost, Space jump, K suit, V visor, L lamps, B jet pack.
+
+[B]Alpha status[/B]
+[LIST]
+[*]Requires Orbiter 2016 + D3D9Client; XRSound for sound (optional).
+[*]Not yet: vessel integration (airlocks, boarding, crew transfer) — next milestone.
+[*]Jet pack landing is being debugged (the figure may sink into the ground after touchdown).
+[/LIST]
+
+[B]Credits:[/B] figure — MakeHuman / MPFB (CC0); motion capture — CMU Graphics Lab Motion Capture Database; sounds — Kenney, OwlishMedia (CC0); HUD font — Jura (OFL). Prior art and inspiration: UMmu (Dan Steph) and UACS (Abdullah Radwan). OrbiterCrew contains none of their code.
+
+[HR][/HR]
+
+[B][SIZE=6]OrbiterCrew — живой экипаж для Orbiter 2016 (альфа-превью)[/SIZE][/B]
+
+OrbiterCrew — новая система экипажа для Orbiter 2016, написанная с нуля (GPL-3.0). Главное — люди, которые выглядят и двигаются как люди, и жизнеобеспечение как физическая модель, а не таймер. Первый член экипажа — Низа Крит, астронавигатор 37-й Звёздной экспедиции.
+
+[B]Вид[/B]
+[LIST]
+[*]Реалистичная фигура человека (MakeHuman/MPFB, ассеты CC0), меш со скелетом из 31 кости, деформируется каждый кадр.
+[*]Две формы одежды: бортовой комбинезон (пригодный воздух) и скафандр «Каркас» с силовым экзоскелетом. [B]K[/B] — надеть / снять; снять можно только там, где можно дышать.
+[*]Комбинезон с панелями, кантом, молнией и картой нормалей; воротник-стойка; расслабленные кисти.
+[/LIST]
+
+[B]Анимация[/B]
+[LIST]
+[*]Шаг и бег из записей motion capture, перенесённые на фигуру: прямое опорное колено, естественный таз, без скольжения стоп.
+[*]Без Shift — шаг, с Shift — бег, никакой смеси «полушаг-полубег». Длина шага растёт со скоростью.
+[*]Быстрая остановка с учётом сцепления; S на бегу — резкое торможение. Наклон при разгоне и торможении, крен в поворотах.
+[*]На бегу кулаки, на шаге расслабленные кисти. Моргание раз в 2–6 с. Волосы на пружинах: качаются от шагов, остановок и поворотов.
+[*]Дыхание анимируется по физиологии: глубже и чаще от нагрузки и усталости.
+[*]Прыжок (Пробел) — баллистический полёт в физике Orbiter, приседание при приземлении.
+[/LIST]
+
+[B]Жизнеобеспечение (всё считается в реальном времени)[/B]
+[LIST]
+[*]Состав атмосферы по планетам (O₂ / CO₂), а не только давление: на Марсе шлем не снять.
+[*]Метаболическая мощность от нагрузки → расход O₂, выдох CO₂, пульс, частота дыхания.
+[*]Выносливость (анаэробный запас) ограничивает скорость бега; гипоксия, отравление CO₂ и вакуум ведут к потере сознания и гибели.
+[*]Скафандр: одна батарея на всё (подача O₂, поглотитель CO₂, вентиляторы, обогрев и охлаждение, приводы, фонари); терморегуляция −157…+121 °C с учётом солнца, тени и раскалённого грунта.
+[/LIST]
+
+[B]Скафандр и реактивный ранец[/B]
+[LIST]
+[*]Сервоусиление экзоскелета на Shift: длиннее и быстрее шаг за счёт батареи; без заряда приводы — мёртвый груз.
+[*]Шлем: золотой солнцезащитный щиток ([B]V[/B]), два фонаря ([B]L[/B]).
+[*]Азотная РСУ скафандра для работы в невесомости; поза невесомости, конечности с инерцией.
+[*]Реактивный ранец ([B]B[/B] — взять / сбросить, отдельный объект): две гондолы на складных балках с управлением вектором тяги, ~280 м/с Δv, 2 × 500 Н. Летает на Луне, Марсе и в космосе (на Земле тяга меньше веса).
+[/LIST]
+
+[B]Компьютер скафандра[/B] [I](макет компоновки; в игре экран рисует модуль)[/I]
+[LIST]
+[*]Голографический шлемовый экран: показатели организма и ресурсы по кромке визора, термоконтроль, расход.
+[*]Два МФД с управлением мышью: карта рельефа (изолинии, крутые склоны), орбита, питание, цели (корабли, экипаж, сброшенные ранцы), профиль перелёта, посадка, сближение (график относительного движения, коридор скорости), стыковка, организм.
+[*]Автопилоты: у грунта — удержание высоты, зависание, перелёт к цели, посадка; в космосе — синхронизация, удержание, сближение, стыковка.
+[*]Прибор ночного видения (кнопка на экране).
+[/LIST]
+
+[B]Звук[/B] (XRSound, по желанию): шаги в момент касания стопы, тяжёлые шаги скафандра, глухие шаги в вакууме, дыхание в ритме физиологии, вентилятор скафандра по тепловой нагрузке.
+
+[B]Управление на земле:[/B] W/S — движение (S тормозит), A/D — поворот, Q/E — шаг вбок, Shift — бег / сервоусиление, Пробел — прыжок, K — скафандр, V — щиток, L — фонари, B — ранец.
+
+[B]Статус альфы[/B]
+[LIST]
+[*]Нужны Orbiter 2016 + D3D9Client; для звука — XRSound (по желанию).
+[*]Пока нет: интеграции с кораблями (шлюзы, посадка на борт, передача экипажа) — следующий этап.
+[*]Посадка ранца отлаживается (после касания фигура может провалиться в грунт).
+[/LIST]
+
+[B]Благодарности:[/B] фигура — MakeHuman / MPFB (CC0); захват движения — CMU Graphics Lab Motion Capture Database; звуки — Kenney, OwlishMedia (CC0); шрифт HUD — Jura (OFL). Предшественники и вдохновение: UMmu (Dan Steph) и UACS (Abdullah Radwan). Кода из них в OrbiterCrew нет.

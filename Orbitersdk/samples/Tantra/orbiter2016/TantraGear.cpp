@@ -1,5 +1,7 @@
 #include "TantraGear.h"
 
+#include "../core/Spec.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -65,15 +67,17 @@ void TantraGear::LegRestFoot(double& x, double& s) {
         if (!L.lower || L.hinge.x < 0.0) continue;
         const VECTOR3 tip = ToV(L.hinge) + Rotate(_V(0, 0, -(m::kLegLMinS + L.extRest)), ToV(L.axis), L.phiRest);  // stowed along -z
         x = tip.x;
-        s = tip.z + 38.0;  // mesh origin at s = 38
+        s = tip.z + tantra::spec::kOriginS;  // mesh origin
         return;
     }
 }
 
 void TantraGear::Apply(const tantra::CarriagePose& p, double sCG, const Extras& ex) {
     const double tuck = (std::max)(p.tuck, ex.tuck);
-    Set(m::ANIM_CREST_DORSAL, tuck);
-    Set(m::ANIM_CREST_LATERAL, tuck);
+    Set(m::ANIM_CREST_DORSAL, tuck);                                       // telescopic fin into its slot
+    // Erection folds the wings too: inner panels up first, then the outer panels down along them (outboard).
+    Set(m::ANIM_CREST_LATERAL, (std::max)(ex.wingIn, (std::min)(1.0, 2.0 * p.tuck)));
+    Set(m::ANIM_WING_OUTER, (std::max)(ex.wingOut, (std::max)(0.0, 2.0 * p.tuck - 1.0)));
     Set(m::ANIM_POD_RETRACT, ex.podStow);
     Set(m::ANIM_ELEVON_PORT, ex.elevon[0]);
     Set(m::ANIM_ELEVON_STARBOARD, ex.elevon[1]);
@@ -100,6 +104,8 @@ void TantraGear::Apply(const tantra::CarriagePose& p, double sCG, const Extras& 
     Set(m::ANIM_SHIN_LEN_STARBOARD, shin);
     Set(m::ANIM_PAD_FOLD_PORT, p.padFold);
     Set(m::ANIM_PAD_FOLD_STARBOARD, p.padFold);
+    Set(m::ANIM_STRUT_CARRIAGE, (std::max)(ex.strut[0], ex.strut[1]));   // one animation for both sides
+    Set(m::ANIM_ANCHOR_CARRIAGE, (std::max)(ex.anchor[0], ex.anchor[1]));
 
     // Anamezon port: doors, trap lifts and empty slots, manipulator joints.
     Set(m::ANIM_BAY_DOORS, ex.bayDoors);
@@ -123,5 +129,9 @@ void TantraGear::Apply(const tantra::CarriagePose& p, double sCG, const Extras& 
         Set(kExt[i], (ext(wr) * L.extRest + ext(ws) * L.extStand) / m::kLegExtMax);
         Set(kRest[i], wr);
         Set(kStand[i], ws);
+        static const int kStrut[4] = {m::ANIM_LEG0_STRUT, m::ANIM_LEG1_STRUT, m::ANIM_LEG2_STRUT, m::ANIM_LEG3_STRUT};
+        static const int kAnchor[4] = {m::ANIM_LEG0_ANCHOR, m::ANIM_LEG1_ANCHOR, m::ANIM_LEG2_ANCHOR, m::ANIM_LEG3_ANCHOR};
+        Set(kStrut[i], ex.strut[2 + i]);
+        Set(kAnchor[i], ex.anchor[2 + i]);
     }
 }

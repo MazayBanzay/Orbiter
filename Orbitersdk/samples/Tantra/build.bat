@@ -19,7 +19,7 @@ set LFLAGS=/LIBPATH:"%SDK%\lib" orbiter.lib Orbitersdk.lib "%SDK%\XRSound\XRSoun
 
 set A=%ROOT%orbiter2016
 cl %CFLAGS% /Fo"%OUT%\\" /Fe"%OUT%\Tantra.dll" ^
- "%ROOT%core\Ignition.cpp" "%ROOT%core\Drive.cpp" "%ROOT%core\ExhaustModel.cpp" "%ROOT%core\Carriage.cpp" "%ROOT%core\Aero.cpp" "%ROOT%core\Damage.cpp" "%ROOT%core\Radiation.cpp" ^
+ "%ROOT%core\Ignition.cpp" "%ROOT%core\Drive.cpp" "%ROOT%core\ExhaustModel.cpp" "%ROOT%core\Carriage.cpp" "%ROOT%core\Legs.cpp" "%ROOT%core\Aero.cpp" "%ROOT%core\Damage.cpp" "%ROOT%core\Radiation.cpp" ^
  "%A%\Tantra.cpp" "%A%\TantraPanel.cpp" "%A%\TantraExhaust.cpp" "%A%\TantraSafety.cpp" "%A%\TantraGear.cpp" "%A%\TantraPort.cpp" "%A%\TantraCrew.cpp" ^
  /link %LFLAGS%
 if errorlevel 1 (echo BUILD FAILED & exit /b 1)

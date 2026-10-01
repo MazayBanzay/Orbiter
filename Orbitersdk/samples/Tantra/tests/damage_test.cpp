@@ -98,6 +98,17 @@ int main() {
         g.vDown = 10.0;
         e.Step(0.02, f, clean, g, true);
         check(e.Destroyed(), "10 m/s on the legs: legs gone, hull breaks (8 m/s left)");
+        Model s1, s2, s3;                // MR struts of the level set: 1.5 m stroke, 6.6 / 9.4 m/s
+        g.vSoft = 6.64;
+        g.vBreak = 9.39;
+        g.vDown = 6.0;
+        s1.Step(0.02, f, clean, g, true);
+        g.vDown = 8.0;
+        s2.Step(0.02, f, clean, g, true);
+        g.vDown = 10.0;
+        s3.Step(0.02, f, clean, g, true);
+        check(s1.Integrity(kLegPort) == 1.0 && s2.Integrity(kLegPort) < 1.0 && !s2.Lost(kLegPort) && s3.Lost(kLegPort) &&
+                  !s3.Destroyed(), "MR struts 1.5 m: 6 ok / 8 damaged / 10 broken, hull survives (3.5 m/s left)");
         Model d;
         g.gearDown = false;
         g.vDown = 6.0;

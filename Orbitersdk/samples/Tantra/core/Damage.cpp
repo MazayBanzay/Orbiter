@@ -12,33 +12,33 @@ namespace tantra::damage {
 
 namespace {
 constexpr double kSigma = 5.670e-8, kEps = 0.85, kSG = 1.7415e-4;  // Stefan-Boltzmann, emissivity, Sutton-Graves
-constexpr double kNoseRn = 1.8;                                    // iridium nose tip radius [m]
+constexpr double kNoseRn = 3.0;                                    // iridium nose tip radius [m] (T8: blunted)
 
 // Zone: effective nose radius, exposure law, thermal lag, material limit.
 struct ZoneSpec { double rn; double limit; double tau; };
 const ZoneSpec kZone[kZoneCount] = {
     {kNoseRn, 2400.0, 25.0},  // nose: crystalline iridium shield (melts 2719 K)
     {12.0, 2200.0, 40.0},     // belly: flat bottom, boron-zirconium ceramic, stagnation-line equivalent
-    {0.8, 2100.0, 15.0},      // crest leading edges (blunted 0.9 m plates, sweep 28 deg)
+    {0.45, 2100.0, 15.0},     // wing leading edges (R 0.45 m, sweep 41 deg; Li heat pipes keep them ~1100 K)
     {3.0, 2000.0, 20.0},      // dorsal fin (leeward at entry; windward only in sideslip or upside down)
-    {11.5, 2000.0, 40.0},     // stern face and well (flying stern first)
+    {10.9, 2000.0, 40.0},     // stern: the nacelle cluster (flying stern first)
     {1.0, 1300.0, 10.0},      // gear legs and pads in the flow
     {1.0, 1300.0, 10.0},      // pods and their door arms in the flow
 };
 
 // Part ratings.
-constexpr double kCrestArea = 212.0, kCrestRating = 12.0e6;  // per crest, normal force [N]
-constexpr double kFinArea = 611.0, kFinRating = 10.0e6;
+constexpr double kCrestArea = 240.0, kCrestRating = 14.0e6;  // per wing, normal force [N]
+constexpr double kFinArea = 726.0, kFinRating = 12.0e6;
 constexpr double kPodQ = 60.0e3, kGearQ = 40.0e3, kDoorQ = 3.0e3;  // dynamic pressure the part takes [Pa]
 constexpr double kHullG = 6.0, kHullGBreak = 9.0;
-constexpr double kTdLegs = 3.0, kTdLegsBreak = 6.0, kTdBelly = 1.0, kTdBellyBreak = 5.0;  // [m/s]
+constexpr double kTdBelly = 1.0, kTdBellyBreak = 5.0;  // [m/s]; the legs' limits come with Ground (ankle struts)
 
-const char* kRu[kPartCount] = {"щит носа", "днище", "гребень левый", "гребень правый", "перо",
+const char* kRu[kPartCount] = {"щит носа", "днище", "крыло левое", "крыло правое", "перо",
                                "гондола 1", "гондола 2", "гондола 3", "гондола 4",
                                "нога лафета левая", "нога лафета правая", "кормовая нога 1", "кормовая нога 2",
                                "кормовая нога 3", "кормовая нога 4", "створки ангара", "створки отсеков",
                                "чаши кормы", "корпус"};
-const char* kEn[kPartCount] = {"nose shield", "belly", "port crest", "starboard crest", "fin",
+const char* kEn[kPartCount] = {"nose shield", "belly", "port wing", "starboard wing", "fin",
                                "pod 1", "pod 2", "pod 3", "pod 4",
                                "port carriage leg", "starboard carriage leg", "stern leg 1", "stern leg 2",
                                "stern leg 3", "stern leg 4", "hangar doors", "bay doors", "stern cups", "hull"};
@@ -74,7 +74,7 @@ void Model::Step(double dt, const Flight& f, const Exposure& x, const Ground& g,
     double expo[kZoneCount];
     expo[kZoneNose] = sternFirst ? 0.05 : std::max(0.05, ca);
     expo[kZoneBelly] = std::max(0.05, sa);                        // windward flat bottom
-    expo[kZoneCrestEdge] = x.crests * (sternFirst ? 0.1 : 0.86);  // cos^1.2 of the 28 deg sweep
+    expo[kZoneCrestEdge] = x.crests * (sternFirst ? 0.1 : 0.71);  // cos^1.2 of the 41 deg sweep
     expo[kZoneFin] = x.fin * std::max(0.05, std::max(-sa, sb));   // leeward unless flying upside down / yawed
     expo[kZoneStern] = sternFirst ? std::max(0.05, -ca) : 0.05;
     expo[kZoneGear] = x.gear;
@@ -125,10 +125,10 @@ void Model::Step(double dt, const Flight& f, const Exposure& x, const Ground& g,
     if (g.touchdown) {
         double v = g.vDown;  // what is left for the hull after the legs
         if (g.gearDown) {
-            if (v > kTdLegsBreak) for (int p = kLegPort; p <= kSternLeg3; ++p) Hurt(p, 1.0, enabled);
-            else if (v > kTdLegs) for (int p = kLegPort; p <= kSternLeg3; ++p) Hurt(p, (v - kTdLegs) / (kTdLegsBreak - kTdLegs), enabled);
-            // the legs absorb the energy of a 6 m/s touchdown at most; the rest reaches the hull
-            v = v > kTdLegsBreak ? std::sqrt(v * v - kTdLegsBreak * kTdLegsBreak) : 0.0;
+            if (v > g.vBreak) for (int p = kLegPort; p <= kSternLeg3; ++p) Hurt(p, 1.0, enabled);
+            else if (v > g.vSoft) for (int p = kLegPort; p <= kSternLeg3; ++p) Hurt(p, (v - g.vSoft) / (g.vBreak - g.vSoft), enabled);
+            // the struts absorb the energy of a vBreak touchdown at most (stroke bottomed out); the rest reaches the hull
+            v = v > g.vBreak ? std::sqrt(v * v - g.vBreak * g.vBreak) : 0.0;
         }
         if (v > kTdBellyBreak) Hurt(kHull, 1.0, enabled);
         else if (v > kTdBelly) { Hurt(kBelly, 0.2 * (v - kTdBelly), enabled); Hurt(kHull, 0.1 * (v - kTdBelly), enabled); }

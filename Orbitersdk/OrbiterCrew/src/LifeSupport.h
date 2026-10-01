@@ -53,6 +53,7 @@ namespace ocrew
 	struct Suit
 	{
 		double o2Cap{ 1.0 }, o2{ 1.0 };               // kg
+		double waterCap{ 2.0 }, water{ 2.0 };         // kg: the drink bag in the helmet ring (she sips from it, Body::Sustain)
 		double sorbCap{ 1.6 }, sorbUsed{};            // kg CO2
 		double battCap{ 6.0 * 3.6e6 }, batt{ 6.0 * 3.6e6 };   // J
 		double pressure{ 30 };                        // kPa, regulated helmet O2
@@ -66,6 +67,13 @@ namespace ocrew
 		double ppO2{ 30 }, ppCO2{ 0.05 };             // helmet gas
 		double driveW{}, thermalW{}, drawW{};         // last step
 		double heatW{};                               // last step: heat moved, + cooling, - heating
+		// radiation: passive shielding (BNNT with hydrogen + a layered shield) and an active magnetic field on the battery.
+		// fieldFactor divides the charged particles' dose; the cosmic rays only by ~1.5 (Radiation::Dose applies both).
+		double shieldGcm2{ 2.0 };                    // g/cm^2 areal density
+		bool fieldOn{};                               // magnetic shield switched on (works only while powered)
+		double fieldW{ 600 };                        // its draw, W
+		double fieldFactor{ 30 };                    // charged particles divided by this with the field up
+		bool FieldUp() const { return fieldOn && Powered(); }
 		double tIn{ 295.15 }, tSet{ 295.15 };          // K: the air and the cooling garment inside, and what the control holds
 		double cIn{ 15000 };                          // J/K: garment water loop, air, underwear
 		bool drivesOn{ true };
@@ -91,11 +99,34 @@ namespace ocrew
 		double reserve{ 1 };       // consciousness reserve 0..1 (brain oxygenation)
 		double anoxia{}, injury{};
 		double coreT{ 310.15 };    // K
+		double doseSv{}, careerSv{}, doseRate{};   // acute dose of this mission, lifetime dose, current rate (Sv/h)
+		// --- water and food (drunk and eaten automatically when available: a convention, not a survival game) ---
+		double waterDef{};         // kg of body water lost and not replaced
+		double glycogen{ 8.0e6 };  // J: muscle and liver carbohydrate, about a day of quiet living
+		double fat{ 12.0 };        // kg of usable fat (a fit 62 kg woman)
+		double fastDays{};         // days since the last meal
+		double sweat{};            // kg/s, last step
+		// --- injuries by part of the body, 0 (whole) .. 1 (useless); they heal slowly ---
+		enum Part { HEAD, TORSO, ARMS, LEGS, PARTS };
+		double hurt[PARTS]{};
+		double liftMax{ 60 };      // kg she can lift briefly when well (set per person); carrying on the move: a third
 		State state{ OK };
 		double met{ 90 }, pulse{ 62 }, breath{ 13 };
 		std::string warning;
 
-		double AerobicMax() const { return vo2max * mass * 0.335; }   // W: VO2 (L/min) * 20.1 kJ/L
+		double AerobicMax() const { return vo2max * mass * 0.335 * RadFitness() * Condition(); }   // W: VO2 (L/min) * 20.1 kJ/L
+		// water, food and a hurt torso take the edge off every effort
+		double Condition() const;
+		double LiftCapacity() const { return liftMax * (1 - 0.8 * hurt[ARMS]) * (0.6 + 0.4 * Condition()); }   // kg, briefly
+		double CarryCapacity() const { return LiftCapacity() / 3; }                                            // kg, on the move
+		// drink, eat and sweat for dt seconds. 'supplied': water and food at hand (a base, a ship, a breathable world
+		// with her kit); 'suitWaterKg': drinking water in the suit (taken from it); 'airT' K at the skin, 'suited'
+		void Sustain(double dt, bool supplied, double* suitWaterKg, double airT, bool suited);
+		void Hurt(Part p, double amount);
+		// radiation sickness takes the edge off: about -10 % aerobic power per Sv above 1, down to half
+		double RadFitness() const { return std::clamp(1.0 - 0.1 * (doseSv - 1.0), 0.5, 1.0); }
+		// absorb radiation at 'rateSvh' for dt seconds (call after Step)
+		void Irradiate(double dt, double rateSvh);
 		// activityW: metabolic cost of what she does beyond standing; heatW: heat reaching the body from outside control
 		void Step(double dt, double activityW, double ppO2, double ppCO2, double ambientP, bool suited, double heatW);
 		void Spend(double joules) { wbal = (std::max)(0.0, wbal - joules / WCAP); }
@@ -106,7 +137,7 @@ namespace ocrew
 		double Heat() const { return state == DEAD ? 0 : 0.8 * met; }            // W released as heat
 		double Fatigue() const { return 1 - wbal; }
 		double Effort() const { return std::clamp((met - 90) / (AerobicMax() - 90), 0.0, 1.2); }
-		double RunLimit() const { return 3.0 + 2.0 * std::pow(wbal, 0.6); }     // m/s
+		double RunLimit() const { return (3.0 + 2.0 * std::pow(wbal, 0.6)) * (1 - 0.7 * hurt[LEGS]); }     // m/s, hurt legs slow her
 		bool CanAct() const { return state == OK; }
 
 		static constexpr double WCAP = 40e3;   // J of metabolic work above the threshold

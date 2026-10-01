@@ -37,6 +37,7 @@ struct Ground {
     bool contact = false;
     bool touchdown = false;  // contact began this step
     double vDown = 0.0;      // vertical speed at touchdown [m/s], positive down
+    double vSoft = 3.0, vBreak = 6.0;  // the gear set's ankle struts take these (core/Legs Limits) [m/s]
     bool gearDown = false;
     double legRatio[6] = {}; // load / rating: carriage port, stbd, stern legs 0..3
 };

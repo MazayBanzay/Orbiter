@@ -5,6 +5,8 @@
 #include <initializer_list>
 
 #include "../core/Carriage.h"
+#include "../core/Spec.h"
+#include "../orbiter2016/MeshLayout.h"
 
 using namespace tantra;
 
@@ -17,13 +19,27 @@ int RunErect(double sCG) {
     std::printf("--- CG at s %.1f ---\n", sCG);
     Carriage c;
     CarriageGeometry g;
-    g.trackS0 = 32.0;          // C-148: hip track s 32..53, stowed at s 46
-    g.trackS1 = 53.0;
-    g.stowS = 46.0;
-    g.legRestX = 21.6;
-    g.legRestS = -3.5;
-    const double a[4][2] = {{6.85, 17.0}, {-6.85, 17.0}, {-22.3, -11.55}, {22.3, -11.55}};  // stern feet (MeshLayout)
-    for (int i = 0; i < 4; ++i) g.standFoot[i] = {a[i][0], a[i][1], 0.0};
+    namespace m = tantra::mesh;      // T8: the same numbers the adapter takes from MeshLayout.h / Spec.h
+    g.restAxisH = tantra::spec::kAxisHeight;
+    g.turnClear = tantra::spec::kTurnClear;
+    g.standClear = tantra::spec::kStandClear;
+    g.columnX = m::kHipXOut;
+    g.footHalf = m::kPadHalfL;
+    g.footH = m::kFootH;
+    g.legMin = m::kLegLMin;
+    g.trackS0 = m::kCarS0;
+    g.trackS1 = m::kCarS1;
+    g.stowS = m::kStowS;
+    g.standR = m::kStandR;
+    for (int i = 0; i < 4; ++i) g.standFoot[i] = {m::kLegs[i].radial.x * m::kStandR, m::kLegs[i].radial.y * m::kStandR, 0.0};
+    for (const m::LegRig& L : m::kLegs) {          // lower-leg foot at rest (as TantraGear::LegRestFoot)
+        if (!L.lower || L.hinge.x < 0.0) continue;
+        const double v[3] = {0, 0, -(m::kLegLMinS + L.extRest)}, k[3] = {L.axis.x, L.axis.y, L.axis.z}, c = std::cos(L.phiRest), sn = std::sin(L.phiRest);
+        const double kv = k[0] * v[0] + k[1] * v[1] + k[2] * v[2];
+        const double cr[3] = {k[1] * v[2] - k[2] * v[1], k[2] * v[0] - k[0] * v[2], k[0] * v[1] - k[1] * v[0]};
+        g.legRestX = L.hinge.x + v[0] * c + cr[0] * sn + k[0] * kv * (1 - c);
+        g.legRestS = L.hinge.z + v[2] * c + cr[2] * sn + k[2] * kv * (1 - c) + tantra::spec::kOriginS;
+    }
     c.SetGeometry(g);
     const double dt = 0.02;
     c.Update(0.0, sCG);
@@ -61,7 +77,7 @@ int RunErect(double sCG) {
             const Vec3 pn = Cross(Sub(prev[2], prev[0]), Sub(prev[1], prev[0]));
             const double ph = -(prev[0].x * pn.x + prev[0].y * pn.y + prev[0].z * pn.z) / Len(pn);
             const Vec3 d = {n.x / Len(n) - pn.x / Len(pn), n.y / Len(n) - pn.y / Len(pn), n.z / Len(n) - pn.z / Len(pn)};
-            maxStep = std::fmax(maxStep, std::fabs(h - ph) + Len(d) * 70.0);  // tilt as motion of the nose tip
+            maxStep = std::fmax(maxStep, std::fabs(h - ph) + Len(d) * 100.0);  // tilt as motion of the nose tip
             for (int i = 0; i < 3; ++i) prev[i] = p.touch[i];
             if (c.Phase() != lastPhase) {
                 lastPhase = c.Phase();
@@ -81,14 +97,14 @@ int main() {
     auto check = [&](bool ok, const char* what) {
         if (!ok) { std::printf("FAIL: %s\n", what); ++fails; }
     };
-    // loaded, old origin, landing (track end), empty (CG ahead of the track)
-    for (double sCG : {35.3, 38.0, 53.0, 56.5}) fails += RunErect(sCG);
+    // T8: loaded, between, landing (near the track end), empty (CG ahead of the track)
+    for (double sCG : {53.8, 62.0, 71.1, 77.6}) fails += RunErect(sCG);
     // Took off at the loading height: stowing in flight lowers the carriage first, then the gear.
     {
         Carriage a;
         a.Load(Carriage::kLoadP, Carriage::kLoadP, 1.0, 1.0, 0, 0);
         check(a.CommandGear(false, false), "airborne stow accepted at the loading height");
-        for (int k = 0; k < 4000; ++k) a.Update(0.05, 38.0);
+        for (int k = 0; k < 4000; ++k) a.Update(0.05, 60.0);
         check(a.Gear() == 0.0 && a.Progress() == 0.0, "airborne stow from the loading height ends stowed");
         std::printf("airborne stow: gear %.2f  P %.2f\n", a.Gear(), a.Progress());
     }

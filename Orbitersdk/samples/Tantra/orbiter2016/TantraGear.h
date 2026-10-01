@@ -10,7 +10,9 @@
 class TantraGear {
 public:
     struct Extras {
-        double tuck = 0.0;        // crests folded / pods sunk (max of erection and flight mode)
+        double tuck = 0.0;        // pods sunk, fin down (flight mode; the erection tuck comes with the pose)
+        double wingIn = 0.0;      // inner wing panels: 0 deployed .. 1 folded up (kWingFoldDeg); the 30 deg mode in between
+        double wingOut = 0.0;     // outer wing panels: 0 in line .. 1 folded back under the inner panel
         double podSwivel = 0.0;   // pods 0..1 (0 = thrust forward, 1 = 100 deg)
         double podStow = 1.0;     // pods 1 = in the bays, doors shut .. 0 = hanging out
         double elevon[2] = {tantra::mesh::kElevonUpDeg / (tantra::mesh::kElevonUpDeg + tantra::mesh::kElevonDownDeg),
@@ -24,6 +26,8 @@ public:
         double bayDoors = 0.0;    // anamezon port doors 0..1
         bool trapHidden[4] = {};  // empty slot
         double liftY[2] = {tantra::mesh::kLiftY0, tantra::mesh::kLiftY0};  // fork heads (cassette centre, ship y)
+        double strut[6] = {};     // ankle struts unloaded 0..1 (0 carriage port, 1 starboard, 2..5 stern legs)
+        double anchor[6] = {};    // anchors out 0..1
     };
 
     TantraGear(VESSEL* v, UINT mesh);

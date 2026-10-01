@@ -252,6 +252,26 @@ try:
                     while p_ is not None and p_ != side + "Arm": p_ = par0[p_]
                     if p_ == side + "Arm":
                         R_, t_ = idle_frame[n_]; idle_frame[n_] = (Rm @ R_, piv + Rm @ (t_ - piv))
+    if VARIANT == "coverall":
+        # flat feet when standing: the idle pose left the heels ~5 cm up (she stood on her toes). Turn each foot about
+        # the ankle so the ankle-to-toe line has the pitch it has in the bind pose, where the soles are flat
+        for side in ("Left", "Right"):
+            ra = arm.matrix_world @ arm.data.bones[side + "Foot"].head_local; rt = arm.matrix_world @ arm.data.bones[side + "ToeBase"].head_local
+            a = idle_frame[side + "Foot"][1]; t = idle_frame[side + "ToeBase"][1]
+            d_rest = (rt - ra); d_now = (t - a)
+            # rest pose: Blender frame (z up); frames: Orbiter frame (y up, z forward)
+            # +4.8 deg: even the bind feet are slightly pointed (heel ~3 cm above the toe tip over a 24 cm boot, measured on the exported idle)
+            want = math.atan2(d_rest.z, math.hypot(d_rest.x, d_rest.y)) + math.asin(0.031 / 0.243); now = math.atan2(d_now.y, math.hypot(d_now.x, d_now.z))
+            lat = Vector((d_now.z, 0, -d_now.x)).normalized()          # horizontal axis across the foot
+            Rm = Matrix.Rotation(want - now, 3, lat)
+            if abs(math.atan2((Rm @ d_now).y, math.hypot((Rm @ d_now).x, (Rm @ d_now).z)) - want) > 1e-3: Rm = Matrix.Rotation(now - want, 3, lat)
+            piv = a.copy()
+            for n_ in bones:
+                p_ = n_
+                while p_ is not None and p_ != side + "Foot": p_ = par0[p_]
+                if p_ == side + "Foot":
+                    R_, t_ = idle_frame[n_]; idle_frame[n_] = (Rm @ R_, piv + Rm @ (t_ - piv))
+            log.append("  idle %s foot levelled by %.1f deg" % (side, math.degrees(want - now)))
     write_clip("idle", [idle_frame], 30, 0.0, 0.0, 0, bones)
 
     for name, clip in CLIPS:

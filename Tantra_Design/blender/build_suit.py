@@ -738,8 +738,8 @@ try:
     log.append("legs: " + "; ".join("%s hip %s knee %s ankle %s" % (s, tuple(round(c, 3) for c in h), tuple(round(c, 3) for c in k), tuple(round(c, 3) for c in a)) for s, _, h, k, a in legs))
 
 
-    # ================= jet pack «Наплечный», integrated: a moulded shell round the life-support pack is the propellant tank
-    #                   (12 kg), slot main engines in a block on the hip ring behind the pelvis (thrust line through the
+    # ================= jet pack «Наплечный», integrated: a moulded shell round the life-support pack; the propellant -
+    #                   metallic hydrogen, 12 kg - in a high-pressure vessel in the shell's niche, slot main engines in a block on the hip ring behind the pelvis (thrust line through the
     #                   centre of mass), smooth shoulder fairings with flush RCS ports. No bottles, no bells, no pipes.
     #                   All objects are named Jet*: the game shows them only while the pack is worn. =================
     JAWS = lambda co: {'Spine1': 0.85, 'Spine': 0.15}
@@ -755,16 +755,72 @@ try:
         for sx in (-1, 1):
             box_beam(b, Vector((sx * (SW / 2 + 0.0015), sy0 + 0.05, zz)), Vector((sx * (SW / 2 + 0.0015), sy0 + SD - 0.05, zz)), t_, 0.002, Vector((sx, 0, 0)), m_)
         box_beam(b, Vector((-SW / 2 + 0.05, sy0 + SD + 0.0015, zz)), Vector((SW / 2 - 0.05, sy0 + SD + 0.0015, zz)), t_, 0.002, Vector((0, 1, 0)), m_)
-    new_object("JetShell", b, [jshell, jseam, jred], JAWS, arm)
     yb_shell = sy0 + SD
+    # metallic hydrogen (one component, dense): the high-pressure vessel sits in a niche in the shell's lower back,
+    # held by two saddles, a fill coupling on its end. The niche is cut from the shell before it is weighted.
+    NW, NH, NZ = 0.345, 0.135, SC.z - 0.085
+    me_ = bpy.data.meshes.new("tmpShell"); b.to_mesh(me_); b.free()
+    tmp = bpy.data.objects.new("tmpShell", me_); bpy.context.scene.collection.objects.link(tmp)
+    cb = bmesh.new(); bmesh.ops.create_cube(cb, size=1.0)
+    for v in cb.verts: v.co = Vector((v.co.x * NW, v.co.y * 0.07, v.co.z * NH)) + Vector((0, yb_shell, NZ))
+    cme = bpy.data.meshes.new("tmpCut"); cb.to_mesh(cme); cb.free()
+    cut = bpy.data.objects.new("tmpCut", cme); bpy.context.scene.collection.objects.link(cut)
+    bm_ = tmp.modifiers.new("Niche", 'BOOLEAN'); bm_.operation = 'DIFFERENCE'; bm_.object = cut
+    try: bm_.solver = 'EXACT'
+    except Exception: pass
+    dg = bpy.context.evaluated_depsgraph_get(); ev = tmp.evaluated_get(dg)
+    b = bmesh.new(); b.from_mesh(ev.to_mesh()); ev.to_mesh_clear()
+    for o_ in (tmp, cut): bpy.data.objects.remove(o_, do_unlink=True)
+    new_object("JetShell", b, [jshell, jseam, jred], JAWS, arm)
+    jplug = material("JetPlug", METAL, rough=0.3, metal=0.7)
+    def ring_arc(bm, a, c, r, seg, mat, arc=None):
+        d = (c - a).normalized(); u = d.cross(Vector((0, 0, 1)) if abs(d.z) < 0.9 else Vector((1, 0, 0))).normalized(); w = d.cross(u)
+        n = seg if arc is None else seg + 1
+        ang = (lambda i: 2 * math.pi * i / seg) if arc is None else (lambda i: arc[0] + (arc[1] - arc[0]) * i / seg)
+        r0 = [bm.verts.new(a + (u * math.cos(ang(i)) + w * math.sin(ang(i))) * r) for i in range(n)]
+        r1 = [bm.verts.new(c + (u * math.cos(ang(i)) + w * math.sin(ang(i))) * r) for i in range(n)]
+        for i in range(seg): bm.faces.new((r0[i], r0[(i + 1) % n], r1[(i + 1) % n], r1[i])).material_index = mat
+        if arc is None:
+            bm.faces.new(r0[::-1]).material_index = mat; bm.faces.new(r1).material_index = mat
+    def block(bm, c, s, mat):
+        r_ = bmesh.ops.create_cube(bm, size=1.0)
+        for v in r_["verts"]: v.co = Vector((v.co.x * s.x, v.co.y * s.y, v.co.z * s.z)) + c
+        for f in {f for v in r_["verts"] for f in v.link_faces}: f.material_index = mat
+    # the niche: a dark floor and a bezel round the opening
+    b = bmesh.new()
+    block(b, Vector((0, yb_shell - 0.034, NZ)), Vector((NW, 0.004, NH)), 0)
+    t_ = 0.007
+    for zz in (NZ + NH / 2 + t_ / 2, NZ - NH / 2 - t_ / 2): block(b, Vector((0, yb_shell + 0.0015, zz)), Vector((NW + 2 * t_, 0.004, t_)), 1)
+    for xx in (NW / 2 + t_ / 2, -NW / 2 - t_ / 2): block(b, Vector((xx, yb_shell + 0.0015, NZ)), Vector((t_, 0.004, NH)), 1)
+    new_object("JetNiche", b, [jdark, jseam], JAWS, arm)
+    # the vessel: a capsule in a composite wrap, ~1.5 cm proud of the shell, four bands, two saddles
+    VL, VR = 0.18, 0.060; vy = yb_shell - 0.045
+    b = bmesh.new()
+    ring_arc(b, Vector((-VL / 2, vy, NZ)), Vector((VL / 2, vy, NZ)), VR, 40, 0)
+    for xx in (-VL / 2, VL / 2):
+        s_ = bmesh.ops.create_uvsphere(b, u_segments=32, v_segments=16, radius=VR)
+        for v in s_["verts"]: v.co += Vector((xx, vy, NZ))
+    for xx in (-0.066, -0.022, 0.022, 0.066): ring_arc(b, Vector((xx - 0.004, vy, NZ)), Vector((xx + 0.004, vy, NZ)), VR + 0.002, 40, 1)
+    for xx in (-0.104, 0.104):
+        ring_arc(b, Vector((xx - 0.008, vy, NZ)), Vector((xx + 0.008, vy, NZ)), VR + 0.006, 32, 1, arc=(-0.2, math.pi + 0.2))
+        block(b, Vector((xx, vy - 0.01, NZ - VR - 0.004)), Vector((0.024, 0.05, 0.008)), 1)
+        block(b, Vector((xx, vy - 0.01, NZ + VR + 0.004)), Vector((0.024, 0.05, 0.008)), 1)
+    new_object("JetVessel", b, [jshell, jseam], JAWS, arm)
+    # the fill coupling on the right end, inside the niche: a spigot, a red collar, a dark seal
+    EX = VL / 2 + VR
+    b = bmesh.new()
+    ring_arc(b, Vector((EX - 0.004, vy, NZ)), Vector((EX + 0.018, vy, NZ)), 0.011, 20, 0)
+    ring_arc(b, Vector((EX + 0.006, vy, NZ)), Vector((EX + 0.014, vy, NZ)), 0.016, 24, 1)
+    ring_arc(b, Vector((EX + 0.017, vy, NZ)), Vector((EX + 0.021, vy, NZ)), 0.0085, 20, 2)
+    new_object("JetCoupling", b, [jplug, jred, jdark], JAWS, arm)
     b = text_mesh("37 ЗВЁЗДНАЯ", 0.040)
-    for v in b.verts: v.co = Vector((-v.co.x, yb_shell + 0.0015, SC.z + 0.03 + v.co.y))
+    for v in b.verts: v.co = Vector((-v.co.x, yb_shell + 0.0015, SC.z + 0.052 + v.co.y))
     bmesh.ops.triangulate(b, faces=b.faces[:])
     for f in b.faces:
         f.normal_update()
         if f.normal.y < 0: f.normal_flip()
     new_object("JetMark", b, [material("JetMarkRed", RED, rough=0.5)], JAWS, arm, smooth=False)
-    # side engine pods: two tilting nacelles on short booms from the shell's upper corners, pivot axis lateral.
+    # side engine pods: two tilting nacelles on booms from the shell's upper corners, pivot axis lateral.
     # Thrust above the centre of mass (pendulum-stable hover); tilt 0..90 deg: jets down (hover) .. aft (cruise);
     # opposite tilt = yaw, differential thrust = roll. Annular exits, no bells. Pods are separate objects (JetPodL/R)
     # so the game can turn them about the pivot.
@@ -774,7 +830,7 @@ try:
     for sx, L in ((-1, "L"), (1, "R")):
         b = bmesh.new()
         HG = Vector((sx * (SW / 2 + 0.004), SC.y - 0.030, pz1 - 0.030))          # hinge on the shell's side, near the top
-        PV = Vector((sx * 0.440, SC.y - 0.040, pz1 + 0.005))                     # pod pivot
+        PV = Vector((sx * 0.600, SC.y - 0.040, pz1 + 0.005))                     # pod pivot: 0.6 m out, the jets clear her arms
         sweep_rr(b, [HG + Vector((sx * 0.012, 0, 0)), HG.lerp(PV, 0.5) + Vector((0, 0, 0.012)), PV - Vector((sx * 0.050, 0, 0))], 0.046, 0.030, Vector((0, 0, 1)), 0, [1.0, 0.92, 0.85])
         cylinder(b, PV - Vector((sx * 0.052, 0, 0)), PV - Vector((sx * 0.040, 0, 0)), 0.024, 24, 1)       # rotary joint to the pod
         new_object("JetBoom" + L, b, [material("JetBoom", PLATE, rough=0.3), jseam], JAWS, arm)

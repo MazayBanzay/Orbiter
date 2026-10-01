@@ -22,7 +22,7 @@ namespace ocrew
 {
 	// flight keys while the pack is worn: pitch W+ S-, yaw D+ A-, roll E+ Q-, climb R+ F-
 	// throttle numpad 0 + . -; pitch W+ S-; yaw D+ A-; strafe E+ Q-; vertical Space+ LCtrl-; boost Shift
-	struct FlightInput { double pitch{}, yaw{}, roll{}, climb{}, throttle{}, strafe{}, vertical{}; bool boost{}; };
+	struct FlightInput { double pitch{}, yaw{}, roll{}, climb{}, throttle{}, strafe{}, vertical{}; bool boost{}, ap{}; };   // ap: the autopilot steers (pitch/strafe are the pods' tilt)
 
 	struct RcsSet
 	{
@@ -35,9 +35,15 @@ namespace ocrew
 	public:
 		// thrust: 2 x 500 N gives T/W ~4.7 on the Moon, ~2 on Mars (132 kg with her); on Earth it only eases jumps (0.77).
 		// The delta-v stays 2900 * ln(132/120) ~ 280 m/s: thrust changes how hard it pushes, not how far it goes.
-		static constexpr double DRY = 16, FUEL = 12, ISP = 2900, POD_F = 500, RCS_F = 20, TILT = 20 * RAD, YAW_TILT = 5 * RAD;
+		// metallic hydrogen: one component, it relaxes to hot H2 in the pods' chambers; diluted with molecular hydrogen
+		// to keep the chamber alive, ~10 km/s exhaust. 12 kg: ~950 m/s, ~9 min hovering on the Moon.
+		static constexpr double DRY = 16, FUEL = 12, ISP = 10000, POD_F = 500, RCS_F = 20, TILT = 20 * RAD, YAW_TILT = 5 * RAD;
 
 		void Setup(VESSEL4* vessel);
+		// the dust the pods blow off a surface, emitted at her feet (feetY: the soles in the model frame)
+		void SetupDust(double feetY);
+		// hydrogen burns to steam only where the air has oxygen: the steam trails come and go with it
+		void SetOxygen(bool o2);
 		bool Worn() const { return worn; }
 		double Fuel() const;
 		void Wear(double fuel);           // the pack becomes part of her
@@ -55,18 +61,37 @@ namespace ocrew
 		std::string Hud() const;
 		void Fill(HudData& d) const;       // the suit computer's jet pack page
 		// the autopilot's levers: the height hold, the landing, hands off
-		int ModeId() const { return static_cast<int>(mode); }   // 0 manual, 1 height hold, 2 landing
-		void SetHold(double alt) { if (worn && surfaceMode) { mode = HOLD; altTarget = alt; } }
-		void SetDescent() { if (worn) mode = DESCENT; }
+		int ModeId() const { return static_cast<int>(mode); }   // 0 manual, 1 height hold, 2 landing, 3 autopilot vector
+		// the autopilot's hop: thrust acceleration wanted this step, m/s^2, horizon frame (x east, y up, z north);
+		// to be given every step - left without it, the pack falls back to holding the height
+		void SetThrustVector(const VECTOR3& aH) { if (!worn) return; mode = VECTOR; vecA = aH; vecFresh = true; lockout = false; assist = true; }
+		double MaxAccel() const;   // full thrust / her mass
+		// a command from the computer: the touchdown lockout (waiting for the thrust keys) does not apply to it
+		void SetHold(double alt) { if (worn && surfaceMode) { if (mode != HOLD) spdSet = false; mode = HOLD; altTarget = alt; lockout = false; } }
+		// the cruise: move the held height and the held ground speed (forward, along her heading); stop: speed 0
+		void Nudge(double dAlt, double dSpd, bool stop);
+		double SpdTarget() const { return spdTarget; }
+		// full stop: kill every speed, keep the height she is at
+		void Stop();
+		bool Braking() const { return braking; }
+		void SetDescent() { if (worn) { mode = DESCENT; lockout = false; } }
+		// land at this very point (the autopilot's goal), not where the drift would stop
+		void SetDescentAt(double lat, double lng) { if (worn) { mode = DESCENT; landSet = true; landLat = lat; landLng = lng; lockout = false; } }
 		void SetManual() { mode = MANUAL; }
 		double AltTarget() const { return altTarget; }
 		double AltNow() const { return tAlt; }
 		double MaxTilt() const { return tMaxTilt; }
+		// manual (default): Space / Ctrl raise and lower the throttle while held (relative), as numpad 0 / . do; no compensation.
+		// the assistant: Space / Ctrl climb and sink at safe rates and then hold the height, thrust capped to safe values,
+		// the body held upright, the ground protection on. The autopilots and J / C switch the assistant on.
+		// In both: Shift+Space = full thrust while held, Shift+Ctrl = thrust off while held.
+		bool Assist() const { return assist; }
+		void SetAssist(bool a) { assist = a; if (!a) mode = MANUAL; }
 		const RcsSet& Rcs() const { return rcs; }
 		PROPELLANT_HANDLE Propellant() const { return prop; }
 		double Deploy() const { return deploy; }
 		// thrust the pods give now (N): booms locked and throttle open
-		double Thrust() const { return worn && deploy > 0.98 ? 2 * POD_F * level : 0.0; }
+		double Thrust() const { return worn && deploy > 0.98 && Fuel() > 0 ? 2 * POD_F * level : 0.0; }
 		VECTOR3 ShellCentre() const { return shellC; }
 		double ShellHalfHeight() const { return shellSize.y / 2; }
 
@@ -79,15 +104,27 @@ namespace ocrew
 		RcsSet rcs;
 		VECTOR3 hinge[2]{}, pivot[2]{}, shellC{}, shellSize{};
 		double exitDy{ -0.15 };
-		double deploy{}, deployTarget{}, idleT{}, tilt[2]{}, side{}, level{}, cmd{};   // side: sideways gimbal angle (strafe)
-		bool manualDeploy{};
-		enum Mode { MANUAL, HOLD, DESCENT } mode{ MANUAL };
+		double deploy{}, deployTarget{}, idleT{}, tilt[2]{}, side{}, level{}, cmd{};   // side: sideways gimbal angle wanted (strafe)
+		double sidePod[2]{}, podLvl[2]{};   // each pod's own sideways angle (only outwards: the jet never crosses her) and level
+		bool manualDeploy{}, assist{ false };
+		enum Mode { MANUAL, HOLD, DESCENT, VECTOR } mode{ MANUAL };
+		VECTOR3 vecA{}; bool vecFresh{};   // VECTOR: the thrust acceleration wanted this step (x east, y up, z north)
 		double vTarget{ 1.0 };
 		bool surfaceMode{ true }, prevValid{}, prevSpaceKeys{};
 		double prevLeanF{}, prevLeanR{}, prevHdg{}, leanFRate{}, leanRRate{}, yawRate{};
 		// telemetry for the helmet display
 		double tLeanF{}, tLeanR{}, tWantF{}, tWantR{}, tVs{}, tVsCmd{}, tAlt{}, tGs{};
 		bool tFlying{}, tBoost{}, tProtect{}, tTerrain{}, tLimited{}, holdingAttitude{};
-		double altTarget{ 1.5 }, tMaxTilt{ 30 * RAD }, tUpright{ 1 };
+		double altTarget{ 1.5 }, tMaxTilt{ 30 * RAD }, tUpright{ 1 }, tHover{};
+		// the landing: the point she lands on (where she can stop when C was pressed), set on entering the landing
+		bool landSet{}; double landLat{}, landLng{};
+		struct Steam { THRUSTER_HANDLE th; VECTOR3 pos; PARTICLESTREAMSPEC* spec; PSTREAM_HANDLE h; };
+		std::vector<Steam> steam;
+		bool steamOn{ true };
+		bool lockout{}, released{};
+		double spdTarget{}, tVf{}; bool spdSet{}, braking{};   // the cruise: held forward ground speed; her forward speed now
+		// hot nozzles: a glow at each pod's exit, following the heat of the chamber
+		double heat[2]{};   // after a touchdown the pods stay off until the thrust keys are let go and pressed anew
+		double dustLevel{}; PSTREAM_HANDLE dust{};
 	};
 }

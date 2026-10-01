@@ -171,6 +171,34 @@ try:
         if o.name == "Floor": o.scale = (6, 6, 1)
     sc.render.resolution_x, sc.render.resolution_y = 360, 540
     views = {"front": Vector((1.6, -3.6, 1.2)), "side": Vector((4.0, 0.0, 1.0))}
+    if os.environ.get("TANTRA_PRES"):   # presentation stills
+        PO = os.path.join(HERE, "..", "presentation", "img"); os.makedirs(PO, exist_ok=True)
+        base = [g['V'].copy() for g in groups]
+        def pose(clip, k, fist=False, layer=True):
+            hdr, fr_ = read_clip(os.path.join(O, "Config", "Tantra", CLIPS, clip + ".clip")); fr = fr_[k % len(fr_)]
+            if layer and VARIANT == "coverall": fr = coverall_layer(fr, 1.0 if clip == "run" else 0.0)
+            for g, b in zip(groups, base): g['V'] = b.copy()
+            if fist:
+                for nm_, gi, idx, d in MORPHS:
+                    if nm_ == 'fist': groups[gi]['V'][idx, :6] += d
+            P = skinned(bones, W, groups, fr)
+            for ob, p in zip(objs, P): ob.data.vertices.foreach_set("co", to_blender(p).ravel()); ob.data.update()
+            return fr
+        def shot(name, loc, tgt, lens, res):
+            sc.render.resolution_x, sc.render.resolution_y = res
+            cam.location = Vector(loc); cam.data.lens = lens
+            cam.rotation_mode = 'QUATERNION'; cam.rotation_quaternion = (Vector(tgt) - cam.location).to_track_quat('-Z', 'Y')
+            sc.render.filepath = os.path.join(PO, name + ".png"); bpy.ops.render.render(write_still=True)
+        pose("idle", 0, layer=False)
+        shot("hero", (1.7, -3.3, 1.35), (0, 0, 0.92), 50, (900, 1200))
+        shot("portrait", (0.35, -0.95, 1.62), (0, 0, 1.55), 70, (900, 900))
+        hdr, wf = read_clip(os.path.join(O, "Config", "Tantra", CLIPS, "walk.clip"))
+        for i in range(6):
+            pose("walk", int(i * len(wf) / 6)); shot("walk_%d" % i, (3.6, 0.0, 1.0), (0, 0, 0.9), 50, (420, 640))
+        hdr, rf = read_clip(os.path.join(O, "Config", "Tantra", CLIPS, "run.clip"))
+        for i in range(6):
+            pose("run", int(i * len(rf) / 6), fist=True); shot("run_%d" % i, (3.6, 0.0, 1.0), (0, 0, 0.9), 50, (420, 640))
+        raise SystemExit
     if os.environ.get("TANTRA_FACE"):
         hdr, frames = read_clip(os.path.join(O, "Config", "Tantra", CLIPS, "idle.clip")); fr = frames[0]
         base = [g['V'].copy() for g in groups]

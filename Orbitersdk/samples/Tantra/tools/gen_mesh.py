@@ -1,6 +1,6 @@
 """Generate the Tantra mesh (Orbiter .msh, MSHX1) and the animation layout header.
 
-Layout "C-148" (docs/DESIGN.md, Tantra_Design/tantra_c148.html): hull «Б» of rounded-polygon
+Layout "T8" (Tantra_Design/DESIGN_LOCAL.md, tantra_mockup.html «Т8 · итог»; C-148 generator: gen_mesh_c148.py): hull «Б» of rounded-polygon
 sections (flat flanks, lower chines, top slopes, flat bottom), iridium nose on a blunted ogive,
 armoured shoulder with the dorsal spine, dorsal fin 7 retracting into a slot between the trap
 columns, one-piece lateral crests with elevons folding into flank recesses, body flap, stern well
@@ -27,9 +27,9 @@ import sys
 
 import numpy as np
 
-STERN_Z = -38.0
+STERN_Z = -60.0
 AXIS_H = 14.0
-L_SHIP = 146.0
+L_SHIP = 168.968
 SEG = 48
 
 
@@ -252,18 +252,63 @@ MAT = {m[0]: i + 1 for i, m in enumerate(MATERIALS)}  # .msh material indices ar
 
 
 # ---------------------------------------------------------------------------
-# Hull «Б»: rounded-polygon sections (the same construction as the mockup)
+# Hull T8: the smallest smooth envelope over what must be inside (Tantra_Design/DESIGN_LOCAL.md, «форма из содержимого»):
+# stern frame with four nacelles (s 0-18), lift shafts and the 2x2 trap columns D 8 (s 19-89.6), fairings of the carriage
+# legs and pods (s 40-80), the XR2 hangar (s 90.6-111.6), crew (s 112.6-135), the water/charges screen, the nose.
+# Sections: flat bottom, lower chine, flank, rounded top (the C-148 section family scaled by half-width W and height H);
+# the axis sits at 40 % of the height above the bottom. The stern blends into the «clover» around the nacelles.
+
+# (s, half-width at the chine, height) every metre up to the nose root
+PROFILE = [
+    (0, 8.9, 18.2), (1, 8.9, 18.2), (2, 8.9, 18.2), (3, 8.9, 18.2), (4, 8.9, 18.2), (5, 8.9, 18.2), (6, 8.9, 18.2),
+    (7, 8.9, 18.2), (8, 8.9, 18.2), (9, 8.902, 18.2), (10, 8.92, 18.2), (11, 8.955, 18.2), (12, 8.994, 18.2),
+    (13, 9.034, 18.2), (14, 9.073, 18.2), (15, 9.113, 18.2), (16, 9.152, 18.2), (17, 9.191, 18.2), (18, 9.263, 18.2),
+    (19, 9.55, 18.2), (20, 9.55, 18.2), (21, 9.55, 18.2), (22, 9.55, 18.2), (23, 9.662, 18.2), (24, 9.801, 18.2),
+    (25, 9.957, 18.2), (26, 10.121, 18.2), (27, 10.285, 18.2), (28, 10.454, 18.2), (29, 10.64, 18.2),
+    (30, 10.843, 18.2), (31, 11.064, 18.2), (32, 11.302, 18.2), (33, 11.544, 18.2), (34, 11.83, 18.2),
+    (35, 12.116, 18.2), (36, 12.403, 18.2), (37, 12.69, 18.2), (38, 12.977, 18.2), (39, 13.263, 18.2),
+    (40, 13.55, 18.2), (41, 13.55, 18.2), (42, 13.55, 18.2), (43, 13.55, 18.2), (44, 13.55, 18.2), (45, 13.55, 18.2),
+    (46, 13.55, 18.2), (47, 13.55, 18.2), (48, 13.55, 18.2), (49, 13.55, 18.2), (50, 13.55, 18.2), (51, 13.55, 18.2),
+    (52, 13.55, 18.2), (53, 13.55, 18.2), (54, 13.55, 18.2), (55, 13.55, 18.2), (56, 13.55, 18.2), (57, 13.55, 18.2),
+    (58, 13.55, 18.2), (59, 13.55, 18.2), (60, 13.55, 18.2), (61, 13.55, 18.2), (62, 13.55, 18.2), (63, 13.55, 18.2),
+    (64, 13.55, 18.2), (65, 13.55, 18.2), (66, 13.55, 18.2), (67, 13.55, 18.2), (68, 13.55, 18.2), (69, 13.55, 18.2),
+    (70, 13.55, 18.2), (71, 13.55, 18.2), (72, 13.55, 18.2), (73, 13.55, 18.2), (74, 13.55, 18.2), (75, 13.55, 18.2),
+    (76, 13.55, 18.2), (77, 13.55, 18.2), (78, 13.55, 18.2), (79, 13.55, 18.2), (80, 13.55, 18.2),
+    (81, 13.443, 18.2), (82, 13.431, 18.2), (83, 13.418, 18.2), (84, 13.406, 18.2), (85, 13.394, 18.2),
+    (86, 13.382, 18.2), (87, 13.37, 18.2), (88, 13.358, 18.2), (89, 13.35, 18.2), (90, 13.35, 18.2),
+    (91, 13.35, 17.627), (92, 13.35, 17.053), (93, 13.35, 16.48), (94, 13.35, 15.906), (95, 13.35, 15.624),
+    (96, 13.35, 15.346), (97, 13.35, 15.067), (98, 13.35, 14.788), (99, 13.35, 14.518), (100, 13.35, 14.283),
+    (101, 13.35, 14.082), (102, 13.35, 13.916), (103, 13.35, 13.785), (104, 13.35, 13.689), (105, 13.35, 13.627),
+    (106, 13.35, 13.6), (107, 13.35, 13.6), (108, 13.35, 13.6), (109, 13.35, 13.6), (110, 13.35, 13.6),
+    (111, 13.35, 13.6), (112, 13.35, 13.6), (113, 13.063, 13.6), (114, 12.777, 13.6), (115, 12.49, 13.6),
+    (116, 12.203, 13.6), (117, 11.916, 13.6), (118, 11.63, 13.6), (119, 11.343, 13.6), (120, 11.056, 13.6),
+    (121, 10.769, 13.6), (122, 10.483, 13.6), (123, 10.196, 13.6), (124, 9.916, 13.6), (125, 9.653, 13.6),
+    (126, 9.408, 13.6), (127, 9.181, 13.6), (128, 8.97, 13.6), (129, 8.777, 13.6), (130, 8.602, 13.6),
+    (131, 8.443, 13.6), (132, 8.302, 13.6), (133, 8.179, 13.6), (134, 8.073, 13.6), (135, 7.984, 13.6),
+    (136, 7.9, 13.6), (137, 7.815, 13.6), (138, 7.8, 13.6), (139, 7.8, 13.6), (140, 7.8, 13.6), (141, 7.8, 13.6),
+    (142, 7.8, 13.6),
+]
+
+FL = 0.4                                 # bottom at -FL*H, top at (1-FL)*H
+NB = 142.968                             # nose root
+NOSE_LN, NOSE_UP, NOSE_NW, NOSE_BEXP, NOSE_TEXP, NOSE_RN = L_SHIP - NB, 0.4, 0.9, 0.25, 0.55, 3.0
+_PROF = np.array(PROFILE, float)
+
+
+def wh_at(s):
+    """Half-width and height of the body section at s (s <= NB)."""
+    s = min(max(s, 0.0), NB)
+    return float(np.interp(s, _PROF[:, 0], _PROF[:, 1])), float(np.interp(s, _PROF[:, 0], _PROF[:, 2]))
+
 
 def _key(B, C, T, ya, rb, rc, rt, ra):
     return dict(B=np.array(B, float), C=np.array(C, float), T=np.array(T, float), ya=ya, rb=rb, rc=rc, rt=rt, ra=ra)
 
 
-KEY_AFT = _key((11.2, -9.6), (14.6, -4.0), (11.0, 12.0), 14.4, 3.0, 0.8, 3.0, 6.0)
-KEY_FORE = _key((5.4, -8.7), (9.0, -3.8), (6.8, 5.0), 8.9, 1.6, 0.8, 4.5, 5.6)
-# The aft body is a prism from the stern plane to s 47 (flat faces carry the pockets of the stern
-# legs right up to the stern), then blends into the fore body; ogive nose from s 122.
-HULL_KEYS = [(0.0, KEY_AFT), (47.0, KEY_AFT), (75.0, KEY_FORE), (122.0, KEY_FORE)]
-NB = 122.0
+def key_wh(W, H):
+    k = H / 24.0
+    return _key((0.767 * W, -FL * H), (W, -(FL - 0.233) * H), (0.753 * W, (1 - FL) * H - 0.1 * H), (1 - FL) * H,
+                3.0 * k, 0.8, 3.0 * k, 6.0 * k)
 
 
 def fillet(pts, rad, n=10):
@@ -297,19 +342,20 @@ def fillet(pts, rad, n=10):
 class Section:
     """Closed CCW outline starting at the bottom centre; u = arc-length fraction."""
 
-    def __init__(self, P):
-        m = lambda p: np.array([-p[0], p[1]])
-        pts = [P["B"], P["C"], P["T"], np.array([0.0, P["ya"]]), m(P["T"]), m(P["C"]), m(P["B"])]
-        poly = fillet(pts, [P["rb"], P["rc"], P["rt"], P["ra"], P["rt"], P["rc"], P["rb"]])
-        n = len(poly)
-        for k in range(n):
-            p, q = poly[k - 1], poly[k]
-            if p[1] < 0 and q[1] < 0 and p[0] < 0 <= q[0]:
-                y0 = p[1] + (q[1] - p[1]) * (-p[0]) / (q[0] - p[0])
-                poly = np.vstack([[0.0, y0], poly[k:], poly[:k]])
-                break
-        self.p = poly
-        self.q = np.vstack([poly[1:], poly[:1]])
+    def __init__(self, P=None, poly=None):
+        if poly is None:
+            m = lambda p: np.array([-p[0], p[1]])
+            pts = [P["B"], P["C"], P["T"], np.array([0.0, P["ya"]]), m(P["T"]), m(P["C"]), m(P["B"])]
+            poly = fillet(pts, [P["rb"], P["rc"], P["rt"], P["ra"], P["rt"], P["rc"], P["rb"]])
+            n = len(poly)
+            for k in range(n):
+                p, q = poly[k - 1], poly[k]
+                if p[1] < 0 and q[1] < 0 and p[0] < 0 <= q[0]:
+                    y0 = p[1] + (q[1] - p[1]) * (-p[0]) / (q[0] - p[0])
+                    poly = np.vstack([[0.0, y0], poly[k:], poly[:k]])
+                    break
+        self.p = np.asarray(poly, float)
+        self.q = np.vstack([self.p[1:], self.p[:1]])
         l = np.hypot(*(self.q - self.p).T)
         self.cum = np.concatenate([[0.0], np.cumsum(l)])
         self.L = self.cum[-1]
@@ -341,6 +387,32 @@ class Section:
         return -d if inside else d
 
 
+# Stern: four nacelles on the diagonals (centres +-A_N about the stern axis YC), radius R_N; the skin wraps them
+# with webs (radius RW about YC); an axial slot between the two upper (and the two lower) nacelles takes the fin.
+A_N, R_N, RW = 4.8, 4.1, 7.3
+YC = (0.5 - FL) * wh_at(0.0)[1]                 # stern axis: mid-height of the stern section
+NAC = [(A_N, YC + A_N), (-A_N, YC + A_N), (-A_N, YC - A_N), (A_N, YC - A_N)]   # upper stbd, upper port, lower port, lower stbd
+CLOVER_S0, CLOVER_S1 = 8.0, 16.0                 # pure clover aft of s 8, body section from s 16
+NU = 240
+
+
+def clover_poly():
+    pts = []
+    for i in range(NU):
+        th = -math.pi / 2 + 2 * math.pi * i / NU
+        ux, uy = math.cos(th), math.sin(th)
+        r = RW
+        for cx, cy in NAC:
+            cx, cy = cx, cy - YC
+            b = ux * cx + uy * cy
+            d = b * b - (cx * cx + cy * cy - (R_N - 0.15) ** 2)
+            if d >= 0:
+                r = max(r, b + math.sqrt(d))
+        pts.append((r * ux, YC + r * uy))
+    return np.array(pts)
+
+
+_CLOVER = Section(poly=clover_poly())
 _SEC = {}
 
 
@@ -348,42 +420,41 @@ def sec(s):
     s = min(max(s, 0.0), NB)
     k = round(s, 6)
     if k not in _SEC:
-        for (a, pa), (b, pb) in zip(HULL_KEYS, HULL_KEYS[1:]):
-            if s <= b:
-                t = sm5((s - a) / (b - a)) if b > a else 0.0
-                P = {key: pa[key] + (pb[key] - pa[key]) * t for key in pa}
-                break
-        _SEC[k] = Section(P)
+        body = Section(key_wh(*wh_at(s)))
+        if s >= CLOVER_S1:
+            _SEC[k] = body
+        else:
+            f = sm5((CLOVER_S1 - s) / (CLOVER_S1 - CLOVER_S0))
+            us = np.linspace(0.0, 1.0, NU, endpoint=False)
+            poly = np.array([(1 - f) * body.at(u) + f * _CLOVER.at(u) for u in us])
+            _SEC[k] = Section(poly=poly)
     return _SEC[k]
 
 
-# Ogive nose with a spherical tip (radius 1.8), as in the mockup.
+# Nose: blunted (tip radius 3 m), flat bottom up to a tip at 40 % of the height, rounded top, no kink at the root.
+_WF, _HF = wh_at(NB)
 _BASE = sec(NB)
-_Y0 = (_BASE.p[:, 1].min() + _BASE.p[:, 1].max()) / 2
-_RN = (_BASE.p[:, 1].max() - _BASE.p[:, 1].min()) / 2
-_NL = L_SHIP - NB
-_RHO = (_RN ** 2 + _NL ** 2) / (2 * _RN)
-_rn = 1.8
-_XS = _NL - math.sqrt((_RHO - _rn) ** 2 - (_RHO - _RN) ** 2)
-_XT = _XS - _rn * (_NL - _XS) / (_RHO - _rn)
-_TIP = _XS - _rn
-TIP_S = L_SHIP - _TIP
+_YB0 = -FL * _HF
+_YTIP = -FL * _HF + NOSE_UP * _HF
+_Y0 = _YTIP
+TIP_S = L_SHIP - 0.35
 
 
-def nose_k(x):
-    if x <= _TIP:
-        return 0.0
-    if x < _XT:
-        return math.sqrt(max(0.0, _rn ** 2 - (x - _XS) ** 2)) / _RN
-    return (math.sqrt(_RHO ** 2 - (_NL - x) ** 2) + _RN - _RHO) / _RN
+def nose_shape(s):
+    x = max(0.0, (L_SHIP - s) / NOSE_LN)
+    g = 1 - (1 - x) ** 2
+    w = _WF * g ** NOSE_NW
+    yb = _YTIP + (_YB0 - _YTIP) * g ** NOSE_BEXP
+    yt = _YTIP + ((1 - FL) * _HF - _YTIP) * g ** NOSE_TEXP
+    return w, yb, yt
 
 
 def hull_xy(s, u):
     if s <= NB:
         return sec(s).at(u)
-    k = nose_k(L_SHIP - s)
+    w, yb, yt = nose_shape(s)
     p = _BASE.at(u)
-    return np.array([p[0] * k, _Y0 + (p[1] - _Y0) * k])
+    return np.array([p[0] * w / _WF, yb + (p[1] - _YB0) * (yt - yb) / _HF])
 
 
 def hull_pt(s, u, off=0.0):
@@ -414,18 +485,22 @@ def outside(p):
         return None
     if s <= NB:
         return sec(s).dist(p[:2])
-    k = nose_k(L_SHIP - s)
-    return _BASE.dist(((p[0]) / k, _Y0 + (p[1] - _Y0) / k)) * k
+    w, yb, yt = nose_shape(s)
+    kx, ky = w / _WF, (yt - yb) / _HF
+    q = (p[0] / kx, _YB0 + (p[1] - yb) / ky)
+    return _BASE.dist(q) * min(kx, ky)
 
 
-# Reference faces of the aft body (starboard; port mirrors x and u -> 1 - u).
-_SA = sec(30.0)
-_C, _T, _B = KEY_AFT["C"], KEY_AFT["T"], KEY_AFT["B"]
+# Reference faces of the fairing (s 40-80; carriage legs and pods), starboard; port mirrors x and u -> 1 - u.
+S_FAIR = 60.0
+KEY_FAIR = key_wh(*wh_at(S_FAIR))
+_SA = sec(S_FAIR)
+_C, _T, _B = KEY_FAIR["C"], KEY_FAIR["T"], KEY_FAIR["B"]
 E_F = unit(_T - _C)                           # flank, up
 N_F = np.array([E_F[1], -E_F[0]])             # flank outward normal
 E_C = unit(_C - _B)                           # lower chine, up
 N_C = np.array([E_C[1], -E_C[0]])
-_APEX = np.array([0.0, KEY_AFT["ya"]])
+_APEX = np.array([0.0, KEY_FAIR["ya"]])
 E_T = unit(_APEX - _T)                        # top slope, inboard
 N_T = np.array([E_T[1], -E_T[0]])
 
@@ -438,7 +513,7 @@ def flank_t(u):
     return float((_SA.at(u) - _C) @ E_F)
 
 
-def chine_pt(w, key=KEY_AFT):
+def chine_pt(w, key=KEY_FAIR):
     return key["B"] + w * unit(key["C"] - key["B"])
 
 
@@ -453,137 +528,138 @@ def mir(u):
 # ---------------------------------------------------------------------------
 # Geometry of the moving parts (mirrors core/Spec.h)
 
-# Carriage («лафет») legs, one per flank: trunnion shoe on rails in a flank pocket, telescopic
-# trunnion pin (box 5 x 3 m, four stages nesting into the hip block), hip block with the pitch
-# bearing, flat thigh blade (band drums inside), band-mast shin of nested sections collapsing into
-# the thigh, two-axis ankle (lateral axis lockable), pad 16 x 6 x 1.2 m on a spreader fork.
-# Stowed: pitched aft along the hull, pad folded against the thigh ground face out, rolled with the
-# hip to the flank lean so the pad is the flank skin over the pocket.
-CAR_S0, CAR_S1 = 32.0, 53.0                    # hip (trunnion) track; the pin slot runs on to s 54.6
+# Carriage («лафет») legs, one per side in the fairing: trunnion shoe on rails in a flank pocket, telescopic trunnion
+# pin (four stages nesting into the hip block), hip block with the pitch bearing, flat thigh (band drums inside),
+# band mast (interlocking bands rolled off the drums into a rigid box section; 13 visual sections), two-axis ankle,
+# pad 16 x 6 x 1.2 m on a spreader fork. T8 erects the loaded ship (CG s 54.4) on 70 m columns and the light one
+# (CG s 70.6-72) on 86 m: mast up to 94 m, section 6.2 x 2.0 m (I 0.66 m^4; tests: t8 carriage check).
+# Stowed: pitched aft along the hull, pad folded against the thigh ground face out, rolled with the hip to the
+# flank lean so the pad is the flank skin over the pocket.
+CAR_S0, CAR_S1 = 53.4, 71.6                    # hip (trunnion) track: loaded .. landing CG; the pin slot runs on
 CAR_SREF = CAR_S0                              # legs built with the hip at the track start
-STOW_S = 46.0                                  # hip station with the leg folded aft into the pocket
+STOW_S = 66.0                                  # hip station with the leg folded aft into the pocket
 HIP_X_OUT = 19.0
-THIGH_L, THIGH_W, THIGH_T = 8.0, 6.0, 2.0      # blade: 6 m fore-aft when hanging, 2 m across
-SHIN_N, SHIN_SEG, SHIN_OVL, SHIN_TOP = 10, 7.4, 0.3, 0.6
-SHIN_W, SHIN_T = 5.4, 1.7                      # band mast, CNT wall 5 cm
+THIGH_L, THIGH_W, THIGH_T = 8.0, 6.8, 2.3      # blade: 6.8 m fore-aft when hanging, 2.3 m across (band mast 6.2 inside)
+SHIN_N, SHIN_SEG, SHIN_OVL, SHIN_TOP = 13, 7.4, 0.3, 0.6
+SHIN_W, SHIN_T = 6.2, 2.0                      # band mast
 SHIN_STEP = SHIN_SEG - SHIN_OVL
 ANKLE_R, PAD_OFF = 0.8, 1.6                    # ankle; pad mid-plane below the ankle centre
-PAD_L, PAD_W, PAD_T, PAD_RC = 16.0, 6.0, 1.2, 0.3
-LEG_LMIN = THIGH_L + ANKLE_R                   # hip -> ankle, shin collapsed
+PAD_L, PAD_W, PAD_T, PAD_RC = 16.0, 7.0, 1.2, 0.3      # pad as wide as the thigh: the pocket takes both
+LEG_LMIN = THIGH_L + ANKLE_R                   # hip -> ankle, mast rolled in
 LEG_LMAX = SHIN_TOP + (SHIN_N - 1) * SHIN_STEP + SHIN_SEG + ANKLE_R
 FOOT_H = PAD_OFF + PAD_T / 2                   # ankle centre above the ground = leg axis to pad face
-# Stowing: the pin retracts along its axis, then the whole pin/hip/leg assembly rolls about a trunnion on
-# the shoe by the flank lean. Deploying is the reverse: the pin pushes the package straight out along the
-# flank normal, and it unrolls outside the hull.
 ROLL = math.atan2(N_F[1], N_F[0])
-PIN_N, PIN_X0, PIN_STEP, PIN_LEN = 4, 10.8, 1.8, 1.9   # pin stages (deployed: x0 + k*step .. + len); roll pivot at x0
+PIN_N, PIN_X0, PIN_STEP, PIN_LEN = 4, 9.75, 1.8, 1.9   # pin stages (deployed: x0 + k*step .. + len); roll pivot at x0
 ROLL_P = np.array([PIN_X0, 0.0])
 TRAVEL = HIP_X_OUT - PIN_X0 + FOOT_H - float(N_F @ _C - N_F @ ROLL_P)   # stowed pad face lies in the flank plane
-HIP_X_IN = HIP_X_OUT - TRAVEL                 # (in the rolled frame)
-SLIDE_ROLL = 0.3                               # slide state below which the assembly unrolls (outside the hull)
+HIP_X_IN = HIP_X_OUT - TRAVEL
+SLIDE_ROLL = 0.3
 HIP_BLOCK = (0.9, 1.3, 2.7, 1.7)               # hip block: inboard, outboard, half height, half length
 POCKET_T = float((ROLL_P + (HIP_X_IN - PIN_X0 + FOOT_H) * N_F - _C) @ E_F)   # pad centre on the flank
 LAF_S0 = STOW_S - LEG_LMIN - PAD_L / 2 - 0.05
 LAF_S1 = STOW_S + HIP_BLOCK[3] + 0.2
-LAF_DEPTH = 3.3
+LAF_DEPTH = 3.8
 PIN_SLOT = (LAF_S1, CAR_S1 + 1.6)              # lip-sealed slot for the pin beyond the pocket
 
-# Stern legs: hinge forward (s 15.5) under the skin, leg folded aft, pad folded against the thigh
-# ground face out = the skin over the pocket. Upper pair on the top slopes, lower pair on the lower
-# chines. Swing about one axis; the lower pair also rests the ship level (feet out at +-18.7 m).
-LEG_S_H = 14.35                                     # pad from s 0.05: the pocket starts at the stern plane
+# Stern legs: on the outer sides of the four nacelles, 30 deg off the horizontal (in the shadow of the body at
+# sub-light: inside |x| <= 13.5, under the top line). Hinge forward (s 15), leg folded aft along the nacelle on
+# heat shields (10 ceramic screens: ~820 K next to a 1500 K nacelle), pad folded against the thigh. Each leg swings
+# in its own radial plane; standing feet on R 26 m behind the stern (s -12): tip-over 8.9 deg at the landing CG.
+LEG_ANG = math.radians(30.0)                         # lower legs (and every standing foot)
+LEG_ANG_UP = math.radians(23.0)                      # upper legs stowed lower: under the top line at sub-light
+LEG_S_H = 30.0                                       # hinge on a pylon ahead of the nacelles (splay friction <= 0.55)
 LEG_THIGH_L, LEG_THIGH_W, LEG_THIGH_T = 8.0, 2.6, 2.0
-LEG_SHIN_W, LEG_SHIN_T, LEG_SHIN_N = 2.0, 1.5, 3     # CNT wall 8 cm
+LEG_SHIN_W, LEG_SHIN_T, LEG_SHIN_N = 2.0, 1.5, 6
 LEG_LMIN_S = LEG_THIGH_L + ANKLE_R
 LEG_EXT_MAX = LEG_SHIN_N * SHIN_STEP
-LEG_PAD_OFF = 2.1                                    # room for the swing tilt of the blade under the pad
+LEG_STANDOFF = 1.7                                   # heat-shield stack between the nacelle and the leg (clears the widening body ahead)
+LEG_PAD_OFF = 1.1
 LEG_FOOT_H = LEG_PAD_OFF + PAD_T / 2
-LEG_PAD_L = 11.0
-STAND_R, STAND_GROUND_S = 19.0, -12.0
+LEG_PAD_L, LEG_PAD_W = 9.0, 2.6
+STAND_R, STAND_GROUND_S = 33.0, -12.0                # tip-over >= 10 deg at the landing CG
 REST_GROUND_Y = -AXIS_H
-REST_EXT = 13.0                                      # shin out at rest: lower legs lie ~35 deg out (the thigh root stays under the cap)
-LEG_EXT_DELAY = 0.6                                  # the shin runs out only after 60 % of the swing (clear of the stern)
-STERN_POCKET_DEPTH = 4.0
-# name, side, face, pad centre coordinate on the face, pad width, foot direction when standing (deg)
-# Each leg swings in the plane of its face normal: any other single-axis swing slides the leg sideways under
-# the skin. The foot distance along the normal sets the stance (upper feet 17 m up, lower feet out to y -11.7:
-# tip-over 10 deg at the landing CG).
-STERN_LEGS = [("upper_stbd", 1, "top", 5.12, 5.0, ("y", 17.0)), ("upper_port", -1, "top", 5.12, 5.0, ("y", 17.0)),
-              ("lower_port", -1, "chine", 3.96, 4.4, ("y", -11.55)), ("lower_stbd", 1, "chine", 3.96, 4.4, ("y", -11.55))]
-LEG_CAP_BACK = 1.2           # lower legs: opening ends 1.2 m aft of the hinge; a cap on the thigh closes it up to the pad (front edge stays over the skin up to 48 deg swing)
+REST_EXT = 13.0
+LEG_EXT_DELAY = 0.6
+# Leg systems (Tantra_Design/DESIGN_LOCAL.md «Ноги Т8: передовая механика», core/Legs.h): the ankle is a gas-hydraulic
+# strut with an MR valve (stroke 1.5 m carriage / 1.0 m stern, 30 % taken by the weight: the mesh is built at that
+# static sag, unloaded the rod shows STRUT_EXT more); the lower SOLE_T of every pad is the jamming sole; anchors on
+# CNT muscles sit in the pad and run ANCHOR_OUT into the ground; catcher rings on the magnetic-bearing drums.
+STRUT_EXT_C, STRUT_EXT_S = 0.45, 0.3
+SOLE_T, ANCHOR_OUT, ANCHOR_L = 0.45, 0.8, 1.0
+# name, nacelle index, side (x sign), up (y sign)
+STERN_LEGS = [("upper_stbd", 0, 1, 1), ("upper_port", 1, -1, 1), ("lower_port", 2, -1, -1), ("lower_stbd", 3, 1, -1)]
 
-# Lateral crests: one-piece radiator wings, span 55 m, hinge on the chine; elevons on the outer 60 %,
-# 30 % chord. Folded up by 102.7 deg they lie in a flank recess, windward face out, flush.
-CREST_T = 0.9
-CREST_Y = -4.0
-CREST_X0 = (float(N_F @ _C) - CREST_T / 2 - 0.04 - N_F[1] * CREST_Y) / N_F[0]   # 4 cm under the flank: the root lies over the chine fillet
-CREST_X1 = 27.4
-CREST_R = CREST_X1 - CREST_X0
-CREST_TH = float((np.array([CREST_X0, CREST_Y]) - _C) @ E_F)   # hinge on the flank line
-FOLD = math.pi - math.atan2(E_F[1], -E_F[0])
-ELEV_RA = 0.4 * CREST_R
+# Wings: two panels on two hinges. Root hinge along z in the side trough between the nacelles (x 7.6 on the stern
+# axis), root chord s 0-24; inner panel 6 m, outer panel 10 m (span 16 m from the hinge); elevons on the outer
+# panel trailing edge (30 % chord). Modes: 90 = deployed, 30 = raised 30 deg, folded = inner panel up 85 deg and the
+# outer panel folded back down along it (in the shadow of the fairings at sub-light).
+WING_X0, WING_Y = 9.4, YC                      # hinge outside the body side (s 16-24); at the stern a longeron carries it
+WING_T = 0.9
+WING_B1, WING_B = 5.5, 16.0                    # folded: inner panel clear of the upper legs, outer of the lower
+WING_LE0, WING_TE0, WING_LE1, WING_TE1 = 24.0, 0.0, 10.0, 4.0
+WING_FOLD = math.radians(85.0)
+WING_RAISE = math.radians(30.0)
 ELEV_UP, ELEV_DOWN = 30.0, 40.0
-FLAP_HALF, FLAP_S0, FLAP_S1, FLAP_T, FLAP_DOWN = 9.0, -3.0, 2.0, 0.25, 25.0
+FLAP_HALF, FLAP_S0, FLAP_S1, FLAP_T, FLAP_DOWN = 7.0, -1.0, 6.0, 0.25, 25.0
+FLAP_Y = YC - A_N - R_N - 0.45
 
 
-def crest_te(r):
-    return 6.0 + 5.0 * r / CREST_R
+def wing_le(r):
+    return WING_LE0 + (WING_LE1 - WING_LE0) * r / WING_B
 
 
-def crest_le(r):
-    return 28.0 - 7.0 * r / CREST_R
+def wing_te(r):
+    return WING_TE0 + (WING_TE1 - WING_TE0) * r / WING_B
 
 
-def crest_te_c(r):
-    """Trailing edge with the root corner chamfered (0.4 x 0.6 m): while folding, the plate thickness
-    projects up to 0.45 m along the flank and the swept edges would catch the recess edge."""
-    return max(crest_te(r), crest_te(0) + 0.4 + r * (crest_te(0.6) - crest_te(0) - 0.4) / 0.6) if r < 0.6 else crest_te(r)
+def wing_h(r):
+    return wing_te(r) + 0.3 * (wing_le(r) - wing_te(r))
 
 
-def crest_le_c(r):
-    return min(crest_le(r), crest_le(0) - 0.4 + r * (crest_le(0.6) - crest_le(0) + 0.4) / 0.6) if r < 0.6 else crest_le(r)
+# Dorsal fin: telescopic, two stages of 11 m (726 m^2, yaw margin +7 %), root s 3-48; retracts down into the axial
+# slot between the upper nacelles and the trap columns (columns at x +-4.75: a 1.5 m slot).
+FIN_LOWER = [(3.0, 0.0), (48.0, 0.0), (37.5, 11.0), (4.5, 11.0)]
+FIN_UPPER = [(4.5, 11.0), (37.5, 11.0), (27.0, 22.0), (6.0, 22.0)]
+FIN_T, FIN_T2 = 1.1, 0.8
+FIN_BASE = YC + RW + 0.2                      # root at the top web between the upper nacelles
+FIN_DROP = 11.5                               # each stage
+FIN_RETRACT = 2 * FIN_DROP
+SLOT_HALF = 0.75
 
-
-def crest_h(r):
-    return crest_te(r) + 0.3 * (crest_le(r) - crest_te(r))
-
-
-# Dorsal fin 7 (radiator): retracts into a 1.3 m slot between the trap columns; its top chord then
-# closes the slot flush. Spine over the shoulder.
-FIN = [(3.0, 0.0), (46.0, 0.0), (36.0, 6.0), (27.0, 20.5), (6.0, 20.5)]
-FIN_T, FIN_BASE = 1.1, 14.0
-FIN_RETRACT = FIN_BASE + 20.5 - top_y(30.0) + 0.04   # top chord 4 cm under the apex (slot edges on the apex fillet)
-SLOT_HALF = 0.65
-
-# Planetary pods: 4 x 3 cups, pairs at s 30 and s 74 on the lower chines. The bay door is the pod's
-# swing arm: it swings down 144..149 deg about its lower edge and the pod hangs outboard under the
-# chine; the pod turns on a trunnion normal to the door (0 = thrust forward, 90 = thrust up).
+# Planetary pods: 4 x 3 cups in the fairing on its lower chines (s 43.6 aft pair, s 78 fore pair). The bay door is the
+# pod's swing arm: it swings down past vertical about its lower edge, the pod hangs outboard under the chine and turns on
+# a trunnion normal to the door (0 = thrust aft along the hull, 90 = thrust up).
 POD_L, POD_W, POD_T, POD_DEPTH = 5.6, 3.0, 1.8, 1.4
-POD_DEFS = [(30.0, KEY_AFT, (2.4, 6.35), 4.1, -1), (30.0, KEY_AFT, (2.4, 6.35), 4.1, 1),      # door w0..w1, pod centre w
-            (76.0, KEY_FORE, (1.6, 5.75), 3.35, -1), (76.0, KEY_FORE, (1.6, 5.75), 3.35, 1)]
+POD_DEFS = [(43.6, KEY_FAIR, (0.4, 4.6), 2.5, -1), (43.6, KEY_FAIR, (0.4, 4.6), 2.5, 1),
+            (78.0, KEY_FAIR, (0.4, 4.6), 2.5, -1), (78.0, KEY_FAIR, (0.4, 4.6), 2.5, 1)]
 POD_DOOR_L = 6.4
 POD_SWIVEL_MAX = math.radians(100.0)
-POD_CANT = {30.0: math.radians(13.0), 76.0: math.radians(17.0)}   # door swings past vertical: pod top clears the chine
+POD_CANT = {43.6: math.radians(15.0), 78.0: math.radians(15.0)}
 
-PLAN_R, PLAN_CUP_R = 10.75, 0.75
-WELL_Y, WELL_R = 2.2, 11.5
-ANA_CUPS = [(-4.4, 4.4 + WELL_Y), (4.4, 4.4 + WELL_Y), (-4.4, -4.4 + WELL_Y), (4.4, -4.4 + WELL_Y)]
+# Engines in the nacelles: anamezon cup (aperture R 3.0 m, focus in the rim plane s -2) and three planetary cups
+# (R 0.5 m) on the rim of each, turned away from the stern leg on that nacelle.
+RIM_S = -2.0
+ANA_R, ANA_DEPTH = 3.0, 1.5
+ANA_CUPS = [(x, y) for x, y in NAC]
+PLAN_CUP_R, PLAN_RIM = 0.5, 3.55
+PLAN_REL = (math.radians(60.0), math.radians(150.0), math.radians(-120.0))   # from the leg side of each nacelle
+PLAN_R, WELL_Y = A_N * math.sqrt(2.0), YC      # (legacy names: ring radius / stern axis)
+WELL_R = A_N * math.sqrt(2.0) + R_N
 
-# Anamezon port and trap columns (mirrors core/Spec.h). Trap cassettes: octagonal armour around the
-# magnetic trap, lifted by their trunnions on telescopic masts in shafts beyond both column ends.
-CASS_W, CASS_CH = 9.8, 3.2
-CASS_S0, CASS_S1 = 21.5, 46.3
-TRAP_XY = [(5.55, -3.15), (-5.55, -3.15), (5.55, 7.0), (-5.55, 7.0)]  # lower stbd, lower port, upper stbd, upper port
-BAY_S0, BAY_S1 = 19.7, 48.1
-BAY_X0, BAY_X1 = 0.5, 10.6
-LIFT_Y0, LIFT_TRAVEL, LIFT_CEIL = 7.0, 36.0, 11.6
+# Anamezon port and trap columns: 2x2 cylinders D 8 m in octagonal armour, s 21-87.6, lifted by their trunnions on
+# telescopic masts in the shafts at both column ends.
+CASS_W, CASS_CH = 8.3, 2.4                     # armour across the flats: the fin slot between the columns stays 1.2 m
+CASS_S0, CASS_S1 = 21.0, 87.6
+_YB_C = -FL * wh_at(50.0)[1]
+TRAP_XY = [(4.75, _YB_C + 0.8 + 4.3), (-4.75, _YB_C + 0.8 + 4.3), (4.75, _YB_C + 0.8 + 4.3 + 8.6), (-4.75, _YB_C + 0.8 + 4.3 + 8.6)]
+BAY_S0, BAY_S1 = 20.4, 88.2
+BAY_X0, BAY_X1 = 0.75, 9.05
+LIFT_Y0, LIFT_TRAVEL, LIFT_CEIL = TRAP_XY[2][1], 36.0, (1 - FL) * wh_at(50.0)[1] - 0.8
 LIFT_N, LIFT_SEG = 8, 5.2
-HEAD_S = (20.4, 47.4)
-TRAP_MOUTH_Y = -13.6
-HANGAR_S = (80.0, 100.0)
-AIRLOCK_S = 104.0
-# Port airlock: a flush door for space (docking, EVA). On the ground the crew uses the hangar floor platform,
-# which already lowers to the ground: no separate lift.
+HEAD_S = (20.0, 88.6)
+TRAP_MOUTH_Y = _YB_C - 0.2
+HANGAR_S = (90.6, 111.6)
+AIRLOCK_S = 120.0
 
 
 def octagon(cx, cy, w, ch):
@@ -607,7 +683,15 @@ def trap_geom(g, cx, cy, s0, s1):
 
 
 def plan_cups():
-    return [(PLAN_R * math.cos(2 * math.pi * (k + 0.5) / 12), WELL_Y + PLAN_R * math.sin(2 * math.pi * (k + 0.5) / 12)) for k in range(12)]
+    """Three planetary cups on the rim of each nacelle, turned away from that nacelle's stern leg."""
+    out = []
+    for ni, (cx, cy) in enumerate(NAC):
+        sx, sy = (1 if cx > 0 else -1), (1 if cy > YC else -1)
+        a_leg = math.atan2(sy * math.sin(LEG_ANG), sx * math.cos(LEG_ANG))
+        for rel in PLAN_REL:
+            a = a_leg + rel * sx * sy
+            out.append((cx + PLAN_RIM * math.cos(a), cy + PLAN_RIM * math.sin(a)))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -628,15 +712,15 @@ def pod_layout():
         e3 = np.array([*(e * m), 0.0])
         hinge = np.array([*(chine_pt(w0, key) * m), zs(s_c)])
         centre = np.array([*(chine_pt(wc, key) * m), zs(s_c)]) - n3 * POD_DEPTH
-        target = np.array([-sgn, 0.0])                             # door normal after the swing: inboard
+        target = np.array([-sgn, 0.0])
         a0 = math.atan2(n3[1], n3[0])
         a1 = math.atan2(target[1], target[0])
-        swing = a1 - a0                                            # swing down (through straight down)
+        swing = a1 - a0
         if sgn > 0 and swing > 0:
             swing -= 2 * math.pi
         if sgn < 0 and swing < 0:
             swing += 2 * math.pi
-        swing -= sgn * POD_CANT[s_c]                               # past vertical (swing is negative for starboard)
+        swing -= sgn * POD_CANT[s_c]
         cups = [centre + np.array([0, 0, -POD_L / 2]) + e3 * dy for dy in (-0.9, 0.0, 0.9)]
         out.append(dict(s=s_c, sgn=sgn, u=(u0, u1), n=n3, e=e3, hinge=hinge, swing=swing, centre=centre,
                         swivel_axis=n3 * sgn, cups=cups, s0=s_c - POD_DOOR_L / 2, s1=s_c + POD_DOOR_L / 2))
@@ -644,61 +728,58 @@ def pod_layout():
 
 
 def stern_legs():
-    """Per stern leg: hinge, swing axis, stand/rest angles and extensions, pad rotations, pocket."""
+    """Per stern leg: hinge, swing axis, stand/rest angles and extensions, pad rotations. The leg lies on the outer
+    side of its nacelle (30 deg off the horizontal), stowed along -z; it swings in its radial plane."""
     out = []
-    mz = np.array([0.0, 0.0, -1.0])                     # stowed leg direction (aft)
-    for name, sgn, face, c, pw, foot in STERN_LEGS:
-        m = np.array([sgn, 1.0])
-        if face == "top":
-            P2, n2, e2 = top_pt(c), N_T, E_T
-            u0, u1 = _SA.u_of(top_pt(c - pw / 2 - 0.05)), _SA.u_of(top_pt(c + pw / 2 + 0.05))
-        else:
-            P2, n2, e2 = chine_pt(c), N_C, E_C
-            u0, u1 = _SA.u_of(chine_pt(c - pw / 2 - 0.05)), _SA.u_of(chine_pt(c + pw / 2 + 0.05))
-        if sgn < 0:
-            u0, u1 = mir(u1), mir(u0)
-        n3 = np.array([*(n2 * m), 0.0])
-        e3 = np.array([*(e2 * m), 0.0])
-        H = np.array([*((P2 - LEG_FOOT_H * n2) * m), zs(LEG_S_H)])
-        H2 = P2 - LEG_FOOT_H * n2
-        k = (foot[1] - H2[1]) / n2[1]
-        F2 = (H2 + k * n2) * m
-        fd = np.array([F2[0], F2[1], 0.0]) / STAND_R           # foot / kStandR (the adapter multiplies back)
+    mz = np.array([0.0, 0.0, -1.0])
+    for name, ni, sx, sy in STERN_LEGS:
+        cx, cy = NAC[ni]
+        a_st = LEG_ANG_UP if sy > 0 else LEG_ANG
+        n2 = np.array([sx * math.cos(a_st), sy * math.sin(a_st)])             # radial (outward) of the stowed leg
+        P2 = np.array([cx, cy]) + R_N * n2                                     # nacelle surface under the leg
+        H2 = P2 + (LEG_STANDOFF + LEG_THIGH_T / 2) * n2                       # thigh axis
+        n3 = np.array([*n2, 0.0])
+        e3 = np.array([-n2[1], n2[0], 0.0]) * sx * sy                          # across the leg (tangential)
+        H = np.array([*H2, zs(LEG_S_H)])
+        # standing foot: on the leg's radial line from the stern axis, at R, behind the stern
+        F2 = np.array([0.0, YC]) + STAND_R * np.array([sx * math.cos(LEG_ANG), sy * math.sin(LEG_ANG)])  # legs outside the skin: the swing plane need not be radial
         F = np.array([F2[0], F2[1], zs(STAND_GROUND_S) + LEG_FOOT_H])
         d = F - H
         axis = unit(np.cross(mz, d))
         phi_stand = math.acos(float(mz @ unit(d)))
         e_stand = np.linalg.norm(d) - LEG_LMIN_S
-        lower = face == "chine"
+        lower = sy < 0
         phi_rest = e_rest = 0.0
         if lower:
             e_of = lambda ph: (H[1] - (REST_GROUND_Y + LEG_FOOT_H)) / -(rot(axis, ph) @ mz)[1] - LEG_LMIN_S
-            lo, hi = math.radians(15.0), math.radians(90.0)       # swing until the shin is REST_EXT out
+            lo, hi = math.radians(15.0), math.radians(90.0)
             for _ in range(60):
                 mid = (lo + hi) / 2
                 lo, hi = (mid, hi) if e_of(mid) > REST_EXT else (lo, mid)
             phi_rest = (lo + hi) / 2
             e_rest = e_of(phi_rest)
-        # pad built stowed: long axis along z, leg-side ("up") normal pointing inboard (-n3)
         B0 = np.column_stack([np.array([0, 0, 1.0]), -n3, np.cross(np.array([0, 0, 1.0]), -n3)])
 
         def pad_child(phi, long_t, up_t):
             Bt = np.column_stack([long_t, up_t, np.cross(long_t, up_t)])
             return axis_angle(rot(axis, phi).T @ (Bt @ B0.T))
 
+        fd = np.array([F2[0], F2[1] - YC, 0.0]) / STAND_R
         fs_ax, fs_ang = pad_child(phi_stand, unit(fd), np.array([0, 0, 1.0]))
         fr_ax, fr_ang = pad_child(phi_rest, np.array([0, 0, 1.0]), np.array([0, 1.0, 0])) if lower else (np.array([1.0, 0, 0]), 0.0)
         assert 0.0 <= e_stand <= LEG_EXT_MAX and 0.0 <= e_rest <= LEG_EXT_MAX, (name, e_stand, e_rest)
         pad_s0 = LEG_S_H - LEG_LMIN_S - LEG_PAD_L / 2
         out.append(dict(name=name, H=H, axis=axis, phi_stand=phi_stand, e_stand=e_stand, phi_rest=phi_rest, e_rest=e_rest,
-                        phi_max=max(phi_stand, phi_rest), lower=lower, rad=fd, n=n3, e=e3, pw=pw, u=(u0, u1),
-                        fs_ax=fs_ax, fs_ang=fs_ang, fr_ax=fr_ax, fr_ang=fr_ang,
-                        s0=0.0, s1=LEG_S_H - LEG_CAP_BACK if lower else pad_s0 + LEG_PAD_L + 0.1, pad_s1=pad_s0 + LEG_PAD_L))
+                        phi_max=max(phi_stand, phi_rest), lower=lower, rad=fd, n=n3, e=e3, pw=LEG_PAD_W,
+                        fs_ax=fs_ax, fs_ang=fs_ang, fr_ax=fr_ax, fr_ang=fr_ang, nac=ni,
+                        s0=pad_s0, s1=LEG_S_H + 1.0, pad_s1=pad_s0 + LEG_PAD_L))
     return out
 
 
 PODS = pod_layout()
 SLEGS = stern_legs()
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -724,31 +805,29 @@ def ev(x, u):
 
 def openings():
     O = []
-    # crest recess: the folded planform (t on the flank = hinge + span)
-    r_of = lambda u: min(CREST_R, max(0.0, flank_t(u) - CREST_TH))
-    crest = _open("crest_starboard", _SA.u_of((CREST_X0, CREST_Y)) - 0.002, _SA.u_of(flank_pt(CREST_TH + CREST_R + 0.05)),
-                  lambda u: crest_te_c(r_of(u)) - 0.05, lambda u: crest_le_c(r_of(u)) + 0.05, depth=CREST_T + 0.05)
     lafet = _open("carriage_starboard", _SA.u_of(flank_pt(POCKET_T - PAD_W / 2 - 0.05)), _SA.u_of(flank_pt(POCKET_T + PAD_W / 2 + 0.05)),
                   LAF_S0, LAF_S1, depth=LAF_DEPTH)
-    bay = _open("bay_starboard", _SA.u_of((BAY_X0, -9.6)), _SA.u_of((BAY_X1, -9.45)), BAY_S0, BAY_S1)
-    flap = _open("flap_starboard", 0.0, _SA.u_of((FLAP_HALF, -9.6)), 0.0, FLAP_S1, depth=FLAP_T + 0.05, open_aft=True)
-    for o, n in ((crest, "crest_port"), (lafet, "carriage_port"), (bay, "bay_port"), (flap, "flap_port")):
+    yb = -FL * wh_at(S_FAIR)[1]
+    bay = _open("bay_starboard", _SA.u_of((BAY_X0, yb)), _SA.u_of((BAY_X1, yb + 0.15)), BAY_S0, BAY_S1)
+    for o, n in ((lafet, "carriage_port"), (bay, "bay_port")):
         O += [o, _mirror(o, n)]
     for i, p in enumerate(PODS):
         O.append(_open(f"pod_{i}", p["u"][0], p["u"][1], p["s0"], p["s1"], depth=POD_DEPTH + POD_T / 2 + 0.1))
-    for i, L in enumerate(SLEGS):
-        O.append(_open(f"leg{i}", L["u"][0], L["u"][1], L["s0"], L["s1"], depth=STERN_POCKET_DEPTH, open_aft=True))
-    us = _SA.u_of((SLOT_HALF, top_y(30.0)))
-    O.append(_open("fin_slot", us, mir(us), 3.0, 46.0, depth=3.0))
-    SF = sec(90.0)
-    uh = SF.u_of((6.6, 5.7))
-    O.append(_open("hangar_top", uh, mir(uh), *HANGAR_S, depth=3.4))
-    ub = SF.u_of((4.0, -8.7))
-    O.append(_open("hangar_bottom_starboard", 0.0, ub, *HANGAR_S, depth=5.0))
-    O.append(_open("hangar_bottom_port", mir(ub), 1.0, *HANGAR_S, depth=5.0))
+    S30 = sec(30.0)
+    us = S30.u_of((SLOT_HALF, top_y(30.0)))
+    O.append(_open("fin_slot", us, mir(us), 3.0, 48.5, depth=3.0))
+    SF = sec(101.0)
+    W, H = wh_at(101.0)
+    K = key_wh(W, H)
+    uh = SF.u_of((0.62 * W, (1 - FL) * H - 0.12 * H))
+    O.append(_open("hangar_top", uh, mir(uh), HANGAR_S[0] + 0.5, HANGAR_S[1] - 0.5, depth=3.0))
+    ub = SF.u_of(K["C"])                                   # bottom doors run up to the chine: the XR2 span is 23.9 m
+    O.append(_open("hangar_bottom_starboard", 0.0, ub, HANGAR_S[0] + 0.5, HANGAR_S[1] - 0.5, depth=5.0))
+    O.append(_open("hangar_bottom_port", mir(ub), 1.0, HANGAR_S[0] + 0.5, HANGAR_S[1] - 0.5, depth=5.0))
     SA = sec(AIRLOCK_S)
-    fe = unit(KEY_FORE["T"] - KEY_FORE["C"])
-    fp = lambda y: KEY_FORE["C"] + fe * (y - KEY_FORE["C"][1]) / fe[1]
+    KA = key_wh(*wh_at(AIRLOCK_S))
+    fe = unit(KA["T"] - KA["C"])
+    fp = lambda y: KA["C"] + fe * (y - KA["C"][1]) / fe[1]
     O.append(_open("airlock_door", mir(SA.u_of(fp(2.9))), mir(SA.u_of(fp(-1.9))), AIRLOCK_S - 1.4, AIRLOCK_S + 1.4))
     return O
 
@@ -761,12 +840,7 @@ def overlays():
     """Flush dark patches (seals, hatches): name, u0, u1, s0, s1."""
     t_pin = (0.0 - _C[1]) / E_F[1]
     u0, u1 = _SA.u_of(flank_pt(t_pin - 2.5)), _SA.u_of(flank_pt(t_pin + 2.5))
-    SF = sec(104.0)
-    fe = unit(KEY_FORE["T"] - KEY_FORE["C"])
-    fp = lambda y: KEY_FORE["C"] + fe * (y - KEY_FORE["C"][1]) / fe[1]
-    uk = sec(57.0).u_of((1.2, -9.5))
-    return [("hatches", u0, u1, *PIN_SLOT), ("hatches", mir(u1), mir(u0), *PIN_SLOT),
-            ("hatches", 0.0, uk, 56.0, 58.5), ("hatches", mir(uk), 1.0, 56.0, 58.5)]   # skin-coloured, seams only
+    return [("hatches", u0, u1, *PIN_SLOT), ("hatches", mir(u1), mir(u0), *PIN_SLOT)]
 
 
 # ---------------------------------------------------------------------------
@@ -774,9 +848,9 @@ def overlays():
 
 
 def _stations():
-    st = list(np.arange(0.0, 47.0, 1.0)) + list(np.arange(47.0, NB, 0.75)) + [NB]
+    st = list(np.arange(0.0, CLOVER_S1, 0.5)) + list(np.arange(CLOVER_S1, NB, 1.0)) + [NB]
     st += list(np.arange(NB, TIP_S - 2.0, 0.75)) + [TIP_S - 2.0 * (1 - k / 12) for k in range(12)] + [TIP_S - 0.03]
-    st += [48.0, 63.0, 56.0, 58.5, *PIN_SLOT]
+    st += [*PIN_SLOT]
     for o in OPENINGS:
         for x in (o["a"], o["b"]):
             if not callable(x):
@@ -909,7 +983,8 @@ def liner(g, o, depth):
 # Groups (stable order = module contract, written to MeshLayout.h)
 
 SIDES = ("port", "starboard")
-GROUPS = (["hull", "shoulder", "nose", "spine", "fin", "crest_port", "crest_starboard", "elevon_port", "elevon_starboard",
+GROUPS = (["hull", "shoulder", "nose", "spine", "fin", "fin_upper", "crest_port", "crest_starboard", "wing_outer_port",
+           "wing_outer_starboard", "elevon_port", "elevon_starboard",
            "body_flap", "well", "baffle", "cups_anamezon"] + [f"iris_ana_{i}" for i in range(4)]
           + ["cups_planetary"] + [f"iris_plan_{i}" for i in range(12)]
           + [f"door_pod_{i}" for i in range(4)] + [f"pod_{i}" for i in range(4)]
@@ -919,10 +994,16 @@ GROUPS = (["hull", "shoulder", "nose", "spine", "fin", "crest_port", "crest_star
           + [f"pin_{side}_{k}" for side in SIDES for k in range(PIN_N)]
           + [f"shin_{side}_{i}" for side in SIDES for i in range(SHIN_N)]
           + ["leg_hinges"]
-          + [f"leg{i}_{part}" for i in range(4) for part in ("thigh", "shin0", "shin1", "shin2", "ankle", "pad")]
-
+          + [f"leg{i}_{part}" for i in range(4) for part in ["thigh"] + [f"shin{k}" for k in range(LEG_SHIN_N)] + ["ankle", "pad"]]
           + ["bay_liner", "bay_door_port", "bay_door_starboard"] + [f"trap_{i}" for i in range(4)]
-          + [f"lift{c}_heads" for c in range(2)] + [f"lift{c}_m{i}" for c in range(2) for i in range(LIFT_N)])
+          + [f"lift{c}_heads" for c in range(2)] + [f"lift{c}_m{i}" for c in range(2) for i in range(LIFT_N)]
+          + [f"{part}_{side}" for side in SIDES for part in ("sole", "anchor")]
+          + [f"leg{i}_{part}" for i in range(4) for part in ("sole", "anchor")])
+
+
+def wing_panel_poly(sgn, r0, r1, x_of):
+    """Planform of a wing part between spans r0 .. r1 (x, z) in the deployed pose."""
+    return [(x_of(r0), zs(wing_te(r0))), (x_of(r0), zs(wing_le(r0))), (x_of(r1), zs(wing_le(r1))), (x_of(r1), zs(wing_te(r1)))]
 
 
 def build():
@@ -934,10 +1015,9 @@ def build():
             G[name] = Group(name, MAT[mat])
         return G[name]
 
-    ground = -AXIS_H
-    # ---- skin: aft body, shoulder armour (s 48..63), fore body, iridium nose
-    hull, shoulder, nose = grp("hull", "hull_lacquer"), grp("shoulder", "nose_iridium"), grp("nose", "nose_iridium")
-    zone = lambda s: shoulder if 48.0 <= s <= 63.0 else (nose if s >= NB else hull)
+    # ---- skin: stern and body, fairings (carriage legs and pods), nose
+    hull, fairing, nose = grp("hull", "hull_lacquer"), grp("shoulder", "hull_lacquer"), grp("nose", "nose_iridium")
+    zone = lambda s: fairing if 40.0 <= s <= 112.0 else (nose if s >= NB else hull)
     surface(zone, 0.0, 1.0, hull_keep, tip=True)
 
     # ---- recesses behind every opening
@@ -949,111 +1029,99 @@ def build():
     for n in ("hangar_top", "hangar_bottom_starboard", "hangar_bottom_port"):
         liner(hi, OPEN[n], OPEN[n]["depth"])
 
-    # ---- spine over the shoulder (armour ridge, carries the mains and the periscope run)
-    g = grp("spine", "nose_iridium")
-    N = 40
-    rows = []
-    for i in range(N + 1):
-        t = i / N
-        s = 46.0 + 34.0 * t
-        w, h, y = 1.2 * (1 - t) + 0.3, 2.4 * (1 - t) ** 1.3, top_y(s)
-        rows.append([np.array([-w, y - 0.3, zs(s)]), np.array([0.0, y + h, zs(s)]), np.array([w, y - 0.3, zs(s)])])
-    for i in range(N):
-        for k in range(2):
-            a, b, c, d = rows[i][k], rows[i][k + 1], rows[i + 1][k + 1], rows[i + 1][k]
-            out = np.cross(b - a, d - a)
-            if out[1] < 0:
-                out = -out
-            g.quad(*[g.vert(p, out) for p in (a, b, c, d)], out)
-    r0 = rows[0]
-    g.tri(*[g.vert(p, (0, 0, -1)) for p in r0], np.array([0, 0, -1.0]))
+    # ---- fin slot lips (the spine): two rails along the slot, seals over the retracted fin
+    g = grp("spine", "structure")
+    for sgn in (-1, 1):
+        for s0 in np.arange(3.0, 48.0, 3.0):
+            a, b = hull_pt(s0, 0.5), hull_pt(s0 + 3.0, 0.5)
+            x = sgn * (SLOT_HALF + 0.25)
+            box(g, (x - 0.2, a[1] - 0.05, a[2]), (x + 0.2, a[1] + 0.25, b[2]))
 
-    # ---- dorsal fin 7 (reference: extended)
-    prism(grp("fin", "crest_radiator"), [(zs(s), FIN_BASE + h) for s, h in FIN], (0, 0, 1), (0, 1, 0), (1, 0, 0), 0.0, FIN_T)
+    # ---- telescopic dorsal fin (reference: extended); the upper stage is thinner and nests into the lower one
+    prism(grp("fin", "crest_radiator"), [(zs(s), FIN_BASE + h) for s, h in FIN_LOWER], (0, 0, 1), (0, 1, 0), (1, 0, 0), 0.0, FIN_T)
+    prism(grp("fin_upper", "crest_radiator"), [(zs(s), FIN_BASE + h) for s, h in FIN_UPPER], (0, 0, 1), (0, 1, 0), (1, 0, 0), 0.0, FIN_T2)
 
-    # ---- lateral crests with elevons (reference: deployed, elevon neutral) and body flap
+    # ---- wings (reference: deployed, elevons neutral): inner panel, outer panel, elevons on the outer trailing edge
     for side, sgn in (("port", -1), ("starboard", 1)):
-        X = lambda r: sgn * (CREST_X0 + r)
-        ra, rm = ELEV_RA, CREST_R
-        poly = [(X(0.6), zs(crest_te(0.6))), (X(0), zs(crest_te_c(0))), (X(0), zs(crest_le_c(0))), (X(0.6), zs(crest_le(0.6))),
-                (X(rm), zs(crest_le(rm))), (X(rm), zs(crest_h(rm))), (X(ra), zs(crest_h(ra))), (X(ra), zs(crest_te(ra)))]
-        prism(grp(f"crest_{side}", "crest_radiator"), poly, (1, 0, 0), (0, 0, 1), (0, 1, 0), CREST_Y, CREST_T, fan=6)
-        el = [(X(ra + 0.05), zs(crest_te(ra + 0.05))), (X(ra + 0.05), zs(crest_h(ra + 0.05) - 0.08)),
-              (X(rm), zs(crest_h(rm) - 0.08)), (X(rm), zs(crest_te(rm)))]
-        prism(grp(f"elevon_{side}", "mechanism"), el, (1, 0, 0), (0, 0, 1), (0, 1, 0), CREST_Y, CREST_T * 0.7)
-    yb = -9.6
-    box(grp("body_flap", "nose_iridium"), (-FLAP_HALF + 0.05, yb, zs(FLAP_S0)), (FLAP_HALF - 0.05, yb + FLAP_T, zs(FLAP_S1 - 0.05)))
+        X = lambda r, sgn=sgn: sgn * (WING_X0 + r)
+        prism(grp(f"crest_{side}", "crest_radiator"), wing_panel_poly(sgn, 0.0, WING_B1 - 0.05, X), (1, 0, 0), (0, 0, 1), (0, 1, 0),
+              WING_Y, WING_T)
+        ra = WING_B1 + 0.05
+        poly = [(X(ra), zs(wing_h(ra))), (X(ra), zs(wing_le(ra))), (X(WING_B), zs(wing_le(WING_B))), (X(WING_B), zs(wing_h(WING_B)))]
+        prism(grp(f"wing_outer_{side}", "crest_radiator"), poly, (1, 0, 0), (0, 0, 1), (0, 1, 0), WING_Y, WING_T)
+        el = [(X(ra), zs(wing_te(ra))), (X(ra), zs(wing_h(ra) - 0.08)), (X(WING_B), zs(wing_h(WING_B) - 0.08)), (X(WING_B), zs(wing_te(WING_B)))]
+        prism(grp(f"elevon_{side}", "mechanism"), el, (1, 0, 0), (0, 0, 1), (0, 1, 0), WING_Y, WING_T * 0.7)
+        # hinge fairing along the root (in the side trough)
+        tube(grp(f"crest_{side}", "crest_radiator"), (sgn * WING_X0, WING_Y, zs(0.3)), (sgn * WING_X0, WING_Y, zs(WING_LE0 - 0.3)), 0.6, n=12)
+        g = grp("spine", "structure")                         # hinge longeron on the side web between the nacelles
+        x0, x1 = sorted((sgn * (RW - 0.3), sgn * (WING_X0 - 0.5)))
+        box(g, (x0, WING_Y - 0.5, zs(0.5)), (x1, WING_Y + 0.5, zs(CLOVER_S1 + 2.0)))
+    box(grp("body_flap", "nose_iridium"), (-FLAP_HALF + 0.05, FLAP_Y, zs(FLAP_S0)), (FLAP_HALF - 0.05, FLAP_Y + FLAP_T, zs(FLAP_S1 - 0.05)))
+    g = grp("body_flap", "nose_iridium")
+    gs = grp("spine", "structure")
+    for x in (-FLAP_HALF + 1.0, 0.0, FLAP_HALF - 1.0):        # hinge brackets on the lower web (fixed; the flap turns below)
+        box(gs, (x - 0.3, FLAP_Y + FLAP_T + 0.35, zs(FLAP_S1 - 0.9)), (x + 0.3, YC - RW + 0.3, zs(FLAP_S1 + 0.3)))
 
-    # ---- stern: armoured well, back plate, bulkhead, anamezon cups with irises, baffle, planetary ring
-    g = grp("well", "structure")
-    lathe(g, [(-4.0, WELL_R), (0.2, WELL_R)], center=(0.0, WELL_Y))
-    lathe(g, [(-4.0, WELL_R - 0.2), (0.2, WELL_R - 0.2)], center=(0.0, WELL_Y), inward=True)
-    lathe(g, [(-4.0, WELL_R - 0.2), (-4.0, WELL_R)], center=(0.0, WELL_Y))
-    disc_n(g, (0, WELL_Y, zs(0.25)), (0, 0, -1), WELL_R, seg=48)
-    flap_u = [OPEN["flap_starboard"]["u"], OPEN["flap_port"]["u"]]
-    ring = []
-    for u in UGRID[:-1]:
-        inflap = any(a - 1e-9 <= u <= b + 1e-9 for a, b in flap_u)
-        o = hull_pt(0.0, u, -(FLAP_T + 0.05) if inflap else 0.0)
-        d = o[:2] - np.array([0.0, WELL_Y])
-        inner = np.array([0.0, WELL_Y]) + d * min(1.0, WELL_R / np.linalg.norm(d))
-        ring.append((g.vert((inner[0], inner[1], zs(0.0)), (0, 0, -1)), g.vert(o, (0, 0, -1))))
-    for k in range(len(ring)):
-        a, b = ring[k], ring[(k + 1) % len(ring)]
-        g.quad(a[0], b[0], b[1], a[1], np.array([0, 0, -1.0]))
+    # ---- four nacelles: shell, rim, anamezon cups with irises, planetary cups with irises
+    g = grp("well", "engine_metal")
+    for cx, cy in NAC:
+        lathe(g, [(RIM_S, R_N), (CLOVER_S1 + 2.0, R_N)], center=(cx, cy))
     g = grp("baffle", "nose_iridium")
-    lathe(g, [(-1.8, 10.2), (0.3, 10.2)], center=(0.0, WELL_Y))
-    lathe(g, [(-1.8, 10.0), (0.3, 10.0)], center=(0.0, WELL_Y), inward=True)
+    for cx, cy in NAC:
+        lathe(g, [(RIM_S - 0.02, ANA_R + 0.05), (RIM_S - 0.02, R_N), (RIM_S + 0.3, R_N + 0.03)], center=(cx, cy))
     g = grp("cups_anamezon", "boron_nitride")
     for x, y in ANA_CUPS:
-        cup(g, x, y, -1.5, 1.8, 3.2)
+        cup(g, x, y, RIM_S + 0.05, ANA_DEPTH, ANA_R)
     for i, (x, y) in enumerate(ANA_CUPS):
         g = grp(f"iris_ana_{i}", "nose_iridium")
-        disc_n(g, (x, y, zs(-1.55)), (0, 0, -1), 3.35, seg=24)
-        disc_n(g, (x, y, zs(-1.50)), (0, 0, 1), 3.35, seg=24)
+        disc_n(g, (x, y, zs(RIM_S - 0.05)), (0, 0, -1), ANA_R + 0.1, seg=24)
+        disc_n(g, (x, y, zs(RIM_S)), (0, 0, 1), ANA_R + 0.1, seg=24)
     g = grp("cups_planetary", "planetary_cup")
     for x, y in plan_cups():
-        cup(g, x, y, -0.6, 0.5, PLAN_CUP_R, seg=12)
+        cup(g, x, y, RIM_S - 0.25, 0.3, PLAN_CUP_R, seg=12)
     for i, (x, y) in enumerate(plan_cups()):
         g = grp(f"iris_plan_{i}", "nose_iridium")
-        disc_n(g, (x, y, zs(-0.65)), (0, 0, -1), 0.8, seg=12)
-        disc_n(g, (x, y, zs(-0.62)), (0, 0, 1), 0.8, seg=12)
+        disc_n(g, (x, y, zs(RIM_S - 0.3)), (0, 0, -1), PLAN_CUP_R + 0.05, seg=12)
+        disc_n(g, (x, y, zs(RIM_S - 0.27)), (0, 0, 1), PLAN_CUP_R + 0.05, seg=12)
 
     # ---- planetary pods (reference: stowed in the bays, door closed, cups aft)
     for i, p in enumerate(PODS):
         patch(grp(f"door_pod_{i}", "hull_lacquer"), OPEN[f"pod_{i}"])
         g = grp(f"pod_{i}", "engine_metal")
         c, e, nn = p["centre"], p["e"], p["n"]
-        sec2 = [(-1.5, -0.9), (0.9, -0.9), (1.5, -0.3), (1.5, 0.9), (-1.5, 0.9)]   # upper-inner edge chamfered (swing clearance)
+        sec2 = [(-1.5, -0.9), (0.9, -0.9), (1.5, -0.3), (1.5, 0.9), (-1.5, 0.9)]
         prism(g, [(float(c @ e) + a, float(c @ nn) + b) for a, b in sec2], e, nn, (0, 0, 1), c[2], POD_L)
         for c in p["cups"]:
             cup(g, c[0], c[1], c[2] - STERN_Z - 0.02, 0.4, 0.42, seg=10)
-        tube(g, p["centre"] + p["n"] * (POD_T / 2 - 0.05), p["centre"] + p["n"] * (POD_DEPTH - 0.2), 0.9, n=12)  # trunnion to the door
+        tube(g, p["centre"] + p["n"] * (POD_T / 2 - 0.05), p["centre"] + p["n"] * (POD_DEPTH - 0.2), 0.9, n=12)
 
-    # ---- hangar doors s 80..100, shuttle in the top niche, rover platform in the bottom bay
+    # ---- hangar (closed port for an XR2 / DG-IV class craft): doors, floor, cradle, lowering platform.
+    # The visiting craft itself is not part of this mesh.
     ht = OPEN["hangar_top"]
     half = lambda o, lo, hi: dict(o, u=(lo, hi))
     patch(grp("door_top_starboard", "hull_lacquer"), half(ht, ht["u"][0], 0.5))
     patch(grp("door_top_port", "hull_lacquer"), half(ht, 0.5, ht["u"][1]))
     patch(grp("door_bottom_starboard", "hull_lacquer"), OPEN["hangar_bottom_starboard"])
     patch(grp("door_bottom_port", "hull_lacquer"), OPEN["hangar_bottom_port"])
-    box(hi, (-7.2, 1.2, zs(80.5)), (7.2, 1.6, zs(99.5)))
-    box(hi, (-4.0, -3.3, zs(80.5)), (4.0, -2.9, zs(99.5)))
-    g = grp("shuttle", "shuttle")
-    lathe(g, [(81.5, 0.3), (84.5, 1.9), (92.5, 2.0), (96.5, 1.2), (99.0, 0.2)], center=(0.0, 3.9), seg=20)
-    prism(g, [(zs(83.5), 0.0), (zs(91.5), 0.0), (zs(88.5), 6.3), (zs(85.5), 6.3)], (0, 0, 1), (1, 0, 0), (0, 1, 0), 3.2, 0.35)
-    prism(g, [(zs(83.5), 0.0), (zs(91.5), 0.0), (zs(88.5), -6.3), (zs(85.5), -6.3)], (0, 0, 1), (1, 0, 0), (0, 1, 0), 3.2, 0.35)
+    hs0, hs1 = HANGAR_S
+    Wh, Hh = wh_at(101.0)
+    y_ch = -(FL - 0.233) * Hh
+    box(hi, (-Wh + 1.2, y_ch + 5.6, zs(hs0 + 0.5)), (Wh - 1.2, y_ch + 6.0, zs(hs1 - 0.5)))          # ceiling frame
+    g = grp("shuttle", "mechanism")                                                                 # docking cradle
+    for z0 in (hs0 + 3.0, hs1 - 5.0):
+        box(g, (-2.5, y_ch - 1.6, zs(z0)), (2.5, y_ch - 1.2, zs(z0 + 2.0)))
+        box(g, (-0.4, y_ch - 1.2, zs(z0 + 0.6)), (0.4, y_ch + 0.2, zs(z0 + 1.4)))
     g = grp("rover_platform", "mechanism")
-    box(g, (-3.5, -8.35, zs(81.5)), (3.5, -8.1, zs(98.5)))
-    for s0 in (84.0, 93.3):
-        box(g, (-2.35, -8.1, zs(s0)), (-1.35, -6.8, zs(s0 + 9)))
-        box(g, (1.35, -8.1, zs(s0)), (2.35, -6.8, zs(s0 + 9)))
-        box(g, (-1.5, -7.0, zs(s0 + 0.5)), (1.5, -5.5, zs(s0 + 8.5)))
+    yb = -FL * Hh
+    box(g, (-4.5, yb + 0.25, zs(hs0 + 1.5)), (4.5, yb + 0.5, zs(hs1 - 1.5)))
+    for s0 in (hs0 + 3.0, hs0 + 11.0):
+        box(g, (-2.35, yb + 0.5, zs(s0)), (-1.35, yb + 1.8, zs(s0 + 7)))
+        box(g, (1.35, yb + 0.5, zs(s0)), (2.35, yb + 1.8, zs(s0 + 7)))
 
-    # ---- flush patches: pin-slot seals, keel hatch, airlock door; periscope; airlock lift
+    # ---- flush patches: pin-slot seals; airlock door
     for name, u0, u1, s0, s1 in overlays():
         surface(lambda s, n=name: grp(n, "hull_lacquer"), u0, u1, rect_keep(s0, s1), off=0.01)
-    patch(grp("airlock", "hull_lacquer"), OPEN["airlock_door"])   # flush door, skin-coloured
+    patch(grp("airlock", "hull_lacquer"), OPEN["airlock_door"])
 
     # ---- carriage legs (reference: hip out at the track start, leg hanging, shin out, pad open)
     for side, sgn in (("port", -1), ("starboard", 1)):
@@ -1073,6 +1141,8 @@ def build():
         x0, x1 = xs(HIP_X_OUT - bi, HIP_X_OUT + bo)
         box(g, (x0, -bh, T[2] - bl), (x1, bh, T[2] + bl))
         tube(g, T - np.array([sgn * 1.0, 0, 0]), T + np.array([sgn * 1.45, 0, 0]), 1.3, n=20)
+        for xr in (-1.0, 1.2):                                  # catcher (sliding) bearing rings of the magnetic bearing
+            tube(g, T + np.array([sgn * xr, 0, 0]), T + np.array([sgn * (xr + 0.25), 0, 0]), 1.42, n=20)
         # cap: closes the pocket ahead of the stowed pad; built in the flank plane at the stowed pose
         M = comp_matrix(comps, stowed_states(), comp_index(comps, f"slide_{side}", "hip"))
         Minv = np.linalg.inv(M)
@@ -1101,25 +1171,34 @@ def build():
         g = grp(f"ankle_{side}", "mechanism")                   # two-axis ankle: fore-aft and lateral axles
         tube(g, A - np.array([0, 0, 0.9]), A + np.array([0, 0, 0.9]), ANKLE_R, n=12)
         tube(g, A - np.array([0.8, 0, 0]), A + np.array([0.8, 0, 0]), ANKLE_R * 0.8, n=12)
+        tube(g, A, A + np.array([0, ANKLE_R + STRUT_EXT_C + 1.0, 0]), 0.55, n=12)   # strut rod into the mast end
         g = grp(f"pad_{side}", "mechanism")                     # pad on a spreader fork (supports at +-4 m)
-        plate(g, A + np.array([0, -PAD_OFF, 0]), (0, 0, 1), (1, 0, 0), (0, 1, 0), PAD_L / 2, PAD_W / 2, PAD_T, PAD_RC)
+        plate(g, A + np.array([0, -PAD_OFF + SOLE_T / 2, 0]), (0, 0, 1), (1, 0, 0), (0, 1, 0), PAD_L / 2, PAD_W / 2,
+              PAD_T - SOLE_T, PAD_RC)
+        yb = A[1] - PAD_OFF - PAD_T / 2                         # ground face
+        plate(grp(f"sole_{side}", "dark"), A + np.array([0, -PAD_OFF - (PAD_T - SOLE_T) / 2, 0]), (0, 0, 1), (1, 0, 0),
+              (0, 1, 0), PAD_L / 2 - 0.15, PAD_W / 2 - 0.15, SOLE_T, PAD_RC + 0.15)
+        ga = grp(f"anchor_{side}", "nose_iridium")              # 6 anchors, retracted inside the pad
+        for dz in (-5.5, 0.0, 5.5):
+            for dx in (-2.0, 2.0):
+                tube(ga, (A[0] + dx, yb + 0.02, A[2] + dz), (A[0] + dx, yb + 0.02 + ANCHOR_L, A[2] + dz), 0.06, n=6, r1=0.22)
         top = A[1] - PAD_OFF + PAD_T / 2
         box(g, (A[0] - 0.5, top, A[2] - 4.4), (A[0] + 0.5, top + 0.2, A[2] + 4.4))
         box(g, (A[0] - 0.5, top, A[2] - 0.7), (A[0] + 0.5, A[1] - ANKLE_R * 0.6, A[2] + 0.7))
 
     # ---- anamezon port: two belly bays under the trap columns, armoured doors, liner walls
     g = grp("bay_liner", "dark")
+    yb = -FL * wh_at(S_FAIR)[1]
     for sgn in (-1, 1):
         for xw in (BAY_X0, BAY_X1 - 0.15):
-            box(g, (sgn * xw - 0.15, -9.6, zs(BAY_S0)), (sgn * xw + 0.15, -3.0, zs(BAY_S1)))
-        box(g, (min(sgn * BAY_X0, sgn * BAY_X1), -3.3, zs(BAY_S0)), (max(sgn * BAY_X0, sgn * BAY_X1), -3.0, zs(BAY_S1)))
+            box(g, (sgn * xw - 0.15, yb, zs(BAY_S0)), (sgn * xw + 0.15, yb + 6.0, zs(BAY_S1)))
         for s_end in (BAY_S0, BAY_S1):
-            box(g, (min(sgn * BAY_X0, sgn * BAY_X1), -9.5, zs(s_end) - 0.15), (max(sgn * BAY_X0, sgn * BAY_X1), -3.0, zs(s_end) + 0.15))
+            box(g, (min(sgn * BAY_X0, sgn * BAY_X1), yb + 0.1, zs(s_end) - 0.15), (max(sgn * BAY_X0, sgn * BAY_X1), yb + 6.0, zs(s_end) + 0.15))
     for side in SIDES:
         patch(grp(f"bay_door_{side}", "nose_iridium"), OPEN[f"bay_{side}"], back=0.3)
     for i, (x, y) in enumerate(TRAP_XY):
         trap_geom(grp(f"trap_{i}", "trap_shell"), x, y, CASS_S0, CASS_S1)
-    for c, xc in enumerate((5.55, -5.55)):
+    for c, xc in enumerate((4.75, -4.75)):
         g = grp(f"lift{c}_heads", "mechanism")
         for sh, sg in zip(HEAD_S, (-1, 1)):
             z = zs(sh)
@@ -1133,31 +1212,28 @@ def build():
             for sh in HEAD_S:
                 tube(g, (xc, LIFT_CEIL, zs(sh)), (xc, LIFT_CEIL - LIFT_SEG, zs(sh)), w / 2 * math.sqrt(2), n=4)
 
-    # ---- stern legs (reference: stowed aft in their pockets, pads folded ground face out)
+    # ---- stern legs (reference: stowed aft on the nacelle sides over their heat shields, pads folded ground face out)
     g = grp("leg_hinges", "nose_iridium")
     for L in SLEGS:
         tube(g, L["H"] - 1.4 * L["axis"], L["H"] + 1.4 * L["axis"], 1.2, n=16)
+        for a0 in (-1.4, 1.15):                                        # catcher rings of the magnetic bearing
+            tube(g, L["H"] + a0 * L["axis"], L["H"] + (a0 + 0.25) * L["axis"], 1.32, n=16)
+        n3 = L["n"]                                                    # pylon from the body to the hinge
+        r_h = float(np.linalg.norm(L["H"][:2] - np.array([0.0, YC])))
+        c = np.array([0.0, YC, L["H"][2]]) + n3 * (r_h - 2.4) / 1.0 * 0.5 + n3 * 3.6
+        obox(g, np.array([0.0, YC, 0.0]) + n3 * (r_h - 1.5) + np.array([0, 0, L["H"][2] - 0.5]), L["e"], n3, (0, 0, 1),
+             1.2, 2.2, 2.5)
+        cx, cy = NAC[L["nac"]]                                        # heat-shield stack under the stowed leg
+        n3 = L["n"]
+        base = np.array([cx, cy, 0.0]) + n3 * (R_N + LEG_STANDOFF / 2)
+        obox(g, base + np.array([0, 0, zs((L["s0"] + LEG_S_H) / 2)]), L["e"], n3, (0, 0, 1), LEG_PAD_W / 2, LEG_STANDOFF / 2,
+             (LEG_S_H - L["s0"]) / 2)
     mz = np.array([0, 0, -1.0])
     for i, L in enumerate(SLEGS):
         H, ax = L["H"], L["axis"]
-        th = unit(np.cross(ax, mz))                                # blade thickness direction (~ outward)
+        th = unit(np.cross(ax, mz))
         obox(grp(f"leg{i}_thigh", "hull_lacquer"), H + mz * LEG_THIGH_L / 2, ax, th, mz,
              LEG_THIGH_W / 2, LEG_THIGH_T / 2, LEG_THIGH_L / 2)
-        # cap (lower legs): skin over the pocket between the pad and the thigh-root exit, on the thigh
-        s_c0, s_c1 = L["pad_s1"] + 0.05, L["s1"] - 0.05
-        if not L["lower"]:
-            s_c1 = s_c0
-        cc = H + L["n"] * (LEG_FOOT_H - 0.15)
-        cc[2] = zs((s_c0 + s_c1) / 2)
-        if s_c1 > s_c0:   # flush plate, its front edge bevelled (it rises over the skin as the thigh swings)
-            n3 = L["n"]
-            top = H + n3 * LEG_FOOT_H
-            poly = [(float(top @ n3) + a, z) for a, z in ((0.0, zs(s_c0)), (0.0, zs(s_c1)), (-0.3, zs(s_c1 - 0.8)), (-0.3, zs(s_c0)))]
-            gth = grp(f"leg{i}_thigh", "hull_lacquer")
-            prism(gth, poly, n3, (0, 0, 1), L["e"], float(top @ L["e"]), L["pw"])
-            web_h = LEG_FOOT_H - 0.3 - LEG_THIGH_T / 2
-            obox(gth, H + n3 * (LEG_THIGH_T / 2 + web_h / 2) + np.array([0, 0, zs((s_c0 + s_c1 - 2.0) / 2) - H[2]]), L["e"], n3,
-                 (0, 0, 1), 0.5, web_h / 2 + 0.05, (s_c1 - s_c0 - 2.0) / 2)
         for k in range(LEG_SHIN_N):
             f = 1 - 0.04 * k
             obox(grp(f"leg{i}_shin{k}", "band"), H + mz * (SHIN_TOP + SHIN_SEG / 2), ax, th, mz,
@@ -1165,12 +1241,24 @@ def build():
         fc = H + mz * LEG_LMIN_S
         g = grp(f"leg{i}_ankle", "mechanism")
         tube(g, fc - ax * 0.9, fc + ax * 0.9, ANKLE_R, n=12)
+        tube(g, fc, fc - mz * (ANKLE_R + STRUT_EXT_S + 0.9), 0.4, n=12)        # strut rod into the shin end
         g = grp(f"leg{i}_pad", "mechanism")
-        # sled pad: both ends bevelled on the leg side (they rise out of the pocket first while the leg swings)
         pc = fc + L["n"] * LEG_PAD_OFF
         n3 = L["n"]
-        prof = [(PAD_T / 2, -LEG_PAD_L / 2), (PAD_T / 2, LEG_PAD_L / 2), (-PAD_T / 2, LEG_PAD_L / 2 - 0.7), (-PAD_T / 2, -LEG_PAD_L / 2 + 0.7)]
+        # rigid part; the sole on the ground side (+n)
+        prof = [(PAD_T / 2 - SOLE_T, -LEG_PAD_L / 2), (PAD_T / 2 - SOLE_T, LEG_PAD_L / 2), (-PAD_T / 2, LEG_PAD_L / 2 - 0.7),
+                (-PAD_T / 2, -LEG_PAD_L / 2 + 0.7)]
         prism(g, [(float(pc @ n3) + a, pc[2] + b) for a, b in prof], n3, (0, 0, 1), L["e"], float(pc @ L["e"]), L["pw"])
+        prof = [(PAD_T / 2, -LEG_PAD_L / 2 + 0.15), (PAD_T / 2, LEG_PAD_L / 2 - 0.15), (PAD_T / 2 - SOLE_T, LEG_PAD_L / 2 - 0.15),
+                (PAD_T / 2 - SOLE_T, -LEG_PAD_L / 2 + 0.15)]
+        prism(grp(f"leg{i}_sole", "dark"), [(float(pc @ n3) + a, pc[2] + b) for a, b in prof], n3, (0, 0, 1), L["e"],
+              float(pc @ L["e"]), L["pw"] - 0.3)
+        ga = grp(f"leg{i}_anchor", "nose_iridium")                             # 4 anchors, retracted inside the pad
+        face = pc + n3 * (PAD_T / 2 - 0.02)
+        for dz in (-3.0, 3.0):
+            for de in (-0.6, 0.6):
+                q = face + np.array([0, 0, dz]) + L["e"] * de
+                tube(ga, q, q - n3 * ANCHOR_L, 0.06, n=6, r1=0.2)
         tube(g, fc + L["n"] * 0.3, fc + L["n"] * (LEG_PAD_OFF - PAD_T / 2), 0.5, n=12)
     missing = [n for n in GROUPS if G[n] is None]
     assert not missing, missing
@@ -1192,31 +1280,37 @@ def rig(legs):
         C.append(dict(anim=anim, kind=kind, groups=groups, par=par, parent=parent, s0=s0, s1=s1, d=d))
         return len(C) - 1
 
-    add("crest_dorsal", "tr", ["fin"], np.array([0, -FIN_RETRACT, 0]))
+    fl = add("crest_dorsal", "tr", ["fin"], np.array([0, -FIN_DROP, 0]))
+    add("crest_dorsal", "tr", ["fin_upper"], np.array([0, -FIN_DROP, 0]), parent=fl)      # nests into the lower stage
     ed = ELEV_UP / (ELEV_UP + ELEV_DOWN)
     for side, sgn in (("port", -1), ("starboard", 1)):
-        f = add("crest_lateral", "rot", [f"crest_{side}"], (np.array([sgn * CREST_X0, CREST_Y, 0]), np.array([0, 0, 1.0]), sgn * FOLD))
-        h0 = np.array([sgn * (CREST_X0 + ELEV_RA), CREST_Y, zs(crest_h(ELEV_RA))])
-        h1 = np.array([sgn * CREST_X1, CREST_Y, zs(crest_h(CREST_R))])
+        f = add("crest_lateral", "rot", [f"crest_{side}"], (np.array([sgn * WING_X0, WING_Y, 0]), np.array([0, 0, 1.0]), sgn * WING_FOLD))
+        # outer panel: hinge on the lower face at the end of the inner panel; folds back under it (outboard when the
+        # inner panel stands up)
+        o = add("wing_outer", "rot", [f"wing_outer_{side}"], (np.array([sgn * (WING_X0 + WING_B1), WING_Y - WING_T / 2, 0]),
+                                                               np.array([0, 0, 1.0]), -sgn * math.pi * 0.985), parent=f)
+        ra = WING_B1 + 0.05
+        h0 = np.array([sgn * (WING_X0 + ra), WING_Y, zs(wing_h(ra))])
+        h1 = np.array([sgn * (WING_X0 + WING_B), WING_Y, zs(wing_h(WING_B))])
         ax = unit(h1 - h0)
-        down = -1.0 if (np.cross(ax, [0, 0, -1.0])[1] > 0) else 1.0      # sign that moves the trailing edge down
-        add(f"elevon_{side}", "rot", [f"elevon_{side}"], (h0, ax, down * math.radians(ELEV_UP + ELEV_DOWN)), parent=f, d=ed)
-    add("body_flap", "rot", ["body_flap"], (np.array([0, -9.6 + FLAP_T / 2, zs(FLAP_S1)]), np.array([1.0, 0, 0]), -math.radians(FLAP_DOWN)))
+        down = -1.0 if (np.cross(ax, [0, 0, -1.0])[1] > 0) else 1.0
+        add(f"elevon_{side}", "rot", [f"elevon_{side}"], (h0, ax, down * math.radians(ELEV_UP + ELEV_DOWN)), parent=o, d=ed)
+    add("body_flap", "rot", ["body_flap"], (np.array([0, FLAP_Y + FLAP_T / 2, zs(FLAP_S1)]), np.array([1.0, 0, 0]), -math.radians(FLAP_DOWN)))
     # pods: 1 = stowed (mesh pose); the swing opens the door and hangs the pod out
     for i, p in enumerate(PODS):
         sw = add("pod_retract", "rot", [f"door_pod_{i}"], (p["hinge"], np.array([0, 0, 1.0]), -p["swing"]), d=1.0)
         add("pod_swivel", "rot", [f"pod_{i}"], (p["centre"], p["swivel_axis"], POD_SWIVEL_MAX), parent=sw)
     for i, (x, y) in enumerate(ANA_CUPS):
-        add("iris_ana", "sc", [f"iris_ana_{i}"], (np.array([x, y, zs(-1.55)]), np.array([0.001, 0.001, 1])))
+        add("iris_ana", "sc", [f"iris_ana_{i}"], (np.array([x, y, zs(RIM_S - 0.05)]), np.array([0.001, 0.001, 1])))
     for i, (x, y) in enumerate(plan_cups()):
-        add("iris_plan", "sc", [f"iris_plan_{i}"], (np.array([x, y, zs(-0.65)]), np.array([0.001, 0.001, 1])))
+        add("iris_plan", "sc", [f"iris_plan_{i}"], (np.array([x, y, zs(RIM_S - 0.3)]), np.array([0.001, 0.001, 1])))
     ht = OPEN["hangar_top"]
     for name, u, ang in (("door_top_starboard", ht["u"][0], -105), ("door_top_port", ht["u"][1], 105),
                          ("door_bottom_starboard", OPEN["hangar_bottom_starboard"]["u"][1], 95),
                          ("door_bottom_port", OPEN["hangar_bottom_port"]["u"][0], -95)):
-        hp = hull_pt(90.0, u)
+        hp = hull_pt(101.0, u)
         add("hangar", "rot", [name], (np.array([hp[0], hp[1], 0.0]), np.array([0, 0, 1.0]), math.radians(ang)))
-    add("rover_lift", "tr", ["rover_platform"], np.array([0, (-AXIS_H + 0.25) - (-8.35), 0]))
+    add("rover_lift", "tr", ["rover_platform"], np.array([0, (-AXIS_H + 0.25) - (-FL * wh_at(101.0)[1] + 0.25), 0]))
     for side, sgn in (("port", -1), ("starboard", 1)):
         T = np.array([sgn * HIP_X_OUT, 0.0, zs(CAR_SREF)])
         run = np.array([0, 0, CAR_S1 - CAR_S0])
@@ -1230,21 +1324,27 @@ def rig(legs):
         pi = add(f"pitch_{side}", "rot", [f"thigh_{side}"], (T, np.array([1.0, 0, 0]), math.pi / 2), parent=sl)  # 1 = aft
         for i in range(SHIN_N):
             add(f"shin_len_{side}", "tr", [f"shin_{side}_{i}"], np.array([0, i * SHIN_STEP, 0]), parent=pi)
-        ank = add(f"shin_len_{side}", "tr", [f"ankle_{side}"], np.array([0, (SHIN_N - 1) * SHIN_STEP, 0]), parent=pi)
+        ank = add(f"shin_len_{side}", "tr", [], np.array([0, (SHIN_N - 1) * SHIN_STEP, 0]), parent=pi)   # pivot only
+        st = add("strut_carriage", "tr", [f"ankle_{side}"], np.array([0, -STRUT_EXT_C, 0]), parent=ank)  # 1 = unloaded
         A = T + np.array([0, -LEG_LMAX, 0])
-        fb = add(f"pad_fold_{side}", "rot", [], (A, np.array([0, 1.0, 0]), -sgn * math.pi / 2), parent=ank)  # pivot only
-        add(f"pad_fold_{side}", "rot", [f"pad_{side}"], (A, np.array([1.0, 0, 0]), math.pi / 2), parent=fb)
+        fb = add(f"pad_fold_{side}", "rot", [], (A, np.array([0, 1.0, 0]), -sgn * math.pi / 2), parent=st)  # pivot only
+        pd = add(f"pad_fold_{side}", "rot", [f"pad_{side}"], (A, np.array([1.0, 0, 0]), math.pi / 2), parent=fb)
+        add("anchor_carriage", "tr", [f"sole_{side}"], np.zeros(3), parent=pd)                 # the sole rides on the pad
+        add("anchor_carriage", "tr", [f"anchor_{side}"], np.array([0, -ANCHOR_OUT, 0]), parent=pd)
     mz = np.array([0, 0, -1.0])
     for i, L in enumerate(legs):
         sw = add(f"leg{i}_swing", "rot", [f"leg{i}_thigh"], (L["H"], L["axis"], L["phi_max"]))
         for k in range(LEG_SHIN_N):
             add(f"leg{i}_ext", "tr", [f"leg{i}_shin{k}"], mz * SHIN_STEP * (k + 1), parent=sw)
-        ex = add(f"leg{i}_ext", "tr", [f"leg{i}_ankle"], mz * LEG_EXT_MAX, parent=sw)
+        ex = add(f"leg{i}_ext", "tr", [], mz * LEG_EXT_MAX, parent=sw)                              # pivot only
+        st = add(f"leg{i}_strut", "tr", [f"leg{i}_ankle"], mz * STRUT_EXT_S, parent=ex)           # 1 = unloaded
         fc = L["H"] + mz * LEG_LMIN_S
         # the pad turns to the ground only once the ankle is clear of the hull (rest: half way; stand: last quarter,
         # the ankle is then behind the stern and beyond the well skirt)
-        fr = add(f"leg{i}_foot_rest", "rot", [], (fc, L["fr_ax"], L["fr_ang"]), parent=ex, s0=0.5)   # pivot only
-        add(f"leg{i}_foot_stand", "rot", [f"leg{i}_pad"], (fc, L["fs_ax"], L["fs_ang"]), parent=fr, s0=0.75)
+        fr = add(f"leg{i}_foot_rest", "rot", [], (fc, L["fr_ax"], L["fr_ang"]), parent=st, s0=0.5)   # pivot only
+        pd = add(f"leg{i}_foot_stand", "rot", [f"leg{i}_pad"], (fc, L["fs_ax"], L["fs_ang"]), parent=fr, s0=0.75)
+        add(f"leg{i}_anchor", "tr", [f"leg{i}_sole"], np.zeros(3), parent=pd)
+        add(f"leg{i}_anchor", "tr", [f"leg{i}_anchor"], L["n"] * ANCHOR_OUT, parent=pd)
     add("bay_doors", "rot", ["bay_door_starboard"], (bay_hinge(1), np.array([0, 0, 1.0]), math.radians(100)))
     add("bay_doors", "rot", ["bay_door_port"], (bay_hinge(-1), np.array([0, 0, 1.0]), -math.radians(100)))
     step = LIFT_TRAVEL / (LIFT_N - 1)
@@ -1261,7 +1361,7 @@ def rig(legs):
 
 def bay_hinge(sgn):
     o = OPEN["bay_starboard" if sgn > 0 else "bay_port"]
-    p = hull_pt(36.0, o["u"][1] if sgn > 0 else o["u"][0])
+    p = hull_pt(55.0, o["u"][1] if sgn > 0 else o["u"][0])
     return np.array([p[0], p[1], 0.0])
 
 
@@ -1366,15 +1466,18 @@ def v3(a):
 # four chunks by station. name, groups (or station range of the hull for a chunk), mass [t]
 _HULL_GROUPS = ("hull", "shoulder", "nose", "spine", "pocket_liner", "hatches", "airlock")
 DEBRIS_DEFS = (
-    [("crest_port", ["crest_port", "elevon_port"], 20.0), ("crest_starboard", ["crest_starboard", "elevon_starboard"], 20.0),
-     ("fin", ["fin"], 20.0)]
+    [("crest_port", ["crest_port", "wing_outer_port", "elevon_port"], 22.0),
+     ("crest_starboard", ["crest_starboard", "wing_outer_starboard", "elevon_starboard"], 22.0),
+     ("fin", ["fin", "fin_upper"], 24.0)]
     + [(f"pod_{i}", [f"pod_{i}", f"door_pod_{i}"], 19.0) for i in range(4)]
-    + [(f"leg_{side}", [f"shin_{side}_{i}" for i in range(SHIN_N)] + [f"ankle_{side}", f"pad_{side}"], 80.0) for side in SIDES]
-    + [(f"sternleg_{i}", [f"leg{i}_shin{k}" for k in range(LEG_SHIN_N)] + [f"leg{i}_ankle", f"leg{i}_pad"], 30.0) for i in range(4)]
+    + [(f"leg_{side}", [f"shin_{side}_{i}" for i in range(SHIN_N)] + [f"ankle_{side}", f"pad_{side}", f"sole_{side}", f"anchor_{side}"], 80.0)
+       for side in SIDES]
+    + [(f"sternleg_{i}", [f"leg{i}_shin{k}" for k in range(LEG_SHIN_N)] + [f"leg{i}_ankle", f"leg{i}_pad", f"leg{i}_sole", f"leg{i}_anchor"], 30.0)
+       for i in range(4)]
     + [(n, [n], 6.0) for n in ("door_top_port", "door_top_starboard", "door_bottom_port", "door_bottom_starboard")]
     + [(n, [n], 10.0) for n in ("bay_door_port", "bay_door_starboard")]
-    + [("hull_aft", (-10.0, 47.0), 1300.0), ("hull_mid", (47.0, 80.0), 320.0), ("hull_fore", (80.0, 122.0), 420.0),
-       ("hull_nose", (122.0, 150.0), 263.0)])
+    + [("hull_aft", (-10.0, 40.0), 900.0), ("hull_mid", (40.0, 90.0), 650.0), ("hull_fore", (90.0, 135.0), 420.0),
+       ("hull_nose", (135.0, 175.0), 300.0)])
 DEBRIS = []  # filled by write_debris: (name, class, centroid (mesh frame), mass)
 
 
@@ -1385,7 +1488,8 @@ def write_debris(groups, root):
     os.makedirs(mdir, exist_ok=True)
     os.makedirs(cdir, exist_ok=True)
     DEBRIS.clear()
-    chunk_extra = {"hull_aft": ["well", "baffle", "cups_anamezon", "cups_planetary", "bay_liner"] + [f"trap_{i}" for i in range(4)],
+    chunk_extra = {"hull_aft": ["well", "baffle", "cups_anamezon", "cups_planetary", "body_flap"],
+                   "hull_mid": ["bay_liner"] + [f"trap_{i}" for i in range(4)],
                    "hull_fore": ["hangar_inner", "shuttle", "rover_platform"]}
     for name, spec, mass in DEBRIS_DEFS:
         parts = []
@@ -1447,10 +1551,18 @@ def write_layout(legs, comps, path):
     L.append(f"constexpr double kLegLMin = {LEG_LMIN:.3f}, kLegLMax = {LEG_LMAX:.3f};  // hip -> ankle, shin in / out")
     L.append(f"constexpr double kFootH = {FOOT_H:.3f}, kPadHalfL = {PAD_L / 2}, kPadHalfW = {PAD_W / 2};  // ankle above ground; pad")
     L.append(f"constexpr double kLegLMinS = {LEG_LMIN_S:.3f}, kLegExtMax = {LEG_EXT_MAX:.3f}, kLegFootH = {LEG_FOOT_H:.3f};  // stern legs (stowed along -z)")
+    L.append(f"constexpr double kStrutExtC = {STRUT_EXT_C}, kStrutExtS = {STRUT_EXT_S}, kAnchorOut = {ANCHOR_OUT};  // unloaded strut rod; anchors")
     L.append(f"constexpr double kLegExtDelay = {LEG_EXT_DELAY};  // stern shins run out over the last {1 - LEG_EXT_DELAY:.0%} of the swing")
     L.append(f"constexpr double kStandR = {STAND_R}, kStandGroundS = {STAND_GROUND_S};")
     L.append(f"constexpr double kPlanR = {PLAN_R}, kWellY = {WELL_Y};")
-    L.append(f"constexpr double kFinRetract = {FIN_RETRACT:.3f};")
+    L.append(f"constexpr double kFinRetract = {FIN_RETRACT:.3f}, kFinDrop = {FIN_DROP:.3f};  // telescopic fin: two stages")
+    L.append(f"constexpr double kSternAxisY = {YC:.4f}, kRimS = {RIM_S}, kAnaCupR = {ANA_R}, kPlanCupR = {PLAN_CUP_R};")
+    L.append("constexpr double kAnaCup[4][2] = {" + ", ".join("{%.4f, %.4f}" % c for c in ANA_CUPS) + "};  // x, y of the anamezon cups (nacelles)")
+    L.append("constexpr double kPlanCup[12][2] = {" + ", ".join("{%.4f, %.4f}" % c for c in plan_cups()) + "};  // planetary cups on the rims")
+    L.append(f"constexpr double kWingX0 = {WING_X0}, kWingY = {WING_Y:.4f}, kWingB1 = {WING_B1}, kWingB = {WING_B}, kWingFoldDeg = {math.degrees(WING_FOLD):.1f}, kWingRaiseDeg = {math.degrees(WING_RAISE):.1f};")
+    L.append(f"constexpr double kWingLe0 = {WING_LE0}, kWingTe0 = {WING_TE0}, kWingLe1 = {WING_LE1}, kWingTe1 = {WING_TE1};")
+    L.append(f"constexpr double kFlapY = {FLAP_Y:.4f}, kFlapHalf = {FLAP_HALF}, kFlapS0 = {FLAP_S0}, kFlapS1 = {FLAP_S1};")
+    L.append(f"constexpr double kHangarS0 = {HANGAR_S[0]}, kHangarS1 = {HANGAR_S[1]}, kAirlockS = {AIRLOCK_S}, kShipLength = {L_SHIP};")
     L.append(f"constexpr double kElevonUpDeg = {ELEV_UP}, kElevonDownDeg = {ELEV_DOWN}, kBodyFlapDownDeg = {FLAP_DOWN};")
     L.append("constexpr double kTrapXY[4][2] = {" + ", ".join("{%.2f, %.2f}" % t for t in TRAP_XY) + "};  // lower stbd, lower port, upper stbd, upper port")
     L.append(f"constexpr double kTrapZ = {zs((CASS_S0 + CASS_S1) / 2):.3f}, kCassW = {CASS_W}, kCassLen = {CASS_S1 - CASS_S0:.1f}, kTrapMouthY = {TRAP_MOUTH_Y};")
@@ -1516,7 +1628,7 @@ def write_layout(legs, comps, path):
 
 def stowed_states():
     """Flight at 0.9 c: everything folded, doors shut, fin down."""
-    st = {"crest_lateral": 1, "crest_dorsal": 1, "pod_retract": 1}
+    st = {"crest_lateral": 1, "wing_outer": 1, "crest_dorsal": 1, "pod_retract": 1}
     for s in SIDES:
         st.update({f"track_{s}": (STOW_S - CAR_S0) / (CAR_S1 - CAR_S0), f"slide_{s}": 1.0, f"pitch_{s}": 1.0,
                    f"shin_len_{s}": 1.0, f"pad_fold_{s}": 1.0})
@@ -1525,7 +1637,7 @@ def stowed_states():
 
 def preview_poses(legs):
     """Named poses: flight (stowed), resting level (pods hovering), turning 45 deg, standing, hangar open."""
-    mid = (53.0 - CAR_S0) / (CAR_S1 - CAR_S0)
+    mid = (60.0 - CAR_S0) / (CAR_S1 - CAR_S0)
     shin = lambda L: (LEG_LMAX - L) / (LEG_LMAX - LEG_LMIN)
     stowed = stowed_states()
     rest = {"pod_retract": 0, "pod_swivel": 90 / 100}
@@ -1534,8 +1646,8 @@ def preview_poses(legs):
     for i, g in enumerate(legs):
         if g["lower"]:
             rest.update({f"leg{i}_swing": g["phi_rest"] / g["phi_max"], f"leg{i}_ext": g["e_rest"] / LEG_EXT_MAX, f"leg{i}_foot_rest": 1})
-    turn_h = 53.0 + 16.0
-    turn = {"crest_lateral": 1, "crest_dorsal": 1, "pod_retract": 0, "pod_swivel": 0.45}
+    turn_h = 60.0 + 16.0
+    turn = {"crest_lateral": 1, "wing_outer": 1, "crest_dorsal": 1, "pod_retract": 0, "pod_swivel": 0.45}
     for s in SIDES:
         turn.update({f"track_{s}": mid, f"pitch_{s}": 0.5, f"shin_len_{s}": shin(turn_h - FOOT_H)})
     stand = dict(stowed)
@@ -1545,11 +1657,11 @@ def preview_poses(legs):
     hang.update({"hangar": 1, "rover_lift": 1, "bay_doors": 1, "elevon_port": 1, "elevon_starboard": 0, "body_flap": 1})
     # ship pose: pitch about the hip (trunnion) at s 53, lift of that point above its level height
     return [("flight (stowed)", stowed, 0, 0, (15, -60)), ("resting level", rest, 0, 0, (10, -120)),
-            ("turning 45 deg", turn, 45, turn_h - AXIS_H, (8, -80)), ("standing", stand, 90, 12 + 53 - AXIS_H, (8, -60)),
+            ("turning 45 deg", turn, 45, turn_h - AXIS_H, (8, -80)), ("standing", stand, 90, 12 + 60 - AXIS_H, (8, -60)),
             ("hangar open", hang, 0, 0, (-15, -60))]
 
 
-def pose_world(P, pitch, lift, pivot_s=53.0):
+def pose_world(P, pitch, lift, pivot_s=60.0):
     """Ship vertices -> world (ground frame): pitch nose-up about the trunnion at pivot_s, raise by lift."""
     R = rot([1, 0, 0], -math.radians(pitch))
     c = np.array([0.0, 0.0, zs(pivot_s)])

@@ -13,10 +13,10 @@
 namespace tantra::aero {
 
 // Reference geometry of the hull (m, m^2).
-constexpr double kLength = 146.0;
-constexpr double kPlanform = 3100.0;   // hull planform (crests are their own airfoils)
-constexpr double kFrontal = 560.0;     // aft body cross-section
-constexpr double kSide = 2700.0;       // side projection
+constexpr double kLength = 168.968;
+constexpr double kPlanform = 3589.0;   // hull planform, T8 (wings are their own airfoils)
+constexpr double kFrontal = 407.0;     // largest cross-section (fairings, s 40..80)
+constexpr double kSide = 2649.0;       // side projection
 
 double AxialNoseFirst(double mach);    // on the frontal area
 double AxialSternFirst(double mach);   // on the frontal area: the well rim and baffle are the front

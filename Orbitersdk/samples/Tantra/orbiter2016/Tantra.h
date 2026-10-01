@@ -11,6 +11,7 @@
 #include "../core/Damage.h"
 #include "../core/Drive.h"
 #include "../core/Ignition.h"
+#include "../core/Legs.h"
 #include "../core/Params.h"
 #include "../core/Spec.h"
 #include "MeshLayout.h"
@@ -91,7 +92,7 @@ private:
     void ActErect();                  // carriage: stand the ship on its stern / lay it level
     void ActGear();                   // gear down / up (in flight)
     void ActGearSet();                // flight gear set: level (columns) / standing (stern legs)
-    void ActCrests();                 // fold / unfold crests and sink the pods (interstellar)
+    void ActCrests();                 // wings 90 -> 30 -> folded (+ fin down, pods in: interstellar) -> 90
     void ActHangar();
     void ActRovers();
     void ActPort();                   // maglev port table under the stern
@@ -176,6 +177,16 @@ private:
     bool shownLost_[tantra::damage::kPartCount] = {};
     double glowT_[2] = {-1.0, -1.0};
     bool TouchPointLost(int i, const tantra::CarriagePose& p) const;
+    int TouchLeg(int i, const tantra::CarriagePose& p) const;  // leg carrying touchdown point i: 0 carriage port,
+                                                                // 1 starboard, 2..5 stern legs; -1 hull
+    // Leg systems (core/Legs): MR ankle struts, jamming soles with anchors, fibre sensors, magnetic bearings.
+    tantra::legs::Soles solesCar_, solesStern_;
+    tantra::legs::Regen regen_;
+    double strut_[6] = {};                     // ankle struts unloaded 0..1 (rod out)
+    double legN_[6] = {}, legR_[6] = {};       // sensed load [N] and its share of the rating, per leg
+    bool legAlarm_[6] = {};
+    bool hipCatcher_ = false;                  // hip magnetic bearings over capacity: running on the catchers
+    double touchMu_[tantra::CarriagePose::kMaxTouch] = {0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7};
     double tipWind_ = 0.0;                     // wind that would overturn the ship now [m/s]
     const char* legName_ = "";
     void UpdateWind(double dt);
@@ -246,7 +257,9 @@ private:
     // has come to rest on its contacts (Orbiter puts a landed vessel down with uncompressed contacts).
     double settleTimer_ = 6.0;        // s of overdamped suspension
     double settledFor_ = 0.0;         // s at rest on the ground
-    bool crestsFolded_ = false;       // manual (interstellar) fold
+    bool crestsFolded_ = false;       // interstellar: wings folded, fin down, pods in (wingMode_ == 2)
+    int wingMode_ = 0;                // 0 = 90 (deployed), 1 = raised 30 deg, 2 = folded
+    double wingIn_ = 0.0, wingOut_ = 0.0;   // inner panels 0..1 (of kWingFoldDeg), outer panels 0..1 (folded under)
     double tuck_ = 0.0;               // crests/pods, flight mode part
     double hangar_ = 0.0, hangarT_ = 0.0, rovers_ = 0.0, roversT_ = 0.0;
     double irisAna_ = 0.0, irisPlan_ = 1.0, airlockUp_ = 0.0;

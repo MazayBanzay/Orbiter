@@ -1,0 +1,234 @@
+<title>OrbiterCrew Alpha</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jura:wght@500;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* layout: one reading column, figures break out wider; a quiet HUD-like header line; EN / RU switch */
+:root {
+  --bg: #eef1f4; --surface: #ffffff; --fg: #1b2129; --muted: #5a6573; --line: #d3d9e0;
+  --accent: #c8611c; --accent-soft: #f6e3d4; --key-bg: #e3e8ee;
+  --display: "Jura", "Segoe UI", system-ui, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f141a; --surface: #161d25; --fg: #e3e8ee; --muted: #9aa6b4; --line: #2a3440;
+  --accent: #f08a3c; --accent-soft: #3a2616; --key-bg: #222b36; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f141a; --surface: #161d25; --fg: #e3e8ee; --muted: #9aa6b4; --line: #2a3440;
+  --accent: #f08a3c; --accent-soft: #3a2616; --key-bg: #222b36; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font: 17px/1.6 var(--body); }
+.wrap { max-width: 980px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 64px; }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+  border-bottom: 1px solid var(--line); padding-bottom: 14px; }
+.brand { font: 700 15px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.brand b { color: var(--accent); font-weight: 700; }
+.lang { display: flex; gap: 4px; border: 1px solid var(--line); border-radius: 6px; padding: 3px; background: var(--surface); }
+.lang button { font: 600 13px/1 var(--display); letter-spacing: .08em; border: 0; border-radius: 4px; padding: 7px 12px;
+  background: transparent; color: var(--muted); cursor: pointer; }
+.lang button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.lang button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+h1 { font: 700 clamp(30px, 5vw, 46px)/1.1 var(--display); margin: 34px 0 10px; text-wrap: balance; }
+.tag { font: 600 12px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 4px; padding: 4px 8px; vertical-align: middle; margin-left: 8px; }
+.lead { font-size: 19px; color: var(--muted); max-width: 64ch; margin: 0 0 26px; }
+h2 { font: 700 22px/1.2 var(--display); letter-spacing: .02em; margin: 44px 0 12px; display: flex; align-items: baseline; gap: 12px; }
+h2::before { content: ""; width: 18px; height: 2px; background: var(--accent); transform: translateY(-6px); flex: none; }
+p, ul { max-width: 68ch; }
+ul { padding-left: 1.2em; margin: 0 0 8px; display: grid; gap: 6px; }
+li::marker { color: var(--accent); }
+figure { margin: 18px 0; }
+figure img { display: block; width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 6px; }
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 18px 0; }
+.pair figure { margin: 0; }
+.note { font-size: 14px; color: var(--muted); font-style: italic; }
+kbd { font: 500 13px/1 var(--mono); background: var(--key-bg); border: 1px solid var(--line); border-bottom-width: 2px;
+  border-radius: 4px; padding: 2px 6px; white-space: nowrap; }
+.status { background: var(--accent-soft); border-radius: 6px; padding: 14px 18px; margin-top: 12px; }
+.status ul { margin: 0; }
+.credits { margin-top: 44px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 15px; color: var(--muted); }
+.credits p { margin: 0; max-width: none; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand"><b>OrbiterCrew</b> · Orbiter 2016</div>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" id="btn-en" aria-pressed="true">EN</button>
+      <button type="button" id="btn-ru" aria-pressed="false">RU</button>
+    </div>
+  </header>
+
+  <!-- ===================== ENGLISH ===================== -->
+  <main id="en" lang="en">
+    <h1>Living crew for Orbiter 2016 <span class="tag">alpha</span></h1>
+    <p class="lead">A new crew system written from scratch (GPL-3.0). People that look and move like people, and life support that is physics, not a timer. The first crew member is Niza Krit, astronavigator of the 37th Star Expedition.</p>
+    <figure><img src="img/01_coverall.jpg" alt="Niza Krit in the shipboard coverall, full figure and portrait"></figure>
+
+    <h2>Look</h2>
+    <ul>
+      <li>Realistic human figure (MakeHuman / MPFB, CC0 assets), skinned mesh with a 31-bone skeleton, deformed every frame.</li>
+      <li>Two outfits: shipboard coverall for breathable air, and the «Frame» space suit with a powered exoskeleton. <kbd>K</kbd> puts the suit on or takes it off, only where the air is breathable.</li>
+      <li>Coverall with sewn panels, piping, zip and a normal map; stand collar; relaxed hands.</li>
+    </ul>
+
+    <h2>Animation</h2>
+    <figure><img src="img/02_walk.jpg" alt="Walk cycle, side view"><figcaption>Walk, one cycle, rendered from the files the game loads</figcaption></figure>
+    <figure><img src="img/03_run.jpg" alt="Run cycle, side view"><figcaption>Run, one cycle</figcaption></figure>
+    <ul>
+      <li>Motion-capture walk and run retargeted onto the figure: straight standing knee, natural pelvis, no foot skating.</li>
+      <li>Walk without <kbd>Shift</kbd>, run with it. Never a half-walk, half-run mix. Stride grows with speed.</li>
+      <li>Fast, friction-limited stop; <kbd>S</kbd> while running brakes hard. Lean into acceleration and braking, bank into turns.</li>
+      <li>Fists when running, relaxed hands when walking. Blinking every 2–6 s. Hair on springs: it sways with steps, stops and turns.</li>
+      <li>Breathing animation driven by the physiology: deeper and faster with effort and fatigue.</li>
+      <li>Jump on <kbd>Space</kbd>: ballistic flight in Orbiter's physics, crouch on landing.</li>
+    </ul>
+    <figure><img src="img/04_details.jpg" alt="Eyes open and closed, relaxed hand, fist"><figcaption>Blink, relaxed hand on the walk, fist on the run</figcaption></figure>
+    <figure><img src="img/05_ingame_walk.jpg" alt="In-game screenshot of the walk"><figcaption>In game, KSC runway</figcaption></figure>
+
+    <h2>Life support</h2>
+    <ul>
+      <li>Atmosphere composition per planet (O₂ / CO₂), not just pressure: no taking the helmet off on Mars.</li>
+      <li>Metabolic power from activity drives O₂ use, CO₂ output, pulse and breathing rate.</li>
+      <li>Stamina (anaerobic reserve) limits the running speed. Hypoxia, CO₂ narcosis and vacuum exposure lead to unconsciousness and death.</li>
+      <li>Suit: one battery for everything (O₂ regulation, CO₂ sorbent, fans, heating and cooling, drives, lamps). Thermal control rated −157…+121 °C, with sun, shade and hot ground taken into account.</li>
+    </ul>
+
+    <h2>Space suit and jet pack</h2>
+    <div class="pair">
+      <figure><img src="img/06_suit.jpg" alt="Space suit with exoskeleton"></figure>
+      <figure><img src="img/07_helmet.jpg" alt="Helmet with gold visor and lamp pods"></figure>
+    </div>
+    <ul>
+      <li>Exoskeleton servo boost on <kbd>Shift</kbd>: longer, faster stride at the battery's cost. With a flat battery the drives are dead weight.</li>
+      <li>Helmet: gold sun visor <kbd>V</kbd>, two lamps <kbd>L</kbd>.</li>
+      <li>Nitrogen RCS in the suit for zero-g work; weightless body posture, limbs lag behind the thrust.</li>
+      <li>Jet pack (<kbd>B</kbd> take or drop, a separate object): two pods on folding booms with thrust vectoring, ~280 m/s Δv, 2 × 500 N. Flies on the Moon, Mars and in space; on Earth the thrust is less than the weight.</li>
+    </ul>
+    <div class="pair">
+      <figure><img src="img/08_pack_open.jpg" alt="Jet pack, booms open"><figcaption>Booms open</figcaption></figure>
+      <figure><img src="img/09_pack_folded.jpg" alt="Jet pack, booms folded"><figcaption>Booms folded</figcaption></figure>
+    </div>
+    <figure><img src="img/10_ingame_pack_moon.jpg" alt="In-game: jet pack on the Moon"><figcaption>In game, on the Moon</figcaption></figure>
+
+    <h2>Suit computer</h2>
+    <figure><img src="img/11_helmet_computer_mockup.jpg" alt="Helmet display layout"><figcaption>Layout mock-up; in the game the display is drawn by the module</figcaption></figure>
+    <ul>
+      <li>Holographic helmet display: vitals and resources along the visor rim, thermal control, consumption.</li>
+      <li>Two mouse-driven MFDs: terrain map (contours, steep slopes), orbit, power, targets (vessels, crew, dropped packs), transfer profile, landing, rendezvous (relative-motion plot, speed corridor), docking, body.</li>
+      <li>Autopilots: near the ground — altitude hold, hover, hop to target, landing; in space — sync, hold, approach, dock.</li>
+      <li>Night vision (on-screen button).</li>
+    </ul>
+
+    <h2>Sound</h2>
+    <p>With XRSound (optional): footsteps on the gait's foot contacts, heavy suit steps, muffled steps in vacuum, breathing paced by the physiology, the suit fan following the thermal load.</p>
+
+    <h2>Controls on the ground</h2>
+    <p><kbd>W</kbd>/<kbd>S</kbd> move (<kbd>S</kbd> brakes) · <kbd>A</kbd>/<kbd>D</kbd> turn · <kbd>Q</kbd>/<kbd>E</kbd> side step · <kbd>Shift</kbd> run / servo boost · <kbd>Space</kbd> jump · <kbd>K</kbd> suit · <kbd>V</kbd> visor · <kbd>L</kbd> lamps · <kbd>B</kbd> jet pack</p>
+
+    <h2>Alpha status</h2>
+    <div class="status"><ul>
+      <li>Requires Orbiter 2016 and D3D9Client; XRSound for sound (optional).</li>
+      <li>Not yet: vessel integration (airlocks, boarding, crew transfer). That is the next milestone.</li>
+      <li>Jet pack landing is being debugged: the figure may sink into the ground after touchdown.</li>
+    </ul></div>
+
+    <div class="credits"><p>Figure — MakeHuman / MPFB (CC0). Motion capture — CMU Graphics Lab Motion Capture Database. Sounds — Kenney, OwlishMedia (CC0). HUD font — Jura (OFL). Prior art and inspiration: UMmu (Dan Steph) and UACS (Abdullah Radwan); OrbiterCrew contains none of their code.</p></div>
+  </main>
+
+  <!-- ===================== РУССКИЙ ===================== -->
+  <main id="ru" lang="ru" hidden>
+    <h1>Живой экипаж для Orbiter 2016 <span class="tag">альфа</span></h1>
+    <p class="lead">Новая система экипажа, написанная с нуля (GPL-3.0). Люди, которые выглядят и двигаются как люди, и жизнеобеспечение как физическая модель, а не таймер. Первый член экипажа — Низа Крит, астронавигатор 37-й Звёздной экспедиции.</p>
+    <figure><img src="img/01_coverall.jpg" alt="Низа Крит в бортовом комбинезоне: фигура и портрет"></figure>
+
+    <h2>Вид</h2>
+    <ul>
+      <li>Реалистичная фигура человека (MakeHuman / MPFB, ассеты CC0), меш со скелетом из 31 кости, деформируется каждый кадр.</li>
+      <li>Две формы одежды: бортовой комбинезон для пригодного воздуха и скафандр «Каркас» с силовым экзоскелетом. <kbd>K</kbd> — надеть или снять; снять можно только там, где можно дышать.</li>
+      <li>Комбинезон с панелями, кантом, молнией и картой нормалей; воротник-стойка; расслабленные кисти.</li>
+    </ul>
+
+    <h2>Анимация</h2>
+    <figure><img src="img/02_walk.jpg" alt="Цикл шага, вид сбоку"><figcaption>Шаг, один цикл, отрисован из файлов, которые загружает игра</figcaption></figure>
+    <figure><img src="img/03_run.jpg" alt="Цикл бега, вид сбоку"><figcaption>Бег, один цикл</figcaption></figure>
+    <ul>
+      <li>Шаг и бег из записей motion capture, перенесённые на фигуру: прямое опорное колено, естественный таз, без скольжения стоп.</li>
+      <li>Без <kbd>Shift</kbd> — шаг, с ним — бег. Никакой смеси «полушаг-полубег». Длина шага растёт со скоростью.</li>
+      <li>Быстрая остановка с учётом сцепления; <kbd>S</kbd> на бегу — резкое торможение. Наклон при разгоне и торможении, крен в поворотах.</li>
+      <li>На бегу кулаки, на шаге расслабленные кисти. Моргание раз в 2–6 с. Волосы на пружинах: качаются от шагов, остановок и поворотов.</li>
+      <li>Дыхание анимируется по физиологии: глубже и чаще от нагрузки и усталости.</li>
+      <li>Прыжок на <kbd>Пробел</kbd>: баллистический полёт в физике Orbiter, приседание при приземлении.</li>
+    </ul>
+    <figure><img src="img/04_details.jpg" alt="Глаза открыты и закрыты, расслабленная кисть, кулак"><figcaption>Моргание, расслабленная кисть на шаге, кулак на бегу</figcaption></figure>
+    <figure><img src="img/05_ingame_walk.jpg" alt="Скриншот шага в игре"><figcaption>В игре, ВПП KSC</figcaption></figure>
+
+    <h2>Жизнеобеспечение</h2>
+    <ul>
+      <li>Состав атмосферы по планетам (O₂ / CO₂), а не только давление: на Марсе шлем не снять.</li>
+      <li>Метаболическая мощность от нагрузки задаёт расход O₂, выдох CO₂, пульс и частоту дыхания.</li>
+      <li>Выносливость (анаэробный запас) ограничивает скорость бега. Гипоксия, отравление CO₂ и вакуум ведут к потере сознания и гибели.</li>
+      <li>Скафандр: одна батарея на всё (подача O₂, поглотитель CO₂, вентиляторы, обогрев и охлаждение, приводы, фонари). Терморегуляция −157…+121 °C с учётом солнца, тени и раскалённого грунта.</li>
+    </ul>
+
+    <h2>Скафандр и реактивный ранец</h2>
+    <div class="pair">
+      <figure><img src="img/06_suit.jpg" alt="Скафандр с экзоскелетом"></figure>
+      <figure><img src="img/07_helmet.jpg" alt="Шлем с золотым щитком и фонарями"></figure>
+    </div>
+    <ul>
+      <li>Сервоусиление экзоскелета на <kbd>Shift</kbd>: длиннее и быстрее шаг за счёт батареи. Без заряда приводы — мёртвый груз.</li>
+      <li>Шлем: золотой солнцезащитный щиток <kbd>V</kbd>, два фонаря <kbd>L</kbd>.</li>
+      <li>Азотная РСУ скафандра для работы в невесомости; поза невесомости, конечности с инерцией.</li>
+      <li>Реактивный ранец (<kbd>B</kbd> — взять или сбросить, отдельный объект): две гондолы на складных балках с управлением вектором тяги, ~280 м/с Δv, 2 × 500 Н. Летает на Луне, Марсе и в космосе; на Земле тяга меньше веса.</li>
+    </ul>
+    <div class="pair">
+      <figure><img src="img/08_pack_open.jpg" alt="Ранец, балки раскрыты"><figcaption>Балки раскрыты</figcaption></figure>
+      <figure><img src="img/09_pack_folded.jpg" alt="Ранец, балки сложены"><figcaption>Балки сложены</figcaption></figure>
+    </div>
+    <figure><img src="img/10_ingame_pack_moon.jpg" alt="В игре: ранец на Луне"><figcaption>В игре, на Луне</figcaption></figure>
+
+    <h2>Компьютер скафандра</h2>
+    <figure><img src="img/11_helmet_computer_mockup.jpg" alt="Компоновка шлемового экрана"><figcaption>Макет компоновки; в игре экран рисует модуль</figcaption></figure>
+    <ul>
+      <li>Голографический шлемовый экран: показатели организма и ресурсы по кромке визора, термоконтроль, расход.</li>
+      <li>Два МФД с управлением мышью: карта рельефа (изолинии, крутые склоны), орбита, питание, цели (корабли, экипаж, сброшенные ранцы), профиль перелёта, посадка, сближение (график относительного движения, коридор скорости), стыковка, организм.</li>
+      <li>Автопилоты: у грунта — удержание высоты, зависание, перелёт к цели, посадка; в космосе — синхронизация, удержание, сближение, стыковка.</li>
+      <li>Прибор ночного видения (кнопка на экране).</li>
+    </ul>
+
+    <h2>Звук</h2>
+    <p>С XRSound (по желанию): шаги в момент касания стопы, тяжёлые шаги скафандра, глухие шаги в вакууме, дыхание в ритме физиологии, вентилятор скафандра по тепловой нагрузке.</p>
+
+    <h2>Управление на земле</h2>
+    <p><kbd>W</kbd>/<kbd>S</kbd> движение (<kbd>S</kbd> тормозит) · <kbd>A</kbd>/<kbd>D</kbd> поворот · <kbd>Q</kbd>/<kbd>E</kbd> шаг вбок · <kbd>Shift</kbd> бег / сервоусиление · <kbd>Пробел</kbd> прыжок · <kbd>K</kbd> скафандр · <kbd>V</kbd> щиток · <kbd>L</kbd> фонари · <kbd>B</kbd> ранец</p>
+
+    <h2>Статус альфы</h2>
+    <div class="status"><ul>
+      <li>Нужны Orbiter 2016 и D3D9Client; для звука — XRSound (по желанию).</li>
+      <li>Пока нет интеграции с кораблями (шлюзы, посадка на борт, передача экипажа). Это следующий этап.</li>
+      <li>Посадка ранца отлаживается: после касания фигура может провалиться в грунт.</li>
+    </ul></div>
+
+    <div class="credits"><p>Фигура — MakeHuman / MPFB (CC0). Захват движения — CMU Graphics Lab Motion Capture Database. Звуки — Kenney, OwlishMedia (CC0). Шрифт HUD — Jura (OFL). Предшественники и вдохновение: UMmu (Dan Steph) и UACS (Abdullah Radwan); кода из них в OrbiterCrew нет.</p></div>
+  </main>
+</div>
+
+<script>
+(function () {
+  var en = document.getElementById('en'), ru = document.getElementById('ru');
+  var be = document.getElementById('btn-en'), br = document.getElementById('btn-ru');
+  function set(lang, save) {
+    en.hidden = lang !== 'en'; ru.hidden = lang !== 'ru';
+    be.setAttribute('aria-pressed', lang === 'en'); br.setAttribute('aria-pressed', lang === 'ru');
+    document.documentElement.lang = lang;
+    if (save) { try { localStorage.setItem('oc-lang', lang); } catch (e) {} }
+  }
+  var start = location.hash === '#ru' ? 'ru' : location.hash === '#en' ? 'en' : null;
+  if (!start) { try { start = localStorage.getItem('oc-lang'); } catch (e) {} }
+  set(start === 'ru' ? 'ru' : 'en', false);
+  be.addEventListener('click', function () { set('en', true); });
+  br.addEventListener('click', function () { set('ru', true); });
+})();
+</script>

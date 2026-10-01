@@ -673,23 +673,41 @@ bool Tantra::RedrawLower(int id, SURFHANDLE s) {
         case L_LOADS: {
             const double W = GetMass() * LocalG();
             const tantra::Carriage::Loads ld = carriage_.Statics(W, 0.3);
-            std::snprintf(key, sizeof key, "%.0f %.0f %.0f %.0f", ld.columnEach / 1e5, ld.legs / 1e5, ld.driveMoment / 1e5, W / 1e6);
+            const double sj = (std::max)(solesCar_.Jam(), solesStern_.Jam());
+            const double sa = (std::max)(solesCar_.Anchors(), solesStern_.Anchors());
+            std::snprintf(key, sizeof key, "%.0f %.0f %.0f %.0f %.0f%.0f%.0f%.0f%.0f%.0f %d%.1f%.1f %.1f %.1f", ld.columnEach / 1e5,
+                          ld.legs / 1e5, ld.driveMoment / 1e5, W / 1e6, 100 * legR_[0], 100 * legR_[1], 100 * legR_[2], 100 * legR_[3],
+                          100 * legR_[4], 100 * legR_[5], hipCatcher_, sj, sa, regen_.Returned() / 1e8, regen_.Spent() / 1e8);
             if (!PanelChanged(id, key)) return false;
             PanelClear(s, id);
+            const int dy = 21, y0 = r[1] + 4;
             std::snprintf(buf, sizeof buf, "вес        %8.1f МН", W / 1e6);
-            PanelText(s, r[0] + 8, r[1] + 6, buf, FONT_WHITE);
+            PanelText(s, r[0] + 8, y0, buf, FONT_WHITE);
             std::snprintf(buf, sizeof buf, "колонна x2 %8.1f МН", ld.columnEach / 1e6);
-            PanelText(s, r[0] + 8, r[1] + 32, buf, FONT_AMBER);
+            PanelText(s, r[0] + 8, y0 + dy, buf, FONT_AMBER);
             std::snprintf(buf, sizeof buf, "%s %8.1f МН", carriage_.Port() ? "стол      " : "лапы      ", ld.legs / 1e6);
-            PanelText(s, r[0] + 8, r[1] + 58, buf, FONT_AMBER);
+            PanelText(s, r[0] + 8, y0 + 2 * dy, buf, FONT_AMBER);
             std::snprintf(buf, sizeof buf, "привод цапф %6.0f МН·м", ld.driveMoment / 1e6);
-            PanelText(s, r[0] + 8, r[1] + 84, buf, FONT_AMBER);
-            std::snprintf(buf, sizeof buf, "изгиб мачт %6.0f %%", 100.0 * ld.columnFL2 / 1.9e12);
-            PanelText(s, r[0] + 8, r[1] + 110, buf, ld.columnFL2 > 1.9e12 ? FONT_RED : FONT_GREEN);
+            PanelText(s, r[0] + 8, y0 + 3 * dy, buf, FONT_AMBER);
+            {   // column buckling: F L^2 against pi^2 E I / safety of the band mast (Spec.h)
+                const double flLim = PI * PI * tantra::spec::kCntE * tantra::spec::kLafShinI / tantra::spec::kSafety;
+                std::snprintf(buf, sizeof buf, "изгиб мачт %6.0f %%", 100.0 * ld.columnFL2 / flLim);
+                PanelText(s, r[0] + 8, y0 + 4 * dy, buf, ld.columnFL2 > flLim ? FONT_RED : FONT_GREEN);
+            }
+            {   // fibre sensors: every leg against its rating
+                double worst = 0.0;
+                for (double v : legR_) worst = (std::max)(worst, v);
+                std::snprintf(buf, sizeof buf, "опоры %2.0f %2.0f|%2.0f %2.0f %2.0f %2.0f%%", 100 * legR_[0], 100 * legR_[1],
+                              100 * legR_[2], 100 * legR_[3], 100 * legR_[4], 100 * legR_[5]);
+                PanelText(s, r[0] + 8, y0 + 5 * dy, buf, worst >= 1.0 ? FONT_RED : worst >= tantra::legs::kAlarm ? FONT_AMBER : FONT_GREEN);
+            }
+            std::snprintf(buf, sizeof buf, "цапфы %s пятки %s", hipCatcher_ ? "страх." : "магн. ",
+                          sa > 0.99 ? "якоря" : sj > 0.99 ? "замкн." : "облег.");
+            PanelText(s, r[0] + 8, y0 + 6 * dy, buf, hipCatcher_ ? FONT_AMBER : FONT_GREEN);
             return true;
         }
         case L_CRESTS:
-            PanelButton(s, id, crestsFolded_ ? "ГРЕБНИ СЛОЖЕНЫ" : "ГРЕБНИ РАСКРЫТЫ", crestsFolded_ ? 1 : 0);
+            PanelButton(s, id, wingMode_ == 2 ? "КРЫЛЬЯ СЛОЖЕНЫ" : (wingMode_ == 1 ? "КРЫЛЬЯ 30°" : "КРЫЛЬЯ 90°"), wingMode_ ? 1 : 0);
             return true;
         case L_IRIS: {
             std::snprintf(key, sizeof key, "%.2f %.2f %.2f", irisAna_, irisPlan_, tuck_);

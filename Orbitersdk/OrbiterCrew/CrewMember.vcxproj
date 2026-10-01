@@ -16,6 +16,7 @@
     <ClInclude Include="src\JetPack.h" />
     <ClInclude Include="src\SuitHud.h" />
     <ClInclude Include="src\LifeSupport.h" />
+    <ClInclude Include="src\Radiation.h" />
     <ClInclude Include="src\Motion.h" />
     <ClInclude Include="src\Skin.h" />
     <ClInclude Include="src\Sound.h" />
@@ -27,6 +28,7 @@
     <ClCompile Include="src\JetPack.cpp" />
     <ClCompile Include="src\SuitHud.cpp" />
     <ClCompile Include="src\LifeSupport.cpp" />
+    <ClCompile Include="src\Radiation.cpp" />
     <ClCompile Include="src\Motion.cpp" />
     <ClCompile Include="src\Skin.cpp" />
     <ClCompile Include="src\Sound.cpp" />

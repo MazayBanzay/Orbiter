@@ -63,7 +63,7 @@ def skin(P):
     s = P[:, 2] - gm.STERN_Z
     d = np.full(len(P), np.nan)
     u = np.full(len(P), np.nan)
-    key = np.where(s <= 47.0, 30.0, np.round(s * 4) / 4)
+    key = np.round(s * 4) / 4                    # T8: the section changes everywhere (stern clover, fairings, nose)
     ok = (s >= 0.0) & (s <= gm.NB)
     for k in np.unique(key[ok]):
         m = ok & (key == k)
@@ -86,9 +86,16 @@ def in_opening(u, s, names, margin=0.12):
 
 
 STOW = dict(gm.stowed_states())
-MOVING = [n for n in gm.GROUPS if n.startswith(("fin", "crest_", "elevon_", "door_", "pod_", "hip_", "thigh_", "ankle_", "pad_",
-                                               "shin_", "leg", "bay_door"))
-          and n != "leg_hinges"]
+# Parts that stow inside the skin; the stern legs (on the nacelles) and the folded wings stow outside it, in the
+# shadow of the body (checked separately).
+MOVING = [n for n in gm.GROUPS if n.startswith(("fin", "door_", "pod_", "hip_", "thigh_", "ankle_", "pad_", "sole_", "anchor_", "shin_",
+                                                 "bay_door"))]
+
+
+def foot(V, pad):
+    """A pad with its jamming sole (the sole is the ground face)."""
+    return np.vstack([V[pad], V[pad.replace("pad", "sole")]])
+OUTSIDE = [n for n in gm.GROUPS if n.startswith(("crest_", "wing_outer_", "elevon_")) or (n.startswith("leg") and n != "leg_hinges")]
 
 # ---- A. flight at 0.9 c: every moving part inside the skin, covers flush
 V = gm.apply_pose(groups, comps, STOW)
@@ -98,12 +105,20 @@ for n in MOVING:
     worst.append((np.nanmax(d), n))
 worst.sort(reverse=True)
 check(worst[0][0] <= 0.03, "stowed: nothing proud of the skin (worst " + ", ".join(f"{n} {w:+.3f}" for w, n in worst[:4]) + ")")
-for n, lim in (("crest_starboard", 0.12), ("crest_port", 0.12), ("pad_starboard", 0.06), ("pad_port", 0.06), ("hip_starboard", 0.06),
-               ("door_pod_0", 0.03), ("door_top_port", 0.03), ("bay_door_starboard", 0.03)) + tuple((f"leg{i}_pad", 0.06) for i in range(4)) \
-        + tuple((f"leg{i}_thigh", 0.06) for i in range(4) if legs[i]["lower"]):
+for n, lim in (("sole_starboard", 0.21), ("sole_port", 0.21), ("hip_starboard", 0.06),
+               ("door_pod_0", 0.03), ("door_top_port", 0.03), ("bay_door_starboard", 0.03)):
     m = np.nanmax(outs(V[n]))
     check(-lim <= m <= 0.03, f"stowed {n}: outer face flush ({m:+.3f} m)")
-V_fin = V["fin"]
+# sub-light: everything outside the skin lies in the shadow of the widest/tallest body sections
+W_MAX, Y_TOP, Y_BOT = gm.wh_at(60.0)[0], (1 - gm.FL) * gm.wh_at(60.0)[1], -gm.FL * gm.wh_at(60.0)[1]
+for n in OUTSIDE:
+    P = V[n]
+    ok = (np.abs(P[:, 0]).max() <= W_MAX + 0.05) and (P[:, 1].max() <= Y_TOP + 0.35) and (P[:, 1].min() >= Y_BOT - 1.7)
+    check(ok, f"stowed {n} in the body shadow: |x| {np.abs(P[:, 0]).max():.2f} (<= {W_MAX:.2f}), y {P[:, 1].min():.2f}..{P[:, 1].max():.2f}")
+for n in OUTSIDE:
+    d = np.nanmin(outs(samples(G[n], V[n])))
+    check(d > -0.03, f"stowed {n} does not enter the hull (deepest {d:+.2f} m)")
+V_fin = np.vstack([V["fin"], V["fin_upper"]])
 check(V_fin[:, 1].max() <= gm.top_y(30) + 0.01 and V_fin[:, 1].min() > -9.0,
       f"fin retracted: y {V_fin[:, 1].min():.1f}..{V_fin[:, 1].max():.2f} (skin {gm.top_y(30):.2f})")
 
@@ -116,7 +131,7 @@ def in_trap(P):
         x, y = np.abs(P[:, 0] - cx), np.abs(P[:, 1] - cy)
         h = gm.CASS_W / 2
         ins = (x < h - 0.02) & (y < h - 0.02) & (x + y < 2 * h - gm.CASS_CH - 0.02)
-        hit |= (s > 20.9) & (s < 46.9) & ins
+        hit |= (s > gm.CASS_S0 - 0.1) & (s < gm.CASS_S1 + 0.1) & ins
     return hit
 
 
@@ -127,12 +142,7 @@ for n in MOVING:
         check(False, f"stowed {n}: {k} points inside a trap cassette")
         nt += 1
 check(nt == 0, "stowed parts clear of the trap cassettes")
-lift_pts = np.vstack([V[f"lift{c}_m0"] for c in range(2)])
-for i in range(4):
-    lo = V[f"leg{i}_thigh"].min(0) - 0.1
-    hi = V[f"leg{i}_thigh"].max(0) + 0.1
-    k = np.all((lift_pts > lo) & (lift_pts < hi), axis=1).sum()
-    check(k == 0, f"stern leg {i} pocket clear of the lift masts")
+# (T8: no stern-leg pockets in the skin - the legs lie on the nacelles)
 
 
 # ---- C. sweeps: parts pass through their own openings only
@@ -151,28 +161,31 @@ def sweep(name, groups_, allowed, seq, n=24):
 
 
 for side in gm.SIDES:
-    parts = [f"hip_{side}", f"thigh_{side}", f"ankle_{side}", f"pad_{side}"] + [f"shin_{side}_{i}" for i in range(gm.SHIN_N)]
+    parts = [f"hip_{side}", f"thigh_{side}", f"ankle_{side}", f"pad_{side}", f"sole_{side}", f"anchor_{side}"] + \
+        [f"shin_{side}_{i}" for i in range(gm.SHIN_N)]
     slot = dict(gm.OPEN[f"carriage_{side}"], a=gm.PIN_SLOT[0] - 0.5, b=gm.PIN_SLOT[1], depth=4.0)
     sweep(f"carriage leg {side} slide out", parts, [f"carriage_{side}", slot],
           lambda t, s=side: dict(STOW, **{f"slide_{s}": 1 - t}))
 for i, L in enumerate(legs):
     ph = L["phi_stand"] / L["phi_max"]
     ex = L["e_stand"] / gm.LEG_EXT_MAX
-    parts = [f"leg{i}_{p}" for p in ("thigh", "shin0", "shin1", "shin2", "ankle", "pad")]
-    sweep(f"stern leg {i} to stand", parts, [f"leg{i}"],
+    parts = [f"leg{i}_{p}" for p in ["thigh"] + [f"shin{k}" for k in range(gm.LEG_SHIN_N)] + ["ankle", "pad", "sole", "anchor"]]
+    sweep(f"stern leg {i} to stand", parts, [],
           lambda t, i=i, ph=ph, ex=ex: dict(STOW, **{f"leg{i}_swing": ph * t, f"leg{i}_ext": ex * min(1, max(0, (t - gm.LEG_EXT_DELAY) / (1 - gm.LEG_EXT_DELAY))),
                                                     f"leg{i}_foot_stand": t}))
     if L["lower"]:
         pr, er = L["phi_rest"] / L["phi_max"], L["e_rest"] / gm.LEG_EXT_MAX
-        sweep(f"stern leg {i} to rest", parts, [f"leg{i}"],
+        sweep(f"stern leg {i} to rest", parts, [],
               lambda t, i=i, pr=pr, er=er: dict(STOW, **{f"leg{i}_swing": pr * t, f"leg{i}_ext": er * min(1, max(0, (t - gm.LEG_EXT_DELAY) / (1 - gm.LEG_EXT_DELAY))), f"leg{i}_foot_rest": t}))
 for i in range(4):
     sweep(f"pod {i} swing out", [f"door_pod_{i}", f"pod_{i}"], [f"pod_{i}"], lambda t: dict(STOW, pod_retract=1 - t))
 sweep("pods swivel", [f"pod_{i}" for i in range(4)], [], lambda t: dict(STOW, pod_retract=0, pod_swivel=t), n=10)
-sweep("crests unfold", ["crest_starboard", "crest_port", "elevon_starboard", "elevon_port"], ["crest_starboard", "crest_port"],
-      lambda t: dict(STOW, crest_lateral=1 - t))
-sweep("fin extends", ["fin"], ["fin_slot"], lambda t: dict(STOW, crest_dorsal=1 - t))
-sweep("elevons and body flap", ["elevon_starboard", "elevon_port", "body_flap"], ["flap_starboard", "flap_port"],
+WINGS = ["crest_starboard", "crest_port", "wing_outer_starboard", "wing_outer_port", "elevon_starboard", "elevon_port"]
+sweep("wings unfold (outer out, then inner down)", WINGS, [],
+      lambda t: dict(STOW, wing_outer=max(0.0, 1 - 2 * t), crest_lateral=min(1.0, 2 - 2 * t)))
+sweep("wings 30 deg", WINGS, [], lambda t: dict(STOW, crest_lateral=t * gm.WING_RAISE / gm.WING_FOLD, wing_outer=0), n=10)
+sweep("fin extends", ["fin", "fin_upper"], ["fin_slot"], lambda t: dict(STOW, crest_dorsal=1 - t))
+sweep("elevons and body flap", ["elevon_starboard", "elevon_port", "body_flap"], [],
       lambda t: {"elevon_starboard": t, "elevon_port": 1 - t, "body_flap": t}, n=10)
 
 # ---- D. resting level on six feet, pods out with the cups down
@@ -181,16 +194,25 @@ st, pitch, lift = P["resting level"]
 V = gm.apply_pose(groups, comps, st)
 gy = -gm.AXIS_H
 for side in gm.SIDES:
-    y = V[f"pad_{side}"][:, 1].min()
+    y = foot(V, f"pad_{side}")[:, 1].min()
     check(abs(y - gy) < 0.02, f"{side} carriage pad on the ground at rest: {y:.3f} (ground {gy})")
 for i, L in enumerate(legs):
     if L["lower"]:
-        y = V[f"leg{i}_pad"][:, 1]
+        y = foot(V, f"leg{i}_pad")[:, 1]
         check(abs(y.min() - gy) < 0.05 and np.ptp(y) < gm.LEG_PAD_OFF + gm.PAD_T + 0.05,
               f"stern leg {i} pad flat on the ground at rest: {y.min():.3f}..{y.max():.2f}")
-feet = ("pad_", "ankle_", "shin_") + tuple(f"leg{i}_" for i, L in enumerate(legs) if L["lower"])
+feet = ("pad_", "sole_", "anchor_", "ankle_", "shin_") + tuple(f"leg{i}_" for i, L in enumerate(legs) if L["lower"])
 low = min((V[n][:, 1].min(), n) for n in gm.GROUPS if not n.startswith(feet))
 check(low[0] > gy + 0.8, f"lowest non-foot part at rest: {low[1]} {low[0]:.2f} (ground {gy})")
+# leg systems: anchors run into the ground, the unloaded strut drops the pad by its rod
+VA = gm.apply_pose(groups, comps, dict(st, anchor_carriage=1, **{f"leg{i}_anchor": 1 for i, L in enumerate(legs) if L["lower"]}))
+for n in [f"anchor_{side}" for side in gm.SIDES] + [f"leg{i}_anchor" for i, L in enumerate(legs) if L["lower"]]:
+    y = VA[n][:, 1].min()
+    check(abs(y - (gy - gm.ANCHOR_OUT + 0.02)) < 0.05, f"{n} out: tips {gy - y:.2f} m into the ground")
+VS = gm.apply_pose(groups, comps, dict(st, strut_carriage=1))
+for side in gm.SIDES:
+    d = foot(V, f"pad_{side}")[:, 1].min() - foot(VS, f"pad_{side}")[:, 1].min()
+    check(abs(d - gm.STRUT_EXT_C) < 0.01, f"{side} strut unloaded: pad {d:.2f} m lower")
 V0 = gm.apply_pose(groups, comps, dict(st, hangar=1, rover_lift=1))
 yl = V0["rover_platform"][:, 1].min()
 check(abs(yl - gy) < 0.3, f"hangar platform (crew and rovers) on the ground: {yl:.2f} (ground {gy})")
@@ -204,11 +226,11 @@ for i in range(4):
 st, pitch, lift = P["turning 45 deg"]
 V = gm.apply_pose(groups, comps, st)
 for side in gm.SIDES:
-    W = gm.pose_world(V[f"pad_{side}"], pitch, lift)
+    W = gm.pose_world(foot(V, f"pad_{side}"), pitch, lift)
     check(np.ptp(W[:, 1]) < gm.PAD_OFF + gm.PAD_T + 0.3, f"{side} pad level while turning: height span {np.ptp(W[:, 1]):.2f}")
     check(abs(W[:, 1].min() - gy) < 0.05, f"{side} pad on the ground while turning: {W[:, 1].min():.3f}")
 for n in gm.GROUPS:
-    if n.startswith(("pad_", "ankle_", "shin_", "hip_", "thigh_", "carriage_", "pin_")):
+    if n.startswith(("pad_", "sole_", "anchor_", "ankle_", "shin_", "hip_", "thigh_", "carriage_", "pin_")):
         continue
     W = gm.pose_world(V[n], pitch, lift)
     if W[:, 1].min() < gy + 1.0:
@@ -219,7 +241,7 @@ st, pitch, lift = P["standing"]
 V = gm.apply_pose(groups, comps, st)
 gz = gm.zs(gm.STAND_GROUND_S)
 for i in range(4):
-    z = V[f"leg{i}_pad"][:, 2]
+    z = foot(V, f"leg{i}_pad")[:, 2]
     check(abs(z.min() - gz) < 0.05 and np.ptp(z) < gm.LEG_PAD_OFF + gm.PAD_T + 0.05,
           f"stern leg {i} pad flat on the ground standing: {z.min():.2f}..{z.max():.2f} (ground {gz})")
 lowest = min((V[n][:, 2].min(), n) for n in gm.GROUPS if not n.startswith("leg"))
@@ -227,7 +249,7 @@ check(lowest[0] > gz + 3.0, f"stern clearance standing: {lowest[1]} {lowest[0] -
 F = np.array([L["rad"][:2] * gm.STAND_R for L in legs])
 poly = F[[0, 3, 2, 1]]
 dmin = min(abs((q - p)[0] * (-p)[1] - (q - p)[1] * (-p)[0]) / np.linalg.norm(q - p) for p, q in zip(poly, np.roll(poly, -1, 0)))
-for name, s_cg in (("landing", 53.0), ("loaded", 35.3)):
+for name, s_cg in (("landing", 71.1), ("loaded", 53.8)):
     ang = math.degrees(math.atan2(dmin, s_cg - gm.STAND_GROUND_S))
     check(ang > 10.0, f"standing, {name} CG: tip-over angle {ang:.1f} deg (feet polygon inradius {dmin:.1f} m)")
 for i, L in enumerate(legs):

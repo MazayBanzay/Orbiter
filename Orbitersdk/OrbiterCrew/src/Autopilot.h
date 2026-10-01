@@ -38,5 +38,15 @@ namespace ocrew
 		VECTOR3 holdRel{}, cmdH{};
 		double prevErr[3]{}, errRate[3]{}, prevHerr{}, herrRate{};
 		bool prevOk{}, driving{};
+		// ПЕРЕЛЁТ: where to set down (a base: one of its pads, chosen once; a vessel or a person: beside it, kept up to date)
+		bool Goal(VESSEL* v, double& lat, double& lng, double& dist, double& north, double& east);
+		int pad{ -1 }; bool checked{};
+		// the hop: climb clear, boost along a 25-degree path, coast with the pods off, brake on a guidance law
+		// (zero miss / zero velocity at a point 25 m over the goal), then the approach and landing as for a short transfer
+		enum Phase { CRUISE, CLIMB, BOOST, COAST, BRAKE } phase{ CRUISE };
+		double tgo{};
+		bool Hop(VESSEL* v, JetPack& jet, double dt, double g, double left, double north, double east, FlightInput& in);
+	public:
+		static constexpr double RANGE = 15e3;   // the pack's reach for a transfer, m
 	};
 }

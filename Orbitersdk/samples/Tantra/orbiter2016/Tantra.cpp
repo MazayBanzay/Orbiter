@@ -44,7 +44,7 @@ const CrewSeed kCrew[] = {
 
 // Crew to the ground: the hangar floor platform (s 81.5..98.5) lowers to the ground; the crew steps off
 // beside it. The port airlock door serves in space.
-const double kCrewLiftS = 90.0;
+const double kCrewLiftS = 101.0;   // hangar platform (T8 hangar s 90.6..111.6)
 const VECTOR3 kEvaPos = {4.5, -sp::kAxisHeight + 1.5, sp::Z(kCrewLiftS)};
 
 // Attitude micro-motor blocks.
@@ -58,10 +58,11 @@ VECTOR3 RotateAbout(const VECTOR3& p, const VECTOR3& axis, double ang) {
 }
 VECTOR3 V3(const tantra::mesh::V& a) { return _V(a.x, a.y, a.z); }
 
-// Hull stations of the airfoil references: body (Newtonian centre of pressure near the planform centroid),
-// dorsal fin 7, lateral crests.
-const double kAeroS[5] = {55.0, 55.0, 23.0, 16.5, 45.0};
-const double kAeroY[5] = {0.0, 0.0, 22.0, -4.0, -12.0};
+// Hull stations of the airfoil references (T8): body (Newtonian centre of pressure near the planform / side
+// centroids), telescopic dorsal fin (726 m2, centre of pressure s 30, 9.7 m up the fin), wings (2 x 240 m2,
+// centre s 14 on the hinge line), gear and pods (under the fairings).
+const double kAeroS[5] = {77.9, 76.6, 30.2, 14.2, 60.0};
+const double kAeroY[5] = {0.0, 0.0, 19.0, 1.82, -12.0};
 
 // --- Aerodynamic coefficients -------------------------------------------------
 
@@ -224,13 +225,12 @@ void Tantra::DefinePropulsion() {
     exh.pelletRateMax = prm_.pelletRate;
     exhaust_ = new TantraExhaust(this, mouths, exh);
     safety_ = new TantraSafety(prm_.MakeRadiationSpec());
-    // Twelve central ion-trigger cups in the stern ring, behind the baffle (vertical take-off,
-    // interplanetary flight). Vectoring outward only - never across the well.
+    // Twelve ion-trigger cups, three on the rim of each nacelle (MeshLayout kPlanCup; vertical take-off,
+    // interplanetary flight). Vectoring outward only - never across the nacelle cluster.
     for (int i = 0; i < sp::kPlanCount; ++i) {
-        const double a = 2.0 * PI * (i + 0.5) / sp::kPlanCount;
-        const VECTOR3 pos = _V(sp::kPlanR * std::cos(a), sp::kPlanR * std::sin(a), sp::Z(sp::kPlanS));
+        const VECTOR3 pos = _V(tantra::mesh::kPlanCup[i][0], tantra::mesh::kPlanCup[i][1], sp::Z(sp::kPlanS));
         plan_[i] = CreateThruster(pos, fwd, prm_.planThrustTotal / sp::kPlanCount, ion_, prm_.planExhaust);
-        AddExhaust(plan_[i], 40.0, 1.8);
+        AddExhaust(plan_[i], 40.0, 1.0);
     }
     // Four planetary pods x 3 cups on the lower chines (MeshLayout kPods). The cups are placed every step
     // by UpdatePods from the rig: door arm swing, pod swivel, vessel frame.
@@ -313,22 +313,23 @@ void Tantra::ScaleAttitudeThrust() {
 
 void Tantra::DefineAerodynamics() {
     namespace ae = tantra::aero;
-    static PlateData fin = {0.9, nullptr}, crests = {1.33, nullptr};
+    static PlateData fin = {0.9, nullptr}, crests = {1.5, nullptr};
     fin.avail = &aeroFin_;
     crests.avail = &aeroCrest_;
     // Airfoils act at hull stations (kAeroS / kAeroY); UpdateCG moves the refs with the vessel frame.
     // Body: normal force on the planform (centre of pressure near its centroid), axial on the frontal area.
     foil_[0] = CreateAirfoil3(LIFT_VERTICAL, _V(0, kAeroY[0], Zf(kAeroS[0])), BodyPitch, nullptr, ae::kLength, ae::kPlanform, 0.4);
     foil_[1] = CreateAirfoil3(LIFT_HORIZONTAL, _V(0, kAeroY[1], Zf(kAeroS[1])), BodyYaw, nullptr, ae::kLength, ae::kSide, 0.4);
-    // Dorsal fin 7 (611 m2) holds heading, lateral crests (2 x 212 m2) hold pitch; nothing when folded.
-    foil_[2] = CreateAirfoil3(LIFT_HORIZONTAL, _V(0, kAeroY[2], Zf(kAeroS[2])), PlateCoeff, &fin, 28.0, 611.0, fin.aspect);
-    foil_[3] = CreateAirfoil3(LIFT_VERTICAL, _V(0, kAeroY[3], Zf(kAeroS[3])), PlateCoeff, &crests, 16.0, 424.0, crests.aspect);
+    // Telescopic dorsal fin (726 m2) holds heading, wings (2 x 240 m2) hold pitch; scaled by what is out and how far
+    // the wings are raised (cos^2 of the raise; nothing folded or with the fin down).
+    foil_[2] = CreateAirfoil3(LIFT_HORIZONTAL, _V(0, kAeroY[2], Zf(kAeroS[2])), PlateCoeff, &fin, 34.5, 726.0, fin.aspect);
+    foil_[3] = CreateAirfoil3(LIFT_VERTICAL, _V(0, kAeroY[3], Zf(kAeroS[3])), PlateCoeff, &crests, 16.8, 480.0, crests.aspect);
     // Gear and pods in the flow, under the hull: drag and the nose-down moment it brings.
     foil_[4] = CreateAirfoil3(LIFT_VERTICAL, _V(0, kAeroY[4], Zf(kAeroS[4])), GearDrag, &aeroGearArea_, 10.0, 1.0, 1.0);
 }
 
-// Elevons on the outer 60 % of the lateral crests (2 x 36 m2, -30..+40 deg) and the body flap under the
-// stern (18 x 5 m, 0..25 deg). Removed while the crests are folded.
+// Elevons on the outer wing panels (2 x 35 m2, -30..+40 deg) and the body flap under the lower nacelles
+// (14 x 7 m, 0..25 deg). Removed while the wings are folded.
 void Tantra::DefineControlSurfaces(bool on) {
     if (on == ctrlOn_) return;
     for (CTRLSURFHANDLE& h : ctrl_) {
@@ -336,10 +337,10 @@ void Tantra::DefineControlSurfaces(bool on) {
         h = nullptr;
     }
     if (on) {
-        ctrl_[0] = CreateControlSurface3(AIRCTRL_ELEVATOR, 72.0, 1.2, _V(0, -4.0, Zf(12.5)), AIRCTRL_AXIS_XPOS, 1.0);
-        ctrl_[1] = CreateControlSurface3(AIRCTRL_AILERON, 36.0, 1.2, _V(23.5, -4.0, Zf(13.0)), AIRCTRL_AXIS_XPOS, 1.0);
-        ctrl_[2] = CreateControlSurface3(AIRCTRL_AILERON, 36.0, 1.2, _V(-23.5, -4.0, Zf(13.0)), AIRCTRL_AXIS_XNEG, 1.0);
-        ctrl_[3] = CreateControlSurface3(AIRCTRL_ELEVATORTRIM, 90.0, 0.8, _V(0, -9.6, Zf(0.0)), AIRCTRL_AXIS_XPOS, 1.5);
+        ctrl_[0] = CreateControlSurface3(AIRCTRL_ELEVATOR, 70.0, 1.2, _V(0, 1.82, Zf(3.0)), AIRCTRL_AXIS_XPOS, 1.0);
+        ctrl_[1] = CreateControlSurface3(AIRCTRL_AILERON, 35.0, 1.2, _V(18.6, 1.82, Zf(3.0)), AIRCTRL_AXIS_XPOS, 1.0);
+        ctrl_[2] = CreateControlSurface3(AIRCTRL_AILERON, 35.0, 1.2, _V(-18.6, 1.82, Zf(3.0)), AIRCTRL_AXIS_XNEG, 1.0);
+        ctrl_[3] = CreateControlSurface3(AIRCTRL_ELEVATORTRIM, 98.0, 0.8, _V(0, -7.4, Zf(2.5)), AIRCTRL_AXIS_XPOS, 1.5);
     }
     ctrlOn_ = on;
 }
@@ -419,6 +420,7 @@ void Tantra::clbkSaveState(FILEHANDLE scn) {
         oapiWriteScenario_string(scn, const_cast<char*>("CARRIAGE"), cb);
         std::snprintf(cb, sizeof cb, "%d %.2f %.0f %.2f %.0f", crestsFolded_ ? 1 : 0, hangar_, hangarT_, rovers_, roversT_);
         oapiWriteScenario_string(scn, const_cast<char*>("DECK"), cb);
+        oapiWriteScenario_int(scn, const_cast<char*>("WINGS"), wingMode_);
         std::snprintf(cb, sizeof cb, "%d %d %d %d", trapPresent_[0], trapPresent_[1], trapPresent_[2], trapPresent_[3]);
         oapiWriteScenario_string(scn, const_cast<char*>("TRAPSLOTS"), cb);
     }
@@ -475,6 +477,11 @@ void Tantra::clbkLoadStateEx(FILEHANDLE scn, void* status) {
             int folded = 0;
             std::sscanf(line + 4, "%d %lf %lf %lf %lf", &folded, &hangar_, &hangarT_, &rovers_, &roversT_);
             crestsFolded_ = folded != 0;
+            if (crestsFolded_) wingMode_ = 2;
+        } else if (!_strnicmp(line, "WINGS", 5)) {
+            std::sscanf(line + 5, "%d", &wingMode_);
+            wingMode_ = (std::max)(0, (std::min)(2, wingMode_));
+            crestsFolded_ = wingMode_ == 2;
         } else {
             ParseScenarioLineEx(line, status);
         }
@@ -484,6 +491,8 @@ void Tantra::clbkLoadStateEx(FILEHANDLE scn, void* status) {
     SelectActiveTrap();
     carriage_.Update(0.0, frameS_);
     tuck_ = crestsFolded_ ? 1.0 : 0.0;
+    wingOut_ = wingMode_ == 2 ? 1.0 : 0.0;
+    wingIn_ = wingMode_ == 2 ? 1.0 : (wingMode_ == 1 ? tantra::mesh::kWingRaiseDeg / tantra::mesh::kWingFoldDeg : 0.0);
     UpdateGear(0.0);
 }
 
@@ -659,7 +668,11 @@ void Tantra::UpdateWind(double dt) {
 void Tantra::UpdateLegLoads(const VECTOR3& fh) {
     const tantra::CarriagePose& p = carriage_.Pose();
     legLoad_ = legRatio_ = tipWind_ = colRatio_ = sternRatio_ = 0.0;
-    if (!GroundContact() || carriage_.Gear() <= 0.0) return;
+    for (int l = 0; l < 6; ++l) legN_[l] = legR_[l] = 0.0;
+    if (!GroundContact() || carriage_.Gear() <= 0.0) {
+        hipCatcher_ = false;
+        return;
+    }
     VECTOR3 up;
     HorizonInvRot(_V(0, 1, 0), up);
     double lift = 0.0;
@@ -669,35 +682,59 @@ void Tantra::UpdateLegLoads(const VECTOR3& fh) {
         lift += GetThrusterLevel(th) * GetThrusterMax0(th) * dotp(d, up);
     }
     const double W = (std::max)(0.0, GetMass() * LocalG() - lift);
-    const double F = length(fh), h = p.trunnionH, M = F * h;
+    const double h = p.trunnionH;
     const double rho = GetAtmDensity();
     auto pcr = [](double I, double L) { return PI * PI * sp::kCntE * I / (L * L); };
     const double colShare = p.columnShare, sternShare = 1.0 - colShare;
-    double worst = 0.0, ratio = 0.0, tipF = 1e30;
-    if (colShare > 0.0) {       // two carriage legs, 38 m apart
-        const double X = tantra::mesh::kHipXOut;
-        const double n = colShare * W / 2.0 + M / (2.0 * X);
-        const double cap = (std::min)(sp::kCntSigma * sp::kLafShinA, pcr(sp::kLafShinI, (std::max)(8.0, p.mastLen))) / sp::kSafety;
-        worst = n;
-        ratio = n / cap;
-        colRatio_ = ratio;
-        legName_ = russian_ ? "нога лафета" : "carriage leg";
-        tipF = (std::min)(tipF, colShare * W * X / (std::max)(1.0, h));
+    // Fibre strain gauges in the bands: the load of every leg - weight share plus the overturning moment of the
+    // wind force (ship frame: across the carriage legs, in the plane of the stern feet) at the CG height.
+    namespace lg = tantra::legs;
+    lg::LegLoadInput in;
+    in.weight = W;
+    in.columnShare = colShare;
+    in.h = h;
+    in.windSide = fh.x;
+    in.windX = fh.x;
+    in.windY = fh.y;
+    in.hipX = tantra::mesh::kHipXOut;
+    for (int i = 0; i < 4; ++i) {
+        in.feetX[i] = carriage_.Geometry().standFoot[i].x;
+        in.feetY[i] = carriage_.Geometry().standFoot[i].y;
     }
-    if (sternShare > 0.0) {     // four stern legs, splay ~16 deg
-        const double r = sp::kStandInradius;
-        const double n = (sternShare * W / 4.0 + M / (2.0 * r)) / std::cos(16.0 * RAD);
-        const double cap = (std::min)(sp::kCntSigma * sp::kSternShinA, pcr(sp::kSternShinI, 26.5)) / sp::kSafety;
-        sternRatio_ = n / cap;
-        if (n / cap > ratio) {
-            worst = n;
-            ratio = n / cap;
-            legName_ = russian_ ? "кормовая нога" : "stern leg";
-        }
-        tipF = (std::min)(tipF, sternShare * W * r / (std::max)(1.0, h));
+    in.cosSplay = std::cos(16.0 * RAD);
+    in.lowerPairOnly = p.nTouch == 6;
+    lg::LegLoads(in, legN_);
+    const double capC = (std::min)(sp::kCntSigma * sp::kLafShinA, pcr(sp::kLafShinI, (std::max)(8.0, p.mastLen))) / sp::kSafety;
+    const double capS = (std::min)(sp::kCntSigma * sp::kSternShinA, pcr(sp::kSternShinI, 26.5)) / sp::kSafety;
+    static const char* kNameRu[6] = {"нога лафета левая", "нога лафета правая", "кормовая нога 1", "кормовая нога 2",
+                                     "кормовая нога 3", "кормовая нога 4"};
+    static const char* kNameEn[6] = {"carriage leg port", "carriage leg starboard", "stern leg 1", "stern leg 2",
+                                     "stern leg 3", "stern leg 4"};
+    int worstLeg = 0;
+    for (int l = 0; l < 6; ++l) {
+        legR_[l] = legN_[l] / (l < 2 ? capC : capS);
+        if (legR_[l] > legR_[worstLeg]) worstLeg = l;
+        if (legR_[l] >= lg::kAlarm && !legAlarm_[l])
+            Message("Датчики: %s - %.0f%% допуска, на грани излома", "Sensors: %s at %.0f%% of rating, close to buckling",
+                    russian_ ? kNameRu[l] : kNameEn[l], 100.0 * legR_[l]);
+        legAlarm_[l] = legR_[l] >= lg::kAlarm || (legAlarm_[l] && legR_[l] > lg::kAlarm - 0.05);
     }
-    legLoad_ = worst;
-    legRatio_ = ratio;
+    colRatio_ = (std::max)(legR_[0], legR_[1]);
+    sternRatio_ = (std::max)((std::max)(legR_[2], legR_[3]), (std::max)(legR_[4], legR_[5]));
+    legLoad_ = legN_[worstLeg];
+    legRatio_ = legR_[worstLeg];
+    legName_ = russian_ ? kNameRu[worstLeg] : kNameEn[worstLeg];
+    // Hip magnetic bearings (10 T): above their capacity the drums sit on the sliding catchers.
+    const bool catcher = colShare > 0.0 && (std::max)(legN_[0], legN_[1]) > lg::BearingCapacity(lg::kHipBearingArea);
+    if (catcher != hipCatcher_)
+        Message(catcher ? "Цапфы: магнитные подшипники перегружены - на страховочных, привод медленнее"
+                        : "Цапфы: снова на магнитной подвеске",
+                catcher ? "Trunnions: magnetic bearings over capacity - on the catchers, drives slower"
+                        : "Trunnions: back on the magnetic bearings");
+    hipCatcher_ = catcher;
+    double tipF = 1e30;
+    if (colShare > 0.0) tipF = (std::min)(tipF, colShare * W * tantra::mesh::kHipXOut / (std::max)(1.0, h));
+    if (sternShare > 0.0) tipF = (std::min)(tipF, sternShare * W * sp::kStandInradius / (std::max)(1.0, h));
     if (rho > 0.0 && tipF < 1e29) tipWind_ = std::sqrt(2.0 * tipF / (rho * sp::kSideCd * sp::kSideArea));
 }
 
@@ -947,7 +984,7 @@ void Tantra::clbkPreStep(double, double simdt, double) {
     {
         namespace dm = tantra::damage;
         const bool crestsOk = !damage_.Lost(dm::kCrestPort) || !damage_.Lost(dm::kCrestStbd);
-        DefineControlSurfaces(tuck_ < 0.5 && carriage_.Pose().tuck < 0.5 && crestsOk && !damage_.Destroyed());
+        DefineControlSurfaces(wingOut_ < 0.5 && carriage_.Pose().tuck < 0.5 && crestsOk && !damage_.Destroyed());
     }
     UpdateControlSurfaces();
     VECTOR3 v;
@@ -1153,8 +1190,14 @@ void Tantra::UpdateDamage(double dt) {
     g.touchdown = g.contact && !wasContact_;
     g.vDown = -lastVy_;
     g.gearDown = carriage_.Gear() > 0.5;
-    g.legRatio[0] = g.legRatio[1] = colRatio_;
-    for (int i = 2; i < 6; ++i) g.legRatio[i] = sternRatio_;
+    for (int i = 0; i < 6; ++i) g.legRatio[i] = legR_[i];   // fibre sensors, every leg on its own
+    {   // the MR struts spread the stop over their stroke
+        const bool tail = carriage_.Set() == tantra::Carriage::FlightSet::Standing;
+        const tantra::legs::TouchdownLimits lim =
+            tantra::legs::Limits(tail ? tantra::legs::kStrokeStern : tantra::legs::kStrokeCarriage);
+        g.vSoft = lim.vSoft;
+        g.vBreak = lim.vBreak;
+    }
     if (!g.contact) lastVy_ = v.y;
     wasContact_ = g.contact;
     damage_.Step(dt, f, x, g, GetDamageModel() != 0);
@@ -1373,16 +1416,18 @@ void Tantra::UpdateDamageVisual(bool force) {
 }
 
 // Which part carries touchdown point i of the carriage pose (sets: rest 6, columns 4, stand 4, belly 3).
-bool Tantra::TouchPointLost(int i, const tantra::CarriagePose& p) const {
-    namespace dm = tantra::damage;
-    int part = -1;
+int Tantra::TouchLeg(int i, const tantra::CarriagePose& p) const {
     if (p.nTouch == 6) {
-        static const int kRest[6] = {dm::kLegStbd, dm::kLegPort, dm::kSternLeg3, dm::kSternLeg2, dm::kLegStbd, dm::kLegPort};
-        part = kRest[i];
-    } else if (p.nTouch == 4) {
-        part = p.onColumns ? (p.touch[i].x >= 0.0 ? dm::kLegStbd : dm::kLegPort) : dm::kSternLeg0 + i;
+        static const int kRest[6] = {1, 0, 5, 4, 1, 0};  // starboard, port, stern legs 3, 2, starboard, port
+        return kRest[i];
     }
-    return part >= 0 && damage_.Lost(part);
+    if (p.nTouch == 4) return p.onColumns ? (p.touch[i].x >= 0.0 ? 1 : 0) : 2 + i;
+    return -1;
+}
+
+bool Tantra::TouchPointLost(int i, const tantra::CarriagePose& p) const {
+    const int leg = TouchLeg(i, p);  // damage parts: kLegPort, kLegStbd, kSternLeg0..3 in this order
+    return leg >= 0 && damage_.Lost(tantra::damage::kLegPort + leg);
 }
 
 // The ship's computer watches the contacts: with the gear out, just off the ground, no engine able to
@@ -1570,11 +1615,26 @@ void Tantra::ActSelectCrew(int delta) {
 void Tantra::UpdateGear(double simdt) {
     // The carriage moves the touchdown points; keep every step small (time warp included).
     const double dt = (std::min)(simdt, 0.05);
-    carriage_.Update(dt, frameS_);
+    carriage_.Update(hipCatcher_ ? 0.6 * dt : dt, frameS_);  // on the sliding catchers the drives turn slower
     auto step = [dt](double v, double t, double rate) {
         return v < t ? (std::min)(t, v + rate * dt) : (std::max)(t, v - rate * dt);
     };
     tuck_ = step(tuck_, crestsFolded_ ? 1.0 : 0.0, 0.1);
+    // Wings: folding - the inner panels stand up first, then the outer panels fold down along them (outboard);
+    // unfolding - the outer panels out in line first, then the inner panels down to their mode. (Lowering the
+    // inner panels with the outer ones folded would swing those into the hull.)
+    {
+        namespace m = tantra::mesh;
+        const double inT = wingMode_ == 2 ? 1.0 : (wingMode_ == 1 ? m::kWingRaiseDeg / m::kWingFoldDeg : 0.0);
+        const double outT = wingMode_ == 2 ? 1.0 : 0.0;
+        if (outT > wingOut_) {
+            wingIn_ = step(wingIn_, inT, 0.1);
+            if (wingIn_ >= 0.98) wingOut_ = step(wingOut_, outT, 0.12);
+        } else {
+            wingOut_ = step(wingOut_, outT, 0.12);
+            if (wingOut_ <= 0.02) wingIn_ = step(wingIn_, inT, 0.1);
+        }
+    }
     hangar_ = step(hangar_, hangarT_, 0.08);
     rovers_ = step(rovers_, hangar_ > 0.97 ? roversT_ : 0.0, 0.05);
     // Anamezon cups open with the chamber field; the planetary cups close while anamezon feeds.
@@ -1586,6 +1646,8 @@ void Tantra::UpdateGear(double simdt) {
 
     TantraGear::Extras ex;
     ex.tuck = tuck_;
+    ex.wingIn = wingIn_;
+    ex.wingOut = wingOut_;
     ex.podSwivel = podAngle_ / sp::kPodSwivelMaxDeg;
     ex.podStow = 1.0 - podOut_;
     ex.elevon[0] = elevon_[0];
@@ -1600,15 +1662,38 @@ void Tantra::UpdateGear(double simdt) {
     for (int i = 0; i < 4; ++i) ex.trapHidden[i] = !trapPresent_[i];
     ex.liftY[0] = liftY_[0];
     ex.liftY[1] = liftY_[1];
-    if (gear_) gear_->Apply(carriage_.Pose(), frameS_, ex);
-
     const tantra::CarriagePose& p = carriage_.Pose();
+    // Leg systems: the legs of the current ground set touch with their struts out (unloaded), the weight pushes the
+    // rods in (the touchdown points follow at 0.45 m/s); soles conform, lock, then the anchors go in.
+    bool inSet[6] = {};
+    {
+        for (int i = 0; i < p.nTouch; ++i) {
+            const int l = TouchLeg(i, p);
+            if (l >= 0) inSet[l] = true;
+        }
+        const bool down = carriage_.Gear() >= 0.5, contact = down && GroundContact();
+        const bool resting = thrustAccel_ < 0.3 * LocalG();   // lift-off thrust pulls the anchors first
+        solesCar_.Update(dt, contact && (inSet[0] || inSet[1]), resting);
+        solesStern_.Update(dt, contact && (inSet[2] || inSet[3] || inSet[4] || inSet[5]), resting);
+        for (int l = 0; l < 6; ++l) {
+            const double target = down && inSet[l] && !contact ? 1.0 : 0.0;   // stowed: the muscle lock holds the rod in
+            strut_[l] = step(strut_[l], target, target > strut_[l] ? 0.5 : 1.0);
+            ex.strut[l] = strut_[l];
+            ex.anchor[l] = inSet[l] ? (l < 2 ? solesCar_ : solesStern_).Anchors() : 0.0;
+        }
+        regen_.Update(dt, GetMass() * LocalG(), p.trunnionH, carriage_.Busy() && contact);
+    }
+    if (gear_) gear_->Apply(p, frameS_, ex);
+
     // Aerodynamic state: what the crests, fin, gear and pods present to the flow.
     {
         const double fold = (std::max)(tuck_, p.tuck);
         namespace dm = tantra::damage;
         aeroFin_ = (1.0 - fold) * (damage_.Lost(dm::kFin) ? 0.0 : 1.0);
-        aeroCrest_ = (1.0 - fold) * ((damage_.Lost(dm::kCrestPort) ? 0.0 : 0.5) + (damage_.Lost(dm::kCrestStbd) ? 0.0 : 0.5));
+        const double raise = (std::max)(wingIn_, (std::max)(0.0, 2.0 * p.tuck - 1.0)) * tantra::mesh::kWingFoldDeg * RAD;
+        const double inLine = 1.0 - (std::max)(wingOut_, (std::min)(1.0, 2.0 * p.tuck));
+        aeroCrest_ = std::cos(raise) * std::cos(raise) * (0.45 + 0.55 * inLine) *
+                     ((damage_.Lost(dm::kCrestPort) ? 0.0 : 0.5) + (damage_.Lost(dm::kCrestStbd) ? 0.0 : 0.5));
         const double legs = carriage_.Gear();  // two carriage legs + two lower stern legs, pads
         aeroGearArea_ = legs * (2.0 * (6.0 * 8.0 + 5.4 * (std::max)(0.0, p.mastLen - 8.0) + 16.0 * 1.2) + 2.0 * 2.6 * 12.0) +
                         podOut_ * 4.0 * (3.0 * 1.8 + 0.3 * 6.4 * 3.8);
@@ -1643,14 +1728,20 @@ void Tantra::UpdateGear(double simdt) {
     if (simdt > 0.0) HorizonInvRot(_V(0, 1, 0), upL);  // not while the scenario loads: no horizon frame yet
     touchOfs_ = upL * terrainOfs_;  // refined terrain: points raised, relaxing (WatchTerrain)
     int nt = 0;
+    double mu[tantra::CarriagePose::kMaxTouch];
     for (int i = 0; i < p.nTouch; ++i) {
         if (TouchPointLost(i, p)) continue;  // a broken leg carries nothing: the ship settles onto the hull
-        t[nt++] = _V(p.touch[i].x, p.touch[i].y, p.touch[i].z) + touchOfs_ +
+        const int l = TouchLeg(i, p);
+        const double rod = l < 0 ? 0.0 : strut_[l] * (l < 2 ? tantra::mesh::kStrutExtC : tantra::mesh::kStrutExtS);
+        mu[nt] = l < 0 ? 0.5 : (l < 2 ? solesCar_ : solesStern_).Mu();
+        t[nt++] = _V(p.touch[i].x, p.touch[i].y, p.touch[i].z) + touchOfs_ - upL * rod +
                upL * (p.touch[i].x >= 0.0 ? driveLag_[1] : driveLag_[0]);  // side error of the drives
-        if (nt - 1 >= nTouch_ || length(t[nt - 1] - touch_[nt - 1]) > 1e-4) changed = true;
+        if (nt - 1 >= nTouch_ || length(t[nt - 1] - touch_[nt - 1]) > 1e-4 || std::fabs(mu[nt - 1] - touchMu_[nt - 1]) > 0.02)
+            changed = true;
     }
     if (nt != nTouch_) changed = true;
     if (changed) {
+        for (int i = 0; i < nt; ++i) touchMu_[i] = mu[i];
         SetSuspension(t, nt);
         for (int i = 0; i < nt; ++i) touch_[i] = t[i];
         nTouch_ = nt;
@@ -1659,15 +1750,16 @@ void Tantra::UpdateGear(double simdt) {
     crew_.SetLiftFoot(_V(kEvaPos.x, -p.trunnionH + 0.93, Zf(kCrewLiftS)));   // beside the lowered hangar platform
 }
 
-// Orbiter 2016 touchdown vertices: the pads of the current gear pose are elastic (MR-fluid cushions
-// under the pads and the leg bands); the hull points around them only matter in a belly landing.
+// Orbiter 2016 touchdown vertices: the pads of the current gear pose are elastic (the MR-valve ankle struts and
+// the leg bands); the hull points around them only matter in a belly landing. Friction per pad from its sole
+// (core/Legs: conforming 0.5, locked 0.7, anchored 0.9).
 // Stiffness gives kSag of static compression at the design gravity, damping is a fraction of critical,
 // so the ship settles and sways a little on its legs. Orbiter integrates the contacts explicitly: a spring
 // or a damper that is too stiff for the time step pumps energy in and throws the ship off the planet (the
 // first frames after loading have long steps, time warp even longer). So: hull points no stiffer than the
 // legs, damping 2*zeta*omega kept under ~6 1/s (zeta 0.35 settling, 0.3 after), and GuardAgainstLaunch.
 void Tantra::SetSuspension(const VECTOR3* t, int n) {
-    const double m = GetMass(), kSag = 0.25, kGref = 1.7 * G0, kMu = 0.8;
+    const double m = GetMass(), kSag = 0.25, kGref = 1.7 * G0;
     const double kZeta = settleTimer_ > 0.0 ? 0.35 : 0.3;
     touchSettled_ = settleTimer_ <= 0.0;
     const double k = m * kGref / ((std::max)(n, 1) * kSag);  // all legs broken: the hull points still carry
@@ -1676,13 +1768,13 @@ void Tantra::SetSuspension(const VECTOR3* t, int n) {
     const double zs = Zf(0.0), zn = Zf(sp::kLength - 1.2);
     const VECTOR3 hull[] = {
         {0, 0, zn},                                                        // nose tip
-        {0, 14.0, zs}, {0, -9.6, zs}, {14.0, -4.0, zs}, {-14.0, -4.0, zs},  // stern plane
-        {0, 2.2, zs - 4.0}, {0, -9.3, zs - 4.0},                           // engine well rim
-        {14.6, -4.0, Zf(30.0)}, {-14.6, -4.0, Zf(30.0)}, {0, 14.4, Zf(30.0)}, {0, -9.6, Zf(30.0)},
-        {9.0, -3.8, Zf(100.0)}, {-9.0, -3.8, Zf(100.0)}, {0, 8.9, Zf(100.0)}, {0, -8.7, Zf(100.0)},
+        {0, 10.5, zs}, {0, -6.9, zs}, {8.9, 1.82, zs}, {-8.9, 1.82, zs},    // stern: the nacelle cluster
+        {4.8, 1.82 - 8.9, zs - 2.0}, {-4.8, 1.82 - 8.9, zs - 2.0},         // lower nacelle rims
+        {13.55, -3.04, Zf(60.0)}, {-13.55, -3.04, Zf(60.0)}, {0, 10.92, Zf(60.0)}, {0, -7.28, Zf(60.0)},  // fairings
+        {11.0, -2.27, Zf(122.0)}, {-11.0, -2.27, Zf(122.0)}, {0, 8.16, Zf(122.0)}, {0, -5.44, Zf(122.0)},
     };
     TOUCHDOWNVTX v[tantra::CarriagePose::kMaxTouch + sizeof hull / sizeof hull[0]];
-    for (int i = 0; i < n; ++i) v[i] = {t[i], k, c, kMu, kMu};
+    for (int i = 0; i < n; ++i) v[i] = {t[i], k, c, touchMu_[i], touchMu_[i]};
     int nv = n;
     for (const VECTOR3& h : hull) v[nv++] = {h + touchOfs_, kHull, cHull, 0.5, 0.5};
     SetTouchdownPoints(v, nv);
@@ -1727,9 +1819,12 @@ void Tantra::ActGearSet() {
 }
 
 void Tantra::ActCrests() {
-    crestsFolded_ = !crestsFolded_;
-    Message(crestsFolded_ ? "Гребни сложены в ниши, перо убрано, гондолы в отсеках" : "Гребни раскрыты, перо выдвинуто",
-            crestsFolded_ ? "Crests folded into their recesses, fin down, pods in the bays" : "Crests out, fin up");
+    wingMode_ = (wingMode_ + 1) % 3;
+    crestsFolded_ = wingMode_ == 2;
+    static const char* ru[3] = {"Крылья 90°: развёрнуты, перо выдвинуто", "Крылья 30°: подняты (вход), перо выдвинуто",
+                                "Крылья сложены, перо убрано, гондолы в отсеках (субсвет)"};
+    static const char* en[3] = {"Wings 90: deployed, fin up", "Wings 30: raised (entry), fin up", "Wings folded, fin down, pods in (sub-light)"};
+    Message(ru[wingMode_], en[wingMode_]);
 }
 
 void Tantra::ActHangar() {
@@ -1911,6 +2006,18 @@ bool Tantra::clbkDrawHUD(int mode, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp
         line(L("Нагрузка: %s %.0f МН = %.0f%% допуска (x1,5)  опрокинет ветер %.0f м/с",
                "Load: %s %.0f MN = %.0f%% of rating (x1.5)  overturning wind %.0f m/s"),
              legName_, legLoad_ / 1e6, 100.0 * legRatio_, tipWind_);
+    if (GroundContact() && carriage_.Gear() > 0.0) {
+        const double sj = (std::max)(solesCar_.Jam(), solesStern_.Jam()), sa = (std::max)(solesCar_.Anchors(), solesStern_.Anchors());
+        line(L("Опоры (датчики): лафет %.0f/%.0f%%  корма %.0f/%.0f/%.0f/%.0f%%  пятки %s  цапфы %s",
+               "Legs (sensors): carriage %.0f/%.0f%%  stern %.0f/%.0f/%.0f/%.0f%%  soles %s  trunnions %s"),
+             100.0 * legR_[0], 100.0 * legR_[1], 100.0 * legR_[2], 100.0 * legR_[3], 100.0 * legR_[4], 100.0 * legR_[5],
+             sa > 0.99 ? L("на якорях", "anchored") : sj > 0.99 ? L("замкнуты", "locked") : L("облегают", "conforming"),
+             hipCatcher_ ? L("на страховочных", "on the catchers") : L("магнитная подвеска", "magnetic"));
+    }
+    if (regen_.Returned() + regen_.Spent() > 1e6)
+        line(L("Приводы лафета (сверхпроводящие): затрачено %.1f ГДж, возвращено при опускании %.1f ГДж",
+               "Carriage drives (superconducting): spent %.1f GJ, returned while lowering %.1f GJ"),
+             regen_.Spent() / 1e9, regen_.Returned() / 1e9);
     {
         static const char* kPhRu[] = {"лежит", "подготовка", "подъём на колоннах", "поворот", "лапы выходят", "опускание",
                                       "сбор мачт", "стоит на корме"};

@@ -11,6 +11,7 @@
 #include "Autopilot.h"
 #include "JetPack.h"
 #include "LifeSupport.h"
+#include "Radiation.h"
 #include "Motion.h"
 #include "Skin.h"
 #include "SuitHud.h"
@@ -59,6 +60,8 @@ namespace ocrew
 		void Land();
 
 		std::string name{ "Crew member" }, role{ "crew" };
+		std::string sex{ "female" };   // a description: abilities are set per person (VO2max, LiftMax), not derived from it
+		double age{}, heightM{};
 		Figure bodyFig, suitFig;
 		Motion motion;
 		CrewSound sound;
@@ -73,6 +76,8 @@ namespace ocrew
 		Suit suit;
 		Body bio;
 		Air air;
+		Radiation rad;
+		RadEnv radEnv;
 		Thermal thermal;
 		bool boost{};                        // servo boost (suit, live drives, Shift)
 		double humanW{}, driveDemandW{};     // who pays for the movement: her muscles / the drives
@@ -114,6 +119,11 @@ namespace ocrew
 		Autopilot ap;
 		bool mouseWasDown{};
 		void ApRequest(int req);
+		double LieHeight() const { return jet.Worn() ? 0.36 : 0.18; }
+		// how far a base's landing pad under her stands above the relief there (0 = none): bases with
+		// MapObjectsToSphere put the pads on the smooth sphere, which can be above the real ground
+		double PadLift() const;   // her back (or the pack) on the ground, not under it
+		void StandUp();
 		double suitResidual{};   // heat the suit could not move, W (+ in, - out)
 
 		// helmet: sun shade (V) and lamps (L)

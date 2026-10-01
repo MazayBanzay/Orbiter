@@ -47,6 +47,11 @@ namespace ocrew
 		if (oapiReadItem_string(cfg, const_cast<char*>("Voice"), buf)) voice = buf;
 		if (oapiReadItem_float(cfg, const_cast<char*>("BodyMass"), v)) bio.mass = v;
 		if (oapiReadItem_float(cfg, const_cast<char*>("VO2max"), v)) bio.vo2max = v;
+		if (oapiReadItem_string(cfg, const_cast<char*>("Sex"), buf)) sex = buf;
+		oapiReadItem_float(cfg, const_cast<char*>("Age"), age);
+		oapiReadItem_float(cfg, const_cast<char*>("Height"), heightM);
+		if (oapiReadItem_float(cfg, const_cast<char*>("LiftMax"), v)) bio.liftMax = v;
+		if (oapiReadItem_float(cfg, const_cast<char*>("BodyFat"), v)) bio.fat = v;
 		oapiReadItem_float(cfg, const_cast<char*>("SuitMass"), suitMass);
 		oapiReadItem_float(cfg, const_cast<char*>("StandHeight"), height);
 		oapiReadItem_float(cfg, const_cast<char*>("WalkSpeed"), walkSpeed);
@@ -87,6 +92,7 @@ namespace ocrew
 		SetTouchdownPoints(td, 8);
 		SetupRcs();
 		jet.Setup(this);
+		jet.SetupDust(-height);
 
 		// helmet lamps in the side pods (rest pose, model frame); they follow the torso at run time
 		for (int i = 0; i < 2; ++i)
@@ -113,12 +119,17 @@ namespace ocrew
 			else if (key == "ROLE") { std::getline(ss >> std::ws, role); }
 			else if (key == "SUIT") { ss >> suitOn; suitFromScenario = true; }
 			else if (key == "SUIT_O2") ss >> suit.o2;
+			else if (key == "SUIT_WATER") ss >> suit.water;
 			else if (key == "SUIT_SORBENT") ss >> suit.sorbUsed;
 			else if (key == "SUIT_BATTERY") { double kwh; ss >> kwh; suit.batt = kwh * 3.6e6; }
 			else if (key == "STAMINA") ss >> bio.wbal;
+			else if (key == "DOSE") ss >> bio.doseSv >> bio.careerSv;
+			else if (key == "NOURISH") ss >> bio.waterDef >> bio.glycogen >> bio.fat >> bio.fastDays;
+			else if (key == "HURT") for (double& h : bio.hurt) ss >> h;
 			else if (key == "RESERVE") ss >> bio.reserve;
 			else if (key == "SHADE") { ss >> shadeTarget; shade = shadeTarget; }
 			else if (key == "LAMP") ss >> lampOn;
+			else if (key == "FIELD") ss >> suit.fieldOn;
 			else if (key == "HUD") { std::string rest; std::getline(ss, rest); hud.Load(rest); }
 			else if (key == "JETPACK") ss >> jetFromScenario;
 			else if (key == "BODY") { int st; ss >> st; bio.state = static_cast<Body::State>(std::clamp(st, 0, 2)); }
@@ -134,13 +145,18 @@ namespace ocrew
 		oapiWriteScenario_string(scn, const_cast<char*>("ROLE"), const_cast<char*>(role.c_str()));
 		oapiWriteScenario_int(scn, const_cast<char*>("SUIT"), suitOn);
 		oapiWriteScenario_float(scn, const_cast<char*>("SUIT_O2"), suit.o2);
+		oapiWriteScenario_float(scn, const_cast<char*>("SUIT_WATER"), suit.water);
 		oapiWriteScenario_float(scn, const_cast<char*>("SUIT_SORBENT"), suit.sorbUsed);
 		oapiWriteScenario_float(scn, const_cast<char*>("SUIT_BATTERY"), suit.batt / 3.6e6);
 		oapiWriteScenario_float(scn, const_cast<char*>("STAMINA"), bio.wbal);
+		{ char rb[64]; snprintf(rb, sizeof rb, "%.5f %.5f", bio.doseSv, bio.careerSv); oapiWriteScenario_string(scn, const_cast<char*>("DOSE"), rb); }
+		{ char rb[96]; snprintf(rb, sizeof rb, "%.4f %.0f %.3f %.3f", bio.waterDef, bio.glycogen, bio.fat, bio.fastDays); oapiWriteScenario_string(scn, const_cast<char*>("NOURISH"), rb); }
+		{ char rb[64]; snprintf(rb, sizeof rb, "%.3f %.3f %.3f %.3f", bio.hurt[0], bio.hurt[1], bio.hurt[2], bio.hurt[3]); oapiWriteScenario_string(scn, const_cast<char*>("HURT"), rb); }
 		oapiWriteScenario_float(scn, const_cast<char*>("RESERVE"), bio.reserve);
 		oapiWriteScenario_int(scn, const_cast<char*>("BODY"), static_cast<int>(bio.state));
 		oapiWriteScenario_float(scn, const_cast<char*>("SHADE"), shadeTarget);
 		oapiWriteScenario_int(scn, const_cast<char*>("LAMP"), lampOn);
+		oapiWriteScenario_int(scn, const_cast<char*>("FIELD"), suit.fieldOn);
 		oapiWriteScenario_string(scn, const_cast<char*>("HUD"), const_cast<char*>(hud.Save().c_str()));
 		oapiWriteScenario_int(scn, const_cast<char*>("JETPACK"), jet.Worn());
 	}
@@ -193,6 +209,9 @@ namespace ocrew
 		}
 		suitOn = on;
 		if (on) suit.Seal();
+		// the suit computer comes on with the helmet (the coverall's 'no HUD' may have been set before this flight)
+		if (on && oapiCameraInternal() && oapiCameraTarget() == GetHandle() && oapiGetHUDMode() == HUD_NONE) oapiSetHUDMode(HUD_SURFACE);
+		if (on) hudHidden = false;
 		SetEmptyMass(Mass());
 		ShowFigure();
 		Say(on ? "Скафандр надет, шлем загерметизирован" : "Скафандр снят");
@@ -211,7 +230,7 @@ namespace ocrew
 		VESSELSTATUS2 s = Status(this);
 		if (s.status != 1) return;
 		lying = lie;
-		if (lie) surface::Lie(s, 0.12); else surface::Stand(s, height);
+		if (lie) surface::Lie(s, LieHeight() + PadLift()); else surface::Stand(s, height + PadLift());
 		DefSetStateEx(&s);
 	}
 
@@ -325,7 +344,7 @@ namespace ocrew
 			VESSELSTATUS2 s = Status(this);
 			s.surf_hdg = std::fmod(s.surf_hdg + turn * dt + PI2, PI2);
 			surface::Walk(s, oapiGetSize(s.rbody), fwd * dt, lat * dt);
-			surface::Stand(s, height);
+			surface::Stand(s, height + PadLift());
 			DefSetStateEx(&s);
 		}
 	}
@@ -367,11 +386,12 @@ namespace ocrew
 		OBJHANDLE body = GetSurfaceRef();
 		if (!body) return;
 		const double R = oapiGetSize(body);
+		const double padLift = PadLift();   // standing over a raised pad: its deck is the ground
 		auto heightOf = [&](const VECTOR3& local)
 		{
 			VECTOR3 gp; Local2Global(local, gp);
 			double lng, lat, rad; oapiGlobalToEqu(body, gp, &lng, &lat, &rad);
-			return rad - R - oapiSurfaceElevation(body, lng, lat);
+			return rad - R - oapiSurfaceElevation(body, lng, lat) - padLift;
 		};
 		const double feet = (std::min)(heightOf(_V(0.12, -height, 0.05)), heightOf(_V(-0.12, -height, 0.05)));
 		double other = 1e9;
@@ -379,7 +399,7 @@ namespace ocrew
 			_V(-0.30, -0.05, 0.10), _V(0, 0.10, -0.26), _V(0, 0.0, 0.12) })
 			other = (std::min)(other, heightOf(p));
 		if (jet.Worn() && jet.Deploy() > 0.5)
-			for (double sx : { 0.44, -0.44 }) other = (std::min)(other, heightOf(_V(sx, 0.43, -0.17)));
+			for (double sx : { 0.60, -0.60 }) other = (std::min)(other, heightOf(_V(sx, 0.43, -0.17)));
 
 		// the ground's slope under her (horizon frame: x east, y up, z north) and her speed into it
 		double lng, lat, rad; GetEquPos(lng, lat, rad);
@@ -394,7 +414,7 @@ namespace ocrew
 		const double lean = std::acos(std::clamp(dotp(unit(upG), uB), -1.0, 1.0));
 
 		if (other < 0.02) { Fall(length(hv), "Удар о грунт"); return; }      // head, knees, hands, pack: a fall, not a landing
-		if (feet < 0.05 && into > -0.05)
+		if (feet < 0.12 && into > -0.3)   // the soles at the ground and not climbing away: down
 		{
 			if (along > 4.0 || lean > 30 * RAD) { Fall(into + 0.5 * along, "Падение при посадке"); return; }
 			freeVy = -into;                                                  // the impact that counts is the one into the slope
@@ -410,7 +430,7 @@ namespace ocrew
 		s.rbody = GetEquPos(lng, lat_, rad);
 		oapiGetHeading(GetHandle(), &hdg);
 		s.surf_lng = lng; s.surf_lat = lat_; s.surf_hdg = hdg;
-		surface::Lie(s, 0.12);
+		surface::Lie(s, LieHeight() + PadLift());
 		DefSetStateEx(&s);
 		lying = true; fallenT = 2.5; wasFree = false; freeT = 0;
 		fwd = lat = turn = accel = 0;
@@ -426,13 +446,53 @@ namespace ocrew
 		s.rbody = GetEquPos(lng, lat_, rad);
 		oapiGetHeading(GetHandle(), &hdg);
 		s.surf_lng = lng; s.surf_lat = lat_; s.surf_hdg = hdg;
-		surface::Stand(s, height);
+		surface::Stand(s, height + PadLift());
 		DefSetStateEx(&s);
 		landingSpeed = (std::max)(0.0, -freeVy);
 		bio.Impact(landingSpeed);
 		jet.Touchdown();
+		if (ap.Get() != Autopilot::OFF) ap.Off(this, "на грунте");
 		wasFree = false; freeT = 0;
 		if (landingSpeed > 7) Say(bio.state == Body::DEAD ? "Смертельный удар" : "Жёсткая посадка - травма");
+	}
+
+	double CrewMember::PadLift() const
+	{
+		OBJHANDLE body = GetSurfaceRef();
+		if (!body) return 0;
+		double lng, lat, rad; GetEquPos(lng, lat, rad);
+		const double R = oapiGetSize(body), terr = oapiSurfaceElevation(body, lng, lat), cl = (std::max)(0.05, std::cos(lat));
+		const double PAD_R = 11.0, PAD_TOP = 0.03;   // the pad's reach from its centre and its deck above the reference
+		double lift = 0;
+		for (DWORD b = 0; b < oapiGetBaseCount(body); ++b)
+		{
+			OBJHANDLE hb = oapiGetBaseByIndex(body, b);
+			double blng, blat; oapiGetBaseEquPos(hb, &blng, &blat);
+			if (std::hypot((blat - lat) * R, (blng - lng) * R * cl) > 5000) continue;
+			for (DWORD k = 0; k < oapiGetBasePadCount(hb); ++k)
+			{
+				double plng, plat, prad = R;
+				if (!oapiGetBasePadEquPos(hb, k, &plng, &plat, &prad)) continue;
+				if (std::hypot((plat - lat) * R, (plng - lng) * R * cl) > PAD_R) continue;
+				// a deck a little above the relief is the pad mesh standing on it; tens or hundreds of metres means the
+				// pad's sphere radius and the relief simply disagree (the client lays the pad on the relief): ignore it
+				const double d = (prad - R) + PAD_TOP - terr;
+				if (d > 0 && d < 1.5) lift = (std::max)(lift, d);
+			}
+		}
+		return lift;
+	}
+
+	void CrewMember::StandUp()
+	{
+		VESSELSTATUS2 s = Status(this);
+		double lng, lat_, rad, hdg = 0;
+		s.rbody = GetEquPos(lng, lat_, rad);
+		oapiGetHeading(GetHandle(), &hdg);
+		s.surf_lng = lng; s.surf_lat = lat_; s.surf_hdg = hdg;
+		surface::Stand(s, height + PadLift());
+		DefSetStateEx(&s);
+		lying = false; wasFree = false; freeT = 0; fwd = lat = turn = 0;
 	}
 
 	void CrewMember::Liftoff()
@@ -491,7 +551,7 @@ namespace ocrew
 		double lng, lat_, rad;
 		s.rbody = GetEquPos(lng, lat_, rad);
 		s.surf_lng = lng; s.surf_lat = lat_; s.surf_hdg = jumpHeading;
-		surface::Stand(s, height);
+		surface::Stand(s, height + PadLift());
 		DefSetStateEx(&s);
 		airborne = false;
 		landingSpeed = fallSpeed;
@@ -658,6 +718,7 @@ namespace ocrew
 		const double dt = simdt;
 		if (dt <= 0) return;
 		air = atmospheres.Sample(this);
+		jet.SetOxygen(air.ppO2 > 1.0);   // steam behind the jets only where hydrogen can burn
 		const double g = Gravity();
 		const bool landed = (GetFlightStatus() & 1) != 0;
 		UpdateRcs(!landed && !airborne);
@@ -683,6 +744,21 @@ namespace ocrew
 			heat = net > 150 ? net - 150 : net < -150 ? net + 150 : 0;
 		}
 		bio.Step(dt, humanW + (turn ? 25 : 0), suitOn ? suit.ppO2 : air.ppO2, suitOn ? suit.ppCO2 : air.ppCO2, air.p, suitOn, heat);
+		// radiation: the environment here, through the suit's shell (a coverall is ~0.3 g/cm^2) and its field
+		radEnv = rad.Sample(this, air.p, Gravity());
+		bio.Irradiate(dt, Radiation::Dose(radEnv, suitOn ? suit.shieldGcm2 : 0.3, suitOn && suit.FieldUp() ? suit.fieldFactor : 1.0));
+		// water and food: at hand in breathable air on the ground (her kit, a base); elsewhere only what the suit carries
+		bio.Sustain(dt, air.Breathable() && (GetFlightStatus() & 1), suitOn ? &suit.water : nullptr, air.T, suitOn);
+		// time acceleration: a person outside a safe zone (unbreathable air, not standing on the ground, or a radiation
+		// field) holds the simulation to 10x at most, as UMmu did - the organism needs real attention there
+		{
+			const bool safe = air.Breathable() && (GetFlightStatus() & 1) && bio.doseRate < 1e-3;
+			if (!safe && bio.state != Body::DEAD && oapiGetTimeAcceleration() > 10.0)
+			{
+				oapiSetTimeAcceleration(10.0);
+				Say("Ускорение времени ограничено 10x: экипаж вне безопасной зоны");
+			}
+		}
 
 		// ---- jet pack ----
 		const double altFeet = GetAltitude(ALTMODE_GROUND) - height;
@@ -693,15 +769,23 @@ namespace ocrew
 		jet.Update(dt, landed, suitOn && bio.CanAct() && suit.Powered(), g, altFeet, fin);
 		flightFresh = false;
 		freeT = (!landed && !airborne) ? freeT + dt : 0;
-		if (!landed && !airborne && freeT > 0.3 && jet.SurfaceMode()) GroundContactCheck(dt);
+		if (!landed && !airborne && !lying && freeT > 0.3 && jet.SurfaceMode()) GroundContactCheck(dt);   // lying: already down, no new falls
 		if (fallenT > 0) fallenT -= dt;
 		if (!landed && !airborne) { VECTOR3 hv; GetGroundspeedVector(FRAME_HORIZON, hv); freeVy = hv.y; }
-		if (landed && wasFree) { landingSpeed = (std::max)(0.0, -freeVy); bio.Impact(landingSpeed); Place(!bio.CanAct()); }   // back on her feet after a flight
+		if (landed && wasFree)   // back on her feet after a flight
+		{
+			landingSpeed = (std::max)(0.0, -freeVy); bio.Impact(landingSpeed); Place(!bio.CanAct());
+			jet.Touchdown();
+			if (ap.Get() == Autopilot::HOVER) ap.Off(this, "на грунте");
+		}
 		wasFree = !landed && !airborne;
 
 		if (airborne && jet.Thrust() > 0) airborne = false;                                   // the jump turns into a flight
 		bool lifted = false;
 		if (landed && !airborne && bio.CanAct() && jet.Thrust() > GetMass() * g * 1.02) { Liftoff(); lifted = true; }
+
+		// fallen and pushed loose by the ground contact (lying on the pack): she gets up when the fall is over all the same
+		if (lying && !landed && !airborne && fallenT <= 0 && bio.CanAct()) StandUp();
 
 		// ---- posture and movement ----
 		if (airborne)
@@ -768,7 +852,9 @@ namespace ocrew
 		static const std::pair<const char*, const char*> WARN[] = {
 			{ "VACUUM - NO SUIT", "ВАКУУМ БЕЗ СКАФАНДРА" }, { "OVERHEATING", "ПЕРЕГРЕВ" }, { "HYPOTHERMIA", "ПЕРЕОХЛАЖДЕНИЕ" },
 			{ "HYPOXIA", "ГИПОКСИЯ" }, { "LOW OXYGEN", "МАЛО КИСЛОРОДА" }, { "CO2 NARCOSIS", "ОТРАВЛЕНИЕ CO2" },
-			{ "HIGH CO2", "ВЫСОКИЙ CO2" }, { "EXHAUSTED", "ИСТОЩЕНИЕ" }, { "INJURED", "ТРАВМА" } };
+			{ "HIGH CO2", "ВЫСОКИЙ CO2" }, { "EXHAUSTED", "ИСТОЩЕНИЕ" }, { "INJURED", "ТРАВМА" },
+			{ "RADIATION - TAKE COVER", "РАДИАЦИЯ - В УКРЫТИЕ" }, { "RADIATION SICKNESS", "ЛУЧЕВАЯ БОЛЕЗНЬ" },
+			{ "DEHYDRATED", "ОБЕЗВОЖИВАНИЕ" }, { "STARVING", "ГОЛОД" } };
 		HudData d;
 		d.name = name; d.role = role == "astronavigator" ? "астронавигатор" : role; d.state = static_cast<int>(bio.state); d.suit = suitOn;
 		d.pulse = bio.pulse; d.breath = bio.breath; d.effort = (std::min)(1.0, bio.Effort()); d.stamina = bio.wbal;
@@ -780,6 +866,10 @@ namespace ocrew
 		d.sorbHours = bio.CO2Made() > 0 ? (suit.sorbCap - suit.sorbUsed) / bio.CO2Made() / 3600 : 0;
 		d.landed = (GetFlightStatus() & 1) != 0; d.servo = boost;
 		d.tInC = suit.tIn - 273.15;
+		d.water = suit.water; d.waterDef = bio.waterDef; d.bodyMass = bio.mass; d.fastDays = bio.fastDays;
+		for (int i = 0; i < 4; ++i) d.hurt[i] = bio.hurt[i];
+		d.radValid = true; d.radRate = bio.doseRate; d.radDose = bio.doseSv;
+		d.fieldOn = suitOn && suit.FieldUp(); d.fieldW = d.fieldOn ? suit.fieldW : 0;
 		d.apMode = static_cast<int>(ap.Get()); d.apStatus = ap.Status(); d.apCmd = ap.CmdHorizon();
 		if (air.p > 1) { VECTOR3 gsv, asv; GetGroundspeedVector(FRAME_HORIZON, gsv); GetAirspeedVector(FRAME_HORIZON, asv); d.wind = gsv - asv; }
 		d.envC = thermal.tEnv - 273.15; d.ratedMinC = suit.tMin - 273.15; d.ratedMaxC = suit.tMax - 273.15; d.sunlit = thermal.sunlit;
@@ -826,6 +916,8 @@ namespace ocrew
 	// a button of the suit computer: the pack's height hold and landing, or one of the autopilots on the selected target
 	void CrewMember::ApRequest(int req)
 	{
+		if (jet.Worn() && !jet.Assist() && (req == SuitHud::AP_ALT || req == SuitHud::AP_LAND || req == Autopilot::HOVER || req == Autopilot::TRANSFER))
+			jet.SetAssist(true);   // the autopilots fly through the assistant
 		if (req == SuitHud::AP_ALT)
 		{
 			if (!jet.Worn()) return;
@@ -841,6 +933,31 @@ namespace ocrew
 			if (jet.ModeId() == 2) jet.SetManual(); else jet.SetDescent();
 			return;
 		}
+		if (req >= SuitHud::AP_CRUISE && req < SuitHud::AP_CRUISE + 20)   // the ПОЛЁТ page: the cruise's height and speed
+		{
+			if (!jet.Worn()) return;
+			ap.Off(this, "круиз");
+			static const double A[4] = { -10, -1, 1, 10 }, S[5] = { -5, -1, 0, 1, 5 };
+			const int k = req - SuitHud::AP_CRUISE;
+			if (k < 4) jet.Nudge(A[k], 0, false); else if (k == 12) jet.Stop(); else if (k >= 10 && k < 15) jet.Nudge(0, S[k - 10], false);
+			return;
+		}
+		if (req == SuitHud::AP_STOP)   // full stop: every speed to zero, the height held
+		{
+			if (!jet.Worn()) return;
+			ap.Off(this, "стоп");
+			jet.Stop();
+			return;
+		}
+		if (req == SuitHud::AP_MANUAL)
+		{
+			if (!jet.Worn()) return;
+			jet.SetAssist(!jet.Assist());
+			if (!jet.Assist()) { ap.Off(this, "ручной режим"); if (rcsLive) SetAttitudeMode(RCS_ROT); }
+			Say(jet.Assist() ? "Ранец: помощник - безопасная тяга, Shift+пробел полная" : "Ранец: ручное - пробел / Ctrl тяга больше / меньше");
+			return;
+		}
+		if (req == SuitHud::AP_FIELD) { if (suitOn) { suit.fieldOn = !suit.fieldOn; Say(suit.fieldOn ? "Магнитное поле включено" : "Магнитное поле выключено"); } return; }
 		if (req == SuitHud::AP_SHADE) { if (suitOn) { shadeTarget = shadeTarget > 0.5 ? 0 : 1; Say(shadeTarget > 0.5 ? "Щиток опущен" : "Щиток поднят"); } return; }
 		if (req == SuitHud::AP_LAMP) { if (suitOn) { lampOn = !lampOn; Say(lampOn ? "Фонари включены" : "Фонари выключены"); } return; }
 		if (req >= Autopilot::HOVER && req <= Autopilot::DOCK) ap.Engage(static_cast<Autopilot::Mode>(req), hud.SelectedTarget(), this);

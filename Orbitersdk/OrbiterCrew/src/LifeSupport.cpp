@@ -72,7 +72,7 @@ namespace ocrew
 		if (std::abs(residual) < 5 && power) tIn += (tSet - tIn) * (1 - std::exp(-dt / 90));
 		else tIn += residual * dt / cIn;
 		tIn = std::clamp(tIn, 200.0, 400.0);
-		drawW = power ? lifeW + thermalW + driveW + lampW : 0;
+		drawW = power ? lifeW + thermalW + driveW + lampW + (fieldOn ? fieldW : 0) : 0;
 		batt = (std::max)(0.0, batt - drawW * dt);
 
 		if (power && o2 > 0) { o2 = (std::max)(0.0, o2 - o2Use * dt); ppO2 = pressure; }
@@ -140,11 +140,85 @@ namespace ocrew
 		else if (wbal < 0.15) warning = "EXHAUSTED";
 	}
 
+	void Body::Irradiate(double dt, double rate)
+	{
+		doseRate = rate;
+		if (state == DEAD) return;
+		doseSv += rate * dt / 3600; careerSv += rate * dt / 3600;
+		// acute radiation syndrome, in game time: above ~4.5 Sv the injury builds over hours (LD50 without care),
+		// above ~8 Sv faster; above ~20 Sv the central nervous system fails within the hour
+		if (doseSv > 4.5) injury += dt * (doseSv - 4.5) / (3.5 * 6 * 3600);
+		if (doseSv > 20) reserve -= dt / 1800;
+		if (injury >= 1) state = DEAD;
+		if (warning.empty())
+		{
+			if (rate > 0.05) warning = "RADIATION - TAKE COVER";
+			else if (doseSv > 1) warning = "RADIATION SICKNESS";
+		}
+	}
+
+	double Body::Condition() const
+	{
+		const double dehyd = waterDef / mass;                                        // fraction of body mass
+		double c = 1.0;
+		if (dehyd > 0.02) c *= std::clamp(1.0 - 5.0 * (dehyd - 0.02), 0.4, 1.0);    // -5 % per 1 % beyond 2 %
+		if (glycogen < 0.2 * 8.0e6) c *= 0.8;                                        // out of carbohydrate: fat only
+		c *= std::clamp(1.0 - 0.04 * (std::max)(0.0, fastDays - 2.0), 0.6, 1.0);     // a week without food tells
+		c *= 1.0 - 0.5 * hurt[TORSO];
+		return c;
+	}
+
+	void Body::Hurt(Part p, double amount)
+	{
+		if (amount <= 0) return;
+		hurt[p] = std::clamp(hurt[p] + amount, 0.0, 1.0);
+		if (p == HEAD && hurt[HEAD] > 0.5) reserve = (std::max)(0.0, reserve - 0.5 * amount);   // a blow to the head
+	}
+
+	void Body::Sustain(double dt, bool supplied, double* suitWater, double airT, bool suited)
+	{
+		if (state == DEAD) { sweat = 0; return; }
+		// water out: breath and skin at rest, sweat with effort and heat (the suit's cooling takes most of the heat)
+		const double load = std::clamp((met - 90) / (std::max)(1.0, AerobicMax() - 90), 0.0, 1.2);
+		const double hot = suited ? 0.0 : (std::max)(0.0, airT - 298.15);
+		const double lph = 0.08 + (suited ? 0.5 : 0.9) * load + 0.04 * hot;                  // L/h
+		sweat = (std::min)(lph, 2.0) / 3600;
+		waterDef += sweat * dt;
+		// water in: drink what is at hand, up to ~1 L/h
+		const double drinkMax = 1.0 / 3600 * dt;
+		double drink = 0;
+		if (supplied) drink = (std::min)(waterDef, drinkMax);
+		else if (suitWater && *suitWater > 0) { drink = (std::min)({ waterDef, drinkMax, *suitWater }); *suitWater -= drink; }
+		waterDef = (std::max)(0.0, waterDef - drink);
+		// food: carbohydrate burns first; meals refill it when food is at hand
+		const double burn = met * dt;
+		if (glycogen > 0) { glycogen = (std::max)(0.0, glycogen - 0.6 * burn); fat -= 0.4 * burn / 37.0e6; }
+		else fat -= burn / 37.0e6;
+		if (supplied) { glycogen = (std::min)(8.0e6, glycogen + 8.0e6 * dt / 3600); fastDays = 0; }
+		else fastDays += dt / 86400;
+		// healing: slow on her own, a few percent of an injury a day
+		for (double& h : hurt) h = (std::max)(0.0, h - 0.03 * dt / 86400);
+		// what kills: severe dehydration (~12 % of body mass), starvation (no usable fat left)
+		const double dehyd = waterDef / mass;
+		if (dehyd > 0.08) reserve -= dt * (dehyd - 0.08) / 0.04 / 3600;
+		if (dehyd > 0.12) injury += dt / 6 / 3600;
+		if (fat < 1.0) injury += dt / (2 * 86400);
+		if (injury >= 1) state = DEAD;
+		if (warning.empty())
+		{
+			if (dehyd > 0.04) warning = "DEHYDRATED";
+			else if (fastDays > 3) warning = "STARVING";
+			else if (hurt[LEGS] > 0.3 || hurt[ARMS] > 0.3 || hurt[TORSO] > 0.3 || hurt[HEAD] > 0.3) warning = "INJURED";
+		}
+	}
+
 	void Body::Impact(double v)
 	{
 		if (state == DEAD || v <= 7.0) return;
 		if (v >= 14.0) { state = DEAD; return; }
 		injury += (v - 7.0) / 7.0;          // hard landings add up
+		Hurt(LEGS, (v - 7.0) / 5.0);         // the legs take a hard landing first
+		if (v > 10.0) { Hurt(TORSO, (v - 10.0) / 6.0); Hurt(HEAD, (v - 10.0) / 8.0); }
 		reserve = (std::max)(0.0, reserve - 0.3 * (v - 7.0) / 7.0);
 		if (injury >= 1) state = DEAD;
 	}

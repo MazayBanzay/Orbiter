@@ -34,12 +34,18 @@ namespace ocrew
 		bool firstPerson{};              // the view is from her eyes (the visor effects apply)
 		// jet pack
 		bool jet{}, jetFlying{}, jetSurface{}, jetLimited{}, jetProtect{}, jetTerrain{};
-		double jetFuel{}, jetDv{}, jetThrottle{}, jetFlow{}, jetTilt[2]{}, jetMaxTilt{}, jetDeploy{}, jetAltHold{}, alt{}, vs{}, gs{}, leanF{}, leanR{};
+		double jetFuel{}, jetDv{}, jetThrottle{}, jetFlow{}, jetTilt[2]{}, jetMaxTilt{}, jetDeploy{}, jetAltHold{}, jetSpd{}, jetVf{}, alt{}, vs{}, gs{}, leanF{}, leanR{};
+		double water{}, waterDef{}, bodyMass{ 62 }, fastDays{}, hurt[4]{};   // suit drink bag kg; the body: water short kg, days without food, injuries by part
+		bool jetBraking{};               // the full stop is braking
 		int jetMode{};                   // 0 manual, 1 height hold, 2 landing
+		bool jetAssist{ true };          // false: hands-on, no compensation
+		double jetHover{};               // s: how long the fuel left would hold her hovering here
 		// autopilot (Autopilot::Mode) and what it says; its commanded acceleration, horizon frame
 		int apMode{}; std::string apStatus; VECTOR3 apCmd{};
 		// inside the suit, and the wind (Orbiter's own: ground speed minus air speed, horizon frame x east z north)
 		double tInC{ 22 }; VECTOR3 wind{};
+		// radiation (from the radiation model when present: radValid): dose rate Sv/h, the dose taken Sv; the suit's field
+		bool radValid{}; double radRate{}, radDose{}; bool fieldOn{}; double fieldW{};
 		// walking
 		bool landed{}, servo{}; double speed{};
 		// talk
@@ -76,7 +82,7 @@ namespace ocrew
 		void Draw(oapi::Sketchpad* skp, const HUDPAINTSPEC* hps, const HudData& d, VESSEL* v);
 		void Click(double x, double y);        // a left click in the view, pixels of the HUD surface
 		// requests for the crew member: an autopilot button (AP_*) and the target it applies to; -1 = none
-		enum { AP_ALT = 100, AP_LAND = 101, AP_SHADE = 102, AP_LAMP = 103 };
+		enum { AP_ALT = 100, AP_LAND = 101, AP_SHADE = 102, AP_LAMP = 103, AP_MANUAL = 104, AP_FIELD = 105, AP_STOP = 106 };
 		int TakeRequest() { const int r = request; request = -1; return r; }
 		OBJHANDLE SelectedTarget() const { return sel; }
 		std::string Save() const;              // one scenario line
@@ -84,7 +90,8 @@ namespace ocrew
 
 		enum Mode { EVA, FLIGHT, RDV, SYS };
 		enum LPage { L_LOCAL, L_ORBIT, L_POWER, L_OPTS, L_COUNT };
-		enum RPage { R_TARGETS, R_TRANSFER, R_LANDING, R_APPROACH, R_DOCK, R_BODY };
+		enum RPage { R_TARGETS, R_TRANSFER, R_LANDING, R_APPROACH, R_DOCK, R_BODY, R_FLIGHT };
+		enum { AP_CRUISE = 200 };   // + 0..3: height -10 -1 +1 +10 m; + 10..14: speed -5 -1 stop +1 +5 m/s
 
 		struct Target
 		{
@@ -92,7 +99,8 @@ namespace ocrew
 			double dist{}, rate{};             // m; m/s, - closing
 			double north{}, east{}, up{};      // m, local horizon at her position (surface)
 			VECTOR3 rel{}, relV{};             // her position / velocity relative to the target, global frame
-			bool pack{}, crew{}, landed{};
+			bool pack{}, crew{}, landed{}, base{};
+			int pads{};                         // a base: its landing pads
 		};
 
 	// state below is read by the MFD pages (SuitHud.cpp)
@@ -118,6 +126,7 @@ namespace ocrew
 		bool orbitOk{}, tgtOrbitOk{}; ELEMENTS el{}, tel{}; ORBITPARAM op{}, top{}; double relInc{};
 		// terrain around her (north-up), cached
 		struct Grid { int n{}; double half{}, lat{}, lng{}, t{ -1 }; std::vector<double> h; } grid;
+		Grid next; int nextRow{ -1 };   // the grid being sampled, a few rows per frame
 		struct Prof { OBJHANDLE tgt{}; double t{ -1 }, dist{}, brg{}; std::vector<double> h; } prof;
 		// history
 		struct Trend { double t{ -1 }; std::vector<double> pulse, breath, core; } trend;
@@ -125,11 +134,24 @@ namespace ocrew
 		double lastRR{ -1 };
 
 		// what can be clicked, from the last frame (pixels)
-		enum HitKind { H_LTAB, H_RTAB, H_LFOLD, H_RFOLD, H_TGT, H_AP, H_PAL, H_ZOOM, H_MODE, H_NVG, H_NEXT };
+		enum HitKind { H_LTAB, H_RTAB, H_LFOLD, H_RFOLD, H_TGT, H_AP, H_PAL, H_ZOOM, H_MODE, H_NVG, H_NEXT, H_BRIGHT, H_LOOK, H_ACK };
 		struct Hit { double x0, y0, x1, y1; int kind, arg; };
 		std::vector<Hit> hits;
 		int request{ -1 };
-		// night vision: the D3D9 client's custom camera renders her view into a texture, shown amplified in green
+		// infrared view: the D3D9 client's custom camera renders her view into a texture, shown amplified, neutral grey
+		// screen brightness against the light around: automatic, or by hand (saved); ambient 0 dark .. 1 bright
+		// the display's technology, as it looks: 0 hologram, 1 light-built (a thin coherent line, hatched, no fills), 2 electroluminescent
+		int look{};
+		// caution & warning: what is wrong now (and was), acknowledged or not; newest first
+		struct Alert { std::string key, tile, text; int level{}; double t0{}; bool ack{}, active{}, seen{}; };
+		std::vector<Alert> alerts;
+		void Alerts(const HudData& d);
+		// radiation: dose rate (uSv/h) and the dose of this outing (uSv)
+		double doseRate{}, dose{}, lastDoseT{ -1 };
+		// short history for the trend arrows: O2, battery, sorbent, CO2, inside temperature (every 5 s, one minute)
+		struct Hist { double t{ -1 }; std::vector<double> v[5]; } hist;
+		int Trend(int i, double thr) const;
+		bool brightAuto{ true }; double brightManual{ 0.6 }, ambient{ 0.5 }, lastAmbT{ -1 };
 		bool nvg{}, gcTried{}, gcOk{}; SURFHANDLE nvSrf{}; void* nvCam{}; int nvW{}, nvH{}; std::string nvNote;
 		void NightVision(oapi::Sketchpad* skp, VESSEL* v, double W, double H);
 		HudText glyphs;
@@ -139,6 +161,7 @@ namespace ocrew
 		std::map<int, oapi::Font*> fonts;
 		friend class Gfx;
 		friend struct Ctx;
+		friend void TerrainRows(SuitHud& h, OBJHANDLE body, double bodyR);
 	};
 
 	// UTF-8 -> the system code page, for the fallback text
