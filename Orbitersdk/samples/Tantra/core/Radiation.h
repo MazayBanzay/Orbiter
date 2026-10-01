@@ -1,6 +1,7 @@
 // Tantra core: radiation of the running anamezon drive and what it does to people
-// and planets. No Orbiter dependencies: the Orbiter 2010 adapter and the UACS port
-// (docs/PORTING_UACS.md) both feed it positions and read doses and hazards.
+// and planets. No Orbiter dependencies: the Orbiter adapter feeds it positions and reads
+// doses and hazards; for people it is a radiation source for the OrbiterCrew module
+// (docs/PORTING_CREW.md).
 //
 // Two components (docs/DESIGN.md, "Радиация"):
 //  * gammas from neutral pions (~1/3 of the annihilation energy), isotropic, flux
@@ -74,8 +75,8 @@ private:
 };
 
 // Accumulated dose per crewed object (other vessels, EVA crew). In Orbiter 2010 UMmu
-// cannot touch another vessel's crew, so the ledger only reports; the UACS port applies
-// it to the astronauts (docs/PORTING_UACS.md).
+// cannot touch another vessel's crew, so the ledger only reports. OrbiterCrew people
+// accumulate dose themselves (docs/PORTING_CREW.md); the ledger is for other vessels only.
 struct DoseRecord {
     std::string name;
     double dose = 0.0;      // Gy accumulated

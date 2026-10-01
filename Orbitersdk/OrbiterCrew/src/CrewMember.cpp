@@ -34,8 +34,21 @@ namespace ocrew
 	}
 
 	namespace { std::vector<CrewMember*> everyone; }   // for the suit computer: names of the other crew
-	CrewMember::CrewMember(OBJHANDLE hVessel, int fModel) : VESSEL4(hVessel, fModel) { everyone.push_back(this); }
-	CrewMember::~CrewMember() { everyone.erase(std::remove(everyone.begin(), everyone.end(), this), everyone.end()); }
+	CrewMember::CrewMember(OBJHANDLE hVessel, int fModel) : VESSEL4(hVessel, fModel),
+		who(Crew::Create()), name(who.name), role(who.role), sex(who.sex), age(who.age), heightM(who.heightM), bio(who.body)
+	{
+		everyone.push_back(this);
+		who.where = Person::IN_WORLD; who.vessel = hVessel;
+	}
+
+	CrewMember::~CrewMember()
+	{
+		everyone.erase(std::remove(everyone.begin(), everyone.end(), this), everyone.end());
+		// the body leaves the world; the person stays in the registry with everything he or she is
+		who.where = Person::NOWHERE; who.vessel = nullptr;
+		// (until the crew can be aboard ships, no body left means the simulation is closing: start clean next time)
+		if (everyone.empty()) Crew::Clear();
+	}
 
 	void CrewMember::clbkSetClassCaps(FILEHANDLE cfg)
 	{

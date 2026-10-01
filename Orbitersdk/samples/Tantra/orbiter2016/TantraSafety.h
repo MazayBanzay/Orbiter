@@ -3,8 +3,8 @@
 // with an ecosystem and the crews put at risk, and works out a removable interlock:
 // the highest feed level that keeps every ecosystem below harm and every unshielded
 // crew below a lethal dose within an hour. Other vessels' crews cannot be touched
-// through UMmu, so their doses are only accumulated and announced; the UACS port
-// applies them (docs/PORTING_UACS.md).
+// directly, so their doses are only accumulated and announced; OrbiterCrew people get
+// the drive as a radiation source in their environment (docs/PORTING_CREW.md).
 #pragma once
 #include "orbitersdk.h"
 

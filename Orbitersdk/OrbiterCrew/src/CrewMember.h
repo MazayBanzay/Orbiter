@@ -11,6 +11,7 @@
 #include "Autopilot.h"
 #include "JetPack.h"
 #include "LifeSupport.h"
+#include "Person.h"
 #include "Radiation.h"
 #include "Motion.h"
 #include "Skin.h"
@@ -59,9 +60,11 @@ namespace ocrew
 		void Liftoff();
 		void Land();
 
-		std::string name{ "Crew member" }, role{ "crew" };
-		std::string sex{ "female" };   // a description: abilities are set per person (VO2max, LiftMax), not derived from it
-		double age{}, heightM{};
+		// the person this vessel is the body of. The person comes first and lives in the crew registry, not in the
+		// vessel; the names below are the person's own data, kept under their old names
+		Person& who;
+		std::string& name; std::string& role; std::string& sex;
+		double& age; double& heightM;
 		Figure bodyFig, suitFig;
 		Motion motion;
 		CrewSound sound;
@@ -74,7 +77,7 @@ namespace ocrew
 
 		bool suitOn{ true }, suitFromScenario{};
 		Suit suit;
-		Body bio;
+		Body& bio;                     // who.body
 		Air air;
 		Radiation rad;
 		RadEnv radEnv;
