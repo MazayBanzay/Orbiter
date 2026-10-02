@@ -21,3 +21,4 @@ VS2022, `CrewMember.vcxproj`, Release|Win32 -> `Modules\OrbiterCrew\CrewMember.d
 ## Assets
 Meshes, skeletons and clips come from the Blender pipeline in `Tantra_Design/blender`
 (MakeHuman/MPFB CC0 assets, CMU motion capture database).
+The flight suit is built on `elvs_male_coveralls_1` by Elvaerwyn (MakeHuman Community asset pack suits03, CC-BY 4.0).

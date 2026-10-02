@@ -1083,6 +1083,9 @@ void Tantra::clbkPostStep(double, double simdt, double) {
     GetLiftVector(l);
     GetDragVector(d);
     thrustAccel_ = length(t) / GetMass();
+    // The compensator cancels this step's thrust, not the previous one's: with the one-step lag a throttle jump (or a
+    // burn that starts with thrust already set) put the whole load on the hull for a step - 198 g smoothed to 13 g.
+    drive_.Compensate(AnaIsMain() ? GetThrusterGroupLevel(THGROUP_MAIN) : 0.0, GetMass(), thrustAccel_);
     // Proper acceleration: all forces but gravity - thrust, air AND the ground (a hard contact is a g-spike);
     // the compensator takes off what it cancels of the anamezon thrust. Crew and structure feel the rest.
     VECTOR3 F, W;
@@ -1672,16 +1675,19 @@ void Tantra::UpdateGear(double simdt) {
             if (l >= 0) inSet[l] = true;
         }
         const bool down = carriage_.Gear() >= 0.5, contact = down && GroundContact();
-        const bool resting = thrustAccel_ < 0.3 * LocalG();   // lift-off thrust pulls the anchors first
+        const double gLoc = simdt > 0.0 ? LocalG() : G0;       // while the scenario loads there is no gravity ref yet
+        const bool resting = thrustAccel_ < 0.3 * gLoc;        // lift-off thrust pulls the anchors first
         solesCar_.Update(dt, contact && (inSet[0] || inSet[1]), resting);
         solesStern_.Update(dt, contact && (inSet[2] || inSet[3] || inSet[4] || inSet[5]), resting);
         for (int l = 0; l < 6; ++l) {
-            const double target = down && inSet[l] && !contact ? 1.0 : 0.0;   // stowed: the muscle lock holds the rod in
+            // the rod runs out only in real flight (3 s off the ground): a bounce must never push the pads into the
+            // ground again (that pumps the ship off the planet); stowed, the muscle lock holds the rod in
+            const double target = down && inSet[l] && !GroundContact() && sinceContact_ > 3.0 ? 1.0 : 0.0;
             strut_[l] = step(strut_[l], target, target > strut_[l] ? 0.5 : 1.0);
             ex.strut[l] = strut_[l];
             ex.anchor[l] = inSet[l] ? (l < 2 ? solesCar_ : solesStern_).Anchors() : 0.0;
         }
-        regen_.Update(dt, GetMass() * LocalG(), p.trunnionH, carriage_.Busy() && contact);
+        regen_.Update(dt, GetMass() * gLoc, p.trunnionH, carriage_.Busy() && contact);
     }
     if (gear_) gear_->Apply(p, frameS_, ex);
 
@@ -1728,20 +1734,30 @@ void Tantra::UpdateGear(double simdt) {
     if (simdt > 0.0) HorizonInvRot(_V(0, 1, 0), upL);  // not while the scenario loads: no horizon frame yet
     touchOfs_ = upL * terrainOfs_;  // refined terrain: points raised, relaxing (WatchTerrain)
     int nt = 0;
-    double mu[tantra::CarriagePose::kMaxTouch];
+    double mu[tantra::CarriagePose::kMaxTouch], muLng[tantra::CarriagePose::kMaxTouch];
+    // While the ship moves on the columns (lift, turn, lowering) it turns about the trunnions and the legs turn in them:
+    // the pads stand still. Orbiter takes the touchdown points as fixed to the hull, so the turn would drag them across
+    // the ground at w * 70 m and friction (0.9 x weight at 70 m) would hold the ship back until it falls. Along the
+    // hull the pads therefore carry no friction while the carriage moves; across it they keep their full grip.
+    const bool swivel = p.onColumns && carriage_.Busy();
     for (int i = 0; i < p.nTouch; ++i) {
         if (TouchPointLost(i, p)) continue;  // a broken leg carries nothing: the ship settles onto the hull
         const int l = TouchLeg(i, p);
         const double rod = l < 0 ? 0.0 : strut_[l] * (l < 2 ? tantra::mesh::kStrutExtC : tantra::mesh::kStrutExtS);
         mu[nt] = l < 0 ? 0.5 : (l < 2 ? solesCar_ : solesStern_).Mu();
+        muLng[nt] = swivel && l >= 0 && l < 2 ? 0.01 : mu[nt];
         t[nt++] = _V(p.touch[i].x, p.touch[i].y, p.touch[i].z) + touchOfs_ - upL * rod +
                upL * (p.touch[i].x >= 0.0 ? driveLag_[1] : driveLag_[0]);  // side error of the drives
-        if (nt - 1 >= nTouch_ || length(t[nt - 1] - touch_[nt - 1]) > 1e-4 || std::fabs(mu[nt - 1] - touchMu_[nt - 1]) > 0.02)
+        if (nt - 1 >= nTouch_ || length(t[nt - 1] - touch_[nt - 1]) > 1e-4 || std::fabs(mu[nt - 1] - touchMu_[nt - 1]) > 0.02 ||
+            std::fabs(muLng[nt - 1] - touchMuLng_[nt - 1]) > 0.02)
             changed = true;
     }
     if (nt != nTouch_) changed = true;
     if (changed) {
-        for (int i = 0; i < nt; ++i) touchMu_[i] = mu[i];
+        for (int i = 0; i < nt; ++i) {
+            touchMu_[i] = mu[i];
+            touchMuLng_[i] = muLng[i];
+        }
         SetSuspension(t, nt);
         for (int i = 0; i < nt; ++i) touch_[i] = t[i];
         nTouch_ = nt;
@@ -1774,7 +1790,7 @@ void Tantra::SetSuspension(const VECTOR3* t, int n) {
         {11.0, -2.27, Zf(122.0)}, {-11.0, -2.27, Zf(122.0)}, {0, 8.16, Zf(122.0)}, {0, -5.44, Zf(122.0)},
     };
     TOUCHDOWNVTX v[tantra::CarriagePose::kMaxTouch + sizeof hull / sizeof hull[0]];
-    for (int i = 0; i < n; ++i) v[i] = {t[i], k, c, touchMu_[i], touchMu_[i]};
+    for (int i = 0; i < n; ++i) v[i] = {t[i], k, c, touchMu_[i], touchMuLng_[i]};
     int nv = n;
     for (const VECTOR3& h : hull) v[nv++] = {h + touchOfs_, kHull, cHull, 0.5, 0.5};
     SetTouchdownPoints(v, nv);

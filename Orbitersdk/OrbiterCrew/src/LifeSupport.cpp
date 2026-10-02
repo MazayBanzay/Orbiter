@@ -59,7 +59,8 @@ namespace ocrew
 		const bool power = Powered();
 
 		// heat to move: her own heat plus what leaks in (+) or out (-) through the insulation
-		const double net = bodyHeatW + conductance * (tEnv - 295);
+		if (pOut > pMaxOutKPa) breached = true;   // the outside pressure crushes the shell: it does not come back
+		const double net = bodyHeatW + Conductance() * (tEnv - 295);
 		double residual = net;
 		thermalW = driveW = heatW = 0;
 		if (power)
@@ -75,6 +76,18 @@ namespace ocrew
 		drawW = power ? lifeW + thermalW + driveW + lampW + (fieldOn ? fieldW : 0) : 0;
 		batt = (std::max)(0.0, batt - drawW * dt);
 
+		if (breached)   // the shell is open: the gas outside fills the helmet within seconds, the tank bleeds out
+		{
+			ppO2 += (ventPpO2 - ppO2) * (1 - std::exp(-dt / 3)); ppCO2 += (ventPpCO2 - ppCO2) * (1 - std::exp(-dt / 3));
+			o2 = (std::max)(0.0, o2 - 0.01 * dt);
+			return residual;
+		}
+		if (vent && power)   // breathable air around: the fan breathes it in, the tank and the sorbent rest
+		{
+			ppO2 += (ventPpO2 - ppO2) * (1 - std::exp(-dt / 10));
+			ppCO2 += (ventPpCO2 - ppCO2) * (1 - std::exp(-dt / 20));
+			return residual;
+		}
 		if (power && o2 > 0) { o2 = (std::max)(0.0, o2 - o2Use * dt); ppO2 = pressure; }
 		else ppO2 = (std::max)(0.0, ppO2 - o2Use * dt * KPaPerKg(0.032, volume));
 
@@ -212,14 +225,34 @@ namespace ocrew
 		}
 	}
 
-	void Body::Impact(double v)
+	void Body::Impact(double v, Contact c)
 	{
-		if (state == DEAD || v <= 7.0) return;
-		if (v >= 14.0) { state = DEAD; return; }
-		injury += (v - 7.0) / 7.0;          // hard landings add up
-		Hurt(LEGS, (v - 7.0) / 5.0);         // the legs take a hard landing first
-		if (v > 10.0) { Hurt(TORSO, (v - 10.0) / 6.0); Hurt(HEAD, (v - 10.0) / 8.0); }
-		reserve = (std::max)(0.0, reserve - 0.3 * (v - 7.0) / 7.0);
+		if (state == DEAD) return;
+		switch (c)
+		{
+		case ON_FEET:   // legs bend and take it; the spine only in a very hard landing; the head is spared
+			if (v <= 7.0) return;
+			if (v >= 16.0) { state = DEAD; return; }
+			injury += (v - 7.0) / 9.0;
+			Hurt(LEGS, (v - 7.0) / 5.0);
+			if (v > 11.0) Hurt(TORSO, (v - 11.0) / 6.0);
+			reserve = (std::max)(0.0, reserve - 0.2 * (v - 7.0) / 9.0);
+			break;
+		case ON_BACK:   // a fall on the back: the torso, the back of the head, the arms flung out
+			if (v <= 5.0) return;
+			if (v >= 13.0) { state = DEAD; return; }
+			injury += (v - 5.0) / 8.0;
+			Hurt(TORSO, (v - 5.0) / 6.0); Hurt(HEAD, (v - 6.0) / 6.0); Hurt(ARMS, (v - 7.0) / 8.0);
+			reserve = (std::max)(0.0, reserve - 0.5 * (v - 5.0) / 8.0);
+			break;
+		case ON_HEAD:   // head first: the head and the neck
+			if (v <= 4.0) return;
+			if (v >= 10.0) { state = DEAD; return; }
+			injury += (v - 4.0) / 6.0;
+			Hurt(HEAD, (v - 4.0) / 4.0); Hurt(TORSO, (v - 7.0) / 6.0);
+			reserve = (std::max)(0.0, reserve - (v - 4.0) / 6.0);
+			break;
+		}
 		if (injury >= 1) state = DEAD;
 	}
 

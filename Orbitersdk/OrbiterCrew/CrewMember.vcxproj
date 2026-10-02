@@ -18,6 +18,8 @@
     <ClInclude Include="src\LifeSupport.h" />
     <ClInclude Include="src\Radiation.h" />
     <ClInclude Include="src\Person.h" />
+    <ClInclude Include="src\Wearable.h" />
+    <ClInclude Include="src\SuitComputer.h" />
     <ClInclude Include="src\Motion.h" />
     <ClInclude Include="src\Skin.h" />
     <ClInclude Include="src\Sound.h" />
@@ -31,6 +33,7 @@
     <ClCompile Include="src\LifeSupport.cpp" />
     <ClCompile Include="src\Radiation.cpp" />
     <ClCompile Include="src\Person.cpp" />
+    <ClCompile Include="src\Wearable.cpp" />
     <ClCompile Include="src\Motion.cpp" />
     <ClCompile Include="src\Skin.cpp" />
     <ClCompile Include="src\Sound.cpp" />

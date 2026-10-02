@@ -23,7 +23,7 @@ constexpr double kForeHalfWidth = 7.8, kForeTop = 8.16, kForeBottom = -5.44;  //
 constexpr double kAxisHeight = 14.0;            // hull axis above ground, resting level
 constexpr double kWellRadius = 10.9;            // nacelle cluster at the stern (centres +-4.8, R 4.1)
 constexpr double kWellCentreY = 1.82;           // stern axis (mid-height of the stern section)
-constexpr double kTvcMaxDeg = 7.0;              // magnetic nozzles: jet deflection by the field, no hinges
+constexpr double kTvcMaxDeg = 10.0;             // magnetic nozzles: jet deflection by the field, no hinges (the upper cups of the T8 stern need 8.4 deg to aim through the CG)
 
 // Undercarriage: carriage columns and stern legs (core/Carriage, orbiter2010/MeshLayout.h).
 constexpr double kColumnX = 19.0;                // hips of the carriage legs (deployed)

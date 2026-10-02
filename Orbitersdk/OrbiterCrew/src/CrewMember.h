@@ -15,6 +15,7 @@
 #include "Radiation.h"
 #include "Motion.h"
 #include "Skin.h"
+#include "SuitComputer.h"
 #include "SuitHud.h"
 #include "Sound.h"
 #include <string>
@@ -48,9 +49,11 @@ namespace ocrew
 		struct Keys { bool fwd{}, back{}, left{}, right{}, stepL{}, stepR{}, run{}; };
 
 		Figure& Active() { return suitOn && suitFig.ok ? suitFig : bodyFig; }
-		double Mass() const { return bio.mass + (suitOn ? suitMass : 0) + (jet.Worn() ? JetPack::DRY : 0); }
+		double Mass() const { return bio.mass + who.worn.DryMass(); }   // the propellant: Orbiter adds its tanks
 		double Gravity() const;
-		void Say(const std::string& text) { message = text; messageTime = 6; }
+		// a line for her display; level 1 caution (amber), 2 danger (red)
+		void Say(const std::string& text, int level = 0) { message = text; messageLevel = level; messageTime = 6; }
+		int messageLevel{};
 		void ShowFigure();
 		void SetSuit(bool on);
 		void Place(bool lying);
@@ -72,12 +75,15 @@ namespace ocrew
 		VISHANDLE vis{};
 		VECTOR3 eye{ 0, 0.69, 0.17 };
 		double height{ 0.93 };
-		double suitMass{ 25 };
 		double walkSpeed{ 1.45 }, runSpeed{ 5.0 };
 
-		bool suitOn{ true }, suitFromScenario{};
-		Suit suit;
 		Body& bio;                     // who.body
+		// what the person wears (who.worn): the body only carries its physics; the old names point into it
+		bool& suitOn; bool& suitFromScenario; double& suitMass;
+		Suit& suit;
+		JetPack& jet;
+		SuitHud& hud;
+		Autopilot& ap;
 		Air air;
 		Radiation rad;
 		RadEnv radEnv;
@@ -89,6 +95,7 @@ namespace ocrew
 		bool keysFresh{};
 		double fwd{}, lat{}, turn{}, accel{};
 		bool airborne{}, lying{}, placed{};
+		double settleT{}, diagT{};   // next check of the feet against the ground while standing still
 		double fallSpeed{}, landingSpeed{}, jumpHeading{};
 
 		// suit RCS: SAFER-class cold-gas unit in the pack (self-rescue, ~10 m/s); off on the ground and without power
@@ -100,14 +107,14 @@ namespace ocrew
 		void BuildAttGroups(const RcsSet& set);
 
 		// jet pack
-		JetPack jet;
-		bool jetFromScenario{}, wasFree{};
+		bool& jetFromScenario;
+		bool wasFree{};
 		double freeVy{}, freeT{};
 		FlightInput flight{};
 		bool flightFresh{};
 		void Touchdown();
 		void GroundContactCheck(double dt);
-		void Fall(double impact, const char* why);
+		void Fall(double impact, const char* why, Body::Contact c = Body::ON_BACK);
 		double fallenT{};
 		void TakePack();
 		void DropPack();
@@ -118,10 +125,10 @@ namespace ocrew
 		bool hudHidden{};   // we switched Orbiter's HUD off (no suit, generic cockpit)
 		std::string message;
 		double messageTime{};
-		SuitHud hud;
-		Autopilot ap;
 		bool mouseWasDown{};
 		void ApRequest(int req);
+		// what of an impact reaches the body: in the suit, through its frame and dampers (Suit::ImpactThrough)
+		void HitBody(double v, Body::Contact c) { bio.Impact(suitOn ? Suit::ImpactThrough(v, bio.mass, who.worn.Mass(), c) : v, c); }
 		double LieHeight() const { return jet.Worn() ? 0.36 : 0.18; }
 		// how far a base's landing pad under her stands above the relief there (0 = none): bases with
 		// MapObjectsToSphere put the pads on the smooth sphere, which can be above the real ground

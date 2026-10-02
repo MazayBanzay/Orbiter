@@ -36,7 +36,10 @@ namespace ocrew
 		bool jet{}, jetFlying{}, jetSurface{}, jetLimited{}, jetProtect{}, jetTerrain{};
 		double jetFuel{}, jetDv{}, jetThrottle{}, jetFlow{}, jetTilt[2]{}, jetMaxTilt{}, jetDeploy{}, jetAltHold{}, jetSpd{}, jetVf{}, alt{}, vs{}, gs{}, leanF{}, leanR{};
 		double water{}, waterDef{}, bodyMass{ 62 }, fastDays{}, hurt[4]{};   // suit drink bag kg; the body: water short kg, days without food, injuries by part
-		bool jetBraking{};               // the full stop is braking
+		bool jetBraking{}, jetFine{};
+		int messageLevel{};             // 0 info, 1 caution, 2 danger
+		double suitPMax{ 200 }; bool suitBreached{};   // the shell's rated outside pressure, kPa; crushed   // jetFine: the limiter is on
+		bool o2Vent{};                  // breathing the air around (breathable): the tank rests               // the full stop is braking
 		int jetMode{};                   // 0 manual, 1 height hold, 2 landing
 		bool jetAssist{ true };          // false: hands-on, no compensation
 		double jetHover{};               // s: how long the fuel left would hold her hovering here
@@ -45,7 +48,7 @@ namespace ocrew
 		// inside the suit, and the wind (Orbiter's own: ground speed minus air speed, horizon frame x east z north)
 		double tInC{ 22 }; VECTOR3 wind{};
 		// radiation (from the radiation model when present: radValid): dose rate Sv/h, the dose taken Sv; the suit's field
-		bool radValid{}; double radRate{}, radDose{}; bool fieldOn{}; double fieldW{};
+		bool radValid{}; double radRate{}, radDose{}, radCareer{}; bool fieldOn{}; double fieldW{};
 		// walking
 		bool landed{}, servo{}; double speed{};
 		// talk
@@ -79,12 +82,15 @@ namespace ocrew
 	{
 	public:
 		~SuitHud();
+		// the body it draws on leaves the world: drop what is bound to that body (the IR camera)
+		void Detach();
 		void Draw(oapi::Sketchpad* skp, const HUDPAINTSPEC* hps, const HudData& d, VESSEL* v);
 		void Click(double x, double y);        // a left click in the view, pixels of the HUD surface
 		// requests for the crew member: an autopilot button (AP_*) and the target it applies to; -1 = none
-		enum { AP_ALT = 100, AP_LAND = 101, AP_SHADE = 102, AP_LAMP = 103, AP_MANUAL = 104, AP_FIELD = 105, AP_STOP = 106 };
+		enum { AP_ALT = 100, AP_LAND = 101, AP_SHADE = 102, AP_LAMP = 103, AP_MANUAL = 104, AP_FIELD = 105, AP_STOP = 106, AP_FINE = 107 };
 		int TakeRequest() { const int r = request; request = -1; return r; }
 		OBJHANDLE SelectedTarget() const { return sel; }
+		int AlarmLevel() const { int l = 0; for (const auto& a : alerts) if (a.active && !a.ack) l = (std::max)(l, a.level); return l; }   // for the alarm tone
 		std::string Save() const;              // one scenario line
 		void Load(const std::string& line);
 
@@ -112,7 +118,7 @@ namespace ocrew
 		std::vector<RPage> RPages() const;
 
 		// ---- ui state (saved) ----
-		int pal{ 2 }, mode{ FLIGHT }, lpage{ L_LOCAL }, rpage{ R_TARGETS }, zoom{ 1 };
+		int pal{ 1 }, mode{ FLIGHT }, lpage{ L_LOCAL }, rpage{ R_TARGETS }, zoom{ 1 };
 		bool autoMode{ true }, openL{ true }, openR{ true };
 		// ---- nav state ----
 		std::vector<Target> targets;
@@ -141,7 +147,8 @@ namespace ocrew
 		// infrared view: the D3D9 client's custom camera renders her view into a texture, shown amplified, neutral grey
 		// screen brightness against the light around: automatic, or by hand (saved); ambient 0 dark .. 1 bright
 		// the display's technology, as it looks: 0 hologram, 1 light-built (a thin coherent line, hatched, no fills), 2 electroluminescent
-		int look{};
+		bool mapMono{};   // the local map in one colour (off by default: the user's choice)
+		int look{ 0 };   // holo, orange + cyan by default (the user's choice); the scenario's HUD line overrides
 		// caution & warning: what is wrong now (and was), acknowledged or not; newest first
 		struct Alert { std::string key, tile, text; int level{}; double t0{}; bool ack{}, active{}, seen{}; };
 		std::vector<Alert> alerts;
@@ -152,6 +159,9 @@ namespace ocrew
 		struct Hist { double t{ -1 }; std::vector<double> v[5]; } hist;
 		int Trend(int i, double thr) const;
 		bool brightAuto{ true }; double brightManual{ 0.6 }, ambient{ 0.5 }, lastAmbT{ -1 };
+		// the ranging relief for the IR view: the ground around her out to ~300 m (rings x sectors), from the elevation
+		// data - what an active ranger sees where there is no light at all (the night side of Io)
+		struct Relief { OBJHANDLE body{}; double lat{}, lng{}, t{ -1 }; int nr{}, na{}; std::vector<double> lat_, lng_, rad_; } relief;
 		bool nvg{}, gcTried{}, gcOk{}; SURFHANDLE nvSrf{}; void* nvCam{}; int nvW{}, nvH{}; std::string nvNote;
 		void NightVision(oapi::Sketchpad* skp, VESSEL* v, double W, double H);
 		HudText glyphs;

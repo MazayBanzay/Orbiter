@@ -5,7 +5,7 @@ bpy.ops.wm.open_mainfile(filepath=os.path.join(HERE, "astronavigator_coverall.bl
 sc = bpy.context.scene; cam = render_util.setup_stage()
 sc.render.resolution_x, sc.render.resolution_y = 700, 700
 shots = {"cu_nape": ((0.0, 0.55, 1.62), (0, 0.02, 1.43)), "cu_neck_side": ((0.45, -0.25, 1.55), (0.0, 0.0, 1.43)),
-         "cu_wrist": ((0.75, -0.45, 0.95), (0.40, 0.0, 0.88))}
+         "cu_side": ((0.75, -0.05, 1.32), (0.0, -0.03, 1.30)), "cu_seat": ((0.25, 1.1, 0.95), (0.0, 0.05, 0.85)), "cu_bust": ((0.45, -0.9, 1.30), (0.0, -0.05, 1.22))}
 for name, (loc, tgt) in shots.items():
     cam.location = loc; cam.data.lens = 60
     cam.rotation_mode = 'QUATERNION'; cam.rotation_quaternion = (Vector(tgt) - Vector(loc)).to_track_quat('-Z', 'Y')

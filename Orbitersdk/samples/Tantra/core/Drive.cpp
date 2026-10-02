@@ -45,6 +45,11 @@ void Drive::Update(double dt, double fieldLevel, double level, double mass, doub
     residual_ = (std::max)(0.0, thrustAccel - compensated_);
 }
 
+void Drive::Compensate(double level, double mass, double thrustAccel) {
+    compensated_ = (std::min)(thrustAccel, CompensationCapacity(level, mass));
+    residual_ = (std::max)(0.0, thrustAccel - compensated_);
+}
+
 double Drive::LevelForResidual(double residualLimit, double mass, double fieldLevel) const {
     if (fieldLevel < 1.0 || mass <= 0.0) return 0.0;
     // a(level) = level * Fmax / m grows linearly; compensation capacity grows with the

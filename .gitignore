@@ -16,6 +16,9 @@ __pycache__/
 *.blend1
 *.log
 *.bak
+# local safety copies made before rebuilds (large binaries)
+/Tantra_Design/backup_*/
+/Tantra_Design/blender/backup_*/
 
 # --- SDK property sheet used to build OrbiterCrew / Tantra with VS2022 ---
 !/Orbitersdk/
@@ -34,6 +37,8 @@ __pycache__/
 /Config/Vessels/*
 !/Config/Vessels/OrbiterCrew/
 !/Config/OrbiterCrew/
+# the people's figures: bone bindings (.skin), animation clips, HUD font, pack geometry
+!/Config/Tantra/
 !/Scenarios/
 /Scenarios/*
 !/Scenarios/OrbiterCrew/
@@ -66,3 +71,4 @@ __pycache__/
 *.exp
 *.iobj
 *.ipdb
+/Tantra_Design/presentation/img_alpha_backup/

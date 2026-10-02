@@ -4,6 +4,7 @@
 // take its people with it, their own organism decides. The crew registry holds every person of the simulation.
 #pragma once
 #include "LifeSupport.h"
+#include "Wearable.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -17,6 +18,7 @@ namespace ocrew
 		std::string sex{ "female" };     // a description: abilities are set per person (VO2max, LiftMax), not derived from it
 		double age{}, heightM{};
 		Body body;                       // the organism: water, food, injuries, dose, stamina, consciousness
+		Worn worn;                       // what is on him or her: coverall, suit (with its computer), pack
 
 		enum Where { NOWHERE, IN_WORLD, ABOARD };
 		Where where{ NOWHERE };          // IN_WORLD: her body walks in Orbiter's world; ABOARD: in a seat of a ship

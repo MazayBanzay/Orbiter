@@ -54,6 +54,7 @@ namespace ocrew
 	void JetPack::Setup(VESSEL4* vessel)
 	{
 		v = vessel;
+		steam.clear(); rcs = {}; dust = nullptr;   // a new body: its parts are made anew
 		if (!LoadGeo())
 		{
 			for (int i = 0; i < 2; ++i) { const double s = i ? -1 : 1; hinge[i] = _V(s * 0.204, 0.54, -0.18); pivot[i] = _V(s * 0.60, 0.575, -0.17); }
@@ -102,7 +103,15 @@ namespace ocrew
 			else if (!o2 && s.h) { v->DelExhaustStream(s.h); s.h = nullptr; }
 	}
 
-	double JetPack::Fuel() const { return prop ? v->GetPropellantMass(prop) : 0; }
+	double JetPack::Fuel() const { return v && prop ? v->GetPropellantMass(prop) : kept; }
+
+	void JetPack::Detach()
+	{
+		if (!v) return;
+		if (!worn) kept = 0;   // the fuel was copied every step (no Orbiter calls while the body is being deleted)
+		keptKnown = true;
+		v = nullptr; prop = nullptr; pod[0] = pod[1] = nullptr; rcs = {}; steam.clear(); dust = nullptr;
+	}
 
 	void JetPack::Wear(double fuel)
 	{
@@ -156,9 +165,11 @@ namespace ocrew
 		return false;
 	}
 
-	void JetPack::Update(double dt, bool landed, bool canFly, double g, double altFeet, const FlightInput& in)
+	void JetPack::Update(double dt, bool landed, bool canFly, double g, double altFeet, const FlightInput& in0)
 	{
+		if (v && prop) kept = v->GetPropellantMass(prop);   // the pack's own record of its fuel, kept current
 		if (!worn || dt <= 0) return;
+		const FlightInput& in = in0;
 		if (!canFly) mode = MANUAL;
 		const bool free = !landed;
 		surfaceMode = altFeet < 3000 && g > 0.05;
@@ -179,12 +190,23 @@ namespace ocrew
 		const double leanF = -rb.x;    // + leaning forward (rad, up to pi)
 		const double leanR = rb.z;     // + leaning to her right
 		double hdg = 0; oapiGetHeading(v->GetHandle(), &hdg);
+		// the rates from her own angular velocity, not from differences of the lean and the heading: those wrap and
+		// flip when she is head down (the heading turns over by 180 deg) - the damping then pushed the spin on instead of
+		// stopping it. The signs of the body rates are learned while she is near upright (where the differences agree)
+		VECTOR3 av; v->GetAngularVel(av);
 		if (prevValid)
 		{
-			auto rate = [&](double now, double before, double& r) { r += ((now - before) / dt - r) * (std::min)(1.0, dt / 0.06); };
-			rate(leanF, prevLeanF, leanFRate); rate(leanR, prevLeanR, leanRRate);
+			const double dF = leanF - prevLeanF, dR = leanR - prevLeanR;
 			double dh = hdg - prevHdg; if (dh > PI) dh -= PI2; if (dh < -PI) dh += PI2;
-			yawRate += (dh / dt - yawRate) * (std::min)(1.0, dt / 0.06);
+			if (cs > 0.8 && dt > 0)
+			{
+				auto learn = [&](double diff, double body, double& sgn) { if (std::abs(diff / dt) > 0.15 && std::abs(body) > 0.15) sgn = diff * body > 0 ? 1 : -1; };
+				learn(dF, av.x, sgnF); learn(dR, av.z, sgnR); learn(dh, av.y, sgnY);
+			}
+			const double k = (std::min)(1.0, dt / 0.06);
+			leanFRate += (sgnF * av.x - leanFRate) * k;
+			leanRRate += (sgnR * av.z - leanRRate) * k;
+			yawRate += (sgnY * av.y - yawRate) * k;
 		}
 		prevLeanF = leanF; prevLeanR = leanR; prevHdg = hdg; prevValid = true;
 		VECTOR3 hv; v->GetGroundspeedVector(FRAME_HORIZON, hv);
@@ -202,18 +224,8 @@ namespace ocrew
 		}
 
 		// ---- throttle: by hand (numpad 0 / .), or the height hold, or the landing autopilot ----
-		// the share of the pods' thrust that lifts: their real directions against the local vertical
-		double cosAll;
-		{
-			double lift = 0, sum = 0;
-			for (int i = 0; i < 2; ++i)
-			{
-				VECTOR3 dg; v->GlobalRot(_V(std::sin(sidePod[i]), std::cos(sidePod[i]) * std::cos(tilt[i]), std::cos(sidePod[i]) * std::sin(tilt[i])), dg);
-				const double w = podLvl[i] > 1e-3 || level > 1e-3 ? (std::max)(podLvl[i], 1e-3) : 1.0;
-				lift += w * dotp(dg, up); sum += w;
-			}
-			cosAll = (std::max)(0.2, lift / sum);
-		}
+		// the lift is set as a force along the local vertical (the pods' vectors are built from forces below)
+		const double cosAll = 1.0;
 		if (assist && !in.boost && surfaceMode && in.vertical != 0 && mode != HOLD && canFly && !(landed && in.vertical < 0))
 		{
 			mode = HOLD; spdSet = false; altTarget = landed ? 0.3 : (std::max)(0.5, altFeet);   // Space lifts off from the ground
@@ -221,7 +233,7 @@ namespace ocrew
 		if (mode == HOLD && !in.boost) altTarget = (std::max)(0.5, altTarget + 1.5 * in.vertical * dt);
 		if (mode == HOLD && altTarget <= 0.55 && altFeet < 0.8 && in.vertical <= 0) mode = DESCENT;   // held at the bottom, near the ground: touch down
 		if (vecNow) cmd = std::clamp(m * length(vecA) / tmax, 0.0, 1.0);   // the autopilot sets the whole vector
-		else if (mode == MANUAL) cmd = std::clamp(cmd + (0.5 * in.throttle + (assist || in.boost ? 0.0 : 0.8 * in.vertical)) * dt, 0.0, 1.0);
+		else if (mode == MANUAL) cmd = std::clamp(cmd + (0.5 * in.throttle + (assist || in.boost ? 0.0 : 0.8 * in.vertical)) * dt * (fine ? 0.25 : 1.0), 0.0, 1.0);
 		else if (mode == HOLD)
 		{
 			altTarget = (std::max)(0.5, altTarget + 1.5 * in.throttle * dt);       // numpad 0 / . move the held height
@@ -239,15 +251,20 @@ namespace ocrew
 				}
 			}
 			const double aCmd = std::clamp(1.5 * (altTarget - altFeet) - 2.0 * hv.y, -3.0, 4.0);
-			cmd = std::clamp(m * (g + aCmd) / (tmax * cosAll), 0.0, 1.0);
+			cmd = std::clamp(m * (g + aCmd) / (tmax * cosAll), -1.0, 1.0);   // negative: the jets turned up, pushing her down
 		}
-		else   // DESCENT: sink slower the lower she is, touch down at 0.5 m/s
+		else   // DESCENT: come down fast and brake late - a stopping profile, not a crawl
 		{
-			const double drift = std::hypot(hv.x, hv.z);
-			double vt = -(std::max)(0.5, (std::min)(4.0, std::sqrt(2 * 0.8 * (std::max)(0.0, altFeet - 0.3))));   // stop the sink by 0.3 m
-			if (drift > 2.5) vt = (std::max)(vt, -1.5);   // still braking a big drift: sink gently meanwhile
-			if (drift > 0.35) vt = (std::max)(vt, altFeet > 1.2 ? -0.5 : 0.4 * (1.2 - altFeet));   // no touchdown while sliding: wait at ~1 m
-			cmd = std::clamp(m * (g + 1.5 * (vt - hv.y)) / (tmax * cosAll), 0.0, 1.0);
+			// the sink the pods can still stop by 1 m over the ground, braking at half of what the landing limit gives
+			// (2.2 weights: 1.2 g net); at most 40 m/s; the last metre at 0.6 m/s
+			const double drift = std::hypot(hv.x, hv.z), aV = 0.5 * 1.2 * (std::max)(0.5, g);
+			double vt = altFeet > 1.0 ? -(std::min)(40.0, (std::max)(0.6, std::sqrt(2 * aV * (altFeet - 1.0)))) : -0.6;
+			// the drift must be gone by 2 m: never come down faster than the braking it still needs allows - with much
+			// drift low down, hold (or climb a little) while braking
+			const double aH = 0.7 * 0.5 * (std::max)(0.5, g) * std::tan((std::max)(5 * RAD, maxTilt));
+			if (drift > 0.3) vt = (std::max)(vt, (std::min)(1.0, -(altFeet - 2.0) * aH / drift));
+			if (altFeet < 2.0 && drift > 0.5) vt = (std::max)(vt, 0.5 * (1.5 - altFeet));   // still sliding at the ground: wait
+			cmd = std::clamp(m * (g + 1.5 * (vt - hv.y)) / (tmax * cosAll), -1.0, 1.0);
 			if (landed) { mode = MANUAL; cmd = 0; }
 		}
 		// ground proximity, in any mode: sinking too fast for the height left -> the pods brake on their own
@@ -276,6 +293,10 @@ namespace ocrew
 			else if (released) lockout = false;
 			if (lockout) { cmd = level = 0; if (mode != MANUAL) mode = MANUAL; }
 		}
+		// the vertical force, signed: the assistant may turn the jets up to stop a climb (or push her down faster than
+		// the weak lunar g would); 'level' stays the upward share (dust, displays, the liftoff test)
+		lift = (landed && level < 0) ? 0.0 : level * tmax;
+		level = (std::max)(0.0, level);
 		dustLevel = worn && surfaceMode && deploy > 0.98 ? level * std::clamp(1.0 - altFeet / 1.5, 0.0, 1.0) * std::clamp(cs, 0.0, 1.0) : 0.0;
 
 		// ---- booms: out when the pods are wanted, folded again after a while idle on the ground ----
@@ -296,7 +317,7 @@ namespace ocrew
 			if (mode == HOLD && assist && free && !in.ap && !in.boost)
 			{
 				if (!spdSet) { spdTarget = std::clamp(vf, -5.0, 40.0); spdSet = true; }
-				spdTarget = std::clamp(spdTarget + 3.0 * in.pitch * dt, -5.0, 40.0);
+				spdTarget = std::clamp(spdTarget + 3.0 * in.pitch * dt * (fine ? 0.1 : 1.0), -5.0, 40.0);
 				if (braking) { spdTarget = 0; if (std::hypot(vf, vr) < 0.15 && std::abs(hv.y) < 0.2) braking = false; }
 				const double gg = (std::max)(0.5, g), mt = (std::max)(5 * RAD, maxTilt), ms = (std::min)(braking ? 45 * RAD : 20 * RAD, mt);
 				pin.pitch = std::clamp(std::atan(std::clamp(1.0 * (spdTarget - vf), -4.0, 4.0) / gg) / mt, -1.0, 1.0);
@@ -311,15 +332,33 @@ namespace ocrew
 			const double R = oapiGetSize(body), cl = (std::max)(0.05, std::cos(lat)), gs = std::hypot(hv.x, hv.z);
 			if (!landSet)
 			{
-				// the point she can stop at, braking at ~3 m/s^2: that is where she lands
+				pinned = false;
+				// the point she can stop at, braking at ~3 m/s^2 (kept for the display)
 				const double dStop = gs * gs / (2 * 3.0);
 				landLat = lat + (gs > 0.1 ? hv.z / gs : 0) * dStop / R;
 				landLng = lng + (gs > 0.1 ? hv.x / gs : 0) * dStop / (R * cl);
 				landSet = true;
 			}
-			double dl = landLng - lng; while (dl > PI) dl -= PI2; while (dl < -PI) dl += PI2;
-			const double errN = (landLat - lat) * R, errE = dl * R * cl;
-			const double aN = std::clamp(0.6 * errN - 1.6 * hv.z, -4.0, 4.0), aE = std::clamp(0.6 * errE - 1.6 * hv.x, -4.0, 4.0);
+			double aN = 0, aE = 0;
+			if (pinned)   // the autopilot's point (a pad, beside a target): hold over it
+			{
+				double dl = landLng - lng; while (dl > PI) dl -= PI2; while (dl < -PI) dl += PI2;
+				const double errN = (landLat - lat) * R, errE = dl * R * cl;
+				aN = std::clamp(0.6 * errN - 1.6 * hv.z, -4.0, 4.0); aE = std::clamp(0.6 * errE - 1.6 * hv.x, -4.0, 4.0);
+			}
+			else if (gs > 0.05)
+			{
+				// no point to chase: let the drift run while there is time, brake it so it is gone by the ground.
+				// Time left to the ground at the planned sink; the drift allowed = what the pods can still stop in that time
+				const double aH = 0.5 * (std::max)(0.5, g) * std::tan((std::max)(5 * RAD, maxTilt));
+				const double tg = (std::max)(0.0, altFeet - 2.0) / (std::max)(0.6, -hv.y);
+				const double allowed = altFeet < 2.0 ? 0.0 : 0.7 * aH * tg;
+				if (gs > allowed)
+				{
+					const double a = (std::min)(aH * 2, 1.2 * (gs - allowed) + (altFeet < 2.0 ? 0.8 * gs : aH));
+					aN = -hv.z / gs * a; aE = -hv.x / gs * a;
+				}
+			}
 			const double ch = std::cos(hdg), sh = std::sin(hdg);
 			const double aF = aN * ch + aE * sh, aR = aE * ch - aN * sh;
 			const double gg = (std::max)(0.5, g), mt = (std::max)(5 * RAD, maxTilt);
@@ -327,62 +366,101 @@ namespace ocrew
 			pin.strafe = std::clamp(std::atan(aR / gg) / (std::min)(45 * RAD, mt), -1.0, 1.0);
 		}
 		// ---- the pods: W swings the jets aft (push forward), S forward (brake, back); A/D against each other (turn) ----
-		const double tYaw = assist ? YAW_TILT * std::clamp(1.5 * (1.0 * in.yaw - yawRate), -1.0, 1.0) : YAW_TILT * in.yaw;
+		// the turn: calm by default (assistant: up to ~17 deg/s; by hand: 40 % of the differential tilt);
+		// the full rate and the full tilt only with Shift - an emergency manoeuvre
+		const double kf = fine ? 0.1 : 1.0;   // the limiter
+		const double yawMax = (in.boost ? 1.0 : 0.3) * (fine ? 0.2 : 1.0);   // rad/s the assistant turns her at, full deflection
+		const double tYaw = assist ? YAW_TILT * std::clamp(1.5 * (yawMax * in.yaw - yawRate) / yawMax * 0.6, -1.0, 1.0)
+		                           : YAW_TILT * in.yaw * (in.boost ? 1.0 : 0.4) * kf;
 		const double sideMax = (std::min)(in.boost ? 35 * RAD : mode == DESCENT || braking ? 45 * RAD : 20 * RAD, maxTilt + 1e-6);
-		// the thrust direction wanted: with the assistant, from the local vertical (her lean is taken out - the vector,
-		// not the body, sets the path); by hand, from her own axis
-		double tiltCmd = maxTilt * pin.pitch, sideCmd = sideMax * pin.strafe;
-		if (assist && free && surfaceMode)
+		// ---- the pods' vectors, built from forces: the lift, the steering and the turn are separate demands, so the
+		// steering works whatever the lift is (zero lift included) - the pods swing and run for it on their own ----
+		const VECTOR3 fH0 = fG - up * dotp(fG, up), fH = length(fH0) > 0.2 ? unit(fH0) : unit(uG - up * dotp(uG, up));
+		const VECTOR3 rH0 = rG - up * dotp(rG, up) - fH * dotp(rG, fH), rH = length(rH0) > 1e-3 ? unit(rH0) : _V(0, 0, 0);
+		const double gg = (std::max)(0.5, g);
+		const bool steer = free && !lockout && Fuel() > 0;   // on the ground the pods only lift
+		VECTOR3 T;   // the total force wanted from both pods, in her frame, N
+		if (vecNow)
 		{
-			const VECTOR3 fH0 = fG - up * dotp(fG, up), fH = length(fH0) > 0.2 ? unit(fH0) : unit(uG - up * dotp(uG, up));
-			const VECTOR3 rH0 = rG - up * dotp(rG, up) - fH * dotp(rG, fH), rH = length(rH0) > 1e-3 ? unit(rH0) : _V(0, 0, 0);
-			const VECTOR3 w = unit(up + fH * std::tan(tiltCmd) + rH * std::tan(sideCmd));
-			const VECTOR3 b = tmul(Rm, w);   // in her frame
-			tiltCmd = std::clamp(std::atan2(b.z, b.y), -80 * RAD, 80 * RAD);
-			sideCmd = std::asin(std::clamp(b.x, -1.0, 1.0));
-		}
-		if (vecNow && length(vecA) > 1e-3)   // the autopilot's vector: from the horizon frame into hers
-		{
-			const VECTOR3 fH0 = fG - up * dotp(fG, up), fH = length(fH0) > 0.2 ? unit(fH0) : unit(uG - up * dotp(uG, up));
-			const VECTOR3 rH0 = rG - up * dotp(rG, up) - fH * dotp(rG, fH), rH = length(rH0) > 1e-3 ? unit(rH0) : _V(0, 0, 0);
 			const double ch = std::cos(hdg), sh = std::sin(hdg);
 			const VECTOR3 north = fH * ch - rH * sh, east = fH * sh + rH * ch;
-			const VECTOR3 w = unit(east * vecA.x + up * (std::max)(0.05, vecA.y) + north * vecA.z);   // the pods only lift
-			const VECTOR3 b = tmul(Rm, w);
-			tiltCmd = std::clamp(std::atan2(b.z, b.y), -80 * RAD, 80 * RAD);
-			sideCmd = std::asin(std::clamp(b.x, -1.0, 1.0));
+			T = tmul(Rm, (east * vecA.x + up * vecA.y + north * vecA.z) * m);
 		}
-		side += std::clamp((ready ? sideCmd : 0.0) - side, -dt * 90 * RAD, dt * 90 * RAD);
-		// sideways: only the pod whose jet goes outwards swings (the other one's would cross her body and the pack);
-		// it swings twice as far for the same push, and runs harder so both lift alike (no roll)
-		const double INWARD = 6 * RAD, sOne = std::atan(2 * std::tan(std::abs(side)));
+		else if (assist && free && surfaceMode)
+		{
+			// the assistant: the lift along the local vertical, the steering as a horizontal acceleration
+			// (W/S and Q/E ask for g*tan of the old vector angle - the same feel at a hover); her lean is taken out
+			const double kp = in.ap ? 1.0 : kf;   // the autopilot and the assistant's own laws are not limited
+			const double Ff = steer ? m * gg * std::tan(maxTilt * pin.pitch * (pin.pitch == in.pitch ? kp : 1.0)) : 0.0;
+			const double Fs = steer ? m * gg * std::tan(sideMax * pin.strafe * (pin.strafe == in.strafe ? kp : 1.0)) : 0.0;
+			T = tmul(Rm, up * lift + fH * Ff + rH * Fs);
+		}
+		else
+		{
+			// by hand: in her own frame, no compensation; the steering as a share of the full thrust
+			T = _V(steer ? tmax * std::sin(sideMax) * pin.strafe * kf : 0.0, lift, steer ? tmax * std::sin(maxTilt) * pin.pitch * kf : 0.0);
+		}
+		// the turn: opposite fore/aft forces at the pods, as with a quarter of the thrust at least (works with no lift)
+		const double Fy = POD_F * (std::max)(0.25, level) * std::sin(tYaw) * (steer || level > 0 ? 1.0 : 0.0);
+		VECTOR3 want[2]; double need[2];
 		for (int i = 0; i < 2; ++i)
 		{
 			const double sgn = i == 0 ? 1 : -1;   // +1: the pod on her right
-			// thrust to +x (side > 0) blows the jet to -x: outwards for the left pod (sgn -1)
-			const bool outward = side * sgn < 0;
-			sidePod[i] = (outward ? (std::min)(sOne, 60 * RAD) * (side > 0 ? 1 : -1) : std::clamp(side, -INWARD, INWARD));
+			// sideways only from the pod whose jet goes outwards (thrust to +x blows the jet to -x: the left pod)
+			const bool outward = T.x * sgn < 0;
+			VECTOR3 w = _V(outward ? T.x : 0.0, 0.5 * T.y, 0.5 * T.z - sgn * Fy);
+			const double hz = std::hypot(w.x, w.z);
+			(void)hz;   // the pods swing all round in their fore/aft plane: the jets at 0.6 m out pass beside her and the helmet
+			// the lift comes first: the steering and the turn get only what the pod has left after it (cutting the whole
+			// vector cut the lift too - braking hard near the ground she sank and hit)
+			w.y = std::clamp(w.y, -POD_F, POD_F);
+			const double room = std::sqrt((std::max)(0.0, POD_F * POD_F - w.y * w.y)), hz2 = std::hypot(w.x, w.z);
+			if (hz2 > room && hz2 > 1e-9) { w.x *= room / hz2; w.z *= room / hz2; }
+			want[i] = w; need[i] = length(w) / POD_F;
 		}
-		podLvl[0] = podLvl[1] = level;
-		{
-			const double c0 = std::cos(sidePod[0]), c1 = std::cos(sidePod[1]), cm = (std::max)(c0, c1);
-			double l0 = level * cm / c0, l1 = level * cm / c1;
-			const double top = (std::max)(l0, l1);
-			if (top > 1) { l0 /= top; l1 /= top; }
-			podLvl[0] = l0; podLvl[1] = l1;
-		}
+		const double over = (std::max)({ 1.0, need[0], need[1] });   // (rounding only now)
+		// both pods swing together: one common angle follows the total vector the short way round, each pod only adds
+		// its small offset (the turn). Swinging separately near 180 deg, one went over the front and the other over the
+		// back - for two seconds they pushed opposite ways 1.2 m apart, and she spun up
+		auto wrap = [](double a) { while (a > PI) a -= PI2; while (a < -PI) a += PI2; return a; };
+		if (std::hypot(T.y, T.z) > 1.0 && ready)
+			tiltBase = wrap(tiltBase + std::clamp(wrap(std::atan2(T.z, T.y) - tiltBase), -dt * 180 * RAD, dt * 180 * RAD));
+		else if (!ready) tiltBase = wrap(tiltBase - std::clamp(tiltBase, -dt * 90 * RAD, dt * 90 * RAD));
 		for (int i = 0; i < 2; ++i)
 		{
 			const double sgn = i == 0 ? 1 : -1;
-			const double lim = (std::max)(maxTilt, std::abs(tiltCmd)) + YAW_TILT;
-			const double target = ready ? std::clamp(tiltCmd - sgn * tYaw, -lim, lim) : 0.0;
-			tilt[i] += std::clamp(target - tilt[i], -dt * 90 * RAD, dt * 90 * RAD);
+			const VECTOR3 w = want[i];
+			const double len = length(w);
+			double tT = 0, sT = 0;
+			if (len > 1e-6 && ready)
+			{
+				tT = std::atan2(w.z, w.y);   // any direction in the pod's plane, up included
+				sT = std::asin(std::clamp(w.x / len, -1.0, 1.0));
+				// never inwards past 6 deg (the jet would cross her), never outwards past 60
+				sT = sgn > 0 ? std::clamp(sT, -60 * RAD, 6 * RAD) : std::clamp(sT, -6 * RAD, 60 * RAD);
+			}
+			// the common angle plus this pod's own small offset (the turn), never more than 30 deg apart
+			const double base = std::hypot(T.y, T.z) > 1.0 ? std::atan2(T.z, T.y) : tiltBase;
+			const double target = wrap(tiltBase + std::clamp(wrap(tT - base), -30 * RAD, 30 * RAD));
+			tilt[i] = wrap(tilt[i] + std::clamp(wrap(target - tilt[i]), -dt * 240 * RAD, dt * 240 * RAD));
+			// a jet blowing up (over the head, raised arms) or forward (past the arms) is canted 15 deg outwards: the
+			// plume spreads wide in vacuum and must not cross her (the jets back and down pass clear as they are)
+			const double cant = 15 * RAD * std::clamp((std::max)(-std::cos(tilt[i]), -std::sin(tilt[i])) * 2.0, 0.0, 1.0);
+			sT = sgn > 0 ? (std::min)(sT, -cant) : (std::max)(sT, cant);
+			sidePod[i] += std::clamp(sT - sidePod[i], -dt * 180 * RAD, dt * 180 * RAD);   // fast: the pods answer a danger at once
+			podLvl[i] = ready && Fuel() > 0 ? (std::min)(1.0, need[i] / over) : 0.0;
+			// a pod still swinging pushes only as much as it points the way it should (no thrust the wrong way)
+			if (len > 1e-6)
+			{
+				const VECTOR3 now = _V(std::sin(sidePod[i]), std::cos(sidePod[i]) * std::cos(tilt[i]), std::cos(sidePod[i]) * std::sin(tilt[i]));
+				podLvl[i] *= std::clamp(dotp(now, w / len), 0.0, 1.0);
+			}
 			v->SetThrusterDir(pod[i], _V(std::sin(sidePod[i]), std::cos(sidePod[i]) * std::cos(tilt[i]), std::cos(sidePod[i]) * std::sin(tilt[i])));
-			v->SetThrusterLevel(pod[i], ready ? podLvl[i] : 0.0);
+			v->SetThrusterLevel(pod[i], podLvl[i]);
 			// the nozzle heats up in a few seconds of thrust and cools slower (for a glowing exit material, not yet drawn)
-			const double want = ready ? podLvl[i] : 0.0;
-			heat[i] += (want - heat[i]) * (std::min)(1.0, dt / (want > heat[i] ? 3.0 : 7.0));
+			heat[i] += (podLvl[i] - heat[i]) * (std::min)(1.0, dt / (podLvl[i] > heat[i] ? 3.0 : 7.0));
 		}
+		side = 0.5 * (sidePod[0] + sidePod[1]);
 		tMaxTilt = maxTilt;
 
 		// ---- the body stays upright: the pack's small ports hold her attitude near a surface ----
@@ -495,7 +573,7 @@ namespace ocrew
 		if (!worn) return;
 		d.jetFlying = tFlying; d.jetSurface = surfaceMode; d.jetLimited = tLimited; d.jetProtect = tProtect; d.jetTerrain = tTerrain;
 		d.jetFuel = Fuel() / FUEL; d.jetDv = DeltaV(); d.jetThrottle = level; d.jetFlow = Thrust() / ISP; d.jetTilt[0] = tilt[0]; d.jetTilt[1] = tilt[1];
-		d.jetMaxTilt = tMaxTilt; d.jetDeploy = deploy; d.jetAltHold = altTarget; d.jetSpd = spdTarget; d.jetVf = tVf; d.jetBraking = braking; d.alt = tAlt; d.vs = tVs; d.gs = tGs;
+		d.jetMaxTilt = tMaxTilt; d.jetDeploy = deploy; d.jetAltHold = altTarget; d.jetSpd = spdTarget; d.jetVf = tVf; d.jetBraking = braking; d.jetFine = fine; d.alt = tAlt; d.vs = tVs; d.gs = tGs;
 		d.leanF = tLeanF; d.leanR = tLeanR; d.jetMode = static_cast<int>(mode); d.boost = tBoost; d.jetAssist = assist; d.jetHover = tHover;
 	}
 }

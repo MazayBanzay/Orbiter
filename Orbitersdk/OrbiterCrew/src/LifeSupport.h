@@ -85,6 +85,30 @@ namespace ocrew
 		// returns the heat (W) the suit could not handle, going into her body (+ warms, - cools)
 		double Step(double dt, double o2Use, double co2Made, double driveDemandW, double bodyHeatW, double tEnv);
 		double HoursLeft(double o2Use) const { return o2Use > 0 ? o2 / o2Use / 3600 : 0; }
+		// in breathable air the fan draws the air around through the helmet: the tank and the sorbent are not used,
+		// only the battery (set before Step)
+		bool vent{}; double ventPpO2{}, ventPpCO2{};
+		// the outside: its pressure (kPa, Orbiter's own) sets how much heat the gas carries through the suit - nothing in
+		// vacuum (radiation only), more the denser the gas; above the shell's rated outside pressure the shell gives way
+		double pOut{};                   // kPa, set before Step
+		double pMaxOutKPa{ 200 };        // class 1 «Каркас»: built for vacuum and Earth-like air, not for a deep atmosphere
+		bool breached{};                 // the shell crushed / torn: the outside comes in
+		double Conductance() const { return conductance * (1 + 4 * std::sqrt((std::max)(0.0, pOut) / 101.3)) * (breached ? 10 : 1); }   // W/K
+		bool Venting() const { return vent && Powered(); }
+		// an impact through the suit: the frame carries the suit's and the pack's mass to the ground, and its passive
+		// dampers (physical loop, no power needed) take that mass's energy and a share of the body's - 40 % feet first,
+		// 20 % on the back, 30 % head first (the helmet) - until their stroke (~0.25 m) runs out at ~7 m/s; the rest
+		// reaches the body. contact: as Body::Contact (0 feet, 1 back, 2 head).
+		// Returns the impact speed the bare body feels the same energy at.
+		static double ImpactThrough(double v, double mBody, double mWorn, int contact)
+		{
+			if (v <= 0 || mBody <= 0) return 0;
+			const double share = contact == 0 ? 0.4 : contact == 2 ? 0.3 : 0.2, VSTROKE = 7.0;
+			const double eBody = 0.5 * mBody * v * v, eWorn = 0.5 * mWorn * v * v;
+			const double cap = 0.5 * VSTROKE * VSTROKE * (mWorn + share * mBody);
+			const double toBody = eBody + eWorn - (std::min)(cap, eWorn + share * eBody);
+			return std::sqrt(2 * (std::max)(0.0, toBody) / mBody);
+		}
 		double BattHours() const { return drawW > 0 ? batt / drawW / 3600 : 0; }
 	};
 
@@ -131,7 +155,10 @@ namespace ocrew
 		void Step(double dt, double activityW, double ppO2, double ppCO2, double ambientP, bool suited, double heatW);
 		void Spend(double joules) { wbal = (std::max)(0.0, wbal - joules / WCAP); }
 		// touchdown at 'v' m/s (vertical): the suit and its frame take the first 7 m/s; beyond, injury; above 14, fatal
-		void Impact(double v);
+		// what hits first: the injuries follow the body's own physics - feet first, the legs take it (the spine only in a
+		// very hard landing); on the back, the torso and the back of the head; head first, the head
+		enum Contact { ON_FEET, ON_BACK, ON_HEAD };
+		void Impact(double v, Contact c = ON_FEET);
 		double O2Use() const { return state == DEAD ? 0 : met / 14.07e6; }       // kg/s, 14.07 MJ per kg O2
 		double CO2Made() const { return O2Use() * 1.169; }                       // kg/s at RQ 0.85
 		double Heat() const { return state == DEAD ? 0 : 0.8 * met; }            // W released as heat

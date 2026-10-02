@@ -500,6 +500,7 @@ bool Tantra::clbkPanelRedrawEvent(int id, int, SURFHANDLE s, void*) {
 
 double Tantra::LocalG() const {
     OBJHANDLE ref = GetGravityRef();
+    if (!ref) return G0;  // not yet known (scenario loading)
     VECTOR3 pos;
     GetRelativePos(ref, pos);
     const double r = length(pos);

@@ -22,6 +22,7 @@ namespace ocrew
 		double accel{};                // forward acceleration commanded by the legs (m/s^2)
 		double g{ 9.81 };
 		bool grounded{ true };         // on the surface (false while in the air after a jump)
+		bool lying{};                  // down on the ground (fallen, unconscious, dead): no tuck of the legs
 		double landing{};              // vertical speed at touchdown this step (m/s), else 0
 		double effort{};               // 0..1 metabolic load
 		double fatigue{};              // 0..1
@@ -69,6 +70,7 @@ namespace ocrew
 		double floatW{}, swayX{}, swayXV{}, swayZ{}, swayZV{}, swayY{}, swayYV{};
 		double hangW{}, jetW{};
 		double seeds[12]{};
+		double lyingW{};                       // 0 .. 1: down on the ground, limp
 		double blinkIn{ 2.5 }, blinkT{ -1 };   // seconds to the next blink; time into the current one (-1: eyes open)
 		std::mt19937 rng;
 		Pose pIdle, pWalk, pRun, pLoco, pOut;

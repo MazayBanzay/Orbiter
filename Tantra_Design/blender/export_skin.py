@@ -5,6 +5,7 @@
 # Coordinates: Blender (RH, Z up, faces -Y) -> Orbiter (LH, Y up, faces +Z): p_o = C p_b - (0, ORIGIN_H, 0),
 # R_o = C R_b C^T with C = [[-1,0,0],[0,0,1],[0,-1,0]]. Triangle order reversed (as in export_orbiter.py).
 import bpy, os, sys, math, traceback
+import numpy as np
 from mathutils import Matrix, Vector, Quaternion
 HERE = os.path.dirname(__file__); ROOT = os.path.dirname(HERE); sys.path.insert(0, HERE)
 from pose_util import idle_pose
@@ -33,6 +34,7 @@ CLIPS = [("walk", "35_01_aim" if VARIANT == "coverall" else "35_01"), ("run", "0
 LOG = os.path.join(HERE, "export_skin.log"); log = []
 C3 = Matrix(((-1, 0, 0), (0, 0, 1), (0, -1, 0)))
 
+def smooth(e0, e1, x): t = min(max((x - e0) / (e1 - e0), 0.0), 1.0); return t * t * (3 - 2 * t)
 def cp(p):
     q = C3 @ Vector(p); return Vector((q.x, q.y - ORIGIN_H, q.z))
 def cm(M4):
@@ -49,7 +51,7 @@ def hierarchy(arm):
 
 def short_name(o, mat):
     base = o.name.split('.')[-1]
-    s = {"female1605": "Skin", "eyebrow001": "Brows", "eyelashes01": "Lashes", "low-poly": "Eyes", "shoes03": "Boots"}.get(base, "Hair" if ("bob" in base or "hair" in base) else base[:10])
+    s = {"female1605": "Skin", "body": "Skin", "eyebrow001": "Brows", "eyelashes01": "Lashes", "low-poly": "Eyes", "shoes03": "Boots"}.get(base, "Hair" if ("bob" in base or "hair" in base) else base[:10])
     if base == "Coverall" and mat: return (s + "_" + mat.name.split('.')[-1].replace("Coverall", ""))[:20], s
     if s not in BODY_LABELS and len(o.material_slots) > 1 and mat: return (s + "_" + mat.name.split('.')[-1][:9])[:20], s
     return s[:20], s
@@ -94,14 +96,43 @@ def export_bind(arm, bones):
         if dds in textures: return textures.index(dds) + 1
         textures.append(dds); return len(textures)
     objs = [o for o in bpy.data.objects if o.type == 'MESH' and not o.hide_render and o.name != "Floor" and len(o.data.polygons)]
+    # coverall: the base mesh gives the upper-arm bone weight far inside the shoulder joint, up to the neck. Lowering
+    # the arm turns everything inside the pivot UP about it - a hump over the shoulder. Inside the joint the arm's
+    # weight passes to the clavicle (which stays with the torso), fading over a few cm across the pivot.
+    sides = []
+    for sd in ("Left", "Right"):
+        h = np.array(cp(arm.matrix_world @ arm.data.bones[sd + "Arm"].head_local)); e = np.array(cp(arm.matrix_world @ arm.data.bones[sd + "ForeArm"].head_local))
+        sides.append((bidx[sd + "Arm"], bidx[sd + "Shoulder"], h, (e - h) / np.linalg.norm(e - h)))
+    def shoulder_fix(ws, P):
+        P = np.array(P); d = dict(ws)
+        for a, c, h, ax in sides:
+            if a not in d: continue
+            t = np.clip((float(np.dot(P - h, ax)) + 0.035) / 0.05, 0, 1); keep = t * t * (3 - 2 * t)
+            moved = d[a] * (1 - keep); d[a] -= moved; d[c] = d.get(c, 0.0) + moved
+        return [(b, w) for b, w in d.items() if w > 1e-4]
+    # coverall: the middle of the seat follows the pelvis, not the thighs - with the legs together the thigh bones
+    # would pull the fabric into the cleft between the buttocks again
+    hips = bidx["Hips"]; hy = float(cp(arm.matrix_world @ arm.data.bones["Hips"].head_local).y)
+    legs = {bidx[n] for n in ("LeftUpLeg", "RightUpLeg", "LHipJoint", "RHipJoint") if n in bidx}
+    def seat_fix(ws, P):
+        x, y, z = P
+        if z > 0: return ws   # front
+        f = (1 - smooth(0.03, 0.06, abs(x))) * smooth(hy - 0.12, hy - 0.06, y) * (1 - smooth(hy + 0.04, hy + 0.08, y)) * smooth(0.02, 0.05, -z)   # above the gluteal fold, behind
+        if f <= 0: return ws
+        d = dict(ws); moved = 0.0
+        for b in legs:
+            if b in d: m = d[b] * f; d[b] -= m; moved += m
+        d[hips] = d.get(hips, 0.0) + moved
+        return [(b, w) for b, w in d.items() if w > 1e-4]
     for o in objs:
         me = o.data; M = o.matrix_world; N3 = M.to_3x3().inverted().transposed()
         vis = visible_verts(o)
         me.calc_loop_triangles(); uvl = me.uv_layers.active.data if me.uv_layers.active else None
         cn = me.corner_normals
         gname = {g.index: g.name for g in o.vertex_groups}
-        def weights(vi):
+        def weights(vi, P):
             ws = [(bidx[gname[g.group]], g.weight) for g in me.vertices[vi].groups if gname.get(g.group) in bidx and g.weight > 1e-4]
+            if VARIANT == "coverall": ws = seat_fix(shoulder_fix(ws, P), P)
             ws = sorted(ws, key=lambda t: -t[1])[:4] or [(bidx["Head"], 1.0)]
             s = sum(w for _, w in ws); ws = [(b, w / s) for b, w in ws]
             return ws + [(0, 0.0)] * (4 - len(ws))
@@ -126,7 +157,7 @@ def export_bind(arm, bones):
                     P = cp(M @ me.vertices[vi].co); n = (N3 @ Vector(cn[li].vector)).normalized(); Nn = C3 @ n
                     uv = uvl[li].uv if uvl else (0, 0); U = (uv[0], 1 - uv[1])
                     key = (vi, round(U[0], 5), round(U[1], 5), round(Nn.x, 3), round(Nn.y, 3), round(Nn.z, 3))
-                    if key not in index: index[key] = len(verts); verts.append((P, Nn, U, weights(vi)))
+                    if key not in index: index[key] = len(verts); verts.append((P, Nn, U, weights(vi, P)))
                     face.append(index[key])
                 faces.append(face)
             if s == "Boots":

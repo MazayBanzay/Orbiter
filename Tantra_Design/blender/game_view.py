@@ -199,6 +199,21 @@ try:
         for i in range(6):
             pose("run", int(i * len(rf) / 6), fist=True); shot("run_%d" % i, (3.6, 0.0, 1.0), (0, 0, 0.9), 50, (420, 640))
         raise SystemExit
+    if os.environ.get("TANTRA_BACK"):   # the seat from behind, standing and in two walk frames (game pose, game textures)
+        base = [g['V'].copy() for g in groups]
+        sc.render.resolution_x, sc.render.resolution_y = 600, 700
+        for clip, k in (("idle", 0), ("walk", 0), ("walk", 9)):
+            hdr, frames = read_clip(os.path.join(O, "Config", "Tantra", CLIPS, clip + ".clip")); fr = frames[k % len(frames)]
+            if VARIANT == "coverall" and clip != "idle": fr = coverall_layer(fr, 0.0)
+            for g, b in zip(groups, base): g['V'] = b.copy()
+            P = skinned(bones, W, groups, fr)
+            for ob, p in zip(objs, P): ob.data.vertices.foreach_set("co", to_blender(p).ravel()); ob.data.update()
+            hp = Vector(to_blender(fr[0:1, 4:7])[0])
+            for vn, off in (("back", Vector((0.0, 1.3, 0.05))), ("backq", Vector((0.7, 1.1, 0.1)))):
+                cam.location = hp + off; cam.data.lens = 50
+                cam.rotation_mode = 'QUATERNION'; cam.rotation_quaternion = (hp - cam.location).to_track_quat('-Z', 'Y')
+                sc.render.filepath = os.path.join(OUT, "seat_%s%d_%s.png" % (clip, k, vn)); bpy.ops.render.render(write_still=True)
+        raise SystemExit
     if os.environ.get("TANTRA_FACE"):
         hdr, frames = read_clip(os.path.join(O, "Config", "Tantra", CLIPS, "idle.clip")); fr = frames[0]
         base = [g['V'].copy() for g in groups]

@@ -303,7 +303,6 @@ namespace ocrew
 		{
 			tgo -= dt;
 			VECTOR3 a = guide((std::max)(1.0, tgo));
-			if (a.y < 0.05) a.y = 0.05;
 			if (length(a) > aMax) a = a * (aMax / length(a));
 			jet.SetThrustVector(a);
 			what = "торможение";

@@ -3,7 +3,7 @@ import json, os, sys
 from PIL import Image
 man = json.load(open(sys.argv[1]))
 root = os.path.join(man["orbiter"], "Textures")
-SIZE = {"suit_diffuse": 2048, "surf_": 512, "body": 2048, "coverall": 2048, "hair": 1024, "bob": 1024, "shoes": 1024, "eyebrow": 512, "eyelash": 512, "low-poly": 256}
+SIZE = {r"\skin.dds": 2048, r"\hair.dds": 2048, r"\eyes.dds": 1024, "suit_diffuse": 2048, "surf_": 512, "body": 2048, "coverall": 2048, "hair": 1024, "bob": 1024, "shoes": 1024, "eyebrow": 512, "eyelash": 512, "low-poly": 256}
 for t in man["textures"]:
     dst = os.path.join(root, t["dds"]); os.makedirs(os.path.dirname(dst), exist_ok=True)
     im = Image.open(t["src"]).convert("RGBA")

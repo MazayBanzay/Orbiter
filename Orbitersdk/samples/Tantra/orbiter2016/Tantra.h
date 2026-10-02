@@ -187,6 +187,7 @@ private:
     bool legAlarm_[6] = {};
     bool hipCatcher_ = false;                  // hip magnetic bearings over capacity: running on the catchers
     double touchMu_[tantra::CarriagePose::kMaxTouch] = {0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7};
+    double touchMuLng_[tantra::CarriagePose::kMaxTouch] = {0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7};  // along the hull
     double tipWind_ = 0.0;                     // wind that would overturn the ship now [m/s]
     const char* legName_ = "";
     void UpdateWind(double dt);

@@ -26,6 +26,7 @@ namespace ocrew
 			double landing{};         // touchdown speed after a jump, m/s
 			bool suited{}, vacuum{}, fanOn{};
 			double fanLoad{};         // 0..1 thermal control load: the fan runs harder when heating or cooling
+			int alarm{};               // the suit computer's caution (1) / warning (2) not yet acknowledged
 			bool alive{ true };
 			double breathRate{ 13 };  // per minute
 			double intensity{};       // 0..1: how hard she breathes
@@ -43,7 +44,8 @@ namespace ocrew
 
 		XRSound* xr{};
 		Set walk, run, suit, suitVac, breath, helmetBreath;
-		int fanId{};
+		int fanId{}, cautionId{}, warningId{};
+		double alarmClock{};
 		bool fanPlaying{};
 		double fanVolume{};
 		double breathClock{};

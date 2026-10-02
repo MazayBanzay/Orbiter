@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тантра Т9: рабочий меш</title>
+<style>
+:root{--bg:#eef1f4;--panel:#ffffff;--ink:#1d2430;--muted:#5d6878;--line:#d5dbe3;--acc:#2b6cb0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+#wrap{display:grid;grid-template-columns:1fr 380px;height:100vh}
+#view{position:relative;min-width:0;overflow:hidden}
+#view canvas{display:block;position:absolute;left:0;top:0}
+#side{background:var(--panel);border-left:1px solid var(--line);overflow:auto;padding:10px 12px}
+h1{font-size:15px;margin:0 0 6px}
+h2{font-size:12px;margin:12px 0 4px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+button{font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:#f7f9fb;cursor:pointer;margin:2px}
+button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.row{display:grid;grid-template-columns:150px 1fr 42px;gap:6px;align-items:center;font-size:12px}
+.row input{width:100%}
+#hud{position:absolute;left:10px;top:10px;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:8px;padding:5px 9px;font-size:12px;z-index:2}
+#groups label{display:inline-block;margin:1px 6px 1px 0;font-size:12px}
+</style>
+</head>
+<body>
+<div id="wrap">
+<div id="view"><div id="hud"></div></div>
+<div id="side">
+<h1>Т9: рабочий меш и риг</h1>
+<div id="info" style="color:var(--muted)"></div>
+<h2>Позы</h2><div id="poses"></div>
+<h2>Корабль</h2>
+<div class="row"><span>тангаж, °</span><input id="pitch" type="range" min="0" max="90" step="1" value="0"><span id="pitchV">0</span></div>
+<div class="row"><span>подъём оси, м</span><input id="lift" type="range" min="0" max="80" step="0.5" value="0"><span id="liftV">0</span></div>
+<h2>Группы</h2><div id="groups"></div>
+<h2>Анимации</h2><div id="anims"></div>
+</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="t9_data.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+function b64f(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; }
+const view = $("view");
+const renderer = new THREE.WebGLRenderer({antialias: true});
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio)); view.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xeef1f4);
+const cam = new THREE.PerspectiveCamera(40, 1, 0.3, 4000); const ctl = new THREE.OrbitControls(cam, renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7f6a, 0.85));
+const sun = new THREE.DirectionalLight(0xffffff, 0.65); sun.position.set(150, 260, 120); scene.add(sun);
+const shipG = new THREE.Group(), inner = new THREE.Group(); shipG.add(inner); scene.add(shipG);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), new THREE.MeshLambertMaterial({color: 0xd8ccb0}));
+ground.rotation.x = -Math.PI / 2; ground.position.y = -T9.axisH; scene.add(ground);
+const grid = new THREE.GridHelper(500, 50, 0xb9ad92, 0xc9bea4); grid.position.y = -T9.axisH + 0.03; scene.add(grid);
+// groups
+const MESH = {}, BASE = {};
+for (const p of T9.parts) {
+  const v = new Float32Array(b64f(p.v)), idx = new Uint32Array(b64f(p.i));
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(v.slice(), 3)); g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({color: new THREE.Color(...p.color), side: THREE.DoubleSide}));
+  m.name = p.name; inner.add(m); MESH[p.name] = m; BASE[p.name] = v;
+}
+// rig (same math as gen_mesh.comp_matrices)
+const S = {}; for (const a of T9.anims) S[a] = 0; for (const c of T9.comps) S[c.anim] = c.d;
+function rotM(ax, ang) { const a = new THREE.Vector3(...ax).normalize(); return new THREE.Matrix4().makeRotationAxis(a, ang); }
+function compMatrices() {
+  const M = new Array(T9.comps.length);
+  const mat = i => {
+    if (M[i]) return M[i];
+    const c = T9.comps[i];
+    const fr = x => Math.min(1, Math.max(0, (x - c.s0) / (c.s1 - c.s0)));
+    const f = fr(S[c.anim]) - fr(c.d);
+    let T = new THREE.Matrix4();
+    if (c.kind === "rot") { const R = rotM(c.axis, c.ang * f); const ref = new THREE.Vector3(...c.ref); const r2 = ref.clone().applyMatrix4(new THREE.Matrix4().extractRotation(R)); T = R; T.setPosition(ref.clone().sub(r2)); }
+    else if (c.kind === "tr") T.makeTranslation(c.shift[0] * f, c.shift[1] * f, c.shift[2] * f);
+    else { const sc = c.scale.map(s => 1 + (s - 1) * f); const ref = new THREE.Vector3(...c.ref); T.makeScale(sc[0], sc[1], sc[2]); T.setPosition(ref.x * (1 - sc[0]), ref.y * (1 - sc[1]), ref.z * (1 - sc[2])); }
+    M[i] = c.parent === null || c.parent === undefined || c.parent < 0 ? T : mat(c.parent).clone().multiply(T);
+    return M[i];
+  };
+  for (let i = 0; i < T9.comps.length; i++) mat(i);
+  return M;
+}
+function applyRig() {
+  const M = compMatrices();
+  const done = new Set();
+  T9.comps.forEach((c, i) => { for (const gname of c.groups) { const m = MESH[gname]; if (!m) continue; const pos = m.geometry.attributes.position.array, base = BASE[gname]; const v = new THREE.Vector3(); for (let k = 0; k < base.length; k += 3) { v.set(base[k], base[k + 1], base[k + 2]).applyMatrix4(M[i]); pos[k] = v.x; pos[k + 1] = v.y; pos[k + 2] = v.z; } m.geometry.attributes.position.needsUpdate = true; m.geometry.computeVertexNormals(); done.add(gname); } });
+}
+let pitch = 0, lift = 0;
+function applyShip() { shipG.position.set(0, lift, 0); shipG.rotation.x = -pitch * Math.PI / 180; inner.position.set(0, 0, 0); }
+// UI: poses
+for (const p of T9.poses) { const b = document.createElement("button"); b.textContent = p.name; b.onclick = () => { for (const a of T9.anims) S[a] = 0; for (const c of T9.comps) S[c.anim] = c.d; Object.assign(S, p.states); pitch = p.pitch; lift = p.lift; sync(); }; $("poses").appendChild(b); }
+$("pitch").oninput = e => { pitch = +e.target.value; sync(); }; $("lift").oninput = e => { lift = +e.target.value; sync(); };
+// UI: groups by prefix
+const prefixes = [...new Set(T9.parts.map(p => p.name.replace(/[_\d]+$/, "").replace(/_(port|starboard)$/, "").replace(/\d+$/, "")))].sort();
+for (const pre of prefixes) { const l = document.createElement("label"); const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = true; cb.onchange = () => { for (const p of T9.parts) if (p.name.replace(/[_\d]+$/, "").replace(/_(port|starboard)$/, "").replace(/\d+$/, "") === pre) MESH[p.name].visible = cb.checked; }; l.appendChild(cb); l.appendChild(document.createTextNode(pre)); $("groups").appendChild(l); }
+// UI: anims
+const sliders = {};
+for (const a of T9.anims) { const r = document.createElement("div"); r.className = "row"; r.innerHTML = `<span>${a}</span><input type="range" min="0" max="1" step="0.01"><span></span>`; const inp = r.querySelector("input"); inp.oninput = () => { S[a] = +inp.value; sync(false); }; sliders[a] = r; $("anims").appendChild(r); }
+function sync(all = true) { for (const a of T9.anims) { const r = sliders[a]; r.querySelector("input").value = S[a]; r.querySelector("span:last-child").textContent = S[a].toFixed(2); } $("pitch").value = pitch; $("lift").value = lift; $("pitchV").textContent = pitch; $("liftV").textContent = lift; applyRig(); applyShip(); $("hud").textContent = `тангаж ${pitch}° · ось на ${(T9.axisH + lift).toFixed(1)} м`; }
+$("info").textContent = `${T9.parts.length} групп, ${T9.comps.length} компонентов рига, ${T9.anims.length} анимаций, длина ${T9.L.toFixed(1)} м`;
+function resize() { const r = view.getBoundingClientRect(); renderer.setSize(r.width, r.height); cam.aspect = r.width / r.height; cam.updateProjectionMatrix(); }
+window.addEventListener("resize", resize); if (window.ResizeObserver) new ResizeObserver(resize).observe(view);
+cam.position.set(120, 60, -160); ctl.target.set(0, 0, -20); ctl.update();
+window.setCam = (p, t) => { cam.position.set(...p); ctl.target.set(...t); ctl.update(); };
+window.setAnim = (a, v) => { S[a] = v; sync(); };
+window.S = S;
+resize(); sync();
+(function loop() { renderer.render(scene, cam); requestAnimationFrame(loop); })();
+</script>
+</body>
+</html>

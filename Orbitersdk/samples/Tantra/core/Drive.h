@@ -64,6 +64,10 @@ public:
     double CompensatedAccel() const { return compensated_; }
     double ResidualAccel() const { return residual_; }
 
+    // The apparatus cancels the load of the thrust of THIS step: it acts on the inertial field, not on a command that
+    // has to arrive first. Call it after the step's thrust is known (Update only sees the previous step's).
+    void Compensate(double level, double mass, double thrustAccel);
+
     // Highest feed level that keeps the uncompensated acceleration at or below gLimit.
     double LevelForResidual(double residualLimit, double mass, double fieldLevel) const;
 

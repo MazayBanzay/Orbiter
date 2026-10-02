@@ -67,19 +67,21 @@ namespace ocrew
 		if (dt <= 0 || !skin.Loaded()) return;
 		if (bound != &skin) Bind(skin);
 		time += dt;
+		lyingW = Follow(lyingW, in.lying ? 1.0 : 0.0, in.lying ? 0.5 : 0.3, dt);
 		const Clip& walk = clips.walk; const Clip& run = clips.run;
 
 		// ---- gait: blend weights and phase ----
 		const double speed = in.grounded ? std::abs(in.fwd) + 0.5 * std::abs(in.lat) + 0.3 * std::abs(in.turn) : 0;
 		if (std::abs(in.fwd) > 0.05) dir = in.fwd < 0 ? -1 : 1;
-		const double tMove = in.grounded ? Smooth(0.03, 0.6 * walk.speed, speed) : wMove;
+		// in the air: a jump keeps the stride (legs tucked); a lift-off into flight lets the gait die out over ~half a second
+		const double tMove = in.grounded ? Smooth(0.03, 0.6 * walk.speed, speed) : (in.floating ? 0.0 : wMove);
 		// suit: blend by the clips' own speeds (unchanged). Coverall: walking (no Shift) is the walk clip at any speed up
 		// to the top walking speed; the run takes over only above it - never a half-walk, half-run mix while walking
 		const double tRunSuit = Smooth(1.3 * walk.speed, 0.9 * run.speed, speed);
 		const double top = in.walkTop > 0 ? in.walkTop : walk.speed;
 		const double tRunCov = Smooth(1.04 * top, 1.04 * top + 0.6, speed);
 		const double tRun = Lerp(tRunSuit, tRunCov, 1 - suitW);
-		wMove = Follow(wMove, tMove, tMove > wMove ? 0.12 : 0.22, dt);
+		wMove = Follow(wMove, tMove, tMove > wMove ? 0.12 : (in.floating ? 0.35 : 0.22), dt);
 		wRun = Follow(wRun, tRun, 0.30, dt);
 
 		strideVar = Follow(strideVar, strideVarTarget, 0.4, dt);
@@ -108,6 +110,13 @@ namespace ocrew
 			const double rate = (std::max)(lastRate * (0.4 + 0.6 * wMove), 0.5);
 			phase = dir > 0 ? (std::min)(phase + rate * dt, settleTarget) : (std::max)(phase - rate * dt, settleTarget);
 		}
+		else if (in.floating && wMove > 0.01)
+		{
+			// lifting off from a walk or a run: the legs finish their stride as they leave the ground, slowing down,
+			// instead of freezing mid-step while the flight pose blends in
+			settling = false;
+			phase += dir * lastRate * wMove * dt;
+		}
 		phase -= std::floor(phase);
 		// a foot touches down at every half cycle (phase 0: left foot forward, 0.5: right), also on the last settling step
 		footfalls = in.grounded && wMove > 0.2 && std::floor(before * 2) != std::floor(phase * 2) ? 1 : 0;
@@ -121,7 +130,7 @@ namespace ocrew
 		BlendPose(pWalk, pRun, F(wRun), pLoco);
 		BlendPose(pIdle, pLoco, F(wMove), pOut);
 
-		const double rest = 1 - wMove;
+		const double rest = (1 - wMove) * (1 - lyingW);   // lying limp: no glances or weight shifts
 
 		// ---- breathing: chest and shoulders; deeper with effort and fatigue ----
 		breathPhase += 6.2832 * in.breathRate / 60.0 * dt;
@@ -189,7 +198,8 @@ namespace ocrew
 
 		// ---- weightlessness: the neutral body posture of people in orbit, slow drift of the limbs,
 		//      and limbs that lag behind the thrust (underdamped springs: they swing and settle) ----
-		floatW = Follow(floatW, in.floating ? 1.0 : 0.0, 0.8, dt);
+		// into the flight as fast as the stride fades out (~0.35 s, the gait layer), so no pose is left between them
+		floatW = Follow(floatW, in.floating ? 1.0 : 0.0, in.floating ? 0.35 : 0.8, dt);
 		{
 			// rad per m/s^2 (and per rad/s^2). Without the pack (suit RCS, free float): as it was, the user likes it.
 			// With the pack: a body that holds itself under 1000 N, not a doll (user: too loose) - blended by jetW
@@ -249,10 +259,18 @@ namespace ocrew
 		}
 
 		// ---- crouch: absorbs landings, tucks the legs in the air ----
-		if (in.landing > 0) crouchV += (std::min)(in.landing, 6.0) * 0.9;
+		// the body takes a touchdown on its knees: the hips sink by what it takes to stop the fall at a comfortable
+		// ~1.5 g (d = v^2 / 2a) plus a little settling; in the suit the frame's dampers have ~0.25 m of stroke.
+		// The knee angle for that drop sets the kick of the crouch spring (its peak is ~0.46 v0 / w)
+		if (in.landing > 0.2)
+		{
+			const double drop = (std::min)(in.landing * in.landing / (2 * 15.0) + 0.03, Lerp(0.35, 0.25, suitW));
+			const double ang = std::acos(std::clamp(1 - drop / (THIGH + SHIN), -1.0, 1.0));
+			crouchV += ang * 9.0 / 0.46;
+		}
 		crouch = std::clamp(crouch + crouchV * dt, 0.0, 0.9);
 		crouchV += (-81 * crouch - 12.6 * crouchV) * dt;   // w 9 rad/s, damping 0.7
-		tuck = Follow(tuck, in.grounded || in.floating ? 0.0 : 0.45, in.grounded ? 0.08 : 0.15, dt);
+		tuck = Follow(tuck, in.grounded || in.floating || in.lying ? 0.0 : 0.45, in.grounded || in.lying ? 0.08 : 0.15, dt);   // lying: legs out, not tucked as in a jump
 		const double knee = (std::max)(crouch, tuck);
 		if (knee > 1e-3)
 		{
@@ -277,6 +295,22 @@ namespace ocrew
 		Spring rs{ roll, rollV }; rs.Step(in.grounded ? rollTarget : 0.0, 7, dt); roll = rs.x; rollV = rs.v;
 		skin.Turn(pOut, bLowerBack, AX_LAT, F(pitch));
 		skin.TurnAll(pOut, SOLES, AX_FWD, F(roll));
+
+		// ---- down on the ground (fallen, unconscious, dead): limp, not the standing pose laid flat ----
+		// arms fall out to the sides with soft elbows, legs a little apart with the knees eased and the feet rolled out,
+		// the head turned to one side
+		if (lyingW > 1e-3)
+		{
+			const float L = F(lyingW);
+			skin.Turn(pOut, bLArm, AX_FWD, -0.45f * L); skin.Turn(pOut, bRArm, AX_FWD, 0.45f * L);        // left arm is on -x
+			skin.Turn(pOut, bLForeArm, AX_LAT, -0.30f * L); skin.Turn(pOut, bRForeArm, AX_LAT, -0.30f * L);
+			skin.Turn(pOut, bLUpLeg, AX_FWD, -0.12f * L); skin.Turn(pOut, bRUpLeg, AX_FWD, 0.12f * L);
+			skin.Turn(pOut, bLUpLeg, AX_UP, -0.35f * L); skin.Turn(pOut, bRUpLeg, AX_UP, 0.35f * L);       // feet roll outwards
+			skin.Turn(pOut, bLUpLeg, AX_LAT, -0.08f * L); skin.Turn(pOut, bRUpLeg, AX_LAT, -0.08f * L);
+			skin.Turn(pOut, bLLeg, AX_LAT, 0.16f * L); skin.Turn(pOut, bRLeg, AX_LAT, 0.16f * L);           // knees eased
+			skin.Turn(pOut, bLFoot, AX_LAT, 0.30f * L); skin.Turn(pOut, bRFoot, AX_LAT, 0.30f * L);         // feet relaxed
+			skin.Turn(pOut, bNeck1, AX_UP, 0.40f * L); skin.Turn(pOut, bHead, AX_FWD, -0.15f * L);          // head to one side
+		}
 
 		skin.Apply(pOut);
 	}

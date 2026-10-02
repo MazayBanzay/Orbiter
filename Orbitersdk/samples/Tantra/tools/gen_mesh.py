@@ -1,15 +1,15 @@
 """Generate the Tantra mesh (Orbiter .msh, MSHX1) and the animation layout header.
 
-Layout "T8" (Tantra_Design/DESIGN_LOCAL.md, tantra_mockup.html «Т8 · итог»; C-148 generator: gen_mesh_c148.py): hull «Б» of rounded-polygon
-sections (flat flanks, lower chines, top slopes, flat bottom), iridium nose on a blunted ogive,
-armoured shoulder with the dorsal spine, dorsal fin 7 retracting into a slot between the trap
-columns, one-piece lateral crests with elevons folding into flank recesses, body flap, stern well
-with iris-shuttered anamezon cups and a ring of 12 planetary cups, four planetary pods on the lower
-chines (the bay door is the pod's swing arm), carriage («лафет») legs with a telescopic trunnion
-pin, four stern legs hinged forward and folded aft.
+Layout "T9" (Tantra_Design/DESIGN_LOCAL.md 2026-10-02, docs/T9_PLAN.md): the T8 hull «Б» of rounded-polygon sections
+(flat flanks, lower chines, top slopes, flat bottom) with a 9 m insert at s 88 (argon charges), iridium nose on a blunted
+ogive with two retro anamezon cups, armoured shoulder with the dorsal spine, telescopic dorsal fin, two-panel wings with
+elevons, body flap, stern clover of four fixed anamezon cups with irises and the marching planetary cup on a sliding
+mount in the central well, four planetary pods in flank bays at CG height on telescopic arms, two blade legs («лопасти»)
+on trunnion carriages with umbrella feet, four stern legs of four sections with umbrella feet on rails, one kangaroo
+leg out of the hangar floor (the third support while lying).
 
 Vessel frame: +z forward, +y up, +x starboard. s = metres from the stern plane,
-z = s + STERN_Z (mesh origin at s = 38). Hull axis 14 m above ground while resting level.
+z = s + STERN_Z (mesh origin at s = 60). Hull axis 31.4 m above ground while resting level (the shortest blade).
 
 Every opening in the skin is cut from the same (s, u) surface its door or cover is built from,
 so closed doors, stowed pads and folded crests are flush by construction (u = perimeter
@@ -28,8 +28,9 @@ import sys
 import numpy as np
 
 STERN_Z = -60.0
-AXIS_H = 14.0
-L_SHIP = 168.968
+INSERT_S, INSERT_L = 88.0, 9.0                 # T9: hull insert (argon charges); everything ahead moves forward
+AXIS_H = 31.4                                  # lying on the blades: shortest blade 30 m + ankle 0.5 + hub 0.9
+L_SHIP = 168.968 + INSERT_L
 SEG = 48
 
 
@@ -190,6 +191,13 @@ def cup(g, cx, cy, s_rim, depth, radius, seg=24):
     lathe(g, [(s + 0.03, r) for s, r in prof], center=(cx, cy), inward=True, seg=seg)
 
 
+def cup_fwd(g, cx, cy, s_rim, depth, radius, seg=24):
+    """Concave reflector cup opening forward (retro cups in the nose)."""
+    prof = [(s_rim - depth * (1 - t * t), radius * t) for t in np.linspace(0.02, 1.0, 8)]
+    lathe(g, prof, center=(cx, cy), seg=seg)
+    lathe(g, [(s - 0.03, r) for s, r in prof], center=(cx, cy), inward=True, seg=seg)
+
+
 def rounded_rect(a, b, r, n=4):
     """Convex rounded rectangle (half sizes a, b; corner radius r) as a 2D polygon."""
     pts = []
@@ -275,22 +283,25 @@ PROFILE = [
     (70, 13.55, 18.2), (71, 13.55, 18.2), (72, 13.55, 18.2), (73, 13.55, 18.2), (74, 13.55, 18.2), (75, 13.55, 18.2),
     (76, 13.55, 18.2), (77, 13.55, 18.2), (78, 13.55, 18.2), (79, 13.55, 18.2), (80, 13.55, 18.2),
     (81, 13.443, 18.2), (82, 13.431, 18.2), (83, 13.418, 18.2), (84, 13.406, 18.2), (85, 13.394, 18.2),
-    (86, 13.382, 18.2), (87, 13.37, 18.2), (88, 13.358, 18.2), (89, 13.35, 18.2), (90, 13.35, 18.2),
-    (91, 13.35, 17.627), (92, 13.35, 17.053), (93, 13.35, 16.48), (94, 13.35, 15.906), (95, 13.35, 15.624),
-    (96, 13.35, 15.346), (97, 13.35, 15.067), (98, 13.35, 14.788), (99, 13.35, 14.518), (100, 13.35, 14.283),
-    (101, 13.35, 14.082), (102, 13.35, 13.916), (103, 13.35, 13.785), (104, 13.35, 13.689), (105, 13.35, 13.627),
-    (106, 13.35, 13.6), (107, 13.35, 13.6), (108, 13.35, 13.6), (109, 13.35, 13.6), (110, 13.35, 13.6),
-    (111, 13.35, 13.6), (112, 13.35, 13.6), (113, 13.063, 13.6), (114, 12.777, 13.6), (115, 12.49, 13.6),
-    (116, 12.203, 13.6), (117, 11.916, 13.6), (118, 11.63, 13.6), (119, 11.343, 13.6), (120, 11.056, 13.6),
-    (121, 10.769, 13.6), (122, 10.483, 13.6), (123, 10.196, 13.6), (124, 9.916, 13.6), (125, 9.653, 13.6),
-    (126, 9.408, 13.6), (127, 9.181, 13.6), (128, 8.97, 13.6), (129, 8.777, 13.6), (130, 8.602, 13.6),
-    (131, 8.443, 13.6), (132, 8.302, 13.6), (133, 8.179, 13.6), (134, 8.073, 13.6), (135, 7.984, 13.6),
-    (136, 7.9, 13.6), (137, 7.815, 13.6), (138, 7.8, 13.6), (139, 7.8, 13.6), (140, 7.8, 13.6), (141, 7.8, 13.6),
-    (142, 7.8, 13.6),
+    (86, 13.382, 18.2), (87, 13.37, 18.2), (88, 13.358, 18.2),
+    # T9 insert s 88..97: the fairing section runs on (argon tanks)
+    (89, 13.358, 18.2), (90, 13.358, 18.2), (91, 13.358, 18.2), (92, 13.358, 18.2), (93, 13.358, 18.2), (94, 13.358, 18.2),
+    (95, 13.358, 18.2), (96, 13.358, 18.2), (97, 13.358, 18.2), (98, 13.35, 18.2), (99, 13.35, 18.2),
+    (100, 13.35, 17.627), (101, 13.35, 17.053), (102, 13.35, 16.48), (103, 13.35, 15.906), (104, 13.35, 15.624),
+    (105, 13.35, 15.346), (106, 13.35, 15.067), (107, 13.35, 14.788), (108, 13.35, 14.518), (109, 13.35, 14.283),
+    (110, 13.35, 14.082), (111, 13.35, 13.916), (112, 13.35, 13.785), (113, 13.35, 13.689), (114, 13.35, 13.627),
+    (115, 13.35, 13.6), (116, 13.35, 13.6), (117, 13.35, 13.6), (118, 13.35, 13.6), (119, 13.35, 13.6),
+    (120, 13.35, 13.6), (121, 13.35, 13.6), (122, 13.063, 13.6), (123, 12.777, 13.6), (124, 12.49, 13.6),
+    (125, 12.203, 13.6), (126, 11.916, 13.6), (127, 11.63, 13.6), (128, 11.343, 13.6), (129, 11.056, 13.6),
+    (130, 10.769, 13.6), (131, 10.483, 13.6), (132, 10.196, 13.6), (133, 9.916, 13.6), (134, 9.653, 13.6),
+    (135, 9.408, 13.6), (136, 9.181, 13.6), (137, 8.97, 13.6), (138, 8.777, 13.6), (139, 8.602, 13.6),
+    (140, 8.443, 13.6), (141, 8.302, 13.6), (142, 8.179, 13.6), (143, 8.073, 13.6), (144, 7.984, 13.6),
+    (145, 7.9, 13.6), (146, 7.815, 13.6), (147, 7.8, 13.6), (148, 7.8, 13.6), (149, 7.8, 13.6), (150, 7.8, 13.6),
+    (151, 7.8, 13.6),
 ]
 
 FL = 0.4                                 # bottom at -FL*H, top at (1-FL)*H
-NB = 142.968                             # nose root
+NB = 142.968 + INSERT_L                  # nose root
 NOSE_LN, NOSE_UP, NOSE_NW, NOSE_BEXP, NOSE_TEXP, NOSE_RN = L_SHIP - NB, 0.4, 0.9, 0.25, 0.55, 3.0
 _PROF = np.array(PROFILE, float)
 
@@ -636,15 +647,28 @@ POD_DOOR_L = 6.4
 POD_SWIVEL_MAX = math.radians(100.0)
 POD_CANT = {43.6: math.radians(15.0), 78.0: math.radians(15.0)}
 
-# Engines in the nacelles: anamezon cup (aperture R 3.0 m, focus in the rim plane s -2) and three planetary cups
-# (R 0.5 m) on the rim of each, turned away from the stern leg on that nacelle.
+# Engines in the nacelles: fixed anamezon cups (aperture R 3.0 m, focus in the rim plane s -2: the hull stands in
+# their shadow). T9: the 12 planetary cups on the rims are gone. The marching planetary cup (R 2.2, 12.1 T, 886 MN)
+# sits in the central well between the nacelles (free circle R 2.69) on a sliding mount: stowed under the well iris
+# 0.6 m below the rim plane, run out MARCH_TRAVEL so its lip stands 4.5 m beyond the anamezon rims (jet >= 2 radii
+# from the nacelle lips). Interlocks (code): anamezon irises only with the mount home and its iris shut; the mount
+# only with the anamezon irises shut.
 RIM_S = -2.0
 ANA_R, ANA_DEPTH = 3.0, 1.5
 ANA_CUPS = [(x, y) for x, y in NAC]
-PLAN_CUP_R, PLAN_RIM = 0.5, 3.55
-PLAN_REL = (math.radians(60.0), math.radians(150.0), math.radians(-120.0))   # from the leg side of each nacelle
-PLAN_R, WELL_Y = A_N * math.sqrt(2.0), YC      # (legacy names: ring radius / stern axis)
 WELL_R = A_N * math.sqrt(2.0) + R_N
+WELL_C_R = A_N * math.sqrt(2.0) - R_N              # central well (2.69)
+WELL_C_DEPTH_S = 14.0                              # well floor station
+MARCH_R, MARCH_D = 2.2, 1.5                        # marching cup aperture, depth
+MARCH_BODY_R, MARCH_BODY_L = 2.5, 8.0              # coil housing behind the cup (slides in the well)
+MARCH_LIP_S = -0.3                                 # cup lip, stowed
+MARCH_IRIS_S = -0.6                                # well iris (shut over the stowed cup)
+MARCH_TRAVEL = 4.5 + MARCH_LIP_S - RIM_S           # lip from s -0.3 to s -6.5 (6.2 m)
+# Nose: two retro anamezon cups (R 2.2) at x +-3.0, y -1.0, lips at s 165 (156 before the insert), 0.5 m under the
+# skin; the jet leaves forward through a skin opening s 165-171.5 whose cover is the iris (petals = nose skin).
+NOSE_CUP_X, NOSE_CUP_Y, NOSE_CUP_R, NOSE_CUP_D = 3.0, -1.0, 2.2, 1.5
+NOSE_CUP_S = 156.0 + INSERT_L
+NOSE_CUP_S1 = NOSE_CUP_S + 6.5
 
 # Anamezon port and trap columns: 2x2 cylinders D 8 m in octagonal armour, s 21-87.6, lifted by their trunnions on
 # telescopic masts in the shafts at both column ends.
@@ -658,8 +682,9 @@ LIFT_Y0, LIFT_TRAVEL, LIFT_CEIL = TRAP_XY[2][1], 36.0, (1 - FL) * wh_at(50.0)[1]
 LIFT_N, LIFT_SEG = 8, 5.2
 HEAD_S = (20.0, 88.6)
 TRAP_MOUTH_Y = _YB_C - 0.2
-HANGAR_S = (90.6, 111.6)
-AIRLOCK_S = 120.0
+HANGAR_S = (90.6 + INSERT_L, 111.6 + INSERT_L)
+AIRLOCK_S = 120.0 + INSERT_L
+HANGAR_REF_S = 101.0 + INSERT_L            # reference section of the hangar doors
 
 
 def octagon(cx, cy, w, ch):
@@ -682,16 +707,13 @@ def trap_geom(g, cx, cy, s0, s1):
         box(g, (cx - 2.2, cy + 1.6, zs(se) - 0.2 if sg < 0 else zs(se)), (cx - 0.8, cy + 3.0, zs(se) if sg < 0 else zs(se) + 0.2))
 
 
-def plan_cups():
-    """Three planetary cups on the rim of each nacelle, turned away from that nacelle's stern leg."""
-    out = []
-    for ni, (cx, cy) in enumerate(NAC):
-        sx, sy = (1 if cx > 0 else -1), (1 if cy > YC else -1)
-        a_leg = math.atan2(sy * math.sin(LEG_ANG), sx * math.cos(LEG_ANG))
-        for rel in PLAN_REL:
-            a = a_leg + rel * sx * sy
-            out.append((cx + PLAN_RIM * math.cos(a), cy + PLAN_RIM * math.sin(a)))
-    return out
+def nose_u_range(s, cx, cy, r):
+    """u-range of the nose skin at station s within r of the axis (cx, cy): the retro-cup opening."""
+    us = np.linspace(0.0, 1.0, 2001)
+    xy = np.array([hull_xy(s, u) for u in us])
+    m = np.hypot(xy[:, 0] - cx, xy[:, 1] - cy) <= r
+    sel = us[m]
+    return float(sel.min()), float(sel.max())
 
 
 # ---------------------------------------------------------------------------
@@ -750,7 +772,7 @@ def stern_legs():
         e_stand = np.linalg.norm(d) - LEG_LMIN_S
         lower = sy < 0
         phi_rest = e_rest = 0.0
-        if lower:
+        if False:                      # T9: lying, the ship stands on the blades and the kangaroo leg - no stern-leg rest pose
             e_of = lambda ph: (H[1] - (REST_GROUND_Y + LEG_FOOT_H)) / -(rot(axis, ph) @ mz)[1] - LEG_LMIN_S
             lo, hi = math.radians(15.0), math.radians(90.0)
             for _ in range(60):
@@ -816,8 +838,8 @@ def openings():
     S30 = sec(30.0)
     us = S30.u_of((SLOT_HALF, top_y(30.0)))
     O.append(_open("fin_slot", us, mir(us), 3.0, 48.5, depth=3.0))
-    SF = sec(101.0)
-    W, H = wh_at(101.0)
+    SF = sec(HANGAR_REF_S)
+    W, H = wh_at(HANGAR_REF_S)
     K = key_wh(W, H)
     uh = SF.u_of((0.62 * W, (1 - FL) * H - 0.12 * H))
     O.append(_open("hangar_top", uh, mir(uh), HANGAR_S[0] + 0.5, HANGAR_S[1] - 0.5, depth=3.0))
@@ -829,6 +851,9 @@ def openings():
     fe = unit(KA["T"] - KA["C"])
     fp = lambda y: KA["C"] + fe * (y - KA["C"][1]) / fe[1]
     O.append(_open("airlock_door", mir(SA.u_of(fp(2.9))), mir(SA.u_of(fp(-1.9))), AIRLOCK_S - 1.4, AIRLOCK_S + 1.4))
+    u0, u1 = nose_u_range(NOSE_CUP_S + 3.0, NOSE_CUP_X, NOSE_CUP_Y, NOSE_CUP_R + 0.4)
+    nose_cup = _open("nose_cup_starboard", u0, u1, NOSE_CUP_S, NOSE_CUP_S1, depth=3.0)
+    O += [nose_cup, _mirror(nose_cup, "nose_cup_port")]
     return O
 
 
@@ -986,7 +1011,7 @@ SIDES = ("port", "starboard")
 GROUPS = (["hull", "shoulder", "nose", "spine", "fin", "fin_upper", "crest_port", "crest_starboard", "wing_outer_port",
            "wing_outer_starboard", "elevon_port", "elevon_starboard",
            "body_flap", "well", "baffle", "cups_anamezon"] + [f"iris_ana_{i}" for i in range(4)]
-          + ["cups_planetary"] + [f"iris_plan_{i}" for i in range(12)]
+          + ["well_centre", "march_unit", "iris_march", "cups_nose", "iris_nose_0", "iris_nose_1"]
           + [f"door_pod_{i}" for i in range(4)] + [f"pod_{i}" for i in range(4)]
           + ["door_top_port", "door_top_starboard", "door_bottom_port", "door_bottom_starboard",
              "hangar_inner", "shuttle", "rover_platform", "hatches", "airlock", "pocket_liner"]
@@ -1017,7 +1042,7 @@ def build():
 
     # ---- skin: stern and body, fairings (carriage legs and pods), nose
     hull, fairing, nose = grp("hull", "hull_lacquer"), grp("shoulder", "hull_lacquer"), grp("nose", "nose_iridium")
-    zone = lambda s: fairing if 40.0 <= s <= 112.0 else (nose if s >= NB else hull)
+    zone = lambda s: fairing if 40.0 <= s <= 112.0 + INSERT_L else (nose if s >= NB else hull)
     surface(zone, 0.0, 1.0, hull_keep, tip=True)
 
     # ---- recesses behind every opening
@@ -1076,13 +1101,31 @@ def build():
         g = grp(f"iris_ana_{i}", "nose_iridium")
         disc_n(g, (x, y, zs(RIM_S - 0.05)), (0, 0, -1), ANA_R + 0.1, seg=24)
         disc_n(g, (x, y, zs(RIM_S)), (0, 0, 1), ANA_R + 0.1, seg=24)
-    g = grp("cups_planetary", "planetary_cup")
-    for x, y in plan_cups():
-        cup(g, x, y, RIM_S - 0.25, 0.3, PLAN_CUP_R, seg=12)
-    for i, (x, y) in enumerate(plan_cups()):
-        g = grp(f"iris_plan_{i}", "nose_iridium")
-        disc_n(g, (x, y, zs(RIM_S - 0.3)), (0, 0, -1), PLAN_CUP_R + 0.05, seg=12)
-        disc_n(g, (x, y, zs(RIM_S - 0.27)), (0, 0, 1), PLAN_CUP_R + 0.05, seg=12)
+    # central well: collar (cup ceramic, it sees the reaction zones at grazing angles) and the deep metal well
+    g = grp("baffle", "nose_iridium")
+    lathe(g, [(RIM_S - 0.02, WELL_C_R - 0.05), (RIM_S - 0.02, WELL_C_R + 0.3)], center=(0.0, YC))   # rim ring
+    g = grp("well_centre", "engine_metal")
+    lathe(g, [(RIM_S, WELL_C_R), (WELL_C_DEPTH_S, WELL_C_R), (WELL_C_DEPTH_S, 0.3)], center=(0.0, YC), inward=True)
+    # marching planetary cup on its sliding mount (reference: stowed, lip at MARCH_LIP_S under the shut well iris)
+    g = grp("march_unit", "engine_metal")
+    cup(g, 0.0, YC, MARCH_LIP_S, MARCH_D, MARCH_R)
+    b0, b1 = MARCH_LIP_S + MARCH_D, MARCH_LIP_S + MARCH_D + MARCH_BODY_L
+    lathe(g, [(b0 - 0.4, MARCH_R + 0.1), (b0 - 0.4, MARCH_R + 0.45), (b0, MARCH_R + 0.45), (b0, MARCH_BODY_R), (b1, MARCH_BODY_R), (b1, 0.0)],
+          center=(0.0, YC))                                                       # coil ring, housing, end cap
+    for k in range(4):                                                            # slide shoes on the well wall
+        a = math.pi / 4 + k * math.pi / 2
+        c = np.array([0.0, YC, 0.0]) + np.array([math.cos(a), math.sin(a), 0.0]) * (WELL_C_R - 0.12)
+        obox(g, c + np.array([0, 0, zs(b0 + 2.0)]), (math.cos(a), math.sin(a), 0), (-math.sin(a), math.cos(a), 0), (0, 0, 1), 0.1, 0.5, 1.5)
+    g = grp("iris_march", "nose_iridium")
+    disc_n(g, (0.0, YC, zs(MARCH_IRIS_S)), (0, 0, -1), WELL_C_R + 0.02, seg=32)
+    disc_n(g, (0.0, YC, zs(MARCH_IRIS_S + 0.05)), (0, 0, 1), WELL_C_R + 0.02, seg=32)
+    # nose retro cups behind their skin openings; the covers (petals) are the irises
+    g = grp("cups_nose", "boron_nitride")
+    for sgn in (1, -1):
+        cup_fwd(g, sgn * NOSE_CUP_X, NOSE_CUP_Y, NOSE_CUP_S, NOSE_CUP_D, NOSE_CUP_R)
+        lathe(g, [(NOSE_CUP_S, NOSE_CUP_R + 0.05), (NOSE_CUP_S + 1.2, NOSE_CUP_R + 0.05)], center=(sgn * NOSE_CUP_X, NOSE_CUP_Y), inward=True)
+    patch(grp("iris_nose_0", "nose_iridium"), OPEN["nose_cup_starboard"])
+    patch(grp("iris_nose_1", "nose_iridium"), OPEN["nose_cup_port"])
 
     # ---- planetary pods (reference: stowed in the bays, door closed, cups aft)
     for i, p in enumerate(PODS):
@@ -1104,7 +1147,7 @@ def build():
     patch(grp("door_bottom_starboard", "hull_lacquer"), OPEN["hangar_bottom_starboard"])
     patch(grp("door_bottom_port", "hull_lacquer"), OPEN["hangar_bottom_port"])
     hs0, hs1 = HANGAR_S
-    Wh, Hh = wh_at(101.0)
+    Wh, Hh = wh_at(HANGAR_REF_S)
     y_ch = -(FL - 0.233) * Hh
     box(hi, (-Wh + 1.2, y_ch + 5.6, zs(hs0 + 0.5)), (Wh - 1.2, y_ch + 6.0, zs(hs1 - 0.5)))          # ceiling frame
     g = grp("shuttle", "mechanism")                                                                 # docking cradle
@@ -1302,15 +1345,17 @@ def rig(legs):
         add("pod_swivel", "rot", [f"pod_{i}"], (p["centre"], p["swivel_axis"], POD_SWIVEL_MAX), parent=sw)
     for i, (x, y) in enumerate(ANA_CUPS):
         add("iris_ana", "sc", [f"iris_ana_{i}"], (np.array([x, y, zs(RIM_S - 0.05)]), np.array([0.001, 0.001, 1])))
-    for i, (x, y) in enumerate(plan_cups()):
-        add("iris_plan", "sc", [f"iris_plan_{i}"], (np.array([x, y, zs(RIM_S - 0.3)]), np.array([0.001, 0.001, 1])))
+    add("iris_march", "sc", ["iris_march"], (np.array([0.0, YC, zs(MARCH_IRIS_S)]), np.array([0.001, 0.001, 1])))
+    add("march_slide", "tr", ["march_unit"], np.array([0, 0, -MARCH_TRAVEL]))            # 1 = run out past the rims
+    for i, sgn in enumerate((1, -1)):                                                     # petals draw into the cup axis
+        add("iris_nose", "sc", [f"iris_nose_{i}"], (np.array([sgn * NOSE_CUP_X, NOSE_CUP_Y, zs(NOSE_CUP_S + 1.0)]), np.array([0.001, 0.001, 0.2])))
     ht = OPEN["hangar_top"]
     for name, u, ang in (("door_top_starboard", ht["u"][0], -105), ("door_top_port", ht["u"][1], 105),
                          ("door_bottom_starboard", OPEN["hangar_bottom_starboard"]["u"][1], 95),
                          ("door_bottom_port", OPEN["hangar_bottom_port"]["u"][0], -95)):
-        hp = hull_pt(101.0, u)
+        hp = hull_pt(HANGAR_REF_S, u)
         add("hangar", "rot", [name], (np.array([hp[0], hp[1], 0.0]), np.array([0, 0, 1.0]), math.radians(ang)))
-    add("rover_lift", "tr", ["rover_platform"], np.array([0, (-AXIS_H + 0.25) - (-FL * wh_at(101.0)[1] + 0.25), 0]))
+    add("rover_lift", "tr", ["rover_platform"], np.array([0, (-AXIS_H + 0.25) - (-FL * wh_at(HANGAR_REF_S)[1] + 0.25), 0]))
     for side, sgn in (("port", -1), ("starboard", 1)):
         T = np.array([sgn * HIP_X_OUT, 0.0, zs(CAR_SREF)])
         run = np.array([0, 0, CAR_S1 - CAR_S0])
@@ -1464,7 +1509,7 @@ def v3(a):
 # Debris: every part that can break off becomes a vessel of its own (Config/Vessels/Tantra/Debris_*.cfg,
 # Meshes/Tantra/Debris/*.msh), built from the same groups, centred on its own centroid. The hull breaks into
 # four chunks by station. name, groups (or station range of the hull for a chunk), mass [t]
-_HULL_GROUPS = ("hull", "shoulder", "nose", "spine", "pocket_liner", "hatches", "airlock")
+_HULL_GROUPS = ("hull", "shoulder", "nose", "spine", "pocket_liner", "hatches", "airlock", "cups_nose", "iris_nose_0", "iris_nose_1")
 DEBRIS_DEFS = (
     [("crest_port", ["crest_port", "wing_outer_port", "elevon_port"], 22.0),
      ("crest_starboard", ["crest_starboard", "wing_outer_starboard", "elevon_starboard"], 22.0),
@@ -1476,8 +1521,8 @@ DEBRIS_DEFS = (
        for i in range(4)]
     + [(n, [n], 6.0) for n in ("door_top_port", "door_top_starboard", "door_bottom_port", "door_bottom_starboard")]
     + [(n, [n], 10.0) for n in ("bay_door_port", "bay_door_starboard")]
-    + [("hull_aft", (-10.0, 40.0), 900.0), ("hull_mid", (40.0, 90.0), 650.0), ("hull_fore", (90.0, 135.0), 420.0),
-       ("hull_nose", (135.0, 175.0), 300.0)])
+    + [("hull_aft", (-10.0, 40.0), 900.0), ("hull_mid", (40.0, 99.0), 700.0), ("hull_fore", (99.0, 144.0), 420.0),
+       ("hull_nose", (144.0, 185.0), 300.0)])
 DEBRIS = []  # filled by write_debris: (name, class, centroid (mesh frame), mass)
 
 
@@ -1488,7 +1533,7 @@ def write_debris(groups, root):
     os.makedirs(mdir, exist_ok=True)
     os.makedirs(cdir, exist_ok=True)
     DEBRIS.clear()
-    chunk_extra = {"hull_aft": ["well", "baffle", "cups_anamezon", "cups_planetary", "body_flap"],
+    chunk_extra = {"hull_aft": ["well", "baffle", "cups_anamezon", "well_centre", "march_unit", "iris_march", "body_flap"],
                    "hull_mid": ["bay_liner"] + [f"trap_{i}" for i in range(4)],
                    "hull_fore": ["hangar_inner", "shuttle", "rover_platform"]}
     for name, spec, mass in DEBRIS_DEFS:
@@ -1554,11 +1599,11 @@ def write_layout(legs, comps, path):
     L.append(f"constexpr double kStrutExtC = {STRUT_EXT_C}, kStrutExtS = {STRUT_EXT_S}, kAnchorOut = {ANCHOR_OUT};  // unloaded strut rod; anchors")
     L.append(f"constexpr double kLegExtDelay = {LEG_EXT_DELAY};  // stern shins run out over the last {1 - LEG_EXT_DELAY:.0%} of the swing")
     L.append(f"constexpr double kStandR = {STAND_R}, kStandGroundS = {STAND_GROUND_S};")
-    L.append(f"constexpr double kPlanR = {PLAN_R}, kWellY = {WELL_Y};")
+    L.append(f"constexpr double kWellCentreR = {WELL_C_R:.3f}, kMarchCupR = {MARCH_R}, kMarchLipS = {MARCH_LIP_S}, kMarchTravel = {MARCH_TRAVEL:.2f}, kMarchIrisS = {MARCH_IRIS_S};  // marching cup: lip station stowed, run-out")
+    L.append(f"constexpr double kNoseCupX = {NOSE_CUP_X}, kNoseCupY = {NOSE_CUP_Y}, kNoseCupR = {NOSE_CUP_R}, kNoseCupS = {NOSE_CUP_S};  // retro cups (lips)")
     L.append(f"constexpr double kFinRetract = {FIN_RETRACT:.3f}, kFinDrop = {FIN_DROP:.3f};  // telescopic fin: two stages")
-    L.append(f"constexpr double kSternAxisY = {YC:.4f}, kRimS = {RIM_S}, kAnaCupR = {ANA_R}, kPlanCupR = {PLAN_CUP_R};")
+    L.append(f"constexpr double kSternAxisY = {YC:.4f}, kRimS = {RIM_S}, kAnaCupR = {ANA_R};")
     L.append("constexpr double kAnaCup[4][2] = {" + ", ".join("{%.4f, %.4f}" % c for c in ANA_CUPS) + "};  // x, y of the anamezon cups (nacelles)")
-    L.append("constexpr double kPlanCup[12][2] = {" + ", ".join("{%.4f, %.4f}" % c for c in plan_cups()) + "};  // planetary cups on the rims")
     L.append(f"constexpr double kWingX0 = {WING_X0}, kWingY = {WING_Y:.4f}, kWingB1 = {WING_B1}, kWingB = {WING_B}, kWingFoldDeg = {math.degrees(WING_FOLD):.1f}, kWingRaiseDeg = {math.degrees(WING_RAISE):.1f};")
     L.append(f"constexpr double kWingLe0 = {WING_LE0}, kWingTe0 = {WING_TE0}, kWingLe1 = {WING_LE1}, kWingTe1 = {WING_TE1};")
     L.append(f"constexpr double kFlapY = {FLAP_Y:.4f}, kFlapHalf = {FLAP_HALF}, kFlapS0 = {FLAP_S0}, kFlapS1 = {FLAP_S1};")
@@ -1707,8 +1752,10 @@ def preview(groups, comps, path, poses):
 if __name__ == "__main__":
     here = os.path.dirname(os.path.abspath(__file__))
     root = os.path.join(here, "..", "..", "..", "..")
+    install = "--install" in sys.argv            # otherwise everything goes to build/mesh_t9 (the installed DLL matches the old mesh)
     groups, legs = build()
-    out = os.path.join(root, "Meshes", "Tantra")
+    work = os.path.join(here, "..", "build", "mesh_t9")
+    out = os.path.join(root, "Meshes", "Tantra") if install else os.path.join(work, "Meshes", "Tantra")
     os.makedirs(out, exist_ok=True)
     write_msh(groups, os.path.join(out, "Tantra.msh"))
     trap = Group("trap", MAT["trap_shell"])
@@ -1717,8 +1764,8 @@ if __name__ == "__main__":
     raw_dir = os.path.join(here, "..", "build", "mesh")
     os.makedirs(raw_dir, exist_ok=True)
     write_json(groups, os.path.join(raw_dir, "tantra_raw.json"))
-    write_debris(groups, root)
-    write_layout(legs, rig(legs), os.path.join(here, "..", "orbiter2016", "MeshLayout.h"))
+    write_debris(groups, root if install else work)
+    write_layout(legs, rig(legs), os.path.join(here, "..", "orbiter2016", "MeshLayout.h") if install else os.path.join(work, "MeshLayout.h"))
     nv = sum(len(g.v) for g in groups)
     nt = sum(len(g.t) for g in groups)
     print(f"Tantra.msh: {len(groups)} groups, {nv} vertices, {nt} triangles; MeshLayout.h written")

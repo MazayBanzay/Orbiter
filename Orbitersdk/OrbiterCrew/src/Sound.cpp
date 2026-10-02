@@ -35,6 +35,8 @@ namespace ocrew
 	{
 		xr = XRSound::CreateInstance(vessel);
 		if (!xr || !xr->IsPresent()) { oapiWriteLog(const_cast<char*>("OrbiterCrew: XRSound not present, crew sounds off")); delete xr; xr = nullptr; return; }
+		// XRSound plays its cockpit air-conditioning loop in every vessel: a person has no cabin - only the suit's own fan
+		xr->SetDefaultSoundEnabled(XRSound::AirConditioning, false);
 		int id = 1000;
 		id = Load(walk, id, "steps\\walk_%02d.wav", XRSound::BothViewClose);
 		id = Load(run, id, "steps\\run_%02d.wav", XRSound::BothViewClose);
@@ -44,6 +46,10 @@ namespace ocrew
 		id = Load(helmetBreath, id, "voice\\" + voice + "\\helmet_breath_%02d.wav", XRSound::InternalOnly);
 		fanId = id;
 		if (!xr->LoadWav(fanId, (std::string(ROOT) + "suit\\fan.wav").c_str(), XRSound::InternalOnly)) fanId = 0;
+		// the suit computer's alarm tones (XRSound's own tones, no words: the display is Russian, the voice set English)
+		cautionId = fanId + 1; warningId = fanId + 2;
+		if (!xr->LoadWav(cautionId, "XRSound\\Default\\BeepLow.wav", XRSound::InternalOnly)) cautionId = 0;
+		if (!xr->LoadWav(warningId, "XRSound\\Default\\Warning Beep.wav", XRSound::InternalOnly)) warningId = 0;
 
 		// breath takes: how hard each one is and how long it lasts, so the right take fits the breathing rate
 		std::ifstream f(std::string(ROOT) + "voice\\" + voice + "\\breath.txt");
@@ -132,15 +138,29 @@ namespace ocrew
 		}
 		else breathClock = 0;
 
-		// ---- suit ventilation: always on in a powered suit, louder under thermal load (heard inside only) ----
-		const bool fan = in.suited && in.fanOn && in.alive && fanId;
+		// ---- suit thermal control: heard only when it works - a low hum for a little heating or cooling, louder the
+		// harder it has to work (strong cold or heat); quiet when nothing is needed (heard inside only) ----
+		const bool fan = in.suited && in.fanOn && in.alive && fanId && in.fanLoad > 0.03;
 		if (fan)
 		{
-			const double target = 0.25 + 0.55 * std::clamp(in.fanLoad, 0.0, 1.0);
+			const double target = 0.15 + 0.65 * std::clamp(in.fanLoad, 0.0, 1.0);
 			fanVolume += (target - fanVolume) * (std::min)(1.0, in.dt / 1.5);   // the fan spins up and down over a second or two
 			if (!fanPlaying || std::abs(target - fanVolume) > 0.01) xr->PlayWav(fanId, true, static_cast<float>(fanVolume));
 			fanPlaying = true;
 		}
-		else if (fanPlaying) { xr->StopWav(fanId); fanPlaying = false; fanVolume = 0.25; }
+		else if (fanPlaying) { xr->StopWav(fanId); fanPlaying = false; fanVolume = 0.15; }
+
+		// ---- alarm: a tone while a caution or a warning waits for acknowledgement ----
+		if (in.alarm > 0 && in.alive)
+		{
+			alarmClock -= in.dt;
+			if (alarmClock <= 0)
+			{
+				const int id = in.alarm >= 2 ? warningId : cautionId;
+				if (id) xr->PlayWav(id, false, in.alarm >= 2 ? 0.8f : 0.6f);
+				alarmClock = in.alarm >= 2 ? 1.5 : 4.0;
+			}
+		}
+		else alarmClock = 0;
 	}
 }
