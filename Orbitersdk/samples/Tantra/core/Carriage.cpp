@@ -107,7 +107,9 @@ void Carriage::BuildPose(double sCG) {
     const double restLen = g.restAxisH - g.footH;                                     // blade hip -> ankle, lying
 
     // --- erection: heights and pitch ---
-    o.tuck = Ease(ph(0) / 0.3);
+    // the crests and the fin stay as the crew set them: standing, the wings in line clear the stern legs by 30 deg
+    // and the fin is the stabiliser of the nose-first climb (they fold for sub-light and a stern-first descent only)
+    o.tuck = 0.0;
     o.trunnionH = Lerp(g.restAxisH, hStand, Ease((ph(0) - 0.1) / 0.9));
     if (standingSet) o.trunnionH = hStand;
     o.theta = 0.5 * kPi * Ease(ph(2));
@@ -158,7 +160,6 @@ void Carriage::BuildPose(double sCG) {
         o.legStand = port_ ? 0.0 : Ease(gr);
         o.legRail = 1.0 - Ease(gr * 2.0);
         o.legFold = 1.0 - Ease(gr * 2.0 - 1.0);
-        o.tuck = 1.0;
     } else {
         o.slideOut = 1.0;
         o.footFold = 0.0;

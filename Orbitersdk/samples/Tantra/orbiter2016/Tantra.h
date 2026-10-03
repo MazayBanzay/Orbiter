@@ -332,10 +332,19 @@ private:
     int PanelState(int which) const;      // the light of a panel button (TantraInterior LiftPanelHooks::State)
     static SURFHANDLE PanelTex();
     int navAllowed_ = 0;                  // bits (1 << NAVMODE_*): the autopilots switched on from the holo panel (keys stay refused)
+    // a light at each person inside (other vessels inside the hull are in its shadow: their faces were black). Small and near
+    // the body, so the interior keeps its gloom; it follows the person through the bridge, the corridors, the lifts.
+    static constexpr int kPersonLights = 4;
+    LightEmitter* personLight_[kPersonLights] = {};
+    VECTOR3 personLightPos_[kPersonLights] = {};   // vessel frame (the emitters keep a reference)
+    void PersonLights();
     void SeatKeys();                      // the numpad in the commander's seat (the focus is the person): throttle, attitude, killrot
     unsigned seatKeyPrev_ = 0;            // the keys held last step (edges)
-    unsigned seatAttSet_ = 0;
-    bool seatSurf_ = false;   // the helm holds the control surfaces (released on leaving the seat)             // the attitude groups the numpad drives now (bits THGROUP_ATT_*)
+    unsigned seatAttSet_ = 0;             // the attitude groups the numpad drives now (bits THGROUP_ATT_*)
+    bool seatSurf_ = false;               // the helm holds the control surfaces (released on leaving the seat)
+    double liftoffAlt_ = 0.0;             // origin height above the ground at the last contact (stern-first takeoff)
+    bool autoGearArmed_ = false;          // the stern legs stow by themselves once 50 m up (after each stand)
+    void AutoFlightSet();                 // the stern legs after a tail-first takeoff; crests on a stern-first descent
     void ToggleNav(int mode);             // an Orbiter autopilot from the flight terminal (TantraDisplays)         // the 2D panels' texture (loaded on first use), shared with the bridge console
     void PanelStatus(char* out, int n) const;    // the lift zone's screen
     void CabStatus(char* out, int n) const;      // the cabin's screen
@@ -372,4 +381,6 @@ private:
 
     // 2D panel.
     MESHHANDLE panelMesh_ = nullptr;
-    char panelCache_[128][256] 
+    char panelCache_[128][256] = {};  // last drawn content per area, to skip redundant blits
+    double messageTimer_ = 0.0;
+};

@@ -24,7 +24,7 @@ namespace {
 // Engines in two layers: outside (XRSound fades it by distance and air - nothing in vacuum) and inside (Global, our own
 // volume: the planetary engines only as a dull rumble through the hull; the anamezon drive shakes the whole ship).
 enum SoundSlot { SND_ANA_RUN = 1, SND_ION_RUN, SND_FIELD_UP, SND_BEAM_UP, SND_IGNITE, SND_SHUTDOWN = 7,
-                 SND_MARCH_EXT, SND_MARCH_INT, SND_POD_EXT, SND_POD_INT, SND_ANA_INT };
+                 SND_MARCH_EXT, SND_MARCH_INT, SND_POD_EXT, SND_POD_INT, SND_ANA_INT, SND_SEAT };
 
 // Crew from the novel.
 // Ages, pulse and weight are placeholders the player can edit in the scenario.
@@ -167,6 +167,7 @@ void Tantra::clbkSetClassCaps(FILEHANDLE cfg) {
         interior_.SetTouch(th);
     }
     screen_.Init(this, vcMeshIdx_);
+    screen_.SetHud([](void* c, SURFHANDLE s, int w, int h, const VECTOR3& d, const VECTOR3& u, double f) { static_cast<TantraDisplays*>(c)->DrawHud(s, w, h, d, u, f); }, &disp_);
     DefineGear();
     DefinePort();
 }
@@ -450,6 +451,7 @@ void Tantra::clbkPostCreation() {
     sound_->LoadWav(SND_POD_EXT, "XRSound\\Tantra\\pod_ext.wav", PT::Global);
     sound_->LoadWav(SND_POD_INT, "XRSound\\Tantra\\pod_int.wav", PT::Global);
     sound_->LoadWav(SND_ANA_INT, "XRSound\\Tantra\\ana_int.wav", PT::Global);
+    sound_->LoadWav(SND_SEAT, "XRSound\\Tantra\\seat_servo.wav", PT::Global);   // the bridge seats' micro-lift (the focus is the person: global)
     // Our own engine sounds replace the stock ones: the cup reflectors do not roar like rockets.
     sound_->SetDefaultSoundEnabled(XRSound::MainEngines, false);
     sound_->SetDefaultSoundEnabled(XRSound::RetroEngines, false);
@@ -1095,7 +1097,8 @@ void Tantra::WatchLights() {
             const COLOUR4 dif = {float(w.r), float(w.g), float(w.b), 0.0f};
             const COLOUR4 spec = {float(w.r * 0.8), float(w.g * 0.8), float(w.b * 0.8), 0.0f};
             const COLOUR4 amb = {0.0f, 0.0f, 0.0f, 0.0f};
-            watchLight_[i] = AddPointLight(_V(w.x, w.y, w.z + MeshDZ()), 7.0, 0.6, 0.3, 0.15, dif, spec, amb);
+            watchLight_[i] = i < 4 ? AddPointLight(_V(w.x, w.y, w.z + MeshDZ()), 7.0, 0.6, 0.3, 0.15, dif, spec, amb)
+                                   : AddPointLight(_V(w.x, w.y, w.z + MeshDZ()), 9.0, 0.4, 0.12, 0.05, dif, spec, amb);   // the bridge: lights the people too
             if (watchLight_[i]) watchLight_[i]->Activate(false);
         }
     }
@@ -1111,13 +1114,13 @@ void Tantra::WatchLights() {
     if (body) {                                                  // a person walking inside: where is he or she
         VECTOR3 g, l; oapiGetGlobalPos(body, &g); Global2Local(g, l);
         const double dy = l.y - kBridgeAxisY, dz = l.z - MeshDZ() - kBridgeAxisZ;
-        bridge = std::fabs(l.x) <= kBridgeHx && dy * dy + dz * dz <= kBridgeR * kBridgeR;
+        bridge = std::fabs(l.x) <= kBridgeHx && dy * dy + dz * dz <= (kBridgeR + 1.2) * (kBridgeR + 1.2);   // the doorway counts as the bridge
     }
     for (int i = 0; i < 6; i++) {
         if (!watchLight_[i]) continue;
         const WatchLight& w = spec(i);
         watchLight_[i]->SetPosition(_V(w.x, w.y, w.z + MeshDZ()));
-        const bool on = inside && (i >= 4) == bridge;
+        const bool on = inside && (bridge ? (i <= 1 || i >= 4) : i < 4);   // 4 at a time: the bridge's 2 + the corridor's 2, or the way's 4
         if (watchLight_[i]->IsActive() != on) watchLight_[i]->Activate(on);
     }
     if (!cabSpot_[0]) {
@@ -1140,6 +1143,41 @@ void Tantra::WatchLights() {
                                   kCabLight[2] + MeshDZ()));
         const bool on = (inside && !bridge) || !lift_.Stowed();
         if (cabLight_->IsActive() != on) cabLight_->Activate(on);
+    }
+}
+
+// A light at each person inside the hull (the nearest to the camera first): 0.6 m before the face at head height, 1.6 m reach.
+void Tantra::PersonLights() {
+    struct P { double d; VECTOR3 at; };
+    P best[kPersonLights]; int n = 0;
+    VECTOR3 cam; oapiCameraGlobalPos(&cam);
+    const double dz = MeshDZ();
+    for (DWORD i = 0, cnt = oapiGetVesselCount(); i < cnt; i++) {
+        OBJHANDLE h = oapiGetVesselByIndex(i);
+        if (!h || h == GetHandle()) continue;
+        VESSEL* v = oapiGetVesselInterface(h);
+        const char* cls = v ? v->GetClassNameA() : nullptr;
+        if (!cls || std::strncmp(cls, "OrbiterCrew", 11) != 0) continue;
+        VECTOR3 g, p; v->GetGlobalPos(g); Global2Local(g, p);
+        const double mz = p.z - dz;                                        // the mesh (interior) frame
+        if (std::fabs(p.x) > 7.0 || p.y < -3.0 || p.y > 12.0 || mz < 60.0 || mz > 140.0) continue;   // inside the hull
+        VECTOR3 fw; v->GlobalRot(_V(0, 0, 1), fw);                         // the person's facing, in this ship's frame
+        MATRIX3 R; GetRotationMatrix(R); fw = tmul(R, fw);
+        VECTOR3 up; v->GlobalRot(_V(0, 1, 0), up); up = tmul(R, up);
+        const VECTOR3 at = p + up * 1.5 + fw * 0.6;
+        const double d = length(g - cam);
+        int k = n < kPersonLights ? n++ : -1;
+        if (k < 0) { for (int j = 0; j < kPersonLights; j++) if (best[j].d > d && (k < 0 || best[j].d > best[k].d)) k = j; if (k < 0) continue; }
+        best[k] = {d, at};
+    }
+    for (int i = 0; i < kPersonLights; i++) {
+        if (i < n) personLightPos_[i] = best[i].at;
+        if (!personLight_[i] && i < n) {
+            const COLOUR4 dif = {0.9f, 0.88f, 0.82f, 0}, spe = {0.2f, 0.2f, 0.2f, 0}, amb = {0.12f, 0.12f, 0.12f, 0};
+            personLight_[i] = AddPointLight(personLightPos_[i], 1.6, 1.0, 0.5, 2.0, dif, spe, amb);
+        }
+        if (personLight_[i] && i < n) personLight_[i]->SetPosition(personLightPos_[i]);   // follow the person (the emitter keeps a copy)
+        if (personLight_[i]) personLight_[i]->Activate(i < n);
     }
 }
 
@@ -1219,6 +1257,13 @@ void Tantra::SeatKeys() {
 void Tantra::clbkPreStep(double, double simdt, double) {
     interior_.Step(simdt);                        // the moving bridge seats, the deferred stand-up (OrbiterCrew)
     SeatKeys();
+    PersonLights();
+    if (sound_ && sound_->IsPresent()) {                                // the seats' micro-lift while one moves
+        const bool mv = interior_.SeatMoving();
+        if (mv && !sound_->IsWavPlaying(SND_SEAT)) sound_->PlayWav(SND_SEAT, true, 0.35f);
+        else if (!mv && sound_->IsWavPlaying(SND_SEAT)) sound_->StopWav(SND_SEAT);
+    }
+    AutoFlightSet();
     screen_.SetViewer(interior_.ViewerBody());   // the bridge screen follows the viewer (gcAPI renders for the focus only)
     WatchLights();
     WatchTerrain();   // first: a refined terrain tile must not bury the pads for even one step
@@ -2663,6 +2708,7 @@ void Tantra::ActErect() {
         Message("Лафет: только на грунте, шасси выпущено", "Carriage: on the ground with the gear down only");
         return;
     }
+    if (up && wingMode_ == 1) { wingMode_ = 0; crestsFolded_ = false; }   // raised wings would meet the stern legs
     if (up) Message("Подъём во взлётное положение (2 мин): лопасти, цапфы под ЦМ, поворот, кормовые ноги", "Standing up on the stern (2 min): blades, trunnions under the CG, turn, stern legs");
     else Message("Укладка: лопасти, поворот, нога-кенгуру, лёжа", "Laying the ship down: blades, turn, kangaroo leg, lying");
 }
@@ -2700,8 +2746,39 @@ void Tantra::ActGearSet() {
             standing ? "Landing set: tail-first (stern legs)" : "Landing set: lying (blades + kangaroo)");
 }
 
+// Tail-first flight. After the takeoff from the stand the stern legs stow by themselves 50 m up (feet clear of the
+// ground blast and of a settle-back: below that a thrust dip may still put the ship back on them), climbing at
+// 1 m/s at least; once per stand, the crew can lower them again. Coming down stern-first through the air (faster
+// than 30 m/s) the crests fold and the fin goes down - in the reversed flow they would rock the ship (DESIGN).
+void Tantra::AutoFlightSet() {
+    const bool standingSet = carriage_.Set() == tantra::Carriage::FlightSet::Standing;
+    if (GroundContact()) {
+        liftoffAlt_ = GetAltitude(ALTMODE_GROUND);
+        autoGearArmed_ = standingSet && carriage_.Standing();
+        return;
+    }
+    VECTOR3 v;
+    GetGroundspeedVector(FRAME_HORIZON, v);
+    if (autoGearArmed_ && standingSet && carriage_.GearDown() && sinceContact_ > 3.0 &&
+        GetAltitude(ALTMODE_GROUND) - liftoffAlt_ > 50.0 && v.y > 1.0) {
+        autoGearArmed_ = false;
+        if (carriage_.CommandGear(false, false))
+            Message("50 м: кормовые ноги убираются в броню", "50 m: the stern legs stow into the armour");
+    }
+    VECTOR3 a;
+    GetAirspeedVector(FRAME_LOCAL, a);
+    const double as = length(a);
+    if (!crestsFolded_ && GetAtmDensity() > 1e-4 && as > 30.0 && a.z < -0.7 * as) {
+        wingMode_ = 2;
+        crestsFolded_ = true;
+        Message("Спуск кормой вперёд: крылья сложены, перо убрано", "Stern-first descent: wings folded, fin down");
+    }
+}
+
 void Tantra::ActCrests() {
     wingMode_ = (wingMode_ + 1) % 3;
+    // the raised wings (30 deg) would meet the upper stern legs (21-30 deg off the horizontal): not with them out
+    if (wingMode_ == 1 && carriage_.Set() == tantra::Carriage::FlightSet::Standing && carriage_.Gear() > 0.0) wingMode_ = 2;
     crestsFolded_ = wingMode_ == 2;
     static const char* ru[3] = {"Крылья 90°: развёрнуты, перо выдвинуто", "Крылья 30°: подняты (вход), перо выдвинуто",
                                 "Крылья сложены, перо убрано, гондолы в отсеках (субсвет)"};
@@ -3008,4 +3085,24 @@ int Tantra::CanWalk(char* reason, int n) const {
     }
     const double lim = 10.0 * PI / 180.0;
     if (GroundContact()) {
-        if (std::fabs(G
+        if (std::fabs(GetPitch()) > lim || std::fabs(GetBank()) > lim) return no("Корабль не горизонтален: ходить нельзя");
+        return 1;
+    }
+    if (GetAltitude() < 100e3) return no("Взлёт или посадка: все в креслах");
+    return 1;
+}
+
+// The user's decision: no Orbiter autopilots (killrot, prograde, hold altitude...) in the Tantra. Any that gets switched on
+// (a key, an MFD, a scenario) is switched off at once.
+void Tantra::clbkNavMode(int mode, bool active) {
+    if (!active) { navAllowed_ &= ~(1 << mode); return; }
+    if (navAllowed_ & (1 << mode)) return;                              // from the holo panel: allowed (the user's decision)
+    DeactivateNavmode(mode);
+    oapiWriteLogV("Tantra: Orbiter autopilot %d refused (only from the holo panel)", mode);
+}
+
+// An Orbiter autopilot switched from the flight terminal (the only way: the keys stay refused - the user's decision).
+void Tantra::ToggleNav(int mode) {
+    if (GetNavmodeState(mode)) DeactivateNavmode(mode);
+    else { navAllowed_ |= 1 << mode; ActivateNavmode(mode); }
+}

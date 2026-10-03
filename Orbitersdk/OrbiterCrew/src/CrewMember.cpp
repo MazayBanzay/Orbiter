@@ -951,6 +951,26 @@ namespace ocrew
 		Animate(dt, g, landed);
 	}
 
+	// The eyes aboard a ship: the specific force at the eyes (the ship's thrust, lift and drag over its mass, plus the
+	// rotation about its CG), in her frame, drives the neck (HeadSway); the engines and the air shake the structure.
+	VECTOR3 CrewMember::HeadSwayStep(double dt, const VECTOR3& eye)
+	{
+		VESSEL* ship = inShip && oapiIsVessel(inShip) ? oapiGetVesselInterface(inShip) : nullptr;
+		if (!ship) { headSway.Reset(); return _V(0, 0, 0); }
+		const double m = ship->GetMass();
+		VECTOR3 T, L, D, w, a, eg, r;
+		ship->GetThrustVector(T); ship->GetLiftVector(L); ship->GetDragVector(D);
+		ship->GetAngularVel(w); ship->GetAngularAcc(a);
+		Local2Global(eye, eg);
+		ship->Global2Local(eg, r);
+		// a point at r on the rotating ship: alpha x r + w x (w x r); the specific force there is the CG's plus that
+		const VECTOR3 fShip = (T + L + D) / m + crossp(a, r) + crossp(w, crossp(w, r));
+		MATRIX3 Rs, Rp;
+		ship->GetRotationMatrix(Rs); GetRotationMatrix(Rp);
+		const VECTOR3 f = tmul(Rp, mul(Rs, fShip));
+		return headSway.Step(dt, f, length(T) / m / 9.81, ship->GetDynPressure(), ship->GetMachNumber());
+	}
+
 	void CrewMember::HudBySuit()
 	{
 		// ---- no HUD without the suit (the generic cockpit has one; switch it off, give it back with the suit) ----
@@ -996,7 +1016,10 @@ namespace ocrew
 			in.jet = jet.Worn();
 			motion.Update(in, fig.clips, fig.skin);
 			footfalls = motion.Footfalls();
-			if (firstPerson) SetCameraOffset(fig.skin.Point(fig.skin.Bone("Head"), eye));   // the camera rides the head
+			if (firstPerson) {   // the camera rides the head; aboard a ship the head rides the ship's accelerations
+				const VECTOR3 e = fig.skin.Point(fig.skin.Bone("Head"), eye);
+				SetCameraOffset(e + HeadSwayStep(dt, e));
+			} else headSway.Reset();
 		}
 		// ---- sound ----
 		CrewSound::Input si;

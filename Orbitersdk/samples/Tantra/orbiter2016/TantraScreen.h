@@ -17,6 +17,7 @@ public:
     bool OnMouse(int id, int event);                // click on the button
     void SetViewer(OBJHANDLE body) { view_.SetHost(body); view_.Frame(); }   // every step: the viewer (a person's body in focus, nullptr = the ship), telescope
     void Shutdown() { view_.Shutdown(); }
+    void SetHud(shipview::ViewScreen::Overlay fn, void* ctx) { view_.SetZoneOverlay(0, fn, ctx); }   // drawn over the front picture (after Init)
 
 private:
     void Place(double meshDZ);

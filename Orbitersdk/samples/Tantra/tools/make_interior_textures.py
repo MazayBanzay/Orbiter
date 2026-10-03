@@ -67,6 +67,28 @@ def floor():
     return t
 
 
+def grate():
+    """The bridge's technical floor: an open grating (1 m per tile) over a lit sub-floor - dark bars, a faint cold glow in the
+    cells, plate frames every 0.5 m (the watch twilight: the floor reads, it doesn't shine)."""
+    y, x = np.mgrid[0:N, 0:N]
+    t = np.empty((N, N, 3), float)
+    t[:] = (10, 16, 24)                                                                    # the cells: the dark sub-floor
+    glow = 0.5 + 0.5 * np.cos(2 * np.pi * (x / N)) * np.cos(2 * np.pi * (y / N))           # the sub-floor lamps under the plates
+    t += glow[..., None] * np.array([6, 16, 26.0])
+    C, W = 24, 5                                                                           # cell pitch, bar width (px): ~4.7 cm, ~1 cm
+    bar = ((x % C) < W) | ((y % C) < W)
+    shade = 70 + 10 * (((x % C) < 2) | ((y % C) < 2))                                     # the bars' lit edge
+    for k, c in enumerate((0.92, 0.96, 1.06)):
+        t[..., k] = np.where(bar, shade * c, t[..., k])
+    P = N // 2                                                                             # plate frames
+    frame = ((x % P) < 10) | ((x % P) > P - 10) | ((y % P) < 10) | ((y % P) > P - 10)
+    for k, c in enumerate((0.95, 0.98, 1.05)):
+        t[..., k] = np.where(frame, 58 * c, t[..., k])
+    seam = ((x % P) == 0) | ((y % P) == 0) | ((x % P) == P - 1) | ((y % P) == P - 1)
+    t[seam] = (14, 15, 18)
+    return t + noise(2.0)[..., None]
+
+
 def wall():
     t = base((92, 98, 104), 2.5)                                                           # 2 m x 2 m: panels 0.5 m x 1.0 m
     W, H = N // 4, N // 2
@@ -231,6 +253,7 @@ if __name__ == "__main__":
     for name, fn in (("in_floor", floor), ("in_wall", wall), ("in_ceiling", ceiling), ("in_trim", trim), ("in_metal", metal)):
         write_dds(os.path.join(out, name + ".dds"), fn())
     write_dds(os.path.join(out, "in_cabpanel.dds"), cab_panel())
+    write_dds(os.path.join(out, "br_grate.dds"), grate())
     for name, fn in FX:
         write_dds_rgba(os.path.join(out, name + ".dds"), fn())
     print("textures written to", out)

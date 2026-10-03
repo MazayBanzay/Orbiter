@@ -51,7 +51,8 @@ void TantraWalk::OnLoadVC() {
 
 void TantraWalk::SitAt(int seat) {
     inBridge_ = true; seated_ = true; seat_ = seat; vy_ = 0.0;
-    x_ = kSeats[seat].x; z_ = kSeats[seat].z + 0.35; feet_ = kBridgeFloorY;
+    x_ = kSeats[seat].x + kSeats[seat].fx * 0.35; z_ = kSeats[seat].z + kSeats[seat].fz * 0.35; feet_ = kBridgeFloorY;
+    v_->SetCameraDefaultDirection(_V(kSeats[seat].fx, 0, kSeats[seat].fz));
     snprintf(noteText_, sizeof noteText_, "seated: %s", kSeats[seat].name);
 }
 
@@ -139,7 +140,7 @@ void TantraWalk::Interact() {
     }
     if (!kFreeWalk) { snprintf(noteText_, sizeof noteText_, "nobody of the crew to stand up here"); return; }
     if (seated_) {                                              // stand up BEHIND the seat
-        z_ = kSeats[seat_].z - 0.95; seated_ = false; seat_ = -1;
+        x_ = kSeats[seat_].x - kSeats[seat_].fx * 0.95; z_ = kSeats[seat_].z - kSeats[seat_].fz * 0.95; seated_ = false; seat_ = -1;
         oapiWriteLogV("Tantra walk: stands up");
         return;
     }
@@ -147,7 +148,8 @@ void TantraWalk::Interact() {
         int best = -1; double bd = 1.4;
         for (int i = 0; i < 4; i++) { const double d = std::hypot(x_ - kSeats[i].x, z_ - kSeats[i].z); if (d < bd) { bd = d; best = i; } }
         if (best >= 0) {
-            seated_ = true; seat_ = best; x_ = kSeats[best].x; z_ = kSeats[best].z + 0.35; vy_ = 0.0;   // eyes right at the console
+            seated_ = true; seat_ = best; x_ = kSeats[best].x + kSeats[best].fx * 0.35; z_ = kSeats[best].z + kSeats[best].fz * 0.35; vy_ = 0.0;   // eyes right at the console
+            v_->SetCameraDefaultDirection(_V(kSeats[best].fx, 0, kSeats[best].fz));
             oapiWriteLogV("Tantra walk: sits down in the seat '%s'", kSeats[best].name);
             snprintf(noteText_, sizeof noteText_, "seated: %s", kSeats[best].name);
         } else snprintf(noteText_, sizeof noteText_, "no seat within reach");

@@ -134,12 +134,61 @@ def cab_panel(scr, btn_u, btn_v, width_m=1.4):
     return im
 
 
+def glass():
+    """A porthole's glass, 128 x 128 RGBA: a faint blue-grey tint, a diagonal glint."""
+    v, u = np.mgrid[0:128, 0:128] / 127.0
+    a = np.empty((128, 128, 4), float)
+    a[..., 0], a[..., 1], a[..., 2] = 150, 175, 200
+    a[..., 3] = 55
+    glint = np.exp(-((u + v - 0.75) / 0.06) ** 2) + 0.5 * np.exp(-((u + v - 0.95) / 0.03) ** 2)
+    a[..., :3] += glint[..., None] * 90
+    a[..., 3] += glint * 110
+    return np.clip(a, 0, 255).astype(np.uint8)
+
+
+def door():
+    """A sliding door leaf's face, 256 x 512 (u across the leaf, u = 1 at the seam; v down): dark brushed metal, a frame line, a
+    recessed handle at the seam, a lighter mid band (the lock), a kick plate with grooves."""
+    W, H = 256, 512
+    rng = np.random.default_rng(5)
+    a = np.empty((H, W, 3), float)
+    a[:] = (58, 61, 66)
+    a += rng.normal(0, 1.4, (1, W, 1)) + rng.normal(0, 0.8, (H, W, 1))           # brushed vertically
+    im = Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
+    d = ImageDraw.Draw(im)
+    d.rectangle([10, 10, W - 11, H - 11], outline=(40, 42, 46), width=3)          # the panel's inset line
+    d.rectangle([13, 13, W - 14, H - 14], outline=(78, 82, 88), width=1)
+    d.rectangle([10, int(H * 0.86), W - 11, H - 11], fill=(44, 46, 50))           # kick plate
+    for yy in range(int(H * 0.87), H - 14, 7):
+        d.line([(16, yy), (W - 17, yy)], fill=(36, 38, 41), width=2)
+    d.rectangle([10, int(H * 0.47), W - 11, int(H * 0.53)], fill=(66, 70, 76))    # the band at the lock
+    d.rounded_rectangle([W - 44, int(H * 0.40), W - 22, int(H * 0.60)], radius=8, fill=(26, 27, 30), outline=(90, 94, 100), width=2)   # the handle recess
+    d.rectangle([24, int(H * 0.08), 120, int(H * 0.11)], fill=(150, 112, 30))      # a small amber tag
+    return im
+
+
+def write_dds_rgba(path, a):
+    h, w, _ = a.shape
+    header = bytearray(128)
+    header[0:4] = b"DDS "
+    for off, v in {4: 124, 8: 0x100F, 12: h, 16: w, 20: w * 4, 76: 32, 80: 0x41, 88: 32, 92: 0x00FF0000, 96: 0x0000FF00,
+                   100: 0x000000FF, 104: 0xFF000000, 108: 0x1000}.items():
+        header[off:off + 4] = int(v).to_bytes(4, "little")
+    bgra = np.empty((h, w, 4), np.uint8)
+    bgra[..., 0], bgra[..., 1], bgra[..., 2], bgra[..., 3] = a[..., 2], a[..., 1], a[..., 0], a[..., 3]
+    with open(path, "wb") as f:
+        f.write(header)
+        f.write(bgra.tobytes())
+
+
 if __name__ == "__main__":
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
     out = os.path.join(ROOT, "Textures", "Tantra")
     os.makedirs(out, exist_ok=True)
     write_dds(os.path.join(out, "in_btncaps.dds"), caps())
+    write_dds_rgba(os.path.join(out, "in_glass.dds"), glass())
+    write_dds(os.path.join(out, "in_door.dds"), door())
     write_dds(os.path.join(out, "in_liftpanel.dds"), zone_panel())
     from gen_mesh import CAB_PANEL                                       # the cabin panel's layout lives in the generator
     write_dds(os.path.join(out, "in_cabpanel.dds"), cab_panel(CAB_PANEL["scr"], CAB_PANEL["btn_u"], CAB_PANEL["btn_v"], CAB_PANEL["x1"] - CAB_PANEL["x0"]))

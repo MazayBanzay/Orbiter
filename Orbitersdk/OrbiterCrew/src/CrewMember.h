@@ -18,6 +18,7 @@
 #include "SuitComputer.h"
 #include "SuitHud.h"
 #include "Sound.h"
+#include "HeadSway.h"
 #include <string>
 #include <vector>
 
@@ -75,6 +76,8 @@ namespace ocrew
 		Figure bodyFig, suitFig;
 		Motion motion;
 		CrewSound sound;
+		oc::HeadSway headSway;               // the eyes on the neck aboard a ship: lag and vibration
+		VECTOR3 HeadSwayStep(double dt, const VECTOR3& eye);
 		std::string voice{ "female1" };
 		VISHANDLE vis{};
 		VECTOR3 eye{ 0, 0.69, 0.17 };

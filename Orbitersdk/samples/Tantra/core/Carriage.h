@@ -9,7 +9,7 @@
 //     ankle with an umbrella foot 12 m ahead of the hip. It takes (sCG - s_track) / (s_foot - s_track) of the weight;
 //   * four stern legs on the nacelles: four sections each, umbrella feet on R 36 m; they carry the standing ship.
 // Erection progress P runs 0 (lying) .. 6 (standing on the stern):
-//   0-1 crests tucked, lift on the blades to the standing height (kangaroo foot fixed on the ground);
+//   0-1 lift on the blades to the standing height (kangaroo foot fixed on the ground);
 //   1-2 trunnions run forward under the CG (the kangaroo unloads), kangaroo folds into its pocket;
 //   2-3 turn 90 deg about the trunnions (drive moment = weight x CG error only);
 //   3-4 stern legs swing out, run down to the ground, feet open;  4-5 load to the stern legs;
