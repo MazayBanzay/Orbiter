@@ -6,7 +6,7 @@
 namespace {
 const double kBoardRadius = 6.0;   // m around the lift foot (only with an older OrbiterCrew: no F - enter)
 const double kLiftReach = 3.0;     // m: the lift is within reach for F
-enum { kItemLift = 100 };
+enum { kItemLift = 100, kItemCall = 101 };
 }  // namespace
 
 void TantraCrew::Init(VESSEL* ship, const VECTOR3& liftFoot, int seats) {
@@ -27,10 +27,17 @@ TantraCrew::~TantraCrew() {
     api_.Unload();
 }
 
-int TantraCrew::ItemCount(void*) { return 1; }
+int TantraCrew::ItemCount(void*) { return 2; }
 
 int TantraCrew::ItemAt(void* ctx, int i, OcItem* out) {
     TantraCrew* c = static_cast<TantraCrew*>(ctx);
+    if (i == 1 && out) {                                                 // the cabin is up: call it from the foot of the lift
+        if (!c->callOn_) return 0;
+        *out = OcItem{};
+        out->id = kItemCall; out->kind = OC_LIFT; out->pos = c->callPos_; out->dir = _V(0, 0, 1); out->radius = kLiftReach;
+        std::snprintf(out->label, sizeof out->label, "%s", "вызвать кабину лифта");
+        return 1;
+    }
     if (i != 0 || !out) return 0;
     *out = OcItem{};
     out->id = kItemLift;
@@ -45,13 +52,14 @@ int TantraCrew::ItemAt(void* ctx, int i, OcItem* out) {
 // F at the lift: the person boards (the body leaves the world, the person is aboard)
 void TantraCrew::Use(void* ctx, int id, int personId) {
     TantraCrew* c = static_cast<TantraCrew*>(ctx);
+    if (id == kItemCall) { if (c->callOn_ && c->callFn_) c->callFn_(c->callCtx_); return; }
     if (id != kItemLift || !c->airlockOpen_ || !c->api_.Ok()) return;
     OcInfo in;
     if (!c->api_.Info(personId, &in) || in.where != 1 || !in.vessel) return;
     // the user's rule: going in, the camera stays with the person - the same body walks in and stands inside
     auto board = [&]() -> bool {
         if (c->hasArrival_ && c->api_.EnterShip)
-            return c->api_.EnterShip(in.vessel, c->ship_->GetHandle(), &c->arrival_, &c->arrivalDir_) != 0;
+            return c->api_.EnterShip && c->api_.EnterShip(in.vessel, c->ship_->GetHandle(), &c->arrival_, &c->arrivalDir_) != 0;
         return c->api_.Board(in.vessel, c->ship_->GetHandle()) != 0;
     };
     for (Member& m : c->members_) {
@@ -204,6 +212,40 @@ TantraCrew::EvaResult TantraCrew::Eva(int slot) {
     m.aboard = false;
     m.vessel = vname;
     last_ = m.name;
+    return EvaResult::Ok;
+}
+
+TantraCrew::EvaResult TantraCrew::EvaPerson(int personId) {
+    if (!api_.Ok() || !api_.ExitTo) return EvaResult::NoCrewModule;
+    if (!airlockOpen_) return EvaResult::AirlockClosed;
+    if (!ship_->GroundContact()) return EvaResult::NotLanded;
+    OcInfo in{};
+    if (!personId || !api_.Info(personId, &in)) return EvaResult::Failed;
+    Member* mm = nullptr;
+    for (Member& m : members_) if (m.person == personId) mm = &m;
+    VECTOR3 gpos;
+    ship_->Local2Global(foot_, gpos);
+    OBJHANDLE body = ship_->GetSurfaceRef();
+    double lng = 0, lat = 0, rad = 0, hdg = 0;
+    oapiGlobalToEqu(body, gpos, &lng, &lat, &rad);
+    oapiGetHeading(ship_->GetHandle(), &hdg);
+    VESSELSTATUS2 vs;
+    std::memset(&vs, 0, sizeof vs);
+    vs.version = 2;
+    vs.rbody = body;
+    vs.status = 1;  // landed
+    vs.surf_lng = lng;
+    vs.surf_lat = lat;
+    vs.surf_hdg = hdg;
+    const std::string vname = VesselName(mm ? mm->name : std::string(in.name));
+    OBJHANDLE h = api_.ExitTo(personId, vname.c_str(), &vs);       // inside: the body leaves the ship and stands at the foot
+    if (!h) return EvaResult::Failed;
+    if (mm) {
+        mm->aboard = false;
+        VESSEL* v = oapiGetVesselInterface(h);
+        mm->vessel = v ? v->GetName() : vname;
+        last_ = mm->name;
+    } else last_ = in.name;
     return EvaResult::Ok;
 }
 

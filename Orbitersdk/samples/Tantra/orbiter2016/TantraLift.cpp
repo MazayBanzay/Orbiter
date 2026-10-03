@@ -70,6 +70,8 @@ void TantraLift::Update(double dt, bool allowed, double groundY) {
 
 bool TantraLift::AtGround() const { return lower_ && down_ > 0.0 && down_ >= downT_ - 1e-6 && mast_ >= mastT_ - 1e-6; }
 
+double TantraLift::CabHeight() const { return (std::max)(0.0, m::kLockDeckY - down_ * m::kLockDrop - groundY_); }
+
 bool TantraLift::Moving() const { return !(lower_ ? AtGround() : Stowed()); }
 
 VECTOR3 TantraLift::Foot() const {

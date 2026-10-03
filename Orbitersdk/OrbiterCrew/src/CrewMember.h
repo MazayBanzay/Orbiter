@@ -23,6 +23,7 @@
 
 namespace ocrew
 {
+	struct ShipInterior;
 	class CrewMember : public VESSEL4
 	{
 	public:
@@ -132,7 +133,7 @@ namespace ocrew
 		bool mouseWasDown{};
 		// F - the action (user 2026-10-03: F everywhere): what is within reach - a ship's lift or airlock, later
 		// a seat, a terminal, a door inside
-		OBJHANDLE useShip{}; int useId{ -1 }; std::string useHint; double useScan{};
+		OBJHANDLE useShip{}; int useId{ -1 }, useKind{}; std::string useHint; double useScan{};
 		void FindUse(double dt);
 	public:
 		// inside a ship (user 2026-10-03: the person walks inside with her own body): the body hangs on the ship's
@@ -142,6 +143,33 @@ namespace ocrew
 		VECTOR3 inFeet{};                    // feet, in the ship's frame
 		double inHdg{};                      // heading about the ship's up axis (0 = along +z)
 		bool inViewing{};
+		// a seat in the ship: 0 standing, 1 sitting down, 2 seated, 3 standing up, 4 the seat moving back before she rises
+		int seat{}, seatId{ -1 };
+		double seatT{}, seatStill{};
+		VECTOR3 seatFeet{}, seatFrom{};
+		double seatHdg{}, seatHdgFrom{};
+		// the mouse (the user, 2026-10-03, everywhere, both views; not in a seat - there Orbiter's own): right button
+		// held - the mouse turns her and she walks where she looks; released - the mouse looks around (head / camera),
+		// the cursor stays in the middle (the aim: a click presses what is there); Alt frees the cursor. A/D step aside
+		static constexpr bool kMouseWalk = true;
+		static constexpr bool kMouseFreeLook = false;   // released: mouse look with the cursor held in the middle - off (the user: the cursor stays free)
+		bool mouseMode{}, mouseLocked{}, mouseRmb{};
+		double vesselYaw{};                  // inside: her vessel's turn from the ship's axes, in quarter turns
+		double freeYaw{}, freePitch{};
+		int orbitCal{};                      // external camera: 0 not yet, 1 probing, 2 known, -1 failed
+		double orbitY0{}, orbitP0{}, orbitKa{ 1 }, orbitKp{ 1 };
+		double mouseTurnBy{};
+		double MouseLook(double dt, bool canTurn);   // -> the heading change she makes this step
+		bool CalibrateOrbit();
+		static constexpr bool kSeatClips = false;   // sitting-down / getting-up motion: off for now (the user, 2026-10-03: later, cosmetics)
+		static constexpr double seatStartZ = 0.318, seatStandZ = 0.295;   // sit_down starts / stand_up ends standing this far in front of the seat (export_sit.log)
+		void SitDown(int id);
+		bool SeatPlace(int id);
+		void StandFromSeat();
+		int SeatState() const { return seat; }
+		bool lmbWas{};
+		void ClickInside(ShipInterior& si);   // a mouse click on a button of the ship (OC_BUTTON)
+		double carried{};                    // seconds left of being carried by the ship (ocCarry): no walking
 		int attachWait{};                    // frames a new body waits before it is attached
 		bool takeView{};                     // take the focus and the person's own view at the next step
 		void ApplyView();
@@ -155,6 +183,7 @@ namespace ocrew
 		bool CalibrateLook();
 		int lookCal{};                       // 0 not yet, 1 probing, 2 known, -1 failed
 		double lookSa{ 1 }, lookSp{ 1 }, lookY0{}, lookP0{};
+		bool lookSwap{};
 		void HudBySuit();                    // the user's rule: no HUD without the suit, the suit computer in the helmet
 	private:
 		bool DoUse();

@@ -31,10 +31,13 @@ public:
     Event Process(double dt);          // picks up members standing at the lift
     // the crew's own items for the interior provider (one OcInterior per ship: the provider appends these to its list
     // and passes F on them here). Ids from 100 up.
-    int CrewItemCount() const { return 1; }
+    int CrewItemCount() const { return 2; }
+    // outside, at the foot of the lift while the cabin is up: F calls the cabin down (the ship's sequence)
+    void SetLiftCall(const VECTOR3& pos, bool on, void (*fn)(void*), void* ctx) { callPos_ = pos; callOn_ = on; callFn_ = fn; callCtx_ = ctx; }
     int CrewItem(int i, OcItem* out) const { return ItemAt(const_cast<TantraCrew*>(this), i, out); }
     bool CrewUse(int id, int personId) { if (id < 100) return false; Use(this, id, personId); return true; }
     EvaResult Eva(int slot);
+    EvaResult EvaPerson(int personId);   // a person walking inside (the lift cabin at the ground): the same body steps out at the foot of the lift
     // the OrbiterCrew person in this slot, if he or she is aboard without a body (can stand up into the interior); 0 if not
     int PersonOf(int slot);
 
@@ -77,6 +80,7 @@ private:
     static int ItemCount(void* ctx);
     static int ItemAt(void* ctx, int i, OcItem* out);
     static void Use(void* ctx, int id, int personId);
+    VECTOR3 callPos_ = {}; bool callOn_ = false; void (*callFn_)(void*) = nullptr; void* callCtx_ = nullptr;
     bool inPerson_ = false;            // loading: inside an OC_PERSON block
     std::string personLines_;
 };

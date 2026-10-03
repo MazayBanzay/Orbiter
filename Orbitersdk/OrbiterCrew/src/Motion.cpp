@@ -24,6 +24,8 @@ namespace ocrew
 		const std::string dir = "Config\\" + clipDir + "\\";
 		const bool ok = idle.Load(dir + "idle.clip") && walk.Load(dir + "walk.clip") && run.Load(dir + "run.clip");
 		if (!ok) oapiWriteLogV("OrbiterCrew: cannot load the clips in Config\\%s", clipDir.c_str());
+		seats = sitDown.Load(dir + "sit_down.clip") && sit.Load(dir + "sit.clip") && standUp.Load(dir + "stand_up.clip");
+		sitDown.loop = sit.loop = standUp.loop = false;
 		return ok;
 	}
 
@@ -129,8 +131,32 @@ namespace ocrew
 		run.Sample(phase, pRun);
 		BlendPose(pWalk, pRun, F(wRun), pLoco);
 		BlendPose(pIdle, pLoco, F(wMove), pOut);
+		// ---- a seat: sitting down, seated, standing up (captured motion, the seat at the model origin) ----
+		seatW = in.seat && clips.seats ? 1.0 : Follow(seatW, 0.0, 0.12, dt);
+		if (clips.seats && (in.seat || seatW > 1e-3))
+		{
+			if (in.seat == 1) clips.sitDown.Sample(in.seatT, pSeat);
+			else if (in.seat == 3) clips.standUp.Sample(in.seatT, pSeat);
+			else if (in.seat == 2) clips.sit.Sample(0, pSeat);
+			BlendPose(pOut, pSeat, F(seatW), pOut);
+		}
+		// seated: upright and looking ahead (the user). The capture slumps and turns its head: the trunk is set straight
+		// over the hips with the shoulders square, the neck and head as in the standing pose; eased in at the end of
+		// sitting down and out at the start of getting up
+		const double upr = !clips.seats ? 0.0 : in.seat == 2 ? 1.0 : in.seat == 1 ? Smooth(0.55, 1.0, in.seatT) : in.seat == 3 ? 1 - Smooth(0.0, 0.45, in.seatT) : 0.0;
+		if (upr > 1e-3)
+		{
+			auto P = [&](int b) { return _V(pOut.t[b * 3], pOut.t[b * 3 + 1], pOut.t[b * 3 + 2]); };
+			VECTOR3 v = P(bNeck1) - P(bLowerBack);
+			skin.Turn(pOut, bLowerBack, AX_LAT, F(-upr * std::atan2(v.z, v.y)));    // + pitches the top forward
+			v = P(bNeck1) - P(bLowerBack);
+			skin.Turn(pOut, bLowerBack, AX_FWD, F(upr * std::atan2(v.x, v.y)));     // + rolls the top to the left (-x)
+			const VECTOR3 sh = P(bRArm) - P(bLArm);                                   // left arm on -x: along +x when square
+			skin.Turn(pOut, bLowerBack, AX_UP, F(upr * std::atan2(sh.z, sh.x)));     // + turns the face to the right
+			skin.Reattach(pOut, pIdle, bSpine1, bNeck1, F(upr));
+		}
 
-		const double rest = (1 - wMove) * (1 - lyingW);   // lying limp: no glances or weight shifts
+		const double rest = (1 - wMove) * (1 - lyingW) * (1 - seatW);   // lying limp or seated: no weight shifts on the feet
 
 		// ---- breathing: chest and shoulders; deeper with effort and fatigue ----
 		breathPhase += 6.2832 * in.breathRate / 60.0 * dt;
@@ -150,7 +176,8 @@ namespace ocrew
 
 		// the head looks around at rest and into turns while moving
 		headYaw = Follow(headYaw, std::clamp(0.35 * in.turn, -0.35, 0.35), 0.25, dt);
-		skin.Turn(pOut, bNeck1, AX_UP, F(headYaw + rest * 0.22 * Noise(1, time * 0.12) + wMove * (1 - wRun * (1 - suitW)) * 0.04 * Noise(1, time * 0.5)));
+		const double look = (1 - wMove) * (1 - lyingW) * (1 - upr);   // seated: she looks ahead
+		skin.Turn(pOut, bNeck1, AX_UP, F(headYaw + look * 0.22 * Noise(1, time * 0.12) + wMove * (1 - wRun * (1 - suitW)) * 0.04 * Noise(1, time * 0.5)));
 		skin.Turn(pOut, bHead, AX_LAT, F(rest * (0.05 * Noise(2, time * 0.19) + 0.10 * in.fatigue)));
 		skin.Turn(pOut, bHead, AX_FWD, F(rest * 0.03 * Noise(3, time * 0.15)));
 
@@ -312,6 +339,7 @@ namespace ocrew
 			skin.Turn(pOut, bNeck1, AX_UP, 0.40f * L); skin.Turn(pOut, bHead, AX_FWD, -0.15f * L);          // head to one side
 		}
 
+		if (in.heading != 0) skin.TurnAll(pOut, _V(0, 0, 0), AX_UP, F(in.heading));
 		skin.Apply(pOut);
 	}
 }

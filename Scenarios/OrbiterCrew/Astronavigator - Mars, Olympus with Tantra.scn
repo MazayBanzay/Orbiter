@@ -1,0 +1,69 @@
+BEGIN_DESC
+Марс, база «Олимп». «Тантра» стоит рядом с базой носом на гору Олимп. Низа Крит в скафандре снаружи, ранец лежит в двух метрах перед ней.
+W/S идти, A/D поворот, Q/E шаг вбок, Shift бег, B надеть ранец (подойти к нему), K скафандр.
+Вход в «Тантру» через лифт главного шлюза.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52001.825
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Niza_Krit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Niza_Krit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 50.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Tantra:Tantra
+  STATUS Landed Mars
+  POS -135.4438645 12.7400000
+  HEADING 15.06
+  PRPLEVEL 0:1.000 1:1.000 2:1.000 3:1.000 4:1.000 5:1.000
+  ENGSET 0
+  IGNITION 0
+  GLIMIT 1 5.00
+  CARRIAGE 0.0000 0.0 1.000 1 0 0
+  CREW 1 44 62 82 Capt - Erg Noor
+  CREW 0 23 62 58 Spe Niza_Krit Niza Krit
+  CREW 1 36 62 74 Spe - Pel Lin
+  CREW 1 52 62 80 APhy - Pur Hiss
+  CREW 1 31 62 60 APhy - Ingrid Ditra
+  CREW 1 38 62 76 Bio - Eon Tal
+  CREW 1 35 62 57 Doc - Luma Lasvi
+  CREW 1 33 62 75 Eng - Kay Ber
+  CREW 1 34 62 62 Geo - Bina Led
+  LIFT 1.0000 1.0000 1.0000 1.0000 1
+  AIRLOCK 1
+END
+Niza_Krit:OrbiterCrew\Astronavigator
+  STATUS Landed Mars
+  POS -135.4431712 12.7400000
+  HEADING 15.06
+  ALT 0.930
+  AFCMODE 7
+  NAME Niza Krit
+  ROLE Spe
+  SEX female
+  SUIT 1
+END
+JetPack1:OrbiterCrew\JetPack
+  STATUS Landed Mars
+  POS -135.4431622 12.7400326
+  HEADING 195.06
+  ALT 0.240
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+END
+END_SHIPS

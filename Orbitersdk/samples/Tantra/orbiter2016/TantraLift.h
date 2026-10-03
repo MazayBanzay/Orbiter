@@ -22,6 +22,8 @@ public:
     bool Stowed() const { return door_ <= 0.0 && out_ <= 0.0 && mast_ <= 0.0 && down_ <= 0.0; }
     bool AtGround() const;                         // platform down on the ground, the people can step off
     bool Moving() const;
+    double CabSpeed() const { return vCab_; }       // m/s, + down
+    double CabHeight() const;                       // the cabin floor above the ground, m
     VECTOR3 Foot() const;                          // ship frame x, y where the crew steps off and boards (z: station kAirlockS)
     const char* Stage() const;                     // short status for the HUD
 

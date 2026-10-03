@@ -12,6 +12,8 @@ namespace ocrew
 	struct ClipSet
 	{
 		Clip idle, walk, run;
+		Clip sitDown, sit, standUp;      // optional (a seat in a ship): sit_down.clip, sit.clip, stand_up.clip
+		bool seats{};
 		bool Load(const std::string& clipDir);
 	};
 
@@ -35,6 +37,10 @@ namespace ocrew
 		VECTOR3 angAcc{};              // angular acceleration, vessel frame (rad/s^2): turning swings the limbs too
 		bool jet{};                    // wearing the jet pack: hands forward, clear of the pods' jets
 		VECTOR3 angVel{};              // angular velocity, vessel frame (rad/s): limbs lag behind the turning
+		int seat{};                    // 0 standing, 1 sitting down, 2 seated, 3 standing up
+		double seatT{};                // 0..1 through sitting down / standing up
+		double heading{};              // rad, + to the right: the whole figure turned about the vertical through the origin
+		                               // (inside a ship the vessel keeps the ship's orientation; she turns in her pose)
 	};
 
 	class Motion
@@ -73,6 +79,7 @@ namespace ocrew
 		double lyingW{};                       // 0 .. 1: down on the ground, limp
 		double blinkIn{ 2.5 }, blinkT{ -1 };   // seconds to the next blink; time into the current one (-1: eyes open)
 		std::mt19937 rng;
-		Pose pIdle, pWalk, pRun, pLoco, pOut;
+		double seatW{};                        // 0 .. 1: the seat clips over the standing ones
+		Pose pIdle, pWalk, pRun, pLoco, pOut, pSeat;
 	};
 }

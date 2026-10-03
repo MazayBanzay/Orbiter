@@ -212,6 +212,7 @@ namespace ocrew
 			std::string key;
 			ss >> key;
 			if (who.LoadLine(key, ss)) {}   // the person: who, the organism, what is worn
+			else if (key == "SEAT") { ss >> seatId; seat = seatId >= 0 ? 2 : 0; seatT = 1; }
 			else if (key == "INTERIOR") { ss >> inFeet.x >> inFeet.y >> inFeet.z >> inHdg; std::getline(ss >> std::ws, inShipName); }
 			else if (key == "SHADE") { ss >> shadeTarget; shade = shadeTarget; }
 			else if (key == "LAMP") ss >> lampOn;
@@ -231,6 +232,7 @@ namespace ocrew
 		{
 			char b[160]; std::snprintf(b, sizeof b, "%.3f %.3f %.3f %.4f %s", inFeet.x, inFeet.y, inFeet.z, inHdg, oapiGetVesselInterface(inShip)->GetName());
 			oapiWriteScenario_string(scn, const_cast<char*>("INTERIOR"), b);
+			if (seat == 2 || seat == 4) oapiWriteScenario_int(scn, const_cast<char*>("SEAT"), seatId);
 		}
 	}
 
@@ -412,18 +414,20 @@ namespace ocrew
 		accel = (nf - fwd) / dt;
 		fwd = nf;
 
-		const double latTarget = (k.stepR - k.stepL) * 0.9;
+		const double side = mouseMode ? std::clamp(static_cast<double>((k.right - k.left) + (k.stepR - k.stepL)), -1.0, 1.0) : static_cast<double>(k.stepR - k.stepL);   // the mouse turns: A/D step aside
+		const double latTarget = side * 0.9;
 		lat = Approach(lat, latTarget, std::abs(latTarget) > std::abs(lat) ? (std::min)(3.0, 0.5 * g) : (std::min)(5.0, 0.7 * g), dt);
 
 		// turning: on the spot freely, at speed limited by the sideways grip (v * w <= 0.7 g)
 		const double wmax = std::abs(fwd) < 0.3 ? 1.8 : (std::min)(1.8, 0.7 * g / std::abs(fwd));
-		const double turnTarget = (k.right - k.left) * wmax;
+		const double turnTarget = mouseMode ? std::clamp(mouseTurnBy / dt, -wmax, wmax) : (k.right - k.left) * wmax;
 		turn = Approach(turn, turnTarget, std::abs(turnTarget) > std::abs(turn) ? 10.0 : 14.0, dt);
 
-		if (fwd || lat || turn)
+		if (fwd || lat || turn || mouseTurnBy)
 		{
 			VESSELSTATUS2 s = Status(this);
-			s.surf_hdg = std::fmod(s.surf_hdg + turn * dt + PI2, PI2);
+			// the mouse: she faces where it turned her, at once (its own limit is the grip, through turn above)
+			s.surf_hdg = std::fmod(s.surf_hdg + (mouseMode ? mouseTurnBy : turn * dt) + PI2, PI2);
 			surface::Walk(s, oapiGetSize(s.rbody), fwd * dt, lat * dt);
 			surface::Stand(s, height + PadLift());
 			DefSetStateEx(&s);
@@ -624,12 +628,17 @@ namespace ocrew
 		double q = t.sunlit ? ALPHA * t.sunFlux * 0.3 : 0;   // about a third of her surface faces the Sun
 		if (ref && ((GetFlightStatus() & 1) || GetAltitude() < 1000))
 		{
-			// airless ground: hot regolith by day, cold by night; she sees it with half of her surface
+			// the ground she sees with half of her surface. Airless: hot regolith by day, ~100 K by night (the Moon).
+			// A thin atmosphere (Mars, 0.6 kPa) holds the night up (~180 K, -93 C) and the day down (~290 K at noon)
 			const double scale = std::pow(t.sunFlux / 1361, 0.25);
-			t.groundT = t.sunlit && elev > 0 ? 100 + 290 * std::pow(std::sin(elev), 0.25) * scale : 100;
+			const double thin = air.p > 0.05 ? (std::min)(1.0, air.p / 0.6) : 0.0;
+			const double floorT = 100 + 80 * thin, amp = 290 * scale * (1 - 0.53 * thin);
+			t.groundT = t.sunlit && elev > 0 ? floorT + amp * std::pow(std::sin(elev), 0.25) : floorT;
 			q += 0.5 * 0.95 * SIGMA * std::pow(t.groundT, 4);
 		}
-		q += 0.5 * SIGMA * std::pow(2.7, 4);
+		// the sky: deep space, or the glow of a thin atmosphere (its CO2 radiates at roughly the air's temperature - 35 K)
+		const double skyT = air.p > 0.05 && air.T > 40 ? air.T - 35 : 2.7;
+		q += 0.5 * SIGMA * std::pow(skyT, 4);
 		t.tEnv = std::pow(q / (EPS * SIGMA), 0.25);
 		return t;
 	}
@@ -911,6 +920,7 @@ namespace ocrew
 			}
 			if (!bio.CanAct() && !lying) { fwd = lat = turn = 0; Place(true); }
 			else if (bio.CanAct() && lying && fallenT <= 0) Place(false);   // gets up once the fall is over
+			mouseTurnBy = MouseLook(dt, bio.CanAct() && !lying);
 			if (bio.CanAct() && !lying) Drive(dt, g); else fwd = lat = turn = accel = 0;
 		}
 		else fwd = lat = turn = accel = 0;
@@ -923,7 +933,8 @@ namespace ocrew
 	{
 		// ---- no HUD without the suit (the generic cockpit has one; switch it off, give it back with the suit) ----
 		const bool inHead = oapiCameraInternal() && oapiCameraTarget() == GetHandle();
-		if (inHead && !suitOn && !hudHidden && oapiGetHUDMode() != HUD_NONE) { oapiSetHUDMode(HUD_NONE); hudHidden = true; }
+		// every step, not once: Orbiter or a key may switch the HUD on again (it did inside the ship - the user)
+		if (inHead && !suitOn && oapiGetHUDMode() != HUD_NONE) { oapiSetHUDMode(HUD_NONE); hudHidden = true; }
 		else if (hudHidden && (suitOn || !inHead)) { if (suitOn && inHead) oapiSetHUDMode(HUD_SURFACE); hudHidden = false; }
 		// the suit computer comes on whenever she is in the helmet: after the suit is put on, or on coming back into the
 		// helmet view (the HUD may have been switched off without the suit and the view changed since)
@@ -941,6 +952,8 @@ namespace ocrew
 		{
 			MotionInput in;
 			in.dt = dt; in.fwd = fwd; in.lat = lat; in.turn = turn; in.accel = accel; in.g = g;
+				in.seat = seat == 4 ? 2 : seat; in.seatT = seatT;
+				in.heading = inShip ? std::remainder(inHdg - vesselYaw, PI2) : 0;   // her turn from her vessel's axes
 			in.grounded = !airborne && landed && !lying;
 			in.lying = lying && landed;
 			in.landing = landingSpeed;
@@ -951,6 +964,7 @@ namespace ocrew
 			if (in.floating) GetAngularVel(in.angVel);
 			if (in.floating) { VECTOR3 f; GetThrustVector(f); in.thrustAcc = f / GetMass(); GetAngularAcc(in.angAcc); }
 			const bool firstPerson = oapiCameraInternal() && oapiCameraTarget() == GetHandle();
+			// seated: the ship's cockpit view is her eyes in the seat - her own head must not be in it
 			fig.skin.SetHideHead(firstPerson);
 			// from inside the helmet its own parts sit at the camera: seen from within they show cut edges and their dark
 			// inner faces. The body below the neck stays in view; the helmet, the visor, the shade and its arms do not
@@ -978,6 +992,9 @@ namespace ocrew
 
 	bool CrewMember::clbkDrawHUD(int mode, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp)
 	{
+		// the person and the suit are apart (the user's rule): the suit computer's HUD exists only in the suit -
+		// nothing of it is drawn without it, whatever the HUD mode is
+		if (!suitOn) return true;
 		static const std::pair<const char*, const char*> WARN[] = {
 			{ "VACUUM - NO SUIT", "ВАКУУМ БЕЗ СКАФАНДРА" }, { "OVERHEATING", "ПЕРЕГРЕВ" }, { "HYPOTHERMIA", "ПЕРЕОХЛАЖДЕНИЕ" },
 			{ "HYPOXIA", "ГИПОКСИЯ" }, { "LOW OXYGEN", "МАЛО КИСЛОРОДА" }, { "CO2 NARCOSIS", "ОТРАВЛЕНИЕ CO2" },
@@ -1068,8 +1085,15 @@ namespace ocrew
 		}
 		else if (si->fns.Ground) inFeet.y = fy;
 		oapiWriteLogV("OrbiterCrew: %s inside %s at (%.2f %.2f %.2f)", name.c_str(), sv->GetName(), inFeet.x, inFeet.y, inFeet.z);
+		if (seat == 2 && seatId >= 0)   // seated in the scenario: back into that seat, the ship is told
+		{
+			if (SeatPlace(seatId)) { inFeet = seatFeet; inHdg = seatHdg; if (si->ext.Seated) si->ext.Seated(si->ctx, seatId, who.id, 1); }
+			else { seat = 0; seatId = -1; }
+		}
 		fwd = lat = turn = accel = 0; airborne = lying = false;
-		sv->SetAttachmentParams(inParent, inFeet + si->Origin(), _V(std::sin(inHdg), 0, std::cos(inHdg)), _V(0, 1, 0));
+		vesselYaw = std::round(inHdg / PI05) * PI05;   // in quarter turns of the ship's axes (see InteriorStep)
+		sv->SetAttachmentParams(inParent, inFeet + si->Origin(), _V(std::sin(vesselYaw), 0, std::cos(vesselYaw)), _V(0, 1, 0));
+		SetCameraRotationRange(PI * 0.999, PI * 0.999, 75 * RAD, 75 * RAD);   // the look is about the ship's axes; she turns in her pose
 		if (GetAttachmentStatus(inChild) != ship) sv->AttachChild(GetHandle(), inParent, inChild);
 		who.where = Person::INTERIOR; who.ship = ship; who.vessel = GetHandle();
 		if (si->fns.Viewing) { si->fns.Viewing(si->ctx, 1); inViewing = true; }
@@ -1084,6 +1108,7 @@ namespace ocrew
 			if (inParent) oapiGetVesselInterface(inShip)->DetachChild(inParent);
 		}
 		inViewing = false; inShip = nullptr; inParent = nullptr;
+		SetCameraRotationRange(70 * RAD, 70 * RAD, 75 * RAD, 75 * RAD);
 		who.where = Person::IN_WORLD; who.ship = nullptr;
 	}
 
@@ -1098,6 +1123,168 @@ namespace ocrew
 		if (who.viewDist > 0.5 && d > 0) oapiCameraScaleDist(who.viewDist / d);
 	}
 
+	// where she is in that seat: the feet under the ship's hips point (the clip's seated hips are hipY over the feet)
+	bool CrewMember::SeatPlace(int id)
+	{
+		ShipInterior* si = InteriorOf(inShip);
+		Figure& fig = Active();
+		if (!si || !si->fns.Seat || !fig.ok || !fig.clips.seats) return false;
+		VECTOR3 hips{}, dir{ 0, 0, 1 };
+		si->fns.Seat(si->ctx, id, &hips, &dir);
+		const int hb = fig.skin.Bone("Hips");
+		const double hipY = hb >= 0 && fig.clips.sit.data.size() > static_cast<size_t>(hb * 7 + 5) ? fig.clips.sit.data[hb * 7 + 5] + height : 0.5;
+		seatHdg = std::atan2(dir.x, dir.z);
+		seatFeet = _V(hips.x, hips.y - hipY, hips.z);
+		return true;
+	}
+
+	// F at a seat: she sits down in that very seat (the clip has the seat at the model origin and ends with the hips
+	// at seatHipY over the feet; the ship's Seat() gives the hips point and the facing)
+	void CrewMember::SitDown(int id)
+	{
+		ShipInterior* si = InteriorOf(inShip);
+		Figure& fig = Active();
+		if (!si || !si->fns.Seat || !fig.ok || !fig.clips.seats) return;
+		SeatPlace(id);
+		// the clip starts standing seatStartZ in front of the seat: she is eased from where she is onto that start
+		const VECTOR3 f0 = _V(std::sin(seatHdg), 0, std::cos(seatHdg));
+		seatFrom = inFeet - f0 * seatStartZ; seatHdgFrom = inHdg;
+		seat = 1; seatT = 0; seatId = id; fwd = lat = turn = accel = 0;
+		if (!kSeatClips)   // for now (the user): no sitting-down motion - she is in the seat at once, the seat moves up
+		{
+			seat = 2; seatT = 1; inFeet = seatFeet; inHdg = seatHdg;
+			// seated, Orbiter's own head turning about the vessel's nose: the vessel faces the way the seat faces
+			vesselYaw = std::remainder(seatHdg, PI2);
+			if (oapiCameraInternal() && oapiCameraTarget() == GetHandle() && lookCal == 2) SetLook(0, 0);
+			if (si->ext.Seated) si->ext.Seated(si->ctx, seatId, who.id, 1);
+		}
+		oapiWriteLogV("OrbiterCrew: %s sits down in seat %d of %s", name.c_str(), id, oapiGetVesselInterface(inShip)->GetName());
+	}
+
+	// she stands up from the seat (F in the seat, through the ship): the body takes the focus and her view back
+	void CrewMember::StandFromSeat()
+	{
+		if (seat != 2 || !inShip) return;
+		if (ShipInterior* si = InteriorOf(inShip)) if (si->ext.Seated) si->ext.Seated(si->ctx, seatId, who.id, 0);   // the seat moves back
+		seat = 4; seatT = 0; seatStill = 0;
+		oapiWriteLogV("OrbiterCrew: %s stands up from seat %d", name.c_str(), seatId);
+	}
+
+	// the mouse on the ship's buttons: a left click in Orbiter's window is a ray from the camera through the cursor,
+	// taken into the ship's interior frame; the nearest OC_BUTTON it passes through, within her arm's reach, is pressed
+	void CrewMember::ClickInside(ShipInterior& si)
+	{
+		const bool down = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+		const bool edge = down && !lmbWas;
+		lmbWas = down;
+		if (!edge || oapiGetFocusObject() != GetHandle() || !bio.CanAct()) return;
+		POINT p; GetCursorPos(&p);
+		HWND w = WindowFromPoint(p); DWORD pid = 0;
+		if (w) GetWindowThreadProcessId(w, &pid);
+		RECT rc{};
+		if (!w || pid != GetCurrentProcessId() || !ScreenToClient(w, &p) || !GetClientRect(w, &rc) || rc.right <= 0 || rc.bottom <= 0) return;
+		const double W = rc.right, H = rc.bottom, fpx = (H / 2) / std::tan((std::max)(0.1, oapiCameraAperture()));
+		VECTOR3 cp; oapiCameraGlobalPos(&cp); MATRIX3 Rc; oapiCameraRotationMatrix(&Rc);
+		const VECTOR3 dg = mul(Rc, unit(_V((p.x - W / 2) / fpx, (H / 2 - p.y) / fpx, 1.0)));   // camera -> global
+		VESSEL* sv = oapiGetVesselInterface(si.ship);
+		VECTOR3 o; sv->Global2Local(cp, o); o -= si.Origin();
+		MATRIX3 Rs; sv->GetRotationMatrix(Rs);
+		const VECTOR3 d = tmul(Rs, dg);                                                          // global -> ship
+		// the ship's own touch screens first
+		if (si.ext.Click && si.ext.Click(si.ctx, &o, &d, who.id))
+		{
+			oapiWriteLogV("OrbiterCrew: click (%ld,%ld) taken by a screen of %s", p.x, p.y, sv->GetName());
+			return;
+		}
+		if (!si.fns.Count || !si.fns.Item || !si.fns.Use) return;
+		const VECTOR3 head = inFeet + _V(0, 1.45, 0);
+		double best = 1e9; int hit = -1, buttons = 0, nearId = -1; double nearMiss = 1e9, nearReach = 0;
+		for (int i = 0, n = si.fns.Count(si.ctx); i < n; ++i)
+		{
+			OcItem it{};
+			if (!si.fns.Item(si.ctx, i, &it) || it.kind != OC_BUTTON) continue;
+			++buttons;
+			const VECTOR3 v = it.pos - o;
+			const double t = dotp(v, d);
+			const double miss = t > 0 ? length(v - d * t) : 1e9, reach = length(it.pos - head);
+			if (miss < nearMiss) { nearMiss = miss; nearId = it.id; nearReach = reach; }
+			if (reach > 1.5) continue;                                                            // out of her reach
+			if (miss < (std::max)(it.radius, 0.04) && t < best) { best = t; hit = it.id; }
+		}
+		// every click is logged: what it was aimed at (for the user's tests)
+		oapiWriteLogV("OrbiterCrew: click at (%ld,%ld) of %.0fx%.0f, ray from (%.2f %.2f %.2f) dir (%.2f %.2f %.2f); %d buttons, nearest %d misses by %.3f m, %.2f m from her head -> %s",
+			p.x, p.y, W, H, o.x, o.y, o.z, d.x, d.y, d.z, buttons, nearId, nearMiss, nearReach, hit >= 0 ? "pressed" : "nothing");
+		if (hit < 0) return;
+		si.fns.Use(si.ctx, hit, who.id);
+		oapiWriteLogV("OrbiterCrew: %s presses button %d of %s", name.c_str(), hit, sv->GetName());
+	}
+
+	// the mouse: right button held - she turns with it; released - it looks around, the cursor kept in the middle
+	double CrewMember::MouseLook(double dt, bool canTurn)
+	{
+		const bool rmb = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0, alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+		mouseRmb = rmb;
+		HWND fw = GetForegroundWindow(); DWORD pid = 0;
+		if (fw) GetWindowThreadProcessId(fw, &pid);
+		RECT rc{};
+		const bool win = fw && pid == GetCurrentProcessId() && GetClientRect(fw, &rc) && rc.right > 0 && rc.bottom > 0;
+		mouseMode = kMouseWalk && inShip && oapiCameraInternal() && canTurn && win   // through her eyes only; from outside the classic controls (the user)
+			   // only inside a ship (the user); outside the keys turn her as before
+			 && seat == 0 && oapiGetFocusObject() == GetHandle() && oapiCameraTarget() == GetHandle();
+		if (!mouseMode) { mouseLocked = false; return 0; }
+		const bool eyes = oapiCameraInternal();
+		double turnBy = 0, y = 0, p = 0;
+		if (rmb)
+		{
+			// Orbiter turns the camera; she turns to where it looks
+			mouseLocked = false;
+			LookDir(y, p);   // the camera's look about the ship's axes (her vessel keeps the ship's orientation)
+			const double rel = std::remainder(y + vesselYaw - inHdg, PI2);
+			turnBy = eyes ? rel : std::clamp(rel, -8.0 * dt, 8.0 * dt);   // through her eyes at once; from outside she turns to it
+			return turnBy;
+		}
+		if (alt || !kMouseFreeLook) { mouseLocked = false; return 0; }   // the cursor is free (the user: without the right button as before)
+		// released: the mouse looks around; the cursor goes back to the middle every step (the aim)
+		POINT c{ rc.right / 2, rc.bottom / 2 }; ClientToScreen(fw, &c);
+		POINT m; GetCursorPos(&m);
+		const double k = 0.0025;   // rad per pixel
+		const double dx = mouseLocked ? (m.x - c.x) * k : 0, dyv = mouseLocked ? (m.y - c.y) * k : 0;
+		SetCursorPos(c.x, c.y);
+		if (eyes)
+		{
+			if (!CalibrateLook()) { mouseLocked = true; return 0; }
+			if (!mouseLocked) LookDir(freeYaw, freePitch);
+			freeYaw = std::clamp(freeYaw + dx, -1.2, 1.2); freePitch = std::clamp(freePitch - dyv, -1.25, 1.25);   // the neck's range
+			if (dx || dyv) SetLook(freeYaw, freePitch);
+		}
+		else if (CalibrateOrbit() && (dx || dyv))
+		{
+			oapiCameraRotAzimuth(dx * orbitKa);
+			oapiCameraRotPolar(-dyv * orbitKp);
+		}
+		mouseLocked = true;
+		return 0;
+	}
+
+	// the outside camera: how Orbiter's azimuth / polar turns move the view (its sign and frame are not documented):
+	// one small probe turn, read back the next step, then turned back
+	bool CrewMember::CalibrateOrbit()
+	{
+		if (orbitCal == 2) return true;
+		if (orbitCal < 0) return false;
+		double y, p;
+		LookDir(y, p);
+		if (orbitCal == 0) { orbitY0 = y; orbitP0 = p; oapiCameraRotAzimuth(0.1); oapiCameraRotPolar(0.05); orbitCal = 1; return false; }
+		const double dy = std::remainder(y - orbitY0, PI2), dp = p - orbitP0;
+		oapiCameraRotAzimuth(-0.1); oapiCameraRotPolar(-0.05);
+		oapiWriteLogV("OrbiterCrew: orbit probe (azimuth 0.10, polar 0.05) -> yaw %+.3f pitch %+.3f", dy, dp);
+		if (std::abs(dy) < 0.02) { orbitCal = -1; oapiWriteLogV("OrbiterCrew: outside camera mapping unknown - the mouse does not turn her there"); return false; }
+		orbitKa = 0.1 / dy;                                        // azimuth per radian of yaw
+		orbitKp = std::abs(dp) > 0.01 ? 0.05 / dp : 0;              // polar per radian of pitch (0: none)
+		orbitCal = 2;
+		return true;
+	}
+
 	// the camera's direction relative to the body (her head): yaw right +, pitch up +
 	void CrewMember::LookDir(double& yaw, double& pitch)
 	{
@@ -1110,7 +1297,8 @@ namespace ocrew
 	// sets the look relative to the body, with the mapping found by Calibrate
 	void CrewMember::SetLook(double yaw, double pitch)
 	{
-		oapiCameraSetCockpitDir(lookSp * pitch, lookSa * yaw);
+		if (lookSwap) oapiCameraSetCockpitDir(lookSa * yaw, lookSp * pitch);   // Orbiter 2016 as measured: the first angle turns aside
+		else oapiCameraSetCockpitDir(lookSp * pitch, lookSa * yaw);
 	}
 
 	// Orbiter's polar/azimuth signs are not documented: one probe direction is set, and read back in the next frame
@@ -1122,12 +1310,14 @@ namespace ocrew
 		double y, p;
 		LookDir(y, p);
 		if (lookCal == 0) { lookY0 = y; lookP0 = p; oapiCameraSetCockpitDir(0.15, 0.3); lookCal = 1; return false; }
-		const bool aOk = std::abs(std::abs(y) - 0.3) < 0.05, pOk = std::abs(std::abs(p) - 0.15) < 0.05;
-		oapiWriteLogV("OrbiterCrew: look probe (polar 0.15, azimuth 0.30) -> pitch %.3f yaw %.3f", p, y);
-		if (!aOk || !pOk) { lookCal = -1; oapiCameraSetCockpitDir(0, 0); oapiWriteLogV("OrbiterCrew: look mapping unknown - the body does not follow the mouse"); return false; }
-		lookSa = y > 0 ? 1 : -1; lookSp = p > 0 ? 1 : -1; lookCal = 2;
+		// the documented order (polar 0.15 -> pitch, azimuth 0.30 -> yaw), or the two swapped (0.15 -> yaw, 0.30 -> pitch)
+		const bool asDoc = std::abs(std::abs(y) - 0.3) < 0.05 && std::abs(std::abs(p) - 0.15) < 0.05;
+		const bool swapped = std::abs(std::abs(y) - 0.15) < 0.05 && std::abs(std::abs(p) - 0.3) < 0.05;
+		oapiWriteLogV("OrbiterCrew: look probe (0.15, 0.30) -> pitch %.3f yaw %.3f (%s)", p, y, asDoc ? "as documented" : swapped ? "swapped" : "unknown");
+		if (!asDoc && !swapped) { lookCal = -1; oapiCameraSetCockpitDir(0, 0); oapiWriteLogV("OrbiterCrew: look mapping unknown - the body does not follow the mouse"); return false; }
+		lookSwap = swapped; lookSa = y > 0 ? 1 : -1; lookSp = p > 0 ? 1 : -1; lookCal = 2;
 		SetLook(lookY0, lookP0);
-		oapiWriteLogV("OrbiterCrew: look signs azimuth %+.0f polar %+.0f", lookSa, lookSp);
+		oapiWriteLogV("OrbiterCrew: look mapping %s, yaw %+.0f, pitch %+.0f", lookSwap ? "swapped" : "as documented", lookSa, lookSp);
 		return true;
 	}
 
@@ -1156,8 +1346,71 @@ namespace ocrew
 		bio.Sustain(dt, true, suitOn ? &suit.water : nullptr, air.T, suitOn);
 
 		// walking: the keys as outside, in the ship's frame
-		const Keys k = keysFresh ? keys : Keys{};
+		Keys k = keysFresh ? keys : Keys{};
 		keysFresh = false;
+		if (seat) k = Keys{};                        // in a seat (or getting in / out of it) she does not walk
+		if (carried > 0) { carried -= dt; k = Keys{}; fwd = lat = turn = accel = 0; }   // the ship carries her (a lift)
+		if (seat)
+		{
+			// sitting down / standing up: the clip runs ~1 s; her place is eased onto the seat over its first half
+			const double dur = 1.05;
+			if (seat == 1 || seat == 3) seatT = (std::min)(1.0, seatT + dt / dur);
+			if (seat == 1)
+			{
+				const double e = std::clamp(seatT / 0.5, 0.0, 1.0), s = e * e * (3 - 2 * e);
+				inFeet = seatFrom + (seatFeet - seatFrom) * s;
+				const double v = std::clamp((seatT - 0.3) / 0.7, 0.0, 1.0);   // the height: while the hips go down
+				inFeet.y = seatFrom.y + (seatFeet.y - seatFrom.y) * v * v * (3 - 2 * v);
+				double dh = std::remainder(seatHdg - seatHdgFrom, PI2);
+				inHdg = seatHdgFrom + dh * s;
+				// seated: the ship is told (its seat moves up to the console). The focus and the view stay with her - the
+				// person is the one who acts, never the ship as such (the user, 2026-10-03)
+				if (seatT >= 1) { seat = 2; inFeet = seatFeet; inHdg = seatHdg;
+					if (ShipInterior* s2 = InteriorOf(inShip)) if (s2->ext.Seated) s2->ext.Seated(s2->ctx, seatId, who.id, 1);
+				}
+			}
+			else if (seat == 2) { SeatPlace(seatId); inFeet = seatFeet; inHdg = seatHdg; }   // she goes with the seat
+			else if (seat == 4)   // getting up: first the seat moves back from the console; she rides it, then rises
+			{
+				const VECTOR3 was = seatFeet;
+				SeatPlace(seatId); inFeet = seatFeet; inHdg = seatHdg;
+				seatT += dt;
+				seatStill = length(seatFeet - was) < 1e-4 ? seatStill + dt : 0;
+				if ((seatStill > 0.25 && seatT > 0.3) || seatT > 4)
+				{
+					seat = 3; seatT = 0;
+					if (!kSeatClips)   // for now: she stands behind the seat at once (the free aisle), facing the way it faces
+					{
+						seat = 0; seatId = -1;
+						const VECTOR3 f0 = _V(std::sin(seatHdg), 0, std::cos(seatHdg));
+						VECTOR3 to = seatFeet - f0 * 0.95; to.y += 0.3;
+						double fy = to.y; if (!si->fns.Ground || si->fns.Ground(si->ctx, &to, 0.45, &fy)) to.y = fy; else to = seatFeet;
+						// clear of the walls and the vault there (the navigator's seat is close to the drum's end)
+						if (si->fns.Walls) { VECTOR3 from = to; si->fns.Walls(si->ctx, &from, &to, 0.25, heightM > 0 ? heightM : 1.75); }
+						inFeet = to; inHdg = seatHdg; fwd = lat = turn = accel = 0;
+					}
+				}
+			}
+			else if (seat == 3 && seatT < 1)   // getting up: the hips rise, the feet come down to the floor
+			{
+				const double v = std::clamp(seatT / 0.6, 0.0, 1.0);
+				double fy = seatFeet.y; VECTOR3 fl = seatFeet;
+				if (si->fns.Ground) { fl.y += 0.05; si->fns.Ground(si->ctx, &fl, 0.0, &fy); }
+				inFeet = seatFeet; inFeet.y = seatFeet.y + (fy - seatFeet.y) * v * v * (3 - 2 * v);
+			}
+			else if (seat == 3 && seatT >= 1)
+			{
+				// up: the clip ends standing ~0.3 m in front of the seat, which has moved back from the console
+				seat = 0; seatId = -1;
+				const VECTOR3 f0 = _V(std::sin(seatHdg), 0, std::cos(seatHdg));
+				VECTOR3 from = seatFeet; double fy0 = from.y; from.y += 0.3;
+				if (si->fns.Ground && si->fns.Ground(si->ctx, &from, 0.45, &fy0)) from.y = fy0;
+				VECTOR3 to = from + f0 * seatStandZ;
+				if (si->fns.Walls) si->fns.Walls(si->ctx, &from, &to, 0.25, heightM > 0 ? heightM : 1.75);
+				double fy = to.y; if (!si->fns.Ground || si->fns.Ground(si->ctx, &to, 0.45, &fy)) to.y = fy; else to = from;
+				inFeet = to; inHdg = seatHdg; fwd = lat = turn = accel = 0;
+			}
+		}
 		// the ship says whether one may walk now (takeoff, landing, the anamezon drive: no); she stays where she stands
 		char why[96] = "";
 		const bool shipLets = !si->ext.CanWalk || si->ext.CanWalk(si->ctx, why, sizeof why);
@@ -1167,34 +1420,69 @@ namespace ocrew
 		const double target = !act ? 0 : k.fwd && !k.back ? (k.run ? (std::min)(runSpeed, 3.0) : walkSpeed) : k.back && !k.fwd ? -0.9 : 0;
 		const double nf = Approach(fwd, target, std::abs(target) > std::abs(fwd) ? 2.5 : 6.0, dt);
 		accel = (nf - fwd) / dt; fwd = nf;
-		lat = Approach(lat, act ? (k.stepR - k.stepL) * 0.9 : 0, 4.0, dt);
-		turn = Approach(turn, act ? (k.right - k.left) * 1.8 : 0, 12.0, dt);
-		// through her eyes, the mouse turns her: past the comfortable turn of the head (60 deg) the body follows the look
-		// (the head alone would stop at the neck's range, which felt like an invisible wall)
-		if (act && oapiCameraInternal() && oapiCameraTarget() == GetHandle())
+		// inside a ship the mouse turns her (an experiment, the user 2026-10-03; outside as before): A/D step aside.
+		// Through her eyes the body follows the look at once (the view stays where the mouse put it)
+		const bool eyes = oapiCameraInternal() && oapiCameraTarget() == GetHandle();
+		double look = MouseLook(dt, act && !seat && carried <= 0);   // the heading change the mouse asks for this step
+		const bool mouseTurn = mouseMode && mouseRmb;   // right button held: the mouse turns, A/D step aside; released: A/D turn as outside
+		if (!mouseMode && act && eyes && !seat)   // in a seat: Orbiter's own head turning, nothing of ours
 		{
+			// mouse turning off: past the comfortable turn of the head (60 deg) the body follows the look
 			const double keep = 60 * RAD;
 			double yaw = 0, pitch = 0;
-			if (CalibrateLook()) LookDir(yaw, pitch);
-			if (std::abs(yaw) > keep)
+			LookDir(yaw, pitch);
+			const double rel = std::remainder(yaw + vesselYaw - inHdg, PI2);   // the head's turn from her body
+			if (std::abs(rel) > keep) look = rel - std::copysign(keep, rel);
+		}
+		const double side = mouseTurn ? std::clamp(static_cast<double>((k.right - k.left) + (k.stepR - k.stepL)), -1.0, 1.0) : static_cast<double>(k.stepR - k.stepL);
+		lat = Approach(lat, act ? std::clamp(side, -1.0, 1.0) * 0.9 : 0, 4.0, dt);
+		const double keyTurn = mouseTurn ? 0.0 : (k.right - k.left) * 1.8;
+		if (mouseTurn)   // the mouse turns her at once; 'turn' only feeds the animation
+		{
+			turn = Approach(turn, act ? std::clamp(look / dt, -3.0, 3.0) : 0, 12.0, dt);
+			inHdg += look;
+		}
+		else             // A/D turn her as outside (and past 60 deg of the head the body follows the look)
+		{
+			turn = Approach(turn, act ? keyTurn : 0, 12.0, dt);
+			inHdg += look + turn * dt;
+			// the camera is in the ship's frame: her keys' turn takes it along (her head; from outside it stays behind her)
+			const double dk = turn * dt;
+			if (dk != 0 && oapiCameraTarget() == GetHandle() && !seat)
 			{
-				const double ex = yaw - std::copysign(keep, yaw);
-				inHdg += ex;
-				SetLook(yaw - ex, pitch);
+				if (oapiCameraInternal()) { if (CalibrateLook()) { double cy, cp2; LookDir(cy, cp2); SetLook(std::remainder(cy + dk, PI2), cp2); } }
+				else if (CalibrateOrbit()) oapiCameraRotAzimuth(dk * orbitKa);
 			}
 		}
-		inHdg = std::fmod(inHdg + turn * dt + PI2, PI2);
+		inHdg = std::fmod(inHdg + PI2, PI2);
 		const VECTOR3 f = _V(std::sin(inHdg), 0, std::cos(inHdg)), r = _V(std::cos(inHdg), 0, -std::sin(inHdg));
 		VECTOR3 to = inFeet + f * (fwd * dt) + r * (lat * dt);
+		if (seat || carried > 0) to = inFeet;
 		if (si->fns.Walls) si->fns.Walls(si->ctx, &inFeet, &to, 0.25, heightM > 0 ? heightM : 1.75);
 		double fy = to.y;
-		if (!si->fns.Ground || si->fns.Ground(si->ctx, &to, 0.45, &fy)) { to.y = fy; inFeet = to; }
+		if (seat || carried > 0) {}
+		else if (!si->fns.Ground || si->fns.Ground(si->ctx, &to, 0.45, &fy)) { to.y = fy; inFeet = to; }
 		else { fwd = lat = 0; }                       // no floor there: she does not step into the void
-		sv->SetAttachmentParams(inParent, inFeet + si->Origin(), f, _V(0, 1, 0));
+		// the vessel does not turn with her (the ship's screens are rendered from cameras on this focus body; a turning
+		// body made their zones flicker): its frame stays the ship's, her heading is in the pose (Motion heading)
+		// Orbiter keeps the eyes' camera within +-180 deg of the vessel's nose: past 115 deg the vessel takes a quarter
+		// turn that way (once - the ship's screens retarget once, not every frame), her pose and the view stay where they are
+		if (oapiCameraInternal() && oapiCameraTarget() == GetHandle() && !seat && CalibrateLook())
+		{
+			double cy, cp2; LookDir(cy, cp2);
+			if (std::abs(cy) > 2.0)
+			{
+				const double q = std::copysign(PI05, cy);
+				vesselYaw = std::remainder(vesselYaw + q, PI2);
+				SetLook(std::remainder(cy - q, PI2), cp2);
+			}
+		}
+		sv->SetAttachmentParams(inParent, inFeet + si->Origin(), _V(std::sin(vesselYaw), 0, std::cos(vesselYaw)), _V(0, 1, 0));
 		if (GetAttachmentStatus(inChild) != inShip) sv->AttachChild(GetHandle(), inParent, inChild);
 
 		const int req = hud.TakeRequest();
 		if (req >= 0) ApRequest(req);
+		ClickInside(*si);
 		HudBySuit();
 		Animate(dt, g, true);
 	}
@@ -1207,6 +1495,7 @@ namespace ocrew
 		useScan = 0.2;
 		useShip = nullptr; useId = -1; useHint.clear();
 		if ((who.where != Person::IN_WORLD && who.where != Person::INTERIOR) || !bio.CanAct()) return;
+		if (inShip && seat) { if (seat == 2) { useShip = inShip; useHint = "встать"; } return; }   // in the seat: F - stand up
 		if (inShip)
 		{
 			ShipInterior* si = InteriorOf(inShip);
@@ -1216,10 +1505,15 @@ namespace ocrew
 			for (int i = 0; i < n; ++i)
 			{
 				OcItem it{};
-				if (!si->fns.Item(si->ctx, i, &it)) continue;
+				if (!si->fns.Item(si->ctx, i, &it) || it.kind == OC_BUTTON) continue;   // buttons: the mouse
+				// the item she has come up to: within reach, and the one she faces (a neighbouring seat may be as near)
 				const VECTOR3 dv = it.pos - inFeet;
 				const double d = std::hypot(dv.x, dv.z);
-				if (d < it.radius && std::abs(dv.y) < 2.0 && d < best) { best = d; useShip = inShip; useId = it.id; useHint = Utf8(it.label); }
+				if (d >= it.radius || std::abs(dv.y) >= 2.0) continue;
+				const double facing = d > 0.05 ? (dv.x * std::sin(inHdg) + dv.z * std::cos(inHdg)) / d : 1.0;   // cos of the angle off her nose
+				if (facing < 0.2) continue;                                           // beside or behind her
+				const double score = (1.0 - facing) * 2.0 + d / it.radius;
+				if (score < best) { best = score; useShip = inShip; useId = it.id; useKind = it.kind; useHint = Utf8(it.label); }
 			}
 			return;
 		}
@@ -1246,7 +1540,11 @@ namespace ocrew
 
 	bool CrewMember::DoUse()
 	{
+		if (seat == 2) { StandFromSeat(); return true; }
+		if (seat) return true;   // getting in or out of the seat
 		if (useId < 0 || !useShip) return false;
+		if (inShip && useShip == inShip && useKind == OC_SEAT && seat == 0)
+			if (ShipInterior* si = InteriorOf(inShip)) if (si->ext.Seated && si->fns.Seat && Active().ok && Active().clips.seats) { SitDown(useId); return true; }
 		for (ShipInterior& si : interiors())
 			if (si.ship == useShip && si.fns.Use && oapiIsVessel(si.ship)) { si.fns.Use(si.ctx, useId, who.id); return true; }
 		return false;
@@ -1460,6 +1758,45 @@ extern "C" __declspec(dllexport) int ocEnterShip(OBJHANDLE body, OBJHANDLE ship,
 	if (!c || !pos || c->inShip || c->Who().where != ocrew::Person::IN_WORLD || !ocrew::InteriorOf(ship)) return 0;
 	c->EnterShip(ship, *pos, dir ? *dir : _V(0, 0, 1));
 	return c->inShip ? c->Who().id : 0;
+}
+extern "C" __declspec(dllexport) int ocCarry(int id, OBJHANDLE ship, const VECTOR3* pos, const VECTOR3* dir)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p || !pos || p->where != ocrew::Person::INTERIOR || p->ship != ship) return 0;
+	ocrew::CrewMember* c = BodyOf(p->vessel);
+	if (!c || c->SeatState()) return 0;
+	c->inFeet = *pos;
+	if (dir) c->inHdg = std::atan2(dir->x, dir->z);
+	c->carried = 0.3;
+	return 1;
+}
+extern "C" __declspec(dllexport) int ocInteriorPos(int id, VECTOR3* feet, double* hdg)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p || p->where != ocrew::Person::INTERIOR) return 0;
+	ocrew::CrewMember* c = BodyOf(p->vessel);
+	if (!c || !c->inShip) return 0;
+	if (feet) *feet = c->inFeet;
+	if (hdg) *hdg = c->inHdg;
+	return 1;
+}
+// is the person in the space suit (1), or not (0); -1 no such person
+extern "C" __declspec(dllexport) int ocSuitWorn(int id)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p) return -1;
+	if (p->where == ocrew::Person::IN_WORLD || p->where == ocrew::Person::INTERIOR)
+		if (ocrew::CrewMember* c = BodyOf(p->vessel)) c->KeepWorn();   // the body's own state into the person
+	return p->worn.suit.on ? 1 : 0;
+}
+extern "C" __declspec(dllexport) int ocStand(int id)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p || p->where != ocrew::Person::INTERIOR) return 0;
+	ocrew::CrewMember* c = BodyOf(p->vessel);
+	if (!c || c->SeatState() != 2) return 0;
+	c->StandFromSeat();
+	return 1;
 }
 // the body leaves the world (into the seat 'seatId', or stored with -1); the focus goes to the ship
 extern "C" __declspec(dllexport) void ocLeaveInterior(int id, int seatId)

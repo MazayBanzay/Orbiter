@@ -211,7 +211,7 @@ int TantraWalk::Keys(char* kstate, double meshDZ) {
         else { vy_ -= 9.81 * dt; feet_ += vy_ * dt; if (found && feet_ <= gnd) { feet_ = gnd; vy_ = 0.0; } }
         if (feet_ < -12.0) { oapiWriteLogV("Tantra walk: fell out of the ship, back to the lower lobby"); Teleport(2); }
     }
-    EnsureNote();
+    if (kFreeWalk) EnsureNote();                                // the note is the free walking camera's only (debug)
     for (int k : kKeys) {                                       // free walking: these keys are ours; seated: only E and F (the ship flies)
         prev_[k] = kstate[k];
         if (kFreeWalk || k == OAPI_KEY_E || k == OAPI_KEY_F) kstate[k] = 0;
@@ -219,7 +219,7 @@ int TantraWalk::Keys(char* kstate, double meshDZ) {
     ApplyCamera(meshDZ);
     char extra[96]; extra[0] = 0; if (seated_) snprintf(extra, sizeof extra, "seated(%s)", kSeats[seat_].name);
     Report(extra);
-    if (sys - lastNote_ > 0.2 && note_) {
+    if (kFreeWalk && sys - lastNote_ > 0.2 && note_) {
         lastNote_ = sys;
         char buf[320];
         if (kFreeWalk) snprintf(buf, sizeof buf, "WALK  %s  (x %.1f  z %.1f  floor %.2f)\n%s\nW A S D move, Shift run, E use/sit/stairs/ladder, 1-6 teleport (1 bridge)", RoomAt(x_, z_, feet_), x_, z_, feet_, noteText_);

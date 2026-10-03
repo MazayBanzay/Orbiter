@@ -30,6 +30,11 @@ int AreaH(int id) { return kArea[id][3] - kArea[id][1]; }
 
 }  // namespace
 
+SURFHANDLE Tantra::PanelTex() {           // the panels' texture, also for the bridge console (the VC)
+    if (!g_panelTex) g_panelTex = oapiLoadTexture("Tantra\\panel.dds");
+    return g_panelTex;
+}
+
 void Tantra::ReleasePanelTexture() {
     if (g_panelTex) oapiReleaseTexture(g_panelTex);
     g_panelTex = nullptr;

@@ -402,6 +402,13 @@ try:
     if shoes:
         bs = bmesh.new(); bs.from_mesh(shoes.data); Ms = shoes.matrix_world
         bmesh.ops.delete(bs, geom=[v for v in bs.verts if (Ms @ v.co).z > BOOT_TOP], context='VERTS'); bs.to_mesh(shoes.data); bs.free()
+    # the toes and the instep of the body came through the boot (more so when the foot bends: in the game it looked
+    # like slippers, the user): inside the boot the foot is never seen - remove the body below the boot's top
+    for bo in (o for o in bpy.data.objects if o.type == 'MESH' and o.name.split('.')[-1] in ("body", "female1605")):
+        bb = bmesh.new(); bb.from_mesh(bo.data); Mb = bo.matrix_world
+        gone = [v for v in bb.verts if (Mb @ v.co).z < BOOT_TOP - 0.025]
+        bmesh.ops.delete(bb, geom=gone, context='VERTS'); bb.to_mesh(bo.data); bb.free()
+        log.append("body %s: %d foot vertices removed (inside the boot)" % (bo.name, len(gone)))
     g.name = "Coverall"; g.data.name = "Coverall"     # export_skin.py labels the garment's groups Coverall_<material>
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "astronavigator_crewsuit.blend"), copy=True)
     log.append("game blend saved: astronavigator_crewsuit.blend")

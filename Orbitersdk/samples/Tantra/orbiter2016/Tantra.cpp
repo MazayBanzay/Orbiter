@@ -8,6 +8,7 @@
 #include <initializer_list>
 
 #include "TantraExhaust.h"
+#include "InteriorLayout.h"
 #include "TantraSafety.h"
 #include "TantraGear.h"
 
@@ -129,6 +130,38 @@ void Tantra::clbkSetClassCaps(FILEHANDLE cfg) {
     interior_.Init(this, vcMeshIdx_, [](void* s) { return static_cast<Tantra*>(s)->MeshDZ(); }, this, &crew_);
     interior_.SetCanWalk([](void* s, char* r, int n) { return static_cast<Tantra*>(s)->CanWalk(r, n); }, this);
     walk_.SetStandHook([](void* s, int seat) { return static_cast<TantraInterior*>(s)->StandUp(seat); }, &interior_);
+    {   // the lift panel in the lift zone and the cabin that carries people
+        LiftPanelHooks hk;
+        hk.ctx = this;
+        hk.Press = [](void* s, int which, int person) { static_cast<Tantra*>(s)->PanelPress(which, person); };
+        hk.Label = [](void* s, int which, char* out, int n) { static_cast<Tantra*>(s)->PanelLabel(which, out, n); };
+        hk.State = [](void* s, int which) { return static_cast<const Tantra*>(s)->PanelState(which); };
+        hk.Status = [](void* s, char* out, int n) { static_cast<const Tantra*>(s)->PanelStatus(out, n); };
+        hk.CabStatus = [](void* s, char* out, int n) { static_cast<const Tantra*>(s)->CabStatus(out, n); };
+        hk.DoorB = [](void* s) { return static_cast<const Tantra*>(s)->doorB_; };
+        hk.Cabin = [](void* s, double* out, double* down, int* ground) {
+            const Tantra* t = static_cast<Tantra*>(s);
+            *out = t->lift_.Out(); *down = t->lift_.Down(); *ground = t->lift_.AtGround() ? 1 : 0;
+        };
+        interior_.SetLiftPanel(hk);
+    }
+    {   // the bridge console: the 2D panels, live (redrawn by the ship, clicks to the same handlers)
+        ConsoleHooks ch;
+        ch.ctx = this;
+        ch.Tex = [](void*) { return Tantra::PanelTex(); };
+        ch.Redraw = [](void* s, int a) { static_cast<Tantra*>(s)->clbkPanelRedrawEvent(a, PANEL_REDRAW_USER, Tantra::PanelTex(), nullptr); };
+        ch.Click = [](void* s, int a, int mx, int my) { static_cast<Tantra*>(s)->clbkPanelMouseEvent(a, PANEL_MOUSE_LBDOWN, mx, my, nullptr); };
+        interior_.SetConsole(ch);
+        BridgeHooks bh;
+        bh.ctx = this; bh.PanelTex = ch.Tex; bh.Click = ch.Click;
+        bh.Holo = [](void* s, HoloData* d) { static_cast<const Tantra*>(s)->FillHolo(d); };
+        bh.Nav = [](void* s, int mode) {
+            Tantra* t = static_cast<Tantra*>(s);
+            if (t->GetNavmodeState(mode)) t->DeactivateNavmode(mode);
+            else { t->navAllowed_ |= 1 << mode; t->ActivateNavmode(mode); }
+        };
+        interior_.SetBridge(bh);
+    }
     screen_.Init(this, vcMeshIdx_);
     DefineGear();
     DefinePort();
@@ -1040,9 +1073,46 @@ void Tantra::ApplyThrottleLimits() {
     }
 }
 
+// Watch lighting: dim warm downlights in the corridor, amber in the lift zone. D3D9Client lights each mesh with its four most
+// relevant local lights (diffuse and specular, no shadows); the light pools and the corner shadows are painted in the mesh.
+void Tantra::WatchLights() {
+    using namespace tantra::interior;
+    const int n = (std::min)(kWatchLightCount, 4);
+    auto spec = [&](int i) -> const WatchLight& { return i < 4 ? kWatchLights[i] : kBridgeWatchLights[i - 4]; };
+    auto used = [&](int i) { return i < n || i >= 4; };
+    if (!watchLight_[4]) {
+        for (int i = 0; i < 6; i++) {
+            if (!used(i)) continue;
+            const WatchLight& w = spec(i);
+            const COLOUR4 dif = {float(w.r), float(w.g), float(w.b), 0.0f};
+            const COLOUR4 spec = {float(w.r * 0.8), float(w.g * 0.8), float(w.b * 0.8), 0.0f};
+            const COLOUR4 amb = {0.0f, 0.0f, 0.0f, 0.0f};
+            watchLight_[i] = AddPointLight(_V(w.x, w.y, w.z + MeshDZ()), 7.0, 0.6, 0.3, 0.15, dif, spec, amb);
+            if (watchLight_[i]) watchLight_[i]->Activate(false);
+        }
+    }
+    const OBJHANDLE f = oapiGetFocusObject();
+    const OBJHANDLE body = interior_.ViewerBody();
+    const bool inside = oapiCameraInternal() && (f == GetHandle() ? oapiCockpitMode() == COCKPIT_VIRTUAL : body != nullptr);
+    bool bridge = f == GetHandle();                              // the ship's own VC: the view from a bridge seat
+    if (body) {                                                  // a person walking inside: where is he or she
+        VECTOR3 g, l; oapiGetGlobalPos(body, &g); Global2Local(g, l);
+        const double dy = l.y - kBridgeAxisY, dz = l.z - MeshDZ() - kBridgeAxisZ;
+        bridge = std::fabs(l.x) <= kBridgeHx && dy * dy + dz * dz <= kBridgeR * kBridgeR;
+    }
+    for (int i = 0; i < 6; i++) {
+        if (!watchLight_[i]) continue;
+        const WatchLight& w = spec(i);
+        watchLight_[i]->SetPosition(_V(w.x, w.y, w.z + MeshDZ()));
+        const bool on = inside && (i >= 4) == bridge;
+        if (watchLight_[i]->IsActive() != on) watchLight_[i]->Activate(on);
+    }
+}
+
 void Tantra::clbkPreStep(double, double simdt, double) {
-    interior_.Step();                             // deferred stand-up / sit-down of a person (OrbiterCrew)
+    interior_.Step(simdt);                        // the moving bridge seats, the deferred stand-up (OrbiterCrew)
     screen_.SetViewer(interior_.ViewerBody());   // the bridge screen follows the viewer (gcAPI renders for the focus only)
+    WatchLights();
     WatchTerrain();   // first: a refined terrain tile must not bury the pads for even one step
     UpdateCG(false);
     AimThroughCG();
@@ -1410,11 +1480,12 @@ void Tantra::BreakUp() {
 void Tantra::clbkVisualCreated(VISHANDLE vis, int) {
     vis_ = vis;
     screen_.OnVisual(vis);
+    interior_.OnVisual(vis);
     UpdateDamageVisual(true);
 }
 
 void Tantra::clbkVisualDestroyed(VISHANDLE vis, int) {
-    if (vis == vis_) { vis_ = nullptr; screen_.OnVisualGone(); }
+    if (vis == vis_) { vis_ = nullptr; screen_.OnVisualGone(); interior_.OnVisualGone(); }
 }
 
 void Tantra::UpdateDamageVisual(bool force) {
@@ -1686,6 +1757,178 @@ void Tantra::ActLift() {
     else Message("Лифт: кабина вверх, мачта, консоль, дверь", "Lift: cabin up, mast, arm in, door");
 }
 
+double Tantra::OutsideP() const { return (std::max)(0.0, (std::min)(1.0, GetAtmPressure() / 101325.0)); }
+
+bool Tantra::PressureEqual() const { return std::fabs(zonePressure_ - OutsideP()) < 0.03; }
+
+bool Tantra::LiftGo(bool lower) {
+    if (lower) {
+        const bool level = carriage_.Progress() <= 0.0 && carriage_.Gear() >= 1.0 && GroundContact() && !carriage_.Busy();
+        if (!level) { Message("Лифт - только лёжа на опорах (лафет в покое)", "Lift: lying on the gear only, the carriage at rest"); return false; }
+    }
+    if (!lift_.Command(lower)) return false;
+    return true;
+}
+
+void Tantra::LiftCall() {
+    if (lift_.Stowed() && !lift_.Lowering() && trip_ == 0) { trip_ = 1; doorBT_ = 1.0; Message("Лифт: кабина идёт вниз", "Lift: the cabin is coming down"); }
+}
+
+void Tantra::PanelStep(double dt) {
+    if (panelMsgT_ > 0.0) panelMsgT_ -= dt;
+    if (alertT_ > 0.0 && (alertT_ -= dt) <= 0.0) alertBtn_ = -1;
+    if (overrideT_ > 0.0) overrideT_ -= dt;
+    if (panelErrT_ > 0.0 && (panelErrT_ -= dt) <= 0.0) panelErr_[0] = 0;
+    if (suitMsgT_ > 0.0 && (suitMsgT_ -= dt) <= 0.0) { suitMsg_[0] = 0; suitOk_ = -1; }
+    const bool home = lift_.Stowed() && !lift_.Lowering();          // the cabin stands in the cell
+    if (!home) { doorBT_ = 1.0; zonePressureTarget_ = OutsideP(); }   // away: door B shut, the cell open to the outside
+    switch (trip_) {
+        case 1:                                                          // going down: door B shuts, the air goes, then the cabin
+            if (doorB_ >= 1.0) {
+                zonePressureTarget_ = OutsideP();
+                if (PressureEqual() || OutsideAirOk()) {
+                    if (LiftGo(true)) trip_ = 3;
+                    else { trip_ = 0; std::snprintf(panelErr_, sizeof panelErr_, "ОТКАЗ: лифт только лёжа на опорах"); panelErrT_ = 10.0; }
+                }
+            }
+            break;
+        case 3: if (lift_.AtGround() || !lift_.Lowering()) trip_ = 0; break;
+        case 2:                                                          // going up: home, the air back, door B opens
+            if (home) { zonePressureTarget_ = 1.0; if (zonePressure_ >= 0.999) { doorBT_ = 0.0; trip_ = 0; } }
+            break;
+        default:
+            if (home) { zonePressureTarget_ = 1.0; if (zonePressure_ >= 0.999) doorBT_ = 0.0; }   // at rest in the cell: the air in, the door open
+            break;
+    }
+    const double dd = doorBT_ - doorB_;
+    if (std::fabs(dd) > 1e-9) doorB_ += (dd > 0 ? 1.0 : -1.0) * (std::min)(std::fabs(dd), dt / 2.0);   // 2 s
+    const double d = zonePressureTarget_ - zonePressure_;
+    if (std::fabs(d) > 1e-9) zonePressure_ += (d > 0 ? 1.0 : -1.0) * (std::min)(std::fabs(d), 0.125 * dt);   // ~8 s for one atmosphere
+}
+
+void Tantra::PanelPress(int which, int personId) {
+    messageRu_[0] = 0;
+    struct After { Tantra* t; int w; ~After() { if (t->messageRu_[0]) { std::snprintf(t->panelMsg_, sizeof t->panelMsg_, "%s", t->messageRu_); t->panelMsgBtn_ = w; t->panelMsgT_ = 6.0; } } } after{this, which};
+    const bool home = lift_.Stowed() && !lift_.Lowering();
+    switch (which) {
+        case 0: {                                                        // the lift zone: is my suit on
+            if (OutsideAirOk()) { suitOk_ = 1; std::snprintf(suitMsg_, sizeof suitMsg_, "не нужен - воздух снаружи пригоден"); }
+            else {
+                const int w = interior_.SuitWorn(personId);
+                suitOk_ = w == 1 ? 1 : 0;
+                std::snprintf(suitMsg_, sizeof suitMsg_, "%s", w == 1 ? "надет, герметичен" : w == 0 ? "НЕ НАДЕТ" : "нет данных");
+            }
+            suitMsgT_ = 20.0;
+            Message("Скафандр: %s", "Suit: %s", suitMsg_);
+            break;
+        }
+        case 1:
+            Message("Давление шлюза: %.2f атм, снаружи %.2f атм. Выравнивание - само, по кнопке ВНИЗ в кабине", "Lock pressure %.2f atm, outside %.2f atm",
+                    zonePressure_, OutsideP());
+            break;
+        case 2:                                                          // the lift zone: the cabin from the bottom
+            if (lift_.AtGround() && trip_ == 0) { if (LiftGo(false)) { trip_ = 2; Message("Лифт: вызов, кабина поднимается", "Lift: called, the cabin rises"); } }
+            else if (home) Message("Кабина здесь: войдите в неё и нажмите ВНИЗ", "The cabin is here: step in and press DOWN");
+            else Message("Кабина в пути", "The cabin is on its way");
+            break;
+        case 3: {                                                        // the cabin: DOWN
+            if (!home) { Message(lift_.AtGround() ? "Кабина внизу: ВЫХОД - на грунт, ВВЕРХ - подъём" : "Кабина в пути", "The cabin is not up"); break; }
+            if (trip_) break;
+            int ids[8]; const int n = interior_.CabinPeople(ids, 8);
+            if (!OutsideAirOk()) {
+                char who[96] = {0};
+                for (int i = 0; i < n; i++)
+                    if (interior_.SuitWorn(ids[i]) != 1) {
+                        char nm[48] = {0}; if (!interior_.PersonName(ids[i], nm, sizeof nm)) std::snprintf(nm, sizeof nm, "?");
+                        std::snprintf(who + std::strlen(who), sizeof who - std::strlen(who), "%s%s", who[0] ? ", " : "", nm);
+                    }
+                if (who[0] && overrideT_ <= 0.0) {
+                    alertBtn_ = 3; alertT_ = 3.0; overrideT_ = 15.0;
+                    std::snprintf(panelErr_, sizeof panelErr_, "БЕЗ СКАФАНДРА: %s - ВНИЗ ещё раз: на свой риск", who); panelErrT_ = 15.0;
+                    Message("Лифт: без скафандра - %s", "Lift: no suit - %s", who);
+                    break;
+                }
+                if (who[0]) { std::snprintf(panelErr_, sizeof panelErr_, "РИСК: без скафандра - %s", who); panelErrT_ = 20.0; }
+            }
+            overrideT_ = 0.0;
+            trip_ = 1; doorBT_ = 1.0;
+            Message("Лифт: дверь шлюза закрывается", "Lift: door B shuts");
+            break;
+        }
+        case 4:                                                          // the cabin: UP
+            if (lift_.AtGround() && trip_ == 0) { if (LiftGo(false)) { trip_ = 2; Message("Лифт: подъём", "Lift: up"); } }
+            else if (home) Message("Кабина наверху: выход - пешком в зону лифта", "The cabin is up: walk out");
+            break;
+        case 5:                                                          // the cabin: OUT to the ground
+            if (!lift_.AtGround()) { Message(home ? "Кабина наверху: выход - пешком в зону лифта" : "Кабина в пути", "Not at the ground"); break; }
+            switch (crew_.EvaPerson(personId)) {
+                case TantraCrew::EvaResult::Ok: Message("%s вышел на грунт", "%s steps out", crew_.LastName()); break;
+                case TantraCrew::EvaResult::NotLanded: Message("Выход - только на грунте", "EVA on the ground only"); break;
+                case TantraCrew::EvaResult::AirlockClosed: Message("Шлюз закрыт", "Airlock closed"); break;
+                default: Message("Выход невозможен", "EVA not possible"); break;
+            }
+            break;
+        default: break;
+    }
+}
+
+// The air outside is fit to breathe (the user's rule: on the Earth one goes out without a suit; the checks pass by themselves)
+bool Tantra::OutsideAirOk() const {
+    OBJHANDLE ref = GetSurfaceRef(); char nm[64] = {0};
+    if (ref) oapiGetObjectName(ref, nm, 63);
+    return std::strcmp(nm, "Earth") == 0 && GetAtmPressure() > 70000.0;
+}
+
+// The lift zone's screen (TantraInterior draws it): lines, '!' red, '+' green, '*' amber.
+void Tantra::PanelStatus(char* out, int n) const {
+    char s1[128], s2[128], s3[128];
+    if (suitMsg_[0]) std::snprintf(s1, sizeof s1, "%c1 СКАФАНДР: %s", suitOk_ == 1 ? '+' : '!', suitMsg_);
+    else std::snprintf(s1, sizeof s1, "%s", OutsideAirOk() ? "+1 СКАФАНДР: не нужен - воздух снаружи пригоден" : " 1 СКАФАНДР: нажмите 1 - проверка");
+    const bool home = lift_.Stowed() && !lift_.Lowering();
+    std::snprintf(s2, sizeof s2, "%c2 ШЛЮЗ: %.2f атм, снаружи %.2f, дверь %s", std::fabs(zonePressureTarget_ - zonePressure_) > 1e-6 ? '*' : ' ',
+                  zonePressure_, OutsideP(), doorB_ <= 0.0 ? "открыта" : doorB_ >= 1.0 ? "закрыта" : "движется");
+    std::snprintf(s3, sizeof s3, "%s", lift_.AtGround() ? "+3 КАБИНА: внизу - 3 вызвать наверх" : home ? (trip_ ? "*3 КАБИНА: готовится к спуску" : "+3 КАБИНА: здесь - войдите, ВНИЗ в кабине") :
+                                     lift_.Lowering() ? "*3 КАБИНА: спуск..." : "*3 КАБИНА: подъём...");
+    std::snprintf(out, size_t(n), "СТАТУС ШЛЮЗА\n%s\n%s\n%s\n%s%s", s1, s2, s3, panelErr_[0] ? "!" : "", panelErr_);
+}
+
+// The cabin's screen: what the cabin does and the command to give.
+void Tantra::CabStatus(char* out, int n) const {
+    const bool home = lift_.Stowed() && !lift_.Lowering();
+    char s1[128] = {0}, s2[128] = {0};
+    if (lift_.AtGround()) { std::snprintf(s1, sizeof s1, "+ВНИЗУ. ВЫХОД - выйти на грунт"); std::snprintf(s2, sizeof s2, " ВВЕРХ - подъём"); }
+    else if (trip_ == 1 && doorB_ < 1.0) std::snprintf(s1, sizeof s1, "*Дверь шлюза закрывается...");
+    else if (trip_ == 1) { std::snprintf(s1, sizeof s1, "*Выравнивание давления"); std::snprintf(s2, sizeof s2, "*%.2f -> %.2f атм", zonePressure_, OutsideP()); }
+    else if (!home) std::snprintf(s1, sizeof s1, lift_.Lowering() ? "*СПУСК..." : "*ПОДЪЁМ...");
+    else if (trip_ == 2 || zonePressure_ < 0.999) { std::snprintf(s1, sizeof s1, "*Наддув шлюза: %.2f атм", zonePressure_); std::snprintf(s2, sizeof s2, " дверь откроется сама"); }
+    else if (doorB_ > 0.0) std::snprintf(s1, sizeof s1, "*Дверь шлюза открывается...");
+    else { std::snprintf(s1, sizeof s1, "+ГОТОВА. ВНИЗ - спуск"); std::snprintf(s2, sizeof s2, " снаружи %.2f атм%s", OutsideP(), OutsideAirOk() ? ", воздух пригоден" : ""); }
+    char s3[96];
+    std::snprintf(s3, sizeof s3, "*ВЫСОТА %5.1f м    СКОРОСТЬ %4.1f м/с", lift_.CabHeight(), std::fabs(lift_.CabSpeed()));
+    std::snprintf(out, size_t(n), "КАБИНА ЛИФТА\n%s\n%s\n%s\n%s%s", s3, s1, s2[0] ? s2 : " ", panelErr_[0] ? "!" : "", panelErr_);
+}
+
+int Tantra::PanelState(int which) const {
+    if (which == alertBtn_ && alertT_ > 0.0) return 3;                   // refused: this one
+    const bool home = lift_.Stowed() && !lift_.Lowering();
+    switch (which) {
+        case 0: return suitOk_ == 1 ? 1 : 0;
+        case 1: return std::fabs(zonePressureTarget_ - zonePressure_) > 1e-6 ? 2 : 0;
+        case 2: return lift_.AtGround() && trip_ == 0 ? 1 : (lift_.Moving() || trip_) ? 2 : 0;
+        case 3: return trip_ == 1 || trip_ == 3 ? 2 : (home && trip_ == 0 && doorB_ <= 0.0) ? 1 : 0;
+        case 4: return trip_ == 2 && !home ? 2 : (lift_.AtGround() && trip_ == 0) ? 1 : 0;
+        case 5: return lift_.AtGround() ? 1 : 0;
+        default: return 0;
+    }
+}
+
+void Tantra::PanelLabel(int which, char* out, int n) const {
+    static const char* const kLab[6] = {"1 - проверка скафандра", "2 - давление шлюза", "3 - вызов кабины", "ВНИЗ - спуск", "ВВЕРХ - подъём", "ВЫХОД - на грунт"};
+    const char* s = (which >= 0 && which < 6) ? kLab[which] : "";
+    if (which == panelMsgBtn_ && panelMsgT_ > 0.0 && panelMsg_[0]) std::snprintf(out, size_t(n), "%s", panelMsg_);
+    else std::snprintf(out, size_t(n), "%s", s);
+}
+
 void Tantra::ActEva() {
     if (GroundContact() && rovers_ < 0.99 && !lift_.AtGround()) {
         Message("Выход на грунт: опустите лифт шлюза (Shift+A) или платформу ангара (O, Shift+O)",
@@ -1767,7 +2010,11 @@ void Tantra::UpdateGear(double simdt) {
     const bool level = carriage_.Progress() <= 0.0 && carriage_.Gear() >= 1.0 && GroundContact();
     airlockUp_ = step(airlockUp_, level ? 0.0 : 1.0, 0.1);
     // main airlock crew lift: only lying on the gear with the carriage at rest; it follows the real height of the sill
-    lift_.Update(simdt, level && !carriage_.Busy() && !frozen_, -carriage_.Pose().trunnionH);
+    // lying on the gear at rest; a bounce of the contacts while settling (a moment off the ground) is not a reason to go home
+    const bool liftOk = carriage_.Progress() <= 0.0 && carriage_.Gear() >= 1.0 && !carriage_.Busy() && !frozen_ &&
+                        (GroundContact() || sinceContact_ < 3.0);
+    lift_.Update(simdt, liftOk, -carriage_.Pose().trunnionH);
+    PanelStep(simdt);
     if (lift_.AtGround() && !liftWasDown_) {
         crew_.SetAirlockOpen(true);
         Message("Кабина лифта внизу: выход на грунт (E), вход - у двери кабины (F)", "Lift cabin at the ground: EVA with E, board at its door with F");
@@ -1775,6 +2022,14 @@ void Tantra::UpdateGear(double simdt) {
         Message("Лифт поднимается", "Lift rising");
     }
     liftWasDown_ = lift_.AtGround();
+    {   // every stage change of the crew lift goes to Orbiter.log (debugging without the screen)
+        static const char* lastStage = nullptr;
+        const char* st = lift_.Stage();
+        if (st != lastStage) {
+            oapiWriteLogV("Tantra: lift %s (door %.2f arm %.2f mast %.2f cabin %.2f)", st, lift_.Door(), lift_.Out(), lift_.Mast(), lift_.Down());
+            lastStage = st;
+        }
+    }
 
     TantraGear::Extras ex;
     ex.lockDoor = lift_.Door();
@@ -1912,6 +2167,12 @@ void Tantra::UpdateGear(double simdt) {
         crew_.SetLiftFoot(_V(f.x, f.y, Zf(tantra::mesh::kAirlockS)));
     } else {
         crew_.SetLiftFoot(_V(kEvaPos.x, -p.trunnionH + 0.93, Zf(kCrewLiftS)));   // beside the lowered hangar platform
+    }
+    {   // outside at the foot of the lift while the cabin is up: F calls it down
+        const VECTOR3 f = lift_.Foot();
+        const bool level = carriage_.Progress() <= 0.0 && carriage_.Gear() >= 1.0 && !carriage_.Busy();
+        crew_.SetLiftCall(_V(f.x, f.y, Zf(tantra::mesh::kAirlockS)), level && lift_.Stowed() && !lift_.Lowering() && trip_ == 0,
+                          [](void* s) { static_cast<Tantra*>(s)->LiftCall(); }, this);
     }
 }
 
@@ -2605,7 +2866,22 @@ int Tantra::CanWalk(char* reason, int n) const {
 // The user's decision: no Orbiter autopilots (killrot, prograde, hold altitude...) in the Tantra. Any that gets switched on
 // (a key, an MFD, a scenario) is switched off at once.
 void Tantra::clbkNavMode(int mode, bool active) {
-    if (!active) return;
+    if (!active) { navAllowed_ &= ~(1 << mode); return; }
+    if (navAllowed_ & (1 << mode)) return;                              // from the holo panel: allowed (the user's decision)
     DeactivateNavmode(mode);
-    oapiWriteLogV("Tantra: Orbiter autopilot %d refused (not used in the Tantra)", mode);
+    oapiWriteLogV("Tantra: Orbiter autopilot %d refused (only from the holo panel)", mode);
+}
+
+// The holo panel's values (TantraBridge).
+void Tantra::FillHolo(HoloData* d) const {
+    d->anamezon = engineSet_ == EngineSet::Anamezon; d->anaFeed = AnaIsMain() && GetThrusterGroupLevel(THGROUP_MAIN) > 0.0;
+    d->thrust = GetThrusterGroupLevel(THGROUP_MAIN);
+    const double mx = GetMaxFuelMass(); d->fuel = mx > 0 ? GetFuelMass() / mx : 0.0;
+    d->field = ignition_.FieldLevel(); d->beam = ignition_.BeamLevel();
+    d->alt = GetAltitude(); d->speed = GetAirspeed(); d->mach = GetMachNumber();
+    VECTOR3 v; GetHorizonAirspeedVector(v); d->vs = v.y;
+    d->g = thrustAccel_ / 9.80665; d->aoa = GetAOA(); d->pitch = GetPitch(); d->bank = GetBank();
+    double h = 0.0; oapiGetHeading(GetHandle(), &h); d->hdg = h;
+    d->navOn = 0;
+    for (int m = 1; m <= 7; m++) if (const_cast<Tantra*>(this)->GetNavmodeState(m)) d->navOn |= 1 << m;
 }

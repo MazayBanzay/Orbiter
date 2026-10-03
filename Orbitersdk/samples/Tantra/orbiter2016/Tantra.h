@@ -285,6 +285,8 @@ private:
     TantraWalk walk_;
     TantraInterior interior_; // the interior for OrbiterCrew: people walk inside with their bodies
     TantraScreen screen_;     // bridge: big screen (outside view), its button, console MFD
+    LightEmitter* watchLight_[6] = {};   // 0..3 the way to the lift, 4..5 the bridge capsule   // watch lighting of the way from the bridge to the lift (InteriorLayout.h kWatchLights)
+    void WatchLights();                  // positions (they follow the CG shift) and on/off: only while someone looks inside
     VECTOR3 touch_[tantra::CarriagePose::kMaxTouch] = {};
     int nTouch_ = 0;
     double touchMass_ = 0.0;          // mass the suspension was last tuned for
@@ -315,6 +317,35 @@ private:
     TantraCrew crew_;
     TantraLift lift_;              // main airlock crew lift (port flank s 129)
     bool liftWasDown_ = false;
+    // The lift (the user, 2026-10-03): one walks into the cabin, goes down with it by its DOWN button, steps out at the bottom by
+    // its OUT button; coming back the same the other way. The cabin is the lock: going down, door B (lift zone <-> cell) shuts,
+    // the cell is equalised with the outside (not on the Earth), the cabin goes; coming up, the cell is filled, door B opens.
+    // The checks (everybody in the cabin in the suit) are on DOWN; a second press goes at one's own risk. An empty cabin goes
+    // only when called from the other end (the lift zone's button 3 / F at the foot of the lift outside).
+    void PanelPress(int which, int personId);   // 0..2 the lift zone's panel, 3..5 the cabin's DOWN, UP, OUT
+    void PanelLabel(int which, char* out, int n) const;
+    int PanelState(int which) const;      // the light of a panel button (TantraInterior LiftPanelHooks::State)
+    static SURFHANDLE PanelTex();
+    int navAllowed_ = 0;                  // bits (1 << NAVMODE_*): the autopilots switched on from the holo panel (keys stay refused)
+    void FillHolo(struct HoloData* d) const;         // the 2D panels' texture (loaded on first use), shared with the bridge console
+    void PanelStatus(char* out, int n) const;    // the lift zone's screen
+    void CabStatus(char* out, int n) const;      // the cabin's screen
+    void PanelStep(double dt);
+    bool LiftGo(bool lower);              // the lift itself, with the ship's rule (lying on the gear, the carriage at rest)
+    void LiftCall();                      // F at the foot of the lift outside: the cabin comes down (it is up)
+    bool OutsideAirOk() const;
+    double OutsideP() const;              // the outside pressure, fraction of the normal one (0..1)
+    bool PressureEqual() const;
+    int alertBtn_ = -1; double alertT_ = 0.0;   // a refused press: this button blinks fast
+    double overrideT_ = 0.0;              // after a refusal: a second press of DOWN within this time goes at one's own risk
+    char panelErr_[160] = {0}; double panelErrT_ = 0.0;   // the last refusal / risk (both screens)
+    char suitMsg_[96] = {0}; double suitMsgT_ = 0.0; int suitOk_ = -1;   // the lift zone's button 1: the presser's suit
+    double zonePressure_ = 1.0, zonePressureTarget_ = 1.0;   // the air of the cell (the cabin in it), fraction of the normal pressure
+    double doorB_ = 0.0, doorBT_ = 0.0;   // door B: 0 open .. 1 shut
+    int trip_ = 0;                        // 0 none, 1 going down (door B, air, then the cabin), 2 going up, 3 riding down
+    char panelMsg_[160] = {0};             // the answer of the last pressed button: shown in its hint for a while (the person sees no ship HUD)
+    int panelMsgBtn_ = -1;
+    double panelMsgT_ = 0.0;
     int selectedCrew_ = 0;
 
     // XRSound.

@@ -25,7 +25,9 @@ struct OcInfo {
 // ---- the ship's interior, as the ship gives it to OrbiterCrew (a person walks inside with his or her own body) ----
 // Everything in the ship's frame (the vessel's local coordinates; the ship accounts for its own mesh offsets).
 // The person moves; the ship only answers where the floor and the walls are and what can be used.
-enum OcItemKind { OC_SEAT = 1, OC_TERMINAL, OC_DOOR, OC_LIFT, OC_AIRLOCK, OC_EXIT };
+// OC_BUTTON: a control pressed with the MOUSE (the user's rule: buttons are clicked, not F): pos = its centre, radius =
+// its size on the panel (~0.02-0.05 m); the person must stand within arm's reach. The others are used with F.
+enum OcItemKind { OC_SEAT = 1, OC_TERMINAL, OC_DOOR, OC_LIFT, OC_AIRLOCK, OC_EXIT, OC_BUTTON };
 struct OcItem {
     int id;                     // the ship's own id (given back in Use / Seat)
     int kind;                   // OcItemKind
@@ -80,11 +82,31 @@ struct OcInteriorExt {
     int size;                                                    // sizeof(OcInteriorExt): fields may be added at the end
     void (*Origin)(void* ctx, VECTOR3* o);                       // NULL: (0,0,0) - the interior frame is the ship frame
     int (*CanWalk)(void* ctx, char* reason, int n);              // NULL: always; reason in the ship's code page
+    // A seat (OC_SEAT) taken by OrbiterCrew itself: F at a seat, the person sits down in THAT seat with the body
+    // (Seat() gives the hips and the facing, read every frame: the seat may move and the body goes with it). Empty
+    // seats stand moved back from the console; Seated(on = 1) when seated: the ship moves the seat up to the console;
+    // on = 0 on F in the seat: the ship moves it back, the person rises when Seat() stops moving. The focus and the
+    // camera stay with the person all the time - the ship never takes them (the user's rule). NULL: the old way.
+    void (*Seated)(void* ctx, int seatId, int personId, int on);
+    // A left click inside the ship (touch screens, as in Arrow): the click's ray from the camera through the cursor,
+    // in the interior frame, before any OC_BUTTON is looked for. 1 = the ship took it (a screen was hit), 0 = not.
+    // The ship checks the reach itself (the camera may be behind her: ocInteriorPos gives her feet)
+    int (*Click)(void* ctx, const VECTOR3* origin, const VECTOR3* dir, int personId);
 };
 typedef void (*ocSetInteriorExt_t)(OBJHANDLE ship, const OcInteriorExt* ext);
 // a person outside walks in (a lift, an airlock): the SAME body is now inside at pos/dir (interior frame); the focus
 // and the camera stay with the person (the user's rule: never the ship's panel on going in or out). -> person id, 0
 typedef int (*ocEnterShip_t)(OBJHANDLE body, OBJHANDLE ship, const VECTOR3* pos, const VECTOR3* dir);
+// the seated person stands up (F in the seat, from the ship): the body gets up and takes the focus and the view
+typedef int (*ocStand_t)(int id);
+// the ship carries a person standing inside (a lift cabin, a moving platform): call every frame while it moves;
+// she stands at pos/dir (interior frame, the floor under her feet) and does not walk; she walks again ~0.3 s after
+// the last call. -> 1 if she is inside this ship
+typedef int (*ocCarry_t)(int id, OBJHANDLE ship, const VECTOR3* pos, const VECTOR3* dir);
+// where a person walking inside stands: the feet (interior frame) and the heading about +y (0 = +z). -> 1 if inside
+typedef int (*ocInteriorPos_t)(int id, VECTOR3* feet, double* hdg);
+// is the person in the space suit: 1 yes, 0 no, -1 no such person
+typedef int (*ocSuitWorn_t)(int id);
 
 struct OcApi {
     HMODULE dll = nullptr;
@@ -104,6 +126,10 @@ struct OcApi {
     ocShipOf_t ShipOf = nullptr;
     ocSetInteriorExt_t SetInteriorExt = nullptr;
     ocEnterShip_t EnterShip = nullptr;
+    ocStand_t Stand = nullptr;
+    ocCarry_t Carry = nullptr;
+    ocInteriorPos_t InteriorPos = nullptr;
+    ocSuitWorn_t SuitWorn = nullptr;
 
     bool Load() {
         if (dll) return true;
@@ -125,6 +151,10 @@ struct OcApi {
         ShipOf = (ocShipOf_t)GetProcAddress(dll, "ocShipOf");
         SetInteriorExt = (ocSetInteriorExt_t)GetProcAddress(dll, "ocSetInteriorExt");
         EnterShip = (ocEnterShip_t)GetProcAddress(dll, "ocEnterShip");
+        Stand = (ocStand_t)GetProcAddress(dll, "ocStand");
+        Carry = (ocCarry_t)GetProcAddress(dll, "ocCarry");
+        InteriorPos = (ocInteriorPos_t)GetProcAddress(dll, "ocInteriorPos");
+        SuitWorn = (ocSuitWorn_t)GetProcAddress(dll, "ocSuitWorn");
         if (!(CreatePerson && SetAboard && Board && Disembark && PersonOfBody && Info && SavePerson && LoadPerson)) { Unload(); return false; }
         return true;
     }

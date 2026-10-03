@@ -289,28 +289,49 @@ MATERIALS = [
     ("shuttle", (0.85, 0.84, 0.81), (0.40, 0.40, 0.40, 30), (0, 0, 0)),
     ("trap_shell", (0.44, 0.47, 0.56), (0.45, 0.45, 0.50, 30), (0, 0, 0)),         # anamezon trap containers
     ("canopy", (0.36, 0.37, 0.40), (0.55, 0.55, 0.60, 35), (0, 0, 0)),             # foot canopy: woven CNT, graphite sheen
-    ("br_vault", (0.11, 0.13, 0.17), (0.05, 0.05, 0.05, 5), (0.01, 0.015, 0.03)),    # command bridge capsule
-    ("br_floor", (0.17, 0.18, 0.20), (0.10, 0.10, 0.10, 10), (0, 0, 0)),
-    ("br_panel", (0.10, 0.11, 0.13), (0.20, 0.20, 0.22, 20), (0.01, 0.01, 0.015)),
+    ("br_vault", (0.16, 0.14, 0.12), (0.05, 0.05, 0.05, 5), (0.025, 0.018, 0.010)),    # command bridge capsule (watch twilight: warm, dim)
+    ("br_floor", (0.20, 0.18, 0.15), (0.30, 0.29, 0.27, 30), (0.020, 0.015, 0.008)),
+    ("br_panel", (0.13, 0.12, 0.11), (0.20, 0.20, 0.22, 20), (0.015, 0.011, 0.007)),
+    ("br_panel_face", (0.26, 0.24, 0.21), (0.30, 0.32, 0.36, 30), (0.040, 0.030, 0.018)),   # the instrument wall of the tub (plain: the MFDs and controls are on it)
+    ("br_tub", (0.40, 0.37, 0.33), (0.25, 0.26, 0.30, 25), (0.050, 0.037, 0.022)),          # the body of the tub: warm grey in the watch twilight
+    ("br_holo", (0.05, 0.20, 0.26), (0, 0, 0, 1), (0.06, 0.26, 0.34)),                   # holo panels and role lists: a dim glow
     ("br_screen", (0.02, 0.03, 0.06), (0.30, 0.30, 0.40, 40), (0.03, 0.05, 0.10)),
     ("br_glow", (0.40, 0.90, 1.00), (0, 0, 0, 1), (0.30, 0.70, 0.90)),
     ("br_display", (1.00, 1.00, 1.00), (0, 0, 0, 1), (1.00, 1.00, 1.00)),   # self-lit display: the texture shows at full brightness
     ("br_green", (0.30, 1.00, 0.50), (0, 0, 0, 1), (0.20, 0.90, 0.40)),
     ("br_red", (0.90, 0.20, 0.15), (0.30, 0.10, 0.10, 20), (0.50, 0.08, 0.05)),
     ("br_amber", (1.00, 0.80, 0.30), (0, 0, 0, 1), (0.70, 0.50, 0.10)),
-    ("br_seat", (0.14, 0.16, 0.19), (0.30, 0.30, 0.35, 30), (0, 0, 0)),
-    ("br_cushion", (0.25, 0.28, 0.34), (0.10, 0.10, 0.12, 10), (0, 0, 0)),
+    ("br_seat", (0.15, 0.14, 0.13), (0.30, 0.30, 0.35, 30), (0.008, 0.006, 0.004)),
+    ("br_cushion", (0.27, 0.24, 0.21), (0.10, 0.10, 0.12, 10), (0.010, 0.007, 0.004)),
     ("br_belt", (0.88, 0.56, 0.16), (0.10, 0.10, 0.10, 10), (0, 0, 0)),
     # interior of the crew zone: no sun reaches the inside, so the surfaces are partly self-lit (emissive) and the lamps fully
-    ("in_floor", (0.52, 0.47, 0.38), (0.10, 0.10, 0.10, 10), (0.22, 0.19, 0.15)),
-    ("in_wall", (0.80, 0.82, 0.84), (0.05, 0.05, 0.05, 5), (0.32, 0.33, 0.34)),
-    ("in_ceiling", (0.88, 0.89, 0.90), (0, 0, 0, 1), (0.38, 0.39, 0.40)),
+    ("in_floor", (0.50, 0.50, 0.50), (0.10, 0.10, 0.10, 10), (0.50, 0.50, 0.52)),                 # textured (deck plates): the emissive keeps it visible, the texture is dark
+    ("in_wall", (0.45, 0.45, 0.45), (0.05, 0.05, 0.05, 5), (0.60, 0.60, 0.62)),
+    ("in_ceiling", (0.45, 0.45, 0.45), (0, 0, 0, 1), (0.55, 0.55, 0.57)),
     ("in_light", (1.00, 0.97, 0.88), (0, 0, 0, 1), (1.00, 0.96, 0.84)),
-    ("in_furn", (0.60, 0.43, 0.26), (0.10, 0.10, 0.10, 10), (0.20, 0.14, 0.08)),
-    ("in_seat", (0.22, 0.34, 0.58), (0.15, 0.15, 0.20, 15), (0.08, 0.12, 0.21)),
-    ("in_metal", (0.64, 0.66, 0.70), (0.50, 0.50, 0.50, 30), (0.20, 0.21, 0.23)),
-    ("in_wet", (0.62, 0.84, 0.90), (0.20, 0.20, 0.25, 20), (0.20, 0.27, 0.29)),
+    ("in_furn", (0.30, 0.31, 0.34), (0.10, 0.10, 0.10, 10), (0.15, 0.15, 0.17)),
+    ("in_seat", (0.12, 0.15, 0.22), (0.15, 0.15, 0.20, 15), (0.06, 0.08, 0.13)),
+    ("in_metal", (0.50, 0.50, 0.50), (0.50, 0.50, 0.50, 30), (0.55, 0.55, 0.58)),
+    ("in_wet", (0.36, 0.50, 0.55), (0.20, 0.20, 0.25, 20), (0.13, 0.19, 0.21)),
     ("in_screen", (0.04, 0.08, 0.16), (0.30, 0.30, 0.40, 40), (0.10, 0.28, 0.50)),                            # cinema screen
+    ("in_trim", (0.60, 0.60, 0.60), (0.10, 0.10, 0.10, 10), (0.50, 0.50, 0.50)),                                # hazard stripes (textured)
+    ("in_green", (0.10, 0.60, 0.25), (0, 0, 0, 1), (0.15, 1.00, 0.40)),                                          # status lamps and guide lights
+    ("in_amber", (0.70, 0.45, 0.05), (0, 0, 0, 1), (1.00, 0.62, 0.08)),
+    ("in_red", (0.70, 0.10, 0.08), (0, 0, 0, 1), (1.00, 0.15, 0.10)),
+    ("in_guide", (0.20, 0.50, 0.70), (0, 0, 0, 1), (0.25, 0.75, 1.00)),
+    ("in_btn_dim", (0.16, 0.18, 0.20), (0.3, 0.3, 0.3, 20), (0.04, 0.05, 0.06)),                                   # a push button cap, not lit
+    # the watch lighting of the way from the bridge to the lift: a dim base (the emissive is the night level), the local lights
+    # of the module add the rest; the floor is glossy (the local lights give it highlights)
+    ("in_wall_w", (0.50, 0.50, 0.51), (0.08, 0.08, 0.09, 12), (0.065, 0.065, 0.075)),
+    ("in_floor_w", (0.50, 0.50, 0.50), (0.45, 0.45, 0.48, 40), (0.04, 0.04, 0.045)),
+    ("in_ceil_w", (0.40, 0.40, 0.41), (0, 0, 0, 1), (0.035, 0.035, 0.04)),
+    ("in_metal_w", (0.45, 0.45, 0.47), (0.40, 0.40, 0.42, 30), (0.07, 0.07, 0.08)),                               # furniture, frames of the way
+    ("in_trim_w", (0.50, 0.50, 0.50), (0.10, 0.10, 0.10, 10), (0.14, 0.14, 0.14)),
+    ("in_guide_w", (0.10, 0.30, 0.45), (0, 0, 0, 1), (0.10, 0.34, 0.50)),
+    ("in_fx", (1.0, 1.0, 1.0), (0, 0, 0, 1), (1.0, 1.0, 1.0)),                                                    # light decals: the texture is the light
+    ("in_downlight", (1.0, 0.86, 0.62), (0, 0, 0, 1), (1.0, 0.84, 0.58)),
+    ("in_cove", (0.30, 0.40, 0.62), (0, 0, 0, 1), (0.26, 0.36, 0.58)),
+    ("lift_glass", (0.45, 0.60, 0.70, 0.22), (0.80, 0.80, 0.85, 60), (0.02, 0.03, 0.04)),                       # the lift cabin's windows (transparent)
 ]
 MAT = {m[0]: i + 1 for i, m in enumerate(MATERIALS)}  # .msh material indices are 1-based
 
@@ -1384,7 +1405,6 @@ def compartments():
         ("crew_deck", "верхняя палуба: камбуз, кают-компания, отдых, лаборатория, медотсек", 121.6, 134.0, 1.0, 5.5, 8.4, 0.0, (0.0, 3.0, 127.0)),
         ("airlock", "шлюз-кабина лифта", AIRLOCK_S - CAB_HZ - 0.1, AIRLOCK_S + CAB_HZ + 0.1, 1.0, LOCK_TOP, 1.0, -8.1, (-8.1, 2.0, AIRLOCK_S)),
         ("keel_bay", "киль: анабиоз и технические отсеки", 134.0, 143.8, -4.9, -2.9, 6.2, 0.0, (0.0, -3.6, 139.0)),
-        ("bridge_access", "проход к рубке", 134.0, BR_S + 0.4, 1.0, 3.1, 0.8, 5.8, (5.8, 2.0, 136.5)),
         ("command_bridge", "командная рубка (капсула)", BR_S - 4.4, BR_S + 4.4, BR_Y - 1.0, BR_Y + BR_R, 4.7, 0.0,
          (0.0, BR_Y - 1.0 + 1.65, BR_S - 0.5)),
     ]
@@ -1402,7 +1422,7 @@ PASS_H = 2.0
 DOORS_INT = [
     ("z", 120.3, -0.45, -4.5, 1.4, 2.1),               # hangar -> lock
     ("z", 121.6, -0.45, -4.5, 1.4, 2.1),               # lock -> lower lobby strip
-    ("z", 134.0, 5.8, 1.0, 1.4, 2.1),                  # living deck -> bridge access corridor
+    ("z", 134.0, 0.0, 1.0, 1.6, 2.3),                  # upper corridor -> the bridge door (the vestibule, the arch)
     ("z", 20.0, 0.0, 5.5, 0.8, 1.9),                   # passage -> stern service door (the stern is unmanned)
     ("y", 1.0, 1.5, 123.6, 2.4),                       # spiral stair well (east of the lobby), lower <-> upper deck
     ("y", 1.0, -2.05, 123.6, 1.5, 2.4),                # lift shaft, lower <-> upper deck
@@ -1468,16 +1488,31 @@ _KIND_CLASS = {"cabin": "furn", "dining": "furn", "lounge": "furn", "store": "fu
                "washroom": "wet", "wc": "wet", "shower": "wet"}
 
 
+def _fb3v(g, f, c, h):
+    """Visual-only oriented box of a frame (no collision)."""
+    _OBOX0(g, f.p(c), f.R[:, 0], f.R[:, 1], f.R[:, 2], h[0], h[1], h[2])
+
+
 def accel_seat(g, x, floor_y, z):
-    """Acceleration seat with an inertia absorber: pedestal (the absorber), seat pan, back toward the stern
-    (forward thrust presses the occupant into it), headrest, harness arms. Faces forward (+z)."""
+    """Crew seat with an inertia absorber, the bridge seat simplified: column and absorbers on a base, floating pan with a cushion,
+    reclined back with wings and a headrest, arm rests. Faces the nose (+z). Visual parts only; one collision box."""
     g = _SEAT_G[0] or g
-    box(g, (x - 0.15, floor_y + 0.05, z - 0.15), (x + 0.15, floor_y + 0.40, z + 0.15))           # absorber column
-    box(g, (x - 0.30, floor_y + 0.40, z - 0.35), (x + 0.30, floor_y + 0.50, z + 0.40))           # seat pan
-    box(g, (x - 0.30, floor_y + 0.50, z - 0.40), (x + 0.30, floor_y + 1.30, z - 0.30))           # back
-    box(g, (x - 0.18, floor_y + 1.30, z - 0.42), (x + 0.18, floor_y + 1.55, z - 0.28))           # headrest
-    for sgn in (-1, 1):
-        box(g, (x + sgn * 0.30 - 0.03, floor_y + 0.50, z - 0.30), (x + sgn * 0.30 + 0.03, floor_y + 0.75, z + 0.30))   # arm
+    O = np.array([x, floor_y + 0.075, z])
+    F0 = _Fr(O)
+    _fb3v(g, F0, (0, 0.02, 0), (0.24, 0.02, 0.24))                                                   # base plate
+    _fb3v(g, F0, (0, 0.24, 0), (0.07, 0.22, 0.07))                                                   # central column
+    for sx in (-1, 1):
+        _fb3v(g, F0, (sx * 0.2, 0.2, -0.1), (0.025, 0.17, 0.025))                                    # absorbers
+    H = _Fr(O + (0, 0.5, 0))
+    _fb3v(g, H, (0, 0.04, 0.05), (0.26, 0.035, 0.26)); _fb3v(g, H, (0, 0.095, 0.05), (0.22, 0.025, 0.22))   # pan and cushion
+    B = H.child((0, 0.08, -0.2), rx=-0.35)
+    _fb3v(g, B, (0, 0.42, 0), (0.27, 0.42, 0.035)); _fb3v(g, B, (0, 0.42, 0.055), (0.21, 0.36, 0.025))    # back and cushion
+    for sx in (-1, 1):
+        W = B.child((sx * 0.30, 0.38, 0.06), ry=-sx * 0.25); _fb3v(g, W, (0, 0, 0), (0.03, 0.3, 0.08))     # wings
+        _fb3v(g, H, (sx * 0.31, 0.2, 0.05), (0.025, 0.02, 0.2))                                              # arm rests
+        _fb3v(g, H, (sx * 0.31, 0.11, 0.05), (0.02, 0.07, 0.03))
+    _fb3v(g, B, (0, 0.93, 0.045), (0.14, 0.1, 0.04))                                                        # headrest
+    _solid(x - 0.34, x + 0.34, z + 60.0 - 0.46, z + 60.0 + 0.36, floor_y + 0.075, 1.4)
 
 
 # ---------------------------------------------------------------------------
@@ -1577,7 +1612,7 @@ for _c in COMPARTMENTS:                                   # the airlock cell sit
         _c["cam"] = np.array([-7.85, 2.0, zs(AIRLOCK_S)])
 DOORS_INT[:] = [d for d in DOORS_INT if not (d[0] == "x" and d[1] in (-7.0, -9.1))]
 DOORS_INT += [("x", -6.85, AIRLOCK_S, 1.0, 1.4, 2.1),         # EVA room -> main airlock
-              ("x", -8.85, AIRLOCK_S, 1.0, 2.8, 2.5)]         # main airlock -> the lift cabin (it IS the lock when docked)
+              ("x", -8.85, AIRLOCK_S, 1.0, 2 * CAB_HZ + 0.1, CAB_Y1 - CAB_Y0 + 0.1)]   # main airlock -> out: the whole cabin passes through
 
 ROOMS = []
 ROOM_DOORS = {"U": [], "L": [], "K": []}                  # ("x" | "s", boundary coordinate, centre along it, width)
@@ -1625,14 +1660,16 @@ _room("corr_u", "центральный коридор", "U", -1.0, 1.0, LOB, D_
 _pm = _wall_poly("U", D_S0, LOB)
 _room("medical", "медотсек", "U", -_pm[0][0], -2.8, D_S0, LOB, "medical", poly=_pm)
 _door("U", "s", LOB, -5.2, 1.2)                           # medical -> suit-up room
-_pe = _wall_poly("U", LOB, 127.8)
-_room("eva", "экипировка", "U", -_pe[0][0], -1.0, LOB, 127.8, "eva", poly=_pe)
-_door("U", "x", -1.0, 126.7, 1.4)                         # corridor -> suit-up room
-_room("lockroom", "шлюзовая", "U", -6.85, -1.0, 127.8, 130.2, "lockroom")
-_door("U", "s", 127.8, -3.4, 1.2)                         # suit-up room -> lock room
-_door("U", "x", -1.0, 129.0, 1.2)                         # corridor -> lock room
-_pl = _wall_poly("U", 130.2, D_S1)
-_room("lab", "лаборатория и библиотека", "U", -_pl[0][0], -1.0, 130.2, D_S1, "lab", poly=_pl)
+_pe = _wall_poly("U", LOB, 127.4)
+_room("eva", "экипировка", "U", -_pe[0][0], -1.0, LOB, 127.4, "eva", poly=_pe)
+_door("U", "x", -1.0, 128.0, 4.4)  #                        # corridor -> suit-up room (the only way to the lift)
+_room("lockroom", "зона лифта: давление и безопасность", "U", -6.85, -1.0, 127.4, 130.6, "lockroom")   # as long as the lift cell (127.4..130.6)
+#_door("U", "x", -1.0, 129.0, 1.2)                         # corridor -> lift zone (now one wide opening with the suit-up room) (an ordinary door); door B to the lift cell is in DOORS_INT
+PANEL_X = (-6.25, -5.80, -5.35)                           # the three buttons of the lift panel on the forward wall of the lift zone
+PANEL_BTN = [0.0, 0.0]                                        # filled by the lockroom: the buttons' centre y and the front z of the caps
+LIFT_BTN = []                                                 # the caps' groups (lit, dim per button): at the very end of TantraVC
+_pl = _wall_poly("U", 130.6, D_S1)
+_room("lab", "лаборатория и библиотека", "U", -_pl[0][0], -1.0, 130.6, D_S1, "lab", poly=_pl)
 _door("U", "x", -1.0, 132.1, 1.4)
 _pg = _wall_poly("U", D_S0, LOB)
 _room("galley", "камбуз", "U", 2.8, _pg[0][0], D_S0, LOB, "galley", poly=_pg)
@@ -1641,7 +1678,7 @@ _pd = _wall_poly("U", LOB, 129.0)
 _room("dining", "кают-компания", "U", 1.0, _pd[0][0], LOB, 129.0, "dining", poly=_pd)
 _door("U", "x", 1.0, 127.3, 1.4)
 _pn = _wall_poly("U", 129.0, D_S1)
-_room("lounge", "зона отдыха и кинозал", "U", 1.0, _pn[0][0], 129.0, D_S1, "lounge", poly=_pn)
+_room("lounge", "зона отдыха", "U", 1.0, _pn[0][0], 129.0, D_S1, "lounge", poly=_pn)
 _door("U", "x", 1.0, 130.0, 1.2)
 
 # ---- keel bay under the bridge capsule (2.0 m high): two side corridors, life support and power in the middle,
@@ -1755,6 +1792,133 @@ def _room_x_at(r, yv):
     return lo, hi
 
 
+_HAZ_DOORS = {("U", "x", -1.0, 128.0)}      # doors on the way to the lift (hazard-striped sill)
+_LEAF_DOORS = {}   # doors with a sliding leaf, half open, on the corridor side: slides north (+1) / south (-1)
+
+
+def _door_frame(deck, axis, plane, centre, width, height, sill, thk, g_wall, hazard=False):
+    """An octagonal doorway: the rectangular opening of a wall gets chamfered corners (filler plates in the wall) and a flat
+    frame round the opening (visual only, no collision). axis 'x': wall plane x = plane, the door at station `centre`;
+    axis 'z' (or 's'): wall plane z = plane, the door at x = `centre`."""
+    ct = min(0.42, width * 0.3)
+    cb = min(0.24, width * 0.2)
+    u0, u1 = (zs(centre) if axis == "x" else centre) - width / 2, (zs(centre) if axis == "x" else centre) + width / 2
+    y0, yt = sill, sill + height
+    if axis == "x":
+        ax_u, ax_n = (0, 0, 1), (1, 0, 0)
+    else:
+        ax_u, ax_n = (1, 0, 0), (0, 0, 1)
+    for (cu, cy, su, sy, c) in ((u0, yt, 1, -1, ct), (u1, yt, -1, -1, ct), (u0, y0, 1, 1, cb), (u1, y0, -1, 1, cb)):   # corner fillers
+        tri_ = [(cu, cy), (cu + su * c, cy), (cu, cy + sy * c)]
+        prism(g_wall, tri_, ax_u, (0, 1, 0), ax_n, plane, thk)
+    pts = [(u0 + cb, y0), (u1 - cb, y0), (u1, y0 + cb), (u1, yt - ct), (u1 - ct, yt), (u0 + ct, yt), (u0, yt - ct), (u0, y0 + cb)]
+    gm = _FG[(deck, "metal")]
+    gs_ = _FG[(deck, "trim" if hazard else "metal")]
+    gc = (sum(q[0] for q in pts) / 8, sum(q[1] for q in pts) / 8)
+    for k in range(8):
+        pa, pb = pts[k], pts[(k + 1) % 8]
+        du, dy = pb[0] - pa[0], pb[1] - pa[1]
+        L = math.hypot(du, dy)
+        if k == 0:                                                                       # sill: a flat plate in the floor line
+            mid = ((pa[0] + pb[0]) / 2, y0 + 0.012)
+            hy, off = 0.012, 0.0
+        else:
+            mid = ((pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2)
+            nu, ny = -dy / L, du / L
+            if (mid[0] - gc[0]) * nu + (mid[1] - gc[1]) * ny < 0:
+                nu, ny = -nu, -ny
+            mid = (mid[0] + nu * 0.05, mid[1] + ny * 0.05)
+            hy = 0.045
+        e3 = np.array(ax_u, float) * du + np.array((0, 1, 0), float) * dy
+        e3 = e3 / (np.linalg.norm(e3) or 1.0)
+        n3 = np.cross(np.array(ax_n, float), e3)
+        c3 = np.array(ax_u, float) * mid[0] + np.array((0, 1, 0), float) * mid[1] + np.array(ax_n, float) * plane
+        _OBOX0(gs_ if k == 0 else gm, c3, e3, n3, ax_n, L / 2 + 0.045, hy, thk / 2 + 0.06)
+
+
+def _stand(g, deck, cx_, sw, yb):
+    """A suit donning stand in an open bay on the aft wall: back plate with rear entry, fins, header, a spine with the torso
+    cradle, a helmet shelf, boot cradle and light bars. The suit itself is not modelled here (the suit sessions own it)."""
+    gm_, gl_ = _FG[(deck, "metal")], _FG[(deck, "light")]
+    d_ = 0.65
+    _deco(gm_, cx_ - 0.4, cx_ + 0.4, sw, sw + 0.05, yb + 0.1, 2.25)                                   # back plate
+    for sx in (-1, 1):
+        _deco(gm_, cx_ + sx * 0.4 - 0.025, cx_ + sx * 0.4 + 0.025, sw, sw + d_, yb, 2.45)               # fins
+        _deco(_FG[(deck, "guide")], cx_ + sx * 0.37 - 0.012, cx_ + sx * 0.37 + 0.012, sw + d_ - 0.06, sw + d_ - 0.02, yb + 0.15, 2.2)   # light bars
+    _deco(gm_, cx_ - 0.425, cx_ + 0.425, sw, sw + d_, yb + 2.4, 0.06)                                 # header
+    _deco(gm_, cx_ - 0.04, cx_ + 0.04, sw + 0.05, sw + 0.13, yb + 0.15, 1.7)                          # spine
+    _deco(gm_, cx_ - 0.22, cx_ + 0.22, sw + 0.1, sw + 0.2, yb + 1.1, 0.5)                             # torso cradle
+    _deco(gm_, cx_ - 0.2, cx_ + 0.2, sw + 0.05, sw + 0.38, yb + 1.92, 0.04)                           # helmet shelf
+    _deco(gm_, cx_ - 0.3, cx_ + 0.3, sw + 0.12, sw + 0.5, yb + 0.03, 0.1)                             # boot cradle
+    _deco(_FG[(deck, "green")], cx_ - 0.12, cx_ + 0.12, sw + d_ - 0.03, sw + d_, yb + 2.34, 0.04)     # status lamp
+    _solid(cx_ - 0.43, cx_ + 0.43, sw, sw + d_, yb, 2.45)
+
+
+def _door_leaf(deck, axis, plane, centre, width, height, sill, thk, side, slide):
+    """A sliding door leaf, half open: a plate in front of the wall next to the opening (it slides into the wall pocket),
+    a light bar on its edge. Visual only. side: which face of the wall (+1/-1); slide: towards +u (+1) or -u (-1)."""
+    gm = _FG[(deck, "metal")]
+    u0 = (zs(centre) if axis == "x" else centre) - width / 2
+    u1 = u0 + width
+    a, b = (u1 - 0.45 * width, u1 + 0.55 * width) if slide > 0 else (u0 - 0.55 * width, u0 + 0.45 * width)
+    off = side * (thk / 2 + 0.07)
+    y0, y1 = sill, sill + height + 0.04
+    if axis == "x":
+        box(gm, (plane + off - 0.025, y0, a), (plane + off + 0.025, y1, b))
+        edge = b if slide < 0 else a
+        box(_FG[(deck, "guide")], (plane + off - 0.03, y0 + 0.1, edge - 0.015), (plane + off + 0.03, y1 - 0.1, edge + 0.015))
+    else:
+        box(gm, (a, y0, plane + off - 0.025), (b, y1, plane + off + 0.025))
+        edge = b if slide < 0 else a
+        box(_FG[(deck, "guide")], (edge - 0.015, y0 + 0.1, plane + off - 0.03), (edge + 0.015, y1 - 0.1, plane + off + 0.03))
+
+
+_SHUT_DOORS = {("U", "x", 1.0, 127.3), ("U", "x", 1.0, 130.0), ("U", "s", 125.6, -5.2)}   # closed for now (user, 2026-10-03): dining, rest area, medical
+
+
+def _door_shut(deck, axis, plane, centre, width, height, sill):
+    """A shut door: two leaves meeting in the middle, filling the octagonal doorway, a small window in one leaf at eye height,
+    a lock bar across the seam and a red lamp on both sides. A wall for the walker. axis 'x': wall x = plane, door at station
+    `centre`; axis 'z': wall z = plane, door at x = `centre`."""
+    gm = _FG[(deck, "metal")]
+    ct, cb = min(0.42, width * 0.3), min(0.24, width * 0.2)
+    uc = zs(centre) if axis == "x" else centre
+    u0, u1, y0, yt, g = uc - width / 2, uc + width / 2, sill, sill + height, 0.006
+    wy0, wy1 = sill + 1.3, sill + 1.62                                   # the window band (eye height)
+    wl0, wl1 = uc - 0.38, uc - 0.12                                      # the window, in the low-u leaf
+    left = [[(u0 + cb, y0), (uc - g, y0), (uc - g, wy0), (u0, wy0), (u0, y0 + cb)],
+            [(u0, wy0), (wl0, wy0), (wl0, wy1), (u0, wy1)],
+            [(wl1, wy0), (uc - g, wy0), (uc - g, wy1), (wl1, wy1)],
+            [(u0, wy1), (uc - g, wy1), (uc - g, yt), (u0 + ct, yt), (u0, yt - ct)]]
+    right = [[(2 * uc - u, y) for u, y in left[0]], [(uc + g, wy0), (u1, wy0), (u1, wy1), (uc + g, wy1)], [(2 * uc - u, y) for u, y in left[3]]]
+    A = np.array((0, 0, 1) if axis == "x" else (1, 0, 0), float)
+    N = np.array((1, 0, 0) if axis == "x" else (0, 0, 1), float)
+    for poly in left + right:
+        prism(gm, poly, A, (0, 1, 0), N, plane, 0.05)
+    for sd in (-1, 1):
+        c_ = A * uc + np.array((0.0, y0 + 1.02, 0.0)) + N * (plane + sd * 0.04)
+        _OBOX0(gm, c_, A, (0, 1, 0), N, 0.12, 0.07, 0.015)               # lock bar across the seam
+        for (ua, ub, ya, yb_) in ((wl0 - 0.03, wl1 + 0.03, wy0 - 0.03, wy0), (wl0 - 0.03, wl1 + 0.03, wy1, wy1 + 0.03),
+                                  (wl0 - 0.03, wl0, wy0, wy1), (wl1, wl1 + 0.03, wy0, wy1)):   # window rim
+            c_ = A * (ua + ub) / 2 + np.array((0.0, (ya + yb_) / 2, 0.0)) + N * (plane + sd * 0.03)
+            _OBOX0(gm, c_, A, (0, 1, 0), N, (ub - ua) / 2, (yb_ - ya) / 2, 0.01)
+        _lamp(deck, "red", axis, plane if axis == "x" else plane - STERN_Z, centre, yt + 0.12, sd, 0.06, 0.3)
+    lo = A * u0 + np.array((0.0, y0, 0.0)) + N * (plane - 0.05)
+    hi = A * u1 + np.array((0.0, yt, 0.0)) + N * (plane + 0.05)
+    _coll("door", np.minimum(lo, hi), np.maximum(lo, hi))
+
+
+def _lamp(deck, cls, axis, plane, centre, y, side, thk=0.06, w=0.5):
+    """A status lamp strip above a door, `side` = +1/-1: which face of the wall (plane, thickness thk) it sits on."""
+    g_ = _FG[(deck, cls)]
+    o_ = side * (thk / 2 + 0.02)
+    if axis == "x":
+        c = zs(centre)
+        box(g_, (plane + o_ - 0.02, y, c - w / 2), (plane + o_ + 0.02, y + 0.06, c + w / 2))
+    else:
+        box(g_, (centre - w / 2, y, zs(plane) + o_ - 0.02), (centre + w / 2, y + 0.06, zs(plane) + o_ + 0.02))
+
+
 def _room_walls(g, r):
     """Partitions: one wall per shared line (a room builds the wall on its x1/s1 side; the x0/s0 side only where no closed
     neighbour already has a wall there). Doors are cut by the line they stand on. On the hull side the wall leans along the
@@ -1779,16 +1943,31 @@ def _room_walls(g, r):
                     rects = _subtract(rects, (zs(d[2] - d[3] / 2), ylo, zs(d[2] + d[3] / 2), ylo + 2.1))
             for u0, v0, u1, v1 in rects:
                 box(g, (xn + inset - 0.03, v0, u0), (xn + inset + 0.03, v1, u1))
+            for d in doors:
+                if d[0] == "x" and abs(d[1] - xn) < 0.2 and p0 - 1e-6 <= d[2] <= p1 + 1e-6:
+                    key_ = (deck, "x", round(d[1], 2), round(d[2], 2))
+                    _door_frame(deck, "x", xn + inset, d[2], d[3], 2.1, ylo, 0.06, g, key_ in _HAZ_DOORS)
+                    if key_ in _LEAF_DOORS:
+                        _door_leaf(deck, "x", xn + inset, d[2], d[3], 2.1, ylo, 0.06, 1, _LEAF_DOORS[key_])
+                    if key_ in _SHUT_DOORS:
+                        _door_shut(deck, "x", xn + inset, d[2], d[3], 2.1, ylo)
 
     def wall_s(sn, a0, a1, inset, owner_side_low):
         if abs(sn - xb[2]) < 0.05 or abs(sn - xb[3]) < 0.05:
             return
         covers = [(max(a0, o["x0"]), min(a1, o["x1"])) for o in others if owner_side_low and abs(o["s1"] - sn) < 0.02 and min(a1, o["x1"]) - max(a0, o["x0"]) > 0.05]
+        if deck == "U" and abs(sn - 127.4) < 0.02:
+            covers = covers + [(-6.85, -1.0)]                    # the suit-up room opens into the lift zone: no wall between them
         for p0, p1 in _uncovered(a0, a1, covers):
             rects = [(p0, ylo, p1, yhi)]
             for d in doors:
                 if d[0] == "s" and abs(d[1] - sn) < 0.2:
                     rects = _subtract(rects, (d[2] - d[3] / 2, ylo, d[2] + d[3] / 2, ylo + 2.1))
+            for d in doors:
+                if d[0] == "s" and abs(d[1] - sn) < 0.2 and p0 - 1e-6 <= d[2] <= p1 + 1e-6:
+                    _door_frame(deck, "z", zs(sn + inset), d[2], d[3], 2.1, ylo, 0.06, g, (deck, "s", round(d[1], 2), round(d[2], 2)) in _HAZ_DOORS)
+                    if (deck, "s", round(d[1], 2), round(d[2], 2)) in _SHUT_DOORS:
+                        _door_shut(deck, "z", zs(sn + inset), d[2], d[3], 2.1, ylo)
             for u0, v0, u1, v1 in rects:
                 if hull_side:                                # end on the leaning wall: bands of 0.5 m of height
                     ya = v0
@@ -1806,6 +1985,8 @@ def _room_walls(g, r):
                 else:
                     box(g, (u0, v0, zs(sn + inset) - 0.03), (u1, v1, zs(sn + inset) + 0.03))
 
+    if r["key"] == "lockroom":                            # above the lift cell (it is 2.9 m high) the zone has its own wall up to the ceiling
+        box(g, (r["x0"] + 0.02, LOCK_TOP, zs(r["s0"])), (r["x0"] + 0.08, yhi, zs(r["s1"])))
     if r["key"] != "lockroom" and hull_side != -1:        # the airlock cell has its own inner wall there
         wall_x(r["x0"], r["s0"], r["s1"], 0.05, True)
     if hull_side != 1:
@@ -1819,7 +2000,8 @@ def _room_walls(g, r):
             dx, dy = xb_ - xa, yb_ - ya
             L = math.hypot(dx, dy)
             if L > 1e-6:
-                obox(g, ((xa + xb_) / 2, (ya + yb_) / 2, zc), (dx / L, dy / L, 0.0), (-dy / L, dx / L, 0.0), (0.0, 0.0, 1.0), L / 2, 0.03, hz)
+                _OBOX0(g, ((xa + xb_) / 2, (ya + yb_) / 2, zc), (dx / L, dy / L, 0.0), (-dy / L, dx / L, 0.0), (0.0, 0.0, 1.0), L / 2, 0.03, hz)
+                _coll(g.name, (min(xa, xb_) - 0.03, ya, zc - hz), (max(xa, xb_) + 0.03, yb_, zc + hz))      # one box per 0.5 m of height (the wall is almost vertical)
 
 
 def _furnish(g, r):
@@ -1889,19 +2071,21 @@ def _furnish(g, r):
         _counter(g, 4.6, 6.5, 123.2, 124.1, yb)                      # island
         _fb(g, 2.95, 3.75, 122.45, 123.4, yb, 2.0)                   # food synthesiser
         _fb(g, 2.95, 3.75, 123.5, 124.3, yb, 1.9)                    # cold store
-    elif k == "dining":
-        xe = min(6.4, x1 - 1.8)
-        _table(g, 2.3, xe, 127.0, 127.75, yb)                        # table
-        _bench(g, 2.3, xe, 126.55, 126.95, yb)                       # benches, 7 places a side
-        _bench(g, 2.3, xe, 127.8, 128.2, yb)
-        _counter(g, x1 - 0.55 - ins(0.9), x1 - 0.1 - ins(0.9), 126.0, 128.6, yb)           # sideboard on the hull wall
-    elif k == "lounge":                                              # cinema: 6 acceleration seats facing the screen, an aisle to the bridge door
+    elif k == "dining":                                              # 14 seats facing their tables (the seats face the nose); an aisle between the rows
+        t_a = [(1.6, 3.8), (5.95, min(8.9, x1 - 0.75 - ins(0.9)))]      # row 1 leaves a gap for the galley door (x 5.0)
+        for xa_, xb2 in t_a:
+            _table(g, xa_, xb2, 126.4, 126.95, yb)
+        for xc_ in (1.95, 2.7, 3.45, 6.3, 7.05, 7.8, 8.55):
+            accel_seat(g, xc_, r["y0"], zs(126.1))
+        _table(g, 1.6, 7.0, 128.4, 128.95, yb)
+        for k_ in range(7):
+            accel_seat(g, 2.05 + k_ * 0.75, r["y0"], zs(128.1))
+        _counter(g, x1 - 0.5 - ins(0.9), x1 - 0.1 - ins(0.9), 126.0, 128.6, yb)           # sideboard on the hull wall
+    elif k == "lounge":                                              # rest area: 6 seats facing the wall display, an aisle to the bridge door
         for srow in (131.0, 132.4):
             for x in (1.9, 3.0, 4.1):
                 accel_seat(g, x, r["y0"], zs(srow))
-        _deco(_FG[(r["deck"], "screen")], 1.4, 4.7, 133.93, 134.0, yb + 1.0, 1.6)   # screen on the forward wall (the bridge door is at x 5.8)
-        _sofa(g, x1 - 0.85 - ins(0.95), x1 - 0.1 - ins(0.95), 130.0, 133.0, yb)              # sofa on the hull wall
-        _bench(g, 1.9, 4.1, 129.1, 129.5, yb)                        # bench on the aft wall
+        _deco(_FG[(r["deck"], "screen")], 1.4, 4.7, 133.93, 134.0, yb + 1.0, 1.6)   # display on the forward wall
     elif k == "gym":                                                 # lower deck, 5.5 m high: VR platform, magnetic resistance trainer, track, rower
         _fb(g, -1.0, 1.0, 126.6, 128.4, yb, 0.15)                    # VR platform
         _fb(g, -2.7, -1.7, 126.0, 127.0, yb, 1.8)                    # magnetic resistance trainer
@@ -1911,17 +2095,47 @@ def _furnish(g, r):
         _fb(g, x0 + ins(2.2), x0 + 0.45 + ins(2.2), 130.7, 133.5, yb, 2.2)                 # bookshelves on the hull wall
         _counter(g, x0 + 0.9 + ins(0.9), -2.6, 133.45, 133.93, yb)              # lab bench on the forward wall
         _table(g, -5.6, -3.4, 131.6, 132.5, yb, 0.75)                # reading table
-    elif k == "eva":                                                 # suit-up: 14 lockers (8 + 6 + 2), a bench; the medical door is at x -5.2
-        for i in range(5):
-            _fb(g, x0 + 0.65 + ins(2.0) + i * 0.4, x0 + 1.01 + ins(2.0) + i * 0.4, 125.65, 126.2, yb, 2.0)
-        for i in range(6):
-            _fb(g, -4.4 + i * 0.4, -4.04 + i * 0.4, 125.65, 126.2, yb, 2.0)
-        for i in range(3):
-            _fb(g, x0 + 0.05 + ins(2.0), x0 + 0.6 + ins(2.0), 126.3 + i * 0.4, 126.66 + i * 0.4, yb, 2.0)
-        _bench(g, x0 + 0.7, x0 + 3.1, 127.35, 127.75, yb)
-    elif k == "lockroom":                                            # lock vestibule: tool rack and a decon cabinet
-        _fb(g, -5.8, -2.4, 129.65, 130.12, yb, 1.8)
-        _fb(g, -2.2, -1.2, 127.9, 128.35, yb, 1.0)
+    elif k == "eva":                                                 # suit-up: donning stands in open bays along the aft wall, a scan gate
+        sw = s0 + 0.08
+        cs = [-4.05, -3.15, -2.25]
+        c_ = -6.35
+        while c_ - 0.45 >= -wallx(yb + 2.5) + 0.02:                 # west of the medical door, as many bays as fit under the leaning hull wall
+            cs.append(c_)
+            c_ -= 0.9
+        _STANDS[:] = cs
+        for cx_ in cs:
+            _stand(g, r["deck"], cx_, sw, yb)
+    elif k == "lockroom":                                            # the lift zone: control panel (checks, pressure, lift), refuge module, door B to the lift cell
+        gm_, gt_ = _FG[(r["deck"], "metal")], _FG[(r["deck"], "trim")]
+        sp = s1 - 0.08                                               # inner face of the forward wall
+        _deco(gm_, -6.78, -4.82, sp - 0.05, sp, yb + 0.92, 1.06)     # panel housing
+        gp = _FG[(r["deck"], "panel")]                              # the panel face: texture with the labels (slot 13), self-lit
+        zf = zs(sp - 0.052)
+        q = [gp.vert((-6.7, yb + 1.9, zf), (0, 0, -1), (0.0, 0.0)), gp.vert((-4.9, yb + 1.9, zf), (0, 0, -1), (1.0, 0.0)),
+             gp.vert((-4.9, yb + 1.0, zf), (0, 0, -1), (1.0, 1.0)), gp.vert((-6.7, yb + 1.0, zf), (0, 0, -1), (0.0, 1.0))]
+        gp.quad(*q, (0, 0, -1))
+        gp.tex = 13
+        for bx, cls in zip(PANEL_X, ("green", "guide", "amber")):    # 1 suit checks, 2 pressure equalisation, 3 lift down / up
+            by_ = yb + 1.36                                          # a real push button: a 5 cm metal bezel and a 3.4 cm lit cap (pressed with the mouse)
+            for (cx_, cy_, hx_, hy_) in ((bx, by_ + .021, .025, .004), (bx, by_ - .021, .025, .004), (bx - .021, by_, .004, .017), (bx + .021, by_, .004, .017)):
+                _OBOX0(gm_, (cx_, cy_, zf - .004), (1, 0, 0), (0, 1, 0), (0, 0, 1), hx_, hy_, .004)
+            k_ = PANEL_X.index(bx)                                   # the cap: a lit and a dim group (the module shows one: off / on / blinking)
+            gl_ = Group(f"lift_btn{k_}_lit", MAT[{"green": "in_green", "guide": "in_guide", "amber": "in_amber"}[cls]]); gd_ = Group(f"lift_btn{k_}_dim", MAT["in_btn_dim"])
+            for g_ in (gl_, gd_):
+                _OBOX0(g_, (bx, by_, zf - .007), (1, 0, 0), (0, 1, 0), (0, 0, 1), .017, .017, .007)
+            LIFT_BTN.extend([gl_, gd_])
+        PANEL_BTN[:] = [yb + 1.36, zf - .014]                        # the caps' centre height and front (for the mouse pick)
+        _fb(gm_, -4.3, -3.1, s1 - 0.62, s1 - 0.08, yb, 2.2)          # refuge module on the forward wall
+        _fb(_FG[(r["deck"], "red")], -4.2, -3.2, s1 - 0.66, s1 - 0.62, yb + 1.5, 0.12)
+        # the status screen right of the lift panel: the step, the suit checks, the pressure, the lift, refusals (drawn in the game)
+        _fb(gm_, -2.82, -1.88, s1 - 0.11, s1 - 0.08, yb + 1.18, 0.64)
+        gs_ = Group("lift_status", MAT["br_display"]); gs_.tex = 21; zs_ = zs(s1 - 0.112)
+        q = [gs_.vert((-2.78, yb + 1.78, zs_), (0, 0, -1), (0.0, 0.0)), gs_.vert((-1.92, yb + 1.78, zs_), (0, 0, -1), (1.0, 0.0)),
+             gs_.vert((-1.92, yb + 1.22, zs_), (0, 0, -1), (1.0, 1.0)), gs_.vert((-2.78, yb + 1.22, zs_), (0, 0, -1), (0.0, 1.0))]
+        gs_.quad(*q, (0, 0, -1))
+        LIFT_BTN.append(gs_)
+        _OBOX0(gt_, (x0 + 0.4, yb + 0.012, zs(AIRLOCK_S)), (1, 0, 0), (0, 1, 0), (0, 0, 1), 0.3, 0.012, 0.7)      # hazard strip at door B
+        _lamp(r["deck"], "amber", "x", x0, AIRLOCK_S, yb + 2.3, 1, 0.16)                      # door B: amber, on this side
     elif k == "store":
         _fb(g, x0, x0 + 0.6, 122.0, 125.0, yb, 2.2)
         _fb(g, -6.0, -3.5, 121.7, 122.2, yb, 2.2)
@@ -2007,8 +2221,8 @@ def _in_hole(deck, x, sv, pad=0.5):
 def _lights():
     """Ceiling lamp panels (self-lit): one per ~3 m in every room, corridor and lobby."""
     for r in ROOMS:
-        if r["kind"] == "cabin":
-            continue                                         # the cabins have their own lamps
+        if r["kind"] == "cabin" or r["key"] in _PATH_ROOMS:
+            continue                                         # the cabins have their own lamps, the way to the lift its watch lamps
         g = _FG[(r["deck"], "light")]
         dx, ds = r["xc1"] - r["xc0"], r["s1"] - r["s0"]
         nx, ns = max(1, int(dx / 3.0 + 0.5)), max(1, int(ds / 3.0 + 0.5))
@@ -2022,12 +2236,254 @@ def _lights():
                 _fb(g, x - w / 2, x + w / 2, sv - w / 2, sv + w / 2, r["y1"] - 0.18, 0.03)
 
 
+def _guides():
+    """Guide lights: a thin cyan line along the foot of the walls of the upper corridor (cut at the doors)."""
+    gg = _FG[("U", "guide")]
+    yb = U_Y0 + 0.075
+    for sx in (-1, 1):
+        gaps = [(d[2] - d[3] / 2 - 0.05, d[2] + d[3] / 2 + 0.05) for d in ROOM_DOORS["U"] if d[0] == "x" and abs(d[1] - sx * 1.0) < 0.01]
+        for a_, b_ in _uncovered(LOB + 0.1, D_S1 - 0.1, gaps):
+            box(gg, (sx * 0.99 - 0.015, yb + 0.1, zs(a_)), (sx * 0.99 + 0.015, yb + 0.14, zs(b_)))
+
+
+# ---- watch lighting of the way from the bridge to the lift (corridor, suit-up room, lift zone). D3D9Client draws up to four
+# local lights per mesh and no shadows of them, so: four point lights of the module (Tantra.cpp, kWatchLights) give the real
+# shading and the highlights; the pools of light, the scallops of the downlights on the walls, the cove wash and the contact
+# shadows in the corners are painted (alpha decals, self-lit). The surfaces of the way have their own dim materials.
+_PATH_ROOMS = ("corr_u", "eva", "lockroom")
+PATH_BOXES = ((-1.0, 1.0, LOB, D_S1), (-6.85, -1.0, 127.4, 130.6), (-10.8, -1.0, 125.65, 127.4))   # x0, x1, s0, s1
+_STANDS = []
+W_YF, W_YC = U_Y0 + 0.075, U_Y1 - 0.15                     # floor top and ceiling bottom of the upper deck
+W_CORR = 1.02                                              # the corridor's wall faces at x = +-1.02
+W_DOWN_CORR = [(0.0, sv) for sv in (126.6, 128.6, 130.6, 132.6)]
+W_DOWN_ZONE = [(-5.3, 128.6), (-2.6, 129.7)]
+# the point lights: mesh frame (x, y, z) and colour (written to InteriorLayout.h for the module)
+W_LIGHTS = [((0.0, 4.2, zs(127.6)), (0.62, 0.55, 0.45)), ((0.0, 4.2, zs(131.6)), (0.62, 0.55, 0.45)),
+            ((-4.0, 4.0, zs(129.1)), (0.70, 0.50, 0.26)), ((-4.6, 3.8, zs(126.7)), (0.60, 0.52, 0.42))]
+
+
+def _fxq(g, pts, n, uvs):
+    idx = [g.vert(p_, n, uv) for p_, uv in zip(pts, uvs)]
+    g.quad(*idx, n)
+
+
+def _fx_floor(g, x, sv, R, clip, y=None, down=False):
+    """A square decal on the floor (or, down=True, on the ceiling facing down) centred at (x, s), clipped to clip = (x0, x1, s0, s1)."""
+    x0, x1, s0, s1 = max(x - R, clip[0]), min(x + R, clip[1]), max(sv - R, clip[2]), min(sv + R, clip[3])
+    if x1 - x0 < 0.02 or s1 - s0 < 0.02:
+        return
+    y = (W_YC - 0.006 if down else W_YF + 0.006) if y is None else y
+    U = lambda xv: (xv - (x - R)) / (2 * R)
+    V = lambda s_: (s_ - (sv - R)) / (2 * R)
+    pts = [(x0, y, zs(s0)), (x1, y, zs(s0)), (x1, y, zs(s1)), (x0, y, zs(s1))]
+    uvs = [(U(x0), V(s0)), (U(x1), V(s0)), (U(x1), V(s1)), (U(x0), V(s1))]
+    _fxq(g, pts, (0, -1, 0) if down else (0, 1, 0), uvs)
+
+
+def _wall_gaps(xw):
+    """Door openings (s0, s1, top) in the corridor wall at x = xw (+-1.0)."""
+    return [(d[2] - d[3] / 2, d[2] + d[3] / 2, W_YF + 2.1 + 0.05) for d in ROOM_DOORS["U"] if d[0] == "x" and abs(d[1] - xw) < 0.01]
+
+
+def _fx_wall_x(g, xf, nx, sa, sb, ya, yb_, v_top, gaps=(), u_rng=None):
+    """A decal on the wall plane x = xf facing nx (+-1), over s sa..sb and heights ya..yb_; v = 0 at the height v_top and 1 at
+    the far end of ya..yb_ from it (the decal fades away from v_top); u across sa..sb (or u_rng). Door openings are left out."""
+    us0, us1 = u_rng or (sa, sb)
+    far = ya if abs(v_top - yb_) < abs(v_top - ya) else yb_
+    rects = [(sa, ya, sb, yb_)]
+    for g0, g1, gt in gaps:
+        rects = _subtract(rects, (g0, ya - 1.0, g1, gt))
+    for a0, b0, a1, b1 in rects:
+        if a1 - a0 < 0.02 or b1 - b0 < 0.02:
+            continue
+        U = lambda s_: (s_ - us0) / (us1 - us0)
+        V = lambda yv: (yv - v_top) / (far - v_top)
+        pts = [(xf, b0, zs(a0)), (xf, b0, zs(a1)), (xf, b1, zs(a1)), (xf, b1, zs(a0))]
+        uvs = [(U(a0), V(b0)), (U(a1), V(b0)), (U(a1), V(b1)), (U(a0), V(b1))]
+        _fxq(g, pts, (nx, 0, 0), uvs)
+
+
+def _fx_wall_s(g, sf, ns, xa, xb, ya, yb_, v_top, gaps=()):
+    """The same on a wall plane s = sf facing ns (+-1 along s); u across xa..xb."""
+    far = ya if abs(v_top - yb_) < abs(v_top - ya) else yb_
+    rects = [(xa, ya, xb, yb_)]
+    for g0, g1, gt in gaps:
+        rects = _subtract(rects, (g0, ya - 1.0, g1, gt))
+    for a0, b0, a1, b1 in rects:
+        if a1 - a0 < 0.02 or b1 - b0 < 0.02:
+            continue
+        U = lambda xv: (xv - xa) / (xb - xa)
+        V = lambda yv: (yv - v_top) / (far - v_top)
+        z = zs(sf)
+        pts = [(a0, b0, z), (a1, b0, z), (a1, b1, z), (a0, b1, z)]
+        uvs = [(U(a0), V(b0)), (U(a1), V(b0)), (U(a1), V(b1)), (U(a0), V(b1))]
+        _fxq(g, pts, (0, 0, ns), uvs)
+
+
+def _fx_floor_band(g, x0, x1, s0, s1, edge):
+    """A contact shadow on the floor along a wall; edge: which side is the wall ('x0', 'x1', 's0', 's1')."""
+    y = W_YF + 0.005
+    pts = [(x0, y, zs(s0)), (x1, y, zs(s0)), (x1, y, zs(s1)), (x0, y, zs(s1))]
+    vv = {"x0": [0, 1, 1, 0], "x1": [1, 0, 0, 1], "s0": [0, 0, 1, 1], "s1": [1, 1, 0, 0]}[edge]
+    _fxq(g, pts, (0, 1, 0), [(0.5, v_) for v_ in vv])
+
+
+def build_watch():
+    """The groups of the watch lighting (appended at the very end of the interior: the decals blend over what is drawn before)."""
+    gl = Group("lamps_path", MAT["in_downlight"])
+    gcv = Group("cove_path", MAT["in_cove"])
+    fx = {k: Group(f"fx_{k}", MAT["in_fx"]) for k in ("pool", "amber", "wash", "ao", "cove", "glow")}
+    for k, slot in zip(("pool", "amber", "wash", "ao", "cove", "glow"), range(15, 21)):
+        fx[k].tex = slot
+    C = (-W_CORR, W_CORR, LOB, D_S1 - 0.01)
+    Z = (-6.77, -1.08, 125.68, 130.52)
+    # corridor: downlights on the centre line, a cove strip along both ceiling edges
+    for x, sv in W_DOWN_CORR:
+        box(gl, (x - 0.13, W_YC - 0.035, zs(sv - 0.13)), (x + 0.13, W_YC, zs(sv + 0.13)))
+        _fx_floor(fx["pool"], x, sv, 1.35, C)
+        _fx_floor(fx["pool"], x, sv, 0.42, C, down=True)                       # the halo of the lamp on the ceiling
+        for sx in (-1, 1):
+            xf = sx * (W_CORR - 0.006)
+            _fx_wall_x(fx["wash"], xf, -sx, sv - 0.95, sv + 0.95, W_YF + 0.02, W_YC - 0.01, W_YC - 0.01, _wall_gaps(sx * 1.0))
+    for sx in (-1, 1):
+        xe = sx * (W_CORR - 0.03)
+        box(gcv, (xe - 0.025, W_YC - 0.045, zs(LOB + 0.1)), (xe + 0.025, W_YC - 0.005, zs(D_S1 - 0.1)))
+        xf = sx * (W_CORR - 0.008)
+        _fx_wall_x(fx["cove"], xf, -sx, LOB, D_S1, W_YC - 1.0, W_YC - 0.05, W_YC - 0.05)
+        gaps = _wall_gaps(sx * 1.0)
+        _fx_wall_x(fx["ao"], sx * (W_CORR - 0.004), -sx, LOB, D_S1, W_YF, W_YF + 0.32, W_YF, gaps)       # contact shadow at the foot of the wall
+        for a_, b_ in _uncovered(LOB, D_S1, [(g0, g1) for g0, g1, _ in gaps]):
+            x0_, x1_ = (sx * W_CORR - 0.3, sx * W_CORR) if sx > 0 else (sx * W_CORR, sx * W_CORR + 0.3)
+            _fx_floor_band(fx["ao"], x0_, x1_, a_, b_, "x1" if sx > 0 else "x0")
+    # the suit-up room and the lift zone: amber watch lamps, light over each stand
+    for x, sv in W_DOWN_ZONE:
+        box(gl, (x - 0.13, W_YC - 0.035, zs(sv - 0.13)), (x + 0.13, W_YC, zs(sv + 0.13)))
+        _fx_floor(fx["amber"], x, sv, 1.7, Z)
+        _fx_floor(fx["amber"], x, sv, 0.45, (-6.77, -1.08, 125.68, 130.52), down=True)
+    eva = next(r for r in ROOMS if r["key"] == "eva")
+    for cx_ in _STANDS:
+        xl = max(cx_, eva["xc0"] + 0.3)
+        box(gl, (xl - 0.1, W_YC - 0.03, zs(126.75 - 0.1)), (xl + 0.1, W_YC, zs(126.75 + 0.1)))
+        _fx_floor(fx["pool"], cx_, 126.55, 0.75, (eva["x0"] + 0.1, -1.08, 125.68, 127.4))
+        _fx_wall_s(fx["wash"], 125.68 + 0.08 + 0.05 + 0.004, 1, cx_ - 0.45, cx_ + 0.45, W_YF + 0.02, W_YF + 2.6, W_YF + 2.6)   # back of the bay lit from above
+    # contact shadows of the lift zone: the forward wall and the wall of the lift cell (door B left out)
+    _fx_wall_s(fx["ao"], 130.52 - 0.004, -1, -6.77, -1.08, W_YF, W_YF + 0.32, W_YF)
+    _fx_floor_band(fx["ao"], -6.77, -1.08, 130.22, 130.52, "s1")
+    _fx_wall_x(fx["ao"], -6.77 + 0.004, 1, 127.4, 130.52, W_YF, W_YF + 0.32, W_YF, [(128.3, 129.7, W_YF + 2.6)])
+    for a_, b_ in ((127.4, 128.3), (129.7, 130.52)):
+        _fx_floor_band(fx["ao"], -6.77, -6.47, a_, b_, "x0")
+    # the glow of the lift panel on its wall
+    _fx_wall_s(fx["glow"], 130.52 - 0.008, -1, -7.0, -4.6, W_YF + 0.75, W_YF + 2.15, W_YF + 1.45)
+    return [gl, gcv] + list(fx.values())
+
+
+def _split_path(groups):
+    """Moves the faces of the upper deck that look into the way to the lift (the face centre stepped 5 cm along its normal lies in
+    PATH_BOXES) out of the deck's walls, floor and ceiling into their own dim groups."""
+    tgt = {"walls_upper": ("walls_path", "in_wall_w"), "crew_deck": ("walls_path", "in_wall_w"), "airlock": ("walls_path", "in_wall_w"),
+           "crew_deck_floor": ("path_floor", "in_floor_w"), "crew_deck_ceil": ("path_ceil", "in_ceil_w"),
+           "metal_upper": ("metal_path", "in_metal_w"), "furn_upper": ("metal_path", "in_metal_w"), "trim_upper": ("trim_path", "in_trim_w"),
+           "guide_upper": ("guide_path", "in_guide_w")}
+    new = {}
+    z0 = zs(0.0)
+    for g in groups:
+        if g.name not in tgt:
+            continue
+        nm, mat = tgt[g.name]
+        dst = new.setdefault(nm, Group(nm, MAT[mat]))
+        V, N = g.v, g.n
+        keep = []
+        remap = {}
+        for t in g.t:
+            c = (V[t[0]] + V[t[1]] + V[t[2]]) / 3.0
+            nrm = np.cross(V[t[1]] - V[t[0]], V[t[2]] - V[t[0]])
+            ln = np.linalg.norm(nrm)
+            q = c + (nrm / ln) * 0.05 if ln > 1e-12 else c
+            sv = q[2] - z0
+            inside = U_Y0 < q[1] < U_Y1 and any(b[0] <= q[0] <= b[1] and b[2] <= sv <= b[3] for b in PATH_BOXES)
+            if not inside:
+                keep.append(t)
+                continue
+            tt = []
+            for k in t:
+                if k not in remap:
+                    remap[k] = dst.vert(V[k], N[k])
+                tt.append(remap[k])
+            dst.t.append(tuple(tt))
+        if remap:                                            # drop the moved vertices that no kept face uses
+            used = sorted({k for t in keep for k in t})
+            ix = {k: j for j, k in enumerate(used)}
+            g.v = [g.v[k] for k in used]
+            g.n = [g.n[k] for k in used]
+            if g.uv:
+                g.uv = [g.uv[k] for k in used]
+            g.t = [tuple(ix[k] for k in t) for t in keep]
+    return [x_ for x_ in new.values() if x_.v]
+
+
+# ---- the lift (2026-10-03, the user: walk into the cabin, go down with it by its button, step out at the bottom by the command on its
+# screen). Door B: two sliding leaves between the lift zone and the cabin in the cell (closed while the cabin is away or its air is
+# being equalised), built open, the module slides them. The cabin's panel (DOWN / UP / OUT) and its screen on the forward inner wall of
+# the cabin: interior groups that the module moves with the cabin (the cabin itself is the outside mesh, airlock_platform).
+DOORB_HW = 0.7                                                    # half width of door B
+CAB_PANEL = dict(x0=-8.55, x1=-7.15, y0=CAB_Y0 + 0.85, y1=CAB_Y0 + 2.15, scr=(0.08, 0.10, 0.92, 0.46), btn_u=(0.20, 0.50, 0.80), btn_v=0.64)   # big: read and pressed from a step away
+CAB_BTN = []                                                      # (x, y, z) of the caps' fronts, stowed
+CAB_SLOTS = {}
+
+
+def build_lift_groups():
+    zl = zs(AIRLOCK_S)
+    out = []
+    # door B leaves: on the lift zone side of the cell wall (x -6.85), parked beside the opening, each slides DOORB_HW to the middle
+    yb = U_Y0 + 0.075
+    xl = -6.85 + 0.08 + 0.045
+    for nm, z0, z1, ze in (("lift_doorB_a", zl - 2 * DOORB_HW - 0.02, zl - DOORB_HW + 0.02, zl - DOORB_HW + 0.02),
+                           ("lift_doorB_b", zl + DOORB_HW - 0.02, zl + 2 * DOORB_HW + 0.02, zl + DOORB_HW - 0.02)):
+        g = Group(nm, MAT["in_metal_w"])
+        _OBOX0(g, (xl, yb + 1.07, (z0 + z1) / 2), (1, 0, 0), (0, 1, 0), (0, 0, 1), 0.025, 1.07, (z1 - z0) / 2)
+        out.append(g)
+        ge = Group(nm + "_edge", MAT["in_amber"])                  # the meeting edge: an amber light bar (the door says it is a door)
+        _OBOX0(ge, (xl + 0.03, yb + 1.07, ze), (1, 0, 0), (0, 1, 0), (0, 0, 1), 0.006, 0.9, 0.012)
+        out.append(ge)
+    # the cabin's panel on its forward inner wall (stowed pose), facing aft into the cabin
+    P = CAB_PANEL
+    zf = zl + CAB_HZ - 0.08 - 0.01
+    gp = Group("cab_panel", MAT["br_display"])
+    q = [gp.vert((P["x0"], P["y1"], zf), (0, 0, -1), (0.0, 0.0)), gp.vert((P["x1"], P["y1"], zf), (0, 0, -1), (1.0, 0.0)),
+         gp.vert((P["x1"], P["y0"], zf), (0, 0, -1), (1.0, 1.0)), gp.vert((P["x0"], P["y0"], zf), (0, 0, -1), (0.0, 1.0))]
+    gp.quad(*q, (0, 0, -1))
+    X = lambda u: P["x0"] + (P["x1"] - P["x0"]) * u
+    Y = lambda v: P["y1"] - (P["y1"] - P["y0"]) * v
+    gs = Group("cab_screen", MAT["br_display"])
+    u0, v0, u1, v1 = P["scr"]
+    q = [gs.vert((X(u0), Y(v0), zf - 0.004), (0, 0, -1), (0.0, 0.0)), gs.vert((X(u1), Y(v0), zf - 0.004), (0, 0, -1), (1.0, 0.0)),
+         gs.vert((X(u1), Y(v1), zf - 0.004), (0, 0, -1), (1.0, 1.0)), gs.vert((X(u0), Y(v1), zf - 0.004), (0, 0, -1), (0.0, 1.0))]
+    gs.quad(*q, (0, 0, -1))
+    gm = Group("cab_metal", MAT["in_metal_w"])
+    _OBOX0(gm, ((P["x0"] + P["x1"]) / 2, (P["y0"] + P["y1"]) / 2, zf + 0.004), (1, 0, 0), (0, 1, 0), (0, 0, 1),
+           (P["x1"] - P["x0"]) / 2 + 0.03, (P["y1"] - P["y0"]) / 2 + 0.03, 0.006)                   # the panel's frame plate on the wall
+    caps = []
+    CAB_BTN.clear()
+    for k, (u, mat) in enumerate(zip(P["btn_u"], ("in_green", "in_guide", "in_amber"))):            # DOWN, UP, OUT
+        bx, by = X(u), Y(P["btn_v"])
+        for (cx_, cy_, hx_, hy_) in ((bx, by + .058, .066, .008), (bx, by - .058, .066, .008), (bx - .058, by, .008, .05), (bx + .058, by, .008, .05)):
+            _OBOX0(gm, (cx_, cy_, zf - .004), (1, 0, 0), (0, 1, 0), (0, 0, 1), hx_, hy_, .004)
+        gl_, gd_ = Group(f"cab_btn{k}_lit", MAT[mat]), Group(f"cab_btn{k}_dim", MAT["in_btn_dim"])
+        for g_ in (gl_, gd_):
+            _OBOX0(g_, (bx, by, zf - .01), (1, 0, 0), (0, 1, 0), (0, 0, 1), .048, .048, .01)
+        caps += [gl_, gd_]
+        CAB_BTN.append((bx, by, zf - .02))
+    out += [gp, gs, gm] + caps
+    return out
+
+
 def build_rooms():
     names = {"U": "upper", "L": "lower", "K": "keel"}
     walls = {d: Group(f"walls_{n}", MAT["in_wall"]) for d, n in names.items()}
     _FG.clear()
     for d, n in names.items():
-        for cls, mat in (("furn", "in_furn"), ("seat", "in_seat"), ("metal", "in_metal"), ("wet", "in_wet"), ("light", "in_light"), ("screen", "in_screen")):
+        for cls, mat in (("furn", "in_furn"), ("seat", "in_seat"), ("metal", "in_metal"), ("wet", "in_wet"), ("light", "in_light"), ("screen", "in_screen"),
+                         ("trim", "in_trim"), ("panel", "br_display"), ("green", "in_green"), ("amber", "in_amber"), ("red", "in_red"), ("guide", "in_guide"), ("ceil", "in_ceiling")):
             _FG[(d, cls)] = Group(f"{cls}_{n}", MAT[mat])
     for r in ROOMS:
         if r["open"]:
@@ -2036,6 +2492,18 @@ def build_rooms():
         _furnish(None, r)
     _lift_and_stair(_FG[("L", "metal")])
     _lights()
+    _guides()
+    for d_ in DOORS_INT:                                                       # compartment doors: chamfered corners and a frame
+        if d_[0] not in ("x", "z"):
+            continue
+        sill_ = d_[3]
+        dk_ = "U" if sill_ > 0.5 else ("L" if sill_ > -4.7 else "K")
+        if d_[0] == "z" and not (d_[1] in (134.0, 121.6, 120.3)) and dk_ != "U":
+            continue
+        if d_[0] == "x" and d_[1] == -8.85:
+            continue                                                           # the cabin's way out: the hull door is its frame
+        _door_frame(dk_, d_[0], (d_[1] if d_[0] == "x" else zs(d_[1]) + (0.07 if (d_[1] == 134.0 and dk_ == "U") else 0.0)), d_[2], d_[4], d_[5], sill_, 0.16, walls[dk_], d_[0] == "x" and d_[1] == -6.85)
+
     _SEAT_G[0] = None
     return [x_ for x_ in list(walls.values()) + list(_FG.values()) if x_.v]
 
@@ -2047,7 +2515,7 @@ def build_rooms():
 BR_FLOOR_Y = BR_Y - 1.0
 BR_FZ = math.sqrt(BR_R ** 2 - 1.0 ** 2)                      # half length of the flat floor along s
 BR_CONS_R, BR_CONS_N, BR_CONS_CZ = 3.3, 11, -0.2             # curved console: radius, segments, centre offset (m, from the axis station)
-BR_SCR_R, BR_SCR_Y0, BR_SCR_Y1 = 4.25, BR_FLOOR_Y + 0.9, BR_FLOOR_Y + 2.7
+BR_SCR_R, BR_SCR_Y0, BR_SCR_Y1 = 4.25, BR_FLOOR_Y + 1.15, BR_FLOOR_Y + 2.7       # bottom raised: the commander looks over the crest
 BR_SCR_HX = 4.7                                               # the front part goes from side wall to side wall (no air beside it)
 BR_SCR_RP = 7.0                                               # radius of the concave curve of the front part in plan
 BR_SCR_X = (-BR_SCR_HX, -1.8, 1.8, BR_SCR_HX)                 # front zone borders (x): the centre zone is the biggest
@@ -2107,8 +2575,15 @@ def _screen_zone(g, plan, zc, slot, rows=8):
         for k in range(2 * rows):
             if np.linalg.norm(np.array(cols[i][k + 1][0]) - np.array(cols[i][k][0])) < 1e-4: continue
             g.quad(idx[i][k], idx[i + 1][k], idx[i + 1][k + 1], idx[i][k + 1], np.array(cols[i][k][1]))
-BR_NAV_X, BR_NAV_DZ = -2.4, -0.9                             # navigation table (x, z offset from the axis station)
-BR_SEATS = [(0.0, 2.0, 0xA8362C, True), (1.9, 1.75, 0x3A5A8A, True), (-1.9, 1.75, 0x3A5A8A, True), (BR_NAV_X, BR_NAV_DZ - 1.5, 0x3A5A8A, False)]
+BR_NAV_X, BR_NAV_DZ = -2.4, -1.3                             # navigation table (x, z offset from the axis station)
+# The seats do not turn: an empty seat stands BACK from its console (here), one sits down in front of it, then it runs
+# BR_SEAT_TRAVEL forward to the console; to stand up it runs back first (the user's decision, 2026-10-03).
+BR_SEAT_TRAVEL = (1.0, 0.6, 0.6, 0.6)                         # the commander's seat runs farther (room for more instruments at the console)
+# at the console (variant B, "the tub"): the commander x 0 z +2.05 in his own bay, the side seats x +-1.45 z +1.75, the navigator
+# 1.5 m behind the holo table; here: the places BACK from the console (the empty seats stand there)
+BR_SEAT_AT = ((0.0, 2.25), (1.45, 1.95), (-1.45, 1.95), (BR_NAV_X, BR_NAV_DZ - 1.5))   # knees under the tub's shelf
+BR_SEATS = [(x, z - t, ac, ct) for (x, z), t, ac, ct in zip(BR_SEAT_AT, BR_SEAT_TRAVEL, (0xA8362C, 0x3A5A8A, 0x3A5A8A, 0x3A5A8A), (True, True, True, False))]
+BR_SEAT_BOX = (0.38, -0.45, 0.0, 1.5)                         # collision of a seat (moves with it): half x, z from, z to (offsets), height
 
 COLL = []                                                    # (group name, lo, hi): every box of the interior, for collision in the game
 
@@ -2167,7 +2642,7 @@ def _bridge_seat(G, x, z, accent, ctl):
     H = _Fr(O + (0, .5, 0))
     for k in range(20):                                                                                # floating ring
         a0, a1 = 2 * math.pi * k / 20, 2 * math.pi * (k + 1) / 20
-        tube(met, H.p((.33 * math.cos(a0), -.01, .02 + .33 * math.sin(a0))), H.p((.33 * math.cos(a1), -.01, .02 + .33 * math.sin(a1))), .022, n=6, caps=False)
+        tube(met, H.p((.22 * math.cos(a0), -.01, .02 + .22 * math.sin(a0))), H.p((.22 * math.cos(a1), -.01, .02 + .22 * math.sin(a1))), .022, n=6, caps=False)   # under the pan
     _fb3(seat, H, (0, .05, .1), (.29, .04, .27)); _fb3(cush, H, (0, .11, .1), (.24, .025, .23))
     for sx in (-1, 1):
         _fb3(seat, H, (sx * .31, .12, .1), (.03, .05, .21))
@@ -2180,50 +2655,186 @@ def _bridge_seat(G, x, z, accent, ctl):
     _fb3(acc, B, (0, .26, .09), (.17, .07, .02)); _fb3(acc, B, (0, .2, .105), (.035, .03, .01))
     for sx in (-1, 1):
         _fb3(belt, B, (sx * .12, .55, .092), (.022, .31, .006)); _fb3(belt, H, (sx * .14, .15, .26), (.11, .015, .006))
-    L = H.child((0, .06, .38), rx=-.28)                                                                # leg rest
-    _fb3(seat, L, (0, 0, .22), (.2, .045, .23)); _fb3(cush, L, (0, .06, .22), (.17, .025, .2)); _fb3(met, L, (0, -.03, .52), (.2, .015, .08))
+    # (no leg rest: the feet stand on the floor under the tub - the user's decision)
     for sx in (-1, 1):
-        _fb3(met, H, (sx * .36, .12, 0), (.015, .11, .02)); _fb3(seat, H, (sx * .36, .24, .1), (.04, .025, .18))
+        _fb3(met, H, (sx * .36, .12, 0), (.015, .11, .02)); _fb3(seat, H, (sx * .36, .24, .04), (.04, .025, .18))   # armrest ends at +0.22
         if ctl:
             tube(met, H.p((sx * .36, .26, .22)), H.p((sx * .36, .42, .19)), .018, n=8)                  # side-stick
             S = H.child((sx * .36, .45, .2), rx=-.18); _fb3(seat, S, (0, 0, 0), (.025, .05, .03)); _fb3(acc, S, (0, .06, -.02), (.015, .009, .01))
         else:
             _fb3(seat, H, (sx * .36, .275, .2), (.035, .01, .06))
-    _coll("bridge", (x - .38, BR_FLOOR_Y, zc + z - .45), (x + .38, BR_FLOOR_Y + 1.5, zc + z + .45))
+    # (no static collision: the seat moves; the module puts BR_SEAT_BOX at the seat's current place)
 
 
-# The exit of the bridge: an arch in the starboard end disc of the drum (x +BR_HX), opposite the access corridor (x 5.0..6.6):
-# flat sill on the floor, straight sides, a superellipse top; a glowing edge. It lines up with the corridor while the ship lies.
-BR_DOOR_S, BR_DOOR_HW = 136.6, 0.55                           # station of the door centre, half width
-BR_DOOR_YC, BR_DOOR_BT = BR_FLOOR_Y + 1.45, 0.75              # where the top arch starts, its height (top = floor + 2.2)
-BR_DOOR_X1 = 5.0                                              # the corridor wall: the sleeve runs from the drum to it
+# The exit of the bridge: an arch at the back of the drum on the centre line, into the upper corridor of the living deck
+# (corr_u ends at s 134, half a metre behind the drum). Flat sill, straight sides, a superellipse top, a glowing edge; a short
+# vestibule sleeve. The capsule turns about x: the door lines up with the corridor while the ship lies.
+BR_DOOR_HW = 0.8                                              # half width (1.6 m)
+BR_DOOR_YC, BR_DOOR_BT = BR_FLOOR_Y + 1.55, 0.75              # where the top arch starts, its height (top = floor + 2.3)
+BR_DOOR_ZW = zs(134.0)                                        # the forward wall of the living deck (the corridor end)
+BR_SEG = 64                                                   # segments of the drum (the lathe of the shell)
+BR_PATCH_K = (28, 37)                                         # drum segments of the back patch with the door (y 0.24 .. 4.17)
+BR_PATCH_HX = 1.25                                            # half width of the patch along x
 
 
 def _door_outline(n_arc=24):
-    """Closed outline of the doorway in (z, y), counterclockwise seen from the room, starting at the sill."""
-    zd = zs(BR_DOOR_S); a, yf = BR_DOOR_HW, BR_FLOOR_Y
-    pts = [(zd - a + 2 * a * k / 6, yf) for k in range(6)]                       # the sill
-    pts += [(zd + a, yf + (BR_DOOR_YC - yf) * k / 5) for k in range(5)]           # the right side
+    """Closed outline of the doorway in (x, y), starting at the sill."""
+    a, yf = BR_DOOR_HW, BR_FLOOR_Y
+    pts = [(-a + 2 * a * k / 8, yf) for k in range(8)]                            # the sill
+    pts += [(a, yf + (BR_DOOR_YC - yf) * k / 5) for k in range(5)]                # one side
     for k in range(n_arc + 1):                                                    # superellipse top (n = 4)
         t = math.pi * k / n_arc; c, s_ = math.cos(t), math.sin(t)
-        pts.append((zd + a * math.copysign(abs(c) ** 0.5, c), BR_DOOR_YC + BR_DOOR_BT * abs(s_) ** 0.5))
-    pts += [(zd - a, BR_DOOR_YC - (BR_DOOR_YC - yf) * k / 5) for k in range(1, 5)] # the left side
+        pts.append((a * math.copysign(abs(c) ** 0.5, c), BR_DOOR_YC + BR_DOOR_BT * abs(s_) ** 0.5))
+    pts += [(-a, BR_DOOR_YC - (BR_DOOR_YC - yf) * k / 5) for k in range(1, 5)]   # the other side
     return pts
 
 
-def _plate_hole(g, x, outline, outer, nrm, rings=3):
-    """A flat plate at x with the doorway cut out: from each outline point a ray from the doorway centre to the outer boundary
-    (outer(zc, yc, dz, dy) -> distance along the ray)."""
-    zd = zs(BR_DOOR_S); C = (zd, BR_FLOOR_Y + 0.9)
+def _drum_ang(k):
+    a = 2 * math.pi * k / BR_SEG                                                  # the lathe's angle: (y, z) = (BR_Y - R sin a, zc + R cos a)
+    return a
+
+
+def _drum_yz(k, r, zc):
+    a = _drum_ang(k)
+    return BR_Y - r * math.sin(a), zc + r * math.cos(a)
+
+
+def _drum_back_z(y, zc, r=BR_R):
+    """z of the back of the polygonal drum (the patch segments) at height y: on the chords, like the lathe."""
+    k0, k1 = BR_PATCH_K
+    for k in range(k0, k1):
+        ya, za = _drum_yz(k, r, zc); yb, zb = _drum_yz(k + 1, r, zc)
+        lo, hi = min(ya, yb), max(ya, yb)
+        if lo - 1e-9 <= y <= hi + 1e-9:
+            t = (y - ya) / (yb - ya); return za + (zb - za) * t
+    raise ValueError(y)
+
+
+def _plate_hole_uv(g, outline, C, outer, to3d, nrm, rings=3, n_ang=160):
+    """A plate with the doorway cut out, in plate coordinates (u, v): rays from C evenly in angle and through every outline
+    vertex, each from the outline to the outer boundary (outer(cu, cv, du, dv) -> distance); to3d(u, v) -> mesh point."""
+    P = [np.array(q, float) for q in outline]; C = np.array(C, float)
+    angs = sorted(set([round(2 * math.pi * k / n_ang, 9) for k in range(n_ang)] +
+                      [round(math.atan2(q[1] - C[1], q[0] - C[0]) % (2 * math.pi), 9) for q in P]))
+
+    def hit(u):
+        best = 1e9
+        for k in range(len(P)):
+            a_, b_ = P[k], P[(k + 1) % len(P)]; e = b_ - a_
+            den = u[0] * (-e[1]) - u[1] * (-e[0])
+            if abs(den) < 1e-12: continue
+            w = a_ - C
+            t = (w[0] * (-e[1]) - w[1] * (-e[0])) / den; v_ = (u[0] * w[1] - u[1] * w[0]) / den
+            if t > 1e-9 and -1e-9 <= v_ <= 1 + 1e-9: best = min(best, t)
+        return best
     rows = []
-    for zz, yy in outline:
-        dz, dy = zz - C[0], yy - C[1]; L = math.hypot(dz, dy); ux, uy = dz / L, dy / L
-        Lo = max(outer(C[0], C[1], ux, uy), L)
-        rows.append([g.vert((x, C[1] + uy * (L + (Lo - L) * k / rings), C[0] + ux * (L + (Lo - L) * k / rings)), nrm) for k in range(rings + 1)])
+    for t_ in angs:
+        u = np.array([math.cos(t_), math.sin(t_)]); L = hit(u)
+        Lo = max(outer(C[0], C[1], u[0], u[1]), L)
+        rows.append([g.vert(to3d(*(C + u * (L + (Lo - L) * k / rings))), nrm) for k in range(rings + 1)])
     for i in range(len(rows)):
         j = (i + 1) % len(rows)
         for k in range(rings):
             g.quad(rows[i][k], rows[j][k], rows[j][k + 1], rows[i][k + 1], np.array(nrm))
+
+
+def _rect_outer(u0, u1, v0, v1):
+    def f(cu, cv, du, dv):
+        tu = ((u1 - cu) / du) if du > 1e-9 else (((u0 - cu) / du) if du < -1e-9 else 1e9)
+        tv = ((v1 - cv) / dv) if dv > 1e-9 else (((v0 - cv) / dv) if dv < -1e-9 else 1e9)
+        return min(tu, tv)
+    return f
+
+
+def _drum_cyl(g, x0, x1, r, zc, skip=(), nrm_in=True):
+    """Cylinder strip of the drum between x0 and x1 at radius r (the lathe's segments), without the segments in `skip`."""
+    for k in range(BR_SEG):
+        if k in skip: continue
+        ya, za = _drum_yz(k, r, zc); yb, zb = _drum_yz(k + 1, r, zc)
+        a = _drum_ang(k + 0.5); n_ = np.array([0.0, math.sin(a), -math.cos(a)]) * (1 if nrm_in else -1)
+        vs = [g.vert(p, n_) for p in ((x0, ya, za), (x0, yb, zb), (x1, yb, zb), (x1, ya, za))]
+        g.quad(*vs, n_)
+
+
+def _drum_ring_side(g, x, r0, r1, zc, nx, skip=()):
+    """Flat side of a rib (annulus between r0 and r1 at x), facing nx."""
+    n_ = np.array([nx, 0.0, 0.0])
+    for k in range(BR_SEG):
+        if k in skip: continue
+        ya, za = _drum_yz(k, r0, zc); yb, zb = _drum_yz(k + 1, r0, zc); yc, zc_ = _drum_yz(k + 1, r1, zc); yd, zd = _drum_yz(k, r1, zc)
+        vs = [g.vert(p, n_) for p in ((x, ya, za), (x, yb, zb), (x, yc, zc_), (x, yd, zd))]
+        g.quad(*vs, n_)
+
+
+# The bridge console, variant B "the tub" (the user's choice, 2026-10-03; Tantra_Design/console_mockup.html, DESIGN_LOCAL.md):
+# one continuous tub round the seats. Its inner edge in plan (x, z offset) runs from the port pod round the front to the
+# starboard pod, the commander's bay deepest; the section: wall to the seat 0.72, shelf 0.30 (0.44 at the commander), raked
+# instrument face, top 0.4, back wall. Top: 1.02 at the front, 1.15 toward the sides, 1.32 only at the tails.
+TUB_CTRL = [(-2.35, .95), (-2.4, 1.75), (-2.15, 2.32), (-1.45, 2.44), (-.72, 2.6), (0, 2.7), (.72, 2.6), (1.45, 2.44), (2.15, 2.32), (2.4, 1.75), (2.35, .95)]
+TUB_NP = 180
+# The 12 MFD places of the bridge (the Orbiter limit): real Orbiter MFDs (ExternMFD stuck to the ship) are drawn on them by the
+# module; each: a screen (own texture slot 22 + k) with the button labels at its edges, a bezel, 6 + 6 side buttons and PWR / SEL / MNU.
+# In plate units (scaled by s): screen u -.15..+.15, v -.11..+.19; labels u +-.15..+-.20; bottom row v -.19..-.11; buttons at
+# u +-.225 (rows v = .19 - (k + .5) * .05) and v -.215 (u -.1, 0, .1). Mode numbers: Orbiter's MFD_* ids.
+MFD_PLACES = []
+MFD_SLOT0 = 22
+PANEL_SLOT = 34                                               # Textures/Tantra/panel.dds (the 2D panels' texture, redrawn in the game)
+DISP_SLOT0, HOLO_SLOT = 37, 41                                # the commander's own touch screens (4), the holo panel (35, 36: the lift cabin)
+DISP_PLACES = []                                              # (centre, right, up, normal, w, h, slot, group)
+HOLO_PLACE = []
+PANEL_PIECES = []                                             # (panel id, texture rect, centre, right, up, normal, width, height)
+
+
+def _tub_curve():
+    """Centripetal Catmull-Rom through TUB_CTRL, resampled evenly by length: points P (x, z), tangents T, inward normals N."""
+    C = [np.array(c, float) for c in TUB_CTRL]
+    C = [2 * C[0] - C[1]] + C + [2 * C[-1] - C[-2]]
+    dense = []
+    for i in range(1, len(C) - 2):
+        p0, p1, p2, p3 = C[i - 1], C[i], C[i + 1], C[i + 2]
+        t0 = 0.0; t1 = t0 + np.linalg.norm(p1 - p0) ** .5; t2 = t1 + np.linalg.norm(p2 - p1) ** .5; t3 = t2 + np.linalg.norm(p3 - p2) ** .5
+        for k in range(40):
+            t = t1 + (t2 - t1) * k / 40
+            a1 = (t1 - t) / (t1 - t0) * p0 + (t - t0) / (t1 - t0) * p1; a2 = (t2 - t) / (t2 - t1) * p1 + (t - t1) / (t2 - t1) * p2
+            a3 = (t3 - t) / (t3 - t2) * p2 + (t - t2) / (t3 - t2) * p3
+            b1 = (t2 - t) / (t2 - t0) * a1 + (t - t0) / (t2 - t0) * a2; b2 = (t3 - t) / (t3 - t1) * a2 + (t - t1) / (t3 - t1) * a3
+            dense.append((t2 - t) / (t2 - t1) * b1 + (t - t1) / (t2 - t1) * b2)
+    dense.append(C[-2])
+    D = np.array(dense); L = np.concatenate([[0], np.cumsum(np.linalg.norm(np.diff(D, axis=0), axis=1))])
+    P = np.array([np.interp(np.linspace(0, L[-1], TUB_NP + 1), L, D[:, k]) for k in range(2)]).T
+    T = np.gradient(P, axis=0); T /= np.linalg.norm(T, axis=1)[:, None]
+    N = np.stack([-T[:, 1], T[:, 0]], axis=1)
+    for i in range(len(N)):                                              # inward: toward the seats
+        if np.dot(N[i], np.array([0.0, 1.5]) - P[i]) < 0: N[i] = -N[i]
+    return P, T, N
+
+
+def _tub_h(i):
+    return 1.15                                                       # one height: the top is a deck flush with the screen bottom
+
+
+def _tub_s(P, N, i):
+    """Distance along the outward normal from the inner edge at i to the screen (the front arc or the end walls), less 1 cm."""
+    p, u = np.array(P[i], float), -np.array(N[i], float)
+    c = BR_SCR_R - BR_SCR_RP; best = 1e9
+    for sgn in (-1, 1):                                               # the end walls (the side zones)
+        if abs(u[0]) > 1e-9:
+            t = (sgn * (BR_SCR_HX - .01) - p[0]) / u[0]
+            if t > 0: best = min(best, t)
+    q = p - np.array([0.0, c]); b = q @ u; cc = q @ q - BR_SCR_RP ** 2   # the front arc: |(x, z - c)| = RP
+    disc = b * b - cc
+    if disc >= 0:
+        t = -b + math.sqrt(disc)
+        if t > 0: best = min(best, t)
+    return best - .01
+
+
+def _tub_d(P, i):
+    return .3 + .14 * math.exp(-(P[i][0] / .6) ** 2)
+
+
+def _tub_at_x(P, x):
+    return min((i for i in range(len(P)) if P[i][1] > 2.2), key=lambda i: abs(P[i][0] - x))
 
 
 def build_bridge():
@@ -2239,35 +2850,47 @@ def build_bridge():
     btn_on, btn_off = gm("bridge_button_on", "br_green"), gm("bridge_button_off", "br_red")
     bx0, by0, bz0 = 0.33, BR_FLOOR_Y + 0.765, zc + BR_SEATS[0][1] + 0.12                        # armrest top of the commander's seat, front end
     box(btn_on, (bx0, by0, bz0), (bx0 + 0.06, by0 + 0.025, bz0 + 0.08)); box(btn_off, (bx0, by0, bz0), (bx0 + 0.06, by0 + 0.025, bz0 + 0.08))
-    G = {"seat": gm("bridge_seats", "br_seat"), "cush": gm("bridge_seats_cushion", "br_cushion"), "met": gm("bridge_seats_metal", "mechanism"),
-         "belt": gm("bridge_seats_belt", "br_belt"), "acc": gm("bridge_seats_accent", "br_red")}
+    GS = [{"seat": gm(f"bridge_seat{i}", "br_seat"), "cush": gm(f"bridge_seat{i}_cushion", "br_cushion"), "met": gm(f"bridge_seat{i}_metal", "mechanism"),
+           "belt": gm(f"bridge_seat{i}_belt", "br_belt"), "acc": gm(f"bridge_seat{i}_accent", "br_red")} for i in range(len(BR_SEATS))]   # each seat moves
     # drum shell inside, ribs, flat floor (solid end discs: no door)
-    lathe_axis(shell, (0.0, BR_Y, zc), (1, 0, 0), [(-BR_HX, 0.0), (-BR_HX, BR_R), (BR_HX, BR_R)], seg=64, inward=True)
+    lathe_axis(shell, (0.0, BR_Y, zc), (1, 0, 0), [(-BR_HX, 0.0), (-BR_HX, BR_R)], seg=BR_SEG, inward=True)     # end discs
+    lathe_axis(shell, (0.0, BR_Y, zc), (1, 0, 0), [(BR_HX, BR_R), (BR_HX, 0.0)], seg=BR_SEG, inward=True)
+    patch = set(range(*BR_PATCH_K)); px = BR_PATCH_HX
+    _drum_cyl(shell, -BR_HX, -px, BR_R, zc); _drum_cyl(shell, px, BR_HX, BR_R, zc)                         # the vault
+    _drum_cyl(shell, -px, px, BR_R, zc, skip=patch)
     door = gm("bridge_door_frame", "mechanism"); door_glow = gm("bridge_door_glow", "br_glow")
-    ol = _door_outline()
-
-    def _circle(cz, cy, ux, uy):                                                  # the drum's end disc (centre zc, BR_Y; R)
-        bz, by = cz - zc, cy - BR_Y; bb = bz * ux + by * uy
-        return -bb + math.sqrt(bb * bb - (bz * bz + by * by - BR_R ** 2))
-    _plate_hole(shell, BR_HX, ol, _circle, (-1.0, 0.0, 0.0))
-    for i in range(len(ol)):                                                       # the sleeve through to the corridor wall
-        j = (i + 1) % len(ol); (za, ya), (zb, yb_) = ol[i], ol[j]
-        cz, cy = zs(BR_DOOR_S), BR_FLOOR_Y + 0.9; mz, my = (za + zb) / 2 - cz, (ya + yb_) / 2 - cy
-        n_ = np.array([0.0, -my, -mz]) / max(math.hypot(mz, my), 1e-9)              # towards the doorway centre
-        vs = [door.vert((xx, yy, zz), n_) for xx, zz, yy in ((BR_HX, za, ya), (BR_HX, zb, yb_), (BR_DOOR_X1 + .05, zb, yb_), (BR_DOOR_X1 + .05, za, ya))]
+    ol = _door_outline(); C = (0.0, BR_FLOOR_Y + 0.9)
+    yp0, yp1 = _drum_yz(BR_PATCH_K[0], BR_R, zc)[0], _drum_yz(BR_PATCH_K[1], BR_R, zc)[0]
+    _plate_hole_uv(shell, ol, C, _rect_outer(-px, px, min(yp0, yp1), max(yp0, yp1)),
+                   lambda u, v: (u, v, _drum_back_z(v, zc)), (0.0, 0.0, 1.0))                                  # the back patch with the doorway
+    zw = BR_DOOR_ZW - 0.08                                                                                     # the corridor side of its forward wall
+    for i in range(len(ol)):                                                                                   # the vestibule sleeve
+        j = (i + 1) % len(ol); (xa, ya), (xb, yb_) = ol[i], ol[j]
+        mx, my = (xa + xb) / 2 - C[0], (ya + yb_) / 2 - C[1]
+        n_ = np.array([-mx, -my, 0.0]) / max(math.hypot(mx, my), 1e-9)
+        vs = [door.vert(p, n_) for p in ((xa, ya, _drum_back_z(ya, zc)), (xb, yb_, _drum_back_z(yb_, zc)), (xb, yb_, zw), (xa, ya, zw))]
         door.quad(*vs, n_)
-    gl = [(zs(BR_DOOR_S) + (zz - zs(BR_DOOR_S)) * 1.0, yy) for zz, yy in ol]       # glowing edge: a band 6 cm wide round the doorway
-    cz, cy = zs(BR_DOOR_S), BR_FLOOR_Y + 0.9
-    for i in range(len(gl)):
-        j = (i + 1) % len(gl)
-        if gl[i][1] < BR_FLOOR_Y + 0.01 and gl[j][1] < BR_FLOOR_Y + 0.01: continue   # no light along the sill
-        def outp(p):
-            dz, dy = p[0] - cz, p[1] - cy; L = math.hypot(dz, dy); return (p[0] + dz / L * .06, p[1] + dy / L * .06)
-        a0, a1, b1, b0 = gl[i], gl[j], outp(gl[j]), outp(gl[i])
-        vs = [door_glow.vert((BR_HX - .012, yy, zz), (-1.0, 0.0, 0.0)) for zz, yy in (a0, a1, b1, b0)]
-        door_glow.quad(*vs, np.array([-1.0, 0.0, 0.0]))
-    for k in range(-3, 4):
-        lathe_axis(shell, (0.0, BR_Y, zc), (1, 0, 0), [(k * 1.2 - .07, BR_R), (k * 1.2 - .07, BR_R - .1), (k * 1.2 + .07, BR_R - .1), (k * 1.2 + .07, BR_R)], seg=64, inward=True)
+    top = BR_DOOR_YC + BR_DOOR_BT
+    _plate_hole_uv(door, ol, C, _rect_outer(-BR_DOOR_HW - .01, BR_DOOR_HW + .01, BR_FLOOR_Y, top + .01),
+                   lambda u, v: (u, v, zw - 0.005), (0.0, 0.0, -1.0), rings=1)                                  # the arch in the corridor wall's hole
+    for i in range(len(ol)):                                                                                   # glowing edge round the doorway
+        j = (i + 1) % len(ol)
+        if ol[i][1] < BR_FLOOR_Y + 0.01 and ol[j][1] < BR_FLOOR_Y + 0.01: continue
+        def outp(q):
+            dx, dy = q[0] - C[0], q[1] - C[1]; L = math.hypot(dx, dy); return (q[0] + dx / L * .06, q[1] + dy / L * .06)
+        quad = (ol[i], ol[j], outp(ol[j]), outp(ol[i]))
+        vs = [door_glow.vert((u, v, _drum_back_z(v, zc) + .012), (0.0, 0.0, 1.0)) for u, v in quad]
+        door_glow.quad(*vs, np.array([0.0, 0.0, 1.0]))
+    for k in range(-3, 4):                                                                                     # ribs (the one on the centre line is cut at the door)
+        x0, x1 = k * 1.2 - .07, k * 1.2 + .07
+        sk = patch if abs(k * 1.2) < px else ()
+        _drum_cyl(shell, x0, x1, BR_R - .1, zc, skip=sk)
+        _drum_ring_side(shell, x0, BR_R - .1, BR_R, zc, -1.0, skip=sk); _drum_ring_side(shell, x1, BR_R - .1, BR_R, zc, 1.0, skip=sk)
+    vz0, vz1 = BR_DOOR_ZW - 0.2, _drum_back_z(BR_FLOOR_Y, zc) + 0.25                                        # walking through the vestibule
+    _coll("vestibule", (-BR_DOOR_HW - .5, BR_FLOOR_Y, vz0), (-BR_DOOR_HW, top + .4, vz1))
+    _coll("vestibule", (BR_DOOR_HW, BR_FLOOR_Y, vz0), (BR_DOOR_HW + .5, top + .4, vz1))
+    _coll("vestibule", (-BR_DOOR_HW, top, vz0), (BR_DOOR_HW, top + .4, vz1))
+    _coll("vestibule", (-BR_DOOR_HW, BR_FLOOR_Y - .06, vz0), (BR_DOOR_HW, BR_FLOOR_Y, vz1))
     box(floor, (-BR_HX, BR_FLOOR_Y - .06, zc - BR_FZ), (BR_HX, BR_FLOOR_Y, zc + BR_FZ))
     # the screen, U-shaped: the concave front part in three zones, the side zones on the flat end walls (about +-100 deg)
     del BR_SCR_CAMS[:]
@@ -2284,52 +2907,166 @@ def build_bridge():
     for k in range(14):                                                                  # collision of the screen wall (thin boxes along the arc)
         cx = -BR_SCR_HX + 2 * BR_SCR_HX * (k + .5) / 14; cz_ = zc + _scr_plan(cx)[0] + .5
         _coll("bridge", (cx - .55, BR_FLOOR_Y, cz_ - .55), (cx + .55, BR_FLOOR_Y + 3.0, cz_ + .55))
-    # the curved console
-    for i in range(BR_CONS_N):
-        th = (i - (BR_CONS_N - 1) / 2) * 0.17
-        Sg = _Fr((BR_CONS_R * math.sin(th), BR_FLOOR_Y, zc + BR_CONS_CZ + BR_CONS_R * math.cos(th)), _Ry(th))
-        _fb3(cons, Sg, (0, .4, 0), (.4, .4, .275))
-        P = Sg.child((0, .86, -.02), rx=-.5)
-        _fb3(cons, P, (0, 0, 0), (.4, .008, .25))
-        kind = ("gen", "eng", "ion", "alt", "gen", "centre", "gen", "gen", "discs", "radar", "oes")[i]
-        dials = [(-.28 + .28 * k, -.14 if j == 0 else .12) for k in range(3) for j in range(2)]
-        if kind == "eng":                                                                # window with the four boron-nitride cylinders
-            _fb3(nav, P, (0, .004, 0), (.34, .006, .2))
-            for k in range(4):
-                tube(green, P.p((-.21 + k * .14, .01, 0)), P.p((-.21 + k * .14, .1, 0)), .022, n=10)
-        elif kind == "ion":                                                              # thin rods of the ion charge reserve behind glass
-            for k in range(14):
-                _fb3(amber, P, (-.34 + k * .035, .008, -.04), (.006, .004, .03 + .012 * ((k * 7) % 5)))
-            tube(leds, P.p((.22, .01, .05)), P.p((.22, .016, .05)), .1, n=24)
-        elif kind == "centre":                                                           # the wide crimson dial
-            h = .2; nrm = P.R @ np.array([0, 1.0, 0])                                  # square MFD face: top = far edge of the panel
-            vs = [mfd.vert(P.p((sx * h, .012, sz * h)), nrm, (.5 + sx * .5, .5 - sz * .5)) for sx, sz in ((-1, 1), (1, 1), (1, -1), (-1, -1))]
-            mfd.quad(vs[0], vs[1], vs[2], vs[3], nrm)
-            tube(red, P.p((-.3, .01, .15)), P.p((-.3, .02, .15)), .03, n=12)
-            dials = []
-        elif kind == "radar":
-            tube(green, P.p((-.06, .01, 0)), P.p((-.06, .014, 0)), .15, n=24)
-            dials = []
-        elif kind == "alt":
-            for j in range(11):
-                _fb3(leds, P, (-.3, .008, -.2 + j * .04), (.04, .003, .004))
-            for yy in (-.04, 0.0):
-                tube(red, P.p((-.2, .01, yy)), P.p((-.2, .018, yy)), .012, n=8)
-        for (dx, dz) in dials:
-            tube(metal, P.p((dx, .006, dz)), P.p((dx, .012, dz)), .05, n=16)
-            tube(leds, P.p((dx + .06, .008, dz + .05)), P.p((dx + .06, .012, dz + .05)), .008, n=6)
-        # levers and verniers of the commander, the handle of the anamezon engines, the guarded lever
-        def lever(px, pz, ln, mat_g, kr):
-            b = Sg.p((px, .9, pz)); tip = Sg.p((px, .9 + ln * .93, pz - ln * .3)); tube(metal, b, tip, .009, n=6)
-            tube(mat_g, tip - np.array([0, .01, 0]), tip + np.array([0, .02, 0]), kr, n=10)
-        if i in (4, 6):
-            n_ = 5 if i == 4 else 4
-            for k in range(n_):
-                px = -.27 + k * (.54 / (n_ - 1)); lever(px, -.14, .17, red if k == 2 else metal, .018)
-                tube(metal, Sg.p((px, .9, -.02)), Sg.p((px, .93, -.02)), .026, n=12)
-        if i == 3:
-            lever(-.28, -.12, .26, red, .032)
-        _coll("bridge", (Sg.o[0] - .62, BR_FLOOR_Y, Sg.o[2] - .5), (Sg.o[0] + .62, BR_FLOOR_Y + 1.1, Sg.o[2] + .5))
+    # the console: the tub (variant B)
+    P, T, N = _tub_curve(); F = BR_FLOOR_Y
+    tub = gm("bridge_tub", "br_tub"); tface = gm("bridge_console_face", "br_panel_face")
+    mfd_off = gm("bridge_mfd_dark", "br_screen")                                           # the other MFD places (dark for now)
+    holo = gm("bridge_holo", "br_holo")                                                    # the holo shelf, the readouts, the role lists
+
+    def tp(i, d, y):                                                                       # a point of the tub section at i: d outward, y up
+        return np.array([P[i][0] - N[i][0] * d, F + y, zc + P[i][1] - N[i][1] * d])
+    def knee(i):                                                                           # the knee recess under the shelf (0.4 deep, 0.7 wide)
+        if P[i][1] < 2.2: return 0.0
+        dx = min(abs(P[i][0] - sx_) for sx_ in (0.0, -1.45, 1.45))
+        return .4 * min(1.0, max(0.0, (.38 - dx) / .05))
+    # the section (the user's decision): toe (knee recess), the shelf, the instrument wall leaning ~25 deg up to the screen bottom
+    # 1.15, then a flat deck right up to the screen, and the wall at the screen
+    prof = lambda i: [(knee(i), 0), (knee(i), .68), (0, .68), (0, .72), (_tub_d(P, i), .76), (_tub_d(P, i) + .18, 1.15),
+                      (_tub_s(P, N, i), 1.15), (_tub_s(P, N, i), 0)]
+    plen = np.concatenate([[0], np.cumsum(np.linalg.norm(np.diff(P, axis=0), axis=1))])
+    for k in range(7):                                                                     # toe, under the shelf, lip, shelf, instrument wall, deck, wall at the screen
+        g = tface if k == 4 else tub
+        for i in range(TUB_NP):
+            q = [tp(i, *prof(i)[k]), tp(i + 1, *prof(i + 1)[k]), tp(i + 1, *prof(i + 1)[k + 1]), tp(i, *prof(i)[k + 1])]
+            nrm = np.cross(q[1] - q[0], q[3] - q[0]); nrm /= max(np.linalg.norm(nrm), 1e-9)
+            inward = np.array([N[i][0], 0.0, N[i][1]])
+            ref = (inward, np.array([0, -1.0, 0]), inward, np.array([0, 1.0, 0]), inward + np.array([0, .6, 0]), np.array([0, 1.0, 0]), -inward)[k]
+            if np.linalg.norm(np.cross(q[1] - q[0], q[3] - q[0])) < 1e-9: continue          # (no recess here: an empty strip)
+            if np.dot(nrm, ref) < 0: nrm = -nrm
+            vs = [g.vert(v, nrm) for v in q]                                               # (no fake instruments: the real MFDs and controls stand on it)
+            g.quad(*vs, nrm)
+    for i, sg in ((0, -1.0), (TUB_NP, 1.0)):                                               # end caps
+        ring = [tp(i, *d) for d in prof(i)]; c = sum(ring) / len(ring); nrm = np.array([T[i][0], 0.0, T[i][1]]) * sg
+        ci = tub.vert(c, nrm); vs = [tub.vert(v, nrm) for v in ring]
+        for k in range(len(vs)): tub.tri(ci, vs[k], vs[(k + 1) % len(vs)], nrm)
+    for i in range(0, TUB_NP, 4):                                                          # collision: pieces along the tub (the knee recess open below)
+        j = min(i + 4, TUB_NP); dk = min(knee(i), knee(j)); back = max(_tub_s(P, N, i), _tub_s(P, N, j))
+        lo_ = [tp(ii, d, 0) for ii in (i, j) for d in (dk, back)]; up_ = [tp(ii, d, 0) for ii in (i, j) for d in (0, back)]
+        a_, b_ = np.min(lo_, axis=0), np.max(lo_, axis=0); _coll("bridge", (a_[0], F, a_[2]), (b_[0], F + .68, b_[2]))
+        a_, b_ = np.min(up_, axis=0), np.max(up_, axis=0); _coll("bridge", (a_[0], F + .68, a_[2]), (b_[0], F + max(_tub_h(i), _tub_h(j)), b_[2]))
+    for i in range(0, TUB_NP, 3):                                                          # a light line along the top front edge
+        j = min(i + 3, TUB_NP)
+        q0, q1 = tp(i, _tub_d(P, i) + .18, _tub_h(i) + .004), tp(j, _tub_d(P, j) + .18, _tub_h(j) + .004)
+        tube(leds, q0, q1, .006, n=5)
+    for i in range(3, TUB_NP, 6):                                                          # a light line along the shelf edge
+        q0, q1 = tp(i, 0.0, .725), tp(min(i + 3, TUB_NP), 0.0, .725)
+        tube(leds, q0 + np.array([N[i][0], 0, N[i][1]]) * .01, q1 + np.array([N[i][0], 0, N[i][1]]) * .01, .006, n=5)
+
+    def panel_frame(i, extra):                                                             # a raised panel on the raked face at i
+        D = _tub_d(P, i); lean = math.atan2(.18, _tub_h(i) - .76) - extra                  # lies on the instrument wall
+        ez = -np.array([N[i][0], 0.0, N[i][1]]); ey = np.array([0, 1.0, 0]); ex = np.cross(ey, ez)
+        o = tp(i, D + .01, .76)
+        nrm = -ez * math.cos(lean) + ey * math.sin(lean); up = ey * math.cos(lean) + ez * math.sin(lean)
+        return o, ex, up, nrm
+
+    def flat(g, c, ex, up, nrm, w, h, uv=True):                                            # a flat quad (u to the right, v down)
+        pts = [c - ex * w / 2 + up * h / 2, c + ex * w / 2 + up * h / 2, c + ex * w / 2 - up * h / 2, c - ex * w / 2 - up * h / 2]
+        vs = [g.vert(q, nrm, uvv) if uv else g.vert(q, nrm) for q, uvv in zip(pts, ((0, 0), (1, 0), (1, 1), (0, 1)))]
+        g.quad(*vs, nrm)
+
+    def raised(i, w, h, extra, items):                                                     # backing plate + items (group, du, dx, w, h)
+        o, ex, up, nrm = panel_frame(i, extra); c = o + up * h / 2
+        _fb3(tub, _Fr(c - nrm * .03, np.stack([ex, up, -nrm], axis=1)), (0, 0, 0), (w / 2 + .01, h / 2 + .01, .025))
+        for g, du, dx, ww, hh in items:
+            flat(g, c + up * du + ex * dx + nrm * .006, ex, up, nrm, ww, hh)
+        return c, ex, up, nrm
+    # The instruments are the Tantra's own 2D panels (tools/gen_panel.py, Textures/Tantra/panel.dds), live: the module redraws
+    # them in the game and passes the mouse clicks to the same handlers (the Arrow Freighter way: real controls on the console).
+    # MAIN goes to the commander (its centre block on the crest, its four MFD units on the wall and on the fins), UPPER to the
+    # engineer (starboard), LOWER to the mechanic (port). The MFDs are real Orbiter MFDs stuck to the ship (ShipView::MfdBank).
+    PXM = .00095                                                                           # metres per panel pixel
+    panels = gm("bridge_panels", "br_display"); panels.tex = PANEL_SLOT
+    del PANEL_PIECES[:]; del MFD_PLACES[:]; del DISP_PLACES[:]
+
+    def piece(panel_id, rect, c, ex, up, nrm):                                             # a rectangle of panel.dds on the console
+        x0, y0, x1, y1 = rect; w, h = (x1 - x0) * PXM, (y1 - y0) * PXM
+        c = np.asarray(c, float) + np.asarray(nrm, float) * .003
+        pts = [c - ex * w / 2 + up * h / 2, c + ex * w / 2 + up * h / 2, c + ex * w / 2 - up * h / 2, c - ex * w / 2 - up * h / 2]
+        uvs = [(x0 / 2048, y0 / 2048), (x1 / 2048, y0 / 2048), (x1 / 2048, y1 / 2048), (x0 / 2048, y1 / 2048)]
+        vs = [panels.vert(q, nrm, uv) for q, uv in zip(pts, uvs)]; panels.quad(*vs, np.asarray(nrm, float))
+        PANEL_PIECES.append((panel_id, rect, c, ex, up, nrm, w, h))
+
+    def screen(group, slot, c, ex, up, nrm, w, h):                                          # a touch screen: a quad with its own texture
+        g = gm(group, "br_display"); g.tex = slot
+        c = np.asarray(c, float) + np.asarray(nrm, float) * .003
+        pts = [c - ex * w / 2 + up * h / 2, c + ex * w / 2 + up * h / 2, c + ex * w / 2 - up * h / 2, c - ex * w / 2 - up * h / 2]
+        vs = [g.vert(q, nrm, uv) for q, uv in zip(pts, ((0, 0), (1, 0), (1, 1), (0, 1)))]; g.quad(*vs, np.asarray(nrm, float))
+        return g, c
+
+    def mfd_unit(c, ex, up, nrm, mode, size=.34):                                          # a touch MFD: the labels on the screen's edges
+        k = len(MFD_PLACES)
+        g, c = screen(f"bridge_mfd{k}", MFD_SLOT0 + k, c, ex, up, nrm, size, size)
+        MFD_PLACES.append((c, ex, up, nrm, size, mode, g))
+
+    def display(c, ex, up, nrm, w, h):                                                    # the ship's own touch screen (pages)
+        k = len(DISP_PLACES)
+        g, c = screen(f"bridge_disp{k}", DISP_SLOT0 + k, c, ex, up, nrm, w, h)
+        DISP_PLACES.append((c, ex, up, nrm, w, h, DISP_SLOT0 + k, g))
+
+    def wall_frame(L):                                                                     # a raised panel's frame at arc length L of the tub
+        i = int(np.argmin(np.abs(plen - L)))
+        return panel_frame(i, 0)
+
+    def raise_at(L, w, h):                                                                 # backing plate on the wall, centred on the face
+        o, ex, up, nrm = wall_frame(L); c = o + up * (h / 2 + .01)
+        _fb3(tub, _Fr(c - nrm * .02, np.stack([ex, up, -nrm], axis=1)), (0, 0, 0), (w / 2 + .012, h / 2 + .012, .018))
+        return c, ex, up, nrm
+
+    iC = _tub_at_x(P, 0.0)
+    # the commander: the Orbiter MFD on the crest (touch); the holo panel on the shelf (touch, its 4 zones drawn by the module)
+    c_, ex_, up_, n_ = raise_at(plen[iC], .36, .36)
+    mfd_unit(c_, ex_, up_, n_, 1)                                                          # ORBIT
+    zS = P[iC][1]                                                                          # physical levers on the shelf
+    t15 = math.radians(15)
+    hg, hc = screen("bridge_holo_panel", HOLO_SLOT, np.array([0, F + .762, zc + zS + .2]), np.array([1.0, 0, 0]),
+                    np.array([0, math.sin(t15), math.cos(t15)]), np.array([0, math.cos(t15), -math.sin(t15)]), 1.05, .3)
+    HOLO_PLACE[:] = [(hc, np.array([1.0, 0, 0]), np.array([0, math.sin(t15), math.cos(t15)]), np.array([0, math.cos(t15), -math.sin(t15)]), 1.05, .3, HOLO_SLOT, hg)]
+    for x in (-.16, -.09):                                                                 # throttle 1, throttle 2
+        tube(metal, (x, F + .74, zc + zS + .09), (x, F + .86, zc + zS + .04), .008, n=8)
+        tube(nav, (x, F + .855, zc + zS + .045), (x, F + .89, zc + zS + .03), .018, n=12)
+    box(cons, (.025, F + .74, zc + zS + .015), (.095, F + .78, zc + zS + .105))            # the anamezon start under its guard
+    tube(metal, (.06, F + .76, zc + zS + .06), (.06, F + .85, zc + zS + .06), .008, n=8); tube(red, (.06, F + .85, zc + zS + .06), (.06, F + .875, zc + zS + .06), .016, n=12)
+    _fb3(amber, _Fr((.06, F + .80, zc + zS + .035), _Rx(-.9)), (0, 0, 0), (.04, .004, .045))
+    box(cons, (-.69, F + .735, zc + zS + .0), (-.51, F + .765, zc + zS + .2))              # attitude: RCS mode and the hand controller (left)
+    tube(cons, (-.6, F + .765, zc + zS + .1), (-.6, F + .795, zc + zS + .1), .04, n=16, r1=.03)
+    tube(metal, (-.6, F + .795, zc + zS + .1), (-.6, F + .89, zc + zS + .1), .011, n=8); tube(nav, (-.6, F + .885, zc + zS + .1), (-.6, F + .93, zc + zS + .1), .026, n=14)
+    cz = zc + BR_SEAT_AT[0][1]                                                             # the commander's fins: two own touch screens each
+    for sd in (-1, 1):                                                                     # left: mechanics, right: engineering
+        a25 = math.radians(25)                                                             # leans back 25 deg from vertical
+        nrm = np.array([-sd * math.cos(a25), math.sin(a25), 0.0]); up = np.array([0, 0, 1.0])
+        c = np.array([sd * .62, F + 1.01, cz + .36])
+        _fb3(tub, _Fr(c - nrm * .015, np.stack([np.cross(up, nrm), nrm, up], axis=1)), (0, 0, 0), (.28, .0125, .46))
+        u_ = np.array([sd * math.sin(a25), math.cos(a25), 0.0])
+        for j in (0, 1):                                                                   # rear / front screen (0.3 x 0.3)
+            display(c + nrm * .016 + u_ * .04 + up * ((j - .5) * .4), np.array([0, 0, -sd * 1.0]), u_, nrm, .3, .3)
+        _coll("bridge", (min(sd * .48, sd * .76), F + .7, cz - .1), (max(sd * .48, sd * .76), F + 1.3, cz + .82))
+    # the engineer (starboard): the five sections of UPPER along the tub, MAIN-drive / pods strip on the shelf;
+    # the mechanic (port): the four sections of LOWER. Centred on the seat's own bay.
+    UP_SECT = [(10, 6, 338, 398), (342, 6, 630, 398), (638, 6, 910, 398), (918, 6, 1206, 398), (1214, 6, 1592, 398)]
+    LO_SECT = [(10, 1486, 346, 1874), (350, 1486, 706, 1874), (714, 1486, 1024, 1874), (1034, 1486, 1592, 1874)]
+    for sd, pid, sects, centre in ((1, 1, UP_SECT, 2), (-1, 2, LO_SECT, 2)):
+        Lc = plen[_tub_at_x(P, sd * 1.45)]
+        ws = [(r[2] - r[0]) * PXM for r in sects]; gap = .025
+        Ls = []; acc = 0.0
+        for w in ws: Ls.append(acc + w / 2); acc += w + gap
+        shift = Lc - Ls[centre]
+        for r, L in zip(sects, Ls):
+            L = L + shift if sd > 0 else Lc - (L - Ls[centre])                              # outward along the tub on both sides
+            c_, ex_, up_, n_ = raise_at(L, (r[2] - r[0]) * PXM, (r[3] - r[1]) * PXM)
+            piece(pid, r, c_, ex_, up_, n_)
+    Lc = plen[_tub_at_x(P, 1.45)]                                                          # UPPER's bottom strip (march drives, pods) on the shelf
+    for rect, dL in (((10, 402, 645, 456), -.36), ((650, 402, 1135, 456), .22), ((1136, 402, 1592, 456), .70)):
+        i = int(np.argmin(np.abs(plen - (Lc + dL)))); t15 = math.radians(15)
+        inward = np.array([N[i][0], 0.0, N[i][1]]); ex = np.cross(np.array([0, 1.0, 0]), -inward)
+        up = -inward * math.cos(t15) + np.array([0, 1.0, 0]) * math.sin(t15); nrm = np.cross(up, ex)
+        if nrm[1] < 0: nrm = -nrm
+        piece(1, rect, tp(i, _tub_d(P, i) * .5, .765), ex, up, nrm)
+    # the navigator: his own small desk with his MFD unit, in front of his seat (the seat runs to it)
+    nsx, nsz = BR_SEAT_AT[3][0], zc + BR_SEAT_AT[3][1]
+    box(cons, (nsx - .45, F, nsz + .47), (nsx + .45, F + .7, nsz + .77)); box(nav, (nsx - .47, F + .7, nsz + .44), (nsx + .47, F + .75, nsz + .8))
+    _coll("bridge", (nsx - .47, F, nsz + .44), (nsx + .47, F + .75, nsz + .8))
+    nn = np.array([0, .45, -.9]); nn /= np.linalg.norm(nn)
+    mfd_unit(np.array([nsx, F + .93, nsz + .66]), np.array([1.0, 0, 0]), np.cross(nn, np.array([1.0, 0, 0])) * -1, nn, 9, .3)   # TRANSFER
     # navigation table with the holo-projector emitter ring and the control zone in front of the navigator
     nx, nz = BR_NAV_X, zc + BR_NAV_DZ
     tube(nav, (nx, BR_FLOOR_Y, nz), (nx, BR_FLOOR_Y + .9, nz), .8, n=32, r1=.62)
@@ -2342,19 +3079,16 @@ def build_bridge():
     for k in range(9):
         a = math.pi + (k + .5) / 9 * math.pi; box(leds, (nx + math.cos(a) * .7 - .03, BR_FLOOR_Y + .95, nz + math.sin(a) * .7 - .03), (nx + math.cos(a) * .7 + .03, BR_FLOOR_Y + .99, nz + math.sin(a) * .7 + .03))
     _coll("bridge", (nx - .62, BR_FLOOR_Y, nz - .62), (nx + .62, BR_FLOOR_Y + 1.0, nz + .62))           # the round table: no corners
-    for sx, sz, ac, ct in BR_SEATS:
+    for G, (sx, sz, ac, ct) in zip(GS, BR_SEATS):
         _bridge_seat(G, sx, sz, ac, ct)
     # horn of the receiver, edge up-lights and the long glass strip with a line of light on the port end
-    tube(metal, (-2.8, BR_FLOOR_Y + 1.05, zc + 1.9), (-2.95, BR_FLOOR_Y + 1.15, zc + 1.75), .05, n=14, r1=.17)
+    tube(metal, (-2.75, BR_FLOOR_Y + 1.15, zc + 1.3), (-2.9, BR_FLOOR_Y + 1.25, zc + 1.15), .05, n=14, r1=.17)   # on the port deck of the tub
     box(leds, (-BR_HX + .09, BR_FLOOR_Y + .1, zc - 4.3), (BR_HX - .09, BR_FLOOR_Y + .14, zc - 4.22)); box(leds, (-BR_HX + .09, BR_FLOOR_Y + .1, zc + 4.22), (BR_HX - .09, BR_FLOOR_Y + .14, zc + 4.3))
     # (below the side zone of the screen and the astronomer's screen: they cover the wall from floor + 0.7 up)
     box(nav, (-BR_HX + .02, BR_FLOOR_Y + .38, zc - 1.9), (-BR_HX + .1, BR_FLOOR_Y + .64, zc + 1.1)); box(leds, (-BR_HX + .1, BR_FLOOR_Y + .48, zc - 1.8), (-BR_HX + .13, BR_FLOOR_Y + .53, zc + 1.0))
     _coll("bridge", (-BR_HX - .2, BR_FLOOR_Y, zc - 5), (-BR_HX + .1, BR_FLOOR_Y + 3, zc + 5))
-    dz0, dz1 = zs(BR_DOOR_S) - BR_DOOR_HW, zs(BR_DOOR_S) + BR_DOOR_HW                # the starboard end: open at the door
-    _coll("bridge", (BR_HX - .1, BR_FLOOR_Y, zc - 5), (BR_HX + .2, BR_FLOOR_Y + 3, dz0))
-    _coll("bridge", (BR_HX - .1, BR_FLOOR_Y, dz1), (BR_HX + .2, BR_FLOOR_Y + 3, zc + 5))
-    _coll("bridge", (BR_HX - .1, BR_DOOR_YC + BR_DOOR_BT, dz0), (BR_HX + .2, BR_FLOOR_Y + 3, dz1))
-    return [shell, floor] + scr + [astro] + [cons, leds, green, red, amber, nav, metal, G["seat"], G["cush"], G["met"], G["belt"], G["acc"], btn_on, btn_off, mfd, door, door_glow]
+    _coll("bridge", (BR_HX - .1, BR_FLOOR_Y, zc - 5), (BR_HX + .2, BR_FLOOR_Y + 3, zc + 5))
+    return [shell, floor] + scr + [astro] + [cons, leds, green, red, amber, nav, metal, btn_on, btn_off, mfd, door, door_glow, tface, mfd_off, holo, tub, panels] + [m[6] for m in MFD_PLACES] + [d[7] for d in DISP_PLACES] + [HOLO_PLACE[0][7]] + [G[k] for G in GS for k in ("seat", "cush", "met", "belt", "acc")]
 
 
 def build_interior():
@@ -2454,17 +3188,31 @@ def build_interior():
             slab_z(g, z1, xc - hx, xc + hx, 5.5, 7.5, c["s1"])
         elif c["key"] in ("crew_deck", "lab_deck"):
             dk = "U" if c["key"] == "crew_deck" else "L"
+            def _cuts(sa, sb, xlo, xhi):                    # the upper deck: pieces cut at the edges of the way to the lift (own materials)
+                if dk != "U":
+                    return [(sa, sb, xlo, xhi)]
+                ss = [sa] + [v for v in (127.4, 130.6) if sa < v < sb] + [sb]
+                xs = [xlo] + [v for v in (-6.85, -1.0, 1.0) if xlo < v < xhi] + [xhi]
+                return [(a, b, c_, d) for a, b in zip(ss[:-1], ss[1:]) for c_, d in zip(xs[:-1], xs[1:])]
             for sa, sb, xlo, xhi in _deck_extents(dk):
-                slab_y(gf, c["y0"], xlo, xhi, zs(sa), zs(sb))
+                for a, b, c_, d in _cuts(sa, sb, xlo, xhi):
+                    slab_y(gf, c["y0"], c_, d, zs(a), zs(b))
             for sa, sb, xlo, xhi in _deck_extents(dk, True):
-                slab_y(gc, c["y1"], xlo, xhi, zs(sa), zs(sb), dy=-0.075)      # ceiling hangs below the plane: no face shares the floor above
+                for a, b, c_, d in _cuts(sa, sb, xlo, xhi):
+                    slab_y(gc, c["y1"], c_, d, zs(a), zs(b), dy=-0.075)      # ceiling hangs below the plane: no face shares the floor above
             for zz, sp, send in ((z0, c["s0"], D_S0), (z1, c["s1"], D_S1)):  # end walls as wide as the end rooms at each height
                 ya = c["y0"]
                 while ya < c["y1"] - 1e-6:
                     yb_ = min(c["y1"], ya + 0.5)
                     ym = 0.5 * (ya + yb_)
                     ends = [_room_x_at(r_, ym) for r_ in ROOMS if r_["deck"] == dk and (abs(r_["s0"] - send) < 0.02 or abs(r_["s1"] - send) < 0.02)]
-                    slab_z(g, zz, min(e[0] for e in ends), max(e[1] for e in ends), ya, yb_, sp)
+                    # the forward end wall of the living deck is set 7 cm back: the bridge door frame stands 5 mm in front of it (no z-fighting)
+                    xe0, xe1 = min(e[0] for e in ends), max(e[1] for e in ends)
+                    if dk == "U" and send == D_S1:                 # the corridor's part of the forward wall on its own (the way to the lift)
+                        for a, b in ((xe0, -1.0), (-1.0, 1.0), (1.0, xe1)):
+                            slab_z(g, zz + 0.07, a, b, ya, yb_, sp)
+                    else:
+                        slab_z(g, zz + (0.07 if send == D_S1 else 0.0), xe0, xe1, ya, yb_, sp)
                     ya = yb_
         else:
             slab_y(gf, c["y0"], xc - hx, xc + hx, z0, z1)
@@ -2474,23 +3222,15 @@ def build_interior():
             if c["key"] in ("airlock", "keel_bay", "tech_link"):
                 for sgn in (-1, 1):
                     slab_x(g, xc + sgn * hx, z0, z1, c["y0"], c["y1"])
-            if c["key"] == "bridge_access":
-                slab_x(g, xc + hx, z0, z1, c["y0"], c["y1"])
-                xw, dz0, dz1, top = xc - hx, zs(BR_DOOR_S) - BR_DOOR_HW, zs(BR_DOOR_S) + BR_DOOR_HW, BR_DOOR_YC + BR_DOOR_BT
-                slab_x(g, xw, z0, dz0, c["y0"], c["y1"]); slab_x(g, xw, dz1, z1, c["y0"], c["y1"])   # the inner wall round the bridge door
-                slab_x(g, xw, dz0, dz1, top, c["y1"])
-
-                def _rect(cz, cy, ux, uy):                                          # the doorway's bounding rectangle
-                    tz = (BR_DOOR_HW / abs(ux)) if abs(ux) > 1e-9 else 1e9
-                    ty = ((top - cy) / uy) if uy > 1e-9 else (((BR_FLOOR_Y - cy) / uy) if uy < -1e-9 else 1e9)
-                    return min(tz, ty)
-                _plate_hole(g, xw - .02, _door_outline(), _rect, (1.0, 0.0, 0.0), rings=1)   # the corners of the arch
-                box(gf, (BR_HX - .15, c["y0"] - .06, dz0), (xw + .05, c["y0"], dz1))            # the sill: floor through the sleeve
         out.append(g)                                         # (the group order is a contract with the module: new groups go to the end)
         extra += [x_ for x_ in (gf, gc) if x_.v]
     out += build_rooms()
     out += extra
     obox, tube = _orig_obox, _orig_tube
+    out += _split_path(out)                                   # dim surfaces of the way to the lift (new groups: at the end)
+    out += [x_ for x_ in build_watch() if x_.v]               # watch lamps and the light decals, drawn last
+    out += LIFT_BTN                                           # the lift panel's button caps (the module switches them)
+    out += build_lift_groups()                                # door B leaves, the cabin's panel, screen and caps (moved by the module)
     return out
 
 
@@ -2518,6 +3258,7 @@ GROUPS = (["hull", "shoulder", "nose", "spine", "fin", "fin_upper", "crest_port"
           + [f"lift{c}_heads" for c in range(2)] + [f"lift{c}_m{i}" for c in range(2) for i in range(LIFT_N)]
           + ["nose_ana", "ana_feed", "ana_buffer", "nose_screen", "nose_screen_core", "nose_mirror"]
           + ["airlock_arm1", "airlock_arm2", "airlock_arm3", "airlock_arm4", "airlock_platform", "airlock_glass", "airlock_mast", "airlock_foot"]
+          + ["airlock_cab_frame", "airlock_cab_lining", "airlock_cab_light", "airlock_cab_beacon"]
 )
 
 
@@ -2710,7 +3451,11 @@ def build():
     hs0, hs1 = HANGAR_S
     Wh, Hh = wh_at(HANGAR_REF_S)
     y_ch = -(FL - 0.233) * Hh
-    box(hi, (-Wh + 1.2, y_ch + 5.6, zs(hs0 + 0.5)), (Wh - 1.2, y_ch + 6.0, zs(hs1 - 0.5)))          # ceiling frame
+    # ceiling frame: as wide as the hull at its own height allows (at the chine width it stuck 0.9 m out of the flanks)
+    _us = np.linspace(0.0, 1.0, 1201)
+    _wf = min(max(abs(q[0]) for q in (hull_xy(sf, u) for u in _us) if y_ch + 5.5 <= q[1] <= y_ch + 6.1)
+              for sf in np.linspace(hs0 + 0.5, hs1 - 0.5, 9)) - 0.3
+    box(hi, (-_wf, y_ch + 5.6, zs(hs0 + 0.5)), (_wf, y_ch + 6.0, zs(hs1 - 0.5)))
     g = grp("shuttle", "mechanism")                                                                 # docking cradle
     for z0 in (hs0 + 3.0, hs1 - 5.0):
         box(g, (-2.5, y_ch - 1.6, zs(z0)), (2.5, y_ch - 1.2, zs(z0 + 2.0)))
@@ -2741,13 +3486,41 @@ def build():
     for za, zb in ((z0, zl - 0.65), (zl + 0.65, z1)):                                                # hull-side wall round the door
         box(gpl, (x1 - 0.08, CAB_Y0, za), (x1, CAB_Y1, zb))
     box(gpl, (x1 - 0.08, CAB_Y0 + 2.2, zl - 0.65), (x1, CAB_Y1, zl + 0.65))
-    box(gpl, (x1 - 0.05, CAB_Y0 + 0.12, zl - 0.62), (x1 + 0.02, CAB_Y0 + 2.2, zl + 0.62))           # door leaf (shut)
+    box(gpl, (x1 - 0.13, CAB_Y0 + 0.12, zl + 0.66), (x1 - 0.09, CAB_Y0 + 2.2, zl + 1.4))            # door leaf slid open (2026-10-03: the lift zone is the lock, the cabin is open to it)
     for yy in (1.5, 3.2):                                                                            # guide shoes on the mast
         box(gpl, (LOCK_MAST_X - 0.32, yy - 0.15, zl - 0.32), (x0, yy + 0.15, zl + 0.32))
-    gw = grp("airlock_glass", "planetary_cup")                                                       # glazing band, all round
-    box(gw, (x0 - 0.02, 2.15, z0 + 0.25), (x0 + 0.02, 2.95, z1 - 0.25))
-    for zz in (z0 - 0.02, z1 - 0.02):
-        box(gw, (x0 + 0.25, 2.15, zz), (x1 - 0.25, 2.95, zz + 0.04))
+    # volume (user 2026-10-03: no windows; textures, light and volume): outside a frame - corner posts, roof and base rims, ribs,
+    # the door frame; inside a lining, hand rails, a floor plate and a ceiling light; amber beacons on the roof edges
+    gw = grp("airlock_glass", "engine_metal")                                                        # (name kept: the rig moves it) base plinth
+    box(gw, (x0 - 0.05, CAB_Y0 - 0.06, z0 - 0.05), (x1 + 0.02, CAB_Y0 + 0.1, z1 + 0.05))
+    gfr = grp("airlock_cab_frame", "mechanism")
+    for xc_, zc_ in ((x0, z0), (x0, z1), (x1, z0), (x1, z1)):                                        # corner posts
+        box(gfr, (xc_ - 0.07, CAB_Y0, zc_ - 0.07), (xc_ + (0.02 if xc_ == x1 else 0.07), CAB_Y1 + 0.04, zc_ + 0.07))
+    box(gfr, (x0 - 0.06, CAB_Y1 - 0.14, z0 - 0.06), (x1 + 0.02, CAB_Y1 + 0.06, z0 + 0.06))         # roof rim
+    box(gfr, (x0 - 0.06, CAB_Y1 - 0.14, z1 - 0.06), (x1 + 0.02, CAB_Y1 + 0.06, z1 + 0.06))
+    box(gfr, (x0 - 0.06, CAB_Y1 - 0.14, z0), (x0 + 0.02, CAB_Y1 + 0.06, z1))
+    for zr in np.linspace(z0 + 0.6, z1 - 0.6, 4):                                                    # ribs on the outboard wall
+        box(gfr, (x0 - 0.04, CAB_Y0 + 0.1, zr - 0.04), (x0, CAB_Y1 - 0.14, zr + 0.04))
+    for xr in np.linspace(x0 + 0.45, x1 - 0.45, 2):                                                  # ribs on the end walls
+        for zz in (z0 - 0.04, z1):
+            box(gfr, (xr - 0.04, CAB_Y0 + 0.1, zz), (xr + 0.04, CAB_Y1 - 0.14, zz + 0.04))
+    for za, zb in ((zl - 0.75, zl - 0.65), (zl + 0.65, zl + 0.75)):                                  # the door frame (hull side)
+        box(gfr, (x1 - 0.1, CAB_Y0 + 0.1, za), (x1 + 0.02, CAB_Y0 + 2.3, zb))
+    box(gfr, (x1 - 0.1, CAB_Y0 + 2.2, zl - 0.75), (x1 + 0.02, CAB_Y0 + 2.3, zl + 0.75))
+    gli = grp("airlock_cab_lining", "in_metal_w")
+    box(gli, (x0 + 0.08, CAB_Y0 + 0.12, z0 + 0.08), (x1 - 0.08, CAB_Y0 + 0.14, z1 - 0.08))         # floor plate
+    box(gli, (x0 + 0.08, CAB_Y0 + 0.14, z0 + 0.08), (x0 + 0.12, CAB_Y0 + 1.0, z1 - 0.08))          # lower lining
+    for zz in (z0 + 0.08, z1 - 0.12):
+        box(gli, (x0 + 0.08, CAB_Y0 + 0.14, zz), (x1 - 0.08, CAB_Y0 + 1.0, zz + 0.04))
+    box(gli, (x0 + 0.16, CAB_Y0 + 1.0, z0 + 0.25), (x0 + 0.2, CAB_Y0 + 1.06, z1 - 0.25))            # hand rails at hip height
+    for zz in (z0 + 0.16, z1 - 0.2):
+        box(gli, (x0 + 0.25, CAB_Y0 + 1.0, zz), (x1 - 0.25, CAB_Y0 + 1.06, zz + 0.04))
+    box(gli, (x0 + 0.08, CAB_Y1 - 0.2, z0 + 0.08), (x1 - 0.08, CAB_Y1 - 0.12, z1 - 0.08))         # ceiling
+    gla = grp("airlock_cab_light", "in_light")
+    box(gla, (x0 + 0.6, CAB_Y1 - 0.23, z0 + 0.4), (x1 - 0.6, CAB_Y1 - 0.2, z1 - 0.4))              # the ceiling light
+    gbe = grp("airlock_cab_beacon", "in_amber")
+    for zz in (z0 - 0.07, z1 + 0.05):                                                                # amber beacons on the roof rims
+        box(gbe, (x0 + 0.3, CAB_Y1 + 0.06, zz), (x1 - 0.3, CAB_Y1 + 0.1, zz + 0.02))
     yb_ = 2.9 - (LOCK_DROP + 2.0)                                                                    # the mast and foot are built extended
     # the mast is built as a 0.5 m stub under the arm head and stretched down (a root scaling: Orbiter 2016 crashes on a
     # scaling child), carried out with the arm by its own root translation (y-scaling about y 2.9 and an x shift commute)
@@ -2793,9 +3566,22 @@ def build():
     yb = -FL * wh_at(S_FAIR)[1]
     for sgn in (-1, 1):
         for xw in (BAY_X0, BAY_X1 - 0.15):
-            box(g, (sgn * xw - 0.15, yb, zs(BAY_S0)), (sgn * xw + 0.15, yb + 6.0, zs(BAY_S1)))
+            # metre by metre on the skin of its own section: aft of s 40 the belly rises towards the stern clover
+            # (one box from the s 50 belly stuck up to 1.7 m out under the stern)
+            _ss = list(np.arange(BAY_S0, BAY_S1, 1.0)) + [BAY_S1]
+            for sa, sb in zip(_ss[:-1], _ss[1:]):
+                _sk = [q[1] for sm in (sa, sb) for q in (hull_xy(sm, u) for u in np.linspace(0.0, 1.0, 801))
+                       if abs(abs(q[0]) - xw) <= 0.3 and q[1] < 0.0]
+                _ya = max(yb, max(_sk) + 0.15) if _sk else yb
+                if _ya < yb + 6.0 - 0.3:                                      # where the skin is higher, no wall is needed
+                    box(g, (sgn * xw - 0.15, _ya, zs(sa)), (sgn * xw + 0.15, yb + 6.0, zs(sb)))
         for s_end in (BAY_S0, BAY_S1):
-            box(g, (min(sgn * BAY_X0, sgn * BAY_X1), yb + 0.1, zs(s_end) - 0.15), (max(sgn * BAY_X0, sgn * BAY_X1), yb + 6.0, zs(s_end) + 0.15))
+            # end walls stand on the skin of their own section (at s 20.4 the belly is already higher: it stuck 1.6 m out)
+            _sk = [q for q in (hull_xy(s_end, u) for u in np.linspace(0.0, 1.0, 1201)) if BAY_X0 <= abs(q[0]) <= BAY_X1 and q[1] < 0.0]
+            _y0 = max(yb + 0.1, max(q[1] for q in _sk) + 0.05 if _sk else yb + 0.1)
+            _xs = [abs(q[0]) for q in (hull_xy(s_end, u) for u in np.linspace(0.0, 1.0, 1201)) if _y0 <= q[1] <= yb + 6.0]
+            _xw = min(BAY_X1, min(_xs) - 0.2) if _xs else BAY_X1                      # and no wider than the skin there
+            box(g, (min(sgn * BAY_X0, sgn * _xw), _y0, zs(s_end) - 0.15), (max(sgn * BAY_X0, sgn * _xw), yb + 6.0, zs(s_end) + 0.15))
     for side in SIDES:
         patch(grp(f"bay_door_{side}", "nose_iridium"), OPEN[f"bay_{side}"], back=0.3)
     for i, (x, y) in enumerate(TRAP_XY):
@@ -2812,7 +3598,10 @@ def build():
             g = grp(f"lift{c}_m{i}", "band")
             w = 1.1 - 0.06 * i
             for sh in HEAD_S:
-                tube(g, (xc, LIFT_CEIL, zs(sh)), (xc, LIFT_CEIL - LIFT_SEG, zs(sh)), w / 2 * math.sqrt(2), n=4)
+                # top under the skin of its own section (the ends of the columns sit lower than at s 50)
+                _top = [q[1] for q in (hull_xy(sh, u) for u in np.linspace(0.0, 1.0, 1201)) if abs(abs(q[0]) - abs(xc)) <= 0.8 and q[1] > 0.0]
+                yc_ = min(LIFT_CEIL, (min(_top) - 0.3 - w / 2) if _top else LIFT_CEIL)
+                tube(g, (xc, yc_, zs(sh)), (xc, yc_ - LIFT_SEG, zs(sh)), w / 2 * math.sqrt(2), n=4)
 
     # ---- stern legs (reference: stowed aft on the nacelle sides over their heat shields; umbrella open at the ankle)
     g = grp("leg_hinges", "nose_iridium")
@@ -2850,7 +3639,7 @@ def build():
         patch(g, OPEN[n], back=0.2)
     g = grp("kang_thigh", "band")
     obox(g, K + np.array([0, 0, -KANG_THIGH_L / 2 - 0.75]), (1, 0, 0), (0, 1, 0), (0, 0, 1), KANG_THIGH_W / 2, KANG_THIGH_W / 2, KANG_THIGH_L / 2 - 0.75)
-    obox(g, K + np.array([0, 0, -0.8]), (1, 0, 0), (0, 1, 0), (0, 0, 1), KANG_THIGH_W / 2, 0.85, 0.8)   # neck into the hip drum (swings inside the pocket end)
+    obox(g, K + np.array([0, 0, -0.8]), (1, 0, 0), (0, 1, 0), (0, 0, 1), KANG_THIGH_W / 2, 0.6, 0.8)    # neck inside the hip drum radius (swings inside the pocket end)
     tube(g, K - np.array([1.6, 0, 0]), K + np.array([1.6, 0, 0]), 0.9, n=16)                      # hip drum
     Kn = K + np.array([0, 0, -KANG_THIGH_L])                                                      # knee axis
     tube(g, Kn + np.array([-0.3, 0, 0]), Kn + np.array([KANG_KNEE_DX + 0.8, 0, 0]), 0.8, n=16)     # knee fork pin
@@ -2939,7 +3728,8 @@ def rig(legs):
                                                   np.array([1.0, LOCK_MAST_FULL / LOCK_MAST_STUB, 1.0])))             # root: stub -> ground
     add("airlock_mast", "tr", ["airlock_foot"], np.array([0, -(LOCK_MAST_FULL - LOCK_MAST_STUB), 0]), parent=ao_)   # stays at the mast's end
     add("airlock_down", "tr", ["airlock_platform"], np.array([0, -LOCK_DROP, 0]), parent=ao_)
-    add("airlock_down", "tr", ["airlock_glass"], np.array([0, -LOCK_DROP, 0]), parent=ao_)
+    for g_ in ("airlock_glass", "airlock_cab_frame", "airlock_cab_lining", "airlock_cab_light", "airlock_cab_beacon"):
+        add("airlock_down", "tr", [g_], np.array([0, -LOCK_DROP, 0]), parent=ao_)
     add("rover_lift", "tr", ["rover_platform"], np.array([0, (-AXIS_H + 0.25) - (-FL * wh_at(HANGAR_REF_S)[1] + 0.25), 0]))
     for side, sgn in (("port", -1), ("starboard", 1)):
         T = np.array([sgn * HIP_X_OUT, 0.0, zs(CAR_SREF)])
@@ -3076,11 +3866,50 @@ def write_json(groups, path):
         json.dump(data, f)
 
 
+def _tex_slot(name):
+    """Texture slot (1-based, appended after the 7 screens) of an interior group: 8 floor, 9 wall, 10 ceiling, 11 hazard trim, 12 metal."""
+    if name.startswith(("bridge", "command_bridge")) and not name.startswith("bridge_access"):
+        return 0
+    if name.endswith("_floor"):
+        return 8
+    if name.endswith("_ceil") or name.startswith("ceil_"):
+        return 10
+    if name.startswith("trim_"):
+        return 11
+    if name.startswith("metal_"):
+        return 12
+    if name.startswith(("walls_", "crew_deck", "lab_deck", "airlock", "tech_", "hangar_lock", "keel_bay", "bridge_access")):
+        return 9
+    return 0
+
+
+def _uv_project(groups, m_per_tile=2.0):
+    for g in groups:
+        k = _tex_slot(g.name)
+        if not k or not g.v:
+            continue
+        g.tex = k
+        g.uv = []
+        for p, n in zip(g.v, g.n):
+            ax = int(np.argmax(np.abs(n)))
+            if ax == 1:
+                u, v = p[0], p[2]
+            elif ax == 0:
+                u, v = p[2], -p[1]
+            else:
+                u, v = p[0], -p[1]
+            g.uv.append((u / m_per_tile, v / m_per_tile))
+
+
 def write_msh(groups, path, textures=()):
     with open(path, "w", newline="\r\n") as f:
         f.write("MSHX1\n")
         f.write(f"GROUPS {len(groups)}\n")
         for g in groups:
+            if not g.v:                                       # an empty group crashes D3D9Client on loading: one degenerate triangle keeps
+                for _ in range(3):                            # the group (its index is a contract with the module) and draws nothing
+                    g.vert((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0) if getattr(g, "tex", 0) else None)
+                g.t.append((0, 1, 2))
             f.write(f"LABEL {g.name}\nMATERIAL {g.material}\nTEXTURE {getattr(g, 'tex', 0)}\n")
             f.write(f"GEOM {len(g.v)} {len(g.t)} ;{g.name}\n")
             has_uv = len(getattr(g, "uv", ())) == len(g.v) and len(g.v) > 0
@@ -3094,8 +3923,9 @@ def write_msh(groups, path, textures=()):
             f.write(m[0] + "\n")
         for name, dif, spec, emi in MATERIALS:
             f.write(f"MATERIAL {name}\n")
-            f.write("{:.3f} {:.3f} {:.3f} 1\n".format(*dif))
-            f.write("{:.3f} {:.3f} {:.3f} 1\n".format(*dif))
+            al = dif[3] if len(dif) > 3 else 1.0                       # alpha: glass
+            f.write("{:.3f} {:.3f} {:.3f} {:.2f}\n".format(dif[0], dif[1], dif[2], al))
+            f.write("{:.3f} {:.3f} {:.3f} {:.2f}\n".format(dif[0], dif[1], dif[2], al))
             f.write("{:.3f} {:.3f} {:.3f} 1 {:.0f}\n".format(*spec))
             f.write("{:.3f} {:.3f} {:.3f} 1\n".format(*emi))
         f.write(f"TEXTURES {len(textures)}\n")
@@ -3401,6 +4231,7 @@ def write_interior_layout(path, vc_groups=()):
     w_s, w_f = split(lambda t: t != "bridge")
     b_s, b_f = split(lambda t: t == "bridge")
     b_f.append(((-BR_HX, BR_FLOOR_Y - 0.06, zs(BR_S) - BR_FZ), (BR_HX, BR_FLOOR_Y, zs(BR_S) + BR_FZ)))
+    b_f.append(((-BR_DOOR_HW, BR_FLOOR_Y - 0.06, BR_DOOR_ZW - 0.3), (BR_DOOR_HW, BR_FLOOR_Y, zs(BR_S) - BR_FZ + 0.05)))   # the sill to the vestibule
     L = ["// Generated by tools/gen_mesh.py: collision data of the interior (mesh frame, metres).",
          "#pragma once", "namespace tantra::interior {", "struct Box { float x0, y0, z0, x1, y1, z1; };"]
 
@@ -3446,16 +4277,72 @@ def write_interior_layout(path, vc_groups=()):
     gi = {g.name: i for i, g in enumerate(vc_groups)}
     L.append("// TantraVC.msh: the centre zone of the screen (the Orbiter MFD is drawn on it), the lamps of the screen button and its position")
     L.append("// The big screen: per zone (left, centre, right) the camera yaw (to starboard), pitch, vertical fov (deg), width/height")
-    L.append("// the bridge door (starboard end disc of the capsule): centre z, half width, top; the sleeve runs to x kDoorX1")
-    L.append("constexpr double kDoorZ = %.3f, kDoorHalfW = %.3f, kDoorTop = %.3f, kDoorX1 = %.3f;" % (zs(BR_DOOR_S), BR_DOOR_HW, BR_DOOR_YC + BR_DOOR_BT, BR_DOOR_X1 + 0.3))
+    L.append("// the bridge door: at the back of the capsule on the centre line (x 0); half width, top; one may go back to z kDoorZ1")
+    L.append("constexpr double kDoorHalfW = %.3f, kDoorTop = %.3f, kDoorZ1 = %.3f;" % (BR_DOOR_HW, BR_DOOR_YC + BR_DOOR_BT, BR_DOOR_ZW - 0.3))
     L.append("// where a person arrives inside from the lift (the airlock cell), facing inboard")
-    L.append("constexpr double kArrivalX = %.3f, kArrivalY = %.3f, kArrivalZ = %.3f;" % (-8.1, CAB_Y0, zs(AIRLOCK_S)))
+    L.append("constexpr double kArrivalX = %.3f, kArrivalY = %.3f, kArrivalZ = %.3f;" % ((LOCK_X0 + LOCK_X1) / 2, CAB_Y0 + 0.12, zs(AIRLOCK_S)))
+    L.append("// the lift cabin (stowed): x range, floor top, roof, half length along z, centre z, hull-side door half width; the lift panel: x of the 3 buttons")
+    L.append("// (1 suit checks, 2 pressure equalisation, 3 lift), floor y and z of the wall they sit on")
+    L.append("constexpr double kCabX0 = %.3f, kCabX1 = %.3f, kCabFloor = %.3f, kCabRoof = %.3f, kCabHz = %.3f, kCabZ = %.3f, kCabDoorHw = 0.65;" % (LOCK_X0, LOCK_X1, CAB_Y0 + 0.12, CAB_Y1, CAB_HZ, zs(AIRLOCK_S)))
+    L.append("constexpr double kPanelBtnX[3] = {%.3f, %.3f, %.3f}, kPanelBtnY = %.3f, kPanelBtnZ = %.3f;" % (PANEL_X + (U_Y0 + 0.075, zs(130.6 - 0.14))))
+    L.append("constexpr double kPanelBtnCY = %.3f, kPanelBtnCZ = %.3f;   // the button caps: centre height, front (mouse pick)" % tuple(PANEL_BTN))
+    gi2 = {g.name: i for i, g in enumerate(vc_groups)}
+    L.append("// the panel pieces on the console: 2D panel id, texture rect (px of panel.dds), centre, right, up, normal, size (m)")
+    L.append("struct PanelPiece { int panel; int tx0, ty0, tx1, ty1; double c[3], ex[3], up[3], n[3], w, h; };")
+    L.append("constexpr unsigned kPanelSlot = %du; constexpr int kPanelPieceCount = %d;" % (PANEL_SLOT, len(PANEL_PIECES)))
+    L.append("constexpr PanelPiece kPanelPieces[%d] = {" % max(1, len(PANEL_PIECES)) + ", ".join(
+        "{%d, %d, %d, %d, %d, {%.4f, %.4f, %.4f}, {%.4f, %.4f, %.4f}, {%.4f, %.4f, %.4f}, {%.4f, %.4f, %.4f}, %.4f, %.4f}" %
+        ((pp[0],) + tuple(pp[1]) + tuple(pp[2]) + tuple(pp[3]) + tuple(pp[4]) + tuple(pp[5]) + (pp[6], pp[7])) for pp in PANEL_PIECES) + "};")
+    L.append("// touch screens: the commander's own screens (4: left rear, left front, right rear, right front) and the holo panel")
+    L.append("struct TouchPlace { double c[3], ex[3], up[3], n[3], w, h; unsigned slot; };")
+    L.append("constexpr int kDispCount = %d;" % len(DISP_PLACES))
+    L.append("constexpr TouchPlace kDisp[%d] = {" % max(1, len(DISP_PLACES)) + ", ".join(
+        "{{%.4f, %.4f, %.4f}, {%.4f, %.4f, %.4f}, {%.4f, %.4f, %.4f}, {%.4f, %.4f, %.4f}, %.4f, %.4f, %du}" %
+        (tuple(d[0]) + tuple(d[1]) + tuple(d[2]) + tuple(d[3]) + (d[4], d[5], d[6])) for d in DISP_PLACES) + "};")
+    hp = HOLO_PLACE[0]
+    L.append("constexpr TouchPlace kHolo = {{%.4f, %.4f, %.4f}, {%.4f, %.4f, %.4f}, {%.4f, %.4f, %.4f}, {%.4f, %.4f, %.4f}, %.4f, %.4f, %du};" %
+             (tuple(hp[0]) + tuple(hp[1]) + tuple(hp[2]) + tuple(hp[3]) + (hp[4], hp[5], hp[6])))
+    L.append("// the bridge MFDs (touch, square): centre, right, up, normal (interior frame), size (m), texture slot, mode")
+    L.append("struct MfdPlace { double c[3], ex[3], up[3], n[3], s; unsigned slot; int mode; };")
+    L.append("constexpr int kMfdCount = %d;" % len(MFD_PLACES))
+    L.append("constexpr MfdPlace kMfd[%d] = {" % max(1, len(MFD_PLACES)) + ", ".join(
+        "{{%.4f, %.4f, %.4f}, {%.4f, %.4f, %.4f}, {%.4f, %.4f, %.4f}, {%.4f, %.4f, %.4f}, %.3f, %du, %d}" %
+        (tuple(m[0]) + tuple(m[1]) + tuple(m[2]) + tuple(m[3]) + (m[4], MFD_SLOT0 + k, m[5])) for k, m in enumerate(MFD_PLACES)) + "};")
+    L.append("constexpr unsigned kLiftStatusSlot = 21u;   // the status screen's texture slot in TantraVC (drawn by the module)")
+    L.append("constexpr int kLiftBtnLit[3] = {%s}, kLiftBtnDim[3] = {%s};   // TantraVC groups of the caps" %
+             (", ".join(str(gi2.get(f"lift_btn{k}_lit", -1)) for k in range(3)), ", ".join(str(gi2.get(f"lift_btn{k}_dim", -1)) for k in range(3))))
+    L.append("// the lift: door B (two leaves, built open, each slides kDoorBTravel to the middle: a -> +z, b -> -z), its half width;")
+    L.append("// the cabin's panel: the groups that ride with the cabin, the caps (DOWN, UP, OUT) lit / dim and their fronts (stowed), the screen's slot")
+    L.append("constexpr int kDoorBGroups[4] = {%s}; constexpr double kDoorBTravel = %.3f, kDoorBHw = %.3f;" %
+             (", ".join(str(gi2.get(n_, -1)) for n_ in ("lift_doorB_a", "lift_doorB_a_edge", "lift_doorB_b", "lift_doorB_b_edge")), DOORB_HW, DOORB_HW))
+    cabg = [n_ for n_ in ("cab_panel", "cab_screen", "cab_metal") + tuple(f"cab_btn{k}_{w}" for k in range(3) for w in ("lit", "dim"))]
+    L.append("constexpr int kCabRideCount = %d; constexpr int kCabRide[%d] = {%s};" % (len(cabg), len(cabg), ", ".join(str(gi2.get(n_, -1)) for n_ in cabg)))
+    L.append("constexpr int kCabBtnLit[3] = {%s}, kCabBtnDim[3] = {%s};" %
+             (", ".join(str(gi2.get(f"cab_btn{k}_lit", -1)) for k in range(3)), ", ".join(str(gi2.get(f"cab_btn{k}_dim", -1)) for k in range(3))))
+    L.append("constexpr double kCabBtn[3][3] = {%s};" % ", ".join("{%.3f, %.3f, %.3f}" % b_ for b_ in CAB_BTN))
+    L.append("constexpr unsigned kCabScreenSlot = 36u;   // the cabin's screen (drawn by the module)")
+    L.append("// watch lighting of the way from the bridge to the lift: point lights (mesh frame) and their colours")
+    L.append("struct WatchLight { double x, y, z, r, g, b; };")
+    L.append("constexpr int kWatchLightCount = %d;" % len(W_LIGHTS))
+    L.append("constexpr WatchLight kWatchLights[] = {" + ", ".join("{%.3f, %.3f, %.3f, %.2f, %.2f, %.2f}" % (tuple(p_) + tuple(c_)) for p_, c_ in W_LIGHTS) + "};")
+    L.append("// the bridge capsule's watch lights: warm, on the axis of the capsule (they stay right whatever its turn); used instead of the")
+    L.append("// way's lights while the viewer is in the capsule (D3D9Client takes 4 local lights per mesh)")
+    L.append("constexpr WatchLight kBridgeWatchLights[] = {{%.3f, %.3f, %.3f, 0.78, 0.52, 0.28}, {%.3f, %.3f, %.3f, 0.78, 0.52, 0.28}};" % (-2.4, BR_Y, zs(BR_S), 2.4, BR_Y, zs(BR_S)))
     L.append("struct ScreenZone { double yaw, pitch, vfov, aspect; unsigned slot; };")
     L.append("constexpr int kScreenZoneCount = %d;" % len(BR_SCR_CAMS))
     L.append("constexpr ScreenZone kScreenZones[%d] = {" % len(BR_SCR_CAMS) + ", ".join("{%.3f, %.3f, %.3f, %.4f, %du}" % c for c in BR_SCR_CAMS) + "};")
     z0, z1, y0, y1 = BR_AST
     L.append("// astronomer's screen (texture slot 7) on the port end wall: width/height")
     L.append("constexpr unsigned kAstroSlot = 7u; constexpr double kAstroAspect = %.4f;" % ((z1 - z0) / (y1 - y0)))
+    L.append("// the moving seats: travel to the console (+z), collision box (half x, z0, z1 offsets, height), groups of each seat")
+    L.append("constexpr double kSeatTravel[4] = {%.3f, %.3f, %.3f, %.3f}; constexpr double kSeatBox[4] = {%.3f, %.3f, %.3f, %.3f};" % (tuple(BR_SEAT_TRAVEL) + BR_SEAT_BOX))
+    rows = []
+    for i in range(len(BR_SEATS)):
+        ids = [gi.get(f"bridge_seat{i}{suf}", -1) for suf in ("", "_cushion", "_metal", "_belt", "_accent")]
+        if i == 0: ids += [gi.get("bridge_button_on", -1), gi.get("bridge_button_off", -1)]
+        ids += [-1] * (7 - len(ids))
+        rows.append("{" + ", ".join(str(v) for v in ids) + "}")
+    L.append("constexpr int kSeatGroups[4][7] = {" + ", ".join(rows) + "};   // -1: none")
     for nm, key in (("kGrpScreenC", "bridge_screen_c"), ("kGrpMfd", "bridge_mfd"), ("kGrpBtnOn", "bridge_button_on"), ("kGrpBtnOff", "bridge_button_off")):
         L.append(f"constexpr unsigned {nm} = {gi.get(key, 0)}u;")
     L.append("constexpr double kBtnX = %.3f, kBtnY = %.3f, kBtnZ = %.3f;" % (0.36, BR_FLOOR_Y + 0.78, zs(BR_S) + BR_SEATS[0][1] + 0.16))
@@ -3491,8 +4378,18 @@ if __name__ == "__main__":
     trap_geom(trap, 0.0, 0.0, -12.4 - STERN_Z, 12.4 - STERN_Z)
     write_msh([trap], os.path.join(out, "TantraTrap.msh"))
     vc_groups = build_interior()
+    _uv_project(vc_groups)
+    for g_ in vc_groups:                                       # the lift cabin's panel and screen: slots 35, 36
+        if g_.name == "cab_panel":
+            g_.tex = 35
+        elif g_.name == "cab_screen":
+            g_.tex = 36
     write_msh(vc_groups, os.path.join(out, "TantraVC.msh"), textures=("Tantra\\screen_l.dds", "Tantra\\screen_c.dds", "Tantra\\screen_r.dds", "Tantra\\screen_c.dds",
-                                                                       "Tantra\\screen_l.dds", "Tantra\\screen_r.dds", "Tantra\\screen_c.dds"))
+                                                                       "Tantra\\screen_l.dds", "Tantra\\screen_r.dds", "Tantra\\screen_c.dds",
+                                                                       "Tantra\\in_floor.dds", "Tantra\\in_wall.dds", "Tantra\\in_ceiling.dds", "Tantra\\in_trim.dds",
+                                                                       "Tantra\\in_metal.dds", "Tantra\\in_liftpanel.dds",
+                                                                       "Tantra\\console_face.dds", "Tantra\\in_fx_pool.dds", "Tantra\\in_fx_amber.dds", "Tantra\\in_fx_wash.dds", "Tantra\\in_fx_ao.dds", "Tantra\\in_fx_cove.dds", "Tantra\\in_fx_glow.dds",
+                                                                       "Tantra\\lift_status.dds") + ("Tantra\\lift_status.dds",) * 12 + ("Tantra\\panel.dds",) + ("Tantra\\in_cabpanel.dds", "Tantra\\lift_status.dds") + ("Tantra\\lift_status.dds",) * 5)   # 37..40: the commander's own touch screens, 41: the holo panel (drawn in the game); 22..33: the bridge MFDs (drawn in the game); 34: the 2D panels' texture (redrawn in the game); 21: the lift zone's status screen (drawn in the game); 14 console face; 15..20 watch light decals: the tub's instrument face
     write_interior_layout(os.path.join(here, "..", "orbiter2016", "InteriorLayout.h") if install else os.path.join(work, "InteriorLayout.h"), vc_groups)
     raw_dir = os.path.join(here, "..", "build", "mesh")
     os.makedirs(raw_dir, exist_ok=True)

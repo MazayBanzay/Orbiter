@@ -65,8 +65,9 @@ namespace ocrew
 	{
 		const int n = Frames();
 		out.q.resize(nb * 4); out.t.resize(nb * 3);
-		const double x = (n > 1 && loop) ? (ph - std::floor(ph)) * n : 0;
-		const int f1 = static_cast<int>(x) % n, f2 = loop ? (f1 + 1) % n : f1;
+		// a loop wraps over its frames; a one-shot clip (sit down, stand up) runs from the first frame to the last
+		const double x = n < 2 ? 0 : loop ? (ph - std::floor(ph)) * n : std::clamp(ph, 0.0, 1.0) * (n - 1);
+		const int f1 = (std::min)(static_cast<int>(x), n - 1) % n, f2 = loop ? (f1 + 1) % n : (std::min)(f1 + 1, n - 1);
 		const float t = static_cast<float>(x - std::floor(x));
 		const float* a = &data[f1 * nb * 7]; const float* b = &data[f2 * nb * 7];
 		if (!cubic || !loop || n < 4)
