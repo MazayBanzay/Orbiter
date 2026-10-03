@@ -1,0 +1,49 @@
+BEGIN_DESC
+OrbiterCrew: the astronavigator in open space, 15 m from the ISS, with the suit's cold-gas RCS (about 10 m/s).
+Numpad: rotation, / switches rotation and translation, 5 kills rotation. V sun shade, L lamps. F1 for her view, H for the HUD.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 57457.6602778935
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 6.0 -30.0 15.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Orbit
+END_HUD
+
+BEGIN_SHIPS
+ISS:ProjectAlpha_ISS
+  STATUS Orbiting Earth
+  RPOS 1846703.870 -3065074.367 -5699294.909
+  RVEL 5832.8256 -3385.2501 3714.3797
+  AROT 110.000 -10.000 80.000
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+  IDS 0:1 100 1:2 100 2:3 100 3:4 100 4:5 100
+  NAVFREQ 0 0
+  XPDR 466
+END
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Orbiting Earth
+  RPOS 1846712.870 -3065080.367 -5699304.909
+  RVEL 5832.8256 -3385.2501 3714.3797
+  AROT 20.000 -30.000 10.000
+  RCSMODE 1
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+  SUIT 1
+END
+END_SHIPS

@@ -1,0 +1,51 @@
+# Whitelist: this repository lives in the root of an Orbiter 2024 installation (branch 2024).
+# Everything is ignored except the project files listed below. Tantra's sources live in branch 2016
+# (Orbitersdk/samples/Tantra, built for 2024 with build_2024.bat / install_2024.bat).
+/*
+!/.gitignore
+!/README.md
+
+# --- OrbiterCrew for Orbiter 2024: sources, config, scenarios ---
+!/Orbitersdk/
+/Orbitersdk/*
+!/Orbitersdk/OrbiterCrew/
+/Orbitersdk/OrbiterCrew/build/
+/Orbitersdk/OrbiterCrew/*.user
+!/Config/
+/Config/*
+!/Config/Vessels/
+/Config/Vessels/*
+!/Config/Vessels/OrbiterCrew/
+!/Config/OrbiterCrew/
+!/Config/Tantra/
+!/Scenarios/
+/Scenarios/*
+!/Scenarios/OrbiterCrew/
+
+# --- starship Tantra: assets, configs, scenarios, sounds (built modules stay local) ---
+!/Meshes/
+/Meshes/*
+!/Meshes/Tantra/
+!/Textures/
+/Textures/*
+!/Textures/Tantra/
+!/Textures/Tantra_*.dds
+!/Config/Vessels/Tantra.cfg
+!/Config/Vessels/TantraTrap.cfg
+!/Scenarios/Tantra/
+!/XRSound/
+/XRSound/*
+!/XRSound/Tantra/
+
+# --- build artifacts and local copies (never committed) ---
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.iobj
+*.ipdb
+*.log
+*.bak
+*.bak_*

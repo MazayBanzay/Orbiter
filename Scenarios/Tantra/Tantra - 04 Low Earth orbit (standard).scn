@@ -1,0 +1,75 @@
+BEGIN_DESC
+«Тантра» на низкой околоземной орбите (как штатный сценарий Orbiter 2010:
+та же дата и соседи - МКС и «Мир»). Ловушки анамезона полные, накопитель поля заряжен,
+гондолы планетарных моторов развёрнуты назад.
+
+Проверка выхлопа: K - маршевые на анамезон, трижды J (поле камер, луч К-частиц,
+подача), затем тяга. Узлы ударных волн - за сотни км позади, смотреть внешней камерой.
+Клавиши: K маршевые, J / Shift+J пуск / останов, Ctrl+J снять блокировку высоты,
+G / Shift+G ограничитель, Y ловушка подачи, B / Shift+B гондолы вниз / назад.
+Экипаж (OrbiterCrew): 1/2 выбор, A шлюз, E выход (на грунте). F8 - 2D-пульт.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 51982.5501203704
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Tantra
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Tantra
+  MODE Extern
+  POS 3.00 150.00 15.00
+  TRACKMODE GlobalFrame
+  FOV 50.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Orbit
+END_HUD
+
+BEGIN_MFD Left
+  TYPE Orbit
+  PROJ Ship
+  FRAME Ecliptic
+  REF Earth
+END_MFD
+
+BEGIN_MFD Right
+  TYPE Surface
+  SPDMODE 1
+END_MFD
+
+BEGIN_SHIPS
+ISS:ProjectAlpha_ISS
+  STATUS Orbiting Earth
+  RPOS 6606225.07 78793.93 -1314330.24
+  RVEL 489.677 -7418.272 1995.128
+  AROT 30.00 0.00 50.00
+  IDS 0:588 100 1:586 100 2:584 100 3:582 100 4:580 100
+  NAVFREQ 0 0
+  XPDR 466
+END
+Mir
+  STATUS Orbiting Earth
+  RPOS -2176041.39 -384799.80 -6284253.30
+  RVEL 7319.246 -147.592 -2513.473
+  AROT 0.00 -45.00 90.00
+  IDS 0:540 100 1:542 100 2:544 100
+  XPDR 482
+END
+Tantra:Tantra
+  STATUS Orbiting Earth
+  RPOS 4751179.22 -1997358.49 4915397.45
+  RVEL -5410.497 -1917.607 4720.699
+  AROT -38.68 11.46 51.36
+  PRPLEVEL 0:1.000 1:1.000 2:1.000 3:1.000 4:1.000
+  ENGSET 0
+  IGNITION 0
+  GLIMIT 1 5.00
+  FIELDSTORE 1.000
+END
+END_SHIPS
