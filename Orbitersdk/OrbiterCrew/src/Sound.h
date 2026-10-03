@@ -30,6 +30,8 @@ namespace ocrew
 			bool alive{ true };
 			double breathRate{ 13 };  // per minute
 			double intensity{};       // 0..1: how hard she breathes
+			bool mine{};              // she is the person in focus: her sounds are the user's ears (Global, wherever the camera is)
+			double wind{};            // 0..1: the air moving past her where SHE is (0 in vacuum and inside a ship)
 		};
 
 		~CrewSound();
@@ -37,14 +39,19 @@ namespace ocrew
 		void Update(const Input& in);
 
 	private:
-		struct Set { int first{}, count{}, last{ -1 }, prev{ -1 }; std::vector<double> level, length; };
+		struct Set { int first{}, firstG{}, count{}, last{ -1 }, prev{ -1 }; std::vector<double> level, length; };   // firstG: the same takes, Global
 		int Load(Set& set, int firstId, const std::string& pattern, int playback);
 		void Play(Set& set, double volume, int pick = -1);
 		int PickBreath(const Set& set, double intensity, double maxLength);
 
 		XRSound* xr{};
 		Set walk, run, suit, suitVac, breath, helmetBreath;
-		int fanId{}, cautionId{}, warningId{};
+		int fanId{}, cautionId{}, warningId{}, windId{};
+		int fanG{}, cautionG{}, warningG{};
+		bool mine{};
+		int fanNow{};                      // the fan loop that plays (spatial or Global)
+		bool windPlaying{};
+		double windVolume{};
 		double alarmClock{};
 		bool fanPlaying{};
 		double fanVolume{};

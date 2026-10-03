@@ -154,6 +154,10 @@ namespace ocrew
 		static constexpr bool kMouseWalk = true;
 		static constexpr bool kMouseFreeLook = false;   // released: mouse look with the cursor held in the middle - off (the user: the cursor stays free)
 		bool mouseMode{}, mouseLocked{}, mouseRmb{};
+		bool seatHelm{};                     // the seat she sits in is a helm (OC_HELM): V works
+		bool shipView{};                     // V: the camera on the ship from outside
+		void ShipView();
+		bool faceSun{}, sunLogged{};          // FACESUN 1: she turns to the Sun at the start
 		double vesselYaw{};                  // inside: her vessel's turn from the ship's axes, in quarter turns
 		double freeYaw{}, freePitch{};
 		int orbitCal{};                      // external camera: 0 not yet, 1 probing, 2 known, -1 failed

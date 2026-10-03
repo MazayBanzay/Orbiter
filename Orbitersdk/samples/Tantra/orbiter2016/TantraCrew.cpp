@@ -306,3 +306,13 @@ const char* TantraCrew::Name(int slot) const { const Member* m = Slot(slot); if 
 const char* TantraCrew::Role(int slot) const { const Member* m = Slot(slot); return m ? m->role.c_str() : ""; }
 int TantraCrew::Age(int slot) const { const Member* m = Slot(slot); return m ? m->age : 0; }
 int TantraCrew::Pulse(int slot) const { const Member* m = Slot(slot); if (m) Refresh(const_cast<Member&>(*m)); return m ? m->pulse : 0; }
+
+// The focused body is a person inside this ship's interior: the ship then sounds as heard from inside (muffled).
+bool TantraCrew::ListenerInside(OBJHANDLE focus) const {
+    if (!focus || !ship_ || !api_.Ok() || !api_.PersonOfBody) return false;
+    const int id = api_.PersonOfBody(focus);
+    if (!id) return false;
+    if (api_.ShipOf) return api_.ShipOf(id) == ship_->GetHandle();
+    OcInfo in{};
+    return api_.Info && api_.Info(id, &in) && in.where == 3;
+}

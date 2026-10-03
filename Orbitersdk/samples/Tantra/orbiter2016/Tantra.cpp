@@ -21,7 +21,10 @@ namespace sp = tantra::spec;
 namespace {
 
 // XRSound ids (ours must stay below 10000).
-enum SoundSlot { SND_ANA_RUN = 1, SND_ION_RUN, SND_FIELD_UP, SND_BEAM_UP, SND_IGNITE, SND_SIREN, SND_SHUTDOWN };
+// Engines in two layers: outside (XRSound fades it by distance and air - nothing in vacuum) and inside (Global, our own
+// volume: the planetary engines only as a dull rumble through the hull; the anamezon drive shakes the whole ship).
+enum SoundSlot { SND_ANA_RUN = 1, SND_ION_RUN, SND_FIELD_UP, SND_BEAM_UP, SND_IGNITE, SND_SHUTDOWN = 7,
+                 SND_MARCH_EXT, SND_MARCH_INT, SND_POD_EXT, SND_POD_INT, SND_ANA_INT };
 
 // Crew from the novel.
 // Ages, pulse and weight are placeholders the player can edit in the scenario.
@@ -104,6 +107,7 @@ Tantra::~Tantra() {
     delete gear_;
     delete sound_;
     screen_.Shutdown();
+    disp_.Shutdown();
     walk_.Shutdown();
     interior_.Unregister();
     if (hudFont_) oapiReleaseFont(hudFont_);
@@ -139,6 +143,7 @@ void Tantra::clbkSetClassCaps(FILEHANDLE cfg) {
         hk.Status = [](void* s, char* out, int n) { static_cast<const Tantra*>(s)->PanelStatus(out, n); };
         hk.CabStatus = [](void* s, char* out, int n) { static_cast<const Tantra*>(s)->CabStatus(out, n); };
         hk.DoorB = [](void* s) { return static_cast<const Tantra*>(s)->doorB_; };
+        hk.CabDoor = [](void* s) { return static_cast<const Tantra*>(s)->cabDoor_; };
         hk.Cabin = [](void* s, double* out, double* down, int* ground) {
             const Tantra* t = static_cast<Tantra*>(s);
             *out = t->lift_.Out(); *down = t->lift_.Down(); *ground = t->lift_.AtGround() ? 1 : 0;
@@ -152,15 +157,14 @@ void Tantra::clbkSetClassCaps(FILEHANDLE cfg) {
         ch.Redraw = [](void* s, int a) { static_cast<Tantra*>(s)->clbkPanelRedrawEvent(a, PANEL_REDRAW_USER, Tantra::PanelTex(), nullptr); };
         ch.Click = [](void* s, int a, int mx, int my) { static_cast<Tantra*>(s)->clbkPanelMouseEvent(a, PANEL_MOUSE_LBDOWN, mx, my, nullptr); };
         interior_.SetConsole(ch);
-        BridgeHooks bh;
-        bh.ctx = this; bh.PanelTex = ch.Tex; bh.Click = ch.Click;
-        bh.Holo = [](void* s, HoloData* d) { static_cast<const Tantra*>(s)->FillHolo(d); };
-        bh.Nav = [](void* s, int mode) {
-            Tantra* t = static_cast<Tantra*>(s);
-            if (t->GetNavmodeState(mode)) t->DeactivateNavmode(mode);
-            else { t->navAllowed_ |= 1 << mode; t->ActivateNavmode(mode); }
-        };
-        interior_.SetBridge(bh);
+    }
+    {   // the commander's touch screens: TantraInterior passes the touches and the steps
+        disp_.Init(this, vcMeshIdx_);
+        TantraInterior::TouchHooks th;
+        th.ctx = &disp_;
+        th.Step = [](void* c, double dt) { static_cast<TantraDisplays*>(c)->Step(dt); };
+        th.Touch = [](void* c, int k, double u, double v) { return static_cast<TantraDisplays*>(c)->Touch(k, u, v); };
+        interior_.SetTouch(th);
     }
     screen_.Init(this, vcMeshIdx_);
     DefineGear();
@@ -435,13 +439,17 @@ void Tantra::clbkPostCreation() {
     sound_ = XRSound::CreateInstance(this);
     if (!sound_ || !sound_->IsPresent()) return;
     using PT = XRSound::PlaybackType;
-    sound_->LoadWav(SND_ANA_RUN, "XRSound\\Tantra\\ana_run.wav", PT::BothViewFar);
+    sound_->LoadWav(SND_ANA_RUN, "XRSound\\Tantra\\ana_run.wav", PT::Global);
     sound_->LoadWav(SND_ION_RUN, "XRSound\\Tantra\\ion_run.wav", PT::BothViewFar);
     sound_->LoadWav(SND_FIELD_UP, "XRSound\\Tantra\\field_up.wav", PT::InternalOnly);
     sound_->LoadWav(SND_BEAM_UP, "XRSound\\Tantra\\beam_up.wav", PT::InternalOnly);
     sound_->LoadWav(SND_IGNITE, "XRSound\\Tantra\\ignite.wav", PT::BothViewMedium);
-    sound_->LoadWav(SND_SIREN, "XRSound\\Tantra\\siren.wav", PT::BothViewFar);
     sound_->LoadWav(SND_SHUTDOWN, "XRSound\\Tantra\\shutdown.wav", PT::InternalOnly);
+    sound_->LoadWav(SND_MARCH_EXT, "XRSound\\Tantra\\march_ext.wav", PT::Global);
+    sound_->LoadWav(SND_MARCH_INT, "XRSound\\Tantra\\march_int.wav", PT::Global);
+    sound_->LoadWav(SND_POD_EXT, "XRSound\\Tantra\\pod_ext.wav", PT::Global);
+    sound_->LoadWav(SND_POD_INT, "XRSound\\Tantra\\pod_int.wav", PT::Global);
+    sound_->LoadWav(SND_ANA_INT, "XRSound\\Tantra\\ana_int.wav", PT::Global);
     // Our own engine sounds replace the stock ones: the cup reflectors do not roar like rockets.
     sound_->SetDefaultSoundEnabled(XRSound::MainEngines, false);
     sound_->SetDefaultSoundEnabled(XRSound::RetroEngines, false);
@@ -1091,6 +1099,11 @@ void Tantra::WatchLights() {
             if (watchLight_[i]) watchLight_[i]->Activate(false);
         }
     }
+    if (!cabLight_) {
+        const COLOUR4 dif = {0.80f, 0.78f, 0.70f, 0.0f}, spec = {0.6f, 0.6f, 0.55f, 0.0f}, amb = {0.0f, 0.0f, 0.0f, 0.0f};
+        cabLight_ = AddPointLight(_V(kCabLight[0], kCabLight[1], kCabLight[2] + MeshDZ()), 4.0, 0.5, 0.5, 0.4, dif, spec, amb);
+        if (cabLight_) cabLight_->Activate(false);
+    }
     const OBJHANDLE f = oapiGetFocusObject();
     const OBJHANDLE body = interior_.ViewerBody();
     const bool inside = oapiCameraInternal() && (f == GetHandle() ? oapiCockpitMode() == COCKPIT_VIRTUAL : body != nullptr);
@@ -1107,10 +1120,105 @@ void Tantra::WatchLights() {
         const bool on = inside && (i >= 4) == bridge;
         if (watchLight_[i]->IsActive() != on) watchLight_[i]->Activate(on);
     }
+    if (!cabSpot_[0]) {
+        const COLOUR4 dif = {1.0f, 0.95f, 0.85f, 0.0f}, spec = {0.8f, 0.8f, 0.75f, 0.0f}, amb = {0.0f, 0.0f, 0.0f, 0.0f};
+        for (int k = 0; k < 2; k++) {
+            cabSpot_[k] = AddSpotLight(_V(kCabSpot[k][0], kCabSpot[k][1], kCabSpot[k][2] + MeshDZ()), _V(kCabSpotDir[0], kCabSpotDir[1], kCabSpotDir[2]),
+                                       40.0, 1.0, 0.02, 0.0008, 50.0 * RAD, 75.0 * RAD, dif, spec, amb);
+            if (cabSpot_[k]) cabSpot_[k]->Activate(false);
+        }
+    }
+    for (int k = 0; k < 2; k++) {
+        if (!cabSpot_[k]) continue;
+        cabSpot_[k]->SetPosition(_V(kCabSpot[k][0] - tantra::mesh::kLockOut * lift_.Out(), kCabSpot[k][1] - tantra::mesh::kLockDrop * lift_.Down(),
+                                    kCabSpot[k][2] + MeshDZ()));
+        const bool on = !lift_.Stowed() || lift_.Lowering();
+        if (cabSpot_[k]->IsActive() != on) cabSpot_[k]->Activate(on);
+    }
+    if (cabLight_) {
+        cabLight_->SetPosition(_V(kCabLight[0] - tantra::mesh::kLockOut * lift_.Out(), kCabLight[1] - tantra::mesh::kLockDrop * lift_.Down(),
+                                  kCabLight[2] + MeshDZ()));
+        const bool on = (inside && !bridge) || !lift_.Stowed();
+        if (cabLight_->IsActive() != on) cabLight_->Activate(on);
+    }
+}
+
+// The numpad in the commander's seat, classic Orbiter (the focus is on the person, so Orbiter gives the keys to his body; the
+// ship reads them itself while he sits at the console and Orbiter's window is in front):
+//   Numpad + / -   throttle up / down (below zero the retro, when the anamezon is the main); Ctrl+ full, Ctrl- zero; * cut
+//   rotation: 2 / 8 pitch up / down, 4 / 6 yaw left / right, 1 / 3 bank left / right
+//   linear:   2 / 8 up / down, 1 / 3 left / right, 6 / 9 forward / back;  Ctrl: 10 % thrust;  / switches rotation / linear
+//   Numpad 5       killrot (the user allowed it in the seat)
+void Tantra::SeatKeys() {
+    auto release = [this]() {
+        for (int g = THGROUP_ATT_PITCHUP; g <= THGROUP_ATT_BACK; g++)
+            if (seatAttSet_ & (1u << g)) SetThrusterGroupLevel(THGROUP_TYPE(g), 0.0);
+        seatAttSet_ = 0;
+        if (seatSurf_) { SetControlSurfaceLevel(AIRCTRL_ELEVATOR, 0.0); SetControlSurfaceLevel(AIRCTRL_AILERON, 0.0); seatSurf_ = false; }
+    };
+    DWORD pid = 0; GetWindowThreadProcessId(GetForegroundWindow(), &pid);
+    if (interior_.TakenSeat() != 0 || !interior_.SeatedPerson() || pid != GetCurrentProcessId()) { release(); seatKeyPrev_ = 0; return; }
+    auto held = [](int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; };
+    const bool ctrl = held(VK_CONTROL);
+    enum { kPlus = 1, kMinus = 2, kStar = 4, kSlash = 8, k5 = 16 };
+    const unsigned now = (held(VK_ADD) ? kPlus : 0) | (held(VK_SUBTRACT) ? kMinus : 0) | (held(VK_MULTIPLY) ? kStar : 0) |
+                         (held(VK_DIVIDE) ? kSlash : 0) | (held(VK_NUMPAD5) ? k5 : 0);
+    const unsigned edge = now & ~seatKeyPrev_;
+    seatKeyPrev_ = now;
+    const double dt = (std::min)(oapiGetSysStep(), 0.1);
+    // the throttle: one axis, main above zero and retro below
+    const bool retro = GetGroupThrusterCount(THGROUP_RETRO) > 0;
+    double thr = GetThrusterGroupLevel(THGROUP_MAIN) - (retro ? GetThrusterGroupLevel(THGROUP_RETRO) : 0.0);
+    const double thr0 = thr;
+    if (ctrl && (edge & kPlus)) thr = 1.0;
+    else if (ctrl && (edge & kMinus)) thr = 0.0;
+    else if (!ctrl && (now & kPlus)) thr += .3 * dt;
+    else if (!ctrl && (now & kMinus)) thr -= .3 * dt;
+    if (edge & kStar) thr = 0.0;
+    if (!retro && thr < 0.0) thr = 0.0;
+    thr = (std::max)(-1.0, (std::min)(1.0, thr));
+    if (thr != thr0) {
+        SetThrusterGroupLevel(THGROUP_MAIN, (std::max)(0.0, thr));
+        if (retro) SetThrusterGroupLevel(THGROUP_RETRO, (std::max)(0.0, -thr));
+    }
+    if (edge & kSlash) SetAttitudeMode(GetAttitudeMode() == RCS_LIN ? RCS_ROT : RCS_LIN);
+    if (edge & k5) ToggleNav(NAVMODE_KILLROT);
+    // the attitude: the groups under the held keys
+    struct K { int vk; THGROUP_TYPE rot, lin; };
+    static const K kAtt[] = {{VK_NUMPAD2, THGROUP_ATT_PITCHUP, THGROUP_ATT_UP}, {VK_NUMPAD8, THGROUP_ATT_PITCHDOWN, THGROUP_ATT_DOWN},
+                             {VK_NUMPAD4, THGROUP_ATT_YAWLEFT, THGROUP_USER}, {VK_NUMPAD6, THGROUP_ATT_YAWRIGHT, THGROUP_ATT_FORWARD},
+                             {VK_NUMPAD1, THGROUP_ATT_BANKLEFT, THGROUP_ATT_LEFT}, {VK_NUMPAD3, THGROUP_ATT_BANKRIGHT, THGROUP_ATT_RIGHT},
+                             {VK_NUMPAD9, THGROUP_USER, THGROUP_ATT_BACK}};
+    const int mode = GetAttitudeMode();
+    unsigned set = 0;
+    for (const K& k : kAtt) {
+        const THGROUP_TYPE g = mode == RCS_LIN ? k.lin : mode == RCS_ROT ? k.rot : THGROUP_USER;
+        if (g == THGROUP_USER || !held(k.vk)) continue;
+        SetThrusterGroupLevel(g, ctrl ? 0.1 : 1.0);
+        set |= 1u << g;
+    }
+    for (int g = THGROUP_ATT_PITCHUP; g <= THGROUP_ATT_BACK; g++)                  // the keys let go: those groups off
+        if ((seatAttSet_ & ~set) & (1u << g)) SetThrusterGroupLevel(THGROUP_TYPE(g), 0.0);
+    seatAttSet_ = set;
+    // the aerodynamic surfaces: Orbiter feeds the stick only to the focus (the person), so the helm moves them itself;
+    // pitch on 2/8, bank on 1/3 (not in the linear RCS mode), the trim on Insert/Delete; the surfaces' own lag smooths it
+    const double k = ctrl ? 0.3 : 1.0;
+    const bool rot = mode != RCS_LIN;
+    const double pitch = rot ? k * ((held(VK_NUMPAD2) ? 1.0 : 0.0) - (held(VK_NUMPAD8) ? 1.0 : 0.0)) : 0.0;
+    const double bank = rot ? k * ((held(VK_NUMPAD3) ? 1.0 : 0.0) - (held(VK_NUMPAD1) ? 1.0 : 0.0)) : 0.0;
+    SetControlSurfaceLevel(AIRCTRL_ELEVATOR, pitch);
+    SetControlSurfaceLevel(AIRCTRL_AILERON, bank);
+    seatSurf_ = true;
+    const double trimRate = 0.2 * dt;
+    if (held(VK_INSERT) || held(VK_DELETE)) {
+        const double tr = GetControlSurfaceLevel(AIRCTRL_ELEVATORTRIM) + (held(VK_INSERT) ? trimRate : -trimRate);
+        SetControlSurfaceLevel(AIRCTRL_ELEVATORTRIM, (std::max)(-1.0, (std::min)(1.0, tr)));
+    }
 }
 
 void Tantra::clbkPreStep(double, double simdt, double) {
     interior_.Step(simdt);                        // the moving bridge seats, the deferred stand-up (OrbiterCrew)
+    SeatKeys();
     screen_.SetViewer(interior_.ViewerBody());   // the bridge screen follows the viewer (gcAPI renders for the focus only)
     WatchLights();
     WatchTerrain();   // first: a refined terrain tile must not bury the pads for even one step
@@ -1481,6 +1589,7 @@ void Tantra::clbkVisualCreated(VISHANDLE vis, int) {
     vis_ = vis;
     screen_.OnVisual(vis);
     interior_.OnVisual(vis);
+    disp_.OnVisual(vis);
     UpdateDamageVisual(true);
 }
 
@@ -1647,19 +1756,51 @@ void Tantra::UpdateSound(IgnStage prev) {
         else if (now == IgnStage::Beam && prev == IgnStage::Field) sound_->PlayWav(SND_BEAM_UP);
         else if (now == IgnStage::Feed) {
             sound_->PlayWav(SND_IGNITE);
-            if (GroundContact()) sound_->PlayWav(SND_SIREN);  // deadly zone around the stern
         } else if (now < prev) sound_->PlayWav(SND_SHUTDOWN);
     }
 
     const double level = GetThrusterGroupLevel(THGROUP_MAIN);
-    const bool anaOn = AnaIsMain() && level > 0.0;
-    const double podLevel = (std::max)(podHover_ ? GetThrusterGroupLevel(THGROUP_HOVER) : 0.0, planGroup_ == 1 ? level : 0.0);
-    const bool ionOn = podLevel > 0.0;
-    // XRSound has no pitch control: loudness follows thrust (pitch layers are a later step).
-    if (anaOn) sound_->PlayWav(SND_ANA_RUN, true, float(0.35 + 0.65 * level));
-    else if (sound_->IsWavPlaying(SND_ANA_RUN)) sound_->StopWav(SND_ANA_RUN);
-    if (ionOn) sound_->PlayWav(SND_ION_RUN, true, float(0.35 + 0.65 * podLevel));
-    else if (sound_->IsWavPlaying(SND_ION_RUN)) sound_->StopWav(SND_ION_RUN);
+    const double ana = AnaIsMain() ? level : 0.0;
+    const double march = march_ ? GetThrusterLevel(march_) : 0.0;
+    double pods = 0.0;
+    for (THRUSTER_HANDLE th : pod_)
+        if (th) pods = (std::max)(pods, GetThrusterLevel(th));
+    // where the listener is: in the cockpit view of the ship, or a person walking inside it (the focus on the body)
+    const OBJHANDLE focus = oapiGetFocusObject();
+    // muffled only while the camera itself is inside: the cockpit view of the ship, or the eyes of a person on board;
+    // any outside camera (the pilot's outside view V included) hears the ship from where the camera is
+    const bool inside = oapiCameraInternal() && (focus == GetHandle() || crew_.ListenerInside(focus));
+    // a sealed armoured hull: from inside no wind, no plasma, no boom - whatever view the camera has (a person inside
+    // looking at the ship from outside still hears what he or she hears)
+    if (int(inside) != soundInside_) {
+        soundInside_ = int(inside);
+        for (XRSound::DefaultSoundID id : {XRSound::LandedWind, XRSound::FlightWind, XRSound::ReentryPlasma, XRSound::SonicBoom})
+            sound_->SetDefaultSoundEnabled(id, !inside);
+    }
+    // one layer per engine and place; volume follows thrust (XRSound has no pitch control)
+    auto layer = [this](int id, bool on, double vol) {
+        if (on && vol > 0.01) sound_->PlayWav(id, true, float((std::min)(1.0, vol)));
+        else if (sound_->IsWavPlaying(id)) sound_->StopWav(id);
+    };
+    // outside: the listener's own distance to the stern and the air around the ship (vacuum: nothing reaches the ears)
+    double outAtt = 0.0;
+    if (!inside) {
+        VECTOR3 ear, stern;
+        oapiCameraGlobalPos(&ear);                 // the camera: the person's eyes, or the outside view
+        Local2Global(_V(0, 0, Zf(0.0)), stern);
+        const double d = length(ear - stern);
+        const double air = (std::min)(1.0, std::sqrt((std::max)(0.0, GetAtmDensity()) / 1.2));
+        outAtt = air / (1.0 + d / 400.0);          // a big engine: full at the ship, half at 400 m, a quarter at 1.2 km
+    }
+    // anamezon: outside a roar where there is air; inside the drive is felt through the whole structure
+    layer(SND_ANA_RUN, !inside && ana > 0.0, (0.35 + 0.65 * ana) * outAtt);
+    layer(SND_ANA_INT, inside && ana > 0.0, 0.45 + 0.55 * ana);
+    // planetary: outside the full roar of the jets; inside only a dull rumble of the engine through the hull
+    layer(SND_MARCH_EXT, !inside && march > 0.0, (0.40 + 0.60 * march) * outAtt);
+    layer(SND_MARCH_INT, inside && march > 0.0, 0.10 + 0.25 * march);
+    layer(SND_POD_EXT, !inside && pods > 0.0, (0.35 + 0.65 * pods) * outAtt);
+    layer(SND_POD_INT, inside && pods > 0.0, 0.08 + 0.20 * pods);
+    if (sound_->IsWavPlaying(SND_ION_RUN)) sound_->StopWav(SND_ION_RUN);   // the old common planetary loop: replaced
 }
 
 // --- Actions (shared by keyboard and panel) ---------------------------------------
@@ -1786,20 +1927,25 @@ void Tantra::PanelStep(double dt) {
         case 1:                                                          // going down: door B shuts, the air goes, then the cabin
             if (doorB_ >= 1.0) {
                 zonePressureTarget_ = OutsideP();
-                if (PressureEqual() || OutsideAirOk()) {
+                if (PressureEqual() || OutsideAirOk()) cabDoorT_ = 1.0;     // then the cabin's own doors
+                if (cabDoor_ >= 1.0) {
                     if (LiftGo(true)) trip_ = 3;
                     else { trip_ = 0; std::snprintf(panelErr_, sizeof panelErr_, "ОТКАЗ: лифт только лёжа на опорах"); panelErrT_ = 10.0; }
                 }
             }
             break;
-        case 3: if (lift_.AtGround() || !lift_.Lowering()) trip_ = 0; break;
+        case 3: if (lift_.AtGround() || !lift_.Lowering()) { trip_ = 0; cabDoorT_ = 0.0; } break;   // down: the doors open
+        case 4: cabDoorT_ = 1.0; if (cabDoor_ >= 1.0) { if (LiftGo(false)) trip_ = 2; else { trip_ = 0; cabDoorT_ = 0.0; } } break;
         case 2:                                                          // going up: home, the air back, door B opens
-            if (home) { zonePressureTarget_ = 1.0; if (zonePressure_ >= 0.999) { doorBT_ = 0.0; trip_ = 0; } }
+            if (home) { zonePressureTarget_ = 1.0; if (zonePressure_ >= 0.999) { doorBT_ = 0.0; cabDoorT_ = 0.0; trip_ = 0; } }
             break;
         default:
-            if (home) { zonePressureTarget_ = 1.0; if (zonePressure_ >= 0.999) doorBT_ = 0.0; }   // at rest in the cell: the air in, the door open
+            if (home) { zonePressureTarget_ = 1.0; if (zonePressure_ >= 0.999) { doorBT_ = 0.0; cabDoorT_ = 0.0; } }   // at rest in the cell: the air in, the doors open
+            else if (lift_.AtGround()) cabDoorT_ = 0.0;
             break;
     }
+    const double dc = cabDoorT_ - cabDoor_;
+    if (std::fabs(dc) > 1e-9) cabDoor_ += (dc > 0 ? 1.0 : -1.0) * (std::min)(std::fabs(dc), dt / 1.5);   // 1.5 s
     const double dd = doorBT_ - doorB_;
     if (std::fabs(dd) > 1e-9) doorB_ += (dd > 0 ? 1.0 : -1.0) * (std::min)(std::fabs(dd), dt / 2.0);   // 2 s
     const double d = zonePressureTarget_ - zonePressure_;
@@ -1827,7 +1973,7 @@ void Tantra::PanelPress(int which, int personId) {
                     zonePressure_, OutsideP());
             break;
         case 2:                                                          // the lift zone: the cabin from the bottom
-            if (lift_.AtGround() && trip_ == 0) { if (LiftGo(false)) { trip_ = 2; Message("Лифт: вызов, кабина поднимается", "Lift: called, the cabin rises"); } }
+            if (lift_.AtGround() && trip_ == 0) { trip_ = 4; Message("Лифт: вызов, кабина поднимается", "Lift: called, the cabin rises"); }
             else if (home) Message("Кабина здесь: войдите в неё и нажмите ВНИЗ", "The cabin is here: step in and press DOWN");
             else Message("Кабина в пути", "The cabin is on its way");
             break;
@@ -1856,7 +2002,7 @@ void Tantra::PanelPress(int which, int personId) {
             break;
         }
         case 4:                                                          // the cabin: UP
-            if (lift_.AtGround() && trip_ == 0) { if (LiftGo(false)) { trip_ = 2; Message("Лифт: подъём", "Lift: up"); } }
+            if (lift_.AtGround() && trip_ == 0) { trip_ = 4; Message("Лифт: подъём", "Lift: up"); }
             else if (home) Message("Кабина наверху: выход - пешком в зону лифта", "The cabin is up: walk out");
             break;
         case 5:                                                          // the cabin: OUT to the ground
@@ -1881,31 +2027,37 @@ bool Tantra::OutsideAirOk() const {
 
 // The lift zone's screen (TantraInterior draws it): lines, '!' red, '+' green, '*' amber.
 void Tantra::PanelStatus(char* out, int n) const {
-    char s1[128], s2[128], s3[128];
-    if (suitMsg_[0]) std::snprintf(s1, sizeof s1, "%c1 СКАФАНДР: %s", suitOk_ == 1 ? '+' : '!', suitMsg_);
-    else std::snprintf(s1, sizeof s1, "%s", OutsideAirOk() ? "+1 СКАФАНДР: не нужен - воздух снаружи пригоден" : " 1 СКАФАНДР: нажмите 1 - проверка");
     const bool home = lift_.Stowed() && !lift_.Lowering();
-    std::snprintf(s2, sizeof s2, "%c2 ШЛЮЗ: %.2f атм, снаружи %.2f, дверь %s", std::fabs(zonePressureTarget_ - zonePressure_) > 1e-6 ? '*' : ' ',
-                  zonePressure_, OutsideP(), doorB_ <= 0.0 ? "открыта" : doorB_ >= 1.0 ? "закрыта" : "движется");
-    std::snprintf(s3, sizeof s3, "%s", lift_.AtGround() ? "+3 КАБИНА: внизу - 3 вызвать наверх" : home ? (trip_ ? "*3 КАБИНА: готовится к спуску" : "+3 КАБИНА: здесь - войдите, ВНИЗ в кабине") :
-                                     lift_.Lowering() ? "*3 КАБИНА: спуск..." : "*3 КАБИНА: подъём...");
-    std::snprintf(out, size_t(n), "СТАТУС ШЛЮЗА\n%s\n%s\n%s\n%s%s", s1, s2, s3, panelErr_[0] ? "!" : "", panelErr_);
+    const bool pm = std::fabs(zonePressureTarget_ - zonePressure_) > 1e-6;
+    const char* door = doorB_ <= 0.0 ? "+ОТКРЫТА" : doorB_ >= 1.0 ? " ЗАКРЫТА" : "*ДВИЖЕТСЯ";
+    const char* cab = lift_.AtGround() ? " ВНИЗУ" : home ? (trip_ ? "*ПОДГОТОВКА К СПУСКУ" : "+В ЯЧЕЙКЕ") : lift_.Lowering() ? "*СПУСК" : "*ПОДЪЁМ";
+    char suit[96];
+    if (suitMsg_[0]) std::snprintf(suit, sizeof suit, "%c%s", suitOk_ == 1 ? '+' : '!', suitMsg_);
+    else std::snprintf(suit, sizeof suit, "%s", OutsideAirOk() ? "+НЕ ТРЕБУЕТСЯ" : " НЕ ПРОВЕРЕН");
+    char msg[200];
+    if (panelErr_[0]) std::snprintf(msg, sizeof msg, "!%s", panelErr_);
+    else std::snprintf(msg, sizeof msg, "%s", lift_.AtGround() ? " КАБИНА ВНИЗУ: ВЫЗОВ - КНОПКА 3" : home && !trip_ ? " ВХОД В КАБИНУ - ДВЕРЬ ШЛЮЗА" : " ");
+    std::snprintf(out, size_t(n), "ШЛЮЗ 1  ·  ЗОНА ЛИФТА\tП-1.2\nДАВЛЕНИЕ ШЛЮЗА\t%c%.2f АТМ\nСНАРУЖИ\t %.2f АТМ%s\nДВЕРЬ ШЛЮЗА\t%s\nКАБИНА\t%s\nСКАФАНДР\t%s\n%s",
+                  pm ? '*' : ' ', zonePressure_, OutsideP(), OutsideAirOk() ? ", ВОЗДУХ" : "", door, cab, suit, msg);
 }
 
 // The cabin's screen: what the cabin does and the command to give.
 void Tantra::CabStatus(char* out, int n) const {
     const bool home = lift_.Stowed() && !lift_.Lowering();
-    char s1[128] = {0}, s2[128] = {0};
-    if (lift_.AtGround()) { std::snprintf(s1, sizeof s1, "+ВНИЗУ. ВЫХОД - выйти на грунт"); std::snprintf(s2, sizeof s2, " ВВЕРХ - подъём"); }
-    else if (trip_ == 1 && doorB_ < 1.0) std::snprintf(s1, sizeof s1, "*Дверь шлюза закрывается...");
-    else if (trip_ == 1) { std::snprintf(s1, sizeof s1, "*Выравнивание давления"); std::snprintf(s2, sizeof s2, "*%.2f -> %.2f атм", zonePressure_, OutsideP()); }
-    else if (!home) std::snprintf(s1, sizeof s1, lift_.Lowering() ? "*СПУСК..." : "*ПОДЪЁМ...");
-    else if (trip_ == 2 || zonePressure_ < 0.999) { std::snprintf(s1, sizeof s1, "*Наддув шлюза: %.2f атм", zonePressure_); std::snprintf(s2, sizeof s2, " дверь откроется сама"); }
-    else if (doorB_ > 0.0) std::snprintf(s1, sizeof s1, "*Дверь шлюза открывается...");
-    else { std::snprintf(s1, sizeof s1, "+ГОТОВА. ВНИЗ - спуск"); std::snprintf(s2, sizeof s2, " снаружи %.2f атм%s", OutsideP(), OutsideAirOk() ? ", воздух пригоден" : ""); }
-    char s3[96];
-    std::snprintf(s3, sizeof s3, "*ВЫСОТА %5.1f м    СКОРОСТЬ %4.1f м/с", lift_.CabHeight(), std::fabs(lift_.CabSpeed()));
-    std::snprintf(out, size_t(n), "КАБИНА ЛИФТА\n%s\n%s\n%s\n%s%s", s3, s1, s2[0] ? s2 : " ", panelErr_[0] ? "!" : "", panelErr_);
+    const char* st;
+    if (lift_.AtGround()) st = "+ВНИЗУ";
+    else if (trip_ == 1 && doorB_ < 1.0) st = "*ДВЕРЬ ШЛЮЗА ЗАКРЫВАЕТСЯ";
+    else if (trip_ == 1) st = "*ВЫРАВНИВАНИЕ ДАВЛЕНИЯ";
+    else if (!home) st = lift_.Lowering() ? "*СПУСК" : "*ПОДЪЁМ";
+    else if (trip_ == 2 || zonePressure_ < 0.999) st = "*НАДДУВ ШЛЮЗА";
+    else if (doorB_ > 0.0) st = "*ДВЕРЬ ШЛЮЗА ОТКРЫВАЕТСЯ";
+    else st = "+ГОТОВА";
+    int ids[8]; const int people = interior_.CabinPeople(ids, 8);
+    char msg[200];
+    if (panelErr_[0]) std::snprintf(msg, sizeof msg, "!%s", panelErr_);
+    else std::snprintf(msg, sizeof msg, "%s", lift_.AtGround() ? " ВЫХОД НА ГРУНТ  ·  ПОДЪЁМ" : home && !trip_ && doorB_ <= 0.0 ? " СПУСК - КНОПКА СПУСК" : " ");
+    std::snprintf(out, size_t(n), "КАБИНА ЛИФТА\tЛ-1\nСОСТОЯНИЕ\t%s\nВЫСОТА\t %.1f М\nСКОРОСТЬ\t %.1f М/С\nДАВЛЕНИЕ\t %.2f АТМ  (СНАР. %.2f)\nЛЮДЕЙ\t %d\n%s",
+                  st, lift_.CabHeight(), std::fabs(lift_.CabSpeed()), zonePressure_, OutsideP(), people, msg);
 }
 
 int Tantra::PanelState(int which) const {
@@ -2856,32 +3008,4 @@ int Tantra::CanWalk(char* reason, int n) const {
     }
     const double lim = 10.0 * PI / 180.0;
     if (GroundContact()) {
-        if (std::fabs(GetPitch()) > lim || std::fabs(GetBank()) > lim) return no("Корабль не горизонтален: ходить нельзя");
-        return 1;
-    }
-    if (GetAltitude() < 100e3) return no("Взлёт или посадка: все в креслах");
-    return 1;
-}
-
-// The user's decision: no Orbiter autopilots (killrot, prograde, hold altitude...) in the Tantra. Any that gets switched on
-// (a key, an MFD, a scenario) is switched off at once.
-void Tantra::clbkNavMode(int mode, bool active) {
-    if (!active) { navAllowed_ &= ~(1 << mode); return; }
-    if (navAllowed_ & (1 << mode)) return;                              // from the holo panel: allowed (the user's decision)
-    DeactivateNavmode(mode);
-    oapiWriteLogV("Tantra: Orbiter autopilot %d refused (only from the holo panel)", mode);
-}
-
-// The holo panel's values (TantraBridge).
-void Tantra::FillHolo(HoloData* d) const {
-    d->anamezon = engineSet_ == EngineSet::Anamezon; d->anaFeed = AnaIsMain() && GetThrusterGroupLevel(THGROUP_MAIN) > 0.0;
-    d->thrust = GetThrusterGroupLevel(THGROUP_MAIN);
-    const double mx = GetMaxFuelMass(); d->fuel = mx > 0 ? GetFuelMass() / mx : 0.0;
-    d->field = ignition_.FieldLevel(); d->beam = ignition_.BeamLevel();
-    d->alt = GetAltitude(); d->speed = GetAirspeed(); d->mach = GetMachNumber();
-    VECTOR3 v; GetHorizonAirspeedVector(v); d->vs = v.y;
-    d->g = thrustAccel_ / 9.80665; d->aoa = GetAOA(); d->pitch = GetPitch(); d->bank = GetBank();
-    double h = 0.0; oapiGetHeading(GetHandle(), &h); d->hdg = h;
-    d->navOn = 0;
-    for (int m = 1; m <= 7; m++) if (const_cast<Tantra*>(this)->GetNavmodeState(m)) d->navOn |= 1 << m;
-}
+        if (std::fabs(G

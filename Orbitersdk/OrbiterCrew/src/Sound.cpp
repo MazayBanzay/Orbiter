@@ -28,6 +28,13 @@ namespace ocrew
 			if (!Exists(path) || !xr->LoadWav(firstId + i, path.c_str(), static_cast<XRSound::PlaybackType>(playback))) break;
 			++set.count;
 		}
+		// the same takes again as Global (no fading, no focus needed): for the person in focus - her own ears
+		set.firstG = firstId + 50;
+		for (int i = 0; i < (std::min)(set.count, 50); ++i)
+		{
+			snprintf(name, sizeof name, pattern.c_str(), i);
+			if (!xr->LoadWav(set.firstG + i, (std::string(ROOT) + name).c_str(), XRSound::Global)) { set.firstG = 0; break; }
+		}
 		return firstId + 100;
 	}
 
@@ -37,6 +44,9 @@ namespace ocrew
 		if (!xr || !xr->IsPresent()) { oapiWriteLog(const_cast<char*>("OrbiterCrew: XRSound not present, crew sounds off")); delete xr; xr = nullptr; return; }
 		// XRSound plays its cockpit air-conditioning loop in every vessel: a person has no cabin - only the suit's own fan
 		xr->SetDefaultSoundEnabled(XRSound::AirConditioning, false);
+		// the wind is our own (where the person is, the user's rule): XRSound's vessel winds would follow the camera
+		xr->SetDefaultSoundEnabled(XRSound::LandedWind, false);
+		xr->SetDefaultSoundEnabled(XRSound::FlightWind, false);
 		int id = 1000;
 		id = Load(walk, id, "steps\\walk_%02d.wav", XRSound::BothViewClose);
 		id = Load(run, id, "steps\\run_%02d.wav", XRSound::BothViewClose);
@@ -50,6 +60,13 @@ namespace ocrew
 		cautionId = fanId + 1; warningId = fanId + 2;
 		if (!xr->LoadWav(cautionId, "XRSound\\Default\\BeepLow.wav", XRSound::InternalOnly)) cautionId = 0;
 		if (!xr->LoadWav(warningId, "XRSound\\Default\\Warning Beep.wav", XRSound::InternalOnly)) warningId = 0;
+		// Global twins of the fan and the tones (her ears); windId is Global only
+		fanG = fanId + 4; cautionG = fanId + 5; warningG = fanId + 6;
+		if (!fanId || !xr->LoadWav(fanG, (std::string(ROOT) + "suit\\fan.wav").c_str(), XRSound::Global)) fanG = 0;
+		if (!xr->LoadWav(cautionG, "XRSound\\Default\\BeepLow.wav", XRSound::Global)) cautionG = 0;
+		if (!xr->LoadWav(warningG, "XRSound\\Default\\Warning Beep.wav", XRSound::Global)) warningG = 0;
+		windId = fanId + 3;
+		if (!xr->LoadWav(windId, "XRSound\\Default\\Landed Wind.wav", XRSound::Global)) windId = 0;   // her ears, wherever the camera is
 
 		// breath takes: how hard each one is and how long it lasts, so the right take fits the breathing rate
 		std::ifstream f(std::string(ROOT) + "voice\\" + voice + "\\breath.txt");
@@ -75,7 +92,8 @@ namespace ocrew
 		}
 		set.prev = set.last; set.last = pick;
 		const double spread = std::uniform_real_distribution<double>(0.88, 1.0)(rng);
-		xr->PlayWav(set.first + pick, false, static_cast<float>(std::clamp(volume * spread, 0.0, 1.0)));
+		const int base = mine && set.firstG && pick < 50 ? set.firstG : set.first;   // her own ears, or heard where she is
+		xr->PlayWav(base + pick, false, static_cast<float>(std::clamp(volume * spread, 0.0, 1.0)));
 	}
 
 	int CrewSound::PickBreath(const Set& set, double intensity, double maxLength)
@@ -94,6 +112,7 @@ namespace ocrew
 	void CrewSound::Update(const Input& in)
 	{
 		if (!xr) return;
+		mine = in.mine;
 
 		// ---- footsteps: on the gait's foot contacts; heavier in the suit; in vacuum only through the body ----
 		for (int i = 0; i < in.footfalls; ++i)
@@ -145,10 +164,22 @@ namespace ocrew
 		{
 			const double target = 0.15 + 0.65 * std::clamp(in.fanLoad, 0.0, 1.0);
 			fanVolume += (target - fanVolume) * (std::min)(1.0, in.dt / 1.5);   // the fan spins up and down over a second or two
-			if (!fanPlaying || std::abs(target - fanVolume) > 0.01) xr->PlayWav(fanId, true, static_cast<float>(fanVolume));
-			fanPlaying = true;
+			const int id = mine && fanG ? fanG : fanId;
+			if (fanPlaying && fanNow != id) { xr->StopWav(fanNow); fanPlaying = false; }   // the focus moved: the other twin
+			if (!fanPlaying || std::abs(target - fanVolume) > 0.01) xr->PlayWav(id, true, static_cast<float>(fanVolume));
+			fanPlaying = true; fanNow = id;
 		}
-		else if (fanPlaying) { xr->StopWav(fanId); fanPlaying = false; fanVolume = 0.15; }
+		else if (fanPlaying) { xr->StopWav(fanNow); fanPlaying = false; fanVolume = 0.15; }
+
+		// ---- the air around her: the wind, by its density and her speed through it; through the helmet muffled ----
+		if (windId && in.wind > 0.01 && in.alive)
+		{
+			const double target = std::clamp(in.wind, 0.0, 1.0);
+			windVolume += (target - windVolume) * (std::min)(1.0, in.dt / 0.8);
+			if (!windPlaying || std::abs(target - windVolume) > 0.01) xr->PlayWav(windId, true, static_cast<float>(windVolume));
+			windPlaying = true;
+		}
+		else if (windPlaying) { xr->StopWav(windId); windPlaying = false; windVolume = 0; }
 
 		// ---- alarm: a tone while a caution or a warning waits for acknowledgement ----
 		if (in.alarm > 0 && in.alive)
@@ -156,7 +187,7 @@ namespace ocrew
 			alarmClock -= in.dt;
 			if (alarmClock <= 0)
 			{
-				const int id = in.alarm >= 2 ? warningId : cautionId;
+				const int id = in.alarm >= 2 ? (mine && warningG ? warningG : warningId) : (mine && cautionG ? cautionG : cautionId);
 				if (id) xr->PlayWav(id, false, in.alarm >= 2 ? 0.8f : 0.6f);
 				alarmClock = in.alarm >= 2 ? 1.5 : 4.0;
 			}

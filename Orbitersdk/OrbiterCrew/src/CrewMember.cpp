@@ -10,6 +10,9 @@
 #include <fstream>
 #include <map>
 
+// oapiCameraAttach modes (OrbiterAPI.h: 0 internal, 1 external) - once used the other way round, by mistake
+const int CAM_INSIDE = 0, CAM_OUTSIDE = 1;
+
 namespace ocrew
 {
 	namespace
@@ -212,6 +215,7 @@ namespace ocrew
 			std::string key;
 			ss >> key;
 			if (who.LoadLine(key, ss)) {}   // the person: who, the organism, what is worn
+			else if (key == "FACESUN") { int f = 0; ss >> f; faceSun = f != 0; }
 			else if (key == "SEAT") { ss >> seatId; seat = seatId >= 0 ? 2 : 0; seatT = 1; }
 			else if (key == "INTERIOR") { ss >> inFeet.x >> inFeet.y >> inFeet.z >> inHdg; std::getline(ss >> std::ws, inShipName); }
 			else if (key == "SHADE") { ss >> shadeTarget; shade = shadeTarget; }
@@ -359,6 +363,7 @@ namespace ocrew
 		if ((inShip || (GetFlightStatus() & 1) || airborne) && !jet.Worn()) for (DWORD k : MOVE_KEYS) if (key == k) return 1;
 		if (key == OAPI_KEY_K) { if (down) SetSuit(!suitOn); return 1; }
 		if (key == OAPI_KEY_CAPITAL && jet.Worn()) { if (down) ApRequest(SuitHud::AP_FINE); return 1; }   // the limiter
+		if (key == OAPI_KEY_V && !KEYMOD_SHIFT(kstate)) { if (down) ShipView(); return 1; }   // the ship from outside; again: her view
 		if (key == OAPI_KEY_V && suitOn) { if (down) { shadeTarget = shadeTarget > 0.5 ? 0 : 1; Say(shadeTarget > 0.5 ? "Щиток опущен" : "Щиток поднят"); } return 1; }
 		if (key == OAPI_KEY_L && suitOn) { if (down) { lampOn = !lampOn; Say(lampOn ? "Фонари включены" : "Фонари выключены"); } return 1; }
 		if (key == OAPI_KEY_B && suitOn) { if (down && bio.CanAct()) { if (jet.Worn()) DropPack(); else TakePack(); } return 1; }
@@ -827,6 +832,23 @@ namespace ocrew
 		// the user's view of this person, remembered in the person (through the eyes / from outside at that distance)
 		if (!takeView && oapiCameraTarget() == GetHandle()) { who.viewOutside = !oapiCameraInternal(); if (who.viewOutside) who.viewDist = oapiCameraTargetDist(); }
 		if (takeView && !inShip) ApplyView();
+		// once at the start: where the Sun is for her (horizon frame: elevation, azimuth from north to the east) - and,
+		// with FACESUN 1 in her scenario block, she turns to face it (standing on the ground)
+		if (!sunLogged && !inShip && simt > 0.5 && GetSurfaceRef())
+		{
+			sunLogged = true;
+			VECTOR3 sp, me; oapiGetGlobalPos(oapiGetGbodyByIndex(0), &sp); GetGlobalPos(me);
+			MATRIX3 Rv; GetRotationMatrix(Rv);
+			VECTOR3 hz; HorizonRot(tmul(Rv, unit(sp - me)), hz);   // x east, y up, z north
+			const double az = std::atan2(hz.x, hz.z), el = std::asin(std::clamp(hz.y, -1.0, 1.0));
+			oapiWriteLogV("OrbiterCrew: %s: the Sun at elevation %.1f deg, azimuth %.1f deg (MJD %.5f)", name.c_str(), el * DEG, std::fmod(az * DEG + 360, 360), oapiGetSimMJD());
+			if (faceSun && (GetFlightStatus() & 1))
+			{
+				VESSELSTATUS2 s = Status(this);
+				s.surf_hdg = std::fmod(az + PI2, PI2);
+				DefSetStateEx(&s);
+			}
+		}
 		if (inShip) { InteriorStep(dt); if (takeView && inParent) ApplyView(); return; }
 		jet.SetOxygen(air.ppO2 > 1.0);   // steam behind the jets only where hydrogen can burn
 		const double g = Gravity();
@@ -984,6 +1006,17 @@ namespace ocrew
 		si.fanLoad = suit.Powered() && suitOn ? std::clamp(std::abs(suit.heatW) / (suit.heatW >= 0 ? suit.coolMaxW : suit.heatMaxW), 0.0, 1.0) : 0.0;
 		si.alive = bio.state != Body::DEAD; si.breathRate = bio.breath;
 		si.intensity = std::clamp(0.8 * bio.Effort() + 0.5 * bio.Fatigue() + 0.6 * (1 - bio.reserve), 0.0, 1.0);
+		si.mine = oapiGetFocusObject() == GetHandle();
+		// the wind where SHE is (the user: the sound follows the person, not the camera): none inside a ship (a sealed
+		// hull) or in vacuum; louder with denser air and with her speed through it; the helmet muffles it
+		// (the person in focus: the wind plays for the user's ears whatever the camera is - other people's winds stay off)
+		if (!inShip && air.p > 0.05 && air.T > 30 && oapiGetFocusObject() == GetHandle())
+		{
+			const double Rgas = (air.body == "Mars" || air.body == "Venus") ? 189.0 : 287.0;   // CO2 or nitrogen-oxygen air
+			const double rho = air.p * 1000 / (Rgas * air.T);
+			const double v = GetAirspeed();
+			si.wind = std::sqrt((std::min)(1.5, rho) / 1.2) * (0.25 + 0.75 * std::clamp(v / 15.0, 0.0, 1.0)) * (suitOn ? 0.35 : 1.0);
+		}
 		sound.Update(si);
 
 		landingSpeed = 0;
@@ -1087,7 +1120,9 @@ namespace ocrew
 		oapiWriteLogV("OrbiterCrew: %s inside %s at (%.2f %.2f %.2f)", name.c_str(), sv->GetName(), inFeet.x, inFeet.y, inFeet.z);
 		if (seat == 2 && seatId >= 0)   // seated in the scenario: back into that seat, the ship is told
 		{
-			if (SeatPlace(seatId)) { inFeet = seatFeet; inHdg = seatHdg; if (si->ext.Seated) si->ext.Seated(si->ctx, seatId, who.id, 1); }
+			if (SeatPlace(seatId)) { inFeet = seatFeet; inHdg = seatHdg; if (si->ext.Seated) si->ext.Seated(si->ctx, seatId, who.id, 1);
+				seatHelm = false;
+				for (int i = 0, n = si->fns.Count ? si->fns.Count(si->ctx) : 0; i < n; ++i) { OcItem it{}; if (si->fns.Item && si->fns.Item(si->ctx, i, &it) && it.id == seatId) seatHelm = it.kind == OC_HELM; } }
 			else { seat = 0; seatId = -1; }
 		}
 		fwd = lat = turn = accel = 0; airborne = lying = false;
@@ -1117,8 +1152,8 @@ namespace ocrew
 	{
 		takeView = false;
 		oapiSetFocusObject(GetHandle());
-		if (!who.viewOutside) { oapiCameraAttach(GetHandle(), 1); return; }
-		oapiCameraAttach(GetHandle(), 0);
+		if (!who.viewOutside) { oapiCameraAttach(GetHandle(), CAM_INSIDE); return; }
+		oapiCameraAttach(GetHandle(), CAM_OUTSIDE);
 		const double d = oapiCameraTargetDist();
 		if (who.viewDist > 0.5 && d > 0) oapiCameraScaleDist(who.viewDist / d);
 	}
@@ -1146,6 +1181,7 @@ namespace ocrew
 		Figure& fig = Active();
 		if (!si || !si->fns.Seat || !fig.ok || !fig.clips.seats) return;
 		SeatPlace(id);
+		seatHelm = useKind == OC_HELM;
 		// the clip starts standing seatStartZ in front of the seat: she is eased from where she is onto that start
 		const VECTOR3 f0 = _V(std::sin(seatHdg), 0, std::cos(seatHdg));
 		seatFrom = inFeet - f0 * seatStartZ; seatHdgFrom = inHdg;
@@ -1165,6 +1201,28 @@ namespace ocrew
 	void CrewMember::StandFromSeat()
 	{
 		if (seat != 2 || !inShip) return;
+		// the ship raised or taking off (tilted over 15 deg from the local vertical near a planet): she stays in the seat
+		// (the user, 2026-10-03). Above 100 km the ship's own gravity holds the deck - no limit there
+		if (oapiIsVessel(inShip))
+		{
+			VESSEL* sv = oapiGetVesselInterface(inShip);
+			OBJHANDLE ref = sv->GetSurfaceRef();
+			if (ref && sv->GetAltitude() < 100e3)
+			{
+				VECTOR3 sp, rp; sv->GetGlobalPos(sp); oapiGetGlobalPos(ref, &rp);
+				MATRIX3 R; sv->GetRotationMatrix(R);
+				const VECTOR3 deckUp = mul(R, _V(0, 1, 0));
+				const double tilt = std::acos(std::clamp(dotp(deckUp, unit(sp - rp)), -1.0, 1.0)) * DEG;
+				if (tilt > 15)
+				{
+					char b[96]; std::snprintf(b, sizeof b, "Вставать нельзя: корабль наклонён на %.0f°", tilt);
+					Say(b, 1);
+					oapiWriteLogV("OrbiterCrew: %s stays seated - the ship is tilted %.1f deg", name.c_str(), tilt);
+					return;
+				}
+			}
+		}
+		if (shipView) ShipView();   // up from the seat: the view comes back to her
 		if (ShipInterior* si = InteriorOf(inShip)) if (si->ext.Seated) si->ext.Seated(si->ctx, seatId, who.id, 0);   // the seat moves back
 		seat = 4; seatT = 0; seatStill = 0;
 		oapiWriteLogV("OrbiterCrew: %s stands up from seat %d", name.c_str(), seatId);
@@ -1283,6 +1341,39 @@ namespace ocrew
 		orbitKp = std::abs(dp) > 0.01 ? 0.05 / dp : 0;              // polar per radian of pitch (0: none)
 		orbitCal = 2;
 		return true;
+	}
+
+	// V: the camera goes to the ship (the one she is in, or the nearest) from outside; the focus and the controls stay
+	// with her; V again - her own view back (the user, 2026-10-03, through «Тантра»)
+	void CrewMember::ShipView()
+	{
+		if (shipView && oapiCameraTarget() != GetHandle())
+		{
+			shipView = false;
+			if (who.viewOutside) { oapiCameraAttach(GetHandle(), CAM_OUTSIDE); const double d = oapiCameraTargetDist(); if (who.viewDist > 0.5 && d > 0) oapiCameraScaleDist(who.viewDist / d); }
+			else oapiCameraAttach(GetHandle(), CAM_INSIDE);
+			return;
+		}
+		// only for the one who controls the ship: seated in its seat (the user); standing, walking, outside - nothing
+		if (seat != 2 || !inShip || !seatHelm) return;   // a helm seat (OC_HELM): the commander's, the navigator's
+		OBJHANDLE ship = inShip;
+		if (!ship)
+		{
+			VECTOR3 me; GetGlobalPos(me); double best = 5000;
+			for (DWORD i = 0; i < oapiGetVesselCount(); ++i)
+			{
+				OBJHANDLE h = oapiGetVesselByIndex(i);
+				if (h == GetHandle()) continue;
+				VESSEL* v = oapiGetVesselInterface(h);
+				if (std::strstr(v->GetClassNameA(), "OrbiterCrew")) continue;   // not a person or a pack
+				VECTOR3 p; oapiGetGlobalPos(h, &p);
+				const double d = length(p - me) - v->GetSize();
+				if (d < best) { best = d; ship = h; }
+			}
+		}
+		if (!ship) { Say("Рядом нет корабля"); return; }
+		shipView = true;
+		oapiCameraAttach(ship, CAM_OUTSIDE);   // the ship from outside; its camera is Orbiter's own from here (mouse, F2)
 	}
 
 	// the camera's direction relative to the body (her head): yaw right +, pitch up +
@@ -1543,7 +1634,7 @@ namespace ocrew
 		if (seat == 2) { StandFromSeat(); return true; }
 		if (seat) return true;   // getting in or out of the seat
 		if (useId < 0 || !useShip) return false;
-		if (inShip && useShip == inShip && useKind == OC_SEAT && seat == 0)
+		if (inShip && useShip == inShip && (useKind == OC_SEAT || useKind == OC_HELM) && seat == 0)
 			if (ShipInterior* si = InteriorOf(inShip)) if (si->ext.Seated && si->fns.Seat && Active().ok && Active().clips.seats) { SitDown(useId); return true; }
 		for (ShipInterior& si : interiors())
 			if (si.ship == useShip && si.fns.Use && oapiIsVessel(si.ship)) { si.fns.Use(si.ctx, useId, who.id); return true; }

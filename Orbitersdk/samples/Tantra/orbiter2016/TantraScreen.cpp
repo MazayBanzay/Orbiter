@@ -27,6 +27,7 @@ void TantraScreen::Init(VESSEL* v, UINT vcMeshIdx) {
         view_.AddZone(vcMeshIdx, DWORD(z.slot), int(kH * z.aspect + 0.5), kH, _V(0.0, kCamY, kCamZ), dir, up, z.vfov);
     }
     tele_ = view_.AddZone(vcMeshIdx, DWORD(kAstroSlot), int(kH * kAstroAspect + 0.5), kH, _V(0.0, kCamY, kCamZ), _V(0, 0, 1), _V(0, 1, 0), kTeleFovDeg);
+    view_.SetZoneLook(tele_, _V(-1.0, 0.1, -0.2), 40.0);                     // its picture: the astronomer's screen on the port wall
     view_.AimAt(tele_, oapiGetObjectByName(const_cast<char*>("Moon")));     // until the navigator's console chooses the target
     view_.SetOn(true);
 }

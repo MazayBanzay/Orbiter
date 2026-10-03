@@ -6,7 +6,7 @@ END_DESC
 
 BEGIN_ENVIRONMENT
   System Sol
-  Date MJD 52001.825
+  Date MJD 52001.7301
 END_ENVIRONMENT
 
 BEGIN_FOCUS
@@ -57,6 +57,7 @@ Niza_Krit:OrbiterCrew\Astronavigator
   ROLE Spe
   SEX female
   SUIT 1
+  FACESUN 1
 END
 JetPack1:OrbiterCrew\JetPack
   STATUS Landed Mars

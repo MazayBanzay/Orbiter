@@ -167,7 +167,9 @@ def export_bind(arm, bones):
     with open(MESH_OUT, "w", encoding="ascii", newline="\r\n") as f:
         f.write("MSHX1\nGROUPS %d\n" % len(groups))
         for lname, mat_i, tex, verts, faces in groups:
-            f.write("LABEL %s\nMATERIAL %d\nTEXTURE %d\nGEOM %d %d\n" % (lname, mat_i, tex, len(verts), len(faces)))
+            # glass casts no shadow (the client's shadow map knows no transparency: a clear visor would black out her face)
+            flag = "FLAG 1\n" if lname.split("_")[0] in ("Visor", "SunShade") else ""
+            f.write("LABEL %s\nMATERIAL %d\nTEXTURE %d\n%sGEOM %d %d\n" % (lname, mat_i, tex, flag, len(verts), len(faces)))
             for P, Nn, U, W in verts: f.write("%.5f %.5f %.5f %.4f %.4f %.4f %.5f %.5f\n" % (P.x, P.y, P.z, Nn.x, Nn.y, Nn.z, U[0], U[1]))
             for a, b, c in faces: f.write("%d %d %d\n" % (a, c, b))
         f.write("MATERIALS %d\n" % len(materials))

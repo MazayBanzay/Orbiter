@@ -42,6 +42,7 @@ public:
     int PersonOf(int slot);
 
     bool AirlockOpen() const { return airlockOpen_; }
+    bool ListenerInside(OBJHANDLE focus) const;   // the focused body is a person walking inside this ship (sound)
     void SetAirlockOpen(bool open) { airlockOpen_ = open; }
 
     // Members aboard, by slot.

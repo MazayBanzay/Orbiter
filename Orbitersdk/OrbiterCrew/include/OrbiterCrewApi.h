@@ -27,7 +27,8 @@ struct OcInfo {
 // The person moves; the ship only answers where the floor and the walls are and what can be used.
 // OC_BUTTON: a control pressed with the MOUSE (the user's rule: buttons are clicked, not F): pos = its centre, radius =
 // its size on the panel (~0.02-0.05 m); the person must stand within arm's reach. The others are used with F.
-enum OcItemKind { OC_SEAT = 1, OC_TERMINAL, OC_DOOR, OC_LIFT, OC_AIRLOCK, OC_EXIT, OC_BUTTON };
+// OC_HELM: a seat the ship is controlled from (as OC_SEAT; there V shows the ship from outside)
+enum OcItemKind { OC_SEAT = 1, OC_TERMINAL, OC_DOOR, OC_LIFT, OC_AIRLOCK, OC_EXIT, OC_BUTTON, OC_HELM };
 struct OcItem {
     int id;                     // the ship's own id (given back in Use / Seat)
     int kind;                   // OcItemKind

@@ -8,9 +8,9 @@
 #include "orbitersdk.h"
 #include "../../../OrbiterCrew/include/OrbiterCrewApi.h"
 #include "ShipMfd.h"
-#include "TantraBridge.h"
 #include "TantraGlyphs.h"
 #include <vector>
+#include <cmath>
 
 class TantraCrew;
 
@@ -25,6 +25,7 @@ struct LiftPanelHooks {
     void (*Status)(void* ctx, char* out, int n) = nullptr;   // the status screen: one line each, a leading '!' red, '+' green, '*' amber
     void (*CabStatus)(void* ctx, char* out, int n) = nullptr;   // the cabin's screen, the same way
     double (*DoorB)(void* ctx) = nullptr;                    // door B between the lift zone and the cell: 0 open .. 1 shut
+    double (*CabDoor)(void* ctx) = nullptr;                  // the cabin's own doors: 0 open .. 1 shut
 };
 
 // The bridge console shows the ship's own 2D panels (panel.dds), live: the ship redraws them and handles their clicks.
@@ -38,7 +39,15 @@ struct ConsoleHooks {
 class TantraInterior {
 public:
     void SetConsole(const ConsoleHooks& hk) { console_ = hk; BuildPanelButtons(); }
-    void SetBridge(const BridgeHooks& hk) { bridge_.Init(v_, vcMesh_, hk); }
+    // The commander's touch screens (kTouch: 0 left display, 1 right display, 2 flight terminal, 3 engines): drawn and handled by
+    // the ship's display module; here only the touch (u right, v down, 0..1) and the redraw step are passed on.
+    struct TouchHooks { void* ctx = nullptr; void (*Step)(void* ctx, double dt) = nullptr; bool (*Touch)(void* ctx, int screen, double u, double v) = nullptr; };
+    void SetTouch(const TouchHooks& hk) { touch_ = hk; }
+    void SideDisplay(int k, bool up) { if (k >= 0 && k < 2) sideTarget_[k] = up ? 0.0 : 1.0; }   // an elbow display rises / sinks
+    bool SideDisplayUp(int k) const { return k >= 0 && k < 2 && sidePos_[k] < 0.02; }
+    SURFHANDLE MfdDisplay(int i) const { return mfds_.Display(1 + i); }        // the 4 MFDs of the elbow displays (0..3)
+    const char* MfdLabel(int i, int b) const { return mfds_.Label(1 + i, b); }
+    void MfdPress(int i, int b) { mfds_.Press(1 + i, b); }
     // meshDZ: the mesh frame -> ship frame offset (z) of the interior, read on every call (the CG moves)
     // crew: the items of TantraCrew (the lift and the way in from outside, ids from 100) are served together with ours
     void Init(VESSEL* ship, UINT vcMeshIdx, double (*meshDZ)(void*), void* dzCtx, TantraCrew* crew);
@@ -80,7 +89,22 @@ private:
 
     LiftPanelHooks panel_{};
     int PanelItem(int k, OcItem* out) const;
-    int CabExitItem(OcItem* out) const;     // F at the cabin's door when it stands on the ground: out to the ground (as F at the lift brings one in)
+    int CabExitItem(OcItem* out) const;
+    // the inner lift (lobby shaft, three stops: the lower deck, the living deck, the technical level): F at its door calls it,
+    // F at a stop lamp inside sends it; the cab carries the people standing in it
+    int ILiftItem(int k, OcItem* out) const;  // k 0..2 call at stop k (outside), 3..5 go to stop k-3 (inside)
+    void ILiftStep(double dt);
+    void ILiftWalls(double& x, double& z, double feet, double radius, double height) const;
+    bool ILiftAt(int stop) const { return std::fabs(iliftY_ - kILiftStopY(stop)) < 0.01 && iliftV_ == 0.0; }
+    bool ILiftOpen(int stop) const { return iliftDoor_[stop] > 0.9; }
+    static double kILiftStopY(int k);
+    double iliftY_ = 0.0, iliftTarget_ = 0.0, iliftV_ = 0.0;
+    bool iliftInit_ = false;
+    UINT iliftAnim_ = 0, iliftDoorAnim_[3] = {0, 0, 0};
+    double iliftDoor_[3] = {0, 0, 0};          // 0 shut .. 1 open
+    struct IRider { int id; double x, z; VECTOR3 dir; };
+    IRider irider_[8] = {};
+    int nIRiders_ = 0;     // F at the cabin's door when it stands on the ground: out to the ground (as F at the lift brings one in)
     void CabinPose(double& sx, double& sy, bool& stowed, bool& atGround) const;   // the cabin's offset from its stowed place (mesh frame)
     void CabinWalls(double& x, double& z, double feet, double radius, double height) const;
     void CarryRiders();                       // the cabin carries the people in it (ocCarry) while it moves
@@ -93,12 +117,17 @@ private:
     std::vector<int> pareas_;                    // the panel areas shown on the console (redrawn)
     double panelT_ = 0.0;
     void BuildPanelButtons();
+    bool ClickPanel(double tx, double ty);   // a click at a point of panel.dds
     bool PanelPoint(int panel, double tx, double ty, VECTOR3* pos, VECTOR3* n) const;                  // the 12 console MFDs of the bridge (real Orbiter MFDs stuck to the ship)
-    TantraBridge bridge_;                     // the commander's touch screens and the holo panel
+    TouchHooks touch_{};
+    UINT sideAnim_[2] = {0, 0};
+    double sidePos_[2] = {0, 0}, sideTarget_[2] = {0, 0};   // 0 up (in use), 1 down in the pedestal
     int capShown_[6] = {-1, -1, -1, -1, -1, -1};
-    UINT cabOutAnim_ = 0, cabDownAnim_ = 0, doorBAnim_ = 0;   // the cabin's panel rides with the cabin; door B's leaves
+    UINT cabOutAnim_ = 0, cabDownAnim_ = 0, doorBAnim_ = 0, cabDoorAnim_ = 0;   // the cabin's panel rides with the cabin; door B's leaves
     SURFHANDLE cabScr_ = nullptr; double cabScrT_ = 0.0;
     void DrawCabStatus();
+    void DrawTable(SURFHANDLE surf, char* buf, int W, int H);   // the lift's screens: a header, rows "key\tvalue", then messages
+    oapi::Pen* rule_ = nullptr;
     TantraGlyphs glyphs_;                    // screen text: the helmet display's glyph atlas (system fonts draw no Cyrillic here)
     SURFHANDLE status_ = nullptr; oapi::Font* fontB_ = nullptr; oapi::Font* fontS_ = nullptr; double statusT_ = 0.0;
     void DrawStatus();

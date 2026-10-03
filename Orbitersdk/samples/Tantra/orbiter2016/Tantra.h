@@ -10,6 +10,7 @@
 #include "TantraWalk.h"
 #include "TantraScreen.h"
 #include "TantraInterior.h"
+#include "TantraDisplays.h"
 
 #include "../core/Carriage.h"
 #include "../core/Damage.h"
@@ -25,6 +26,7 @@ class TantraSafety;   // TantraSafety.h: radiation safety interlock
 class TantraGear;     // TantraGear.h: mesh animations
 
 class Tantra : public VESSEL3 {
+    friend class TantraDisplays;   // the commander's touch screens read the ship's state and call its Act*() like the 2D panels
 public:
     Tantra(OBJHANDLE hVessel, int flightmodel);
     ~Tantra();
@@ -284,8 +286,11 @@ private:
     UINT vcMeshIdx_ = 0;
     TantraWalk walk_;
     TantraInterior interior_; // the interior for OrbiterCrew: people walk inside with their bodies
+    TantraDisplays disp_;     // the commander's touch screens (elbow displays, flight terminal, engine console)
     TantraScreen screen_;     // bridge: big screen (outside view), its button, console MFD
-    LightEmitter* watchLight_[6] = {};   // 0..3 the way to the lift, 4..5 the bridge capsule   // watch lighting of the way from the bridge to the lift (InteriorLayout.h kWatchLights)
+    LightEmitter* watchLight_[6] = {};   // 0..3 the way to the lift, 4..5 the bridge capsule
+    LightEmitter* cabLight_ = nullptr;
+    LightEmitter* cabSpot_[2] = {};       // the cabin's two floodlights (down and out), on while the cabin is out of the cell   // the lift cabin's ceiling light (rides with the cabin; on while someone is inside or it is out)   // watch lighting of the way from the bridge to the lift (InteriorLayout.h kWatchLights)
     void WatchLights();                  // positions (they follow the CG shift) and on/off: only while someone looks inside
     VECTOR3 touch_[tantra::CarriagePose::kMaxTouch] = {};
     int nTouch_ = 0;
@@ -327,7 +332,11 @@ private:
     int PanelState(int which) const;      // the light of a panel button (TantraInterior LiftPanelHooks::State)
     static SURFHANDLE PanelTex();
     int navAllowed_ = 0;                  // bits (1 << NAVMODE_*): the autopilots switched on from the holo panel (keys stay refused)
-    void FillHolo(struct HoloData* d) const;         // the 2D panels' texture (loaded on first use), shared with the bridge console
+    void SeatKeys();                      // the numpad in the commander's seat (the focus is the person): throttle, attitude, killrot
+    unsigned seatKeyPrev_ = 0;            // the keys held last step (edges)
+    unsigned seatAttSet_ = 0;
+    bool seatSurf_ = false;   // the helm holds the control surfaces (released on leaving the seat)             // the attitude groups the numpad drives now (bits THGROUP_ATT_*)
+    void ToggleNav(int mode);             // an Orbiter autopilot from the flight terminal (TantraDisplays)         // the 2D panels' texture (loaded on first use), shared with the bridge console
     void PanelStatus(char* out, int n) const;    // the lift zone's screen
     void CabStatus(char* out, int n) const;      // the cabin's screen
     void PanelStep(double dt);
@@ -342,7 +351,9 @@ private:
     char suitMsg_[96] = {0}; double suitMsgT_ = 0.0; int suitOk_ = -1;   // the lift zone's button 1: the presser's suit
     double zonePressure_ = 1.0, zonePressureTarget_ = 1.0;   // the air of the cell (the cabin in it), fraction of the normal pressure
     double doorB_ = 0.0, doorBT_ = 0.0;   // door B: 0 open .. 1 shut
-    int trip_ = 0;                        // 0 none, 1 going down (door B, air, then the cabin), 2 going up, 3 riding down
+    double cabDoor_ = 0.0, cabDoorT_ = 0.0;   // the cabin's own doors: 0 open .. 1 shut (shut while it travels)
+    int trip_ = 0;                        // 0 none, 1 going down (door B, air, the cabin's doors, then the cabin), 2 going up, 3 riding down,
+                                          // 4 about to go up (the cabin's doors shut first)
     char panelMsg_[160] = {0};             // the answer of the last pressed button: shown in its hint for a while (the person sees no ship HUD)
     int panelMsgBtn_ = -1;
     double panelMsgT_ = 0.0;
@@ -350,6 +361,7 @@ private:
 
     // XRSound.
     XRSound* sound_ = nullptr;
+    int soundInside_ = -1;          // listener inside the hull (1) / outside (0): the outside default sounds follow it
 
     // HUD.
     bool russian_ = true;
@@ -360,6 +372,4 @@ private:
 
     // 2D panel.
     MESHHANDLE panelMesh_ = nullptr;
-    char panelCache_[128][256] = {};  // last drawn content per area, to skip redundant blits
-    double messageTimer_ = 0.0;
-};
+    char panelCache_[128][256] 
