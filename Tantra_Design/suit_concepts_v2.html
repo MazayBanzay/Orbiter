@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Скафандр: 3 концепта</title>
+<style>
+  :root { --bg:#eceae6; --card:#fbfaf8; --ink:#23262b; --dim:#6b6f76; --line:#d6d3cd; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#16181b; --card:#1f2226; --ink:#e6e4df; --dim:#9aa0a8; --line:#33373d; } }
+  :root[data-theme="dark"] { --bg:#16181b; --card:#1f2226; --ink:#e6e4df; --dim:#9aa0a8; --line:#33373d; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, "Segoe UI", sans-serif; }
+  main { max-width:1180px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--dim); margin:0 0 20px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 14px 16px; }
+  .card h2 { font-size:17px; margin:0 0 2px; }
+  .card .k { color:var(--dim); font-size:13px; margin:0 0 8px; }
+  svg { width:100%; height:auto; display:block; }
+  ul { margin:8px 0 0; padding-left:18px; font-size:14px; }
+  li { margin:2px 0; }
+  .note { margin-top:18px; color:var(--dim); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Скафандр астронавигатора — 3 концепта</h1>
+  <p class="sub">Белый основной, красный ≤ 20 %. Компактный шлем с прозрачным визором, без «шаров». Единственная надпись — «37 ЗВЁЗДНАЯ». Пропорции — её фигура (1,74 м). Спереди · сбоку · шлем.</p>
+  <div class="grid" id="grid"></div>
+  <p class="note">Схемы, не финальный рендер: силуэт, тектоника и распределение красного. Выбранный вариант дальше моделируется в Blender поверх её тела и ставится как SuitSkin в OrbiterCrew.</p>
+</main>
+<script>
+const W = '#f4f3ef', W2 = '#dcdad4', R = '#c8322a', INK = '#2b2e33', VIS = 'rgba(150,200,235,0.28)', SKIN = '#e9c3a6', HAIR = '#a8532b';
+const S = 2.1;              // px per cm
+const cm = v => v * S;
+
+// capsule limb with outline
+function limb(x1, y1, x2, y2, w, fill = W) {
+  return `<line x1="${cm(x1)}" y1="${cm(y1)}" x2="${cm(x2)}" y2="${cm(y2)}" stroke="${INK}" stroke-width="${cm(w) + 2.4}" stroke-linecap="round"/>
+          <line x1="${cm(x1)}" y1="${cm(y1)}" x2="${cm(x2)}" y2="${cm(y2)}" stroke="${fill}" stroke-width="${cm(w)}" stroke-linecap="round"/>`;
+}
+function band(x1, y1, x2, y2, w, t, col = R) {   // colored band across a limb at fraction t
+  const x = x1 + (x2 - x1) * t, y = y1 + (y2 - y1) * t, dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
+  const nx = -dy / L * w / 2, ny = dx / L * w / 2;
+  return `<line x1="${cm(x - nx)}" y1="${cm(y - ny)}" x2="${cm(x + nx)}" y2="${cm(y + ny)}" stroke="${col}" stroke-width="${cm(1.6)}"/>`;
+}
+function path(d, fill = W, sw = 1.2) { return `<path d="${d}" fill="${fill}" stroke="${INK}" stroke-width="${sw}" stroke-linejoin="round"/>`; }
+const P = pts => 'M' + pts.map(([x, y]) => `${cm(x)},${cm(y)}`).join(' L') + ' Z';
+const C = pts => { // smooth closed curve through points (Catmull-Rom)
+  let d = `M${cm(pts[0][0])},${cm(pts[0][1])}`;
+  for (let i = 0; i < pts.length; i++) {
+    const p0 = pts[(i - 1 + pts.length) % pts.length], p1 = pts[i], p2 = pts[(i + 1) % pts.length], p3 = pts[(i + 2) % pts.length];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += ` C${cm(c1[0])},${cm(c1[1])} ${cm(c2[0])},${cm(c2[1])} ${cm(p2[0])},${cm(p2[1])}`;
+  }
+  return d + ' Z';
+};
+
+// ---------- body landmarks (cm from the top of the head; x from the centre line) ----------
+// front: shoulders 19, chest 15, waist 12, hips 17
+const torsoFront = (sw = 19, ww = 12, hw = 17) => C([[-sw + 3, 31], [-sw, 35], [-15, 46], [-ww, 64], [-hw, 79], [-12, 90], [0, 91], [12, 90], [hw, 79], [ww, 64], [15, 46], [sw, 35], [sw - 3, 31], [0, 29]]);
+const torsoSide = (chest = 12, back = -9) => C([[4, 29], [chest, 40], [chest - 1, 50], [6, 64], [8, 80], [5, 91], [-8, 90], [-11, 80], [-7, 64], [back, 48], [back + 1, 36], [-4, 29]]);
+
+function helmetFront(kind, cx = 0, cy = 11) {
+  let s = '';
+  if (kind === 'mcp') {        // close-fitting shell, wraparound visor, neck seal ring
+    s += path(C([[cx - 11, cy], [cx - 10, cy - 10], [cx, cy - 14], [cx + 10, cy - 10], [cx + 11, cy], [cx + 9, cy + 12], [cx, cy + 15], [cx - 9, cy + 12]]), W);
+    s += face(cx, cy + 1);
+    s += path(C([[cx - 9.5, cy - 5], [cx, cy - 8], [cx + 9.5, cy - 5], [cx + 9, cy + 7], [cx, cy + 11], [cx - 9, cy + 7]]), VIS, 1);
+    s += `<rect x="${cm(cx - 8)}" y="${cm(cy + 14.5)}" width="${cm(16)}" height="${cm(2.2)}" rx="3" fill="${R}" stroke="${INK}" stroke-width="1"/>`;
+  } else if (kind === 'hut') { // hard torso: faceted helmet, wide flat visor, red brow
+    s += path(P([[cx - 12, cy + 12], [cx - 13, cy - 2], [cx - 9, cy - 12], [cx, cy - 15], [cx + 9, cy - 12], [cx + 13, cy - 2], [cx + 12, cy + 12], [cx, cy + 15]]), W);
+    s += face(cx, cy + 1);
+    s += path(P([[cx - 11, cy - 5], [cx + 11, cy - 5], [cx + 10, cy + 9], [cx, cy + 12], [cx - 10, cy + 9]]), VIS, 1);
+    s += path(P([[cx - 11, cy - 5], [cx - 9, cy - 9], [cx + 9, cy - 9], [cx + 11, cy - 5]]), R, 1);
+  } else {                     // exo: helmet merges into a collar yoke, visor to the chin
+    s += path(C([[cx - 12, cy + 4], [cx - 11, cy - 9], [cx, cy - 15], [cx + 11, cy - 9], [cx + 12, cy + 4], [cx + 11, cy + 13], [cx, cy + 16], [cx - 11, cy + 13]]), W);
+    s += face(cx, cy + 1);
+    s += path(C([[cx - 10.5, cy - 6], [cx, cy - 10], [cx + 10.5, cy - 6], [cx + 10.5, cy + 8], [cx, cy + 13.5], [cx - 10.5, cy + 8]]), VIS, 1);
+    s += `<line x1="${cm(cx)}" y1="${cm(cy - 15)}" x2="${cm(cx)}" y2="${cm(cy - 10)}" stroke="${R}" stroke-width="${cm(1.6)}"/>`;
+  }
+  return s;
+}
+function face(cx, cy) {
+  return `<ellipse cx="${cm(cx)}" cy="${cm(cy + 1)}" rx="${cm(6.3)}" ry="${cm(8.4)}" fill="${SKIN}"/>
+    <path d="M${cm(cx - 7)},${cm(cy + 1)} Q${cm(cx - 7)},${cm(cy - 9)} ${cm(cx)},${cm(cy - 8.5)} Q${cm(cx + 7)},${cm(cy - 9)} ${cm(cx + 7)},${cm(cy + 1)} Q${cm(cx + 4)},${cm(cy - 5)} ${cm(cx)},${cm(cy - 5.5)} Q${cm(cx - 4)},${cm(cy - 5)} ${cm(cx - 7)},${cm(cy + 1)} Z" fill="${HAIR}"/>
+    <circle cx="${cm(cx - 2.3)}" cy="${cm(cy + 0.5)}" r="1.6" fill="#4a2c1c"/><circle cx="${cm(cx + 2.3)}" cy="${cm(cy + 0.5)}" r="1.6" fill="#4a2c1c"/>`;
+}
+function helmetSide(kind, cx = 1, cy = 11) {
+  let s = '';
+  if (kind === 'mcp') {
+    s += path(C([[cx - 10, cy + 2], [cx - 9, cy - 9], [cx + 1, cy - 14], [cx + 10, cy - 7], [cx + 11, cy + 5], [cx + 6, cy + 13], [cx - 6, cy + 13]]));
+    s += path(C([[cx + 2, cy - 7], [cx + 10, cy - 5], [cx + 11, cy + 5], [cx + 6, cy + 11], [cx + 3, cy + 4]]), VIS, 1);
+    s += `<rect x="${cm(cx - 7)}" y="${cm(cy + 12.5)}" width="${cm(14)}" height="${cm(2.2)}" rx="3" fill="${R}" stroke="${INK}"/>`;
+  } else if (kind === 'hut') {
+    s += path(P([[cx - 11, cy + 12], [cx - 12, cy - 3], [cx - 7, cy - 13], [cx + 4, cy - 15], [cx + 11, cy - 8], [cx + 13, cy + 3], [cx + 10, cy + 13]]));
+    s += path(P([[cx + 3, cy - 6], [cx + 12, cy - 6], [cx + 13, cy + 3], [cx + 10, cy + 11], [cx + 4, cy + 9]]), VIS, 1);
+    s += path(P([[cx + 3, cy - 6], [cx + 4, cy - 10], [cx + 10, cy - 10], [cx + 12, cy - 6]]), R, 1);
+  } else {
+    s += path(C([[cx - 11, cy + 4], [cx - 10, cy - 9], [cx + 1, cy - 15], [cx + 11, cy - 8], [cx + 12, cy + 6], [cx + 8, cy + 15], [cx - 9, cy + 14]]));
+    s += path(C([[cx + 2, cy - 8], [cx + 11, cy - 6], [cx + 12, cy + 6], [cx + 8, cy + 13], [cx + 3, cy + 5]]), VIS, 1);
+  }
+  return s;
+}
+
+// ---------- figures ----------
+function front(kind) {
+  let s = '';
+  const legW = kind === 'exo' ? 11 : kind === 'hut' ? 10.5 : 9;
+  const armW = kind === 'exo' ? 8.5 : kind === 'hut' ? 8 : 6.8;
+  const hip = kind === 'mcp' ? 14.5 : 15.5;
+  // arms (behind the torso)
+  for (const sd of [-1, 1]) {
+    s += limb(sd * 17, 34, sd * 21, 60, armW); s += limb(sd * 21, 60, sd * 23, 84, armW * 0.9);
+    s += `<ellipse cx="${cm(sd * 23.4)}" cy="${cm(89)}" rx="${cm(3.4)}" ry="${cm(4.6)}" fill="${kind === 'mcp' ? W2 : W}" stroke="${INK}"/>`;
+  }
+  // legs
+  for (const sd of [-1, 1]) {
+    s += limb(sd * 8.5, 90, sd * 7.5, 128, legW); s += limb(sd * 7.5, 128, sd * 7, 162, legW * 0.82);
+    s += path(C([[sd * 7 - 5, 160], [sd * 7 + 5, 160], [sd * 7 + 6, 172], [sd * 7 - 6, 172]]), kind === 'hut' ? R : W2);
+  }
+  // torso
+  s += path(torsoFront(kind === 'mcp' ? 18.5 : 19.5, kind === 'mcp' ? 11.5 : 13, hip));
+  if (kind === 'mcp') {
+    // lines of non-extension (red): shoulder to hip spirals, along the thigh
+    s += `<path d="M${cm(-13)},${cm(33)} C${cm(-8)},${cm(50)} ${cm(6)},${cm(60)} ${cm(11)},${cm(88)}" fill="none" stroke="${R}" stroke-width="2.4"/>`;
+    s += `<path d="M${cm(13)},${cm(33)} C${cm(8)},${cm(50)} ${cm(-6)},${cm(60)} ${cm(-11)},${cm(88)}" fill="none" stroke="${R}" stroke-width="2.4"/>`;
+    for (const sd of [-1, 1]) {
+      s += `<path d="M${cm(sd * 11)},${cm(92)} C${cm(sd * 5)},${cm(110)} ${cm(sd * 11)},${cm(140)} ${cm(sd * 6)},${cm(158)}" fill="none" stroke="${R}" stroke-width="2.4"/>`;
+      s += `<path d="M${cm(sd * 17)},${cm(36)} C${cm(sd * 22)},${cm(55)} ${cm(sd * 19)},${cm(70)} ${cm(sd * 23)},${cm(84)}" fill="none" stroke="${R}" stroke-width="2"/>`;
+    }
+    s += `<rect x="${cm(-6)}" y="${cm(44)}" width="${cm(12)}" height="${cm(7)}" rx="4" fill="${W2}" stroke="${INK}"/>`;   // chest control unit
+  } else if (kind === 'hut') {
+    // hard upper torso shell with bearings at shoulders and waist
+    s += path(C([[-17, 32], [-16, 44], [-12, 56], [0, 59], [12, 56], [16, 44], [17, 32], [0, 30]]), W);
+    s += path(P([[-12, 56], [12, 56], [13, 60], [-13, 60]]), R, 1);                        // waist bearing (red)
+    for (const sd of [-1, 1]) s += `<circle cx="${cm(sd * 17)}" cy="${cm(35)}" r="${cm(3.6)}" fill="${R}" stroke="${INK}"/>`;   // shoulder bearings
+    s += `<rect x="${cm(-5.5)}" y="${cm(40)}" width="${cm(11)}" height="${cm(6)}" rx="2" fill="${W2}" stroke="${INK}"/>`;
+    for (const sd of [-1, 1]) { s += band(sd * 7.5, 128, sd * 7, 162, legW * 0.82, 0.02); s += band(sd * 21, 60, sd * 23, 84, armW * 0.9, 0.05); }
+  } else {
+    // exo: yoke over the shoulders, external leg struts with hip and knee drives
+    s += path(C([[-18, 31], [-19, 38], [-10, 42], [0, 40], [10, 42], [19, 38], [18, 31], [0, 28]]), W2);
+    for (const sd of [-1, 1]) {
+      s += `<line x1="${cm(sd * 17.5)}" y1="${cm(80)}" x2="${cm(sd * 13.5)}" y2="${cm(126)}" stroke="${INK}" stroke-width="${cm(2.4) + 2}" stroke-linecap="round"/>`;
+      s += `<line x1="${cm(sd * 17.5)}" y1="${cm(80)}" x2="${cm(sd * 13.5)}" y2="${cm(126)}" stroke="${W2}" stroke-width="${cm(2.4)}" stroke-linecap="round"/>`;
+      s += `<line x1="${cm(sd * 13.5)}" y1="${cm(128)}" x2="${cm(sd * 12)}" y2="${cm(162)}" stroke="${INK}" stroke-width="${cm(2.2) + 2}" stroke-linecap="round"/>`;
+      s += `<line x1="${cm(sd * 13.5)}" y1="${cm(128)}" x2="${cm(sd * 12)}" y2="${cm(162)}" stroke="${W2}" stroke-width="${cm(2.2)}" stroke-linecap="round"/>`;
+      s += `<circle cx="${cm(sd * 18)}" cy="${cm(80)}" r="${cm(3.4)}" fill="${R}" stroke="${INK}"/>`;
+      s += `<circle cx="${cm(sd * 13.5)}" cy="${cm(127)}" r="${cm(3)}" fill="${R}" stroke="${INK}"/>`;
+    }
+    s += path(P([[-13, 63], [13, 63], [14, 67], [-14, 67]]), R, 1);                            // belt
+  }
+  // designation on the chest
+  s += `<text x="${cm(kind === 'mcp' ? 0 : 0)}" y="${cm(kind === 'hut' ? 53 : 58)}" font-size="${cm(2.6)}" text-anchor="middle" fill="${R}" font-family="system-ui" font-weight="700" letter-spacing="0.5">37 ЗВЁЗДНАЯ</text>`;
+  s += helmetFront(kind);
+  return s;
+}
+
+function side(kind) {
+  let s = '';
+  const legW = kind === 'exo' ? 11 : kind === 'hut' ? 10.5 : 9;
+  const armW = kind === 'exo' ? 8.5 : kind === 'hut' ? 8 : 6.8;
+  // life support pack
+  if (kind === 'mcp') s += path(C([[-9, 33], [-15, 36], [-15, 62], [-9, 66], [-8, 50]]), W2);
+  else if (kind === 'hut') s += path(P([[-9, 30], [-20, 32], [-20, 68], [-10, 70]]), W2) + path(P([[-20, 40], [-21, 40], [-21, 60], [-20, 60]]), R, 1);
+  else s += path(P([[-9, 30], [-19, 32], [-19, 66], [-10, 68]]), W2) + `<line x1="${cm(-12)}" y1="${cm(68)}" x2="${cm(-12)}" y2="${cm(84)}" stroke="${INK}" stroke-width="${cm(2.4) + 2}"/><line x1="${cm(-12)}" y1="${cm(68)}" x2="${cm(-12)}" y2="${cm(84)}" stroke="${W2}" stroke-width="${cm(2.4)}"/>`;
+  // far leg, near leg
+  s += limb(-1, 90, 1, 128, legW, W2); s += limb(1, 128, -1, 162, legW * 0.82, W2);
+  s += limb(1, 90, 3, 128, legW); s += limb(3, 128, 1, 162, legW * 0.82);
+  s += path(C([[-4, 160], [4, 159], [12, 168], [12, 172], [-5, 172]]), kind === 'hut' ? R : W2);
+  s += path(torsoSide(kind === 'mcp' ? 11 : 12.5, kind === 'mcp' ? -8.5 : -9.5));
+  if (kind === 'mcp') s += `<path d="M${cm(2)},${cm(31)} C${cm(10)},${cm(50)} ${cm(0)},${cm(70)} ${cm(4)},${cm(90)}" fill="none" stroke="${R}" stroke-width="2.4"/>`;
+  if (kind === 'hut') s += path(C([[4, 30], [12.5, 41], [11, 55], [0, 58], [-9, 54], [-9.5, 34]]), W) + path(P([[-9, 55], [11, 55], [11, 59], [-9, 59]]), R, 1);
+  if (kind === 'exo') {
+    s += `<circle cx="${cm(-2)}" cy="${cm(82)}" r="${cm(3.4)}" fill="${R}" stroke="${INK}"/><circle cx="${cm(2)}" cy="${cm(127)}" r="${cm(3)}" fill="${R}" stroke="${INK}"/>`;
+    s += path(P([[-8, 63], [8, 63], [8.5, 67], [-8.5, 67]]), R, 1);
+  }
+  // arm
+  s += limb(0, 34, 2, 60, armW); s += limb(2, 60, 6, 84, armW * 0.9);
+  s += `<ellipse cx="${cm(7)}" cy="${cm(89)}" rx="${cm(3)}" ry="${cm(4.6)}" fill="${kind === 'mcp' ? W2 : W}" stroke="${INK}"/>`;
+  if (kind === 'hut') s += `<circle cx="${cm(0)}" cy="${cm(35)}" r="${cm(3.6)}" fill="${R}" stroke="${INK}"/>`;
+  s += helmetSide(kind);
+  return s;
+}
+
+function helmetBig(kind) {
+  return `<g transform="translate(0,0) scale(2.2)">${helmetFront(kind, 0, 11)}</g>`;
+}
+
+const concepts = [
+  { kind: 'mcp', t: '1 · «Вторая кожа»', k: 'механическое противодавление, газ только в шлеме',
+    li: ['Ткань сама обжимает тело (~30 кПа), газовый объём — только шлем. Силуэт и движения почти как в комбинезоне.',
+         'Красные линии — нерастяжимые нити по «линиям нерастяжения» кожи: держат давление и дают гибкость. ≈10 % красного.',
+         'Шлем плотный, визор обнимает лицо, красное кольцо герметичного ворота.',
+         'Ранец тонкий, анимация лёгкая: почти та же, что без скафандра.'] },
+  { kind: 'hut', t: '2 · «Жёсткий торс»', k: 'гибрид: твёрдая кираса + мягкие рукава и штанины',
+    li: ['Твёрдая кираса с ранцем и мягкие конечности на гермоподшипниках (плечи, пояс). Ближе всего к «Интерстеллару», но собраннее.',
+         'Красное — подшипники, пояс, бровь шлема, обувь: читается «механика суставов». ≈18 %.',
+         'Шлем гранёный, широкий плоский визор.',
+         'Анимация тяжелее: руки шире, шаг короче, торс не гнётся.'] },
+  { kind: 'exo', t: '3 · «Каркас»', k: 'скафандр с встроенным лёгким экзоскелетом',
+    li: ['Внешний силовой каркас: плечевое ярмо, стойки ног с приводами в бедре и колене. Несёт ранец и груз, режет усталость.',
+         'Красное — приводы и пояс, ≈12 %. Шлем переходит в воротник-ярмо, визор до подбородка.',
+         'Мост к этапу экзоскелетов из дорожной карты: те же приводы, больший тормоз, переноска тяжестей.',
+         'Анимация — отдельный профиль: шаг с «помощью» приводов, прыжок выше.'] },
+];
+
+const grid = document.getElementById('grid');
+for (const c of concepts) {
+  const svg = `<svg viewBox="${cm(-30)} ${cm(-6)} ${cm(163)} ${cm(182)}" role="img" aria-label="${c.t}">
+    <g>${front(c.kind)}</g>
+    <g transform="translate(${cm(58)},0)">${side(c.kind)}</g>
+    <g transform="translate(${cm(104)},${cm(22)})">${helmetBig(c.kind)}</g>
+  </svg>`;
+  grid.insertAdjacentHTML('beforeend', `<section class="card"><h2>${c.t}</h2><p class="k">${c.k}</p>${svg}<ul>${c.li.map(x => `<li>${x}</li>`).join('')}</ul></section>`);
+}
+</script>
+</body>
+</html>

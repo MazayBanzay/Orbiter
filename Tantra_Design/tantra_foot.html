@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Чаша опоры</title>
+<style>
+:root { --bg:#d9cfbc; --panel:#f4efe6; --ink:#1f2328; --muted:#5b6168; --line:#c9bfae; --accent:#2f5d8a; --warn:#9a3b1f; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#1d1f22; --panel:#26292d; --ink:#e7e3dc; --muted:#a3a8ae; --line:#3a3e44; --accent:#7fb0e0; --warn:#e08a6a; } }
+:root[data-theme="dark"] { --bg:#1d1f22; --panel:#26292d; --ink:#e7e3dc; --muted:#a3a8ae; --line:#3a3e44; --accent:#7fb0e0; --warn:#e08a6a; }
+html,body { margin:0; height:100%; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui, "Segoe UI", sans-serif; }
+#wrap { display:flex; height:100%; }
+#view { flex:1; min-width:0; position:relative; }
+#side { width:360px; max-width:42vw; overflow:auto; background:var(--panel); border-left:1px solid var(--line); padding:14px 16px; box-sizing:border-box; }
+h1 { font-size:17px; margin:0 0 8px; } h2 { font-size:14px; margin:16px 0 6px; }
+label { display:block; margin:8px 0 2px; color:var(--muted); }
+input[type=range] { width:100%; }
+.row { display:flex; gap:6px; flex-wrap:wrap; }
+button { background:transparent; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:5px 9px; cursor:pointer; font:inherit; }
+button.on { border-color:var(--accent); color:var(--accent); }
+table { border-collapse:collapse; width:100%; font-size:13px; } td { padding:3px 4px; border-bottom:1px solid var(--line); vertical-align:top; }
+td:last-child { text-align:right; white-space:nowrap; }
+.warn { color:var(--warn); } .muted { color:var(--muted); font-size:12.5px; }
+ul { padding-left:18px; margin:6px 0; } li { margin:3px 0; }
+.sw { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; vertical-align:-1px; }
+@media (max-width:760px) { #wrap { flex-direction:column; } #view { height:55vh; flex:none; } #side { width:auto; max-width:none; border-left:none; border-top:1px solid var(--line); } }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="view"></div>
+  <div id="side">
+    <h1>Чаша опоры — проект</h1>
+    <div class="muted">Одна деталь на все семь ног. Макет для согласования до перестройки меша.</div>
+    <label>Стопа</label>
+    <div class="row" id="sizes"></div>
+    <label>Складывание: <span id="tv">0</span></label>
+    <input id="t" type="range" min="0" max="1000" value="0">
+    <div class="row" style="margin-top:6px">
+      <button id="play">▶ раскрыть / сложить</button>
+      <button id="cut">разрез гильзы</button>
+    </div>
+    <div class="muted" id="stage" style="margin-top:6px"></div>
+    <h2>Части</h2>
+    <ul id="parts"></ul>
+    <h2>Цифры</h2>
+    <table id="nums"></table>
+    <h2>Последовательность складывания</h2>
+    <ul>
+      <li>Юбки обода ложатся плашмя на ламели.</li>
+      <li>Ламели веером сходятся на свои рёбра.</li>
+      <li>Рёбра опускаются вниз вдоль ноги, бегунок с подкосами едет вниз по гильзе.</li>
+      <li>Раскрытие — обратно, в воздухе, до касания.</li>
+    </ul>
+    <h2>Что решить</h2>
+    <ul>
+      <li class="warn">Стопы лопастей: веер в бортовой панели несовместим с подкосами. Предлагаю тот же пучок, карман у стопы глубже.</li>
+      <li>Ламели вместо ткани: Орбитер не растягивает ткань, жёсткие ламели складываются честно.</li>
+      <li>Гильза 5,2 м поднимает голеностоп над ступицей: досягаемость ног пересчитать.</li>
+    </ul>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const SIZES = {
+    stern:    { name: "кормовая R 11,25", L: 10.75, depth: 0.68, struts: [[0.5, 3.0, 0.37], [1.0, 5.5, 0.54]], F: 513, M: "15", fab: 14, p: "1,29 (посадка)" },
+    blade:    { name: "лопасть R 12,2",  L: 11.7, depth: 0.84, struts: [[0.5, 3.0, 0.48], [1.0, 5.5, 0.65]], F: 642, M: "20", fab: 16, p: "1,37 (поворот)" },
+    kangaroo: { name: "кенгуру R 6,35",  L: 5.85, depth: 0.30, struts: [[0.5, 0.8, 0.21], [1.0, 1.4, 0.29]], F: 103, M: "1,6", fab: 5, p: "0,81" },
+  };
+  const N = 12, HUB_R = 0.5, CONE = 6 * Math.PI / 180, FOLD = -83 * Math.PI / 180, LAM = 4, SKIRT = 0.9;
+  const STRUT_AT = 0.9, STRUT_DEG = 30, RUN_R = 1.05, SLEEVE_TOP = 5.2, SLEEVE_R = 0.95;
+  const COL = { hub: 0x6d7378, rib: 0x8a9096, strut: 0xb08a3c, runner: 0xc8a24a, lam: 0x2b2f35, skirt: 0x3d434b, sleeve: 0x58606a, leg: 0x34507a, mr: 0xa0463a, ball: 0x9aa0a6, ground: 0xcbbf9f };
+  const PARTS = [
+    ["hub", "Ступица R 1,2 с 16 шарнирами по ободу"],
+    ["rib", "Рёбра: коробка 0,5 × 0,4–1,18 м по нагрузке, стенка 60 мм"],
+    ["strut", "Подкос на 0,9 длины ребра, труба ∅0,25–0,77"],
+    ["runner", "Бегунок на гильзе — сюда сходятся подкосы"],
+    ["lam", "Купол: ткань УНТ в натяжении; в меше — ламели веера"],
+    ["skirt", "Юбка обода 0,9 м: обод садится первым, грунт заперт"],
+    ["sleeve", "Гильза ступицы: шаровой голеностоп внутри"],
+    ["mr", "Демпферы МР между ногой и гильзой"],
+  ];
+
+  let size = "stern", t = 0, playing = false, dir = 1, cut = false;
+  const view = document.getElementById("view");
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  view.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 500);
+  camera.position.set(24, 13, 27);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0.5, 0);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7d66, 0.75));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(12, 20, 8); scene.add(sun);
+
+  function bg() {
+    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    scene.background = new THREE.Color(dark ? 0x1d1f22 : 0xd9cfbc);
+  }
+  bg(); matchMedia("(prefers-color-scheme: dark)").addEventListener("change", bg);
+
+  const mat = {};
+  for (const k in COL) mat[k] = new THREE.MeshStandardMaterial({ color: COL[k], metalness: 0.35, roughness: 0.6, side: THREE.DoubleSide });
+  mat.ground.metalness = 0; mat.ground.roughness = 1;
+  mat.sleeve.transparent = true;
+
+  let root = null;
+  const ribs = [];
+
+  function cyl(a, b, r, m, seg) {
+    const d = new THREE.Vector3().subVectors(b, a), L = d.length();
+    const g = new THREE.CylinderGeometry(r, r, L, seg || 12);
+    const o = new THREE.Mesh(g, m);
+    o.position.copy(a).addScaledVector(d, 0.5);
+    o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+    return o;
+  }
+  function setCyl(o, a, b) {
+    const d = new THREE.Vector3().subVectors(b, a), L = d.length();
+    o.position.copy(a).addScaledVector(d, 0.5);
+    o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize());
+    o.scale.set(1, L / o.userData.L0, 1);
+  }
+
+  // rib: tapered box in the rib frame (x along the rib, y = rib normal "up", z tangential); lower face on y = 0
+  function ribGeom(L, depth) {
+    const xs = [0.25, STRUT_AT * L, L], hs = [0.6, depth, 0.45], w = 0.25;
+    const v = [], idx = [];
+    for (let i = 0; i < 3; i++) for (const [y, z] of [[0, -w], [0, w], [hs[i], w], [hs[i], -w]]) v.push(xs[i], y, z);
+    for (let s = 0; s < 2; s++) for (let k = 0; k < 4; k++) {
+      const a = s * 4 + k, b = s * 4 + (k + 1) % 4, c = a + 4, d = b + 4;
+      idx.push(a, b, d, a, d, c);
+    }
+    idx.push(0, 1, 2, 0, 2, 3, 8, 10, 9, 8, 11, 10);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(v, 3));
+    g.setIndex(idx); g.computeVertexNormals();
+    return g;
+  }
+  // lamella in its rib frame: annular sector from the hub rim to R, angles phi0..phi1 relative to the rib (flat)
+  function lamGeom(L, phi0, phi1) {
+    const R = HUB_R + L, r0 = HUB_R + 0.3, n = 6, v = [], idx = [];
+    for (let i = 0; i <= n; i++) {
+      const p = phi0 + (phi1 - phi0) * i / n;
+      for (const r of [r0, R]) v.push(r * Math.cos(p) - HUB_R, -0.02, r * Math.sin(p));
+    }
+    for (let i = 0; i < n; i++) { const a = 2 * i; idx.push(a, a + 1, a + 3, a, a + 3, a + 2); }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(v, 3));
+    g.setIndex(idx); g.computeVertexNormals();
+    return g;
+  }
+
+  function build() {
+    if (root) scene.remove(root);
+    ribs.length = 0;
+    root = new THREE.Group(); scene.add(root);
+    const S = SIZES[size], L = S.L;
+    // ground under the rim (the skirt's lower edge)
+    const rimY = -(L) * Math.sin(CONE) - SKIRT;
+    const gr = new THREE.Mesh(new THREE.CircleGeometry(30, 64), mat.ground);
+    gr.rotation.x = -Math.PI / 2; gr.position.y = rimY - 0.01; root.add(gr); root.userData.ground = gr;
+    // hub, sleeve, leg, ball, dampers
+    root.add(cyl(new THREE.Vector3(0, -0.25, 0), new THREE.Vector3(0, 0.25, 0), HUB_R, mat.hub, 32));
+    const sl = cyl(new THREE.Vector3(0, 0.25, 0), new THREE.Vector3(0, SLEEVE_TOP, 0), SLEEVE_R, mat.sleeve, 32); root.add(sl);
+    root.userData.sleeve = sl;
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.7, 24, 16), mat.ball); ball.position.y = 1.0; root.add(ball);
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(1.3, 15, 1.3), mat.leg); leg.position.y = 1.3 + 7.5; root.add(leg);
+    for (let k = 0; k < 4; k++) {
+      const a = Math.PI / 4 + k * Math.PI / 2;
+      root.add(cyl(new THREE.Vector3(0.62 * Math.cos(a), 6.2, 0.62 * Math.sin(a)), new THREE.Vector3(0.88 * Math.cos(a), SLEEVE_TOP - 0.1, 0.88 * Math.sin(a)), 0.09, mat.mr, 8));
+    }
+    const runner = new THREE.Mesh(new THREE.TorusGeometry(RUN_R, 0.18, 10, 40), mat.runner);
+    runner.rotation.x = Math.PI / 2; root.add(runner); root.userData.runner = runner;
+    const bayHalf = Math.PI / N;                       // half the angle between two ribs
+    for (let i = 0; i < N; i++) {
+      const a = 2 * Math.PI * i / N;
+      const u = new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), w = new THREE.Vector3(-Math.sin(a), 0, Math.cos(a));
+      const hinge = new THREE.Group();                  // at the hinge, z = tangential axis
+      hinge.position.copy(u).multiplyScalar(HUB_R);
+      hinge.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(u, new THREE.Vector3(0, 1, 0), w));
+      root.add(hinge);
+      const arm = new THREE.Group(); hinge.add(arm);   // rotates about z: the rib angle
+      arm.add(new THREE.Mesh(ribGeom(L, S.depth), mat.rib));
+      // hinge lug on the hub
+      const lug = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.7), mat.hub); lug.position.set(0.05, 0.05, 0); hinge.add(lug);
+      // lamellae: two on each side of the rib, folding onto it like a fan
+      const lams = [];
+      const step = bayHalf / 2;
+      for (const side of [-1, 1]) for (let k = 0; k < 2; k++) {
+        const phi0 = side * k * step, phi1 = side * (k + 1) * step * 1.08;
+        const pivot = new THREE.Group(); arm.add(pivot);   // rotates about the rib normal (y) through the hinge
+        const lm = new THREE.Mesh(lamGeom(L, Math.min(phi0, phi1), Math.max(phi0, phi1)), mat.lam);
+        lm.position.y = -0.01 * k; pivot.add(lm);
+        // skirt: hangs from the outer edge, folds flat onto the lamella
+        const R = HUB_R + L, pm = (phi0 + phi1) / 2, chord = 2 * R * Math.sin(Math.abs(phi1 - phi0) / 2);
+        const sk = new THREE.Group();
+        sk.position.set(R * Math.cos(pm) - HUB_R, -0.02, R * Math.sin(pm));
+        sk.rotation.y = -pm;
+        const plate = new THREE.Mesh(new THREE.BoxGeometry(0.06, SKIRT, chord), mat.skirt);
+        plate.position.set(0, -SKIRT / 2, 0); sk.add(plate);
+        pivot.add(sk);
+        lams.push({ pivot, sk, pm });
+      }
+      // strut: from the runner to the top of the rib at STRUT_AT
+      const st = cyl(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0), S.strutD / 2, mat.strut, 10);
+      st.userData.L0 = 1; root.add(st);
+      ribs.push({ a, u, w, arm, lams, st });
+    }
+    // strut length and the runner's open height
+    const P = ribPoint(0, CONE * -1);
+    const rr = Math.hypot(P.x, P.z) - RUN_R;
+    root.userData.hOpen = P.y + rr * Math.tan(STRUT_DEG * Math.PI / 180);
+    root.userData.Ls = rr / Math.cos(STRUT_DEG * Math.PI / 180);
+    applyT();
+    fillSide();
+  }
+
+  // point on top of rib i at STRUT_AT for rib angle alpha (world, hub frame)
+  function ribPoint(i, alpha) {
+    const S = SIZES[size], L = S.L, r = ribs[i];
+    const l = STRUT_AT * L;
+    const d = r.u.clone().multiplyScalar(Math.cos(alpha)).add(new THREE.Vector3(0, Math.sin(alpha), 0));
+    const n = r.u.clone().multiplyScalar(-Math.sin(alpha)).add(new THREE.Vector3(0, Math.cos(alpha), 0));
+    return r.u.clone().multiplyScalar(HUB_R).addScaledVector(d, l).addScaledVector(n, S.depth);
+  }
+  const ease = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+
+  function applyT() {
+    const sSkirt = ease(t / 0.3), sLam = ease((t - 0.3) / 0.3), sRib = ease((t - 0.6) / 0.4);
+    const alpha = -CONE + (FOLD + CONE) * sRib;
+    let h = root.userData.hOpen;
+    ribs.forEach((r, i) => {
+      r.arm.rotation.z = alpha + CONE;
+      r.lams.forEach(l => { l.pivot.rotation.y = l.pm * sLam; l.sk.rotation.z = -Math.PI / 2 * sSkirt; });
+      const P = ribPoint(i, alpha);
+      const rr = Math.hypot(P.x, P.z) - RUN_R, Ls = root.userData.Ls;
+      h = P.y + Math.sqrt(Math.max(0, Ls * Ls - rr * rr));
+      const A = r.u.clone().multiplyScalar(RUN_R); A.y = h;
+      setCyl(r.st, A, P);
+    });
+    root.userData.runner.position.y = h;
+    root.userData.ground.visible = sRib < 0.02;          // folding happens in the air
+    root.userData.sleeve.material.opacity = cut ? 0.25 : 1.0;
+    document.getElementById("tv").textContent = t.toFixed(2);
+    document.getElementById("stage").textContent =
+      t <= 0.001 ? "Раскрыта: стоит на грунте" : t < 0.3 ? "Юбки ложатся на ламели" : t < 0.6 ? "Ламели сходятся на рёбра" :
+      t < 0.999 ? "Рёбра опускаются вдоль ноги" : "Сложена: пучок вдоль ноги";
+    const hr = document.getElementById("hrun"); if (hr) hr.textContent = h.toFixed(2) + " м";
+  }
+
+  function fillSide() {
+    const sz = document.getElementById("sizes"); sz.innerHTML = "";
+    for (const k in SIZES) {
+      const b = document.createElement("button"); b.textContent = SIZES[k].name; if (k === size) b.className = "on";
+      b.onclick = () => { size = k; build(); }; sz.appendChild(b);
+    }
+    const pl = document.getElementById("parts"); pl.innerHTML = "";
+    for (const [k, txt] of PARTS) {
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="sw" style="background:#${COL[k].toString(16).padStart(6, "0")}"></span>${txt}`; pl.appendChild(li);
+    }
+    const S = SIZES[size], R = HUB_R + S.L * Math.cos(CONE);
+    const area = Math.PI * R * R, Ls = root.userData.Ls, h0 = root.userData.hOpen;
+    // folded runner height and bundle diameter
+    const Pf = ribPoint(0, FOLD), rrf = Math.hypot(Pf.x, Pf.z) - RUN_R;
+    const hf = Pf.y + Math.sqrt(Ls * Ls - rrf * rrf);
+    const bundle = 2 * (HUB_R + S.depth + 0.15);
+    const rows = [
+      ["Радиус чаши", R.toFixed(1) + " м"],
+      ["Площадь опоры", area.toFixed(0) + " м²"],
+      ["Расчётная сила: 52,3 тыс. т на 2,5 g", S.F + " МН"],
+      ["Давление на грунт", S.p + " МПа"],
+      ["Ребро у подкоса (запас 1,5)", "0,5 × " + S.depth.toFixed(2) + " м"],
+      ["Момент в ребре, ровный грунт / камень под ободом", S.M + " МН·м"],
+      ["Подкос (запас 1,5)", "∅" + S.strutD.toFixed(2) + " × " + Ls.toFixed(1) + " м, стенка 60 мм"],
+      ["Ткань купола УНТ (провис 0,1 пролёта)", S.fab + " + 5 мм"],
+      ["Бегунок раскрыта / сложена", h0.toFixed(1) + " / " + hf.toFixed(1) + " м над ступицей"],
+      ["Бегунок сейчас", '<span id="hrun"></span>'],
+      ["Пучок сложенной чаши, ∅ × длина", bundle.toFixed(1) + " × " + (S.L + 0.5).toFixed(1) + " м"],
+    ];
+    document.getElementById("nums").innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("");
+    applyT();
+  }
+
+  document.getElementById("t").addEventListener("input", e => { t = e.target.value / 1000; playing = false; applyT(); });
+  document.getElementById("play").onclick = () => { playing = !playing; dir = t >= 0.999 ? -1 : (t <= 0.001 ? 1 : dir); };
+  document.getElementById("cut").onclick = e => { cut = !cut; e.target.classList.toggle("on", cut); applyT(); };
+
+  function resize() {
+    const w = view.clientWidth, h = view.clientHeight;
+    renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  window.addEventListener("resize", resize);
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (playing) {
+      t += dir * dt / 6;
+      if (t >= 1) { t = 1; playing = false; dir = -1; }
+      if (t <= 0) { t = 0; playing = false; dir = 1; }
+      document.getElementById("t").value = Math.round(t * 1000);
+      applyT();
+    }
+    controls.update(); renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+  }
+  build(); resize(); requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

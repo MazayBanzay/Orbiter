@@ -1,0 +1,392 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Тантра: рубка</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#f4f2ee;--text:#1b1b1b;--muted:#5a5a5a;--accent:#3b6fd6;--border:#c9c5bd}
+body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;margin:16px}
+h1{font-size:18px;margin:0 0 8px}
+#wrap{position:relative;border-radius:12px;overflow:hidden;background:#0b0c10}
+#c3{width:100%;height:620px}
+#ro{position:absolute;right:10px;top:10px;font:12px ui-monospace,Consolas,monospace;color:#e8e4dc;background:rgba(0,0,0,.6);padding:8px 10px;border-radius:8px;white-space:pre;line-height:1.45}
+.pin{position:absolute;transform:translate(-50%,-50%);width:20px;height:20px;border-radius:50%;background:#e8b64a;color:#111;font:700 12px/20px system-ui;text-align:center;pointer-events:none;box-shadow:0 0 0 2px rgba(0,0,0,.55)}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+.b{font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text);cursor:pointer}
+.b.on{border:2px solid var(--accent);padding:5px 11px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px;max-width:1250px}
+@media(max-width:900px){.cols{grid-template-columns:1fr}}
+.card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.5}
+.card h2{font-size:14px;margin:0 0 6px}
+.card ol,.card ul{margin:0;padding-left:20px}
+.card li{margin:3px 0}
+.src{color:var(--muted);font-size:12px}
+.warn{border-color:#d9a441;background:#fff8e8}
+.tag{font-size:12px;color:var(--muted)}
+</style></head><body>
+<h1>«Тантра» — командная рубка (центральный пост): мокап по тексту романа и решениям проекта</h1>
+<div id="wrap"><div id="c3"></div><div id="ro"></div></div>
+<div class="row">
+  <button class="b" data-v="q">3/4 снаружи</button>
+  <button class="b" data-v="aft">От входа назад</button>
+  <button class="b" data-v="top">Сверху</button>
+  <button class="b" data-v="seat">Из кресла командира</button>
+  <button class="b" data-v="console">Пульт крупно</button>
+  <button class="b" data-v="cmd">Место командира</button>
+  <button class="b" data-v="engw">Окно двигателей</button>
+  <button class="b" data-v="nav">Пульт навигации</button>
+  <button class="b" data-v="exit">Выход</button>
+</div>
+<div class="row">
+  <span class="tag">Экран (клик по зоне в сцене: выкл → обзор → данные):</span>
+  <button class="b" data-z="left">Левая зона</button>
+  <button class="b" data-z="center">Центр</button>
+  <button class="b" data-z="right">Правая зона</button>
+  <button class="b" id="allOn">Все: обзор</button>
+  <button class="b" id="allOff">Все выкл</button>
+</div>
+<div class="row">
+  <button class="b on" id="seats">Кресла подняты</button>
+  <label style="font-size:13px">Наклон кресел <input id="tilt" type="range" min="0" max="75" step="1" value="0" style="vertical-align:middle"> <span id="tiltv">0°</span></label>
+  <button class="b" id="light">Свет: рабочий, золотистый</button>
+  <button class="b" id="eng">Двигатели: выкл</button>
+  <button class="b on" id="gal">Голокарта зоны 50 св. лет</button>
+  <button class="b on" id="pins">Метки</button>
+</div>
+<div class="cols">
+<div class="card"><h2>Что в рубке и откуда (метки на схеме)</h2><ol id="legend"></ol></div>
+<div>
+<div class="card"><h2>Форма (наше решение)</h2>
+<ul><li>Рубка занимает весь объём барабана-капсулы: цилиндр R 4,6 м вдоль поперечной оси, длина 9,6 м, плоский пол 9,6 × 9,0 м. Плоского потолка нет: тёмный свод до 5,6 м.</li>
+<li>Один большой вогнутый экран спереди, как прорезь в мир: дуга 140°, высота 1,8 м (0,9–2,7 м над полом). Внутри три зоны (левая, центр, правая), каждая включается сама: выкл, обзор или данные. Сзади экранов пока нет.</li>
+<li>Три кресла у выгнутого пульта спереди под экраном. Отдельный пульт навигации (стол МНУ-11) с голопроектором: одно кресло и перед ним зона управления.</li>
+<li>Двери пока нет: капсула глухая (решение пользователя). Для проверки в игре в нее переходят клавишей 1 режима ходьбы.</li></ul></div>
+<div class="card warn" style="margin-top:12px"><h2>Расхождения с текстом книги и вопросы</h2>
+<ul>
+<li><b>Дверь.</b> Убрана до решения: как входить в капсулу, которая поворачивается, откроем позже.</li>
+<li><b>Поворот.</b> В романе при посадке пол заваливается назад, а гидрошарниры поворачивают сиденья; рубки-капсулы в тексте нет. Капсула — решение проекта. <span class="src">(гл. 3)</span></li>
+<li><b>Экран.</b> В книге экраны в нишах со всех сторон; у нас один вогнутый спереди, сзади пока нет.</li>
+<li><b>Проекция.</b> В книге проектор даёт на заднюю стенку спираль галактики; у нас голограмма карты зоны до 50 св. лет.</li>
+<li><b>Убрано по вашему замечанию:</b> сейф, овальный люк, складное кресло навигатора, полушаровой стереоэкран (место ему вне рубки решаете вы).</li>
+<li><b>Сон и экипаж.</b> В книге экипаж спит в каютах и их четырнадцать; у нас отсек анабиоза и расчёт на 11.</li>
+</ul></div>
+</div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const wrap = $("wrap"), host = $("c3");
+const R = new THREE.WebGLRenderer({antialias: true});
+R.setPixelRatio(Math.min(2, devicePixelRatio)); host.appendChild(R.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0c10);
+const cam = new THREE.PerspectiveCamera(48, 1, 0.05, 80);
+const ctl = new THREE.OrbitControls(cam, R.domElement); ctl.enableDamping = true;
+const amb = new THREE.AmbientLight(0xffffff, 0.8); scene.add(amb);
+scene.add(new THREE.HemisphereLight(0xbfd0ff, 0x30333a, 0.5));
+const keyL = new THREE.PointLight(0xffd9a0, 1.2, 28); keyL.position.set(0, 3.2, 0); scene.add(keyL);
+const rng = (() => { let s = 12345; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; })();
+const mat = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({color: c, roughness: .7, metalness: .1}, o));
+const world = new THREE.Group(); world.scale.x = -1; scene.add(world);   // Orbiter frame is left-handed: mirror, so port is on the left facing the nose
+const DR = 4.6, DL = 4.8, AY = 1.0, FZ = Math.sqrt(DR * DR - AY * AY);          // drum radius, half length, axis height over the floor, half floor length
+function box(w, h, d, m, x, y, z, p = world) { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); p.add(o); return o; }
+function tex(w, h, draw) { const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h); const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t; }
+const LEDS = ["#3fa8ff", "#31d3d0", "#ff9a2a", "#44e07a"], LEDN = [0x3fa8ff, 0x31d3d0, 0xff9a2a, 0x44e07a];
+
+// ---- the room is the inside of the drum: flat floor, dark vault, flat end discs
+box(2 * DL, .06, 2 * FZ, mat(0x2b2e34), 0, -.03, 0);
+const vaultM = new THREE.MeshStandardMaterial({color: 0x1b2028, roughness: .9, side: THREE.BackSide, emissive: 0x06080c});
+const shell = new THREE.Mesh(new THREE.CylinderGeometry(DR, DR, 2 * DL, 96, 1, true), vaultM); shell.rotation.z = Math.PI / 2; shell.position.set(0, AY, 0); world.add(shell);
+for (const sg of [-1, 1]) { const d = new THREE.Mesh(new THREE.CircleGeometry(DR, 64), new THREE.MeshStandardMaterial({color: 0x1b2028, roughness: .9, side: THREE.DoubleSide, emissive: 0x06080c})); d.position.set(sg * DL, AY, 0); d.rotation.y = Math.PI / 2; world.add(d); }
+const ribM = new THREE.LineBasicMaterial({color: 0x34404f, transparent: true, opacity: .6});
+for (let k = -4; k <= 4; k++) { const pts = []; for (let i = 0; i <= 48; i++) { const a = Math.PI * (i / 48) * 1.0 - Math.PI / 2 + Math.PI / 2; pts.push(new THREE.Vector3(k * 1.0, AY + Math.cos(Math.PI * i / 48 - Math.PI / 2 + Math.PI / 2) * DR * -1 + 0, Math.sin(Math.PI * i / 48 - Math.PI / 2 + Math.PI / 2) * DR)); }
+  const pp = []; for (let i = 0; i <= 64; i++) { const a = i / 64 * Math.PI * 2; pp.push(new THREE.Vector3(k * 1.0, AY + Math.cos(a) * (DR - .02), Math.sin(a) * (DR - .02))); }
+  world.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pp), ribM)); }                  // vault ribs
+// dim light reflected from the vault: up-lights along both edges of the floor
+const coveM = new THREE.MeshBasicMaterial({color: 0xffd48a});
+box(2 * DL - .4, .04, .08, coveM, 0, .06, FZ - .2); box(2 * DL - .4, .04, .08, coveM, 0, .06, -FZ + .2);
+// the long glass strip with a line of light on the port end (bomb beacons)
+box(.06, .26, 3.0, mat(0x0a0a0c), -DL + .05, 1.15, -.4); box(.03, .05, 2.8, new THREE.MeshBasicMaterial({color: 0x9fe8ff}), -DL + .1, 1.15, -.4);
+
+// ---- ONE big concave screen across the front: a slot into the world. Its zones (left, centre, right) can show different things
+const SC_R = 4.25, SC_Y = 1.8, SC_H = 1.8, SC_A = 70 * Math.PI / 180, D2R = Math.PI / 180;
+const pano = tex(4096, 256, (g, w, h) => {
+  g.fillStyle = "#02030a"; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 3400; i++) { const v = 110 + rng() * 145 | 0; g.fillStyle = `rgb(${v},${v},${Math.min(255, v + 25)})`; const r = rng() < .06 ? 2.8 : 1.3; g.fillRect(rng() * w, rng() * h, r, r); }
+  g.fillStyle = "#5b5e66"; g.beginPath(); g.arc(w * .22, h * .55, 14, 0, 6.283); g.fill();
+});
+function dataTex(seed) {
+  return tex(512, 256, (g, w, h) => {
+    g.fillStyle = "#06121c"; g.fillRect(0, 0, w, h); g.strokeStyle = "rgba(90,170,230,.35)"; g.lineWidth = 1;
+    for (let x = 0; x <= w; x += 32) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); } for (let y = 0; y <= h; y += 32) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+    g.fillStyle = "#44d0ff"; for (let i = 0; i < 14; i++) { const bh = 20 + ((i * 37 + seed * 53) % 90); g.fillRect(24 + i * 34, h - 24 - bh, 22, bh); }
+    g.strokeStyle = "#ffb04a"; g.lineWidth = 3; g.beginPath(); for (let i = 0; i <= 20; i++) { const y = 70 + Math.sin(i * .6 + seed) * 30; i ? g.lineTo(i * 25 + 6, y) : g.moveTo(6, y); } g.stroke();
+    g.strokeStyle = "#5dff9a"; g.beginPath(); g.arc(w - 70, 70, 40, 0, 6.283); g.stroke();
+  });
+}
+const PANELS = [
+  {z: "left", id: "левая зона", a0: -70 * D2R, a1: -28 * D2R},
+  {z: "center", id: "центр", a0: -28 * D2R, a1: 28 * D2R},
+  {z: "right", id: "правая зона", a0: 28 * D2R, a1: 70 * D2R}
+];
+const panelMeshes = [];
+PANELS.forEach((p, i) => {
+  const geo = new THREE.CylinderGeometry(SC_R, SC_R, SC_H, 32, 1, true, p.a0, p.a1 - p.a0);
+  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({color: 0x07090d, side: THREE.BackSide})); m.position.set(0, SC_Y, 0); world.add(m);
+  const t = pano.clone(); t.needsUpdate = true; t.repeat.set((p.a1 - p.a0) / (2 * SC_A), 1); t.offset.set((p.a0 + SC_A) / (2 * SC_A), 0);   // the zones show pieces of one continuous view
+  p.state = 1; p.mesh = m; p.view = t; p.data = dataTex(i); m.userData.panel = p; panelMeshes.push(m);
+});
+{ // thin frame round the whole screen only
+  const lm = new THREE.LineBasicMaterial({color: 0x7f8da3});
+  for (const y of [SC_Y - SC_H / 2, SC_Y + SC_H / 2]) { const pts = []; for (let i = 0; i <= 60; i++) { const a = -SC_A + 2 * SC_A * i / 60; pts.push(new THREE.Vector3(Math.sin(a) * (SC_R - .01), y, Math.cos(a) * (SC_R - .01))); } world.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lm)); }
+  for (const a of [-SC_A, SC_A]) world.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(Math.sin(a) * (SC_R - .01), SC_Y - SC_H / 2, Math.cos(a) * (SC_R - .01)), new THREE.Vector3(Math.sin(a) * (SC_R - .01), SC_Y + SC_H / 2, Math.cos(a) * (SC_R - .01))]), lm));
+}
+function applyPanel(p) { const mm = p.mesh.material; if (p.state === 0) { mm.map = null; mm.color.set(0x07090d); } else { mm.map = p.state === 1 ? p.view : p.data; mm.color.set(0xffffff); } mm.needsUpdate = true; }
+PANELS.forEach(applyPanel);
+$("allOn").onclick = () => PANELS.forEach(p => { p.state = 1; applyPanel(p); });
+$("allOff").onclick = () => PANELS.forEach(p => { p.state = 0; applyPanel(p); });
+document.querySelectorAll("button[data-z]").forEach(b => b.onclick = () => { const p = PANELS.find(q => q.z === b.dataset.z); p.state = (p.state + 1) % 3; applyPanel(p); });
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2(); let downAt = null;
+R.domElement.addEventListener("pointerdown", e => { downAt = [e.clientX, e.clientY]; });
+R.domElement.addEventListener("pointerup", e => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
+  const r = R.domElement.getBoundingClientRect(); mouse.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); ray.setFromCamera(mouse, cam);
+  const hit = ray.intersectObjects(panelMeshes)[0]; if (hit) { const p = hit.object.userData.panel; p.state = (p.state + 1) % 3; applyPanel(p); }
+});
+
+// ---- the curved console, detailed after the book: instruments in the panel, not on it
+const CR = 3.3, cz0 = -.2, N = 11, DYN = [];
+function dialPanel(central) {
+  return tex(1024, 256, (g, w, h) => {
+    g.fillStyle = "#16181d"; g.fillRect(0, 0, w, h);
+    const n = central ? 4 : 6;
+    for (let i = 0; i < n * 2; i++) {
+      const cx = (i % n + .5) * w / n, cy = (i < n ? .28 : .74) * h, s = 30 + rng() * 26, k = rng();
+      g.strokeStyle = "#cfd2d8"; g.lineWidth = 3; g.fillStyle = "#0c0d10"; g.beginPath();
+      if (k < .45) g.arc(cx, cy, s, 0, 6.283); else if (k < .75) g.ellipse(cx, cy, s * 1.45, s * .8, 0, 0, 6.283); else g.rect(cx - s, cy - s * .8, s * 2, s * 1.6);
+      g.fill(); g.stroke();
+      const a = -2.4 + rng() * 2.4; g.strokeStyle = "#e9e3d5"; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * s * .8, cy + Math.sin(a) * s * .8); g.stroke();
+      for (let j = 0; j < 3; j++) { g.fillStyle = LEDS[(rng() * 4) | 0]; g.beginPath(); g.arc(cx - s + j * 14 + 8, cy + s + 12, 4, 0, 6.283); g.fill(); }
+    }
+    if (central) { const gr = g.createRadialGradient(w / 2, h / 2, 10, w / 2, h / 2, 190); gr.addColorStop(0, "#ff5a3c"); gr.addColorStop(1, "#7d0f12");
+      g.fillStyle = gr; g.beginPath(); g.ellipse(w / 2, h / 2, 200, 96, 0, 0, 6.283); g.fill(); g.strokeStyle = "#f2d8c8"; g.lineWidth = 5; g.stroke();
+      g.strokeStyle = "#fff"; g.lineWidth = 4; g.beginPath(); g.moveTo(w / 2, h / 2 + 60); g.lineTo(w / 2 + 90, h / 2 - 30); g.stroke(); }
+  });
+}
+function smallDial(g, cx, cy, s, label) { g.strokeStyle = "#cfd2d8"; g.lineWidth = 3; g.fillStyle = "#0c0d10"; g.beginPath(); g.arc(cx, cy, s, 0, 6.283); g.fill(); g.stroke();
+  for (let k = 0; k < 9; k++) { const a = Math.PI * .85 + k / 8 * Math.PI * 1.3; g.beginPath(); g.moveTo(cx + Math.cos(a) * s * .8, cy + Math.sin(a) * s * .8); g.lineTo(cx + Math.cos(a) * s * .95, cy + Math.sin(a) * s * .95); g.stroke(); }
+  const a = Math.PI * .85 + rng() * Math.PI * 1.3; g.strokeStyle = "#ffd05a"; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * s * .75, cy + Math.sin(a) * s * .75); g.stroke();
+  if (label) { g.fillStyle = "#9fb0c2"; g.font = "16px system-ui"; g.textAlign = "center"; g.fillText(label, cx, cy + s + 20); } }
+// dynamic panel: the window with the four boron-nitride cylinders (seen through a slot in the console); state 0 off, 1 started (green helices), 2 exhaust (grey guide beam, violet flash)
+let engState = 0;
+const engC = document.createElement("canvas"); engC.width = 512; engC.height = 320; const engTex = new THREE.CanvasTexture(engC);
+function drawEngine(t) {
+  const g = engC.getContext("2d"), w = 512, h = 320;
+  g.fillStyle = "#020305"; g.fillRect(0, 0, w, h);
+  g.strokeStyle = "#39424f"; g.lineWidth = 8; g.strokeRect(10, 10, w - 20, h - 20);
+  for (let k = 0; k < 4; k++) {
+    const cx = 90 + k * 110, top = 50, bot = 270, wd = 40;
+    const gr = g.createLinearGradient(cx - wd / 2, 0, cx + wd / 2, 0); gr.addColorStop(0, "#2a2f36"); gr.addColorStop(.5, engState ? "#1f6a45" : "#4a525d"); gr.addColorStop(1, "#2a2f36");
+    g.fillStyle = gr; g.fillRect(cx - wd / 2, top, wd, bot - top);
+    if (engState) {
+      g.lineWidth = 3; for (let hx = 0; hx < 2; hx++) { g.strokeStyle = hx ? "#7dffb0" : "#2ee07a"; g.beginPath();
+        for (let y = top; y <= bot; y += 4) { const x = cx + Math.sin(y * .11 + t * 7 + hx * 3.1 + k) * (wd / 2 - 4); y === top ? g.moveTo(x, y) : g.lineTo(x, y); } g.stroke(); }
+      g.fillStyle = "rgba(60,255,140,.18)"; g.fillRect(cx - wd, top - 10, wd * 2, bot - top + 20);
+    }
+  }
+  if (engState === 2) {
+    g.strokeStyle = "#a9adb4"; g.lineWidth = 6; g.beginPath(); g.moveTo(20, 160); g.lineTo(w - 20, 160); g.stroke();                       // the grey guide beam
+    if (Math.sin(t * 9) > .55) { g.strokeStyle = "#c68cff"; g.lineWidth = 5; g.beginPath(); let x = 20; g.moveTo(x, 160); while (x < w - 20) { x += 26; g.lineTo(x, 160 + (Math.random() - .5) * 34); } g.stroke(); }   // violet flash: the exhaust has begun
+  }
+  engTex.needsUpdate = true;
+}
+// dynamic panel: the locator screen with a sweep and blips
+const radC = document.createElement("canvas"); radC.width = 512; radC.height = 320; const radTex = new THREE.CanvasTexture(radC);
+function drawRadar(t) {
+  const g = radC.getContext("2d"), w = 512, h = 320; g.fillStyle = "#03100a"; g.fillRect(0, 0, w, h);
+  const cx = 190, cy = 160, r = 130; g.strokeStyle = "rgba(60,220,120,.55)"; g.lineWidth = 2;
+  for (const k of [.33, .66, 1]) { g.beginPath(); g.arc(cx, cy, r * k, 0, 6.283); g.stroke(); }
+  g.beginPath(); g.moveTo(cx - r, cy); g.lineTo(cx + r, cy); g.moveTo(cx, cy - r); g.lineTo(cx, cy + r); g.stroke();
+  const a = t * 1.6; const sw = g.createLinearGradient(cx, cy, cx + Math.cos(a) * r, cy + Math.sin(a) * r); sw.addColorStop(0, "rgba(90,255,150,.0)"); sw.addColorStop(1, "rgba(90,255,150,.8)");
+  g.strokeStyle = sw; g.lineWidth = 4; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); g.stroke();
+  g.fillStyle = "#ffe27a"; for (const [bx, by] of [[40, -60], [-70, 30], [20, 85]]) { g.beginPath(); g.arc(cx + bx, cy + by, 5, 0, 6.283); g.fill(); }
+  g.fillStyle = "#6fe0a0"; g.font = "18px system-ui"; g.fillText("ЛОКАТОР", 350, 60); g.fillText("дальность", 350, 100); g.fillText("курс", 350, 140);
+  for (let k = 0; k < 6; k++) { g.fillStyle = k < 4 ? "#44e07a" : "#294a38"; g.fillRect(350 + k * 22, 200, 14, 40); }
+  radTex.needsUpdate = true;
+}
+DYN.push(drawEngine, drawRadar);
+function staticTex(kind) {
+  return tex(1024, 256, (g, w, h) => {
+    g.fillStyle = "#16181d"; g.fillRect(0, 0, w, h);
+    if (kind === "ion") {                                     // reserve of planetary ion charges: thin rods behind glass, and the speed equaliser dial
+      g.fillStyle = "#050607"; g.fillRect(40, 30, 520, 190); g.strokeStyle = "#8a96a6"; g.lineWidth = 4; g.strokeRect(40, 30, 520, 190);
+      for (let k = 0; k < 14; k++) { const hh = 40 + ((k * 53) % 120); g.fillStyle = "#ffd05a"; g.fillRect(70 + k * 34, 210 - hh, 10, hh); g.fillStyle = "#3b3114"; g.fillRect(70 + k * 34, 40, 10, 170 - hh); }
+      smallDial(g, 760, 125, 80, "уравнитель скоростей"); smallDial(g, 930, 90, 40, ""); smallDial(g, 930, 190, 40, "");
+    } else if (kind === "alt") {                              // altitude scale with red lights at the set figure, flight altitude limiter
+      g.fillStyle = "#050607"; g.fillRect(60, 20, 120, 210); g.strokeStyle = "#cfd2d8"; g.lineWidth = 3; g.strokeRect(60, 20, 120, 210);
+      for (let k = 0; k < 11; k++) { g.beginPath(); g.moveTo(60, 30 + k * 18); g.lineTo(100, 30 + k * 18); g.stroke(); }
+      g.fillStyle = "#ff3a2a"; for (const y of [86, 104]) { g.beginPath(); g.arc(150, y, 8, 0, 6.283); g.fill(); }
+      smallDial(g, 330, 90, 55, "высота"); smallDial(g, 500, 90, 55, "скорость"); smallDial(g, 670, 90, 55, "ОЭС");
+      g.fillStyle = "#050607"; g.fillRect(260, 180, 480, 36); g.strokeStyle = "#cfd2d8"; g.strokeRect(260, 180, 480, 36); g.fillStyle = "#e0b04a"; g.fillRect(480, 174, 28, 48);
+      g.fillStyle = "#9fb0c2"; g.font = "16px system-ui"; g.fillText("ограничитель высоты", 300, 172);
+    } else if (kind === "discs") {                            // three discs: the field of artificial gravity and the probe
+      smallDial(g, 200, 120, 80, "поле тяготения"); smallDial(g, 480, 120, 80, "щуп"); smallDial(g, 760, 120, 80, "счётчики");
+      for (let k = 0; k < 6; k++) { g.fillStyle = LEDS[k % 4]; g.beginPath(); g.arc(120 + k * 160, 235, 7, 0, 6.283); g.fill(); }
+    } else if (kind === "oes") {                              // OES: guard of electronic links, observation log
+      for (let k = 0; k < 8; k++) { g.fillStyle = "#050607"; g.fillRect(40 + k * 120, 40, 90, 70); g.strokeStyle = "#8a96a6"; g.strokeRect(40 + k * 120, 40, 90, 70); g.fillStyle = k % 3 ? "#44e07a" : "#ffb04a"; g.fillRect(50 + k * 120, 90, 70, 12); }
+      smallDial(g, 200, 190, 36, ""); smallDial(g, 420, 190, 36, ""); smallDial(g, 640, 190, 36, ""); smallDial(g, 860, 190, 36, "");
+    } else { const t = dialPanel(false); return t.image ? (g.drawImage(t.image, 0, 0), undefined) : undefined; }
+  });
+}
+function leverAt(seg, x, z, len, c, kr) {
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(.03, .035, .03, 14), mat(0x15181c)); base.position.set(x, .9, z); seg.add(base);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.009, .009, len, 8), mat(0xcfd3da, {metalness: .6})); shaft.position.set(x, .9 + len / 2 * .93, z - len / 2 * .3); shaft.rotation.x = -.34; seg.add(shaft);
+  const kn = new THREE.Mesh(new THREE.SphereGeometry(kr, 12, 10), mat(c)); kn.position.set(x, .9 + len * .93, z - len * .3); seg.add(kn);
+}
+function knobAt(seg, x, z) { const k = new THREE.Mesh(new THREE.CylinderGeometry(.026, .03, .03, 16), mat(0x2a2d33, {metalness: .5})); k.position.set(x, .9, z); seg.add(k); box(.006, .004, .02, mat(0xffd05a), x, .917, z - .006, seg); }
+const PANEL_KIND = ["gen", "eng", "ion", "alt", "gen", "centre", "gen", "gen", "discs", "radar", "oes"];
+for (let i = 0; i < N; i++) {
+  const th = (i - (N - 1) / 2) * 0.17;
+  const seg = new THREE.Group(); seg.position.set(Math.sin(th) * CR, 0, Math.cos(th) * CR + cz0); seg.rotation.y = th; world.add(seg);
+  box(.8, .8, .55, mat(0x25282e), 0, .4, 0, seg);
+  const kind = PANEL_KIND[i];
+  let map;
+  if (kind === "eng") map = engTex; else if (kind === "radar") map = radTex; else if (kind === "centre") map = dialPanel(true); else if (kind === "gen") map = dialPanel(false); else map = staticTex(kind);
+  const top = new THREE.Mesh(new THREE.PlaneGeometry(.8, .5), new THREE.MeshBasicMaterial({map, side: THREE.DoubleSide}));
+  top.position.set(0, .86, -.02); top.rotation.x = -2.07; seg.add(top);
+  if (kind === "alt") leverAt(seg, .0, -.18, .16, 0xe0b04a, .02);
+  if (i === 4 || i === 6) {                                   // the commander's levers and verniers, laid out like a keyboard
+    const n = i === 4 ? 5 : 4;
+    for (let k = 0; k < n; k++) { leverAt(seg, -.27 + k * (.54 / (n - 1)), -.14, .17, k === 2 ? 0xb83a2e : 0xd8d8d8, .018); knobAt(seg, -.27 + k * (.54 / (n - 1)), -.02); }
+  }
+  if (i === 3) leverAt(seg, -.28, -.12, .26, 0xb83a2e, .032);   // the handle of the anamezon engines
+  if (i === 7) { box(.08, .05, .08, mat(0x7a1f18), .26, .91, -.12, seg); leverAt(seg, .26, -.12, .12, 0xcfcfcf, .014); }   // guarded lever of the leg supports
+  if (i === 10) { for (const [dx, dz] of [[-.2, -.1], [.1, -.1]]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .015, 24), mat(0xc9ccd2, {metalness: .6})); r.position.set(dx, .92, dz); seg.add(r); box(.14, .004, .012, mat(0x4a3b24), dx + .0, .93, dz, seg); } }   // reels of the observation log
+}
+const horn = new THREE.Mesh(new THREE.ConeGeometry(.17, .34, 18, 1, true), new THREE.MeshStandardMaterial({color: 0xb7b2a6, side: THREE.DoubleSide, metalness: .4}));
+horn.position.set(-2.8, 1.05, 1.9); horn.rotation.z = Math.PI / 2 + .2; horn.rotation.y = .8; world.add(horn);
+box(.32, .12, .22, mat(0x34373d), 2.4, .87, 2.05);
+
+
+// ---- the navigation console: table of the computing machine МНУ-11 with the holo-projector on its top
+const NX = -2.4, NZ = -.9;
+const nav = new THREE.Group(); nav.position.set(NX, 0, NZ); world.add(nav);
+{
+  const ped = new THREE.Mesh(new THREE.CylinderGeometry(.62, .8, .9, 40), mat(0x2a2d33)); ped.position.y = .45; nav.add(ped);
+  const topP = new THREE.Mesh(new THREE.CylinderGeometry(.82, .82, .05, 48), mat(0x3a3e46)); topP.position.y = .92; nav.add(topP);
+  for (let k = 0; k < 9; k++) { const a = Math.PI + (k + .5) / 9 * Math.PI; box(.06, .03, .06, new THREE.MeshBasicMaterial({color: LEDN[k % 4]}), Math.cos(a) * .7, .96, Math.sin(a) * .7, nav); }   // buttons on the navigator's side only
+  const cz = new THREE.Mesh(new THREE.PlaneGeometry(.95, .42), new THREE.MeshBasicMaterial({map: dialPanel(false), side: THREE.DoubleSide})); cz.position.set(0, 1.0, -.5); cz.rotation.x = -2.07; nav.add(cz);   // the control zone in front of the navigator
+  for (let k = 0; k < 3; k++) { const l = new THREE.Mesh(new THREE.CylinderGeometry(.012, .012, .18, 8), mat(0xcfcfcf)); l.position.set(-.5 + k * .08, 1.03, -.5); l.rotation.x = -.5; nav.add(l); }
+  const ring = new THREE.Mesh(new THREE.RingGeometry(.3, .5, 48), new THREE.MeshBasicMaterial({color: 0x335a88, side: THREE.DoubleSide})); ring.rotation.x = -Math.PI / 2; ring.position.y = .95; nav.add(ring);
+  for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; box(.06, .03, .06, new THREE.MeshBasicMaterial({color: 0xbfe0ff}), Math.cos(a) * .4, .97, Math.sin(a) * .4, nav); }
+}
+const addM = (c, o = .5) => new THREE.MeshBasicMaterial({color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide});
+const holo = new THREE.Group(); holo.position.set(NX, .95, NZ); world.add(holo);
+const beam = new THREE.Mesh(new THREE.CylinderGeometry(.18, .45, .9, 32, 1, true), addM(0x6fb4ff, .10)); beam.position.y = .45; holo.add(beam);
+const volume = new THREE.Group(); volume.position.y = 1.25; holo.add(volume);
+const HR = .78; let shipMark;
+{
+  const P = []; for (let i = 0; i < 360; i++) { const r = Math.cbrt(rng()) * HR * .98, u = rng() * 2 - 1, a = rng() * 6.283, q = Math.sqrt(1 - u * u); P.push(r * q * Math.cos(a), r * u, r * q * Math.sin(a)); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(P, 3));
+  volume.add(new THREE.Points(g, new THREE.PointsMaterial({color: 0xa8d0ff, size: .028, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false})));
+  for (const k of [.4, .8, 1.0]) for (let ax = 0; ax < 3; ax++) { const pts = []; for (let i = 0; i <= 64; i++) { const a = i / 64 * Math.PI * 2, c = Math.cos(a) * HR * k, d = Math.sin(a) * HR * k; pts.push(ax === 0 ? new THREE.Vector3(c, d, 0) : ax === 1 ? new THREE.Vector3(c, 0, d) : new THREE.Vector3(0, c, d)); }
+    volume.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({color: 0x5f95d6, transparent: true, opacity: k === 1 ? .55 : .3, blending: THREE.AdditiveBlending, depthWrite: false}))); }
+  volume.add(new THREE.Mesh(new THREE.SphereGeometry(.03, 16, 12), new THREE.MeshBasicMaterial({color: 0xffd75a})));
+  const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(.18, .12, .1), new THREE.Vector3(.4, .1, .28), new THREE.Vector3(.62, .2, .3)]);
+  const rl = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(40)), new THREE.LineDashedMaterial({color: 0xff7a55, dashSize: .04, gapSize: .025})); rl.computeLineDistances(); volume.add(rl);
+  shipMark = new THREE.Mesh(new THREE.TorusGeometry(.045, .006, 8, 24), new THREE.MeshBasicMaterial({color: 0xff5a3c})); shipMark.position.copy(curve.getPoint(.55)); volume.add(shipMark);
+}
+// ---- anti-g seats on a floating absorber: contoured shell, wings, leg rest, harness, hand controllers; they rise from floor hatches
+const seats = [];
+const SH = mat(0x23272e), CU = mat(0x3b4350), MET = mat(0xaab3c0, {metalness: .7, roughness: .35}), BELT = mat(0xe0902a);
+function makeSeat(x, z, accent, ctl) {
+  const base = new THREE.Group(); base.position.set(x, 0, z); world.add(base);
+  const hatchL = box(.5, .03, 1.1, mat(0x41444b), 0, 0, 0, base), hatchR = box(.5, .03, 1.1, mat(0x41444b), 0, 0, 0, base);
+  hatchL.geometry.translate(-.25, 0, 0); hatchR.geometry.translate(.25, 0, 0);
+  const post = new THREE.Group(); base.add(post);
+  const col = new THREE.Mesh(new THREE.CylinderGeometry(.07, .08, .5, 20), MET); col.position.y = .25; post.add(col);                       // central hydraulic column
+  for (const sx of [-1, 1]) {                                                                                                                  // inertia absorber struts: cylinder with a rod
+    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(.034, .034, .28, 14), SH); cyl.position.set(sx * .27, .14, -.12); cyl.rotation.z = sx * .13; post.add(cyl);
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(.018, .018, .3, 10), MET); rod.position.set(sx * .245, .36, -.12); rod.rotation.z = sx * .13; post.add(rod);
+    box(.07, .05, .07, MET, sx * .27, .01, -.12, post);
+  }
+  const hinge = new THREE.Group(); hinge.position.set(0, .5, 0); post.add(hinge);                                                                // tilts about the cross axis
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.33, .022, 8, 36), MET); ring.rotation.x = Math.PI / 2; ring.position.set(0, -.01, .02); hinge.add(ring);   // floating frame
+  box(.58, .08, .54, SH, 0, .05, .1, hinge); box(.48, .05, .46, CU, 0, .11, .1, hinge);                                                       // pan and cushion
+  for (const sx of [-1, 1]) box(.06, .1, .42, SH, sx * .31, .12, .1, hinge);                                                                   // side bolsters
+  const back = new THREE.Group(); back.position.set(0, .1, -.14); back.rotation.x = -.42; hinge.add(back);                                     // reclined back
+  box(.58, .95, .07, SH, 0, .48, 0, back); box(.46, .82, .05, CU, 0, .46, .06, back);
+  for (const sx of [-1, 1]) { const w = box(.07, .66, .22, SH, sx * .32, .42, .1, back); w.rotation.y = -sx * .25; }                            // side wings
+  box(.3, .22, .09, CU, 0, 1.0, .06, back); for (const sx of [-1, 1]) { const w = box(.06, .24, .16, SH, sx * .19, 1.0, .11, back); w.rotation.y = -sx * .35; }   // headrest with wings
+  box(.34, .14, .04, mat(accent), 0, .26, .09, back);                                                                                           // lumbar band in the seat's colour
+  for (const sx of [-1, 1]) { const st = box(.045, .62, .012, BELT, sx * .12, .55, .092, back); st.rotation.z = sx * .06; }                      // shoulder straps
+  box(.07, .06, .02, mat(accent), 0, .2, .105, back);                                                                                           // buckle
+  for (const sx of [-1, 1]) box(.22, .03, .012, BELT, sx * .14, .15, .26, hinge);                                                               // lap belt
+  const leg = new THREE.Group(); leg.position.set(0, .06, .38); leg.rotation.x = -.28; hinge.add(leg);                                           // leg rest
+  box(.4, .09, .46, SH, 0, 0, .22, leg); box(.34, .05, .4, CU, 0, .06, .22, leg); box(.4, .03, .16, MET, 0, -.03, .52, leg);
+  for (const sx of [-1, 1]) {                                                                                                                   // armrests with the hand controllers
+    box(.03, .22, .04, MET, sx * .36, .12, .0, hinge); box(.08, .05, .36, SH, sx * .36, .24, .1, hinge);
+    if (ctl) {                                                                                                                                  // the commander's side-stick (steering control)
+      const st = new THREE.Mesh(new THREE.CylinderGeometry(.016, .02, .17, 10), MET); st.position.set(sx * .36, .34, .22); st.rotation.x = -.18; hinge.add(st);
+      const gr = box(.05, .1, .06, SH, sx * .36, .45, .2, hinge); gr.rotation.x = -.18; box(.03, .018, .02, mat(0xb83a2e), sx * .36, .5, .17, hinge);
+    } else { box(.07, .02, .12, SH, sx * .36, .275, .2, hinge); for (let k = 0; k < 3; k++) box(.012, .006, .012, new THREE.MeshBasicMaterial({color: LEDN[k]}), sx * .36, .288, .15 + k * .04, hinge); }
+  }
+  seats.push({base, hatchL, hatchR, post, hinge, h: 1});
+}
+makeSeat(0, 1.5, 0xa8362c, true);       // commander: both side-sticks
+makeSeat(1.9, 1.5, 0x3a5a8a, true);
+makeSeat(-1.9, 1.5, 0x3a5a8a, true);
+makeSeat(NX, NZ - 1.5, 0x3a5a8a, false); // navigator, one seat with the control zone in front
+
+// ---- legend and pins
+const NOTES = [
+  ["Широкий багряный циферблат в центре выгнутого пульта; вокруг шкалы приборов круглые, овальные, квадратные, с цветными огоньками", "гл. 1", 0, 1.3, 3.0],
+  ["Окно двигателей в пульте: четыре высоких цилиндра из нитрида бора, при пуске внутри зелёное пламя спиралями, затем серый направляющий луч и фиолетовая вспышка (кнопка «Двигатели»)", "гл. 1", -1.55, 1.1, 2.75],
+  ["Стерженьки запасов планетарных ионных зарядов: тонкие стержни за стеклом в пульте, ползут вниз при расходе; рядом циферблат уравнителя скоростей", "гл. 1, 3", -1.15, 1.1, 2.95],
+  ["Рычаги и верньеры управления у командира, пальцы бегут по ним как по клавишам; рукоятка анамезонных двигателей (красный шар) слева", "гл. 1, 3", -.4, 1.2, 3.1],
+  ["Шкала высоты с красными огнями у заданной цифры и ограничитель высоты полёта; охрана электронных связей, индикаторы", "гл. 3", -.75, 1.15, 3.1],
+  ["Рули командира: боковые ручки управления на подлокотниках обоих кресел (решение проекта: «руль» нужен командиру)", "решение", 0, 1.0, 1.7],
+  ["Экран локатора со свистком при цели, диски трёх приборов, электронный щуп, катушки журнала наблюдений", "гл. 1, 3", 1.7, 1.15, 2.8],
+  ["Обзорный экран: один большой вогнутый, как прорезь в мир; зоны (левая, центр, правая) включаются независимо: клик по зоне. Сзади экранов пока нет", "гл. 1 + решение", 0, 2.9, 4.2],
+  ["Длинное стекло в левой стене с полоской света: индикатор бомбовых маяков", "гл. 1", -4.7, 1.3, -.4],
+  ["Пульт навигации: стол малой расчётной машины МНУ-11. Перед навигатором одно кресло и зона управления", "гл. 1 + решение", NX, 1.1, NZ - .5],
+  ["Голопроектор на светопостроении: кольцо излучателей на столе строит в воздухе объём карты рабочей зоны до 50 св. лет. В книге проекция на заднюю стенку: решение проекта, 3000-е", "гл. 1 + решение", NX, 2.9, NZ],
+  ["Технологичные кресла с компенсацией перегрузок: плавающая рама, поглотители инерции (цилиндры со штоками), контурная спинка с крыльями, подголовник, опора ног, ремни. Поднимаются из люков в полу на гидравлических шарнирах", "гл. 3 + решение", 0, 1.6, 1.4],
+  ["Звуковой рупор автомата-приёмника; тон приборов меняется с обстановкой полёта", "гл. 1", -2.8, 1.4, 1.9],
+  ["Тусклый свет, отражённый от свода: подсветка вверх по краям пола; при входе вспыхивает золотистый", "гл. 1", 0, .3, FZ - .3]
+];
+const leg = $("legend");
+NOTES.forEach(n => { const li = document.createElement("li"); li.innerHTML = `${n[0]} <span class="src">(${n[1]})</span>`; leg.appendChild(li); });
+const pinEls = NOTES.map((n, i) => { const d = document.createElement("div"); d.className = "pin"; d.textContent = i + 1; wrap.appendChild(d); return d; });
+function updPins() {
+  const r = host.getBoundingClientRect(), show = $("pins").classList.contains("on");
+  NOTES.forEach((n, i) => { const v = world.localToWorld(new THREE.Vector3(n[2], n[3], n[4])).project(cam), e = pinEls[i];
+    if (!show || v.z > 1) { e.style.display = "none"; return; } e.style.display = "block"; e.style.left = ((v.x + 1) / 2 * r.width) + "px"; e.style.top = ((1 - v.y) / 2 * r.height) + "px"; });
+}
+// ---- controls
+let tiltT = 0, raised = true, working = true;
+$("seats").onclick = e => { raised = !raised; e.target.classList.toggle("on", raised); e.target.textContent = raised ? "Кресла подняты" : "Кресла убраны в пол"; };
+$("tilt").oninput = e => { tiltT = +e.target.value; $("tiltv").textContent = tiltT + "°"; };
+$("gal").onclick = e => { const on = !e.target.classList.contains("on"); e.target.classList.toggle("on", on); holo.visible = on; };
+$("pins").onclick = e => e.target.classList.toggle("on");
+$("eng").onclick = e => { engState = (engState + 1) % 3; e.target.textContent = ["Двигатели: выкл", "Двигатели: пуск", "Двигатели: истечение"][engState]; e.target.classList.toggle("on", engState > 0); };
+$("light").onclick = e => { working = !working; e.target.textContent = working ? "Свет: рабочий, золотистый" : "Свет: дежурный, тусклый"; coveM.color.set(working ? 0xffd48a : 0x8aa0c8); keyL.intensity = working ? 1.2 : .3; amb.intensity = working ? .8 : .25; };
+const VIEWS = {q: [[8.5, 6.2, -9], [0, 1.6, 0]], aft: [[0, 1.7, -4.0], [0, 1.8, 3]], top: [[0, 13, -.01], [0, 0, 0]], seat: [[0, 1.55, .35], [0, 1.7, 3.4]], console: [[0, 1.9, -.4], [0, 1.4, 3.0]], nav: [[1.2, 2.0, -3.4], [NX, 1.6, NZ - .6]], exit: [[-2.5, 1.7, 0], [4.7, 1.2, 0]], cmd: [[0, 1.5, 1.0], [0, 1.0, 3.0]], engw: [[-1.4, 1.7, 1.2], [-1.9, 1.0, 2.6]]};
+function setView(v) { cam.position.set(-v[0][0], v[0][1], v[0][2]); ctl.target.set(-v[1][0], v[1][1], v[1][2]); ctl.update(); }
+document.querySelectorAll("button[data-v]").forEach(b => b.onclick = () => setView(VIEWS[b.dataset.v]));
+setView(VIEWS.q);
+function resize() { const r = host.getBoundingClientRect(); R.setSize(r.width, r.height); cam.aspect = r.width / r.height; cam.updateProjectionMatrix(); }
+addEventListener("resize", resize); resize();
+let t0 = performance.now();
+(function loop() {
+  const dt = Math.min(.05, (performance.now() - t0) / 1000); t0 = performance.now();
+  for (const s of seats) {
+    s.h += ((raised ? 1 : 0) - s.h) * Math.min(1, dt * 4);
+    s.post.position.y = -.55 * (1 - s.h); s.post.visible = s.h > .02;
+    const open = Math.min(1, s.h * 1.6); s.hatchL.rotation.z = open * 1.35; s.hatchR.rotation.z = -open * 1.35;
+    s.hinge.rotation.x = THREE.MathUtils.degToRad(-tiltT) * s.h;
+  }
+  volume.rotation.y += dt * .18; shipMark.scale.setScalar(1 + .25 * Math.sin(performance.now() / 300));
+  { const tt = performance.now() / 1000; DYN.forEach(f => f(tt)); }
+  ctl.update(); R.render(scene, cam); updPins();
+  $("ro").textContent = `барабан R 4,6 м, длина 9,6 м\nпол 9,6 × 9,0 м, свод до 5,6 м\nпанелей экрана: ${PANELS.length}, включено: ${PANELS.filter(p => p.state).length}\nкресел: 4 (3 у пульта, 1 у навигатора), с компенсацией перегрузок`;
+  requestAnimationFrame(loop);
+})();
+</script></body></html>

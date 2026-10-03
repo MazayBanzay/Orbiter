@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Компьютер скафандра · табло и резерв</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Jura:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0b0d10; --card:#13161a; --ink:#e6e4df; --mute:#98a0a8; --line:#2a2f35; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:1320px; margin:0 auto; padding:20px 16px 48px; }
+  h1 { font-size:21px; margin:0 0 4px; } .sub { color:var(--mute); margin:0 0 14px; font-size:14px; }
+  .ctl { display:flex; flex-wrap:wrap; gap:10px 22px; margin:0 0 12px; }
+  .grp { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .grp b { font-size:12px; color:var(--mute); font-weight:500; margin-right:2px; }
+  .grp button { background:#1b1f24; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:5px 10px; font:13px "Segoe UI", sans-serif; cursor:pointer; }
+  .grp button.on { border-color:#ff8a1c; color:#ffb066; background:#2a1d10; }
+  .wrap { position:relative; width:100%; border-radius:8px; overflow:hidden; background:#000; }
+  .stage { position:absolute; left:0; top:0; width:1280px; height:720px; transform-origin:0 0; overflow:hidden; font-family:'Jura', sans-serif; }
+  section.notes { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 16px; margin-top:16px; font-size:14px; }
+  section.notes h2 { font-size:16px; margin:4px 0 6px; } section.notes ul { margin:0 0 8px; padding-left:18px; }
+
+  /* ---------- display styles: one layout, four technologies ---------- */
+  .stage { --p:#e3f0ff; --w:#ffffff; --d:#7d8d9c; --a:#ff8a1c; --r:#ff4646; --glow:2px; --ghost:0; --unlit:#ffffff10; }
+  .stage.gri { --p:#ff8a3a; --w:#ffb070; --d:#8a4a22; --a:#ffc04a; --r:#ff3b2a; --glow:6px; --ghost:1; --unlit:#ff6a2014; }
+  .stage.vli { --p:#7df9d0; --w:#c8fff0; --d:#2f7f6a; --a:#ffe36a; --r:#ff5a6a; --glow:5px; --ghost:1; --unlit:#7df9d012; }
+  .stage.ray { --p:#c4f2ff; --w:#f4feff; --d:#6f98a8; --a:#ffcf6a; --r:#ff6a5a; --glow:1px; --ghost:0; --unlit:transparent; }
+  .stage.ray .hud { filter:drop-shadow(0 0 1px #ffffff) drop-shadow(0 0 4px color-mix(in srgb, var(--p) 80%, transparent)) drop-shadow(0 0 12px color-mix(in srgb, var(--p) 35%, transparent)); animation:speckle .11s steps(3) infinite; }
+  @keyframes speckle { 0% { opacity:1; } 33% { opacity:.955; } 66% { opacity:.985; } 100% { opacity:.97; } }
+  .stage.ray .num { font-weight:500; }
+  .gri-hw { --p:#ff8a3a; --w:#ffb070; --d:#5a3a22; --a:#ffc04a; --r:#ff3b2a; --ghost:1; --unlit:#ff6a2012; position:absolute; inset:0; pointer-events:none; }
+  .gri-hw .hw { pointer-events:auto; }
+  .gri-hw .num { color:var(--w); text-shadow:0 0 6px #ff7a2a, 0 0 2px #ffb070; letter-spacing:.12em; }
+  .gri-hw .num::before { text-shadow:none; }
+  .gri-hw .on-arc { position:absolute; transform-origin:50% 0; }
+  .gri-hw .cluster { position:absolute; transform-origin:0 0; }
+  .gri-hw .cluster.r { transform-origin:100% 0; }
+  .gri-hw .cl-item { position:absolute; }
+  .gri-hw .dot { position:absolute; width:8px; height:8px; border-radius:50%; background:#140e09; border:1px solid #2c241c; }
+  .gri-hw .dot.c { background:var(--a); border-color:var(--a); box-shadow:0 0 6px #ffb04a, 0 0 12px #ffb04a88; }
+  .gri-hw .dot.w { background:var(--r); border-color:var(--r); box-shadow:0 0 7px #ff3b2a, 0 0 14px #ff3b2a99; }
+  .gri-hw .strip.master { position:absolute; width:7px; height:190px; border-radius:4px; background:#100b07; border:1px solid #2c241c; cursor:pointer; }
+  .gri-hw .strip.master.c { background:var(--a); border-color:var(--a); box-shadow:0 0 12px #ffb04a, 0 0 26px #ffb04a77; }
+  .gri-hw .strip.master.w { background:var(--r); border-color:var(--r); box-shadow:0 0 14px #ff3b2a, 0 0 30px #ff3b2a88; }
+  .gri-hw .on-arc .paint, .gri-hw .on-arc .win, .gri-hw .on-arc .tile, .gri-hw .on-arc .master { position:static; }
+  .gri-hw .paint { position:absolute; color:#7d6c5a; font-size:9px; letter-spacing:.14em; text-transform:uppercase; white-space:nowrap; }
+  .gri-hw .win { position:absolute; height:26px; margin-top:2px; background:#060504; border:1px solid #2c241c; border-radius:3px; box-shadow:inset 0 0 8px #000;
+    display:flex; align-items:center; justify-content:center; font-size:19px; }
+  .gri-hw .tile { width:46px; height:15px; font-size:8.5px; background:#0a0806; border-color:#2c241c; color:#4a3826; border-radius:2px; }
+  .gri-hw .tile.c { color:var(--a); border-color:var(--a); background:#0a0806; box-shadow:0 0 8px #ffb04a88, inset 0 0 8px #ffb04a55; text-shadow:0 0 4px #ffc04a; }
+  .gri-hw .tile.w { color:var(--r); border-color:var(--r); background:#0a0806; box-shadow:0 0 10px #ff3b2aaa, inset 0 0 10px #ff3b2a66; text-shadow:0 0 4px #ff5a3a; }
+  .gri-hw .master { width:92px; height:34px; font-size:11px; background:#0a0806; border-color:#2c241c; color:#4a3826; border-radius:3px; box-shadow:none; }
+  .gri-hw .master.c { color:var(--a); border-color:var(--a); box-shadow:0 0 14px #ffb04aaa, inset 0 0 12px #ffb04a66; text-shadow:0 0 5px #ffc04a; }
+  .gri-hw .master.w { color:var(--r); border-color:var(--r); box-shadow:0 0 16px #ff3b2acc, inset 0 0 14px #ff3b2a77; text-shadow:0 0 5px #ff5a3a; }
+  .stage.el { --p:#5cffc8; --w:#c9fff0; --d:#2b8a72; --a:#ffb84a; --r:#ff5a4a; --glow:1.5px; --ghost:.35; --unlit:#5cffc80d; }
+  .stage.el .num { font-weight:500; letter-spacing:.06em; }
+  .stage.led { --p:#ff4a3a; --w:#ff7a66; --d:#7a2a22; --a:#ffb020; --r:#ff1e1e; --glow:3px; --ghost:1; --unlit:#ff3a2a12; }
+  .stage.ana { --p:#e8e2c8; --w:#fff6dc; --d:#8a8572; --a:#ffb347; --r:#ff5a3c; --glow:1px; --ghost:0; --unlit:#ffffff08; }
+  .stage.led .num { font-style:italic; letter-spacing:.1em; }
+  .stage.ana .master, .stage.ana .tile { border-radius:4px; }
+  .stage.elt { --p:#5dff7e; --w:#b9ffc6; --d:#2a8a3f; --a:#d8ff5a; --r:#ff6a4a; --glow:4px; --ghost:0; --unlit:#5dff7e0c; }
+  .hud { position:absolute; inset:0; color:var(--p); filter:drop-shadow(0 0 var(--glow) color-mix(in srgb, var(--p) 70%, transparent)); }
+  .stage.elt .hud::after { content:""; position:absolute; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(0deg, #000a 0 1px, transparent 1px 3px); mix-blend-mode:multiply; }
+  .t { position:absolute; white-space:nowrap; letter-spacing:.04em; }
+  .lab { color:var(--d); font-size:10px; letter-spacing:.12em; text-transform:uppercase; }
+  /* numbers: gas-discharge / VFD digits show their unlit segments behind ("888") */
+  .num { position:relative; display:inline-block; color:var(--w); font-variant-numeric:tabular-nums; }
+  .num::before { content:attr(data-g); position:absolute; left:0; top:0; color:var(--unlit); opacity:var(--ghost); }
+  .stage.vli .num, .stage.vli .dot { background:radial-gradient(circle, currentColor 52%, transparent 58%) 0 0/2.6px 2.6px;
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .stage.gri .num { font-weight:400; letter-spacing:.12em; }
+  .stage.elt .t, .stage.elt .tile { font-weight:500; }
+
+  /* annunciator tiles */
+  .tile { position:absolute; width:78px; height:30px; border:1px solid color-mix(in srgb, var(--d) 70%, transparent); color:var(--d);
+    font-size:11px; font-weight:700; letter-spacing:.08em; display:flex; align-items:center; justify-content:center; text-align:center;
+    background:var(--unlit); cursor:default; }
+  .tile.c { color:#1a1000; background:var(--a); border-color:var(--a); }
+  .tile.w { color:#200000; background:var(--r); border-color:var(--r); }
+  .stage.gri .tile.c, .stage.gri .tile.w, .stage.vli .tile.c, .stage.vli .tile.w { background:transparent; }
+  .stage.gri .tile.c, .stage.vli .tile.c { color:var(--a); border-color:var(--a); box-shadow:inset 0 0 14px color-mix(in srgb, var(--a) 40%, transparent); }
+  .stage.gri .tile.w, .stage.vli .tile.w { color:var(--r); border-color:var(--r); box-shadow:inset 0 0 14px color-mix(in srgb, var(--r) 45%, transparent); }
+  .master { position:absolute; width:118px; height:66px; font-size:15px; font-weight:700; letter-spacing:.1em; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; border:2px solid color-mix(in srgb, var(--d) 70%, transparent); color:var(--d); background:var(--unlit); }
+  .master.c { border-color:var(--a); color:var(--a); box-shadow:0 0 18px color-mix(in srgb, var(--a) 55%, transparent), inset 0 0 18px color-mix(in srgb, var(--a) 35%, transparent); }
+  .master.w { border-color:var(--r); color:var(--r); box-shadow:0 0 22px color-mix(in srgb, var(--r) 65%, transparent), inset 0 0 22px color-mix(in srgb, var(--r) 45%, transparent); }
+  .blink { animation:bl .9s steps(2) infinite; } @keyframes bl { 50% { opacity:.25; } }
+  .msg { position:absolute; font-size:12px; white-space:nowrap; cursor:pointer; }
+  .msg .tm { color:var(--d); margin-right:8px; }
+  .msg.w { color:var(--r); } .msg.c { color:var(--a); } .msg.ack { opacity:.55; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Компьютер скафандра — табло предупреждений, резерв возврата, пределы и тренды</h1>
+  <p class="sub">Расположение то же, что в игре; показаны только новые элементы и рядом с ними существующие. Переключайте технологию экрана и сценарий. Щелчок по лампе «ВНИМАНИЕ / ОПАСНОСТЬ» — подтвердить; щелчок по сообщению — подтвердить одно.</p>
+  <div class="ctl" id="ctl"></div>
+  <div id="host"></div>
+  <section class="notes">
+    <h2>Что здесь нового</h2>
+    <ul>
+      <li><b>Табло</b> (под компасом): главная лампа и 8 ламп систем. Новое предупреждение мигает, пока его не подтвердят; подтверждённое горит ровно, пока причина не уйдёт. Ниже — лента сообщений со временем; всё остаётся в журнале.</li>
+      <li><b>Резерв возврата</b> (над нижней строкой): что нужно, чтобы вернуться к кораблю или шлюзу — пешком и на ранце, — против того, что есть. Порог «возвращайтесь» — когда остаётся меньше двукратного запаса.</li>
+      <li><b>Пределы и тренды</b>: у шкал жёлтая и красная отметки; у чисел — стрелка изменения за последние полминуты.</li>
+    </ul>
+    <h2>Технологии экрана — «возможное развитие», а не сегодняшний день</h2>
+    <ul>
+      <li><b>Светопостроение + ГРИ-кольцо</b> (рекомендация): основной экран — свет, собранный в пространстве перед глазами: тонкая когерентная нить с мягким ореолом и едва заметным мерцанием, висит на «бесконечности», без экрана. Свет не заливает — он чертит и штрихует. Аварийное железо — на периферии, в выступах обода визора у щёк: цифровые лампы O2, давления, батареи, резерва и огоньки систем; главная лампа — две узкие неоновые полосы по краям обзора (боковое зрение ловит мигание сразу). Середина визора свободна. Это своё железо: горит, даже если свет погаснет. Подписи — краска.</li>
+      <li><b>Голограмма</b> — как сейчас в игре.</li>
+      <li><b>ГРИ</b> — газоразрядные индикаторы: неоновое оранжевое свечение цифр, за ними видны непогашенные сегменты. Линия ламп ИН-14 и табло 1960-х, доведённая до шлема.</li>
+      <li><b>ВЛИ</b> — вакуумно-люминесцентные: сине-зелёное свечение, цифры из точек.</li>
+      <li><b>ЭЛТ</b> — люминофор осциллографа: зелёные векторные линии с послесвечением и растром.</li>
+      <li><b>Полупроводник</b> — светодиоды: шкалы из отдельных огоньков (зелёный / жёлтый / красный по зоне), красные семисегментные цифры.</li>
+      <li><b>ЭЛ · визор</b> — прозрачная электролюминесцентная плёнка прямо на стекле визора: твёрдая, без колб и без полупроводников в самом экране, держит радиацию и холод; холодное ровное свечение.</li>
+    </ul>
+    <p>В игре это будет четвёртая строка на странице ОПЦИИ рядом с цветом; шрифт и атлас букв нужны свои для ГРИ и ВЛИ.</p>
+  </section>
+</main>
+<script>
+const STYLES = [['ray', 'Светопостроение + ГРИ-кольцо'], ['holo', 'Голограмма'], ['gri', 'ГРИ · газоразрядный'], ['vli', 'ВЛИ · люминесцентный'], ['elt', 'ЭЛТ · люминофор'], ['led', 'Полупроводник · светодиоды'], ['el', 'ЭЛ · визор']];
+const SCEN = {
+  norm:  { n:'Норма', co2:0.05, co2t:0, sorb:.96, batt:.82, battT:-1, o2:.97, p:30.0, leak:0.01, rad:48, link:.98, dist:142, alerts:[] },
+  co2:   { n:'CO2 растёт', co2:0.92, co2t:1, sorb:.12, batt:.80, battT:-1, o2:.95, p:30.0, leak:0.01, rad:48, link:.97, dist:142, alerts:[['CO2', 1, 'CO2 0,92 кПа · поглотитель 12 %']] },
+  batt:  { n:'Батарея на исходе', co2:0.06, co2t:0, sorb:.90, batt:.08, battT:-1, o2:.90, p:30.0, leak:0.01, rad:48, link:.95, dist:460, alerts:[['БАТ', 2, 'БАТАРЕЯ 8 % · 1,2 ч'], ['РЕЗЕРВ', 1, 'РЕЗЕРВ ВОЗВРАТА ×2,1 · возвращайтесь']] },
+  leak:  { n:'Утечка', co2:0.07, co2t:1, sorb:.85, batt:.70, battT:-1, o2:.62, p:27.4, leak:0.85, rad:52, link:.96, dist:280, alerts:[['ДАВЛ', 2, 'ДАВЛЕНИЕ 27,4 кПа · утечка 0,85 кПа/мин'], ['O2', 1, 'КИСЛОРОД: расход ×3']] },
+  far:   { n:'Далеко, нет связи', co2:0.05, co2t:0, sorb:.80, batt:.55, battT:-1, o2:.70, p:30.0, leak:0.01, rad:61, link:0, dist:2650, alerts:[['СВЯЗЬ', 1, 'НЕТ СВЯЗИ С «ТАНТРОЙ» · 2,6 км за грядой'], ['РЕЗЕРВ', 1, 'РЕЗЕРВ ВОЗВРАТА ×2,6 · пора назад']] },
+};
+const TILES = ['O2', 'CO2', 'ДАВЛ', 'БАТ', 'ТЕПЛО', 'РАДИАЦ', 'СВЯЗЬ', 'РЕЗЕРВ'];
+const COLS = [['own', 'свой'], ['white', 'белый'], ['cyan', 'циан'], ['green', 'зелёный'], ['amber', 'янтарь']];
+const COLV = { white:['#e3f0ff', '#ffffff', '#7d8d9c'], cyan:['#46e2ff', '#e9f7ff', '#5e8ea5'], green:['#6dff9a', '#e0ffe8', '#4a8a5e'], amber:['#ffb347', '#fff0d8', '#9a7a4a'] };
+const S = { col:'own', style:'ray', scen:'co2', msgs:[], acked:new Set(), cmp:false };
+let ST = 'ray';
+let clock = 14 * 3600 + 32 * 60;
+
+let stage = null, wrap = null;
+const ghost = s => String(s).replace(/[0-9]/g, '8');
+const num = (s, sz = 15) => `<span class="num" data-g="${ghost(s)}" style="font-size:${sz}px">${s}</span>`;
+const f1 = (v, n = 1) => v.toFixed(n).replace('.', ',');
+const T = (x, y, html, cls = '', st = '') => `<div class="t ${cls}" style="left:${x}px;top:${y}px;${st}">${html}</div>`;
+const tm = s => { const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, c = s % 60; return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(c).padStart(2, '0')}`; };
+
+function scene() {
+  return `<svg viewBox="0 0 1280 720" width="1280" height="720" style="position:absolute;left:0;top:0">
+    <defs><linearGradient id="gm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4c4c50"/><stop offset="1" stop-color="#8f8e8b"/></linearGradient>
+    <radialGradient id="vg" cx=".5" cy=".5" r=".72"><stop offset=".7" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".6"/></radialGradient>
+    <linearGradient id="tint" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset=".22" stop-color="#000" stop-opacity="0"/><stop offset=".82" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".45"/></linearGradient></defs>
+    <rect width="1280" height="720" fill="#000"/>
+    <path d="M0,374 C140,360 260,368 380,366 C560,362 700,370 860,362 C1000,356 1140,366 1280,360 L1280,720 L0,720 Z" fill="url(#gm)"/>
+    <ellipse cx="930" cy="470" rx="150" ry="22" fill="#46464a" opacity=".55"/><ellipse cx="240" cy="430" rx="90" ry="12" fill="#46464a" opacity=".55"/>
+    <path d="M446,368 L448,346 L452,336 L456,346 L458,368 Z" fill="#b8b8b4" opacity=".85"/>
+    <rect width="1280" height="720" fill="url(#tint)"/><rect width="1280" height="720" fill="url(#vg)"/></svg>`;
+}
+
+// a gauge with caution / warning limits and a trend arrow, drawn the way each technology would draw it
+function gauge(x, f, name, val, trend, warnLow = .10, cautLow = .25) {
+  const y0 = ST === 'ray' ? 380 : 476, h = ST === 'ray' ? 170 : 196, col = f < warnLow ? 'var(--r)' : f < cautLow ? 'var(--a)' : 'var(--p)';
+  const yl = v => y0 + h * (1 - v);
+  const ar = trend > 0 ? '▲' : trend < 0 ? '▼' : '';
+  let s = '';
+  if (ST === 'led') {
+    // a column of LEDs: each one lit or dark, coloured by the zone it sits in
+    const n = 20, sh = h / n;
+    for (let i = 0; i < n; i++) {
+      const v = (i + 0.5) / n, lit = v <= f, zc = v < warnLow ? 'var(--r)' : v < cautLow ? 'var(--a)' : '#3cff6a';
+      s += `<rect x="${x}" y="${y0 + h - (i + 1) * sh + 1}" width="12" height="${sh - 2.5}" rx="1" fill="${lit ? zc : 'var(--unlit)'}" stroke="${zc}" stroke-opacity=".25"/>`;
+    }
+  } else if (ST === 'ray') {
+    s += `<rect x="${x}" y="${y0}" width="12" height="${h}" fill="none" stroke="var(--d)" stroke-width="1"/>`;
+    for (let yy = y0 + h - 3; yy > yl(f); yy -= 4) s += `<line x1="${x + 2}" x2="${x + 10}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="1.2"/>`;
+  } else {
+    s += `<rect x="${x}" y="${y0}" width="12" height="${h}" fill="var(--unlit)" stroke="var(--d)" stroke-width="1"/>`;
+    s += `<rect x="${x + 1}" y="${yl(f)}" width="10" height="${h * f}" fill="${col}" opacity=".9"/>`;
+  }
+  s += `<line x1="${x - 4}" x2="${x + 16}" y1="${yl(cautLow)}" y2="${yl(cautLow)}" stroke="var(--a)" stroke-width="2"/>`;
+  s += `<line x1="${x - 4}" x2="${x + 16}" y1="${yl(warnLow)}" y2="${yl(warnLow)}" stroke="var(--r)" stroke-width="2"/>`;
+  return { svg:s, html:T(x - 6, y0 - 22, num(Math.round(f * 100), 13) + `<span style="font-size:9px;color:${trend < 0 ? 'var(--a)' : 'var(--p)'}"> ${ar}</span>`) + T(x - 2, y0 + h + 6, name, 'lab') };
+}
+function render() {
+  const host = document.getElementById('host');
+  const list = S.cmp ? [['ray', 'Светопостроение + ГРИ-кольцо'], ['gri', 'ГРИ · газоразрядный'], ['holo', 'Голограмма']] : [[S.style, '']];
+  if (host.dataset.k !== list.map(x => x[0]).join()) {
+    host.dataset.k = list.map(x => x[0]).join();
+    host.innerHTML = list.map(([k, n]) => (n ? `<h2 style="font-size:15px;margin:14px 0 6px">${n}</h2>` : '') + `<div class="wrap" data-st="${k}"><div class="stage"></div></div>`).join('');
+  }
+  host.querySelectorAll('.wrap').forEach(w => { wrap = w; stage = w.firstChild; ST = w.dataset.st; draw(); });
+  controls(); fitAll();
+}
+function draw() {
+  const sc = SCEN[S.scen];
+  stage.className = 'stage ' + (ST === 'holo' ? '' : ST);
+  const cv = COLV[S.col];
+  stage.style.removeProperty('--p'); stage.style.removeProperty('--w'); stage.style.removeProperty('--d');
+  if (cv && (ST === 'ray' || ST === 'holo' || ST === 'el')) { stage.style.setProperty('--p', cv[0]); stage.style.setProperty('--w', cv[1]); stage.style.setProperty('--d', cv[2]); }
+  // messages: new alerts arrive unacknowledged
+  for (const [tile, lvl, text] of sc.alerts)
+    if (!S.msgs.some(m => m.text === text)) S.msgs.unshift({ t:clock - Math.floor(Math.random() * 40), tile, lvl, text, ack:false });
+  const active = S.msgs.filter(m => sc.alerts.some(a => a[2] === m.text));
+  const unW = active.some(m => m.lvl === 2 && !m.ack), unC = active.some(m => m.lvl === 1 && !m.ack);
+  const anyW = active.some(m => m.lvl === 2), anyC = active.some(m => m.lvl === 1);
+
+  let svg = '', html = '';
+  // the existing rim, faint, for context
+  svg += `<path d="M 140,149 A1500,1500 0 0 1 480,69" fill="none" stroke="var(--p)" stroke-width="1.2" opacity=".5"/><path d="M 800,69 A1500,1500 0 0 1 1140,149" fill="none" stroke="var(--p)" stroke-width="1.2" opacity=".5"/>`;
+  html += T(250, 92, `<span class="lab">пульс</span> ${num('96', 13)} <span class="lab">дых</span> ${num('22', 13)} <span class="lab">тело</span> ${num('37,1', 13)}`, '', 'transform:rotate(-9deg)');
+  html += T(850, 92, `<span class="lab">O2</span> ${num(Math.round(sc.o2 * 100), 13)} <span class="lab">бат</span> ${num(Math.round(sc.batt * 100), 13)} <span class="lab">вт</span> ${num('196', 13)}`, '', 'transform:rotate(9deg)');
+  html += T(24, 22, '<span style="font-size:15px;color:var(--w);font-weight:700">НИЗА КРИТ</span>') + T(1256, 22, 'ВКД <span class="clk">' + num(tm(clock), 15) + '</span>', '', 'transform:translateX(-100%)');
+  // compass (context)
+  svg += `<line x1="520" x2="760" y1="58" y2="58" stroke="var(--p)" opacity=".5"/>`;
+  for (let d = 20; d <= 75; d += 5) { const x = 640 + (d - 47) * 4; svg += `<line x1="${x}" x2="${x}" y1="58" y2="${d % 10 ? 54 : 50}" stroke="var(--p)" opacity=".8"/>`; }
+  html += T(620, 62, num('047°', 13));
+
+  // ===== 1. the annunciator panel =====
+  const RAY = ST === 'ray';
+  const mx = 414, my = 96;
+  const mcls = anyW ? 'w' : anyC ? 'c' : '';
+  const mtxt = anyW ? 'ОПАСНОСТЬ' : anyC ? 'ВНИМАНИЕ' : 'НОРМА';
+  if (!RAY) html += `<div class="master ${mcls} ${(unW || unC) ? 'blink' : ''}" style="left:${mx}px;top:${my}px">${mtxt}</div>`;
+  if (!RAY) TILES.forEach((n, i) => {
+    const a = active.filter(m => m.tile === n);
+    const lvl = a.some(m => m.lvl === 2) ? 'w' : a.length ? 'c' : '';
+    const un = a.some(m => !m.ack);
+    html += `<div class="tile ${lvl} ${un ? 'blink' : ''}" style="left:${mx + 128 + (i % 4) * 84}px;top:${my + Math.floor(i / 4) * 36}px">${n}</div>`;
+  });
+  if (!RAY) html += T(mx, my + 74, 'ТАБЛО · щелчок по лампе — подтвердить', 'lab');
+  // the message ribbon
+  S.msgs.slice(0, 4).forEach((m, i) => {
+    const live = active.includes(m);
+    html += `<div class="msg ${m.lvl === 2 ? 'w' : 'c'} ${m.ack || !live ? 'ack' : ''}" data-i="${i}" style="left:${mx}px;top:${(RAY ? 96 : my + 92) + i * 18}px"><span class="tm">${tm(m.t)}</span>${m.lvl === 2 ? '■' : '▲'} ${m.text}${live ? '' : ' · снято'}</div>`;
+  });
+
+  // ===== 2. the return reserve =====
+  const walk = sc.dist / 0.9 / 60, need = walk / 60 + 0.25;                 // hours to walk back + a quarter hour margin
+  const have = Math.min(sc.batt * 25, sc.o2 * 30, sc.sorb * 35) * (sc.leak > 0.3 ? 0.3 : 1);
+  const ratio = have / need, rcls = ratio < 1.2 ? 'var(--r)' : ratio < 3 ? 'var(--a)' : 'var(--p)';
+  const rx = 400, ry = 560, rw = 480;
+  svg += `<rect x="${rx}" y="${ry + 20}" width="${rw}" height="10" fill="var(--unlit)" stroke="var(--d)"/>`;
+  const sc_ = v => rx + rw * Math.min(1, v / Math.max(need * 4, have));
+  if (ST === 'led') {
+    for (let i = 0; i < 40; i++) { const x0 = rx + 2 + i * (rw - 4) / 40, lit = x0 < sc_(have); svg += `<rect x="${x0}" y="${ry + 22}" width="${(rw - 4) / 40 - 3}" height="6" rx="1" fill="${lit ? rcls : 'var(--unlit)'}"/>`; }
+  } else if (ST === 'ray') {
+    for (let xx = rx + 3; xx < sc_(have); xx += 4) svg += `<line x1="${xx}" x2="${xx}" y1="${ry + 22}" y2="${ry + 28}" stroke="${rcls}" stroke-width="1.2"/>`;
+  } else svg += `<rect x="${rx + 1}" y="${ry + 21}" width="${sc_(have) - rx - 1}" height="8" fill="${rcls}" opacity=".85"/>`;
+  svg += `<line x1="${sc_(need)}" x2="${sc_(need)}" y1="${ry + 14}" y2="${ry + 36}" stroke="var(--w)" stroke-width="2"/>`;
+  svg += `<line x1="${sc_(need * 2)}" x2="${sc_(need * 2)}" y1="${ry + 16}" y2="${ry + 34}" stroke="var(--a)" stroke-width="2" stroke-dasharray="3 2"/>`;
+  html += T(rx, ry - 2, `<span class="lab">резерв возврата · до «Тантры»</span> ${num(sc.dist >= 1000 ? f1(sc.dist / 1000, 2) + ' км' : sc.dist + ' м', 13)} <span class="lab">пешком</span> ${num(Math.round(walk) + ' мин', 13)} <span class="lab">на ранце</span> ${num(Math.round(sc.dist / 40 + 6) + ' м/с', 13)}`);
+  html += T(rx + rw, ry + 38, `<span style="color:${rcls};font-weight:700;font-size:13px">×${f1(ratio, 1)} · ${ratio < 1.2 ? 'НЕ ХВАТИТ' : ratio < 3 ? 'ВОЗВРАЩАЙТЕСЬ' : 'НОРМА'}</span>`, '', 'transform:translateX(-100%)');
+  html += T(sc_(need) - 30, ry + 38, 'нужно', 'lab') + T(sc_(need * 2) - 18, ry + 38, '×2', 'lab', 'color:var(--a)');
+
+  // ===== 3. limits and trends =====
+  const g1 = gauge(30, sc.o2, 'O2', 0, sc.leak > .3 ? -1 : 0), g2 = gauge(58, sc.sorb, 'CO2', 0, sc.co2t ? -1 : 0), g3 = gauge(86, sc.batt, 'БАТ', 0, -1);
+  svg += g1.svg + g2.svg + g3.svg; html += g1.html + g2.html + g3.html;
+  // the consumption panel (right) with trends; new rows: pressure, radiation, link
+  const px = 1026, py = 180, pw = 230;
+  const row = (i, n, v, tr, col = 'var(--w)') => T(px, py + 22 + i * 21, `<span class="lab" style="font-size:10.5px">${n}</span>`) +
+    T(px + pw, py + 22 + i * 21, `<span style="color:${col}">${num(v, 13)}</span> <span style="font-size:10px;color:${tr > 0 ? 'var(--a)' : 'var(--p)'}">${tr > 0 ? '▲' : tr < 0 ? '▼' : '·'}</span>`, '', 'transform:translateX(-100%)');
+  html += T(px, py - 6, '<span style="font-weight:700">РАСХОД И СРЕДА</span>');
+  svg += `<line x1="${px}" x2="${px + pw}" y1="${py + 12}" y2="${py + 12}" stroke="var(--p)" opacity=".5"/>`;
+  html += row(0, 'CO2 во вдохе', f1(sc.co2, 2) + ' кПа', sc.co2t, sc.co2 > .7 ? 'var(--a)' : 'var(--w)');
+  html += row(1, 'давление', f1(sc.p, 1) + ' кПа', sc.leak > .3 ? -1 : 0, sc.p < 29 ? 'var(--r)' : 'var(--w)');
+  html += row(2, 'утечка', f1(sc.leak, 2) + ' кПа/мин', sc.leak > .3 ? 1 : 0, sc.leak > .3 ? 'var(--r)' : 'var(--w)');
+  html += row(3, 'радиация', sc.rad + ' мкЗв/ч', 0);
+  html += row(4, 'доза за выход', f1(sc.rad * 1.4 / 1000, 2) + ' мЗв', 1);
+  html += row(5, 'связь «Тантра»', sc.link ? Math.round(sc.link * 100) + ' %' : 'НЕТ', sc.link ? 0 : -1, sc.link ? 'var(--w)' : 'var(--a)');
+  html += row(6, 'батарея', Math.round(sc.batt * 100) + ' % · ' + f1(sc.batt * 25, 1) + ' ч', -1, sc.batt < .1 ? 'var(--r)' : sc.batt < .25 ? 'var(--a)' : 'var(--w)');
+
+  // the reticle (context)
+  svg += `<circle cx="640" cy="360" r="3.5" fill="none" stroke="var(--p)"/><line x1="540" x2="612" y1="367" y2="367" stroke="var(--p)"/><line x1="668" x2="740" y1="367" y2="367" stroke="var(--p)"/>`;
+  // bottom cells (context)
+  [['скорость', '1,4 м/с'], ['походка', 'шаг'], ['щиток', 'поднят'], ['фонари', 'выкл'], ['грунт', '+96 °C']].forEach(([l, v], i) => {
+    html += T(470 + i * 85, 652, `<div class="lab" style="text-align:center">${l}</div><div style="text-align:center">${num(v, 15)}</div>`, '', 'transform:translateX(-50%)');
+  });
+
+  let ring = '';
+  if (RAY) {
+    // the visor's frame shows only at the lower corners, by the cheeks: the hardware sits there, the middle stays clear.
+    // Master caution: two narrow neon strips at the very edges of the view (the side vision catches a blink at once).
+    const pod = side => side < 0
+      ? `<path d="M0,598 C120,622 250,662 330,694 C360,706 380,714 392,720 L0,720 Z" fill="#0b0a08" stroke="#2c2620" stroke-width="2"/>`
+      : `<path d="M1280,598 C1160,622 1030,662 950,694 C920,706 900,714 888,720 L1280,720 Z" fill="#0b0a08" stroke="#2c2620" stroke-width="2"/>`;
+    ring += `<svg viewBox="0 0 1280 720" width="1280" height="720" style="position:absolute;left:0;top:0">${pod(-1)}${pod(1)}</svg>`;
+    const lamp = n => { const a = active.filter(m => m.tile === n); return { lvl:a.some(m => m.lvl === 2) ? 'w' : a.length ? 'c' : '', un:a.some(m => !m.ack) }; };
+    const tube = (x, w, label, val) => `<div class="cl-item" style="left:${x}px;top:0"><div class="paint" style="position:static;text-align:center">${label}</div><div class="win hw" style="position:static;width:${w}px">${num(val, 17)}</div></div>`;
+    const SHORT = { 'ТЕПЛО':'ТЕПЛ', 'РЕЗЕРВ':'РЕЗ', 'СВЯЗЬ':'СВЯЗ', 'РАДИАЦ':'РАД' };   // painted short names, as on real lamps
+    const dots = (x0, names) => names.map((n, i) => { const l = lamp(n); return `<div class="dot hw ${l.lvl} ${l.un ? 'blink' : ''}" style="left:${x0 + i * 44}px;top:46px"></div><div class="paint" style="left:${x0 + i * 44 + 11}px;top:45px">${SHORT[n] || n}</div>`; }).join('');
+    // left cheek: oxygen and pressure, and their lamps; turned to the frame's slope
+    ring += `<div class="cluster" style="left:40px;top:612px;transform:rotate(14deg)">` +
+      tube(0, 58, 'O2 %', String(Math.round(sc.o2 * 100))) + tube(68, 72, 'давл кПа', f1(sc.p, 1)) + dots(2, ['O2', 'CO2', 'ДАВЛ', 'ТЕПЛО']) + `</div>`;
+    // right cheek: battery and the return reserve
+    ring += `<div class="cluster r" style="left:${1280 - 40 - 184}px;top:612px;width:184px;transform:rotate(-14deg)">` +
+      tube(0, 58, 'бат %', String(Math.round(sc.batt * 100))) + tube(68, 72, 'резерв ×', f1(ratio, 1)) + dots(2, ['БАТ', 'РЕЗЕРВ', 'СВЯЗЬ', 'РАДИАЦ']) + `</div>`;
+    const ms = `${mcls} ${(unW || unC) ? 'blink' : ''}`;
+    ring += `<div class="strip master hw ${ms}" style="left:5px;top:250px"></div><div class="strip master hw ${ms}" style="left:${1280 - 13}px;top:250px"></div>`;
+    ring = `<div class="gri-hw">${ring}</div>`;
+  }
+  stage.innerHTML = scene() + `<div class="hud"><svg viewBox="0 0 1280 720" width="1280" height="720" style="position:absolute;left:0;top:0">${svg}</svg>${html}</div>` + ring;
+  stage.querySelectorAll('.master').forEach(e => e.onclick = () => { S.msgs.forEach(m => m.ack = true); render(); });
+  stage.querySelectorAll('.msg').forEach(e => e.onclick = () => { S.msgs[+e.dataset.i].ack = true; render(); });
+}
+function controls() {
+  const grp = (lab, items, cur, key) => `<div class="grp"><b>${lab}</b>${items.map(([k, n]) => `<button class="${k === cur ? 'on' : ''}" data-k="${key}" data-v="${k}">${n}</button>`).join('')}</div>`;
+  document.getElementById('ctl').innerHTML = grp('Вид', [['one', 'Один экран'], ['cmp', 'Сравнение: Свет+ГРИ · ГРИ · Голо']], S.cmp ? 'cmp' : 'one', 'cmp') +
+    (S.cmp ? '' : grp('Экран', STYLES, S.style, 'style')) + grp('Цвет экрана', COLS, S.col, 'col') + grp('Сценарий', Object.entries(SCEN).map(([k, v]) => [k, v.n]), S.scen, 'scen');
+  document.querySelectorAll('#ctl button').forEach(b => b.onclick = () => { if (b.dataset.k === 'cmp') S.cmp = b.dataset.v === 'cmp'; else S[b.dataset.k] = b.dataset.v; if (b.dataset.k === 'scen') clock += 37; render(); });
+}
+function fitAll() { document.querySelectorAll('#host .wrap').forEach(w => { const k = w.clientWidth / 1280; w.firstChild.style.transform = `scale(${k})`; w.style.height = (720 * k) + 'px'; }); }
+addEventListener('resize', fitAll);
+setInterval(() => { clock++; document.querySelectorAll('.clk').forEach(e => e.innerHTML = num(tm(clock), 15)); }, 1000);
+document.fonts && document.fonts.ready.then(render);
+render();
+</script>
+</body>
+</html>

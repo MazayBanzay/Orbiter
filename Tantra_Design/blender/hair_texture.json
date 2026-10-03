@@ -1,0 +1,10 @@
+{
+ "textures": [
+  {
+   "src": "C:\\Games\\Orbiter 2016\\Tantra_Design\\mpfbu\\data\\hair\\toigo_curled_under_bob\\GingerHair.png",
+   "dds": "Tantra\\Astronavigator\\Hair.dds",
+   "alpha": true
+  }
+ ],
+ "orbiter": "C:\\Games\\Orbiter 2016"
+}

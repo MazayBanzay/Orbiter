@@ -1,0 +1,30 @@
+{
+ "textures": [
+  {
+   "src": "C:\\Games\\Orbiter 2016\\Tantra_Design\\blender\\textures\\surf_frame.png",
+   "dds": "Tantra\\AstronavigatorSuit\\surf_frame.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter 2016\\Tantra_Design\\blender\\textures\\surf_plate.png",
+   "dds": "Tantra\\AstronavigatorSuit\\surf_plate.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter 2016\\Tantra_Design\\blender\\textures\\surf_metal.png",
+   "dds": "Tantra\\AstronavigatorSuit\\surf_metal.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter 2016\\Tantra_Design\\blender\\textures\\suit_diffuse.png",
+   "dds": "Tantra\\AstronavigatorSuit\\suit_diffuse.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter 2016\\Tantra_Design\\blender\\textures\\surf_gold.png",
+   "dds": "Tantra\\AstronavigatorSuit\\surf_gold.dds",
+   "alpha": false
+  }
+ ],
+ "orbiter": "C:\\Games\\Orbiter 2016"
+}

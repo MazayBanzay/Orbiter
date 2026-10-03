@@ -1,0 +1,230 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Астронавигатор 3D</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{background:#0d0f13;color:#e6e9ee;font:14px/1.5 system-ui,Segoe UI,sans-serif;margin:0;padding:12px}
+#v{width:100%;height:640px;border-radius:12px;overflow:hidden;background:#15181e;position:relative}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.b{font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid #3a414b;background:#1b1f26;color:#e6e9ee;cursor:pointer}.b.on{border-color:#c8372d;background:#2a1a19}
+label{font-size:13px;color:#a9b2bd}#info{position:absolute;left:10px;top:10px;font:12px ui-monospace,Consolas,monospace;color:#c3ccd6;background:rgba(0,0,0,.45);padding:6px 8px;border-radius:6px;white-space:pre}
+#err{position:absolute;left:10px;bottom:10px;color:#f99;font-size:12px}
+p{color:#a9b2bd;max-width:1100px}
+</style></head><body>
+<div id="v"><div id="info"></div><div id="err"></div></div>
+<div class="bar">
+  <button class="b on" id="v1">1 · Скафандр (вакуум)</button>
+  <button class="b" id="v2">2 · Комбинезон (корабль, дыхательная среда)</button>
+  <button class="b on" id="walk">Ходьба</button>
+  <label>скорость <input id="spd" type="range" min="0" max="3.5" step="0.1" value="1.2"> <span id="spdv">1.2</span> м/с</label>
+  <label>рост <input id="ht" type="range" min="1.60" max="1.90" step="0.01" value="1.72"> <span id="htv">1.72</span> м</label>
+  <button class="b" id="wf">Сетка</button>
+  <button class="b" id="sk">Кости</button>
+</div>
+<p>Процедурная модель на скелете со скиннингом (17 костей). Походка — перенос нашего <code>Gait</code> из UACS. В игре вариант 1 — <code>SuitMesh</code>, вариант 2 — <code>BodyMesh</code>: переключение Alt+S по правилам UACS (дышащая среда — давление 36–250 кПа и температура, либо закрытая зона). Пропорции — параметры; сверим с каноном.</p>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){try{
+const host=document.getElementById('v');
+const R=new THREE.WebGLRenderer({antialias:true});R.setPixelRatio(Math.min(2,devicePixelRatio||1));R.outputEncoding=THREE.sRGBEncoding;R.shadowMap.enabled=true;host.appendChild(R.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x15181e);
+const cam=new THREE.PerspectiveCamera(28,1,0.05,100);cam.position.set(2.6,1.5,4.2);
+const ctl=new THREE.OrbitControls(cam,R.domElement);ctl.target.set(0,0.95,0);ctl.enableDamping=true;ctl.update();
+scene.add(new THREE.HemisphereLight(0xdfe8f5,0x2a2520,0.55));
+const key=new THREE.DirectionalLight(0xffffff,1.0);key.position.set(2.5,4,3);key.castShadow=true;key.shadow.mapSize.set(2048,2048);key.shadow.camera.left=-1.5;key.shadow.camera.right=1.5;key.shadow.camera.top=2.2;key.shadow.camera.bottom=-0.2;scene.add(key);
+const rim=new THREE.DirectionalLight(0x9fc3ff,0.55);rim.position.set(-3,2.5,-3);scene.add(rim);
+const floor=new THREE.Mesh(new THREE.CircleGeometry(3,64),new THREE.MeshStandardMaterial({color:0x2a2f37,roughness:0.95}));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
+const grid=new THREE.GridHelper(6,24,0x3a414b,0x2c323a);grid.position.y=0.002;scene.add(grid);
+function resize(){const w=host.clientWidth,h=host.clientHeight;R.setSize(w,h,false);R.domElement.style.width='100%';R.domElement.style.height='100%';cam.aspect=w/h;cam.updateProjectionMatrix();}
+resize();addEventListener('resize',resize);
+const lerp=(a,b,t)=>a+(b-a)*t,cl=(v,a,b)=>Math.max(a,Math.min(b,v)),sm=(e0,e1,x)=>{const t=cl((x-e0)/(e1-e0),0,1);return t*t*(3-2*t);};
+
+// ---------------- skeleton (female, built at 1.70 m, scaled) ----------------
+const BN=['pelvis','spine','chest','neck','head','uArmL','fArmL','handL','uArmR','fArmR','handR','thighL','shinL','footL','thighR','shinR','footR'];
+const B={};BN.forEach((n,i)=>B[n]=i);
+const JP={pelvis:[0,0.93,0],spine:[0,1.05,0],chest:[0,1.24,0],neck:[0,1.425,0],head:[0,1.52,0.005],
+  uArmL:[0.172,1.385,-0.005],fArmL:[0.205,1.105,-0.02],handL:[0.222,0.865,0.025],
+  thighL:[0.088,0.885,0],shinL:[0.098,0.475,0.005],footL:[0.094,0.078,-0.012]};
+['uArm','fArm','hand','thigh','shin','foot'].forEach(n=>{const p=JP[n+'L'];JP[n+'R']=[-p[0],p[1],p[2]];});
+const PARENT={spine:'pelvis',chest:'spine',neck:'chest',head:'neck',uArmL:'chest',fArmL:'uArmL',handL:'fArmL',uArmR:'chest',fArmR:'uArmR',handR:'fArmR',thighL:'pelvis',shinL:'thighL',footL:'shinL',thighR:'pelvis',shinR:'thighR',footR:'shinR'};
+
+// ---------------- geometry accumulation per material ----------------
+function Acc(){return {pos:[],idx:[],si:[],sw:[]};}
+function addVert(a,p,wts){a.pos.push(p[0],p[1],p[2]);const w=wts.slice().sort((x,y)=>y[1]-x[1]).slice(0,4);let s=w.reduce((q,e)=>q+e[1],0)||1;
+  for(let i=0;i<4;i++){a.si.push(w[i]?w[i][0]:0);a.sw.push(w[i]?w[i][1]/s:0);}return a.pos.length/3-1;}
+function se(ang,w,d,n){const c=Math.cos(ang),s=Math.sin(ang);return [w*Math.sign(c)*Math.pow(Math.abs(c),2/n),d*Math.sign(s)*Math.pow(Math.abs(s),2/n)];}
+// horizontal-ring loft: sections {y,x,z,w,d,n}; weights(x,y,z)
+function loftY(a,S,seg,wf,cap0,cap1){const base=a.pos.length/3;
+  S.forEach(s=>{for(let j=0;j<seg;j++){const q=se(2*Math.PI*j/seg,s.w,s.d,s.n||2);const p=[s.x+q[0],s.y,s.z+q[1]];addVert(a,p,wf(p));}});
+  for(let i=0;i<S.length-1;i++)for(let j=0;j<seg;j++){const A=base+i*seg+j,Bq=base+i*seg+(j+1)%seg,C=A+seg,Dq=Bq+seg;
+    if(S[i+1].y>S[i].y)a.idx.push(A,Bq,C,Bq,Dq,C);else a.idx.push(A,C,Bq,Bq,C,Dq);}
+  const up=S[S.length-1].y>S[0].y;
+  const capf=(k,top)=>{const s=S[k],c=[s.x,s.y,s.z],ci=addVert(a,c,wf(c)),o=base+k*seg;for(let j=0;j<seg;j++){const A=o+j,Bq=o+(j+1)%seg;(top===up)?a.idx.push(A,Bq,ci):a.idx.push(A,ci,Bq);}};
+  if(cap0)capf(0,false);if(cap1)capf(S.length-1,true);}
+// rings in the XY plane along z (feet, boots): sections {z,x,y,w,h,n}
+function loftZ(a,S,seg,wf){const base=a.pos.length/3;
+  S.forEach(s=>{for(let j=0;j<seg;j++){const q=se(2*Math.PI*j/seg,s.w,s.h,s.n||2.6);const p=[s.x+q[0],s.y+q[1],s.z];addVert(a,p,wf(p));}});
+  for(let i=0;i<S.length-1;i++)for(let j=0;j<seg;j++){const A=base+i*seg+j,Bq=base+i*seg+(j+1)%seg,C=A+seg,Dq=Bq+seg;a.idx.push(A,C,Bq,Bq,C,Dq);}
+  [[0,false],[S.length-1,true]].forEach(([k,end])=>{const s=S[k],c=[s.x,s.y,s.z],ci=addVert(a,c,wf(c)),o=base+k*seg;for(let j=0;j<seg;j++){const A=o+j,Bq=o+(j+1)%seg;end?a.idx.push(A,Bq,ci):a.idx.push(A,ci,Bq);}});}
+// deformed sphere (head, helmet, hair): f(theta,phi)->[x,y,z] ; keep(p) filters, split(p) -> which accumulator
+function blob(accs,f,nu,nv,wf,pick){const grid=[];for(let i=0;i<=nv;i++){grid.push([]);for(let j=0;j<=nu;j++){const th=Math.PI*i/nv,ph=2*Math.PI*j/nu;grid[i].push(f(th,ph));}}
+  const vid=new Map();const V=(a,i,j)=>{const k=a.id+':'+i+':'+(j%nu);if(!vid.has(k))vid.set(k,addVert(a,grid[i][j%nu],wf(grid[i][j%nu])));return vid.get(k);};
+  for(let i=0;i<nv;i++)for(let j=0;j<nu;j++){const P=[grid[i][j],grid[i+1][j],grid[i][j+1],grid[i+1][j+1]];const c=P.reduce((s,p)=>[s[0]+p[0]/4,s[1]+p[1]/4,s[2]+p[2]/4],[0,0,0]);
+    const a=pick(c);if(!a)continue;a.idx.push(V(a,i,j),V(a,i,j+1),V(a,i+1,j),V(a,i,j+1),V(a,i+1,j+1),V(a,i+1,j));}}
+
+// ---------------- body description (1.70 m female, athletic) ----------------
+// torso: y, half width, half depth, z offset, exponent
+const TORSO=[[0.765,0.040,0.050,-0.008,2.0],[0.79,0.105,0.082,-0.010,2.1],[0.82,0.150,0.098,-0.012,2.2],[0.86,0.176,0.112,-0.018,2.3],[0.91,0.180,0.114,-0.018,2.3],[0.96,0.162,0.104,-0.010,2.3],[1.03,0.132,0.088,0.000,2.2],
+  [1.10,0.135,0.090,0.002,2.2],[1.17,0.140,0.098,0.008,2.2],[1.215,0.148,0.118,0.022,2.1],[1.25,0.150,0.116,0.020,2.2],[1.30,0.150,0.102,0.008,2.2],
+  [1.345,0.148,0.094,0.000,2.2],[1.38,0.132,0.084,-0.004,2.2],[1.41,0.094,0.070,-0.006,2.1],[1.44,0.064,0.060,-0.004,2.0]];
+// leg (left, +x): y, centre x, z, half width, half depth
+const LEG=[[0.905,0.084,-0.004,0.080,0.090],[0.84,0.090,0.000,0.086,0.090],[0.74,0.096,0.006,0.076,0.080],[0.62,0.098,0.010,0.064,0.068],[0.53,0.099,0.012,0.055,0.058],
+  [0.475,0.099,0.012,0.051,0.056],[0.43,0.099,0.004,0.052,0.060],[0.35,0.098,-0.008,0.053,0.064],[0.27,0.097,-0.008,0.046,0.052],[0.18,0.096,-0.010,0.036,0.040],[0.10,0.095,-0.012,0.030,0.033],[0.075,0.094,-0.012,0.030,0.034]];
+// arm (left): y, x, z, half width, half depth
+const ARM=[[1.415,0.158,-0.004,0.022,0.024],[1.40,0.166,-0.004,0.044,0.046],[1.37,0.176,-0.005,0.049,0.049],[1.33,0.183,-0.007,0.045,0.046],[1.26,0.190,-0.010,0.041,0.042],[1.17,0.200,-0.016,0.036,0.037],[1.105,0.205,-0.020,0.033,0.034],
+  [1.05,0.209,-0.012,0.037,0.036],[0.98,0.214,0.002,0.034,0.032],[0.90,0.219,0.018,0.026,0.022],[0.865,0.222,0.025,0.025,0.019]];
+const secAt=(T,y,cols)=>{for(let i=0;i<T.length-1;i++){const a=T[i],b=T[i+1];if((y-a[0])*(y-b[0])<=0){const t=(y-a[0])/(b[0]-a[0]);return cols.map(c=>lerp(a[c],b[c],t));}}return cols.map(c=>T[y>T[0][0]?0:T.length-1][c]);};
+
+// weights
+const W1=(b)=>[[B[b],1]];
+function wTorso(p){const y=p[1],ax=Math.abs(p[0]),sd=p[0]>=0?'L':'R';const w=[];
+  const tP=1-sm(0.97,1.10,y),tS=sm(0.97,1.10,y)*(1-sm(1.12,1.24,y)),tC=sm(1.12,1.24,y)*(1-sm(1.40,1.445,y)),tN=sm(1.40,1.445,y);
+  const leg=sm(0.95,0.84,y)*sm(0.03,0.12,ax)*0.55,arm=sm(1.28,1.38,y)*sm(0.10,0.16,ax)*0.45;
+  w.push([B.pelvis,tP*(1-leg)],[B.spine,tS],[B.chest,tC*(1-arm)],[B.neck,tN],[B['thigh'+sd],leg*tP],[B['uArm'+sd],arm*tC]);return w;}
+function wLeg(sd){return p=>{const y=p[1],k=JP['shin'+sd][1];const tS=sm(k+0.05,k-0.05,y),tT=1-tS,tp=sm(0.83,0.90,y)*0.35;
+  return [[B['thigh'+sd],tT*(1-tp)],[B['shin'+sd],tS],[B.pelvis,tT*tp]];};}
+function wFoot(sd){return p=>{const t=sm(0.14,0.07,p[1]);return [[B['foot'+sd],t],[B['shin'+sd],1-t]];};}
+function wArm(sd){return p=>{const y=p[1],e=JP['fArm'+sd][1];const tF=sm(e+0.04,e-0.04,y),tU=1-tF,tc=sm(1.33,1.40,y)*0.35;return [[B['uArm'+sd],tU*(1-tc)],[B['fArm'+sd],tF],[B.chest,tU*tc]];};}
+function wHand(sd){return p=>{const t=sm(0.88,0.83,p[1]);return [[B['hand'+sd],t],[B['fArm'+sd],1-t]];};}
+
+// ---------------- parts ----------------
+function torso(a,off,exz){loftY(a,TORSO.map(r=>({y:r[0],x:0,z:r[3],w:r[1]+off,d:r[2]+off+(exz||0),n:r[4]})),40,wTorso,true,false);}
+function neck(a,off){loftY(a,[[1.405,0.056],[1.45,0.053],[1.49,0.051],[1.535,0.052]].map(r=>({y:r[0],x:0,z:-0.004,w:r[1]+off,d:r[1]+off-0.002})),20,p=>{const t=sm(1.47,1.53,p[1]);return [[B.neck,1-t],[B.head,t]];},false,true);}
+function leg(a,sd,off,yTop,yBot){const s=sd==='L'?1:-1;loftY(a,LEG.filter(r=>r[0]<=(yTop||9)&&r[0]>=(yBot||0)).map(r=>({y:r[0],x:s*r[1],z:r[2],w:r[3]+off,d:r[4]+off,n:2.1})),28,wLeg(sd),true,false);}
+function arm(a,sd,off,yBot){const s=sd==='L'?1:-1;loftY(a,ARM.filter(r=>r[0]>=(yBot||0)).map(r=>({y:r[0],x:s*r[1],z:r[2],w:r[3]+off,d:r[4]+off})),24,wArm(sd),true,true);}
+function hand(a,sd,off,mitt){const s=sd==='L'?1:-1,x=s*0.224;
+  const palm=mitt?[[0.875,0.026,0.019],[0.84,0.036,0.016],[0.80,0.040,0.015],[0.765,0.037,0.014],[0.735,0.028,0.012],[0.715,0.016,0.009]]
+    :[[0.875,0.024,0.017],[0.845,0.032,0.014],[0.805,0.035,0.012],[0.775,0.034,0.011],[0.765,0.030,0.010]];
+  loftY(a,palm.map(r=>({y:r[0],x:x+s*0.004,z:0.03,w:(r[1]+off)*(mitt?1.08:1),d:r[2]+off,n:2.4})),20,wHand(sd),true,true);
+  if(!mitt)[[-0.022,0.066],[-0.007,0.075],[0.008,0.072],[0.022,0.058]].forEach(([dx,len])=>loftY(a,[0,0.5,1].map(t=>({y:0.772-len*t,x:x+s*0.004+dx*(s>0?1:-1)*-1,z:0.03+0.006*t,w:0.0072-0.0014*t,d:0.0068-0.0012*t})),10,wHand(sd),true,true));
+  loftY(a,[[0.845,0.013],[0.80,0.012],[0.775,0.008]].map((r,i)=>({y:r[0],x:x-s*0.018,z:0.05+i*0.012,w:r[1]+off,d:r[1]+off})),12,wHand(sd),true,true);}
+function foot(a,sd,off,boot){const s=sd==='L'?1:-1,x=s*0.094;const k=boot?1.18:1;
+  loftZ(a,[[-0.075,0.030,0.040],[-0.05,0.036,0.052],[0.00,0.040,0.052],[0.06,0.044,0.040],[0.12,0.042,0.028],[0.165,0.030,0.018]].map(r=>({z:r[0]*k,x,y:0.052*k,w:r[1]*k+off,h:r[2]*k+off})),20,wFoot(sd));}
+// realistic head: deformed ellipsoid
+function headPoint(th,ph){let x=Math.sin(th)*Math.sin(ph),y=Math.cos(th),z=Math.sin(th)*Math.cos(ph);
+  let rx=0.073,ry=0.100,rz=z>0?0.090:0.101;const yl=y*ry;
+  let X=x*rx,Y=yl,Z=z*rz;
+  const jaw=sm(-0.005,-0.085,Y);X*=lerp(1,0.64,jaw);if(Z>0)Z*=lerp(1,0.93,jaw);if(Z<0)Z*=lerp(1,0.55,jaw);
+  if(Z>0){const nose=0.020*Math.exp(-Math.pow(X/0.011,2))*sm(0.02,-0.005,Y)*sm(-0.045,-0.03,Y);Z+=nose;
+    const eyes=-0.007*Math.exp(-(Math.pow((Math.abs(X)-0.031)/0.013,2)+Math.pow((Y-0.012)/0.011,2)));Z+=eyes;
+    const brow=0.004*Math.exp(-Math.pow((Y-0.03)/0.008,2))*sm(0.05,0.0,Math.abs(X));Z+=brow;
+    const lips=0.004*Math.exp(-(Math.pow(X/0.02,2)+Math.pow((Y+0.057)/0.007,2)));Z+=lips;
+    const chin=0.006*Math.exp(-(Math.pow(X/0.02,2)+Math.pow((Y+0.088)/0.01,2)));Z+=chin;}
+  const ear=0.009*Math.exp(-(Math.pow((Y-0.0)/0.022,2)+Math.pow((Z+0.01)/0.014,2)));X+=Math.sign(X)*ear;
+  return [X,Y+1.605,Z+0.012];}
+function head(skin,hair){const wf=()=>W1('head');
+  blob([skin],headPoint,48,36,wf,()=>skin);
+  // hair: cap over the skull, hairline at the forehead, bun at the back
+  blob([hair],(th,ph)=>{const p=headPoint(th,ph);const c=[0,1.605,0.012];const d=[p[0]-c[0],p[1]-c[1],p[2]-c[2]];return [c[0]+d[0]*1.045,c[1]+d[1]*1.04+0.002,c[2]+d[2]*1.05];},48,36,wf,
+    c=>{const y=c[1]-1.605,z=c[2]-0.012;const front=z>0.02;if(front)return y>0.05-0.02*Math.abs(c[0])/0.07?hair:null;return y>-0.035+(z<-0.03?-0.045:0)?hair:null;});
+  blob([hair],(th,ph)=>[0.036*Math.sin(th)*Math.sin(ph),1.605+0.028+0.032*Math.cos(th),-0.105+0.030*Math.sin(th)*Math.cos(ph)],20,14,wf,()=>hair);}
+function face(dark,lips,white){const wf=()=>W1('head');
+  [-1,1].forEach(s=>{const ex=s*0.031,ey=1.617,ez=0.089;
+    blob([white],(th,ph)=>[ex+0.0105*Math.sin(th)*Math.sin(ph),ey+0.0065*Math.cos(th),ez+0.006*Math.sin(th)*Math.cos(ph)],12,8,wf,()=>white);
+    blob([dark],(th,ph)=>[ex+0.0052*Math.sin(th)*Math.sin(ph),ey+0.0052*Math.cos(th),ez+0.0045+0.0025*Math.sin(th)*Math.cos(ph)],10,8,wf,()=>dark);
+    loftY(dark,[{y:1.6325,x:s*0.031,z:0.096,w:0.0145,d:0.004,n:2},{y:1.6355,x:s*0.032,z:0.0955,w:0.013,d:0.0035,n:2}],10,wf,true,true);});
+  blob([lips],(th,ph)=>[0.017*Math.sin(th)*Math.sin(ph),1.605-0.057+0.0045*Math.cos(th),0.012+0.083+0.0042*Math.sin(th)*Math.cos(ph)],16,8,wf,()=>lips);}
+function helmet(shell,visor){const wf=()=>W1('chest');const c=[0,1.603,0.002],w=0.118,h=0.152,d=0.138,n=2.25;
+  blob([shell,visor],(th,ph)=>{const t=Math.PI*0.02+th*0.80;const s=Math.sin(t),co=Math.cos(t);const q=se(ph,1,1,n);const r=Math.pow(Math.pow(Math.abs(co),n)+Math.pow(Math.abs(s),n),-1/n);
+    return [c[0]+w*r*s*q[0],c[1]+h*r*co,c[2]+d*r*s*q[1]];},56,40,wf,
+    p=>{const y=p[1]-c[1],z=p[2]-c[2];if(p[1]<1.458)return null;return (z>-0.005&&y>-0.075&&y<0.13&&Math.abs(p[0])<0.108)?visor:shell;});}
+function ring(a,y,x,z,w,d,hgt,wf,n){loftY(a,[{y:y-hgt/2,x,z,w,d,n:n||2.1},{y:y+hgt/2,x,z,w,d,n:n||2.1}],28,wf,false,false);}
+function boxy(a,y0,y1,x,z,w,d,wf,n){loftY(a,[{y:y0,x,z,w:w*0.92,d:d*0.9,n:n||6},{y:y0+0.01,x,z,w,d,n:n||6},{y:y1-0.01,x,z,w,d,n:n||6},{y:y1,x,z,w:w*0.92,d:d*0.9,n:n||6}],24,wf,true,true);}
+
+// ---------------- assemble ----------------
+let model=null,skelHelper=null,bones=[],wire=false;
+const MAT={white:{color:0xedeae5,roughness:0.62,metalness:0.02},red:{color:0xc8372d,roughness:0.55},gray:{color:0x3b4048,roughness:0.6,metalness:0.15},dark:{color:0x24282e,roughness:0.7},
+  skin:{color:0xe0b9a0,roughness:0.55},eye:{color:0x2b2420,roughness:0.3},eyew:{color:0xf2efea,roughness:0.3},lips:{color:0xb56a5c,roughness:0.5},hair:{color:0x6e3320,roughness:0.75},visor:{color:0x9fc8e8,roughness:0.05,metalness:0.1,transparent:true,opacity:0.22,depthWrite:false},
+  panel:{color:0x2b3037,roughness:0.4,metalness:0.3},lamp:{color:0xfff3c4,emissive:0xfff0b0,emissiveIntensity:0.8}};
+function build(variant){
+  if(model){scene.remove(model);model.traverse(o=>{if(o.geometry)o.geometry.dispose();});if(skelHelper)scene.remove(skelHelper);}
+  const A={};Object.keys(MAT).forEach(k=>{A[k]=Acc();A[k].id=k;});
+  const suit=variant===1,off=suit?0.012:0.006;
+  torso(A.white,off,suit?0.004:0);
+  ['L','R'].forEach(sd=>{leg(A.white,sd,off,0.905,suit?0.16:0.12);arm(A.white,sd,off,suit?0.905:0.9);});
+  if(suit){
+    ['L','R'].forEach(sd=>{const s=sd==='L'?1:-1;hand(A.gray,sd,0.010,true);foot(A.gray,sd,0.006,true);
+      // boot shafts
+      loftY(A.gray,[0.26,0.19,0.12,0.075].map(y=>{const q=secAt(LEG,y,[1,2,3,4]);return {y,x:s*q[0],z:q[1],w:q[2]+0.020,d:q[3]+0.020};}),24,wLeg(sd),true,false);
+      // red load bands (lines of non-extension) and cuffs
+      [[0.70,0],[0.56,0],[0.36,0]].forEach(([y])=>{const q=secAt(LEG,y,[1,2,3,4]);ring(A.red,y,s*q[0],q[1],q[2]+off+0.009,q[3]+off+0.009,0.034,wLeg(sd));});
+      [[1.27],[1.00]].forEach(([y])=>{const q=secAt(ARM,y,[1,2,3,4]);ring(A.red,y,s*q[0],q[1],q[2]+off+0.009,q[3]+off+0.009,0.03,wArm(sd));});
+      {const q=secAt(ARM,0.905,[1,2,3,4]);ring(A.red,0.905,s*q[0],q[1],q[2]+0.018,q[3]+0.018,0.03,wArm(sd));}
+      {const q=secAt(LEG,0.475,[1,2,3,4]);loftY(A.gray,[{y:0.44,x:s*q[0],z:q[1]+0.02,w:0.045,d:0.03,n:3},{y:0.51,x:s*q[0],z:q[1]+0.022,w:0.047,d:0.032,n:3}],18,wLeg(sd),true,true);}   // knee pads
+    });
+    // waist belt, neck ring, helmet
+    {const q=secAt(TORSO,1.02,[1,2,3]);ring(A.gray,1.02,0,q[2],q[0]+off+0.006,q[1]+off+0.006,0.035,wTorso,2.2);}
+    ring(A.gray,1.448,0,-0.004,0.108,0.094,0.028,W1.bind(null,'chest'),2.2);ring(A.red,1.465,0,-0.004,0.104,0.09,0.008,()=>W1('chest'),2.2);
+    head(A.skin,A.hair);face(A.eye,A.lips,A.eyew);helmet(A.white,A.visor);
+    // helmet lamp
+    boxy(A.lamp,1.60,1.625,0.112,0.03,0.008,0.014,()=>W1('chest'),4);
+    // backpack with rear-entry hatch outline, chest panel
+    boxy(A.white,1.06,1.37,0,-0.168,0.13,0.055,()=>W1('chest'),5);
+    boxy(A.gray,1.10,1.34,0,-0.221,0.105,0.005,()=>W1('chest'),6);
+    boxy(A.red,1.18,1.28,0.108,-0.222,0.007,0.007,()=>W1('chest'),4);
+    boxy(A.panel,1.19,1.27,0,0.152,0.068,0.016,()=>W1('chest'),5);
+    [-0.035,0,0.035].forEach((x,i)=>boxy(i===1?A.red:A.lamp,1.245,1.26,x,0.17,0.011,0.004,()=>W1('chest'),4));
+  }else{
+    ['L','R'].forEach(sd=>{const s=sd==='L'?1:-1;hand(A.skin,sd,0,false);foot(A.dark,sd,0.004,false);
+      loftY(A.dark,[0.14,0.10,0.075].map(y=>{const q=secAt(LEG,y,[1,2,3,4]);return {y,x:s*q[0],z:q[1],w:q[2]+0.012,d:q[3]+0.012};}),24,wLeg(sd),true,false);
+      // red piping along the outer seam of legs and arms, cuffs
+      loftY(A.red,LEG.filter(r=>r[0]<=0.9&&r[0]>=0.13).map(r=>({y:r[0],x:s*(r[1]+r[3]+off-0.001),z:r[2],w:0.0035,d:0.009})),8,wLeg(sd),true,true);
+      loftY(A.red,ARM.filter(r=>r[0]<=1.37&&r[0]>=0.91).map(r=>({y:r[0],x:s*(r[1]+r[3]*0.7+off),z:r[2]-r[4]*0.5,w:0.0035,d:0.008})),8,wArm(sd),true,true);
+      {const q=secAt(ARM,0.91,[1,2,3,4]);ring(A.red,0.91,s*q[0],q[1],q[2]+off+0.003,q[3]+off+0.003,0.014,wArm(sd));}
+      {const q=secAt(LEG,0.135,[1,2,3,4]);ring(A.white,0.14,s*q[0],q[1],q[2]+off+0.004,q[3]+off+0.004,0.03,wLeg(sd));}
+    });
+    neck(A.skin,0);head(A.skin,A.hair);face(A.eye,A.lips,A.eyew);
+    // stand-up collar with red edge, belt, front seam, expedition mark
+    ring(A.white,1.44,0,-0.004,0.068,0.064,0.05,()=>W1('chest'),2.1);ring(A.red,1.466,0,-0.004,0.069,0.065,0.006,()=>W1('chest'),2.1);
+    {const q=secAt(TORSO,1.02,[1,2,3]);ring(A.gray,1.02,0,q[2],q[0]+off+0.004,q[1]+off+0.004,0.03,wTorso,2.2);}
+    loftY(A.gray,TORSO.filter(r=>r[0]>=0.9&&r[0]<=1.41).map(r=>({y:r[0],x:0,z:r[3]+r[2]+off+0.001,w:0.004,d:0.003})),6,wTorso,true,true);
+    boxy(A.red,1.29,1.315,0.075,0.105,0.022,0.006,()=>W1('chest'),4);
+  }
+  // meshes + skeleton
+  bones=BN.map(n=>new THREE.Bone());BN.forEach((n,i)=>{const p=JP[n],par=PARENT[n];const pp=par?JP[par]:[0,0,0];bones[i].position.set(p[0]-pp[0],p[1]-pp[1],p[2]-pp[2]);bones[i].name=n;if(par)bones[B[par]].add(bones[i]);});
+  model=new THREE.Group();model.add(bones[0]);model.updateMatrixWorld(true);const skel=new THREE.Skeleton(bones);   // inverses from the bind pose
+  let tris=0;
+  Object.keys(A).forEach(k=>{const a=A[k];if(!a.idx.length)return;const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.Float32BufferAttribute(a.pos,3));g.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(a.si,4));g.setAttribute('skinWeight',new THREE.Float32BufferAttribute(a.sw,4));
+    const ix=a.idx.slice();for(let t=0;t<ix.length;t+=3){const q=ix[t+1];ix[t+1]=ix[t+2];ix[t+2]=q;}   // builders wind inward; flip to outward (CCW)
+    g.setIndex(ix);g.computeVertexNormals();tris+=a.idx.length/3;
+    const m=new THREE.MeshStandardMaterial(Object.assign({skinning:true,wireframe:wire&&k!=='visor',side:k==='visor'?THREE.DoubleSide:THREE.FrontSide},MAT[k]));
+    m.color.convertSRGBToLinear();if(m.emissive)m.emissive.convertSRGBToLinear();const mesh=new THREE.SkinnedMesh(g,m);mesh.castShadow=k!=='visor';mesh.bind(skel);model.add(mesh);});
+  model.scale.setScalar(H/1.70);scene.add(model);
+  skelHelper=new THREE.SkeletonHelper(model);skelHelper.visible=showSk;scene.add(skelHelper);
+  info.textContent=(variant===1?'Вариант 1 — скафандр (SuitMesh)':'Вариант 2 — комбинезон (BodyMesh)')+'\nтреугольников: '+tris+'\nкостей: '+BN.length+'\nрост: '+H.toFixed(2)+' м';
+}
+// ---------------- gait (port of Gait.cpp) ----------------
+const G={phase:0,amp:0,dir:1};
+function gait(dt,v){const walk=1.2,run=3.0,aW=0.35,aR=0.60;let tgt=0;if(v>1e-3){tgt=aW*sm(0,1,v/walk);if(v>walk)tgt+=(aR-aW)*sm(0,1,(v-walk)/(run-walk));}
+  G.amp+=(tgt-G.amp)*Math.min(1,4*dt);const stride=1.3*cl(0.6+0.4*v,0.6,1.6);if(v>1e-3)G.phase+=2*Math.PI*v*dt/stride;else if(G.amp<0.02){const r=Math.remainder?0:0;const tn=G.phase-Math.round(G.phase/Math.PI)*Math.PI;G.phase-=tn*Math.min(1,3*dt);}
+  const s=Math.sin(G.phase),c=Math.cos(G.phase),a=G.amp,k=a/aW;
+  return {hipL:a*s,hipR:-a*s,kneeL:-0.9*a*Math.max(0,c),kneeR:-0.9*a*Math.max(0,-c),ankL:0.3*a*s,ankR:-0.3*a*s,shL:-0.6*a*s,shR:0.6*a*s,elL:-0.25*a*(1+s)-0.15,elR:-0.25*a*(1-s)-0.15,torso:0.05*k,bob:0.02*k*Math.abs(c)-0.01*k};}
+function pose(P){const b=n=>bones[B[n]];
+  b('thighL').rotation.x=-P.hipL;b('thighR').rotation.x=-P.hipR;b('shinL').rotation.x=-P.kneeL;b('shinR').rotation.x=-P.kneeR;b('footL').rotation.x=-P.ankL;b('footR').rotation.x=-P.ankR;
+  b('uArmL').rotation.x=-P.shL;b('uArmR').rotation.x=-P.shR;b('fArmL').rotation.x=P.elL;b('fArmR').rotation.x=P.elR;b('spine').rotation.x=P.torso;b('head').rotation.x=-0.5*P.torso;
+  b('uArmL').rotation.z=0.06;b('uArmR').rotation.z=-0.06;bones[0].position.y=JP.pelvis[1]+P.bob;}
+// ---------------- UI ----------------
+const info=document.getElementById('info');let variant=1,H=1.72,walking=true,speed=1.2,showSk=false;
+const $=id=>document.getElementById(id);
+$('v1').onclick=()=>{variant=1;$('v1').classList.add('on');$('v2').classList.remove('on');build(variant);};
+$('v2').onclick=()=>{variant=2;$('v2').classList.add('on');$('v1').classList.remove('on');build(variant);};
+$('walk').onclick=()=>{walking=!walking;$('walk').classList.toggle('on',walking);};
+$('spd').oninput=e=>{speed=+e.target.value;$('spdv').textContent=speed.toFixed(1);};
+$('ht').oninput=e=>{H=+e.target.value;$('htv').textContent=H.toFixed(2);model.scale.setScalar(H/1.70);info.textContent=info.textContent.replace(/рост: .*/,'рост: '+H.toFixed(2)+' м');};
+$('wf').onclick=()=>{wire=!wire;$('wf').classList.toggle('on',wire);build(variant);};
+$('sk').onclick=()=>{showSk=!showSk;$('sk').classList.toggle('on',showSk);if(skelHelper)skelHelper.visible=showSk;};
+build(1);
+let last=performance.now();
+(function loop(t){t=t||performance.now();const dt=Math.min(0.05,(t-last)/1000)*(window.TS||1);last=t;pose(gait(dt,walking?speed:0));ctl.update();R.render(scene,cam);requestAnimationFrame(loop);})();
+}catch(e){document.getElementById('err').textContent='Ошибка: '+e.message+' | '+(e.stack||'').split('\n')[1];}})();
+</script></body></html>

@@ -1,0 +1,122 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Тантра: откуда ноги</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#0b0d11;--card:#12151b;--ink:#dfe6ee;--mute:#8b96a3;--hull:#c9d4de;--arm:#d6a24a;--band:#7fb2ff;--acc:#f0c040;--lid:#a39478}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,Segoe UI,sans-serif;margin:0;padding:16px}
+h1{font-size:20px;margin:0 0 6px}h2{font-size:17px;margin:0 0 4px}.lead{color:var(--mute);max-width:1000px;margin:0 0 14px}
+.card{background:var(--card);border-radius:12px;padding:14px 16px;margin:0 0 16px;max-width:1100px}
+.frames{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin:10px 0}
+.fr{background:#0e1116;border-radius:8px;padding:4px}.fr svg{width:100%;height:auto;display:block}
+.fr b{display:block;font-size:13px;padding:4px 6px 0}.fr div{color:var(--mute);font-size:12px;padding:0 6px 6px}
+ol{margin:6px 0;padding-left:20px}li{margin:2px 0}
+</style></head><body>
+<h1>Откуда берутся и куда деваются ноги</h1>
+<p class="lead">Ног два вида. <b>Колонны лафета</b> (2 шт.) — на бортах у центра масс; на них корабль лежит и поворачивается. <b>Кормовые лапы</b> (4 шт.) — на углах кормы; на них корабль стоит вертикально. Цвета: серый — корпус, песочный — бронированная крышка, жёлтый — механизм, голубой — ленты мачты.</p>
+
+<div class="card"><h2>1. Колонны лафета: мачта сматывается с барабанов, как рулетка</h2>
+<p class="lead" style="margin:0">Вид с кормы, поперечное сечение корпуса на линии центра масс (s ≈ 54 м). В полёте внутри борта, под бронированной крышкой, лежит <b>каретка</b>: три барабана со свёрнутыми лентами и сложенная пополам стопа. Колонны как отдельного длинного предмета не существует: она собирается из лент при выпуске и разбирается обратно при уборке.</p>
+<div class="frames" id="c1"></div>
+<ol>
+<li>Бронированная крышка в борту открывается.</li>
+<li>Каретка выезжает из борта на 3–6 м (до z = ±17,5 м), чтобы корабль при повороте проходил между колоннами, не задевая их.</li>
+<li>Барабаны вращаются, три ленты сходят с них и сцепляются замками в квадратную трубу 4,2 м. Труба растёт вниз, как лента рулетки, только жёсткая с трёх сторон. На её конце — сложенная стопа.</li>
+<li>У грунта стопа раскрывается в балку 30 м вдоль корабля, с пятой на каждом конце. Дальше мачта удлиняется уже с опорой на грунт и поднимает корабль.</li>
+<li>Уборка — всё в обратном порядке: стопа складывается, ленты расцепляются и сматываются на барабаны, каретка уезжает в борт, крышка закрывается.</li>
+</ol></div>
+
+<div class="card"><h2>2. Кормовые лапы: лежат вдоль углов кормы, выходят назад</h2>
+<p class="lead" style="margin:0">Вид сбоку на кормовую часть. Четыре лапы — толстые телескопические балки в пазах по углам кормы (две сверху, две снизу), шарнир у самой кормы, s = 5 м. В полёте лапа лежит в пазу <i>вперёд</i> от шарнира, стопа сложена вдоль неё. За срез кормы ничего не выступает: там струя.</p>
+<div class="frames" id="c2"></div>
+<ol>
+<li>В полёте: лапа в пазу вдоль угла кормы, сложенная стопа — её концевая часть.</li>
+<li>Лёжа (корабль горизонтально на колоннах): выходят только <b>две нижние</b>. Они поворачиваются вниз на шарнире и упираются в грунт под кормой, это страховка — 5 % веса.</li>
+<li>Перед поворотом нижние лапы снова уходят в пазы: корма описывает дугу и не должна за что-то цепляться.</li>
+<li>Корабль вертикален, корма висит на колоннах в 16 м над грунтом. Все <b>четыре</b> лапы разворачиваются на шарнирах назад за срез кормы, выдвигаются и раскрывают стопы радиально, звездой радиусом ~21 м.</li>
+<li>Колонны опускают корабль, стопы встают на грунт, вес переходит на лапы, мачты сматываются. При взлёте лапы складываются обратно в пазы.</li>
+</ol></div>
+
+<div class="card"><h2>3. Весь цикл: кто где в каждой фазе</h2><div class="frames" id="c3"></div></div>
+
+<script>
+const NS='http://www.w3.org/2000/svg';
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function frame(id,title,cap,vb,draw){const d=document.createElement('div');d.className='fr';d.innerHTML=`<b>${title}</b>`;
+  const s=el('svg',{viewBox:vb},d);const g=el('g',{},s);draw(g);const c=document.createElement('div');c.textContent=cap;d.appendChild(c);document.getElementById(id).appendChild(d);}
+// y grows downward in SVG; helper: world metres with y up, ground y=0
+const Y=y=>-y;
+function ground(g,x0,x1){el('rect',{x:x0,y:0,width:x1-x0,height:4,fill:'#241c16'},g);el('line',{x1:x0,y1:0,x2:x1,y2:0,stroke:'#5a4636','stroke-width':0.6},g);}
+function rect(g,x,y,w,h,f,s,sw){return el('rect',{x,y:Y(y+h),width:w,height:h,fill:f||'none',stroke:s||'none','stroke-width':sw||0.6},g);}
+function circ(g,x,y,r,f,s,sw){return el('circle',{cx:x,cy:Y(y),r,fill:f||'none',stroke:s||'none','stroke-width':sw||0.6},g);}
+function ln(g,x1,y1,x2,y2,s,w,dash){return el('line',{x1,y1:Y(y1),x2,y2:Y(y2),stroke:s,'stroke-width':w||1,'stroke-linecap':'round','stroke-dasharray':dash||''},g);}
+function tx(g,x,y,t,size,col,anchor){const e=el('text',{x,y:Y(y),fill:col||'#8b96a3','font-size':size||3.2,'text-anchor':anchor||'start'},g);e.textContent=t;}
+function arrow(g,x1,y1,x2,y2,col){ln(g,x1,y1,x2,y2,col||'#f0c040',0.7);const a=Math.atan2(y2-y1,x2-x1),L=2.2;
+  el('polygon',{points:[[x2,Y(y2)],[x2-L*Math.cos(a-0.4),Y(y2-L*Math.sin(a-0.4))],[x2-L*Math.cos(a+0.4),Y(y2-L*Math.sin(a+0.4))]].map(p=>p.join(',')).join(' '),fill:col||'#f0c040'},g);}
+
+// ---------- 1. column carriage, section at the CG ----------
+const R=11.4,AX=20;   // hull radius at s 54, axis height while lying
+function section(g,car,mast,foot,lid){ground(g,-32,32);
+  circ(g,0,AX,R,'#1c2229','var(--hull)',0.9);tx(g,0,AX-1,'корпус',3,'#6d7885','middle');
+  [-1,1].forEach(sd=>{const bayX=sd*(R-3.6);
+    // bay in the hull wall
+    rect(g,sd>0?R-7:-R,AX-3,7,6,'#0b0d11','#3a4450',0.5);
+    // lid: flush when closed, swung up when open
+    if(lid<0.5)ln(g,sd*R,AX-3,sd*R,AX+3,'var(--lid)',1.6);else ln(g,sd*R,AX+3,sd*(R+5),AX+5.5,'var(--lid)',1.6);
+    const cx=sd*lerp(R-3.6,17.5,car);
+    // rail/pin from hull to carriage
+    if(car>0.02)rect(g,sd>0?R-1:cx,AX-0.9,Math.abs(cx-sd*(R-1)),1.8,'var(--lid)');
+    // carriage with three drums
+    rect(g,cx-3.2,AX-3,6.4,6,'#2a3139','var(--arm)',0.8);[[-1.4,1.3],[1.4,1.3],[0,-1.4]].forEach(([dx,dy])=>circ(g,cx+dx,AX+dy,1.2,'#1b2a3f','var(--band)',0.6));
+    // mast
+    const bot=AX-3-mast*(AX-3-0.9);
+    if(mast>0.02){rect(g,cx-2.1,bot,4.2,AX-3-bot,'#1b2a3f','var(--band)',0.7);for(let y=bot+2;y<AX-3;y+=2.2)ln(g,cx-2.1,y,cx+2.1,y,'#3a5a80',0.3);}
+    // foot seen end-on
+    const fy=mast>0.02?bot:AX-3.2;
+    rect(g,cx-1.5,fy-(foot?1.2:3.5),3,foot?1.2:3.5,'var(--arm)');
+  });}
+const lerp=(a,b,t)=>a+(b-a)*t;
+frame('c1','1. В полёте','Каретка с барабанами внутри борта, крышка закрыта. Снаружи — ровная броня.','-34 -38 68 42',g=>section(g,0,0,0,0));
+frame('c1','2. Крышка открыта, каретка выехала','Каретка на выдвижном пальце вышла за борт; это будущая цапфа.','-34 -38 68 42',g=>{section(g,1,0,0,1);arrow(g,11,AX+7,16,AX+7);arrow(g,-11,AX+7,-16,AX+7);});
+frame('c1','3. Мачта растёт вниз','Три ленты сходят с барабанов и сцепляются в трубу; стопа ещё сложена.','-34 -38 68 42',g=>section(g,1,0.55,0,1));
+frame('c1','4. Стопа на грунте','Стопа раскрылась, мачта держит корабль. Дальше она удлиняется и поднимает его.','-34 -38 68 42',g=>{section(g,1,1,1,1);arrow(g,17.5,6,17.5,1.6,'#6fd08a');arrow(g,-17.5,6,-17.5,1.6,'#6fd08a');});
+frame('c1','Как устроена мачта','Три свёрнутые ленты с зубчатыми краями сходятся и замыкаются в жёсткую трубу; при уборке замок расстёгивается.','-20 -34 40 36',g=>{
+  [[-10,26],[10,26],[0,31]].forEach(([x,y])=>{circ(g,x,y,3.6,'#1b2a3f','var(--band)',0.7);circ(g,x,y,1,'#0b0d11','var(--band)',0.4);});
+  ln(g,-7,23.5,-2.1,16,'var(--band)',0.8);ln(g,7,23.5,2.1,16,'var(--band)',0.8);ln(g,0,27.4,0,16,'var(--band)',0.8);
+  rect(g,-2.1,2,4.2,14,'#1b2a3f','var(--band)',0.8);for(let y=3;y<16;y+=1.6){ln(g,-2.1,y,-1.2,y+0.8,'#6fa0e0',0.3);ln(g,2.1,y,1.2,y+0.8,'#6fa0e0',0.3);}
+  tx(g,4,9,'замок «молния»',2.6);tx(g,-17,33.5,'барабаны с лентами',2.6);});
+frame('c1','Стопа сбоку','Сложена пополам (сверху) → раскрыта балкой 30 м вдоль корабля (снизу). Держит продольный момент.','-24 -30 48 32',g=>{
+  ground(g,-22,22);rect(g,-2.1,4,4.2,22,'#1b2a3f','var(--band)',0.7);
+  rect(g,-16,2.2,32,1.4,'var(--arm)');rect(g,-17,0,5,1.2,'var(--arm)');rect(g,12,0,5,1.2,'var(--arm)');
+  ln(g,-2.1,26,-6,20,'var(--arm)',1.4,'1.5 1');ln(g,2.1,26,6,20,'var(--arm)',1.4,'1.5 1');tx(g,7,21,'сложена',2.6);tx(g,-15,5,'раскрыта: 30 м',2.6);});
+
+// ---------- 2. stern legs, side view of the aft body ----------
+const TOP=[[0,13],[8,14],[44,14],[52,12.5],[58,9.5],[62,8.6],[70,8.6]],BOT=[[0,-9],[8,-9.5],[44,-9.5],[52,-9],[58,-8.8],[62,-8.6],[70,-8.6]];
+function T(X,Yb,th){const r=th*Math.PI/180,c=Math.cos(r),s=Math.sin(r);return p=>[X+p[0]*c-p[1]*s,Yb+p[0]*s+p[1]*c];}
+function aft(g,f){const out=TOP.concat(BOT.slice().reverse()).map(f);el('polygon',{points:out.map(p=>p[0]+','+Y(p[1])).join(' '),fill:'#1c2229',stroke:'var(--hull)','stroke-width':0.8},g);
+  const a=f([0,-11.8]),b=f([0,11.8]);ln(g,a[0],a[1],b[0],b[1],'#6b7684',1.2);}
+function leg(g,f,hinge,foot,open,footDir){const h=f(hinge),p=f(foot);ln(g,h[0],h[1],p[0],p[1],'#8a8f96',3.2);ln(g,h[0],h[1],p[0],p[1],'#b8bec6',1.6);circ(g,h[0],h[1],1.6,'var(--lid)');
+  if(open){const d=footDir;rect(g,p[0]-8,p[1]-0.6,16,1.2,'var(--arm)');}else circ(g,p[0],p[1],1.3,'var(--arm)');}
+frame('c2','1. В полёте','Лапы (серые) лежат в пазах вдоль углов кормы, шарнир у кормы; вперёд от шарнира.','-6 -40 90 52',g=>{const f=T(4,14,0);aft(g,f);leg(g,f,[5,9.5],[29,10.5],0);leg(g,f,[5,-7.5],[29,-8.5],0);
+  arrow(g,20,33,40,33,'#8b96a3');tx(g,42,32,'нос',3);tx(g,2,33,'корма, струя',3);});
+frame('c2','2. Лёжа на колоннах','Нижние лапы повернулись вниз на шарнирах и упёрлись в грунт — страховка кормы.','-6 -40 90 52',g=>{ground(g,-6,84);const f=T(4,20,0);aft(g,f);leg(g,f,[5,9.5],[29,10.5],0);leg(g,f,[5,-7.5],[0,-19.3],1);
+  el('path',{d:`M${4+29},${Y(20-8.5)} A 24 24 0 0 1 ${4+2},${Y(1.5)}`,fill:'none',stroke:'#f0c040','stroke-width':0.5,'stroke-dasharray':'1.5 1'},g);});
+frame('c2','3. Поворот','Все лапы снова в пазах: корма идёт по дуге вниз, цепляться нечем.','-6 -64 90 76',g=>{ground(g,-6,84);const f=T(40,16,50);aft(g,f);leg(g,f,[5,9.5],[29,10.5],0);leg(g,f,[5,-7.5],[29,-8.5],0);
+  const c=f([54,0]);circ(g,c[0],c[1],1.6,'var(--acc)');tx(g,c[0]+3,c[1],'цапфа = ЦМ',3,'#f0c040');});
+frame('c2','4. Вертикально: лапы выходят','Все четыре разворачиваются на шарнирах назад за корму, выдвигаются, стопы раскрываются звездой.','-40 -84 80 96',g=>{ground(g,-40,40);const f=T(0,16,90);aft(g,f);
+  leg(g,f,[5,9.5],[-11.4,14.8],1);leg(g,f,[5,-7.5],[-11.4,-14.8],1);
+  const h=f([5,9.5]);el('path',{d:`M${h[0]-10},${Y(h[1]+22)} A 24 24 0 0 0 ${h[0]-15},${Y(h[1]-6)}`,fill:'none',stroke:'#f0c040','stroke-width':0.5,'stroke-dasharray':'1.5 1'},g);});
+frame('c2','Вид снизу на стоящий корабль','Четыре стопы звездой R ≈ 21 м вокруг кормы; струя уходит в центр, мимо лап.','-34 -34 68 68',g=>{
+  circ(g,0,0,11.8,'#1c2229','var(--hull)',0.8);circ(g,0,0,9,'none','#6b7684',0.5);[45,135,225,315].forEach(a=>{const r=a*Math.PI/180,c=Math.cos(r),s=Math.sin(r);
+    ln(g,9.6*c,9.6*s,21*c,21*s,'#b8bec6',2.2);const x=21*c,y=21*s;el('rect',{x:x-8,y:-y-0.8,width:16,height:1.6,fill:'var(--arm)',transform:`rotate(${-a} ${x} ${-y})`},g);});
+  tx(g,0,-0.5,'корма',2.8,'#8b96a3','middle');});
+
+// ---------- 3. whole cycle (side view, small) ----------
+const SH=[[0,13],[8,14],[44,14],[52,12.5],[58,9.5],[62,8.6],[122,8.6],[130,7.4],[138,4.8],[143,2.2],[146,0]],SB=[[0,-9],[8,-9.5],[44,-9.5],[52,-9],[58,-8.8],[62,-8.6],[122,-8.6],[130,-7.4],[138,-4.8],[143,-2.2],[146,0]];
+function ship(g,cx,cy,th,s0){const f=T(0,0,th);const pts=SH.concat(SB.slice().reverse()).map(p=>{const q=f([p[0]-s0,p[1]]);return [cx+q[0],cy+q[1]];});
+  el('polygon',{points:pts.map(p=>p[0]+','+Y(p[1])).join(' '),fill:'#1c2229',stroke:'var(--hull)','stroke-width':1.2},g);circ(g,cx,cy,2.2,'var(--acc)');return p=>{const q=f([p[0]-s0,p[1]]);return [cx+q[0],cy+q[1]];};}
+const cyc=[['Лежит','колонны + 2 нижние лапы',20,0,1,1,0],['Подъём','мачты растут, лапы в пазах',70,0,1,0,0],['Поворот','вокруг цапф, момент ≈ 0',70,45,1,0,0],['Лапы выходят','4 лапы назад за корму',70,90,1,0,1],['Опускание','вес на лапы',66,90,1,0,2],['Стоит','мачты смотаны, каретки в борту',66,90,0,0,2]];
+cyc.forEach(([t,c,h,th,colOn,lowLeg,legs])=>frame('c3',t,c,'-80 -175 200 182',g=>{ground(g,-80,120);const f=ship(g,20,h,th,54);
+  if(colOn){ln(g,20,h,20,1.4,'var(--band)',3.2);rect(g,5,0,30,1.4,'var(--arm)');}
+  if(lowLeg){const a=f([5,-7.5]);ln(g,a[0],a[1],a[0]-5,0.8,'#b8bec6',2.6);rect(g,a[0]-12,0,14,1.3,'var(--arm)');}
+  if(legs){const top=h-54;const yf=legs===2?0.8:top-16+12+0.8;[-1,1].forEach(sd=>{const a=f([5,sd*9]);ln(g,a[0],a[1],20-sd*21,Math.max(0.8,yf),'#b8bec6',2.6);rect(g,20-sd*21-8,Math.max(0,yf-0.8),16,1.3,'var(--arm)');});}
+}));
+</script></body></html>

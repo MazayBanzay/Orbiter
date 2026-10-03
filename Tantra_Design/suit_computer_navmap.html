@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Навигационная карта скафандра</title>
+<style>
+  :root { --bg:#0b0d10; --panel:#11151a; --line:#2a3138; --text:#d9dee3; --mute:#8b95a0; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, "Segoe UI", sans-serif; }
+  main { max-width:1180px; margin:0 auto; padding:20px 16px 40px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p.lead { color:var(--mute); margin:0 0 16px; max-width:900px; }
+  .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:10px 0 14px; }
+  .bar span { color:var(--mute); margin-right:4px; }
+  button { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px 10px; font:inherit; cursor:pointer; }
+  button.on { border-color:#e0a24a; color:#ffcf8a; }
+  .grid { display:grid; grid-template-columns:minmax(0, 520px) minmax(0, 1fr); gap:20px; }
+  @media (max-width:900px) { .grid { grid-template-columns:1fr; } }
+  canvas { width:100%; height:auto; aspect-ratio:1/1; background:#000; border:1px solid var(--line); border-radius:6px; display:block; }
+  .note { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:12px 14px; margin-bottom:12px; }
+  .note h3 { margin:0 0 6px; font-size:15px; }
+  .note ul { margin:4px 0 0; padding-left:18px; color:var(--mute); }
+  .note li { margin:2px 0; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  td, th { padding:4px 6px; border-bottom:1px solid var(--line); text-align:right; }
+  td:first-child, th:first-child { text-align:left; }
+  th { color:var(--mute); font-weight:500; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Навигационная карта скафандра — варианты</h1>
+  <p class="lead">Карта как прибор, а не картинка: один цвет света, смысл — в яркости, толщине и пунктире; на карте — грунт, база с её зданиями и площадками, другие базы в радиусе 500 км, путь и вектор. Пример — у Brighton Beach (Луна), здания и площадки взяты из конфига базы. Масштаб — 10 ступеней.</p>
+
+  <div class="bar"><span>Вариант:</span>
+    <button data-v="phos" class="on">А · фосфор (один цвет)</button>
+    <button data-v="nd">Б · навигационный (дуга курса)</button>
+    <button data-v="now">В · как сейчас</button>
+  </div>
+  <div class="bar"><span>Цвет света (А, Б):</span>
+    <button data-c="amber" class="on">янтарь</button><button data-c="green">зелёный</button><button data-c="cyan">циан</button><button data-c="white">белый</button>
+  </div>
+  <div class="bar"><span>Масштаб (радиус карты):</span><span id="zooms"></span></div>
+
+  <div class="grid">
+    <canvas id="map" width="680" height="680"></canvas>
+    <div>
+      <div class="note"><h3 id="vt">А · фосфор</h3><ul id="vd"></ul></div>
+      <div class="note"><h3>Что на карте и откуда</h3><ul>
+        <li><b>Здания и площадки</b> — из конфига базы (BLOCK, HANGAR, TANK, LPAD, путь поезда); у Orbiter нет вызова для них, читаем файл один раз. ФПС не страдает: это десяток прямоугольников.</li>
+        <li><b>Другие базы</b> — все базы тела в радиусе 500 км: значок и имя; за краем карты — стрелка на кольце с дальностью.</li>
+        <li><b>Грунт</b> — уровни высоты яркостью (не изолинии с штриховкой), круче 15° — точки.</li>
+        <li><b>Путь</b> — след за спиной, вектор скорости, линия на выбранную цель, точка посадки автопилота.</li>
+      </ul></div>
+      <div class="note"><h3>Орбитальные объекты — где выбирать</h3>
+        <ul><li>Предложение: в режиме <b>СБЛИЖЕНИЕ</b> страница «ЦЕЛИ» показывает не «всё в 50 км», а объекты на орбите вокруг того же тела, отсортированные по тому, насколько до них дотянуться: наименьшее Δv сближения и время до ближайшего прохода.</li>
+        <li>На поверхности — базы и объекты на грунте; в космосе — орбитальные. Один список, но разный смысл.</li></ul>
+        <table style="margin-top:8px">
+          <tr><th>объект</th><th>дальн.</th><th>Δv сбл.</th><th>проход</th><th>отн. накл.</th></tr>
+          <tr><td>«Тантра»</td><td>14,2 км</td><td>6 м/с</td><td>0:08:40</td><td>0,02°</td></tr>
+          <tr><td>грузовой модуль</td><td>3,1 км</td><td>2 м/с</td><td>0:02:10</td><td>0,00°</td></tr>
+          <tr><td>станция «Пояс»</td><td>420 км</td><td>95 м/с</td><td>1:12:00</td><td>1,4°</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+<script>
+const ZOOM = [50, 100, 250, 500, 1000, 2500, 5000, 25000, 100000, 500000];
+const COL = { amber:[255,176,64], green:[90,255,140], cyan:[90,220,255], white:[235,240,245] };
+const S = { v:'phos', c:'amber', z:4 };
+// Brighton Beach objects (base frame: x east, z north, metres), from Config\Moon\Base\Brighton.cfg
+const OBJ = [
+  ['tank',0,0,25,25,0],['block',-60.62,-35,40,30,30],['block',-32.48,-18.75,27,12,30],['block',-75.67,-67.5,40,20,30],
+  ['block',-1186.5,-685,40,30,30],['tank',-1300,-700,30,30,0],['tank',-1400,-680,30,30,0],['tank',-1330,-850,30,30,0],
+  ['block',-1350,-690,44,12,-11.3],['block',-1315,-775,95,12,78.69],
+  ['hangar',142,0,40,40,270],['hangar',-142,0,40,40,90],['hangar',71,122.98,40,40,330],['hangar',-71,-122.98,40,40,150],['hangar',-71,122.98,40,40,30],['hangar',71,-122.98,40,40,210],
+  ['tube',0,0,12,244,90],['tube',0,0,12,244,150],['tube',0,0,12,244,210]];
+const PADS = [[200,0],[100,-173.21],[-100,-173.21],[-200,0],[-100,173.21],[100,173.21]];
+const TRAIN = [[-77.94,-45],[-1169.1,-675]];
+const OTHER = [['Скважина «Сев.»', 38000, 20], ['Обсерватория', 212000, 140], ['Склад 7', 460000, 250], ['Дальняя', 640000, 300]];   // [name, dist m, bearing deg]
+const ME = { x:260, y:-60, hdg:35, vx:3.2, vy:1.1 };   // her place in the base frame, heading, ground velocity m/s (east, north)
+const TRAIL = Array.from({length:14}, (_, i) => [ME.x - ME.vx * i * 4, ME.y - ME.vy * i * 4]);
+function noise(x, y) { return Math.sin(x * 0.011 + 1.3) * Math.cos(y * 0.013 - .7) + .5 * Math.sin(x * .031 - y * .027) + .25 * Math.cos(x * .07 + y * .05); }
+
+const cv = document.getElementById('map'), g = cv.getContext('2d'); const W = cv.width, C = W / 2, R = W / 2 - 30;
+function rgba(k, a) { const c = COL[S.c]; return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
+function draw() {
+  const range = ZOOM[S.z], sc = R / range, trackUp = S.v === 'nd';
+  const rot = trackUp ? -ME.hdg * Math.PI / 180 : 0;
+  const P = (x, y) => { const dx = x - ME.x, dy = y - ME.y; const c = Math.cos(rot), s = Math.sin(rot); return [C + (dx * c - dy * s) * sc, C - (dx * s + dy * c) * sc]; };
+  const mono = S.v !== 'now';
+  const ink = (a) => mono ? rgba(0, a) : `rgba(120,220,255,${a})`;
+  const acc = (a) => mono ? rgba(0, a) : `rgba(255,150,40,${a})`;
+  g.fillStyle = '#000'; g.fillRect(0, 0, W, W);
+  g.save(); g.beginPath(); g.arc(C, C, R + 2, 0, 7); g.clip();
+  // terrain: brightness levels (a few bands), steep ground as dots
+  const cell = 10;
+  for (let py = 0; py < W; py += cell) for (let px = 0; px < W; px += cell) {
+    const c = Math.cos(-rot), s = Math.sin(-rot), ux = (px - C) / sc, uy = -(py - C) / sc;
+    const x = ME.x + ux * c - uy * s, y = ME.y + ux * s + uy * c, h = noise(x / Math.max(1, range / 400), y / Math.max(1, range / 400));
+    const band = Math.floor((h + 2) * 2) / 8;
+    if (mono) { g.fillStyle = rgba(0, 0.03 + 0.07 * band); g.fillRect(px, py, cell, cell); }
+    else if (S.v === 'now' && Math.abs(h % 0.5) < 0.04) { g.fillStyle = 'rgba(160,140,110,.5)'; g.fillRect(px, py, 2, 2); }
+    const steep = Math.abs(noise(x / Math.max(1, range / 400) + 3, y / Math.max(1, range / 400)) - h) > 1.35;
+    if (steep) { g.fillStyle = mono ? rgba(0, .45) : 'rgba(255,150,40,.6)'; g.fillRect(px + 4, py + 4, 2, 2); }
+  }
+  // the base: footprints (only where they are big enough to read)
+  if (range <= 5000) {
+    g.lineWidth = 1.4;
+    for (const [t, x, y, w, h, r] of OBJ) {
+      const [cx, cy] = P(x, y); const a = (r * Math.PI / 180) + rot;
+      g.save(); g.translate(cx, cy); g.rotate(-a);
+      g.strokeStyle = ink(.9); g.fillStyle = ink(t === 'tube' ? .10 : .22);
+      if (t === 'tank') { g.beginPath(); g.arc(0, 0, w / 2 * sc, 0, 7); g.fill(); g.stroke(); }
+      else { g.fillRect(-w / 2 * sc, -h / 2 * sc, w * sc, h * sc); g.strokeRect(-w / 2 * sc, -h / 2 * sc, w * sc, h * sc); }
+      g.restore();
+    }
+    PADS.forEach(([x, y], i) => {
+      const [cx, cy] = P(x, y); const r = 40 * sc; g.strokeStyle = ink(.95); g.lineWidth = 1.6; g.beginPath();
+      for (let k = 0; k <= 8; k++) { const t = k * Math.PI / 4 + Math.PI / 8; const q = r / Math.cos(Math.PI / 8); g.lineTo(cx + q * Math.cos(t), cy + q * Math.sin(t)); }
+      g.stroke(); g.fillStyle = ink(1); g.font = `${Math.max(10, Math.min(16, r * .5))}px system-ui`; g.textAlign = 'center'; g.fillText(String(i + 1), cx, cy + 5);
+    });
+    g.setLineDash([6, 4]); g.strokeStyle = ink(.6); g.lineWidth = 1.2; g.beginPath(); g.moveTo(...P(...TRAIN[0])); g.lineTo(...P(...TRAIN[1])); g.stroke(); g.setLineDash([]);
+  } else {
+    const [cx, cy] = P(0, 0); g.strokeStyle = ink(1); g.lineWidth = 1.6; g.strokeRect(cx - 7, cy - 7, 14, 14); g.beginPath(); g.moveTo(cx - 7, cy); g.lineTo(cx + 7, cy); g.moveTo(cx, cy - 7); g.lineTo(cx, cy + 7); g.stroke();
+    g.fillStyle = ink(1); g.font = '13px system-ui'; g.textAlign = 'left'; g.fillText('BRIGHTON BEACH', cx + 11, cy - 8);
+  }
+  // other bases within 500 km
+  for (const [n, d, b] of OTHER) {
+    if (d > 500000) continue;
+    const x = d * Math.sin(b * Math.PI / 180), y = d * Math.cos(b * Math.PI / 180); let [cx, cy] = P(x, y);
+    const rr = Math.hypot(cx - C, cy - C), edge = rr > R - 10;
+    if (edge) { const f = (R - 14) / rr; cx = C + (cx - C) * f; cy = C + (cy - C) * f; }
+    g.strokeStyle = ink(edge ? .6 : 1); g.lineWidth = 1.4; g.strokeRect(cx - 5, cy - 5, 10, 10); g.beginPath(); g.moveTo(cx - 5, cy); g.lineTo(cx + 5, cy); g.moveTo(cx, cy - 5); g.lineTo(cx, cy + 5); g.stroke();
+    g.fillStyle = ink(edge ? .7 : 1); g.font = '12px system-ui'; g.textAlign = cx > C ? 'right' : 'left';
+    g.fillText(n + ' · ' + (d >= 1000 ? (d / 1000).toFixed(d >= 100000 ? 0 : 1).replace('.', ',') + ' км' : d + ' м'), cx + (cx > C ? -9 : 9), cy + 4);
+  }
+  // trail, velocity (10 s), the chosen target line
+  g.fillStyle = ink(.7); TRAIL.forEach(([x, y], i) => { const [cx, cy] = P(x, y); g.globalAlpha = 1 - i / TRAIL.length; g.fillRect(cx - 1.5, cy - 1.5, 3, 3); }); g.globalAlpha = 1;
+  { const [a, b] = P(ME.x, ME.y), [c2, d2] = P(ME.x + ME.vx * 10, ME.y + ME.vy * 10); g.strokeStyle = ink(1); g.lineWidth = 2; g.beginPath(); g.moveTo(a, b); g.lineTo(c2, d2); g.stroke(); }
+  { const [a, b] = P(ME.x, ME.y), [c2, d2] = P(...PADS[0]); g.setLineDash([3, 4]); g.strokeStyle = acc(.8); g.lineWidth = 1.2; g.beginPath(); g.moveTo(a, b); g.lineTo(c2, d2); g.stroke(); g.setLineDash([]); }
+  g.restore();
+  // range rings and the frame
+  g.strokeStyle = ink(.35); g.lineWidth = 1; g.setLineDash([2, 6]);
+  for (const f of [.25, .5, 1]) { g.beginPath(); g.arc(C, C, R * f, 0, 7); g.stroke(); }
+  g.setLineDash([]); g.fillStyle = ink(.85); g.font = '12px system-ui'; g.textAlign = 'left';
+  for (const f of [.5, 1]) { const d = range * f; g.fillText(d >= 1000 ? (d / 1000).toString().replace('.', ',') + ' км' : d + ' м', C + R * f * .707 + 4, C + R * f * .707 + 14); }
+  if (trackUp) {   // ND: a heading arc on top with the track pointer
+    g.strokeStyle = ink(.9); g.lineWidth = 1.2; g.beginPath(); g.arc(C, C, R + 8, -Math.PI * .85, -Math.PI * .15); g.stroke();
+    for (let d = -60; d <= 60; d += 10) { const a = -Math.PI / 2 + d * Math.PI / 180, r1 = R + 8, r2 = R + (d % 30 ? 14 : 20); g.beginPath(); g.moveTo(C + r1 * Math.cos(a), C + r1 * Math.sin(a)); g.lineTo(C + r2 * Math.cos(a), C + r2 * Math.sin(a)); g.stroke();
+      if (d % 30 === 0) { g.textAlign = 'center'; g.fillText(String(Math.round(((ME.hdg + d) % 360 + 360) % 360)).padStart(3, '0'), C + (R + 30) * Math.cos(a) * .96, C + (R + 30) * Math.sin(a) * .96 + 12); } }
+  } else {
+    g.fillStyle = ink(1); g.textAlign = 'center'; g.font = '13px system-ui'; g.fillText('С', C, 18);
+  }
+  // her: a triangle (north-up: turned to the heading; ND: always up)
+  { const a = trackUp ? 0 : ME.hdg * Math.PI / 180; g.save(); g.translate(C, C); g.rotate(a); g.fillStyle = mono ? rgba(0, 1) : '#fff'; g.beginPath(); g.moveTo(0, -11); g.lineTo(7, 9); g.lineTo(0, 5); g.lineTo(-7, 9); g.closePath(); g.fill(); g.restore(); }
+  g.fillStyle = ink(.9); g.textAlign = 'right'; g.font = '12px system-ui'; g.fillText((trackUp ? 'ПУТЬ ВВЕРХ · ' : 'СЕВЕР ВВЕРХ · ') + 'масштаб ' + (range >= 1000 ? (range / 1000).toString().replace('.', ',') + ' км' : range + ' м'), W - 10, W - 10);
+}
+const VD = {
+  phos:['А · фосфор (один цвет)', ['Весь прибор — один цвет света; смысл в яркости: грунт — 3–4 уровня фона, здания — контур и слабая заливка, путь и вектор — самое яркое.', 'Север вверх. Ничего не заштриховано, нет «украшений».', 'Устойчиво и читаемо: так работал бы прибор светопостроения с одной длиной волны.']],
+  nd:['Б · навигационный (дуга курса)', ['Как навигационный дисплей в авиации: путь вверх, дуга курса сверху с оцифровкой, кольца дальности.', 'Тот же один цвет, что в А. Удобно в полёте на ранце — куда летишь, туда и смотришь на карте.', 'В ходьбе можно переключать на «север вверх».']],
+  now:['В · как сейчас', ['Для сравнения: изолинии, оранжевая штриховка крутизны, цветные акценты.', 'Зданий нет — Orbiter не даёт их через вызовы; добавить можно в любом варианте.']]};
+function ui() {
+  document.querySelectorAll('[data-v]').forEach(b => b.classList.toggle('on', b.dataset.v === S.v));
+  document.querySelectorAll('[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c === S.c));
+  document.getElementById('zooms').innerHTML = ZOOM.map((z, i) => `<button data-z="${i}" class="${i === S.z ? 'on' : ''}">${z >= 1000 ? (z / 1000).toString().replace('.', ',') + ' км' : z + ' м'}</button>`).join('');
+  document.querySelectorAll('[data-z]').forEach(b => b.onclick = () => { S.z = +b.dataset.z; ui(); });
+  document.getElementById('vt').textContent = VD[S.v][0]; document.getElementById('vd').innerHTML = VD[S.v][1].map(t => `<li>${t}</li>`).join('');
+  draw();
+}
+document.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { S.v = b.dataset.v; ui(); });
+document.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { S.c = b.dataset.c; ui(); });
+ui();
+</script>
+</body>
+</html>

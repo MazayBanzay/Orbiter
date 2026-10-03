@@ -1,0 +1,239 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Тантра: ноги</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#f4f2ee;--text:#1b1b1b;--muted:#5a5a5a;--accent:#3b6fd6;--border:#c9c5bd}
+body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;margin:16px}
+h1{font-size:18px;margin:0 0 8px}
+#wrap{position:relative;border-radius:12px;overflow:hidden;background:#0b0c10}
+#c3{width:100%;height:600px}
+#ro{position:absolute;right:10px;top:10px;font:12px ui-monospace,Consolas,monospace;color:#e8e4dc;background:rgba(0,0,0,.6);padding:8px 10px;border-radius:8px;white-space:pre;line-height:1.45}
+#ph{position:absolute;left:10px;bottom:10px;font:13px system-ui;color:#e8e4dc;background:rgba(0,0,0,.6);padding:6px 10px;border-radius:8px;max-width:48%}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+.b{font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text);cursor:pointer}
+.b.on{border:2px solid var(--accent);padding:5px 11px}
+.note{font-size:13px;color:var(--muted);margin-top:10px;line-height:1.5;max-width:1100px}
+.note b{color:var(--text)}
+</style></head><body>
+<h1>«Тантра» — ноги: одна конструкция на все шесть опор</h1>
+<div id="wrap"><div id="c3"></div><div id="ph"></div><div id="ro"></div></div>
+<div class="row">
+  <button class="b" id="go">Поставить на корму</button>
+  <button class="b" id="ms">Масса</button>
+  <button class="b" id="gv">Тяготение</button>
+  <label style="font-size:13px">Скорость <input id="spd" type="range" min="-1" max="4" step="0.1" value="0.5" style="vertical-align:middle"> <span id="spdv"></span></label>
+</div>
+<div class="row">
+  <button class="b" data-v="side">Сбоку</button>
+  <button class="b" data-v="q">3/4</button>
+  <button class="b" data-v="aft">С кормы</button>
+  <button class="b" data-v="col">Опора крупно</button>
+  <button class="b" id="rot">Вращение камеры</button>
+</div>
+<div class="note">
+<b>Одна нога на все шесть опор</b> (два лафета и четыре кормовые): шарнир → бронированное бедро 12 м (внутри барабан ленты) → голень — мачта-«молния» 4,6 м, выходит из бедра → шаровая пята → круглая тарелка. Пять деталей, одна конструкция — одни запасные части; ни поршней, ни тяг снаружи.
+<br><b>Лафет:</b> бедро висит на цапфе у ЦМ (каретка едет по бортовому пазу s 34–58 за ЦМ). Лёжа (ось 14 м) голень почти вся в бедре — видна массивная нога на тарелке Ø16 м (201 м²). Подъём — голень выходит из бедра, поворот корабля вокруг цапф, нога неподвижна. Продольный момент держит тарелка. Сбор: голень в бедро, тарелка складывается к бедру, бедро уходит в бортовой паз — в полёте нога лежит в обводе корпуса.
+<br><b>Кормовые:</b> те же ноги с тарелками Ø12 м, в полёте лежат вдоль углов кормы; стоя разведены на R 26 м. Лёжа нижняя пара несёт 5 %.
+<br>Материал голени: композит на нанотрубках, E 0,6 ТПа, допускаемое 1 ГПа, стенка 3 см. Грунт: песок/реголит 0,2–0,4 МПа, гравий 0,6, скала и порт 5–20 МПа.
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+const D=Math.PI/180, G0=9.81;
+const KEYS=[[0,12,13,-9],[8,13.5,14,-9.5],[47,14,14,-9.5],[53,11.6,12,-9],[58,9.5,9.5,-8.8],[62,8.6,8.6,-8.6],[122,8.6,8.6,-8.6],
+            [130,7.4,7.4,-7.4],[138,4.8,4.8,-4.8],[143,2.2,2.2,-2.2],[146,0.15,0.15,-0.15]];
+const COL_X=17.5, H0=14, MAST_A=4.2, MAST_T=0.03, E=0.6e12;
+const MAST_AREA=4*MAST_A*MAST_T, MAST_I=(2/3)*Math.pow(MAST_A,3)*MAST_T;
+const STAND_R=26, TURN_CLEAR=16, STAND_CLEAR=12, WELL_R=11.8, WELL_OUT=4;
+const MASS={land:{m:2.9e6,s:53.0,txt:'посадочная 2,9 кт (ЦМ s 53)'},full:{m:44.0e6,s:35.3,txt:'гружёная 44 кт (ЦМ s 35,3)'}};
+let massK='land', g=2.5, K='A', P=0, PT=0, TS=Math.pow(2,0.5);
+function sec(s){for(let i=0;i<KEYS.length-1;i++){const a=KEYS[i],b=KEYS[i+1];if(s>=a[0]&&s<=b[0]){let t=(s-a[0])/(b[0]-a[0]);t=t*t*(3-2*t);return [a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t];}}return KEYS[KEYS.length-1].slice(1);}
+const ease=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
+const lerp=(a,b,t)=>a+(b-a)*t;
+const V3=(x,y,z)=>new THREE.Vector3(x,y,z);
+
+const el=document.getElementById('c3');
+const R=new THREE.WebGLRenderer({antialias:true});R.setPixelRatio(Math.min(2,window.devicePixelRatio||1));el.appendChild(R.domElement);
+R.shadowMap.enabled=true;
+const scene=new THREE.Scene();scene.background=new THREE.Color(0xbfcad6);scene.fog=new THREE.Fog(0xbfcad6,500,1400);
+const cam=new THREE.PerspectiveCamera(35,1,1,5000);
+const ctl=new THREE.OrbitControls(cam,R.domElement);ctl.enableDamping=true;
+scene.add(new THREE.HemisphereLight(0xdfe6f0,0x6b5440,0.75));
+const sun=new THREE.DirectionalLight(0xffffff,0.9);sun.position.set(-120,220,160);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-160,right:160,top:160,bottom:-160,near:10,far:700});scene.add(sun);
+function resize(){const w=Math.max(1,el.clientWidth),h=Math.max(1,el.clientHeight);R.setSize(w,h,false);R.domElement.style.width='100%';R.domElement.style.height='100%';cam.aspect=w/h;cam.updateProjectionMatrix();}
+resize();window.addEventListener('resize',resize);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(3000,3000),new THREE.MeshLambertMaterial({color:0xc9a57d}));
+ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+const grid=new THREE.GridHelper(400,40,0x9c7f5f,0xb09070);grid.position.y=0.05;scene.add(grid);
+const M=(c,o)=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:0.7,metalness:0.2},o||{}));
+const mHull=M(0xb7b1a5,{roughness:0.85}), mIr=M(0xd8d0b8,{metalness:0.6,roughness:0.35}), mDark=M(0x2d3036), mMech=M(0x6d747e,{metalness:0.5,roughness:0.5});
+const mPad=M(0x4a4f57,{roughness:0.9}), mPin=M(0x8a60d0,{emissive:0x3a2070,metalness:0.4}), mCrest=M(0x3c3a36,{roughness:0.6}), mArm=M(0x5d646e,{metalness:0.45,roughness:0.45});
+function stripeTex(){const c=document.createElement('canvas');c.width=64;c.height=64;const x=c.getContext('2d');
+  x.fillStyle='#39465a';x.fillRect(0,0,64,64);x.fillStyle='#6f7f96';x.fillRect(0,0,64,5);
+  x.fillStyle='#222a36';x.fillRect(20,0,2,64);x.fillRect(42,0,2,64);
+  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
+function add(p,geo,mat,pos){const m=new THREE.Mesh(geo,mat);if(pos)m.position.set(pos[0],pos[1],pos[2]);m.castShadow=m.receiveShadow=true;p.add(m);return m;}
+
+// ---------- ship (built in s coordinates: x = s, y up, z starboard) ----------
+const ship=new THREE.Group();scene.add(ship);           // origin = trunnion = CG
+const hullG=new THREE.Group();ship.add(hullG);           // shifted by -sCG
+(function buildHull(){
+  const N=48, pos=[], idx=[]; const ss=[]; for(let s=0;s<=146;s+=1)ss.push(s);
+  ss.forEach(s=>{const [w,t,b]=sec(s);for(let k=0;k<N;k++){const a=2*Math.PI*k/N,c=Math.cos(a),sn=Math.sin(a);pos.push(s,(sn>=0?t:-b)*sn,w*c);}});
+  for(let i=0;i<ss.length-1;i++)for(let k=0;k<N;k++){const a=i*N+k,b=i*N+(k+1)%N,c=(i+1)*N+(k+1)%N,d=(i+1)*N+k;idx.push(a,d,b,b,d,c);}
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setIndex(idx);geo.computeVertexNormals();
+  const hull=add(hullG,geo,mHull);
+  // groups: nose iridium overlay and shoulder belt as slightly larger lofts
+  function band(s0,s1,grow,mat){const p=[],ix=[],sl=[];for(let s=s0;s<=s1+1e-6;s+=1)sl.push(s);
+    sl.forEach(s=>{const [w,t,b]=sec(s);for(let k=0;k<N;k++){const a=2*Math.PI*k/N,c=Math.cos(a),sn=Math.sin(a);p.push(s,((sn>=0?t:-b)+grow)*sn,(w+grow)*c);}});
+    for(let i=0;i<sl.length-1;i++)for(let k=0;k<N;k++){const a=i*N+k,b=i*N+(k+1)%N,c=(i+1)*N+(k+1)%N,d=(i+1)*N+k;ix.push(a,d,b,b,d,c);}
+    const gg=new THREE.BufferGeometry();gg.setAttribute('position',new THREE.Float32BufferAttribute(p,3));gg.setIndex(ix);gg.computeVertexNormals();add(hullG,gg,mat);}
+  band(122,146,0.05,mIr);band(48,63,0.35,mIr);
+  // stern: bulkhead, well rim, cups
+  const disc=add(hullG,new THREE.CircleGeometry(14,48),mDark,[0,2,0]);disc.rotation.y=-Math.PI/2;disc.scale.set(12/14,11/14,1);
+  const well=add(hullG,new THREE.CylinderGeometry(WELL_R,WELL_R,WELL_OUT,48,1,true),mMech,[-WELL_OUT/2,0,0]);well.rotation.z=Math.PI/2;well.material=well.material.clone();well.material.side=THREE.DoubleSide;
+  [[4.4,4.4],[-4.4,4.4],[4.4,-4.4],[-4.4,-4.4]].forEach(([y,z])=>{const c=add(hullG,new THREE.CircleGeometry(3.2,24),M(0x5b4a9a,{emissive:0x1a1040}),[-1.4,y,z]);c.rotation.y=-Math.PI/2;});
+  // crests folded against the flanks, dorsal retracted into its root fairing, pods sunk
+  [-1,1].forEach(sg=>{const sh=new THREE.Shape();sh.moveTo(2,-1);sh.lineTo(30,-1);sh.lineTo(22,9);sh.lineTo(8,9);sh.lineTo(2,-1);
+    const cr=add(hullG,new THREE.ExtrudeGeometry(sh,{depth:0.8,bevelEnabled:false}),mCrest);cr.position.z=sg*14.2-(sg<0?0.8:0);
+    add(hullG,new THREE.BoxGeometry(6,3,1.2),mMech,[60,0,sg*9.8]);
+    add(hullG,new THREE.BoxGeometry(24,1.6,0.4),mDark,[46,0,sg*14.05]);});           // carriage slot s 34-58
+  add(hullG,new THREE.BoxGeometry(42,1.3,1.8),mCrest,[23,14.0,0]);
+  add(hullG,new THREE.BoxGeometry(22,0.3,9),mDark,[90,-8.55,0]);                         // hangar floor doors
+  add(hullG,new THREE.BoxGeometry(28.4,0.3,10.5),mDark,[33.9,-9.2,5.3]);                 // anamezon port doors
+  add(hullG,new THREE.BoxGeometry(28.4,0.3,10.5),mDark,[33.9,-9.2,-5.3]);
+})();
+const carriages=[-1,1].map(sg=>{const c=new THREE.Group();ship.add(c);add(c,new THREE.BoxGeometry(5,4,2),mMech,[0,0,sg*13.4]);return c;});
+const cgMark=add(ship,new THREE.SphereGeometry(1.1,16,12),M(0xffd24a,{emissive:0x806000}));
+
+
+
+const tex=stripeTex();
+function mkMast(w){const mat=new THREE.MeshStandardMaterial({map:tex.clone(),roughness:0.6,metalness:0.3});mat.map.needsUpdate=true;
+  const m=add(scene,new THREE.BoxGeometry(w||MAST_A,1,w||MAST_A),mat);m.userData.w=w||MAST_A;return m;}
+const up=V3(0,1,0);
+function setMast(m,a,b){const d=V3(0,0,0).subVectors(b,a),L=Math.max(0.01,d.length());m.position.copy(a).addScaledVector(d,0.5);
+  m.quaternion.setFromUnitVectors(up,d.normalize());m.scale.set(1,L,1);if(m.material.map)m.material.map.repeat.set(1,L/4);m.visible=L>0.3;return L;}
+// flat pad geometry helpers
+function halfOval(rx,rz,t,sign){const sh=new THREE.Shape();const n=24;sh.moveTo(0,-rz);
+  for(let i=0;i<=n;i++){const a=-Math.PI/2+Math.PI*i/n;sh.lineTo(sign*rx*Math.cos(a),rz*Math.sin(a));}sh.lineTo(0,-rz);
+  const g=new THREE.ExtrudeGeometry(sh,{depth:t,bevelEnabled:true,bevelThickness:0.25,bevelSize:0.25,bevelSegments:2});g.rotateX(Math.PI/2);g.translate(0,t,0);return g;}
+
+// ---------- the three variants, per side ----------
+// ---------- one leg type for all six supports: hip joint, armoured thigh (band drum inside),
+// extending shin (band mast), ball ankle, round dish pad ----------
+const THIGH_L=12, THIGH_R=3.3, SHIN_A=4.6, ANK=1.6, LAF_X=19, DISH_L=8, DISH_S=6;
+const mThigh=M(0x8c877c,{metalness:0.35,roughness:0.55}), mJoint=M(0x55595f,{metalness:0.6,roughness:0.4});
+function dishGeo(R){const r=R, pts=[[0.01,0],[r,0],[r,0.5],[r*0.93,0.9],[r*0.45,1.3],[2.0,1.9],[1.6,2.2],[0.01,2.2]].map(p=>new THREE.Vector2(p[0],p[1]));
+  return new THREE.LatheGeometry(pts,40);}
+function mkLeg(dishR,flat){const L={};
+  L.hip=new THREE.Group();scene.add(L.hip);
+  const hc=add(L.hip,new THREE.CylinderGeometry(THIGH_R+0.5,THIGH_R+0.5,5,24),mJoint);hc.rotation.x=Math.PI/2;   // hip housing, axis across
+  L.thigh=add(scene,flat?new THREE.BoxGeometry(7,1,3):new THREE.CylinderGeometry(THIGH_R,THIGH_R*0.9,1,8),mThigh);  // carriage legs: deep flat blade (7 m fore-aft, 3 m thick)                                   // octagonal armoured casing
+  L.shin=mkMast(SHIN_A);
+  L.ankle=add(scene,new THREE.SphereGeometry(ANK,20,14),mJoint);
+  L.dish=new THREE.Group();scene.add(L.dish);add(L.dish,dishGeo(dishR),mPad);
+  return L;}
+// segment a->b as a mesh along +y (cylinder/box of unit height)
+function seg(m,a,b){const d=V3(0,0,0).subVectors(b,a),L=Math.max(0.01,d.length());m.position.copy(a).addScaledVector(d,0.5);
+  m.quaternion.setFromUnitVectors(up,d.clone().normalize());m.scale.set(1,L,1);m.visible=L>0.2;return L;}
+// hip at H, leg direction dir (unit, towards the foot), total hip->ankle length len; dish orientation quaternion q
+function poseLeg(L,H,dir,len,q,hipQ){
+  L.hip.position.copy(H);if(hipQ)L.hip.quaternion.copy(hipQ);
+  const tl=Math.min(THIGH_L,len);const K=H.clone().addScaledVector(dir,tl), A=H.clone().addScaledVector(dir,len);
+  seg(L.thigh,H,K);const sl=setMast(L.shin,K,A);L.shin.visible=len-tl>0.3;
+  L.ankle.position.copy(A);L.dish.position.copy(A).addScaledVector(dir,ANK*0.6);L.dish.quaternion.copy(q);
+  return {thigh:tl,shin:Math.max(0,len-tl)};}
+const laf=[-1,1].map(sg=>({sg,L:mkLeg(DISH_L,true)}));
+const HINGES=[[8.8,9.6],[8.8,-9.6],[-6.8,-9.6],[-6.8,9.6]];     // stern corners (y, z) at s = 5
+const stern=HINGES.map(()=>mkLeg(DISH_S));
+
+function params(){const ms=MASS[massK];return {m:ms.m,s:ms.s,W:ms.m*g*G0};}
+function pose(){
+  const {s:sCG}=params(), hRot=sCG+TURN_CLEAR, hStand=sCG+STAND_CLEAR;
+  const ph=k=>Math.max(0,Math.min(1,P-k));
+  let h=lerp(H0,hRot,ease(ph(0))); if(P>3)h=lerp(hRot,hStand,ease(ph(3)));
+  return {sCG,h,th:Math.PI/2*ease(ph(1)),legOut:ease(ph(2)),collect:ease(ph(4)),legRest:1-ease(ph(0)*4),hRot,hStand};
+}
+function shipPt(p,s,y,z){const X=s-p.sCG,c=Math.cos(p.th),sn=Math.sin(p.th);return V3(X*c-y*sn,X*sn+y*c+p.h,z);}
+const qId=new THREE.Quaternion();
+const SH={};
+function apply(){
+  const p=pose(),c=p.collect;
+  ship.position.set(0,p.h,0);ship.rotation.z=p.th;hullG.position.x=-p.sCG;
+  // carriage legs: hanging from the trunnions; on collect the shin reels in, the dish folds flat
+  // against the thigh and the hip slides into the flank recess
+  laf.forEach(({sg,L})=>{
+    // collect: shin reels into the thigh, the dish folds flat against it (ground face outwards), the hip
+    // runs along the slot to s 40 (clear of the deflector coil in the shoulder) and the leg sinks into a
+    // 3.7 m flank recess between the skin and the trap column: the dish becomes the armour panel over it
+    const retract=ease(c/0.4), fold=ease((c-0.35)/0.3), slide=ease((c-0.6)/0.2), tuck=ease((c-0.8)/0.2);
+    const base=shipPt(p,lerp(p.sCG,40,slide),0,0), zIn=14-2.2-1.5;
+    const H=V3(base.x,base.y,sg*lerp(LAF_X,zIn,tuck));
+    const full=H.y-2.2-ANK*0.6;
+    const len=lerp(full,THIGH_L+0.2,retract);
+    const q=new THREE.Quaternion().setFromAxisAngle(V3(1,0,0),-sg*fold*Math.PI/2);
+    const r=poseLeg(L,H,V3(0,-1,0),len,q);
+    if(fold>0){const st=V3(H.x,H.y-THIGH_L*0.5,H.z+sg*3.7);L.dish.position.lerp(st,fold);}
+    L.ankle.visible=fold<0.5;
+    SH.lafShin=r.shin;
+  });
+  // stern legs: stowed along the aft corners, swung out to the feet circle R 26 (standing) or the lower
+  // pair to the ground beside the stern while lying (5 % of the weight)
+  stern.forEach((L,i)=>{
+    const [y,zz]=HINGES[i],Hs=shipPt(p,5,y,zz);
+    const stow=shipPt(p,5+THIGH_L+4,y*0.95,zz*0.95);
+    let foot=null,out=0;
+    if(P<1&&i>=2&&p.legRest>0){foot=V3(5-p.sCG,0,Math.sign(zz)*17.7);out=p.legRest;}
+    else if(p.legOut>0){const a=Math.atan2(zz,-y);foot=V3(STAND_R*Math.cos(a),0,STAND_R*Math.sin(a));out=p.legOut;}
+    let tgt=stow.clone(), q=ship.quaternion.clone();
+    if(foot){const ank=foot.clone().add(V3(0,2.2+ANK*0.6,0));tgt.lerp(ank,out);q.slerp(qId,out);}
+    const d=V3(0,0,0).subVectors(tgt,Hs),len=d.length();
+    poseLeg(L,Hs,d.normalize(),len,q,ship.quaternion);
+  });
+  return p;
+}
+const f0=x=>(x/1e6).toFixed(0), fP=x=>(x/1e6).toFixed(2);
+const SHIN_AREA=4*SHIN_A*0.03, SHIN_I=(2/3)*Math.pow(SHIN_A,3)*0.03, DISH_AL=Math.PI*DISH_L*DISH_L, DISH_AS=Math.PI*DISH_S*DISH_S;
+function readout(p){
+  const {m,W}=params(), onCols=P<4.8, share=P<=0.02?0.95:(P<3.8?1:Math.max(0,1-(P-3.8)/1.0)), Fc=share*W/2;
+  let t=`масса ${(m/1e6).toFixed(1)} кт · ${g} g · вес ${f0(W)} МН\nЦМ s ${p.sCG.toFixed(1)} м · цапфы ${p.h.toFixed(1)} м\n`;
+  t+=`подъём до ${p.hRot.toFixed(0)} м · зазор кормы ${(p.hRot-Math.hypot(p.sCG+WELL_OUT,WELL_R)).toFixed(1)} м\n\n`;
+  if(onCols&&Fc>0){
+    const L=Math.max(1,SH.lafShin||0), k=Math.PI*Math.PI*E*SHIN_I/(4*(L+THIGH_L)*(L+THIGH_L))/Fc;
+    t+=`нога лафета: ${f0(Fc)} МН (${(share*100).toFixed(0)} %)\n  бедро 12 м Ø6,6 · голень наружу ${L.toFixed(1)} м\n`;
+    t+=`  σ голени ${f0(Fc/SHIN_AREA)} МПа (доп. 1000) · устойч. ×${k>50?'>50':k.toFixed(1)}\n`;
+    t+=`  тарелка Ø16 (201 м²): грунт ${fP(Fc/DISH_AL)} МПа\n`;
+    if(P>1&&P<2)t+=`привод цапф (δ 0,3 м): ${f0(W*0.3)} МН·м\n`;
+  }
+  if(P>=2.5||P<=0.02){const n=P<=0.02?2:4, Fl=(P<=0.02?0.05:(1-(onCols?share:0)))*W/n;
+    t+=`кормовые ноги (${n}): ${f0(Fl)} МН на ногу\n  тарелка Ø12 (113 м²): грунт ${fP(Fl/DISH_AS)} МПа\n`;}
+  t+=`\nгрунт: песок 0,2–0,4 · гравий 0,6 · скала/порт 5–20 МПа`;
+  document.getElementById('ro').textContent=t;
+  const ph=P<=0.001?'лежит на ногах лафета и нижних кормовых, ось 14 м':P>=5.999?'стоит на корме, ноги лафета сложены по борту':
+    ['подъём лёжа: голени выходят из бёдер','поворот вокруг цапф — ноги неподвижны','кормовые ноги выходят на R 26','опускание на кормовые ноги','сбор: голени в бёдра, тарелки к бедру, бёдра в паз','сбор'][Math.floor(P)];
+  document.getElementById('ph').textContent=ph;
+}
+
+const $=id=>document.getElementById(id);
+const VIEWS={side:[[20,40,260],[10,22,0]],q:[[160,70,190],[10,22,0]],aft:[[-200,40,40],[0,30,0]],col:[[34,22,90],[0,9,19]]};
+function view(k){const p=pose(),dy=(p.h-14)*0.8,v=VIEWS[k];cam.position.set(v[0][0],v[0][1]+dy,v[0][2]);ctl.target.set(v[1][0],v[1][1]+dy,v[1][2]);ctl.update();}
+view('q');
+document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>view(b.dataset.v));
+$('go').onclick=()=>{PT=PT<3?6:0;};
+const msTxt=()=>$('ms').textContent='Масса: '+MASS[massK].txt;msTxt();
+$('ms').onclick=()=>{massK=massK==='land'?'full':'land';msTxt();};
+const gvTxt=()=>$('gv').textContent='Тяготение: '+(g===1?'1 g (Земля)':'2,5 g (планета Железной звезды)');gvTxt();
+$('gv').onclick=()=>{g=g===2.5?1:2.5;gvTxt();};
+$('rot').onclick=()=>{ctl.autoRotate=!ctl.autoRotate;$('rot').classList.toggle('on',ctl.autoRotate);};
+const spd=$('spd');const sv=()=>{TS=Math.pow(2,+spd.value);$('spdv').textContent='×'+TS.toFixed(1);};spd.oninput=sv;sv();
+window.__legs={set:v=>{P=PT=v;}};  // debug hook
+let last=performance.now();
+function loop(now){const dt=Math.min(0.1,(now-last)/1000);last=now;
+  const step=dt*TS/12;P=P<PT?Math.min(PT,P+step):Math.max(PT,P-step);
+  $('go').textContent=PT>=6?(P>=6?'Уложить в горизонт':'Идёт подъём… (нажать — назад)'):(P<=0?'Поставить на корму':'Идёт укладка… (нажать — вверх)');
+  const p=apply();readout(p);ctl.update();R.render(scene,cam);requestAnimationFrame(loop);}
+requestAnimationFrame(loop);
+})();
+</script></body></html>

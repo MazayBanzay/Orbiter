@@ -1,6 +1,6 @@
 # Whitelist: this repository lives in the root of an Orbiter 2024 installation (branch 2024).
-# Everything is ignored except the project files listed below. Tantra's sources live in branch 2016
-# (Orbitersdk/samples/Tantra, built for 2024 with build_2024.bat / install_2024.bat).
+# Everything is ignored except the project files listed below. Orbiter 2016 was the proving ground; since 2026-10-04
+# everything lives here (Tantra's sources, design and tools moved from branch 2016).
 /*
 !/.gitignore
 !/README.md
@@ -22,6 +22,28 @@
 /Scenarios/*
 !/Scenarios/OrbiterCrew/
 
+# --- design: Blender scripts, sketches, mocap, audio (tools and generated outputs stay local) ---
+!/Tantra_Design/
+/Tantra_Design/assets/
+/Tantra_Design/bx/
+/Tantra_Design/mpfbu/
+/Tantra_Design/blender/renders/
+/Tantra_Design/blender/textures/
+/Tantra_Design/backup_*/
+/Tantra_Design/blender/backup_*/
+/Tantra_Design/presentation/img_alpha_backup/
+__pycache__/
+*.blend
+*.blend1
+
+# --- starship Tantra: sources (and the ship-view screens it builds with) ---
+!/Orbitersdk/samples/
+/Orbitersdk/samples/*
+!/Orbitersdk/samples/Tantra/
+/Orbitersdk/samples/Tantra/build/
+/Orbitersdk/samples/Tantra/docs/PORTING_UACS.md
+!/Orbitersdk/samples/ShipView/
+
 # --- starship Tantra: assets, configs, scenarios, sounds (built modules stay local) ---
 !/Meshes/
 /Meshes/*
@@ -32,6 +54,7 @@
 !/Textures/Tantra_*.dds
 !/Config/Vessels/Tantra.cfg
 !/Config/Vessels/TantraTrap.cfg
+!/Config/Vessels/Tantra/
 !/Scenarios/Tantra/
 !/XRSound/
 /XRSound/*

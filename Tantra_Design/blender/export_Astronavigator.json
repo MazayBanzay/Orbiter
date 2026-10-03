@@ -1,0 +1,40 @@
+{
+ "textures": [
+  {
+   "src": "C:\\Games\\Orbiter 2016\\Tantra_Design\\blender\\textures\\skin_clean.png",
+   "dds": "Tantra\\Astronavigator\\Skin.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter 2016\\Tantra_Design\\blender\\..\\mpfbu\\data\\eyebrows\\eyebrow001\\eyebrow001.png",
+   "dds": "Tantra\\Astronavigator\\Brows.dds",
+   "alpha": true
+  },
+  {
+   "src": "C:\\Games\\Orbiter 2016\\Tantra_Design\\blender\\..\\mpfbu\\data\\eyelashes\\eyelashes01\\eyelashes01.png",
+   "dds": "Tantra\\Astronavigator\\Lashes.dds",
+   "alpha": true
+  },
+  {
+   "src": "C:\\Games\\Orbiter 2016\\Tantra_Design\\mpfbu\\data\\eyes\\materials\\brown_eye.png",
+   "dds": "Tantra\\Astronavigator\\Eyes.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter 2016\\Tantra_Design\\mpfbu\\data\\clothes\\shoes03\\shoes03_diffuse.png",
+   "dds": "Tantra\\Astronavigator\\Boots.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter 2016\\Tantra_Design\\blender\\..\\mpfbu\\data\\hair\\toigo_curled_under_bob\\GingerHair.png",
+   "dds": "Tantra\\Astronavigator\\Hair.dds",
+   "alpha": true
+  },
+  {
+   "src": "C:\\Games\\Orbiter 2016\\Tantra_Design\\blender\\textures\\coverall_diffuse.png",
+   "dds": "Tantra\\Astronavigator\\Coverall_Fabric.dds",
+   "alpha": false
+  }
+ ],
+ "orbiter": "C:\\Games\\Orbiter 2016"
+}

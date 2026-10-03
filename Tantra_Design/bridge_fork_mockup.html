@@ -1,0 +1,484 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Рубка Тантры: вариант 1</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#f4f2ee;--text:#1b1b1b;--muted:#5a5a5a;--accent:#3b6fd6;--border:#c9c5bd;--card:#fff;--warn:#fff8e8;--warnb:#d9a441}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#15171b;--text:#e8e6e1;--muted:#a3a7ae;--accent:#7aa2f7;--border:#3a3f47;--card:#1d2026;--warn:#2a2416;--warnb:#9a7a35}}
+:root[data-theme="dark"]{--bg:#15171b;--text:#e8e6e1;--muted:#a3a7ae;--accent:#7aa2f7;--border:#3a3f47;--card:#1d2026;--warn:#2a2416;--warnb:#9a7a35}
+body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;margin:16px}
+h1{font-size:18px;margin:0 0 4px}.sub{color:var(--muted);font-size:13px;margin:0 0 10px;max-width:1300px}.sub a{color:var(--accent)}
+#wrap{position:relative;border-radius:12px;overflow:hidden;background:#07080b}#c3{width:100%;height:660px}
+.pin{position:absolute;transform:translate(-50%,-50%);width:20px;height:20px;border-radius:50%;background:#e8b64a;color:#111;font:700 11px/20px system-ui;text-align:center;pointer-events:none;box-shadow:0 0 0 2px rgba(0,0,0,.55)}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+.b{font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer}
+.b.on{border:2px solid var(--accent);padding:5px 11px}.tag{font-size:12px;color:var(--muted)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px;max-width:1300px}@media(max-width:900px){.cols{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.5;margin-bottom:14px}
+.card h2{font-size:14px;margin:0 0 6px}.card ol,.card ul{margin:0;padding-left:20px}.card li{margin:3px 0}
+.warn{border-color:var(--warnb);background:var(--warn)}
+</style></head><body>
+<h1>Рубка «Тантры» — вариант 1: один пульт на всех, ниша командира в нём, веер экранов у командира, наши новые MFD</h1>
+<p class="sub">Спереди у командира прорезь: низкий пульт с гребнем, над ним внешний экран. По бокам у командира плоские экраны с центром на уровне глаз, под ними полки с кнопками механизации, проверочным дисплеем и калькулятором. Все боковые экраны сворачиваются. Книжный вариант: <a href="bridge_book_mockup.html">bridge_book_mockup.html</a>.</p>
+<div id="wrap"><div id="c3"></div></div>
+<div class="row">
+  <button class="b" data-v="o60">Командир, FoV 60°</button>
+  <button class="b" data-v="o90">Командир, FoV 90°</button>
+  <button class="b" data-v="left">Командир: голова влево</button>
+  <button class="b" data-v="right">Командир: голова вправо</button>
+  <button class="b" data-v="shelfL">Полка слева (механизация)</button>
+  <button class="b" data-v="shelfR">Полка справа (калькулятор)</button>
+  <button class="b" data-v="pl">Левое место</button>
+  <button class="b" data-v="pr">Правое место</button>
+  <button class="b" data-v="q">3/4 сзади</button>
+  <button class="b" data-v="top">Сверху</button>
+</div>
+<div class="row">
+  <button class="b on" id="fold">Веер командира: развёрнут</button>
+  <span class="tag">Рабочее пространство командира:</span><select class="b" id="wsSel"></select>
+  <span class="tag">Конфигурация корабля:</span><select class="b" id="cfgSel"></select>
+  <button class="b on" id="hud">HUD на главном экране</button>
+  <button class="b on" id="pins">Метки</button>
+</div>
+<div class="row"><span class="tag">Линия единого пульта в плане:</span><span id="varBtns"></span></div>
+<p class="sub" id="varNote" style="margin-top:6px"></p>
+<div class="cols">
+<div>
+<div class="card"><h2>Что на схеме (метки)</h2><ol id="legend"></ol></div>
+<div class="card warn"><h2>Управление громадой: как это должно работать</h2>
+<ul>
+<li><b>Управление по цели, а не по соплам.</b> Командир задаёт, что нужно: орбиту, импульс, точку посадки, шаг подъёма, курс к звезде. Система управления корабля сама раскладывает это на маршевый, 12 сопел гондол, 4 анамезонных, ретро, РСУ, гребни и опоры. Ручное управление остаётся: ручка ориентации, рычаги тяги, кнопки механизации.</li>
+<li><b>Защита границ</b> на каждом действии: предел g для экипажа, нагрузки на лопасти и опоры, нагрев кромок, радиация, высотные блокировки. Граница нарисована на кольцевой шкале, и уставку за неё не утянуть без «обхода», который подтверждается отдельно.</li>
+<li><b>Прогноз до исполнения.</b> Карточка «следующее» показывает, что будет: Δv, длительность, перегрузку, расход ловушек или рабочего тела, положение корабля. Только после этого — одна кнопка «исполнить».</li>
+<li><b>Экипаж — часть управления.</b> Разгон на анамезоне не начнётся, пока все не в креслах; ходить запрещено на взлёте, посадке и разгоне. Это видно на странице ЖИЗНЬ · ЭКИПАЖ и в проверке на полке.</li>
+<li><b>Три места, одна картина.</b> Инженер и навигатор работают у себя и передают командиру готовое («передать манёвр», «принять»); любая страница открывается на любом месте.</li>
+</ul></div>
+</div>
+<div>
+<div class="card"><h2>Наши MFD — новый язык экранов</h2>
+<ul>
+<li><b>Схема вместо списка.</b> Каждая страница — живая схема своего объекта: корма с соплами, корабль сбоку с механизацией, орбита с точкой импульса, поток энергии от реактора к потребителям. Значения подписаны прямо на элементах.</li>
+<li><b>Кольцевые шкалы с уставкой</b>: значение — светящаяся дуга, уставка — треугольник, его тянут пальцем.</li>
+<li><b>Лента состояния сверху</b>: страница, режим, автоматика, тревоги. <b>Карточка «следующее» внизу</b>: одно действие и одна большая кнопка.</li>
+<li><b>Цвет = состояние</b>: голубой — норма, зелёный — работает, янтарный — внимание, красный — тревога.</li>
+<li><b>MFD «ГЛАВНЫЙ ЭКРАН»</b> (слева у гребня): план U-экрана с пятью зонами, у каждой свой источник — курс, вперёд, назад, вниз, телескоп, карта 50 св. лет; слои поверх: HUD, линия курса, цели, сетка, фильтр «земной» (по книге фильтры экранов меняют цвет светил).</li>
+<li><b>HUD на главном экране</b>: линия горизонта, полосы тангажа через 10° с подписями (вниз — пунктиром), вектор скорости (кружок с крыльями), метка корабля, лента курса сверху, V/Vy и H/g по бокам.</li>
+<li><b>Светопостроение</b>: светящиеся линии на тёмном стекле, без рамок и таблиц; страницы листаются касанием по ленте.</li>
+</ul></div>
+<div class="card"><h2>Как устроено</h2>
+<ul>
+<li><b>Командир</b>: спереди низкий пульт (гребень до 1,16 м, ниже глаза) и прорезь на внешний экран. Слева и справа по два <b>плоских экрана с центром на высоте глаза</b> (1,20 м), в 0,74 м от глаза; под ними полки на 0,70 м.</li>
+<li><b>Полка слева</b>: настоящие кнопки механизации (шасси, подъём ◀ ▶ стоп, гребни 90/30, сложить, киль, гондолы, ангар, порт, лифт, платформа) и проверочный дисплей. <b>Полка справа</b>: калькулятор, связь, интерком, тревога, «всем в кресла», «свернуть экраны».</li>
+<li><b>Веер экранов — только у командира</b>, три положения: <b>развёрнут</b>; <b>свёрнут</b> — экраны откинуты назад, остаются видны и открывают главный вид полёта (горизонтальный полёт, разговор с экипажем); <b>сложен</b> — убраны совсем.</li>
+<li><b>Места экипажа</b> (инженер слева, навигатор справа): <b>единый пульт</b> — одна линия от левого места через командира к правому; перед креслами высокий (1,16 м) со встроенными экранами, к командиру опускается до 0,80 м и примыкает к его «подкове».</li>
+</ul></div>
+<div class="card"><h2>Вопросы</h2>
+<ol>
+<li>Новые MFD (схема, кольцевые уставки, карточка «следующее») — это направление?</li>
+<li>Набор кнопок на полках: что добавить или убрать?</li>
+<li>Свёртывание экранов: откидывать назад (как сейчас) или опускать вниз в корпус?</li>
+</ol></div>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// Frame: floor y = 0, drum axis y = 1.0 (R 4.6, end walls x +-4.8), z from the axis station toward the nose; world x = -x(Orbiter)
+const host = document.getElementById("c3");
+const R = new THREE.WebGLRenderer({antialias: true}); R.setPixelRatio(Math.min(devicePixelRatio, 2)); host.appendChild(R.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x05060a);
+const cam = new THREE.PerspectiveCamera(60, 1, 0.03, 100);
+const ctl = new THREE.OrbitControls(cam, R.domElement); ctl.enableDamping = true;
+scene.add(new THREE.AmbientLight(0x8890a0, 0.55));
+const dl = new THREE.DirectionalLight(0xfff2dd, 0.45); dl.position.set(-2, 6, -3); scene.add(dl);
+const pl = new THREE.PointLight(0xc8d8ff, 0.5, 10); pl.position.set(0, 3.3, 0); scene.add(pl);
+const mat = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({color: c, roughness: .75, metalness: .25}, o));
+const M = {body: mat(0x202328), top: mat(0x15171b, {roughness: .45}), seat: mat(0x2a2e34), cush: mat(0x3a2523), metal: mat(0x8a8f98, {metalness: .7, roughness: .35}),
+  floor: mat(0x1c1e22, {roughness: .9}), rail: mat(0x5a6068, {metalness: .6}), shell: new THREE.MeshStandardMaterial({color: 0x101317, side: THREE.BackSide, roughness: .95})};
+const dbl = m => { const q = m.clone(); q.side = THREE.DoubleSide; return q; };
+function box(w, h, d, m, x, y, z, p) { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); p.add(o); return o; }
+function cyl(r0, r1, h, m, x, y, z, p, n = 24) { const o = new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, n), m); o.position.set(x, y, z); p.add(o); return o; }
+const pins = []; function pin(obj, local, n) { pins.push([() => obj.localToWorld(new THREE.Vector3(...local)), n, window.__pinGen]); }
+const room = new THREE.Group(); scene.add(room);
+
+// ================================================================ the room, the outer screen (250 deg), the door
+box(9.6, .06, 8.98, M.floor, 0, -.03, 0, room);
+const shell = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.6, 9.6, 72, 1, true), M.shell); shell.rotation.z = Math.PI / 2; shell.position.y = 1.0; room.add(shell);
+[-1, 1].forEach(s => { const d = new THREE.Mesh(new THREE.CircleGeometry(4.6, 64), new THREE.MeshStandardMaterial({color: 0x13161a, side: THREE.DoubleSide, roughness: .9})); d.rotation.y = Math.PI / 2; d.position.set(s * 4.8, 1.0, 0); room.add(d); });
+const SB = 1.10, ST = 3.1;
+function sky(w, h, planet) { const c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d");
+  g.fillStyle = "#02040a"; g.fillRect(0, 0, w, h); let s = 11; const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  for (let i = 0; i < w * h / 1500; i++) { g.fillStyle = `rgba(255,255,255,${.25 + r() * .75})`; g.fillRect(r() * w, r() * h, 2, 2); }
+  if (planet) { const gr = g.createRadialGradient(w / 2, h * 4.6, h * 3.85, w / 2, h * 4.6, h * 4.2); gr.addColorStop(0, "#2e5f9e"); gr.addColorStop(.9, "#6aa6e0"); gr.addColorStop(1, "rgba(80,140,220,0)"); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    g.strokeStyle = "rgba(255,176,64,.9)"; g.lineWidth = 5; g.setLineDash([22, 14]); g.beginPath(); g.moveTo(w * .25, h * .95); g.quadraticCurveTo(w * .5, h * .25, w * .78, h * .5); g.stroke(); g.setLineDash([]);
+    g.strokeStyle = "#ffb040"; g.strokeRect(w * .78 - 30, h * .5 - 30, 60, 60); g.fillStyle = "#ffb040"; g.font = "bold 30px system-ui"; g.fillText("ЛУНА · манёвр 2 через 12:40", w * .78 + 44, h * .5 - 8);
+    if (hudOn) mainHud(g, w, h); }
+  return new THREE.CanvasTexture(c); }
+let hudOn = true;
+// the HUD of the main screen (light-built over the outside view): horizon + pitch bars every 10 deg (labelled, dashed below), the velocity vector, the heading tape
+function mainHud(g, w, h) {
+  const cx = w / 2, hy = h * .56, ppd = 16.5, col = "#4ef08a"; g.strokeStyle = col; g.fillStyle = col; g.shadowColor = col; g.shadowBlur = 8; g.font = "bold 22px system-ui";
+  g.lineWidth = 4; g.beginPath(); g.moveTo(cx - 520, hy); g.lineTo(cx - 70, hy); g.moveTo(cx + 70, hy); g.lineTo(cx + 520, hy); g.stroke();
+  for (const d of [-20, -10, 10, 20]) { const y = hy - d * ppd; if (y < 30 || y > h - 20) continue; g.lineWidth = 3; g.setLineDash(d < 0 ? [14, 10] : []);
+    g.beginPath(); g.moveTo(cx - 230, y); g.lineTo(cx - 80, y); g.lineTo(cx - 80, y + (d > 0 ? 14 : -14)); g.moveTo(cx + 230, y); g.lineTo(cx + 80, y); g.lineTo(cx + 80, y + (d > 0 ? 14 : -14)); g.stroke(); g.setLineDash([]);
+    g.textAlign = "right"; g.fillText(String(Math.abs(d)), cx - 240, y + 8); g.textAlign = "left"; g.fillText(String(Math.abs(d)), cx + 240, y + 8); }
+  const vx = cx + 58, vy = hy - 34; g.lineWidth = 4; g.beginPath(); g.arc(vx, vy, 16, 0, 6.3); g.moveTo(vx - 16, vy); g.lineTo(vx - 44, vy); g.moveTo(vx + 16, vy); g.lineTo(vx + 44, vy); g.moveTo(vx, vy - 16); g.lineTo(vx, vy - 34); g.stroke();
+  g.lineWidth = 5; g.beginPath(); g.moveTo(cx - 24, hy + 2); g.lineTo(cx - 8, hy + 2); g.moveTo(cx + 8, hy + 2); g.lineTo(cx + 24, hy + 2); g.stroke();       // the ship's waterline mark
+  g.lineWidth = 2; for (let k = -6; k <= 6; k++) { const x = cx + k * 60; g.beginPath(); g.moveTo(x, 14); g.lineTo(x, k % 2 ? 24 : 34); g.stroke(); if (k % 2 === 0) { g.textAlign = "center"; g.fillText(String((87 + k * 5 + 360) % 360).padStart(3, "0"), x, 58); g.textAlign = "left"; } }
+  g.beginPath(); g.moveTo(cx, 36); g.lineTo(cx - 10, 50); g.lineTo(cx + 10, 50); g.closePath(); g.fill();
+  g.textAlign = "left"; g.fillText("V 7,81 км/с   Vy +0,2", cx - 520, hy + 44); g.textAlign = "right"; g.fillText("H 212 км   g 0,41", cx + 520, hy + 44); g.textAlign = "left"; g.shadowBlur = 0;
+}
+{ const pos = [], uv = [], idx = [], N = 60, x0 = 4.69;
+  for (let i = 0; i <= N; i++) { const x = -x0 + 2 * x0 * i / N, z = -2.75 + Math.sqrt(49 - x * x); pos.push(x, SB, z, x, ST, z); uv.push(1 - i / N, 0, 1 - i / N, 1); if (i < N) { const a = 2 * i; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); } }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+  window.mainScr = new THREE.Mesh(g, new THREE.MeshBasicMaterial({map: sky(2048, 512, true), side: THREE.DoubleSide})); room.add(mainScr); }
+const zEnd = -2.75 + Math.sqrt(49 - 4.69 * 4.69), zBack = -2.75;
+for (const s of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(zEnd - zBack, ST - SB), new THREE.MeshBasicMaterial({map: sky(1024, 400, false)})); m.rotation.y = -s * Math.PI / 2; m.position.set(s * 4.68, (SB + ST) / 2, (zEnd + zBack) / 2); room.add(m); }
+{ const s = new THREE.Shape(), k = .41; [[-k, -1], [k, -1], [1, -k], [1, k], [k, 1], [-k, 1], [-1, k], [-1, -k]].forEach(([u, v], i) => i ? s.lineTo(u * .55, v) : s.moveTo(u * .55, v));
+  const door = new THREE.Mesh(new THREE.ShapeGeometry(s), new THREE.MeshStandardMaterial({color: 0x2b3037, side: THREE.DoubleSide, metalness: .5})); door.rotation.y = -Math.PI / 2; door.position.set(-4.77, 1.0, -3.55); room.add(door); }
+
+// ================================================================ OUR MFD v2: a schematic of the object, ring set-points, the status ribbon, the "next" card
+const C = "#5fd8ff", G = "#4ef08a", A = "#ffb040", W = "#e8eef4", D = "#6f7c88", Rd = "#ff6050", BG = "#03080d";
+function T(g, s, x, y, col = W, size = 26, bold = false, align = "left") { g.fillStyle = col; g.font = (bold ? "bold " : "") + size + "px system-ui"; g.textAlign = align; g.fillText(s, x, y); g.textAlign = "left"; }
+function glow(g, col, w) { g.strokeStyle = col; g.lineWidth = w; g.shadowColor = col; g.shadowBlur = 10; }
+function noglow(g) { g.shadowBlur = 0; }
+function ribbon(g, w, page, chips, dots = [1, 0, 0]) {
+  g.fillStyle = "#08131b"; g.fillRect(0, 0, w, 58); T(g, page, 22, 40, W, 28, true);
+  let x = w - 18; chips.slice().reverse().forEach(([t, col]) => { g.font = "bold 20px system-ui"; const tw = g.measureText(t).width + 26; x -= tw; g.strokeStyle = col; g.lineWidth = 2; g.strokeRect(x, 12, tw, 34); T(g, t, x + tw / 2, 36, col, 20, true, "center"); x -= 10; });
+  dots.forEach((d, i) => { g.fillStyle = d ? C : "#24414f"; g.beginPath(); g.arc(24 + i * 18, 52, 4, 0, 6.3); g.fill(); });
+}
+function nextCard(g, x, y, w, h, title, line, action, col = A) {
+  g.fillStyle = "#0a1820"; g.fillRect(x, y, w, h); g.fillStyle = col; g.fillRect(x, y, 6, h);
+  T(g, title, x + 22, y + 34, D, 20, true); T(g, line, x + 22, y + 70, W, 26, true);
+  const bw = 210, bx = x + w - bw - 16, by = y + (h - 56) / 2; g.fillStyle = col === Rd ? "#3a1410" : "#2a2008"; g.fillRect(bx, by, bw, 56); g.strokeStyle = col; g.lineWidth = 3; g.strokeRect(bx, by, bw, 56); T(g, action, bx + bw / 2, by + 37, col, 24, true, "center");
+}
+// a ring gauge: value f (0..1), a set-point triangle (draggable), a limit tick (red) on a 270 deg arc
+function ring(g, cx, cy, r, f, set, col, label, value, limit) {
+  const a0 = Math.PI * .75, a1 = Math.PI * 2.25;
+  g.strokeStyle = "#16303d"; g.lineWidth = r * .16; g.beginPath(); g.arc(cx, cy, r, a0, a1); g.stroke();
+  glow(g, col, r * .16); g.beginPath(); g.arc(cx, cy, r, a0, a0 + (a1 - a0) * f); g.stroke(); noglow(g);
+  if (limit != null) { const a = a0 + (a1 - a0) * limit; g.strokeStyle = Rd; g.lineWidth = 6; g.beginPath(); g.moveTo(cx + Math.cos(a) * r * .8, cy + Math.sin(a) * r * .8); g.lineTo(cx + Math.cos(a) * r * 1.2, cy + Math.sin(a) * r * 1.2); g.stroke(); }
+  if (set != null) { const a = a0 + (a1 - a0) * set, rr = r + r * .16; g.fillStyle = W; g.beginPath(); g.moveTo(cx + Math.cos(a) * (rr + 14), cy + Math.sin(a) * (rr + 14)); g.lineTo(cx + Math.cos(a - .09) * (rr + 34), cy + Math.sin(a - .09) * (rr + 34)); g.lineTo(cx + Math.cos(a + .09) * (rr + 34), cy + Math.sin(a + .09) * (rr + 34)); g.fill(); }
+  T(g, value, cx, cy + r * .16, W, Math.round(r * .42), true, "center"); T(g, label, cx, cy + r * .62, D, Math.round(r * .2), true, "center");
+}
+// the ship seen from astern: the marching cup in the well, the four anamezon cups (clover), the four pods with three cups each
+function sternView(g, cx, cy, s, lv) {
+  glow(g, "#2f6a7d", 3); g.beginPath(); g.ellipse(cx, cy, s * 1.6, s * .95, 0, 0, 6.3); g.stroke(); noglow(g);
+  const cup = (x, y, r, f, col, name) => { g.strokeStyle = "#1d3a48"; g.lineWidth = 3; g.beginPath(); g.arc(x, y, r, 0, 6.3); g.stroke(); if (f > 0) { glow(g, col, 5); g.beginPath(); g.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + f * 6.283); g.stroke(); noglow(g); g.fillStyle = col + "33"; g.beginPath(); g.arc(x, y, r * .7 * f + 2, 0, 6.3); g.fill(); } if (name) T(g, name, x, y + r + 24, D, 18, true, "center"); };
+  cup(cx, cy, s * .32, lv.march, C, "маршевый " + Math.round(lv.march * 100) + "%");
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([u, v]) => cup(cx + u * s * .62, cy + v * s * .5, s * .16, lv.ana, A, ""));
+  [[-1.45, -.15], [1.45, -.15], [-1.25, .55], [1.25, .55]].forEach(([u, v], i) => { const x = cx + u * s, y = cy + v * s; g.strokeStyle = lv.sel === i || lv.sel === -1 ? C : "#2a4a5a"; g.lineWidth = 3; g.strokeRect(x - s * .22, y - s * .12, s * .44, s * .24);
+    for (let k = 0; k < 3; k++) cup(x - s * .13 + k * s * .13, y, s * .05, lv.pod, G, ""); });
+  T(g, "гондолы " + Math.round(lv.pod * 100) + "% · сопла " + lv.podDeg + "°", cx, cy + s * 1.2, G, 22, true, "center");
+}
+// the ship from the side in its pose (mechanisation)
+function sideView(g, cx, cy, L, c) {
+  const ang = -c.pose * Math.PI / 180; g.save(); g.translate(cx, cy); g.rotate(ang);
+  glow(g, C, 4); g.beginPath(); g.moveTo(0, -18); g.quadraticCurveTo(L * .45, -44, L, -9); g.lineTo(L + 28, 0); g.lineTo(L, 9); g.quadraticCurveTo(L * .45, 24, 0, 18); g.closePath(); g.stroke(); noglow(g);
+  const part = (on, col, draw) => { g.strokeStyle = on ? col : "#2a4a5a"; g.lineWidth = 6; g.beginPath(); draw(); g.stroke(); };
+  const cs = c.crests === "90°" ? 50 : c.crests === "30°" ? 28 : 6; part(c.crests !== "СЛОЖЕНЫ", G, () => { g.moveTo(L * .35, -28); g.lineTo(L * .45, -28 - cs); g.lineTo(L * .62, -28); });
+  part(true, c.keel === "ОПУЩЕН" ? A : G, () => { if (c.keel === "ОПУЩЕН") { g.moveTo(L * .08, 18); g.lineTo(L * .02, 66); g.lineTo(L * .2, 20); } else { g.moveTo(L * .06, -20); g.lineTo(0, -64); g.lineTo(L * .2, -24); } });
+  part(c.blades, W, () => { g.moveTo(L * .33, 18); g.lineTo(L * .33, 54); g.moveTo(L * .7, 16); g.lineTo(L * .74, 54); });
+  part(c.stern, W, () => { g.moveTo(0, 12); g.lineTo(-40, 28); g.moveTo(0, -12); g.lineTo(-40, -28); });
+  g.restore();
+}
+const CFG = {
+  lie:   {n: "ЛЁЖА (стоянка)", pose: 0, step: 0, blades: true, stern: false, crests: "90°", keel: "поднят", pods: "внутри"},
+  erect: {n: "ПОДЪЁМ, шаг 3", pose: 30, step: 3, blades: true, stern: false, crests: "убраны", keel: "поднят", pods: "помогают"},
+  stella:{n: "СТЕЛЛА 72°", pose: 72, step: 4, blades: true, stern: true, crests: "убраны", keel: "поднят", pods: "помогают"},
+  stand: {n: "СТОЯ НА КОРМЕ", pose: 90, step: 6, blades: false, stern: true, crests: "убраны", keel: "поднят", pods: "внутри"},
+  atmo:  {n: "ПОЛЁТ В АТМОСФЕРЕ", pose: 0, step: -1, blades: false, stern: false, crests: "30°", keel: "поднят", pods: "выпущены"},
+  ana:   {n: "АНАМЕЗОННЫЙ", pose: 0, step: -1, blades: false, stern: false, crests: "СЛОЖЕНЫ", keel: "ОПУЩЕН", pods: "внутри"},
+};
+let cfg = "lie";
+// the pages: each draws the whole screen (w, h)
+let rScr = [];
+const PG = {
+  flight: {n: "ПОЛЁТ", f(g, w, h) { ribbon(g, w, "ПОЛЁТ", [["ОРБИТА", C], ["РСУ ВРАЩ.", G], ["АВТО: МАНЁВР 2", A]]);
+    const cx = w / 2, cy = h * .50, r = Math.min(w * .17, h * .3);
+    g.save(); g.beginPath(); g.arc(cx, cy, r, 0, 6.3); g.clip(); g.fillStyle = "#0b2a3c"; g.fillRect(cx - r, cy - r, 2 * r, 2 * r); g.translate(cx, cy); g.rotate(-.08); g.fillStyle = "#2a2014"; g.fillRect(-2 * r, r * .1, 4 * r, 2 * r);
+    g.strokeStyle = "rgba(232,238,244,.7)"; g.lineWidth = 2; for (let k = -3; k <= 3; k++) if (k) { g.beginPath(); g.moveTo(-r * .3, r * .1 - k * r * .22); g.lineTo(r * .3, r * .1 - k * r * .22); g.stroke(); } g.restore();
+    glow(g, C, 4); g.beginPath(); g.arc(cx, cy, r, 0, 6.3); g.stroke(); noglow(g);
+    glow(g, A, 7); g.beginPath(); g.moveTo(cx - r * .6, cy); g.lineTo(cx - r * .18, cy); g.moveTo(cx + r * .18, cy); g.lineTo(cx + r * .6, cy); g.stroke(); noglow(g);
+    glow(g, G, 4); g.beginPath(); g.arc(cx + r * .2, cy - r * .3, 13, 0, 6.3); g.stroke(); noglow(g); T(g, "вектор скорости", cx + r * .2 + 22, cy - r * .3 + 6, G, 18);
+    ring(g, w * .17, cy, r * .72, .62, null, C, "СКОРОСТЬ", "7,81"); T(g, "км/с", w * .17, cy + r * .95, D, 20, false, "center");
+    ring(g, w * .83, cy, r * .72, .4, null, C, "ВЫСОТА", "212"); T(g, "км · Vy +0,2", w * .83, cy + r * .95, D, 20, false, "center");
+    nextCard(g, 20, h - 104, w - 40, 88, "СЛЕДУЮЩЕЕ · прогноз: g 0,4 · 18 с", "манёвр 2: Δv 42,6 м/с через 12:40", "ИСПОЛНИТЬ"); }},
+  engines: {n: "ДВИГАТЕЛИ", f(g, w, h) { ribbon(g, w, "ДВИГАТЕЛИ · планетарные", [["ЖЕЛЕЗО", C], ["УВТ АВТО", G]], [0, 1, 0]);
+    sternView(g, w * .40, h * .48, Math.min(w * .2, h * .28), {march: .35, ana: 0, pod: .35, podDeg: 0, sel: -1});
+    ring(g, w * .84, h * .40, Math.min(w, h) * .12, .35, .40, C, "ТЯГА", "35%", .8);
+    T(g, "тяни треугольник: уставка · красная черта: предел g", w * .84, h * .62, D, 16, false, "center");
+    nextCard(g, 20, h - 104, w - 40, 88, "СОПЛА ГОНДОЛ", "0° — тяга вперёд", "90° ВНИЗ", C); }},
+  anamezon: {n: "АНАМЕЗОН", f(g, w, h) { ribbon(g, w, "АНАМЕЗОН", [["ЛОВУШКА 1", A], ["УДЕРЖАНИЕ 82%", G]], [0, 0, 1]);
+    const cx = w * .33, cy = h * .47, r = Math.min(w, h) * .22; [["ПОЛЕ", 1, G], ["ЛУЧ", 1, "#c8c8c8"], ["ПОДАЧА", .62, "#c070ff"]].forEach(([t, f, col], i) => { const rr = r * (1 - i * .27); g.strokeStyle = "#16303d"; g.lineWidth = r * .14; g.beginPath(); g.arc(cx, cy, rr, 0, 6.3); g.stroke(); glow(g, col, r * .14); g.beginPath(); g.arc(cx, cy, rr, -Math.PI / 2, -Math.PI / 2 + f * 6.283); g.stroke(); noglow(g); T(g, t, cx + rr + 18, cy - rr + 30 + i * 6, col, 20, true); });
+    T(g, "62%", cx, cy + 14, W, 46, true, "center");
+    for (let i = 0; i < 4; i++) { const x = w * .66 + i * w * .075, y0 = h * .22, hh = h * .45, f = .92 - .12 * i; g.strokeStyle = i === 0 ? A : "#2a4a5a"; g.lineWidth = 3; g.strokeRect(x, y0, w * .05, hh); g.fillStyle = A + "aa"; g.fillRect(x + 3, y0 + hh * (1 - f), w * .05 - 6, hh * f - 3); T(g, String(i + 1), x + w * .025, y0 + hh + 30, i === 0 ? A : D, 22, true, "center"); }
+    T(g, "ловушки", w * .78, h * .19, D, 20, true, "center");
+    nextCard(g, 20, h - 104, w - 40, 88, "ПУСК · все в креслах ✓", "фаза ПОДАЧА · g 1,9 из 3,0", "СТОП", Rd); }},
+  mech: {n: "МЕХАНИЗАЦИЯ", f(g, w, h) { const c = CFG[cfg]; ribbon(g, w, "МЕХАНИЗАЦИЯ", [[c.n, A]], [1, 0, 0]);
+    sideView(g, w * .12, h * .62, w * .5, c);
+    const cx = w * .82, cy = h * .45, r = Math.min(w, h) * .15; for (let i = 0; i <= 6; i++) { const a = Math.PI * (.75 + 1.5 * i / 6); g.fillStyle = c.step >= i && c.step >= 0 ? G : "#24414f"; g.beginPath(); g.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 13, 0, 6.3); g.fill(); T(g, String(i), cx + Math.cos(a) * (r + 30), cy + Math.sin(a) * (r + 30) + 8, D, 18, true, "center"); }
+    T(g, c.step >= 0 ? "шаг " + c.step : "—", cx, cy + 10, W, 34, true, "center"); T(g, "подъём", cx, cy + 44, D, 18, false, "center");
+    [["гребни", c.crests], ["киль", c.keel], ["гондолы", c.pods]].forEach(([a, b], i) => T(g, a + ": " + b, w * .06, h * .22 + i * 32, b === "ОПУЩЕН" || b === "СЛОЖЕНЫ" ? A : W, 22, true));
+    nextCard(g, 20, h - 104, w - 40, 88, "СЛЕДУЮЩЕЕ · нагрузка лопастей 61%", c.step >= 0 && c.step < 6 ? "подъём: шаг " + (c.step + 1) : "конфигурация готова", c.step >= 0 && c.step < 6 ? "ДАЛЕЕ ▶" : "ОК"); }},
+  maneuver: {n: "МАНЁВР", f(g, w, h) { ribbon(g, w, "МАНЁВР", [["2 ИЗ 3", A], ["Δv ОСТ. 3,9 км/с", G]], [0, 1, 0]);
+    const cx = w * .36, cy = h * .48, r = Math.min(w, h) * .14; g.fillStyle = "#1c4a78"; g.beginPath(); g.arc(cx, cy, r * .5, 0, 6.3); g.fill();
+    glow(g, G, 3); g.beginPath(); g.ellipse(cx, cy, r * 1.3, r, 0, 0, 6.3); g.stroke(); glow(g, A, 3); g.setLineDash([12, 8]); g.beginPath(); g.ellipse(cx + r * .9, cy, r * 2.2, r * 1.5, .1, Math.PI * .9, Math.PI * 2.1); g.stroke(); g.setLineDash([]); noglow(g);
+    g.fillStyle = Rd; g.beginPath(); g.arc(cx + r * 1.3, cy, 12, 0, 6.3); g.fill(); T(g, "импульс", cx + r * 1.3 + 18, cy - 14, Rd, 20, true);
+    const ax = w * .8, ay = h * .44, ar = Math.min(w, h) * .13; g.strokeStyle = "#2a4a5a"; g.lineWidth = 3; g.beginPath(); g.arc(ax, ay, ar, 0, 6.3); g.moveTo(ax - ar, ay); g.lineTo(ax + ar, ay); g.moveTo(ax, ay - ar); g.lineTo(ax, ay + ar); g.stroke();
+    glow(g, A, 5); g.beginPath(); g.arc(ax + ar * .25, ay - ar * .1, 14, 0, 6.3); g.stroke(); noglow(g); T(g, "наведи метку в центр", ax, ay + ar + 34, D, 18, false, "center");
+    nextCard(g, 20, h - 104, w - 40, 88, "ЧЕРЕЗ 00:12:40 · прогноз: железо −3,1 т", "Δv 42,6 м/с · 18 с · гондолы 35%", "АВТО"); }},
+  orbit: {n: "ОРБИТА", f(g, w, h) { ribbon(g, w, "ОРБИТА", [["Ap 418", C], ["Pe 206", C], ["i 51,6°", C]], [1, 0, 0]);
+    const cx = w * .45, cy = h * .5, r = Math.min(w, h) * .14; g.fillStyle = "#1c4a78"; g.beginPath(); g.arc(cx, cy, r * .55, 0, 6.3); g.fill();
+    glow(g, G, 4); g.beginPath(); g.ellipse(cx + r * .25, cy, r * 1.6, r * 1.2, 0, 0, 6.3); g.stroke(); noglow(g); g.fillStyle = W; g.beginPath(); g.arc(cx + r * 1.85, cy, 10, 0, 6.3); g.fill(); T(g, "корабль", cx + r * 1.85 + 16, cy + 6, W, 20);
+    T(g, "Ap 418 км", cx + r * .25, cy - r * 1.3, C, 22, true, "center"); T(g, "Pe 206 км", cx + r * .25, cy + r * 1.3 + 22, C, 22, true, "center");
+    nextCard(g, 20, h - 104, w - 40, 88, "ЦЕЛЬ", "Луна · окно через 1 ч 06 мин", "РАСЧЁТ", C); }},
+  power: {n: "ЭНЕРГИЯ", f(g, w, h) { ribbon(g, w, "ЭНЕРГИЯ", [["41 МВт", C], ["НОРМА", G]], [1, 0, 0]);
+    const cx = w * .26, cy = h * .48, r = Math.min(w, h) * .12; glow(g, C, 4); g.beginPath(); g.arc(cx, cy, r, 0, 6.3); g.stroke(); noglow(g); T(g, "РЕАКТОР", cx, cy + 8, W, 22, true, "center");
+    [["двигатели", .55, C], ["удержание", .2, A], ["компенсатор", .12, G], ["жизнь", .06, G], ["экраны", .03, G]].forEach(([t, f, col], i) => { const y = h * .2 + i * h * .12, x1 = w * .62;
+      glow(g, col, 4 + f * 30); g.beginPath(); g.moveTo(cx + r, cy); g.bezierCurveTo(w * .45, cy, w * .45, y, x1, y); g.stroke(); noglow(g); T(g, t + " " + Math.round(f * 100) + "%", x1 + 14, y + 8, col, 22, true); });
+    nextCard(g, 20, h - 104, w - 40, 88, "НАКОПИТЕЛЬ", "71 МДж · ион. заряды 86%", "ПОДРОБНО", C); }},
+  life: {n: "ЖИЗНЬ · ЭКИПАЖ", f(g, w, h) { ribbon(g, w, "ЖИЗНЬ · ЭКИПАЖ", [["14 на борту", C], ["11 в креслах", G]], [0, 1, 0]);
+    const cx = w * .3, cy = h * .48, r = Math.min(w, h) * .2; for (let i = 0; i < 14; i++) { const a = -Math.PI / 2 + i / 14 * 6.283; g.fillStyle = i < 11 ? G : i < 13 ? C : A; g.beginPath(); g.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 13, 0, 6.3); g.fill(); }
+    T(g, "в креслах · спят · на ходу", cx, cy + 8, D, 18, false, "center");
+    ring(g, w * .72, h * .30, Math.min(w, h) * .09, .209, null, G, "O2", "20,9"); ring(g, w * .72, h * .62, Math.min(w, h) * .09, .3, null, G, "доза", "0,3", .7);
+    nextCard(g, 20, h - 104, w - 40, 88, "КОМПЕНСАТОР", "гасит 1,9 g · 1 человек на ходу", "ВСЕМ В КРЕСЛА", A); }},
+  hull: {n: "КОРПУС", f(g, w, h) { ribbon(g, w, "КОРПУС", [["зона 3: 610 K", A]], [0, 0, 1]);
+    const c = CFG[cfg]; sideView(g, w * .12, h * .5, w * .6, {...c, pose: 0}); g.fillStyle = A + "88"; g.beginPath(); g.arc(w * .12 + w * .6 * .33, h * .5 + 30, 26, 0, 6.3); g.fill();
+    nextCard(g, 20, h - 104, w - 40, 88, "НАГРЕВ", "кромка лопасти 610 K из 1100", "ПОДРОБНО", C); }},
+  attitude: {n: "ПОЛОЖЕНИЕ", f(g, w, h) { ribbon(g, w, "ПОЛОЖЕНИЕ", [["РСУ ВРАЩ.", G], ["ДЕРЖАТЬ: ПРОГРАД", A]], [1, 0, 0]);
+    const r = Math.min(w * .1, h * .2), cy = h * .44;
+    [["ТАНГАЖ", .55, .55, "+4,0°"], ["КРЕН", .5, .5, "0,0°"], ["РЫСКАНИЕ", .46, .5, "−1,2°"]].forEach(([t, f, set, v], i) => ring(g, w * (.16 + i * .22), cy, r, f, set, i === 2 ? A : C, t, v, null));
+    const sx = w * .84, sy = cy; g.save(); g.translate(sx, sy); g.rotate(-.06); glow(g, C, 3); g.beginPath(); g.moveTo(-r * 1.1, -r * .22); g.quadraticCurveTo(0, -r * .5, r * 1.1, -r * .08); g.lineTo(r * 1.35, 0); g.lineTo(r * 1.1, r * .08); g.quadraticCurveTo(0, r * .3, -r * 1.1, r * .22); g.closePath(); g.stroke(); noglow(g);
+    glow(g, G, 3); g.beginPath(); g.arc(0, 0, r * .9, -2.6, -.6); g.stroke(); noglow(g); g.restore(); T(g, "угл. скор. 0,02°/с", sx, sy + r + 26, D, 18, false, "center");
+    nextCard(g, 20, h - 104, w - 40, 88, "СЛЕДУЮЩЕЕ · манёвр 2 через 12:40", "развернуть на импульс: 38° · 46 с", "РАЗВЕРНУТЬ"); }},
+  stars: {n: "КАРТА 50 СВ. Л.", f(g, w, h) { ribbon(g, w, "КАРТА 50 СВ. ЛЕТ", [["цель: звезда Т", A]], [0, 0, 1]);
+    let s = 5; const r = () => (s = (s * 9301 + 49297) % 233280) / 233280; for (let i = 0; i < 160; i++) { g.fillStyle = `rgba(159,230,255,${.3 + r() * .7})`; g.fillRect(20 + r() * (w - 40), 70 + r() * (h - 200), 4, 4); }
+    glow(g, A, 4); g.beginPath(); g.moveTo(w * .3, h * .6); g.lineTo(w * .66, h * .32); g.stroke(); noglow(g);
+    nextCard(g, 20, h - 104, w - 40, 88, "МЕЖЗВЁЗДНЫЙ", "8,6 св. л. · Земля 10,3 г · корабль 5,7 г", "ПРОФИЛЬ"); }},
+};
+PG.mainscr = {n: "ГЛАВНЫЙ ЭКРАН", f(g, w, h) { ribbon(g, w, "ГЛАВНЫЙ ЭКРАН", [["HUD " + (hudOn ? "ВКЛ" : "ВЫКЛ"), hudOn ? G : D]]);
+    // the U screen in plan: five zones, each with its source; touch a zone, then a source
+    const cx = w / 2, cy = h * .58, R = Math.min(w * .42, h * .42); const zones = [["назад", -100, -58], ["обзор", -56, -20], ["КУРС", -18, 18], ["обзор", 20, 56], ["телескоп", 58, 100]];
+    zones.forEach(([t, a0, a1], i) => { const s0 = (a0 - 90) * Math.PI / 180, s1 = (a1 - 90) * Math.PI / 180; g.strokeStyle = i === 2 ? A : C; g.lineWidth = 16; g.beginPath(); g.arc(cx, cy, R, s0, s1); g.stroke();
+      const m = ((a0 + a1) / 2 - 90) * Math.PI / 180; T(g, t, cx + Math.cos(m) * (R - 44), cy + Math.sin(m) * (R - 44) + 8, i === 2 ? A : W, 20, true, "center"); });
+    g.fillStyle = W; g.beginPath(); g.arc(cx, cy, 8, 0, 6.3); g.fill(); T(g, "кресло", cx, cy + 32, D, 16, false, "center");
+    const src = ["КУРС", "ВПЕРЁД", "НАЗАД", "ВНИЗ", "ТЕЛЕСКОП", "КАРТА 50 СВ.Л."], ov = [["HUD", hudOn], ["ЛИНИЯ КУРСА", 1], ["ЦЕЛИ", 1], ["СЕТКА", 0], ["ФИЛЬТР «ЗЕМНОЙ»", 1]];
+    src.forEach((t, i) => { const x = 14 + i * ((w - 28) / 6); g.strokeStyle = i === 0 ? A : "#2a4a5a"; g.lineWidth = 2; g.strokeRect(x, 70, (w - 28) / 6 - 8, 40); T(g, t, x + ((w - 28) / 6 - 8) / 2, 97, i === 0 ? A : W, 15, true, "center"); });
+    ov.forEach(([t, on], i) => { const x = 14 + i * ((w - 28) / 5); g.fillStyle = on ? "#14402c" : "#0c141a"; g.fillRect(x, h - 56, (w - 28) / 5 - 8, 42); g.strokeStyle = on ? G : "#2a4a5a"; g.strokeRect(x, h - 56, (w - 28) / 5 - 8, 42); T(g, t, x + ((w - 28) / 5 - 8) / 2, h - 28, on ? "#c8ffd8" : D, 15, true, "center"); }); }};
+const WS = {
+  "ВЗЛЁТ": {SL: "engines", SR: "flight", RL: "mech", RR: "power"}, "ОРБИТА": {SL: "engines", SR: "orbit", RL: "power", RR: "life"},
+  "МАНЁВР": {SL: "engines", SR: "maneuver", RL: "power", RR: "life"}, "РАЗГОН": {SL: "anamezon", SR: "stars", RL: "power", RR: "life"},
+  "ПОСАДКА": {SL: "engines", SR: "maneuver", RL: "mech", RR: "hull"}, "ПОСТАНОВКА": {SL: "engines", SR: "hull", RL: "mech", RR: "life"},
+};
+let ws = "МАНЁВР";
+function paintArc(m) { const c = m.userData.canvas, g = c.getContext("2d"), half = c.width / 2; g.fillStyle = BG; g.fillRect(0, 0, c.width, c.height);
+  m.userData.keys.forEach((k, i) => { const o = document.createElement("canvas"); o.width = half - 12; o.height = c.height; const og = o.getContext("2d"); og.fillStyle = BG; og.fillRect(0, 0, o.width, o.height); PG[WS[ws][k]].f(og, o.width, o.height); g.drawImage(o, i * half + (i ? 6 : 0), 0); });
+  g.fillStyle = "#1d3a48"; g.fillRect(half - 3, 0, 6, c.height); m.material.map.needsUpdate = true; }
+function paintScreen(m, key) { const c = m.userData.canvas, g = c.getContext("2d"); g.fillStyle = BG; g.fillRect(0, 0, c.width, c.height); PG[key].f(g, c.width, c.height); m.material.map.needsUpdate = true; }
+
+// ================================================================ ONE CONSOLE: one body, one section, one light line - from the left end through the commander's bay to the right end
+const P3 = (a, r, y) => { const t = a * Math.PI / 180; return new THREE.Vector3(-Math.sin(t) * r, y, Math.cos(t) * r); };   // in a place's frame (eye axis at x = z = 0)
+const CMD = new THREE.Vector3(0, 0, .75);                                                                                       // the commander's seat axis
+const PHI = (1 + Math.sqrt(5)) / 2;
+function seat(g) { const st = new THREE.Group(); st.position.set(0, 0, -.02); g.add(st);
+  for (const s of [-1, 1]) box(.05, .03, 1.5, M.rail, s * .2, .015, -.6, g);
+  cyl(.1, .14, .32, M.metal, 0, .16, 0, st); box(.52, .09, .5, M.seat, 0, .42, .06, st); box(.46, .04, .44, M.cush, 0, .48, .06, st);
+  { const b = box(.5, .74, .1, M.seat, 0, .86, -.22, st); b.rotation.x = -.26; box(.2, .16, .08, M.seat, 0, 1.18, -.3, st); }
+  for (const s of [-1, 1]) box(.07, .05, .3, M.seat, s * .29, .6, .02, st);
+  cyl(.03, .035, .03, M.metal, .29, .64, .18, st, 14); const kn = new THREE.Mesh(new THREE.SphereGeometry(.022, 14, 10), mat(0x2a2d33)); kn.position.set(.29, .71, .18); st.add(kn);
+  [-.27, -.31].forEach(x => { const l = cyl(.006, .006, .07, M.metal, x, .68, .13, st, 8); l.rotation.x = -.3; }); }
+function btn(g, x, y, w, h, t, lit, col = G) { g.fillStyle = "#0b0c0e"; g.fillRect(x + 4, y + 6, w, h); g.fillStyle = "#2b2f36"; g.fillRect(x, y, w, h); g.fillStyle = "#454b55"; g.fillRect(x, y, w, 5);
+  g.fillStyle = lit ? col : "#203028"; g.fillRect(x + 10, y + 12, w - 20, 8); T(g, t, x + w / 2, y + h - 16, "#d8dde4", Math.min(26, h * .32), true, "center"); }
+const consoleGroup = new THREE.Group(); room.add(consoleGroup);
+const K = new THREE.Group(); K.position.copy(CMD); room.add(K); seat(K);
+let PLs = null, PRs = null, kScr = [];
+const folders = [];
+const sideKeys = ["RL", "SL", "SR", "RR"];
+// the commander's bay (left half, from the front centre round his left side): angle from his front, inner-edge radius, face top H, shelf depth D
+const BAY = [[0, .52, 1.16, .18, .16], [-14, .52, 1.15, .18, .16], [-28, .52, 1.10, .17, .16], [-40, .53, 1.01, .16, .16], [-52, .57, .95, .18, .12]];   // angle, radius, H, shelf D, top width
+// the plan of the rest of the console (left half, world x, z, H, D) and the crew seat (x, z, facing x, z) - the four variants
+const VARS = {
+  wave: {n: "1 · Волна", d: "Одна волна: ниша командира — самая глубокая бухта пульта, ниши экипажа — две мелкие, по бокам. Места в одну линию; переход между ними низкий (0,95 м), не закрывает командиру боковые зоны экрана.",
+    pts: [[.95, 1.02, .95, .30], [1.55, 1.08, 1.05, .30], [2.2, 1.08, 1.16, .30], [2.85, 1.0, 1.16, .30], [3.3, .6, 1.1, .30], [3.45, .0, 1.05, .30]], seat: [2.2, .30, 0, 1]},
+  crescent: {n: "2 · Полумесяц φ — ВЫБРАН", d: "Пульт идёт по золотому эллипсу (полуоси 3,20 и 1,98 м, отношение 1,618): ниша командира в вершине, экипаж на боковых дугах, развёрнут к центру экрана.",
+    pts: (() => { const a = 3.2, b = 3.2 / PHI, cz = -.2, r = []; [30, 40, 50, 60, 70, 80].forEach(t => { const th = t * Math.PI / 180, h = t < 40 ? .95 : t < 72 ? 1.16 : 1.08; r.push([a * Math.sin(th), cz + b * Math.cos(th), h, .30]); }); return r; })(),
+    seat: (() => { const a = 3.2, b = 3.2 / PHI, th = 52 * Math.PI / 180, x = a * Math.sin(th), z = -.2 + b * Math.cos(th), n = new THREE.Vector2(x / (a * a), (z + .2) / (b * b)).normalize(); return [x - n.x * .78, z - n.y * .78, n.x, n.y]; })()},
+  gull: {n: "3 · Чайка", d: "От ниши командира пульт уходит назад двумя крыльями под углом arctg(1/φ) = 31,7°. Командир — вершина, экипаж на крыльях, развёрнут к центру.",
+    pts: (() => { const dx = Math.cos(31.7 * Math.PI / 180), dz = -Math.sin(31.7 * Math.PI / 180), r = [[.95, .78, .95, .30]]; [.6, 1.2, 1.8, 2.4].forEach((s, i) => r.push([.95 + dx * s, .78 + dz * s, i === 0 ? 1.05 : 1.16, .30])); return r; })(),
+    seat: (() => { const dx = .851, dz = -.526, s = 1.5, x = .95 + dx * s, z = .78 + dz * s; return [x + dz * .78, z - dx * .78, -dz, dx]; })()},
+  forward: {n: "4 · Клин вперёд", d: "Ниши экипажа вынесены вперёд на 1/φ шага между местами: командир сзади-по центру видит и экипаж, и экран; переход от его ниши вперёд к экипажу — одна линия.",
+    pts: [[.95, 1.2, .95, .30], [1.45, 1.65, 1.0, .30], [2.05, 1.9, 1.16, .30], [2.7, 1.85, 1.16, .30], [3.2, 1.45, 1.1, .30], [3.45, .9, 1.05, .30]], seat: [2.05, 1.12, 0, 1]},
+};
+let variant = "crescent";
+function buildConsole(key) {
+  variant = key; const v = VARS[key];
+  while (consoleGroup.children.length) consoleGroup.remove(consoleGroup.children[0]);
+  folders.length = 0;
+  // the control points along the whole console, right end -> commander's bay -> left end
+  const bayL = BAY.map(([a, r, H, D, Tw]) => { const p = P3(a, r, 0).add(CMD); return [p.x, p.z, H, D, Tw]; });
+  // the junction from the bay to the crew arc: a shallow, narrow piece (the body may not fold over itself in the turn)
+  const e = bayL[bayL.length - 1], f = v.pts[0], j = [(e[0] + f[0]) / 2 + .08, (e[1] + f[1]) / 2 + .06, .95, .08, .06];
+  const left = bayL.concat([j], v.pts.map((q, k) => [q[0], q[1], q[2], q[3], k === 0 ? .14 : .42]));
+  const right = left.map(([x, z, H, D, Tw]) => [-x, z, H, D, Tw]);
+  const ctrl = right.slice(1).reverse().concat(left);                                    // (the front centre once)
+  const curve = new THREE.CatmullRomCurve3(ctrl.map(c => new THREE.Vector3(c[0], 0, c[1])), false, "centripetal", .5);
+  const N = 260, P = curve.getSpacedPoints(N), Tg = P.map((_, i) => curve.getTangentAt(i / N));
+  // H and D at every sample: blended from the nearest control points (inverse distance)
+  const attr = P.map(p => { let wsum = 0, H = 0, D = 0, Tw = 0; ctrl.forEach(c => { const d = Math.hypot(p.x - c[0], p.z - c[1]), w = 1 / Math.pow(d + .02, 3); wsum += w; H += w * c[2]; D += w * c[3]; Tw += w * c[4]; }); return [H / wsum, D / wsum, Tw / wsum]; });
+  // people side: one consistent side of the tangent (the commander is on it at the front centre)
+  const n0 = new THREE.Vector3(-Tg[N / 2].z, 0, Tg[N / 2].x), sgn = n0.dot(CMD.clone().sub(P[N / 2])) > 0 ? 1 : -1;
+  const Nn = Tg.map(t => new THREE.Vector3(-t.z * sgn, 0, t.x * sgn));
+  const prof = i => { const [H, D, Tw] = attr[i]; return [[0, 0], [0, .70], [D, .72], [D + .18, H], [D + .18 + Tw, H], [D + .18 + Tw, 0]]; };
+  const pt = (i, d, y) => P[i].clone().addScaledVector(Nn[i], -d).setY(y);
+  const mats = [M.body, M.top, M.body, M.top, M.body];
+  for (let k = 0; k < 5; k++) { const pos = [], idx = [];
+    for (let i = 0; i <= N; i++) { const pr = prof(i), a = pt(i, ...pr[k]), b = pt(i, ...pr[k + 1]); pos.push(a.x, a.y, a.z, b.x, b.y, b.z); if (i < N) { const q = 2 * i; idx.push(q, q + 2, q + 1, q + 1, q + 2, q + 3); } }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals(); consoleGroup.add(new THREE.Mesh(geo, dbl(mats[k]))); }
+  for (const i of [0, N]) { const ring = prof(i).map(q => pt(i, ...q)), c = ring.reduce((s, q) => s.add(q), new THREE.Vector3()).multiplyScalar(1 / ring.length), pos = [];
+    ring.forEach((q, k) => { const r2 = ring[(k + 1) % ring.length]; pos.push(c.x, c.y, c.z, q.x, q.y, q.z, r2.x, r2.y, r2.z); });
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals(); consoleGroup.add(new THREE.Mesh(geo, dbl(M.body))); }
+  const lp = []; for (let i = 0; i <= N; i++) lp.push(pt(i, 0, .705).addScaledVector(Nn[i], .004)); consoleGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(lp), new THREE.LineBasicMaterial({color: 0x2f8fb0})));
+  const lp2 = []; for (let i = 0; i <= N; i++) lp2.push(pt(i, attr[i][1] + .18, attr[i][0] + .004)); consoleGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(lp2), new THREE.LineBasicMaterial({color: 0x1d5a70})));
+  const nearest = (x, z) => { let b = 0, d = 1e9; P.forEach((p, i) => { const q = Math.hypot(p.x - x, p.z - z); if (q < d) { d = q; b = i; } }); return b; };
+  // a screen laid on the raked face at sample i (width w; fills the face height), or a panel on the shelf
+  const onFace = (i, w, drawKey, cw = 1024) => { const a = pt(i, attr[i][1], .72), b = pt(i, attr[i][1] + .18, attr[i][0]), up = b.clone().sub(a), len = up.length(); up.normalize();
+    const n = new THREE.Vector3().crossVectors(Tg[i], up).normalize(); if (n.dot(Nn[i]) < 0) n.negate(); const right = new THREE.Vector3().crossVectors(up, n).normalize(), h = len * .94;
+    const c = document.createElement("canvas"); c.width = cw; c.height = Math.round(cw * h / w); const tex = new THREE.CanvasTexture(c); tex.anisotropy = 8;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({map: tex, side: THREE.DoubleSide})); m.userData.canvas = c;
+    const Rc = Math.hypot(P[i].x - CMD.x, P[i].z - CMD.z), sag = Rc < 1.6 ? w * w / (8 * Rc) : 0;   // a flat screen on a face concave round the commander: bring it forward by the sagitta
+    m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, n)); m.position.copy(a.clone().add(b).multiplyScalar(.5).addScaledVector(n, .006 + sag)); consoleGroup.add(m);
+    const g = c.getContext("2d"); g.fillStyle = BG; g.fillRect(0, 0, c.width, c.height); drawKey(g, c.width, c.height); tex.needsUpdate = true; return m; };
+  const onShelf = (i, w, draw) => { const d = attr[i][1]; if (d < .15) return; const s0 = pt(i, .02, .723), s1 = pt(i, d - .02, .723), sc = s0.clone().add(s1).multiplyScalar(.5), sd = s1.clone().sub(s0).normalize();
+    const c = document.createElement("canvas"); c.width = 1024; c.height = Math.round(1024 * (d - .04) / w); const g = c.getContext("2d"); g.fillStyle = "#16181c"; g.fillRect(0, 0, c.width, c.height); draw(g, c.width, c.height);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d - .04), new THREE.MeshStandardMaterial({map: new THREE.CanvasTexture(c), roughness: .6, side: THREE.DoubleSide}));
+    const yUp = new THREE.Vector3(0, 1, 0), right = new THREE.Vector3().crossVectors(sd, yUp).normalize(); m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(right.negate(), sd, yUp)); m.position.copy(sc); consoleGroup.add(m); return m; };
+  const at = a => { const p = P3(a, .52, 0).add(CMD); return nearest(p.x, p.z); };
+  // the commander: the crest (flight), the main-screen MFD left of it, the autopilots and the place keys right of it
+  // one concave screen over the whole face +-42 deg (it follows the face and its arched top edge): main-screen MFD | flight | manoeuvre
+  { const iL = at(-42), iR = at(42), n = Math.abs(iR - iL), st = Math.sign(iR - iL), pos = [], uv = [], idx = [];
+    const vMax = (attr[at(0)][0] - .72) * .91, fp = (i, t) => pt(i, attr[i][1] + .18 * t - .006, .72 + (attr[i][0] - .72) * t + .002);
+    for (let k = 0; k <= n; k++) { const i = iL + st * k, p = fp(i, .05), q = fp(i, .96); pos.push(p.x, p.y, p.z, q.x, q.y, q.z); uv.push(k / n, 0, k / n, (q.y - p.y) / vMax); if (k < n) { const j = 2 * k; idx.push(j, j + 2, j + 1, j + 1, j + 2, j + 3); } }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+    let len = 0; for (let k = 0; k < n; k++) len += P[iL + st * k].distanceTo(P[iL + st * (k + 1)]);
+    const hh = .91 * Math.hypot(.18, attr[at(0)][0] - .72), c = document.createElement("canvas"); c.width = 3072; c.height = Math.round(3072 * hh / (len * 1.2));
+    const g = c.getContext("2d"); g.fillStyle = BG; g.fillRect(0, 0, c.width, c.height);
+    // the face is lower at the ends: the side pages keep their content in the lower part (the top corners are cut off by the arch)
+    const parts = [["mainscr", 0, .27, .70], ["flight", .27, .46, 1], ["maneuver", .73, .27, .70]];
+    parts.forEach(([k, x0, fw, fh]) => { const o = document.createElement("canvas"); o.width = Math.round(c.width * fw) - 12; o.height = Math.round(c.height * fh); const og = o.getContext("2d"); og.fillStyle = BG; og.fillRect(0, 0, o.width, o.height); PG[k].f(og, o.width, o.height); g.drawImage(o, Math.round(c.width * x0) + 6, c.height - o.height); });
+    g.fillStyle = "#1d3a48"; [.27, .73].forEach(x => g.fillRect(c.width * x - 3, 0, 6, c.height));
+    const tex = new THREE.CanvasTexture(c); tex.anisotropy = 8; consoleGroup.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({map: tex, side: THREE.DoubleSide}))); }
+  // the attitude keys on the shelf in front of the screen (+-30 deg): one row, the autopilots of Orbiter and the hold modes
+  { const iL = at(-30), iR = at(30), n = Math.abs(iR - iL), st = Math.sign(iR - iL), pos = [], uv = [], idx = [];
+    for (let k = 0; k <= n; k++) { const i = iL + st * k, p = pt(i, .02, .723), q = pt(i, attr[i][1] - .02, .723); pos.push(p.x, p.y, p.z, q.x, q.y, q.z); uv.push(k / n, 0, k / n, 1); if (k < n) { const j = 2 * k; idx.push(j, j + 2, j + 1, j + 1, j + 2, j + 3); } }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+    const c = document.createElement("canvas"); c.width = 2400; c.height = 300; const g = c.getContext("2d"); g.fillStyle = "#16181c"; g.fillRect(0, 0, c.width, c.height);
+    const keys = [["СТОП ВРАЩ.", A], ["ГОРИЗОНТ", G], ["ПРОГРАД", G, 1], ["РЕТРОГРАД", G], ["НОРМ +", G], ["НОРМ −", G], ["РАДИАЛ +", G], ["РАДИАЛ −", G], ["ВЫСОТА", G], ["НА ИМПУЛЬС", C], ["РУЧН.", W]];
+    T(g, "ОРИЕНТАЦИЯ · АВТОПИЛОТЫ", 1200, 44, C, 30, true, "center");
+    keys.forEach(([t, col, lit], k) => btn(g, 20 + k * 214, 70, 200, 200, t, !!lit, col));
+    const tex = new THREE.CanvasTexture(c); tex.anisotropy = 8; consoleGroup.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({map: tex, roughness: .6, side: THREE.DoubleSide}))); }
+  // his shelves (part of the same body): left - the mechanisation buttons and the check display; right - calculator, comm
+  // his wings: the same body and section, an arc round his eye (inner edge 0.46 m, 46..112 deg); the button shelf under the monitor
+  const wing = (side, draw) => {
+    const N2 = 40, A0 = side * 46, A1 = side * 112, r0 = .46, D = .30, Hw = .95, Tw = .14;
+    const RB = .12, prof2 = [[0, 0], [0, .70], [D, .72], [D + RB, Hw], [D + RB + Tw, Hw], [D + RB + Tw, 0]];
+    const pt2 = (a, d, y) => P3(a, r0 + d, y).add(CMD);
+    const mats2 = [M.body, M.top, M.body, M.top, M.body];
+    for (let k = 0; k < 5; k++) { const pos = [], idx = [];
+      for (let i = 0; i <= N2; i++) { const a = A0 + (A1 - A0) * i / N2, p = pt2(a, ...prof2[k]), q = pt2(a, ...prof2[k + 1]); pos.push(p.x, p.y, p.z, q.x, q.y, q.z); if (i < N2) { const j = 2 * i; idx.push(j, j + 2, j + 1, j + 1, j + 2, j + 3); } }
+      const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals(); consoleGroup.add(new THREE.Mesh(geo, dbl(mats2[k]))); }
+    { const ring = prof2.map(q => pt2(A1, ...q)), c = ring.reduce((s2, q) => s2.add(q), new THREE.Vector3()).multiplyScalar(1 / ring.length), pos = [];
+      ring.forEach((q, k) => { const r2 = ring[(k + 1) % ring.length]; pos.push(c.x, c.y, c.z, q.x, q.y, q.z, r2.x, r2.y, r2.z); });
+      const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals(); consoleGroup.add(new THREE.Mesh(geo, dbl(M.body))); }
+    const lp = []; for (let i = 0; i <= N2; i++) lp.push(pt2(A0 + (A1 - A0) * i / N2, -.004, .705)); consoleGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(lp), new THREE.LineBasicMaterial({color: 0x2f8fb0})));
+    // the button shelf: a sector on the shelf (texture: u along the arc from the front, v from the inner edge outward)
+    const pos = [], uv = [], idx = [], NS = 30, s0 = side * 48, s1 = side * 110;
+    for (let i = 0; i <= NS; i++) { const a = s0 + (s1 - s0) * i / NS, p = pt2(a, .015, .723), q = pt2(a, D - .015, .723); pos.push(p.x, p.y, p.z, q.x, q.y, q.z); const u = side < 0 ? 1 - i / NS : i / NS; uv.push(u, 0, u, 1); if (i < NS) { const j = 2 * i; idx.push(j, j + 2, j + 1, j + 1, j + 2, j + 3); } }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+    const c = document.createElement("canvas"); c.width = 1800; c.height = 560; const g = c.getContext("2d"); g.fillStyle = "#16181c"; g.fillRect(0, 0, 1800, 560); draw(g, 1800, 560);
+    const tex = new THREE.CanvasTexture(c); tex.anisotropy = 8; consoleGroup.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({map: tex, roughness: .6, side: THREE.DoubleSide})));
+    // the riser screens: a band on the leaning riser (t 0.07..0.95 of its height), two pages read left to right from the seat
+    { const pos = [], uv = [], idx = [], at2 = (a, t) => pt2(a, D + RB * t - .006, .72 + (Hw - .72) * t + .002);
+      for (let i = 0; i <= NS; i++) { const a = s0 + (s1 - s0) * i / NS, p = at2(a, .07), q = at2(a, .95); pos.push(p.x, p.y, p.z, q.x, q.y, q.z); const u = side < 0 ? 1 - i / NS : i / NS; uv.push(u, 0, u, 1); if (i < NS) { const j = 2 * i; idx.push(j, j + 2, j + 1, j + 1, j + 2, j + 3); } }
+      const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+      const arcLen = Math.abs(s1 - s0) * Math.PI / 180 * (r0 + D + RB / 2), hh = .88 * Math.hypot(RB, Hw - .72), c = document.createElement("canvas"); c.width = 2048; c.height = Math.round(2048 * hh / arcLen);
+      const tex = new THREE.CanvasTexture(c); tex.anisotropy = 8; const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({map: tex, side: THREE.DoubleSide})); consoleGroup.add(m);
+      const pages = side < 0 ? ["mech", "attitude"] : ["power", "anamezon"];
+      const paint = () => { const g = c.getContext("2d"), half = c.width / 2; g.fillStyle = BG; g.fillRect(0, 0, c.width, c.height);
+        pages.forEach((k, i) => { const o = document.createElement("canvas"); o.width = half - 12; o.height = c.height; const og = o.getContext("2d"); og.fillStyle = BG; og.fillRect(0, 0, o.width, o.height); PG[k].f(og, o.width, o.height); g.drawImage(o, i * half + (i ? 6 : 0), 0); });
+        g.fillStyle = "#1d3a48"; g.fillRect(half - 3, 0, 6, c.height); tex.needsUpdate = true; };
+      paint(); rScr.push(paint); }
+  };
+  // left (his left hand): the mechanisation buttons and the check display; right: the calculator and the comm keys
+  rScr = [];
+  wing(-1, (g, w, h) => { T(g, "МЕХАНИЗАЦИЯ", 30, 52, A, 36, true);
+    ["ШАССИ", "ПОДЪЁМ ◀", "ПОДЪЁМ ▶", "СТОП", "ГРЕБНИ 90/30", "СЛОЖИТЬ", "КИЛЬ", "ГОНДОЛЫ", "АНГАР", "ПОРТ", "ЛИФТ", "ПЛАТФОРМА"].forEach((t, k) => btn(g, 30 + (k % 6) * 185, 80 + Math.floor(k / 6) * 220, 165, 190, t, k === 0 || k === 10, t === "СТОП" ? Rd : G));
+    g.fillStyle = "#04120a"; g.fillRect(1180, 80, 590, 420); g.strokeStyle = "#2c5a3a"; g.lineWidth = 4; g.strokeRect(1180, 80, 590, 420);
+    T(g, "ПРОВЕРКА", 1205, 130, G, 32, true); ["шасси: лёжа ✓", "гребни 90° ✓", "люки закрыты ✓", "ветер 6 м/с ✓", "нагрузка лопастей 61%", "подъём: готов"].forEach((t, k) => T(g, t, 1205, 186 + k * 52, k === 5 ? A : G, 30)); });
+  wing(1, (g, w, h) => { T(g, "СВЯЗЬ · ЭКИПАЖ", 30, 52, C, 34, true);
+    [["ИНТЕРКОМ", 1], ["ЗЕМЛЯ", 0], ["ВСЕМ В КРЕСЛА", 0], ["ТРЕВОГА", 0], ["СВЕРНУТЬ", 0], ["СВЕТ", 0]].forEach(([t, l], k) => btn(g, 30 + (k % 3) * 250, 80 + Math.floor(k / 3) * 220, 230, 190, t, l, t === "ТРЕВОГА" ? Rd : G));
+    T(g, "КАЛЬКУЛЯТОР", 830, 52, C, 34, true); g.fillStyle = "#04120a"; g.fillRect(830, 72, 940, 90); T(g, "42,6 × 18 = 766,8", 1750, 135, G, 44, true, "right");
+    ["7", "8", "9", "÷", "√", "4", "5", "6", "×", "x²", "1", "2", "3", "−", "%", "0", ",", "=", "+", "C"].forEach((t, k) => btn(g, 830 + (k % 5) * 188, 180 + Math.floor(k / 5) * 94, 172, 84, t, false, k === 19 ? Rd : G)); });
+  // his fan: four flat screens standing on the top edge of the same body at his sides, centres at eye height, hinged at the bottom
+  kScr = [-1, 1].map(side => {
+    const a0 = side < 0 ? -108 : 52, a1 = side < 0 ? -52 : 108, mid = (a0 + a1) / 2, R0 = .90, yb = .95, h = .52;
+    const base = P3(mid, R0, yb).add(CMD), pivot = new THREE.Group(); pivot.position.copy(base); pivot.rotation.order = "YXZ"; pivot.rotation.set(0, Math.atan2(CMD.x - base.x, CMD.z - base.z), 0);
+    consoleGroup.add(pivot); pivot.updateMatrixWorld(true);
+    const N = 32, pos = [], uv = [], idx = [];
+    for (let i = 0; i <= N; i++) { const a = a0 + (a1 - a0) * i / N, lo = pivot.worldToLocal(P3(a, R0, yb).add(CMD)), hi = pivot.worldToLocal(P3(a, R0, yb + h).add(CMD));
+      pos.push(lo.x, lo.y, lo.z, hi.x, hi.y, hi.z); uv.push(i / N, 0, i / N, 1); if (i < N) { const q = 2 * i; idx.push(q, q + 2, q + 1, q + 1, q + 2, q + 3); } }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+    const arcLen = (a1 - a0) * Math.PI / 180 * R0, c = document.createElement("canvas"); c.width = 2048; c.height = Math.round(2048 * h / arcLen); const tex = new THREE.CanvasTexture(c); tex.anisotropy = 8;
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({map: tex, side: THREE.DoubleSide})); m.userData.canvas = c; m.userData.keys = side < 0 ? ["RL", "SL"] : ["SR", "RR"]; pivot.add(m);
+    // the back shell of the arc and two slim stems to the floor
+    const bp = [], bi = []; for (let i = 0; i <= N; i++) { const a = a0 + (a1 - a0) * i / N, lo = pivot.worldToLocal(P3(a, R0 + .025, yb - .01).add(CMD)), hi = pivot.worldToLocal(P3(a, R0 + .025, yb + h + .01).add(CMD)); bp.push(lo.x, lo.y, lo.z, hi.x, hi.y, hi.z); if (i < N) { const q = 2 * i; bi.push(q, q + 2, q + 1, q + 1, q + 2, q + 3); } }
+    const bg = new THREE.BufferGeometry(); bg.setAttribute("position", new THREE.Float32BufferAttribute(bp, 3)); bg.setIndex(bi); bg.computeVertexNormals(); pivot.add(new THREE.Mesh(bg, dbl(M.body)));
+    folders.push({pivot, y0: pivot.position.y}); paintArc(m); return m; });
+  // the crew: seats at their bays, screens in the face, buttons on the shelf
+  const [sx, sz, fx, fz] = v.seat;
+  const crew = (s, pages, name) => { const g = new THREE.Group(); g.position.set(s * sx, 0, sz); g.rotation.y = Math.atan2(s * fx, fz); consoleGroup.add(g); seat(g); g.updateMatrixWorld(true);
+    const front = g.localToWorld(new THREE.Vector3(0, 0, .78)), i0 = nearest(front.x, front.z);
+    [-1, 0, 1].forEach((o, k) => { const i = Math.max(0, Math.min(N, i0 + o * 13 * (s > 0 ? 1 : -1) * (sgn > 0 ? 1 : -1))); onFace(i, .5, (gg, w, h) => PG[pages[k]].f(gg, w, h)); onShelf(i, .48, (gg) => ["ВЫБОР", "ОК", "◀", "▶", "ПЕРЕДАТЬ", "ПРИНЯТЬ", "ИНТЕРКОМ", "ТРЕВОГА"].forEach((t, j) => btn(gg, 20 + (j % 4) * 250, 20 + Math.floor(j / 4) * 150, 225, 130, t, j === 0, t === "ТРЕВОГА" ? Rd : G))); });
+    pin(g, [0, 1.6, .7], 7); return g; };
+  PLs = crew(1, ["hull", "power", "anamezon"], "ИНЖЕНЕР"); PRs = crew(-1, ["maneuver", "orbit", "stars"], "НАВИГАТОР");
+  document.getElementById("varNote").textContent = v.d;
+  room.updateMatrixWorld(true);
+}
+pin(K, [0, 1.25, .86], 1); pin(K, P3(-27, .66, .95).toArray(), 2); pin(K, P3(27, .66, .95).toArray(), 2);
+pin(K, P3(-50, .9, 1.5).toArray(), 3); pin(K, P3(50, .9, 1.5).toArray(), 3); pin(K, P3(-80, .62, .76).toArray(), 4); pin(K, P3(80, .62, .76).toArray(), 5); pin(K, [0, 1.35, -.35], 6);
+
+// ================================================================ legend, controls, views
+const LEG = ["Гребень командира: страница ПОЛЁТ, вырастает из того же тела пульта (до 1,16 м, ниже глаза); над ним прорезь на внешний экран",
+  "У гребня: слева MFD ГЛАВНЫЙ ЭКРАН (что показывает каждая зона, слои HUD); справа автоматика и клавиши места",
+  "Веер командира: по одному изогнутому монитору с каждой стороны на верхней кромке крыла (дуга вокруг глаза, 0,86 м, 52…108°), две страницы рядом, центр на высоте глаза; развёрнут / свёрнут / сложен",
+  "Крыло слева (то же тело пульта под монитором): полка с кнопками механизации и проверочный дисплей; на наклонной стенке над полкой — экраны МЕХАНИЗАЦИЯ и ПОЛОЖЕНИЕ", "Крыло справа: калькулятор и связь; над полкой — экраны ЭНЕРГИЯ и АНАМЕЗОН",
+  "Кресло на рельсе: пустое стоит сзади, после посадки подъезжает", "Экипаж: ниши того же пульта, экраны встроены в наклонную стенку, кнопки на полке"];
+document.getElementById("legend").innerHTML = LEG.map(s => `<li>${s}</li>`).join("");
+{ const sel = document.getElementById("wsSel"); Object.keys(WS).forEach(n => { const o = document.createElement("option"); o.value = n; o.textContent = n; sel.appendChild(o); }); sel.value = ws;
+  sel.onchange = () => { ws = sel.value; kScr.forEach(paintArc); }; }
+{ const sel = document.getElementById("cfgSel"); Object.entries(CFG).forEach(([k, v]) => { const o = document.createElement("option"); o.value = k; o.textContent = v.n; sel.appendChild(o); }); sel.value = cfg;
+  sel.onchange = () => { cfg = sel.value; kScr.forEach(paintArc); rScr.forEach(f => f()); }; }
+let fold = 0, foldT = 0, foldState = 0;
+const FOLD = [[0, "Веер командира: развёрнут"], [1.32, "Веер: свёрнут (экраны видны, открыт главный вид)"], [1.62, "Веер: сложен"]];
+document.getElementById("fold").onclick = e => { foldState = (foldState + 1) % 3; foldT = FOLD[foldState][0]; e.target.classList.toggle("on", foldState === 0); e.target.textContent = FOLD[foldState][1]; };
+const wrap = document.getElementById("wrap"); const pinEls = [];
+let showPins = true; document.getElementById("pins").onclick = e => { showPins = !showPins; e.target.classList.toggle("on", showPins); };
+function updPins() { while (pinEls.length < pins.length) { const d = document.createElement("div"); d.className = "pin"; d.textContent = pins[pinEls.length][1]; wrap.appendChild(d); pinEls.push(d); }
+  const r = R.domElement.getBoundingClientRect(); pins.forEach(([f, n, gen], i) => { const v = f().project(cam); const el = pinEls[i]; const vis = showPins && (gen === undefined || gen === pinGen) && v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05; el.style.display = vis ? "block" : "none"; el.style.left = ((v.x + 1) / 2 * r.width) + "px"; el.style.top = ((1 - v.y) / 2 * r.height) + "px"; }); }
+const eyeOf = g => g.localToWorld(new THREE.Vector3(0, 1.2, -.02));
+const lookOf = (g, yaw, pitch) => { const y = yaw * Math.PI / 180, q = pitch * Math.PI / 180; return g.localToWorld(new THREE.Vector3(-Math.sin(y) * Math.cos(q), 1.2 + Math.sin(q), -.02 + Math.cos(y) * Math.cos(q))); };
+const VIEWS = { o60: () => [eyeOf(K), lookOf(K, 0, -6), 60], o90: () => [eyeOf(K), lookOf(K, 0, -6), 90], left: () => [eyeOf(K), lookOf(K, -70, 0), 60], right: () => [eyeOf(K), lookOf(K, 70, 0), 60],
+  shelfL: () => [eyeOf(K), lookOf(K, -62, -40), 60], shelfR: () => [eyeOf(K), lookOf(K, 62, -40), 60], pl: () => [eyeOf(PLs), lookOf(PLs, 0, -8), 70], pr: () => [eyeOf(PRs), lookOf(PRs, 0, -8), 70],
+  q: () => [new THREE.Vector3(2.6, 2.7, -2.6), new THREE.Vector3(0, .9, .9), 60], top: () => [new THREE.Vector3(0, 9.5, .3), new THREE.Vector3(0, 0, .31), 60] };
+function setView(k) { room.updateMatrixWorld(true); const [p, t, f] = VIEWS[k](); cam.fov = f; cam.updateProjectionMatrix(); cam.position.copy(p); ctl.target.copy(t); ctl.update(); shell.visible = k !== "top" && k !== "q";
+  document.querySelectorAll("[data-v]").forEach(b => b.classList.toggle("on", b.dataset.v === k)); }
+document.querySelectorAll("[data-v]").forEach(b => b.onclick = () => setView(b.dataset.v));
+function resize() { const r = host.getBoundingClientRect(); R.setSize(r.width, r.height); cam.aspect = r.width / r.height; cam.updateProjectionMatrix(); }
+addEventListener("resize", resize); resize();
+let pinGen = "crescent";
+{ const box = document.getElementById("varBtns"); Object.entries(VARS).forEach(([k, v]) => { const b = document.createElement("button"); b.className = "b" + (k === variant ? " on" : ""); b.textContent = v.n; b.style.marginRight = "6px";
+    b.onclick = () => { pinGen = k; window.__pinGen = k; buildConsole(k); fold = 0; [...box.children].forEach(c => c.classList.toggle("on", c === b)); }; box.appendChild(b); }); }
+window.__pinGen = "crescent"; buildConsole("crescent");
+document.getElementById("hud").onclick = e => { hudOn = !hudOn; e.target.classList.toggle("on", hudOn); mainScr.material.map = sky(2048, 512, true); mainScr.material.needsUpdate = true; buildConsole(variant); };
+setView("o60");
+(function loop() { requestAnimationFrame(loop); fold += (foldT - fold) * .06; folders.forEach(f => { f.pivot.rotation.x = -fold; f.pivot.position.y = f.y0 - Math.max(0, fold - 1.34) / .28 * .30; });
+  ctl.update(); R.render(scene, cam); updPins(); })();
+</script></body></html>

@@ -1,0 +1,231 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Тантра: три формы</title>
+<style>
+:root{--bg:#f4f1ea;--fg:#1d1c1a;--mut:#6b665c;--card:#fffdf8;--line:#d8d2c4;--acc:#3b6fd6;--pick:#d9efd9;--bad:#f6d9d2}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17181a;--fg:#e8e4dc;--mut:#9a9488;--card:#202226;--line:#3a3c40;--acc:#7aa2f0;--pick:#24402a;--bad:#4a2a24}}
+:root[data-theme="dark"]{--bg:#17181a;--fg:#e8e4dc;--mut:#9a9488;--card:#202226;--line:#3a3c40;--acc:#7aa2f0;--pick:#24402a;--bad:#4a2a24}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;margin:0}main{max-width:1180px;margin:0 auto;padding:16px}
+h1{font-size:21px;margin:4px 0 8px}h2{font-size:17px;margin:22px 0 6px}
+#wrap{position:relative;border-radius:10px;overflow:hidden;background:#0d0f14}#c3{width:100%;height:min(62vh,560px)}
+#legend{position:absolute;left:10px;bottom:10px;background:rgba(10,12,16,.78);color:#e8e4dc;font-size:12px;padding:8px 10px;border-radius:8px;max-width:min(330px,80%)}
+#legend i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:6px;vertical-align:-2px}
+.row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center}.row span{color:var(--mut);font-size:13px;margin-right:4px}
+.b{font:inherit;font-size:13px;padding:6px 11px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
+.b.on{border:2px solid var(--acc);padding:5px 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0;overflow-x:auto}
+table{border-collapse:collapse;font-size:13px;width:100%}td,th{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}
+.pick{background:var(--pick)}.bad{background:var(--bad)}.mut{color:var(--mut)}
+</style></head><body><main>
+<h1>«Тантра» — три перспективные формы из полного перебора</h1>
+<div id="wrap"><div id="c3"></div><div id="legend"></div></div>
+<div class="row" id="vb"><span>Форма:</span></div>
+<div class="row" id="mb"><span>Окраска:</span></div>
+<div class="row"><span>Вид:</span>
+<button class="b" data-v="q">3/4</button><button class="b" data-v="side">Сбоку</button><button class="b" data-v="top">Сверху</button>
+<button class="b" data-v="bot">Снизу</button><button class="b" data-v="front">С носа</button><button class="b" data-v="aft">С кормы</button>
+<button class="b" id="fold">Крылья: развёрнуты</button><button class="b" id="rot">Вращение</button></div>
+
+<h2>Перебор</h2>
+<div class="card"><p>Параметрическое семейство корпусов от копья через клин к скату: ширина и высота кормы, длина кормового блока,
+где кончается сужение, сечение носовой части; × крылья (размах, корень, конец, стреловидность). 1848 корпусов прошли
+компоновку (кассеты на всей длине s 8–47, ангар s 80–100, пост s 105), 2121 вариант — полёт (запас ≥ 3 % на 0° и 15°,
+гиперзвук без рулей, кромка ≤ 1800 K), 221 — фронт Парето по качеству, нагреву, массе, устойчивости и тени щита.
+«Воронка» (прямоточный Бассард) исключена: не наша тяга.</p>
+<table><tr><th>форма</th><th>корма → нос, полуширина × высота, м</th><th>крылья, м²</th><th>запас 0° / 15°</th><th>гиперзвук</th>
+<th>K дозвук</th><th>V<sub>min</sub>, м/с</th><th>β, кг/м²</th><th>кромка, K</th><th>обшивка + крылья, т</th><th>вне тени щита, м²</th></tr><tr class='mut'><td>сейчас: C-148 + гребни K0</td><td>14,6 × 24 → 9 × 17,6</td><td>419</td><td>-0.8 / -1.6 %</td><td>-2.4 %</td><td>3.17</td><td>179</td><td>1135</td><td>2003</td><td>—</td><td>—</td></tr><tr><td><b>1б-А · XR2, плавное плечо (итог)</b><br><span class='mut'>копьё: широкая часть до s 72 с ангаром s 49–71 (XR2 / DG-IV), плавное сужение s 72–115 к носу 6×12 — излом 6° вместо 18°</span></td><td>13.5 × 23 → 6 × 12</td><td>612</td><td class='pick'>+4.2 / +3.3 %</td><td>-0.5 %</td><td>3.62</td><td>173</td><td>1112</td><td>1784</td><td>150</td><td>282</td></tr><tr><td><b>1 · Копьё-оптимум</b><br><span class='mut'>узкая высокая корма (кассеты 2×2), короткий переход к тонкой носовой части; всё за щитом</span></td><td>13 × 23 → 7 × 12</td><td>864</td><td class='pick'>+9.2 / +8.0 %</td><td>+3.1 %</td><td>3.67</td><td>167</td><td>1155</td><td>1756</td><td>156</td><td>263</td></tr><tr><td><b>2 · Клин-оптимум</b><br><span class='mut'>та же корма, сужение плавное до самого носа (s 47 → 122) — без «плеча»</span></td><td>13 × 23 → 7 × 12</td><td>756</td><td class='pick'>+5.2 / +4.3 %</td><td>+0.7 %</td><td>3.69</td><td>168</td><td>1101</td><td>1756</td><td>157</td><td>263</td></tr><tr><td><b>1б · Копьё, плавное плечо</b><br><span class='mut'>рекомендация по всем нагрузкам: копьё-оптимум с переходом s 47–90 (плечо 12° вместо 18°)</span></td><td>13 × 23 → 7 × 12</td><td>756</td><td class='pick'>+7.9 / +7.0 %</td><td>+2.1 %</td><td>3.63</td><td>171</td><td>1161</td><td>1679</td><td>151</td><td>263</td></tr><tr><td><b>3 · Скат-оптимум</b><br><span class='mut'>широкая плоская корма (кассеты в ряд), несущее тело с наибольшим качеством</span></td><td>21 × 20 → 7 × 12</td><td>768</td><td class='pick'>+3.9 / +4.2 %</td><td>+5.2 %</td><td>3.75</td><td>142</td><td>927</td><td>1713</td><td>163</td><td>462</td></tr></table>
+<p class="mut">Посадочная масса 2,9 кт, ЦМ s 53 для всех (у ската с кассетами в ряд ЦМ надо пересчитать). Крылья складываются одним
+шарниром на борт; размах ограничен высотой борта.</p></div>
+<h2>Уверен ли я в копье</h2>
+<div class="card"><p><b>В принципе — да, в нынешней C-148 — нет.</b> Перебор сам выводит к копью: узкая высокая корма с кассетами 2×2
+и тонкая носовая часть дают самый лёгкий и самый устойчивый корабль с наименьшей площадью вне тени щита. Но у C-148 носовая часть
+велика (9 × 17,6 м против 7 × 12 в оптимуме): нос и плечо дают подъёмную силу далеко впереди ЦМ, поэтому ей и нужны большие
+кормовые крылья. Узкий нос снимает это почти даром.</p>
+<p><b>Активное ограничение — ангар.</b> Все оптимумы упёрлись в заданный мной минимум ангара (полуширина 7, высота 12 м). Если челнок
+и роверы требуют больше, носовая часть растёт, и запас устойчивости падает — это надо решать по реальным размерам челнока.</p>
+<p><b>Клин</b> по аэродинамике почти не отличается от копья (плечо или плавный переход — фокус почти тот же), но обшивки больше на ~20 т.
+<b>Скат</b> — лучший в атмосфере (K 3,75, посадочная 142 м/с, вход холоднее), но обшивка тяжелее, и почти вдвое больше корпуса
+вне тени щита — пыль на 0,5 c бьёт в широкие плечи.</p></div><h2>Все нагрузки задачи</h2>
+<div class="card"><p>Корпус — тонкостенная балка из УНТ-композита (1 ГПа, запас 1,5), стенка по огибающей всех случаев: прочность и
+устойчивость подкреплённой панели (Фаррар, шпангоуты через 3 м). Цифры по случаям — масса стенки, если бы действовал только он, т.</p>
+<table><tr><th>форма</th><th>лёжа гружёный, 2,5 g</th><th>подъём гружёного, 45°, 1,3 g</th><th>стоя гружёный 2,5 g + ветер 30 м/с</th><th>взлёт гружёного на планетарных, напор 20 кПа</th><th>анамезон 1 g гружёный</th><th>вход 2,5 g, посадочная масса</th><th>манёвр на дозвуке 2,5 g + порыв</th><th>посадка на корму 6 м/с</th><th>корпус по огибающей, т</th><th>корень крыла 2,5 g, МН·м</th>
+<th>угол плеча (концентрация, усталость от «ударов» двигателя)</th><th>вне тени щита (пыль 0,5 c), м²</th><th>запас устойчивости</th><th>β / кромка, K</th></tr><tr><td>C-148 сейчас + гребни</td><td>60</td><td>72</td><td>119</td><td>100</td><td>68</td><td>52</td><td>56</td><td>52</td><td><b>120</b></td><td>105</td><td>17°</td><td>348</td><td>-0.8 %</td><td>1135 / 2003</td></tr><tr><td>1 Копьё-О</td><td>56</td><td>65</td><td>112</td><td>93</td><td>60</td><td>43</td><td>49</td><td>43</td><td><b>116</b></td><td>179</td><td>18°</td><td>263</td><td>+9.2 %</td><td>1155 / 1756</td></tr><tr><td>1б Копьё, плечо s47–90</td><td>56</td><td>67</td><td>114</td><td>95</td><td>62</td><td>45</td><td>49</td><td>45</td><td><b>117</b></td><td>159</td><td>12°</td><td>263</td><td>+7.9 %</td><td>1161 / 1679</td></tr><tr><td>2 Клин-О</td><td>58</td><td>70</td><td>117</td><td>99</td><td>65</td><td>48</td><td>51</td><td>48</td><td><b>119</b></td><td>162</td><td>7°</td><td>263</td><td>+5.2 %</td><td>1101 / 1756</td></tr><tr><td>3 Скат-О</td><td>61</td><td>68</td><td>113</td><td>96</td><td>64</td><td>50</td><td>54</td><td>50</td><td><b>118</b></td><td>100</td><td>37°</td><td>462</td><td>+3.9 %</td><td>927 / 1713</td></tr></table>
+<p><b>Вывод.</b> Корпус определяют не полёт и не вход, а гружёный корабль: стоянка на тяжёлой планете (2,5 g, 43 кт на кормовом блоке)
+и взлёт на планетарных. Кормовой блок у всех форм один, поэтому массы корпуса почти равны (116–120 т) — по прочности формы не
+различаются. Решают остальные нагрузки: пыль в крейсере (копьё и клин вдвое лучше ската), усталость в плече от импульсной тяги
+(клин и плавное копьё лучше), управляющие нагрузки и порывы (копьё устойчивее всех), нагрев (скат холоднее).
+<b>Лучший компромисс — «копьё с плавным плечом» (1б):</b> корпус 117 т, запас +7,9 %, минимум площади вне тени щита, плечо 12° вместо 18°,
+самая холодная кромка (1680 K), корень крыла 159 МН·м.</p></div><h2>Проверка 1б-А: челнок, допущения, гиперзвук, субсветовая</h2>
+<div class="card"><p><b>Челнок.</b> Определяет размах XR2 (23,9 м; длина 17,8, высота 6,8 — по руководству XR) — DG-IV (17,9 × 17,9 × 4,9 по мешу)
+меньше. В узкий нос копья он не входит ни при какой разумной ширине: расширение носа под XR2 делает корабль неустойчивым (−3,3 %).
+Поэтому ангар перенесён в широкую часть сразу за кассетами (s 49–71): плоскость крыльев челнока — на уровне скулы, где корпус
+шире всего; зазор XR2 0,15 м на сторону сверх 0,6 м монтажного (DG-IV — 3 м). Створки — днище + нижние борта до скулы (размах
+шире плоского днища). Вырез в скуле — в зоне изгиба при стоянке лёжа: нужен усиленный верхний пояс (учтено как оговорка).
+Челнок в меш не рисуется — только пустой объём ангара.</p>
+<table><tr><th>допущение</th><th>запас 0° / 15°</th><th>гиперзвук (крылья развёрнуты)</th></tr>
+<tr><td>номинал (ЦМ s 51 — ангар с челноком сдвинул его на 2 м назад)</td><td>+4,8 / +4,3 %</td><td>+2,0 %</td></tr>
+<tr><td>ЦМ назад на 3 м</td><td>+2,8 / +2,2 %</td><td>−0,1 %</td></tr>
+<tr><td>ЦМ вперёд на 3 м</td><td>+6,9 / +6,4 %</td><td>+4,0 %</td></tr>
+<tr><td>фокус корпуса на 5 м вперёд (ошибка теории тонкого тела)</td><td>+3,7 / +3,4 %</td><td>+2,0 %</td></tr>
+<tr><td>поперечное обтекание слабее (C<sub>dc</sub> 0,8)</td><td>+4,8 / +4,8 %</td><td>+2,0 %</td></tr>
+<tr class="bad"><td>без интерференции крыло-корпус</td><td>+0,8 / +1,1 %</td><td>+2,0 %</td></tr>
+<tr><td>наклон C<sub>L</sub><sup>α</sup> крыла −15 %</td><td>+3,0 / +2,8 %</td><td>+2,0 %</td></tr>
+<tr class="bad"><td>всё плохое сразу</td><td>−4,8 / −3,3 %</td><td>−0,1 %</td></tr></table>
+<p>По одному допущению — устойчив всегда; при совпадении всех ошибок — нужен автомат устойчивости (как у любого современного
+аппарата) и правило загрузки «ЦМ не позади s 51». Точнее скажет только продувка — после меша.</p>
+<p><b>Гиперзвук.</b> С развёрнутыми крыльями корабль <i>слишком</i> устойчив: элевоны упираются в −40° на всех углах атаки — не
+балансируется. Решение без новых деталей — <b>вход с поднятыми на 30° крыльями</b> (тот же шарнир складывания, принцип «пера»
+SpaceShipTwo): нормальная сила кормы падает (cos³30° = 0,65), центр давления встаёт на ЦМ, балансировка элевонами ≈ 0° при
+угле атаки 30–50°, запас рулей ±25°. Поднятые крылья к тому же работают как кили, пока перо в тени корпуса. Ниже ~М 3 крылья
+опускаются — дозвуковой запас +4,8 %.</p>
+<table><tr><th>зона</th><th>расчётный вход (65 км, 6,5 км/с)</th><th>крутой (×10 плотность, 7,2 км/с)</th><th>предел</th></tr>
+<tr><td>нос, иридий R 1,8 м</td><td>1749 K</td><td class="bad">2518 K → с МГД-щитом (−35 % потока) ≈ 2270 K</td><td>2400 K</td></tr>
+<tr><td>днище</td><td>1247 K</td><td>1795 K</td><td>2200 K</td></tr>
+<tr><td>кромка крыла R 0,45, 55°</td><td>1756 K</td><td class="bad">2529 K → с тепловыми трубами ≈ 1550 K</td><td>2000 K</td></tr>
+<tr><td>кромка с тепловыми трубами</td><td>1078 K</td><td>—</td><td>2000 K</td></tr>
+<tr><td>плечо s 72–95 (наклон 25°)</td><td>1213 K</td><td>1747 K</td><td>2100 K</td></tr></table>
+<p><b>Плечо (уточнение).</b> Короткое сужение s 72–95 даёт в изломах поворот обшивки 18° и наклон граней до 26°/36° — там
+сходятся нагрузки, начинаются трещины от импульсной тяги и ударов, и туда же бьёт пыль. Растянутое до s 115: излом 6°, радиальная
+нагрузка на кольца в изломах в 3 раза меньше, наклон граней 15°/21° (пыль на единицу поверхности −40 %), стенка носа +3 т.
+Цена — запас +4,2/+3,3 % вместо +5,8/+4,9 %. Зато гиперзвуковой баланс почти нейтральный (−0,5 %): балансируется элевонами
+без подъёма крыльев; «перо» 30° остаётся резервом для крутого входа. Принято: сужение s 72–115, крыло корень s 0–30, конец s 2–6.</p>
+<p><b>Субсветовая</b> (крейсер 0,45–0,53 c при струе 0,79 c; канон 0,9 c — для сравнения). Лоб 509 м², нос-щит R 6 м,
+открыто 396 м² — плечо и передний срез широкой части.</p>
+<table><tr><th>скорость</th><th>протоны</th><th>ларморов радиус, 30 Тл</th><th>газ, n 0,1 / 1 см⁻³</th><th>пыль: эрозия за 10 св. лет, n 0,1 / 1</th></tr>
+<tr><td>0,45 c</td><td>112 МэВ</td><td>5 см</td><td>0,1 / 1,2 МВт</td><td>34 / 337 т</td></tr>
+<tr><td>0,53 c</td><td>168 МэВ</td><td>7 см</td><td>0,2 / 2,2 МВт</td><td>50 / 505 т</td></tr>
+<tr><td>0,9 c (канон)</td><td>1214 МэВ</td><td>22 см</td><td>2,7 / 27 МВт</td><td>365 / 3646 т</td></tr></table>
+<p>Газ — не проблема: мегаватты против 0,45 ГВт радиаторов; ионизованные протоны поле 30 Тл отклоняет на сантиметрах (нейтральные — после
+ионизатора на острие). <b>Пыль — главный износ:</b> в Местном пузыре (n ≈ 0,1) на 0,5 c это ~50 т жертвенного покрытия на плечах за
+10 св. лет (~130 кг/м², а на наклонных гранях плеча ×0,3–0,4 на единицу поверхности); в плотном облаке — в 10 раз больше, такие
+облака надо обходить. На 0,9 c износ в 7 раз выше — ещё один довод за крейсер ~0,5 c. Крылья в крейсере сложены на борт —
+кромкой вперёд открыто ~2 × 16 м².</p></div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+const VARS=[{"name": "1б-А · XR2, плавное плечо (итог)", "keys": [[0, 12.42, 21.849999999999998], [8, 13.5, 23], [72, 13.5, 23], [115, 6, 12], [122, 6, 12]], "wing": {"b": 18, "le0": 30, "te0": 0, "le1": 6, "te1": 2}, "fin": [[3.0, 0.0], [46.0, 0.0], [36.0, 6.0], [27.0, 20.5], [6.0, 20.5]], "cass": [[-5.55, 0.3], [5.55, 0.3], [-5.55, 0.74], [5.55, 0.74]], "flat": 0.4, "res": {"tle": 1784}, "hangar": [49, 71]}, {"name": "1 · Копьё-оптимум", "keys": [[0, 11.96, 21.849999999999998], [8, 13, 23], [47, 13, 23], [75, 7, 12], [122, 7, 12]], "wing": {"b": 18, "le0": 38, "te0": 0, "le1": 12, "te1": 2}, "fin": [[3.0, 0.0], [46.0, 0.0], [36.0, 6.0], [27.0, 20.5], [6.0, 20.5]], "cass": [[-5.55, 0.3], [5.55, 0.3], [-5.55, 0.74], [5.55, 0.74]], "flat": 0.4, "res": {"tle": 1756}}, {"name": "2 · Клин-оптимум", "keys": [[0, 11.96, 21.849999999999998], [8, 13, 23], [47, 13, 23], [122, 7, 12]], "wing": {"b": 18, "le0": 38, "te0": 0, "le1": 12, "te1": 8}, "fin": [[3.0, 0.0], [46.0, 0.0], [36.0, 6.0], [27.0, 20.5], [6.0, 20.5]], "cass": [[-5.55, 0.3], [5.55, 0.3], [-5.55, 0.74], [5.55, 0.74]], "flat": 0.4, "res": {"tle": 1756}}, {"name": "1б · Копьё, плавное плечо", "keys": [[0, 11.96, 21.849999999999998], [8, 13, 23], [47, 13, 23], [90, 7, 12], [122, 7, 12]], "wing": {"b": 18, "le0": 38, "te0": 0, "le1": 6, "te1": 2}, "fin": [[3.0, 0.0], [46.0, 0.0], [36.0, 6.0], [27.0, 20.5], [6.0, 20.5]], "cass": [[-5.55, 0.3], [5.55, 0.3], [-5.55, 0.74], [5.55, 0.74]], "flat": 0.4, "res": {"tle": 1679}}, {"name": "3 · Скат-оптимум", "keys": [[0, 19.32, 19.0], [8, 21, 20], [47, 21, 20], [75, 7, 12], [122, 7, 12]], "wing": {"b": 16, "le0": 38, "te0": 0, "le1": 12, "te1": 2}, "fin": [[3.0, 0.0], [46.0, 0.0], [36.0, 6.0], [27.0, 20.5], [6.0, 20.5]], "cass": [[-15.3, 0.45], [-5.1, 0.45], [5.1, 0.45], [15.3, 0.45]], "flat": 0.45, "res": {"tle": 1713}}];
+const D=Math.PI/180, L=146, NS=72, SIG=5.67e-8;
+const sm=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
+// ---- hull: half-width / height along s (same law as the calculation)
+function wh(v,s){const k=v.keys;if(s<=k[0][0])return [k[0][1],k[0][2]];const nb=k[k.length-1][0];
+  if(s<=nb){for(let i=0;i<k.length-1;i++){const a=k[i],b=k[i+1];if(s<=b[0]){const f=sm((s-a[0])/(b[0]-a[0]));return [a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f];}}}
+  const x=(L-1.2-s)/(L-1.2-nb),f=x>0?Math.sqrt(Math.max(0,1-(1-x)*(1-x))):0;return [k[k.length-1][1]*f,k[k.length-1][2]*f];}
+// section: flat bottom, chine, sloped flank, rounded top (proportions of C-148 KEY_AFT, scaled)
+function section(v,s){let [w,h]=wh(v,s);w=Math.max(w,0.05);h=Math.max(h,0.05);const fl=v.flat||0.4;
+  const P=[[0.77*w,-fl*h],[w,-(fl-0.233)*h],[0.75*w,(1-fl)*h-0.1*h],[0,(1-fl)*h]];
+  const pts=[[0,-fl*h]];
+  // bottom -> chine -> flank -> top, right half, then mirrored
+  const seg=(a,b,n)=>{for(let i=1;i<=n;i++){const t=i/n;pts.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);}};
+  seg([0,-fl*h],P[0],6);
+  const arc=(c,r,a0,a1,n)=>{for(let i=1;i<=n;i++){const a=a0+(a1-a0)*i/n;pts.push([c[0]+r*Math.cos(a),c[1]+r*Math.sin(a)]);}};
+  seg(P[0],P[1],5);seg(P[1],P[2],8);
+  const n=9;for(let i=1;i<=n;i++){const t=i/n;const x=P[2][0]*(1-t),y=P[2][1]+(P[3][1]-P[2][1])*Math.sin(t*Math.PI/2);pts.push([x,y]);}
+  const half=pts.slice();const right=half;const left=half.slice(1,-1).reverse().map(p=>[-p[0],p[1]]);
+  const ring=right.concat(left);
+  // resample to NS points
+  const cum=[0];for(let i=1;i<=ring.length;i++){const a=ring[i-1],b=ring[i%ring.length];cum.push(cum[i-1]+Math.hypot(b[0]-a[0],b[1]-a[1]));}
+  const tot=cum[ring.length],out=[];let j=0;for(let k=0;k<NS;k++){const d=tot*k/NS;while(cum[j+1]<d)j++;const f=(d-cum[j])/((cum[j+1]-cum[j])||1),a=ring[j],b=ring[(j+1)%ring.length];out.push([a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f]);}
+  return out;}
+function offset(sec,d){const n=sec.length;return sec.map((p,i)=>{const a=sec[(i-1+n)%n],b=sec[(i+1)%n];const tx=b[0]-a[0],ty=b[1]-a[1],l=Math.hypot(tx,ty)||1;
+  return [p[0]-d*ty/l,p[1]+d*tx/l];});} // ring is counter-clockwise: outward normal (ty,-tx); inward offset by d
+function stations(){const st=[];for(let s=0;s<120;s+=2)st.push(s);for(let s=120;s<L-1.3;s+=0.8)st.push(s);st.push(L-1.25);return st;}
+
+const el=document.getElementById('c3');const R=new THREE.WebGLRenderer({antialias:true});R.setPixelRatio(Math.min(2,window.devicePixelRatio||1));R.localClippingEnabled=true;el.appendChild(R.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x0d0f14);
+const cam=new THREE.PerspectiveCamera(32,1,1,6000);const ctl=new THREE.OrbitControls(cam,R.domElement);ctl.enableDamping=true;ctl.target.set(0,0,73);
+scene.add(new THREE.HemisphereLight(0xdfe6f0,0x3a3026,0.65));const sun=new THREE.DirectionalLight(0xffffff,0.95);sun.position.set(-160,220,180);scene.add(sun);
+const sun2=new THREE.DirectionalLight(0x8090b0,0.35);sun2.position.set(160,-80,-120);scene.add(sun2);
+function resize(){const w=Math.max(1,el.clientWidth),h=Math.max(1,el.clientHeight);R.setSize(w,h,false);R.domElement.style.width='100%';R.domElement.style.height='100%';cam.aspect=w/h;cam.updateProjectionMatrix();}
+window.addEventListener('resize',resize);
+const clipPlane=new THREE.Plane(new THREE.Vector3(-1,0,0),0); // keeps x<=0 (port half) in the cutaway
+let group=null,wingPivots=[],cur=0,mode='look',folded=0,rot=false;
+
+// ---- colouring
+const C=(r,g,b)=>[r,g,b];
+const LOOK={belly:C(.09,.08,.075),top:C(.86,.85,.80),nose:C(.80,.74,.58),stern:C(.22,.22,.24),wing:C(.11,.11,.12),edge:C(.72,.42,.20),fin:C(.13,.13,.14)};
+function heatColor(T){const t=Math.max(0,Math.min(1,(T-300)/(2300-300)));const stops=[[0,[.10,.12,.35]],[.35,[.15,.55,.75]],[.6,[.95,.80,.25]],[.8,[.95,.45,.12]],[1,[1,1,1]]];
+  for(let i=0;i<stops.length-1;i++){const a=stops[i],b=stops[i+1];if(t<=b[0]){const f=(t-a[0])/(b[0]-a[0]);return a[1].map((x,k)=>x+(b[1][k]-x)*f);}}return stops[4][1];}
+const BASE=1.7415e-4*Math.sqrt(1.6e-4)*Math.pow(6500,3);           // design entry, Sutton-Graves per sqrt(Rn)
+const FLOW=new THREE.Vector3(0,Math.sin(45*D),-Math.cos(45*D)).normalize(); // air comes from below-front at 45 deg
+function tempAt(nrm,Rn){const c=-nrm.dot(FLOW);if(c<=0)return 420;const q=BASE/Math.sqrt(Rn)*Math.pow(c,1.5);return Math.pow(q/(0.85*SIG)+Math.pow(250,4),0.25);}
+
+function hullMesh(v,d,colorFn,clip){const st=stations(),rings=st.map(s=>{const sec=d?offset(section(v,s),d):section(v,s);return sec.map(p=>[p[0],p[1],s]);});
+  const tip=[0,(1-(v.flat||0.4))*wh(v,L-1.3)[1]*0+0,L];
+  const pos=[],idx=[];rings.forEach(r=>r.forEach(p=>pos.push(p[0],p[1],p[2])));
+  const tipI=pos.length/3;pos.push(0,0,L-0.2);const aftI=pos.length/3;pos.push(0,0,0);
+  for(let i=0;i<rings.length-1;i++)for(let k=0;k<NS;k++){const a=i*NS+k,b=i*NS+(k+1)%NS,c=(i+1)*NS+k,e=(i+1)*NS+(k+1)%NS;idx.push(a,b,c,b,e,c);}
+  const last=(rings.length-1)*NS;for(let k=0;k<NS;k++){idx.push(last+k,last+(k+1)%NS,tipI);idx.push(k,aftI,(k+1)%NS);}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();
+  // the tip of every ring sits at its centroid height: shift the tip/aft caps to the local centre
+  const P=g.attributes.position;const yc=s=>{const[w,h]=wh(v,s);return (0.5-(v.flat||0.4))*h;};P.setY(tipI,yc(L-1.3));P.setY(aftI,yc(0));
+  g.computeVertexNormals();
+  const col=[],N=g.attributes.normal,tmp=new THREE.Vector3();
+  for(let i=0;i<P.count;i++){tmp.set(N.getX(i),N.getY(i),N.getZ(i));col.push(...colorFn(P.getZ(i),tmp,P.getY(i)-yc(P.getZ(i))));}
+  g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+  const m=mode==='heat'?new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.DoubleSide}):new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.62,metalness:0.18,side:THREE.DoubleSide,clippingPlanes:clip?[clipPlane,new THREE.Plane(new THREE.Vector3(0,0,1),-clip)]:[],clipIntersection:true});
+  return new THREE.Mesh(g,m);}
+function plate(pts2,th,y0,colorFn,clip){ // pts2: [x,z] outline (x lateral), plate in the xz plane at height y0
+  const sh=new THREE.Shape();pts2.forEach((p,i)=>i?sh.lineTo(p[0],p[1]):sh.moveTo(p[0],p[1]));sh.closePath();
+  const g=new THREE.ExtrudeGeometry(sh,{depth:th,bevelEnabled:false});g.rotateX(Math.PI/2);g.translate(0,y0+th/2,0);g.computeVertexNormals();
+  const P=g.attributes.position,N=g.attributes.normal,col=[],tmp=new THREE.Vector3();
+  for(let i=0;i<P.count;i++){tmp.set(N.getX(i),N.getY(i),N.getZ(i));col.push(...colorFn(P.getX(i),P.getZ(i),tmp));}
+  g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+  return new THREE.Mesh(g,mode==='heat'?new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.DoubleSide}):new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.55,metalness:0.25,side:THREE.DoubleSide,clippingPlanes:clip?[clipPlane]:[]}));}
+
+function lookHull(s,n,yr){if(s>v0().keys[v0().keys.length-1][0]+((L-1.2)-v0().keys[v0().keys.length-1][0])*0.55)return LOOK.nose;if(s<1.0)return LOOK.stern;
+  const t=Math.max(0,Math.min(1,(n.y+0.35)/0.7));return LOOK.belly.map((x,k)=>x+(LOOK.top[k]-x)*sm(t));}
+const v0=()=>VARS[cur];
+
+function build(){if(group){scene.remove(group);group.traverse(o=>{if(o.geometry)o.geometry.dispose();});}
+  group=new THREE.Group();wingPivots=[];const v=v0(),cut=mode==='layers';
+  const legend=document.getElementById('legend');
+  // --- hull (and inner layers in the cutaway)
+  if(mode==='look')group.add(hullMesh(v,0,(s,n)=>lookHull(s,n),false));
+  else if(mode==='heat')group.add(hullMesh(v,0,(s,n)=>{const nose=s>L-12;return heatColor(tempAt(n,nose?1.8:12));},false));
+  else{const LAY=[[0,[.10,.09,.08],132],[0.7,[.78,.45,.18],126],[1.4,[.86,.86,.80],120],[2.4,[.35,.37,.40],114]];
+    LAY.forEach(([d,c,sc])=>group.add(hullMesh(v,d,()=>c,sc)));
+    // inner volumes (schematic)
+    const box=(x,y,z,sx,sy,sz,c)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),new THREE.MeshStandardMaterial({color:c,roughness:.7,side:THREE.DoubleSide,clippingPlanes:[clipPlane]}));m.position.set(x,y,z);group.add(m);};
+    const[wa,ha]=wh(v,30),yb=-(v.flat||0.4)*ha;
+    v.cass.forEach(([cx,cy])=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(4.6,4.6,38,8),new THREE.MeshStandardMaterial({color:0x3d6fd0,roughness:.5,side:THREE.DoubleSide,clippingPlanes:[clipPlane]}));m.rotation.x=Math.PI/2;m.position.set(cx,yb+ha*cy,33);group.add(m);});
+    box(0,yb+ha*0.45,8,Math.min(18,wa*1.2),ha*0.5,14,0xc0392b);
+    const hg=v.hangar||[80,100],hm=(hg[0]+hg[1])/2,[wh1,hh1]=wh(v,hm),ych=-((v.flat||0.4)-0.233)*hh1;
+    box(0,ych+1.2,hm,2*(wh1-0.8),8.4,hg[1]-hg[0],0x3f9a5a);
+    const[wc,hc]=wh(v,106);box(0,-(v.flat||0.4)*hc+hc*0.5,106,wc*1.2,hc*0.45,8,0xe0b030);}
+  // --- wings (both sides), with a hinge at the chine
+  const wg=v.wing,[wr,hr]=wh(v,(wg.le0+wg.te0)/2),yCh=-((v.flat||0.4)-0.233)*hr;
+  [-1,1].forEach(sg=>{const piv=new THREE.Group();piv.position.set(sg*wr,yCh,0);
+    const pts=[[0,wg.te0],[0,wg.le0],[sg*wg.b,wg.le1],[sg*wg.b,wg.te1]];
+    const colorFn=(x,z,n)=>mode==='look'?LOOK.wing:(mode==='heat'?heatColor(tempAt(n,15)):[.10,.09,.08]);
+    const edgeFn=()=>mode==='look'?LOOK.edge:(mode==='heat'?heatColor(v.res.tle):[.78,.45,.18]);
+    piv.add(plate([[0,wg.le0-1.4],[0,wg.le0],[sg*wg.b,wg.le1],[sg*wg.b,wg.le1-1.4]],1.0,-0.5,edgeFn,false));
+    const p=plate(pts,0.9,-0.45,colorFn,false);piv.add(p);piv.userData.sg=sg;group.add(piv);wingPivots.push(piv);});
+  // --- dorsal fin (radiator)
+  const[w0,h0]=wh(v,20),yTop=(1-(v.flat||0.4))*h0;const F=v.fin;
+  const fin=plate(F.map(p=>[p[1],p[0]]),1.1,0,()=>mode==='heat'?heatColor(420):(mode==='look'?LOOK.fin:[.10,.09,.08]),cut);
+  fin.rotation.z=Math.PI/2;fin.position.set(0,yTop-0.6,0);group.add(fin);
+  // --- stern: four cups in the well
+  const[ws,hs]=wh(v,0);const ys=(0.5-(v.flat||0.4))*hs;[[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([a,b])=>{const c=new THREE.Mesh(new THREE.CylinderGeometry(3.4,2.2,2.5,24,1,true),new THREE.MeshStandardMaterial({color:0x7a5cff,emissive:0x2a1a66,side:THREE.DoubleSide,clippingPlanes:cut?[clipPlane]:[]}));
+    c.rotation.x=Math.PI/2;c.position.set(a*Math.min(5,ws*0.38),ys+b*Math.min(5,hs*0.22),-0.9);group.add(c);});
+  scene.add(group);applyFold();
+  legend.innerHTML=mode==='look'?'<b>Облик</b> (условно)<br><i style="background:#171513"></i>низ — боразон/SiBCN, чёрный (ε 0,85)<br><i style="background:#dbd9cc"></i>верх — h-BN, белый (α 0,2)<br><i style="background:#ccbd94"></i>нос — иридиевый кристалл<br><i style="background:#b86b33"></i>кромки — линии литиевых тепловых труб<br><i style="background:#1c1c1f"></i>крылья и перо — чёрные радиаторы (обе стороны)'
+   :mode==='heat'?'<b>Тепло на расчётном входе</b> (65 км, 6,5 км/с, угол атаки 45°)<br>'+[[400,'400 K'],[1000,'1000 K'],[1500,'1500 K'],[1900,'1900 K'],[2300,'2300 K']].map(([T,l])=>{const c=heatColor(T).map(x=>Math.round(x*255));return `<i style="background:rgb(${c})"></i>${l}`;}).join(' ')+`<br>кромка крыла: ${v.res.tle} K (предел боразона ~2000 K)`
+   :'<b>Разрез по слоям</b> (правый борт снят ступенями; толщины ×10, условно)<br><i style="background:#1a1714"></i>покрытие c-BN / SiBCN<br><i style="background:#c7732e"></i>литиевые тепловые трубы<br><i style="background:#dbdbcc"></i>теплоизоляция (аэрогель)<br><i style="background:#595e66"></i>несущий набор УНТ<br><i style="background:#3d6fd0"></i>кассеты ловушек <i style="background:#c0392b"></i>камеры <i style="background:#3f9a5a"></i>ангар <i style="background:#e0b030"></i>пост';}
+function applyFold(){const v=v0(),[wr,hr]=wh(v,(v.wing.le0+v.wing.te0)/2),fl=v.flat||0.4;
+  const ang=Math.atan2(0.667*hr,-0.25*wr); // flank direction from the chine up to the top edge
+  wingPivots.forEach(p=>{p.rotation.z=folded===2?p.userData.sg*ang:(folded===1?p.userData.sg*30*D:0);});}
+function view(k){const d=k==='q'?240:310,t=new THREE.Vector3(0,0,73);ctl.target.copy(t);
+  const P={q:[d*0.62,d*0.42,73-d*0.55],side:[d,0,73],top:[0,d,73-d*0.06],bot:[0,-d,73-d*0.06],front:[0,0,73+d],aft:[0,0,73-d]}[k];cam.position.set(P[0],P[1],P[2]);cam.up.set(0,1,0);ctl.update();}
+// ---- ui
+const vb=document.getElementById('vb'),mb=document.getElementById('mb');
+VARS.forEach((v,i)=>{const b=document.createElement('button');b.className='b';b.textContent=v.name;b.onclick=()=>{cur=i;build();mark();};vb.appendChild(b);});
+[['look','Облик'],['heat','Тепло на входе'],['layers','Разрез: слои']].forEach(([k,l])=>{const b=document.createElement('button');b.className='b';b.textContent=l;b.dataset.m=k;b.onclick=()=>{mode=k;build();mark();};mb.appendChild(b);});
+function mark(){[...vb.querySelectorAll('.b')].forEach((b,i)=>b.classList.toggle('on',i===cur));[...mb.querySelectorAll('.b')].forEach(b=>b.classList.toggle('on',b.dataset.m===mode));}
+document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>view(b.dataset.v));
+document.getElementById('fold').onclick=e=>{folded=(folded+1)%3;e.target.textContent='Крылья: '+['развёрнуты','вход — подняты 30°','сложены'][folded];applyFold();};
+document.getElementById('rot').onclick=e=>{rot=!rot;e.target.classList.toggle('on',rot);};
+resize();build();mark();view('q');window.__cam=cam;window.__grp=()=>group;
+(function loop(){requestAnimationFrame(loop);if(rot&&group)group.rotation.y+=0.004;ctl.update();R.render(scene,cam);})();
+})();
+</script></body></html>

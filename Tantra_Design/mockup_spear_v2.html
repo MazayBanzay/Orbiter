@@ -1,0 +1,128 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{background:#fff;font-family:system-ui;margin:16px}:root{--border:#ccc;--border-accent:#3b6fd6;--radius:8px;--text-primary:#111;--text-secondary:#555}.sr-only{position:absolute;left:-9999px}</style></head><body><h2 class="sr-only">3D-макет Тантры «Копьё», версия 2: колодец с четырьмя утопленными камерами, планетарные чаши на боковых пилонах, магнитный дефлектор и экипаж за экраном в носовой части, шасси на стоянке.</h2>
+<div style="padding:1rem 0">
+<div style="position:relative;border-radius:12px;overflow:hidden;background:#07080b">
+  <div id="c3" style="width:100%;height:560px"></div>
+  <div id="lg" style="position:absolute;left:10px;top:10px;font:12px system-ui,sans-serif;color:#e4e0da;background:rgba(0,0,0,.5);padding:8px 10px;border-radius:8px;line-height:1.55;display:none"></div>
+  <div id="err" style="position:absolute;left:10px;bottom:10px;font:12px system-ui;color:#f99"></div>
+</div>
+<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+  <button class="b" id="xr">Системы (рентген)</button>
+  <button class="b" data-v="all">Общий вид</button>
+  <button class="b" data-v="aft">Корма</button>
+  <button class="b" data-v="nose">Нос</button>
+  <button class="b" id="ar">Остановить вращение</button>
+</div>
+<div style="font-size:13px;color:var(--text-secondary);margin-top:8px">Мышь: вращать · колесо: масштаб · правая кнопка: сдвиг. Ось 20 м над грунтом, клетка 10 м. В рентгене виден луч ионизатора перед носом (режим полёта).</div>
+</div>
+<style>.b{font:inherit;font-size:13px;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border);background:transparent;color:var(--text-primary);cursor:pointer}.b.on{border:2px solid var(--border-accent);padding:5px 11px}</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+try{
+const el=document.getElementById('c3');
+const R=new THREE.WebGLRenderer({antialias:true});R.setPixelRatio(Math.min(2,window.devicePixelRatio||1));el.appendChild(R.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x07080b);
+const cam=new THREE.PerspectiveCamera(35,1,1,4000);
+const ctl=new THREE.OrbitControls(cam,R.domElement);ctl.enableDamping=true;ctl.autoRotate=true;ctl.autoRotateSpeed=0.7;
+const VIEWS={all:[[150,55,175],[58,-2,0]],aft:[[-75,18,48],[2,2,0]],nose:[[150,20,55],[105,0,0]]};
+function view(k){cam.position.set(...VIEWS[k][0]);ctl.target.set(...VIEWS[k][1]);ctl.update();}
+view('all');
+scene.add(new THREE.HemisphereLight(0xc8d2e6,0x2a1d17,0.75));
+const d1=new THREE.DirectionalLight(0xffffff,0.95);d1.position.set(120,200,150);scene.add(d1);
+const d2=new THREE.DirectionalLight(0x8090b0,0.45);d2.position.set(-150,40,-120);scene.add(d2);
+function resize(){const w=Math.max(1,el.clientWidth),h=Math.max(1,el.clientHeight);R.setSize(w,h,false);R.domElement.style.width='100%';R.domElement.style.height='100%';cam.aspect=w/h;cam.updateProjectionMatrix();}
+resize();if(window.ResizeObserver)new ResizeObserver(resize).observe(el);window.addEventListener('resize',resize);
+const GY=-20;
+const g=new THREE.Mesh(new THREE.PlaneGeometry(700,700),new THREE.MeshStandardMaterial({color:0x1b140f,roughness:1}));g.rotation.x=-Math.PI/2;g.position.y=GY;scene.add(g);
+const grid=new THREE.GridHelper(400,40,0x3a2c22,0x2a2019);grid.position.y=GY+0.05;scene.add(grid);
+const skin=[];
+const mk=(o)=>{const m=new THREE.MeshStandardMaterial(Object.assign({side:THREE.DoubleSide,transparent:true},o));skin.push(m);return m;};
+const hullM=mk({color:0x5c616c,metalness:0.55,roughness:0.42});
+const darkM=mk({color:0x2c2f36,metalness:0.6,roughness:0.5});
+const shieldM=mk({color:0xa39478,metalness:0.9,roughness:0.22});
+const crestM=mk({color:0x7a3f2a,metalness:0.3,roughness:0.6});
+const cupM=new THREE.MeshStandardMaterial({color:0x9a90e8,emissive:0x281e66,metalness:0.85,roughness:0.2,side:THREE.DoubleSide});
+const legM=new THREE.MeshStandardMaterial({color:0x9aa0a8,metalness:0.7,roughness:0.35});
+const cylM=new THREE.MeshStandardMaterial({color:0xc9b27a,metalness:0.6,roughness:0.35});
+const sysM=(c)=>new THREE.MeshStandardMaterial({color:c,emissive:c,emissiveIntensity:0.35,metalness:0.2,roughness:0.5});
+const SYS=[['Гермомодули экипажа, анабиоз, библиотека',0x4f8fd6],['Центральный пост (экраны, без окон)',0x6fd6e0],['Вода и заряды: экран от вторичных частиц',0x3fb3a8],['Магнитный дефлектор 10–30 Тл',0xd05ad0],['Ловушки анамезона 30 Тл',0x8f6ff0],['Камеры нитрида бора (ловушка остатка)',0xeeeeee],['ВЭУ (реактор)',0xe0703a],['Накопитель поля камер',0x4fc97a],['Ионные заряды',0xe0a83a],['Гидроаккумуляторы и насосы',0xe8d45a],['Ангар: тележки, робот, станции',0x8a8f99]];
+const sm={};SYS.forEach(([n,c])=>sm[n]=sysM(c));const S=new THREE.Group();
+const lerp=(a,b,t)=>a+(b-a)*t;
+function sample(keys,s){if(s<=keys[0][0])return keys[0].slice(1);for(let i=0;i<keys.length-1;i++){const a=keys[i],b=keys[i+1];if(s<=b[0]){let t=(s-a[0])/(b[0]-a[0]);t=t*t*(3-2*t);return a.slice(1).map((v,k)=>lerp(v,b[k+1],t));}}return keys[keys.length-1].slice(1);}
+function loft(keys,s0,s1,n,seg,mat,cap0){const pos=[],idx=[];for(let i=0;i<=n;i++){const s=lerp(s0,s1,i/n);const [w,t,b]=sample(keys,s);
+  for(let j=0;j<=seg;j++){const th=2*Math.PI*j/seg,c=Math.cos(th),sn=Math.sin(th);pos.push(s,sn>=0?t*sn:Math.abs(b)*sn,w*c);}}
+  for(let i=0;i<n;i++)for(let j=0;j<seg;j++){const a=i*(seg+1)+j,b=a+seg+1;idx.push(a,b,a+1,b,b+1,a+1);}
+  if(cap0){const ci=pos.length/3;const [w,t,b]=sample(keys,s0);pos.push(s0,(t-Math.abs(b))/2,0);for(let j=0;j<seg;j++)idx.push(ci,j+1,j);}
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setIndex(idx);geo.computeVertexNormals();return new THREE.Mesh(geo,mat);}
+function extrudeSY(pts,depth,mat){const sh=new THREE.Shape();pts.forEach((p,i)=>i?sh.lineTo(p[0],p[1]):sh.moveTo(p[0],p[1]));const geo=new THREE.ExtrudeGeometry(sh,{depth:depth,bevelEnabled:false});geo.translate(0,0,-depth/2);return new THREE.Mesh(geo,mat);}
+function finSZ(pts,th,y,mat){const sh=new THREE.Shape();pts.forEach((p,i)=>i?sh.lineTo(p[0],p[1]):sh.moveTo(p[0],p[1]));const geo=new THREE.ExtrudeGeometry(sh,{depth:th,bevelEnabled:false});geo.rotateX(Math.PI/2);geo.translate(0,y+th/2,0);return new THREE.Mesh(geo,mat);}
+function cylBetween(a,b,r,mat,open){const va=new THREE.Vector3(...a),vb=new THREE.Vector3(...b),d=vb.clone().sub(va),L=d.length();const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,L,32,1,!!open),mat);m.position.copy(va.clone().add(vb).multiplyScalar(0.5));m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return m;}
+function cylX(s0,s1,y,z,r,mat,open){return cylBetween([s0,y,z],[s1,y,z],r,mat,open);}
+function cup(r,x,y,z,mat){const m=new THREE.Mesh(new THREE.SphereGeometry(r,24,10,0,Math.PI*2,0,1.0),mat);m.rotation.z=-Math.PI/2;m.position.set(x,y,z);return m;}
+function sphere(r,x,y,z,mat){const m=new THREE.Mesh(new THREE.SphereGeometry(r,20,14),mat);m.position.set(x,y,z);return m;}
+function box(s0,s1,y0,y1,z0,z1,mat){const m=new THREE.Mesh(new THREE.BoxGeometry(s1-s0,y1-y0,z1-z0),mat);m.position.set((s0+s1)/2,(y0+y1)/2,(z0+z1)/2);return m;}
+const L1=26,L2=26;
+function knee(H,P){const h=new THREE.Vector3(...H),p=new THREE.Vector3(...P),dv=p.clone().sub(h),d=Math.min(dv.length(),L1+L2-0.01),u=dv.clone().normalize();
+  const a=(L1*L1-L2*L2+d*d)/(2*d),hh=Math.sqrt(Math.max(0,L1*L1-a*a));const up=new THREE.Vector3(0,1,0);const n=up.clone().sub(u.clone().multiplyScalar(up.dot(u))).normalize();
+  const k=h.clone().add(u.clone().multiplyScalar(a)).add(n.multiplyScalar(hh));return [k.x,k.y,k.z];}
+function legAft(grp,H,P,folded){if(folded)P=[-3,H[1]+1.5*Math.sign(H[1]),H[2]*1.15];const K=folded?[13,H[1]+4.5*Math.sign(H[1]),H[2]*1.32]:knee(H,P);
+  grp.add(cylBetween(H,K,2.3,legM));grp.add(cylBetween(K,P,1.8,legM));
+  const a=H.map((v,i)=>lerp(v,K[i],0.2)),b=K.map((v,i)=>lerp(v,P[i],0.45));grp.add(cylBetween(a,b,1.0,cylM));
+  const a2=H.map((v,i)=>lerp(v,K[i],0.55)),b2=K.map((v,i)=>lerp(v,P[i],0.25));grp.add(cylBetween(a2,b2,0.7,cylM));
+  grp.add(sphere(3.0,...H,legM));grp.add(sphere(2.8,...K,legM));
+  if(!folded){const pad=new THREE.Mesh(new THREE.CylinderGeometry(5,5.4,0.8,28),legM);pad.position.set(P[0],GY+0.4,P[2]);grp.add(pad);grp.add(cylBetween(P,[P[0],GY+0.8,P[2]],1.0,legM));}}
+function foreStrut(grp,s,ytop,z){grp.add(cylBetween([s,ytop,z],[s,GY+0.8,z],0.9,legM));grp.add(cylBetween([s,ytop-1,z],[s,ytop-6,z],1.3,cylM));const pad=new THREE.Mesh(new THREE.CylinderGeometry(3.75,4,0.7,24),legM);pad.position.set(s,GY+0.35,z);grp.add(pad);}
+const G=new THREE.Group();
+// hull: aft machinery (faceted), neck, forebody (ogive shield section at tip)
+const aft=[[0,12,13,-9],[8,13,14,-9.5],[40,13,14,-9.5],[52,10,11,-8],[57,6,6,-6]];
+const neck=[[56,6,6,-6],[62,5.5,5.5,-5.5],[72,5.5,5.5,-5.5],[77,7.5,7.5,-7.5]];
+const fore=[[76,7.5,7.5,-7.5],[90,8.6,8.6,-8.6],[104,7.6,7.6,-7.6],[116,4.5,4.5,-4.5],[126,0.2,0.2,-0.2]];
+G.add(loft(aft,0,57,24,8,hullM,true));G.add(loft(neck,56,77,12,32,hullM,false));
+G.add(loft(fore,76,106,24,48,hullM,false));G.add(loft(fore,106,126,20,48,shieldM,false));
+G.add(extrudeSY([[10,13],[18,36],[32,36],[46,13.5]],1.2,crestM));
+G.add(finSZ([[8,12.5],[40,12.5],[24,26],[12,26]],0.8,-1,crestM));G.add(finSZ([[8,-12.5],[40,-12.5],[24,-26],[12,-26]],0.8,-1,crestM));
+// armoured engine well: collar + 4 recessed cups
+G.add(cylX(-4,0.2,2,0,10.6,darkM,true));
+const ring=new THREE.Mesh(new THREE.RingGeometry(0.1,10.6,40),darkM);ring.rotation.y=Math.PI/2;ring.position.set(0.25,2,0);G.add(ring);
+const MC=[[6.4,4.4],[6.4,-4.4],[-2.4,4.4],[-2.4,-4.4]];
+MC.forEach(([y,z])=>G.add(cup(3.8,-3.5,y,z,cupM)));
+// planetary pods on lateral pylons, canted outward 10 deg
+[1,-1].forEach(sz=>{const P=new THREE.Group();
+  P.add(box(-4.5,4.5,-3.8,3.8,-2.4,2.4,hullM));
+  for(let r=0;r<3;r++)for(let c=0;c<2;c++)P.add(cup(1.15,-5.65,-2.5+r*2.5,-1.2+c*2.4,cupM));
+  P.position.set(4.5,6,sz*17.2);P.rotation.y=sz*0.17;G.add(P);
+  G.add(box(2,7,5,7,sz>0?12.4:-15,sz>0?15:-12.4,hullM));});
+// ion charges on neck
+for(let i=0;i<8;i++){const a=2*Math.PI*i/8;G.add(cylX(58,72,6.6*Math.sin(a),6.6*Math.cos(a),0.9,sm['Ионные заряды']));}
+// gear
+legAft(G,[30,-9,10],[-10,GY,19],false);legAft(G,[30,-9,-10],[-10,GY,-19],false);
+legAft(G,[28,11,9],[0,0,0],true);legAft(G,[28,11,-9],[0,0,0],true);
+foreStrut(G,98,-7.5,4);foreStrut(G,98,-7.5,-4);
+G.add(cylBetween([84,-7,-8],[84,GY+1,-8],0.12,cylM));G.add(box(82.5,85.5,GY,GY+0.4,-9.5,-6.5,cylM));
+// systems
+S.add(cylX(80,93,0,0,5,sm['Гермомодули экипажа, анабиоз, библиотека']));S.add(cylX(94,100,0,0,4.8,sm['Гермомодули экипажа, анабиоз, библиотека']));
+S.add(sphere(3.2,102.5,0,0,sm['Центральный пост (экраны, без окон)']));
+S.add(cylX(106,114,0,0,5.4,sm['Вода и заряды: экран от вторичных частиц']));
+const coil=new THREE.Mesh(new THREE.TorusGeometry(3.4,0.9,12,32),sm['Магнитный дефлектор 10–30 Тл']);coil.rotation.y=Math.PI/2;coil.position.set(118,0,0);S.add(coil);
+S.add(sphere(0.8,126.2,0,0,sm['Магнитный дефлектор 10–30 Тл']));
+const beam=new THREE.Mesh(new THREE.ConeGeometry(7,80,24,1,true),new THREE.MeshBasicMaterial({color:0xb8a8ff,transparent:true,opacity:0.08,side:THREE.DoubleSide,depthWrite:false}));beam.rotation.z=Math.PI/2;beam.position.set(166,0,0);S.add(beam);
+[[-3.5,5.5],[-3.5,-5.5],[7,5.5],[7,-5.5]].forEach(([y,z])=>S.add(cylX(24,49,y,z,4.9,sm['Ловушки анамезона 30 Тл'])));
+MC.forEach(([y,z])=>S.add(cylX(1.2,22,y,z,2.2,sm['Камеры нитрида бора (ловушка остатка)'])));
+S.add(sphere(3.4,53,0,0,sm['ВЭУ (реактор)']));
+const tor=new THREE.Mesh(new THREE.TorusGeometry(3.6,0.8,12,32),sm['Накопитель поля камер']);tor.rotation.y=Math.PI/2;tor.position.set(26,2,0);S.add(tor);
+[[28,-8,9],[28,-8,-9],[32,-8,9],[32,-8,-9]].forEach(p=>S.add(sphere(1.5,...p,sm['Гидроаккумуляторы и насосы'])));
+S.add(box(77,80,-7,-2.5,-4,4,sm['Ангар: тележки, робот, станции']));
+S.visible=false;G.add(S);scene.add(G);
+let xray=false;
+const lg=document.getElementById('lg');lg.innerHTML=SYS.map(([n,c])=>'<div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;background:#'+c.toString(16).padStart(6,'0')+'"></span>'+n+'</div>').join('');
+function apply(){S.visible=xray;skin.forEach(m=>{m.opacity=xray?0.13:1;m.depthWrite=!xray;m.needsUpdate=true;});lg.style.display=xray?'block':'none';}
+const xb=document.getElementById('xr');xb.onclick=()=>{xray=!xray;xb.classList.toggle('on',xray);apply();};
+const ab=document.getElementById('ar');ab.onclick=()=>{ctl.autoRotate=!ctl.autoRotate;ab.textContent=ctl.autoRotate?'Остановить вращение':'Вращать';};
+document.querySelectorAll('.b[data-v]').forEach(b=>b.onclick=()=>{view(b.dataset.v);if(b.dataset.v!=='all'){ctl.autoRotate=false;ab.textContent='Вращать';}});
+apply();
+(function loop(){ctl.update();R.render(scene,cam);requestAnimationFrame(loop);})();
+}catch(e){document.getElementById('err').textContent='Ошибка: '+e.message;}
+})();
+</script>
+</body></html>

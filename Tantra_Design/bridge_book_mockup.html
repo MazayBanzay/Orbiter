@@ -1,0 +1,278 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Рубка Тантры: книжный вариант</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#f4f2ee;--text:#1b1b1b;--muted:#5a5a5a;--accent:#3b6fd6;--border:#c9c5bd;--card:#fff;--warn:#fff8e8;--warnb:#d9a441}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#15171b;--text:#e8e6e1;--muted:#a3a7ae;--accent:#7aa2f7;--border:#3a3f47;--card:#1d2026;--warn:#2a2416;--warnb:#9a7a35}}
+:root[data-theme="dark"]{--bg:#15171b;--text:#e8e6e1;--muted:#a3a7ae;--accent:#7aa2f7;--border:#3a3f47;--card:#1d2026;--warn:#2a2416;--warnb:#9a7a35}
+body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;margin:16px}
+h1{font-size:18px;margin:0 0 4px}.sub{color:var(--muted);font-size:13px;margin:0 0 10px;max-width:1300px}.sub a{color:var(--accent)}
+#wrap{position:relative;border-radius:12px;overflow:hidden;background:#07080b}#c3{width:100%;height:660px}
+.pin{position:absolute;transform:translate(-50%,-50%);width:20px;height:20px;border-radius:50%;background:#e8b64a;color:#111;font:700 11px/20px system-ui;text-align:center;pointer-events:none;box-shadow:0 0 0 2px rgba(0,0,0,.55)}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+.b{font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer}
+.b.on{border:2px solid var(--accent);padding:5px 11px}.tag{font-size:12px;color:var(--muted)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px;max-width:1300px}@media(max-width:900px){.cols{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.5;margin-bottom:14px}
+.card h2{font-size:14px;margin:0 0 6px}.card ol,.card ul{margin:0;padding-left:20px}.card li{margin:3px 0}.src{color:var(--muted);font-size:12px}
+.warn{border-color:var(--warnb);background:var(--warn)}
+</style></head><body>
+<h1>Рубка «Тантры» — вариант 2, книжный: центральный пост по роману</h1>
+<p class="sub">Всё взято из «Туманности Андромеды» (главы 1–3 и 7; efremov-fiction.ru/roman/1), плюс то, что нужно, чтобы <b>всем полётом можно было управлять с командирского места</b> (отмечено ⊕). Вариант 1 (лента 270°): <a href="bridge_fork_mockup.html">bridge_fork_mockup.html</a>.</p>
+<div id="wrap"><div id="c3"></div></div>
+<div class="row">
+  <button class="b" data-v="cmd">Из посадочного кресла (FoV 60°)</button>
+  <button class="b" data-v="cmd90">То же, FoV 90°</button>
+  <button class="b" data-v="up">Взгляд вверх: экраны в нишах</button>
+  <button class="b" data-v="q">3/4 сзади</button>
+  <button class="b" data-v="mnu">МНУ-11 и стол астронавигатора</button>
+  <button class="b" data-v="rack">Стойка механизмов равновесия</button>
+  <button class="b" data-v="top">Сверху</button>
+</div>
+<div class="row">
+  <button class="b on" id="seatUp">Посадочное кресло: поднято из люка</button>
+  <button class="b" id="green">Свет: дежурный зелёный</button>
+  <span class="tag">Рукоять анамезона:</span>
+  <button class="b on" data-s="0">выкл</button><button class="b" data-s="1">зелёные спирали</button><button class="b" data-s="2">серый луч</button><button class="b" data-s="3">фиолетовая молния</button>
+  <button class="b on" id="pins">Метки</button>
+</div>
+<div class="cols">
+<div>
+<div class="card"><h2>Что на схеме (метки)</h2><ol id="legend"></ol></div>
+<div class="card"><h2>Из книги (пересказ)</h2>
+<ul>
+<li><b>Выгнутый пульт</b>, в его центре — широкий багряный циферблат (за ним следят притяжение железной звезды). Кресло рядом. <span class="src">гл. 1</span></li>
+<li><b>Зеркальные экраны в глубоких нишах со всех четырёх сторон поста</b>; они «над» сидящим — отражательные, через них пост ведёт обзор. Названы левый передний, правый передний, «второй» экран; фильтры экранов меняют цвет и яркость светил. Боковые телескопы дают звёзды на экраны. <span class="src">гл. 1, 2</span></li>
+<li><b>МНУ-11</b> — малая электронная расчётная машина со столом, рукоятками и кнопками; из-под стола выдвигается складное кресло. Корабль ведёт электронная машина («робот-рулевой»), но в посту обязателен дежурный навигатор. <span class="src">гл. 1, 2</span></li>
+<li><b>Свой стол у астронавигатора</b> — с него переходят «вперёд к пульту». Астроном работает у своих машин и телескопов. <span class="src">гл. 2</span></li>
+<li><b>Кресло у стойки механизмов равновесия</b> — обычное место инженера (Кэй Бэр). Справа — диски трёх приборов поля искусственного тяготения, электронный щуп борта выводит предмет на экран. <span class="src">гл. 1, 2</span></li>
+<li><b>Прорезь в пульте</b>: четыре высоких цилиндра из нитрида бора. Рукоять анамезона по ступеням: зелёные спирали (поле) → серый направляющий луч К-частиц → фиолетовая молния (истечение). <span class="src">гл. 2</span></li>
+<li><b>Приборы:</b> зависимые часы, счётчик дней, счётчики горючего, циферблат уравнителя скоростей, шкала высоты с красными огнями, локаторы (дают свисток), прожекторы; рычаги и верньеры управления; звуковой рупор автомата-приёмника. <span class="src">гл. 1–3</span></li>
+<li><b>Приборы «поют»</b>: настроены на мелодию, малейший непорядок — фальшивая нота. Дежурный свет — слабое зелёное освещение вдоль панелей и часов. <span class="src">гл. 1</span></li>
+<li><b>Посадочное кресло поднимается из люка перед пультом</b>, «упаковка» (ремни); у гидравлических кресел рычаги уходят вниз под перегрузкой; при посадке шарниры поворачивают сиденья, пульт оказывается над головой, рычаг выключения упоров. <span class="src">гл. 2, 3</span></li>
+<li><b>Главный распределительный щит</b> в посту; экран проектора для фильмов; позже — экраны ТВФ. Кабина звёздных карт — отдельно. <span class="src">гл. 2, 3, 7</span></li>
+</ul></div>
+</div>
+<div>
+<div class="card warn"><h2>⊕ Чтобы всем полётом управлять с командирского места</h2>
+<ol>
+<li><b>Командир сидит в посадочном кресле в центре выгнутого пульта</b>; пульт охватывает его на ±75°, всё в пределах руки.</li>
+<li><b>Повторитель МНУ-11</b> на пульте слева от багряного циферблата: результаты расчёта (курс, манёвр, Δv) и малая клавиатура ввода — командиру не нужно идти к машине.</li>
+<li><b>Пульт робота-рулевого</b> (автоматика) справа от прорези: держать курс, гасить вращение, вести по расчёту МНУ, посадка.</li>
+<li><b>Повторитель стойки равновесия</b> — те самые три диска справа + переключатели поля тяготения и компенсатора.</li>
+<li><b>Механизация — левое крыло пульта</b>: рычаг упоров (книжный «рычаг выключения упоров») и рядом группа рычагов нашей механизации: подъём 0–6, гребни 90°/30°/сложены, киль, гондолы, порт, ангар, лифт; мнемосхема над ними.</li>
+<li><b>Выбор картины для каждого из 4 экранов в нишах</b> — переключатели на пульте: передний обзор, боковые телескопы, щуп борта, локатор, звёздная карта.</li>
+<li><b>Тяга:</b> рычаги и верньеры планетарных моторов перед командиром, рукоять анамезона справа у прорези — как в книге.</li>
+</ol></div>
+<div class="card"><h2>Где книга расходится с нашими прежними решениями</h2>
+<ul>
+<li>В книге — <b>4 экрана в нишах</b>, у нас был один большой вогнутый. Здесь — как в книге: ниши высоко, над пультом, экраны наклонены к креслу.</li>
+<li>В книге при посадке <b>сиденья поворачивают шарниры, пульт уходит над голову</b>; у нас поворачивается вся капсула рубки, пол остаётся полом. Шарниров нет — их работу делает капсула.</li>
+<li>Посадочное кресло из люка совпадает с нашим правилом «кресло подъезжает к пульту после посадки» — только движение вертикальное.</li>
+<li>Аналоговые приборы книги (циферблаты, счётчики, шкалы) совпадают с концепцией аналоговой и световой техники.</li>
+</ul></div>
+<div class="card"><h2>Вопросы</h2>
+<ol>
+<li>Экраны в 4 нишах, как в книге, — или оставить наш один вогнутый?</li>
+<li>Повторители МНУ-11 и стойки равновесия на пульте командира — так достаточно для «всем полётом с одного места»?</li>
+<li>Звук: «пение приборов» с фальшивой нотой при неисправности — делать (это XRSound на корабле)?</li>
+</ol></div>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// Frame: floor y = 0, drum axis y = 1.0 (R 4.6, end walls x +-4.8), z from the axis station toward the nose; world x = -x(Orbiter)
+const host = document.getElementById("c3");
+const R = new THREE.WebGLRenderer({antialias: true}); R.setPixelRatio(Math.min(devicePixelRatio, 2)); host.appendChild(R.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x05060a);
+const cam = new THREE.PerspectiveCamera(60, 1, 0.03, 100);
+const ctl = new THREE.OrbitControls(cam, R.domElement); ctl.enableDamping = true;
+const amb = new THREE.AmbientLight(0x8890a0, 0.55); scene.add(amb);
+const dl = new THREE.DirectionalLight(0xfff2dd, 0.45); dl.position.set(-2, 6, -3); scene.add(dl);
+const pl = new THREE.PointLight(0xffe8c8, 0.55, 11); pl.position.set(0, 3.2, 0.5); scene.add(pl);
+const mat = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({color: c, roughness: .7, metalness: .3}, o));
+const M = {body: mat(0x24262b), top: mat(0x17191d, {roughness: .45}), seat: mat(0x2c2f35), cush: mat(0x4a2a26), metal: mat(0x9097a0, {metalness: .75, roughness: .3}),
+  floor: mat(0x1d1f23, {roughness: .9}), brass: mat(0xb08a4a, {metalness: .8, roughness: .35}), shell: new THREE.MeshStandardMaterial({color: 0x121519, side: THREE.BackSide, roughness: .95})};
+function box(w, h, d, m, x, y, z, p) { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); p.add(o); return o; }
+function cyl(r0, r1, h, m, x, y, z, p, n = 24) { const o = new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, n), m); o.position.set(x, y, z); p.add(o); return o; }
+function canv(w, h, draw) { const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h); const t = new THREE.CanvasTexture(c); t.anisotropy = 8; return t; }
+const pins = []; function pin(obj, local, n) { pins.push([() => obj.localToWorld(new THREE.Vector3(...local)), n]); }
+const room = new THREE.Group(); scene.add(room);
+box(9.6, .06, 8.98, M.floor, 0, -.03, 0, room);
+const shell = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.6, 9.6, 72, 1, true), M.shell); shell.rotation.z = Math.PI / 2; shell.position.y = 1.0; room.add(shell);
+[-1, 1].forEach(s => { const d = new THREE.Mesh(new THREE.CircleGeometry(4.6, 64), new THREE.MeshStandardMaterial({color: 0x15181d, side: THREE.DoubleSide, roughness: .9})); d.rotation.y = Math.PI / 2; d.position.set(s * 4.8, 1.0, 0); room.add(d); });
+
+// ---------------------------------------------------------------- the commander: the landing seat rising out of a floor hatch in front of the curved console
+const S = new THREE.Vector3(0, 0, 1.55);                   // the seat axis on the floor
+const EYE = new THREE.Vector3(0, 1.2, 1.53);
+// the hatch
+box(.9, .01, .9, mat(0x0a0b0d), S.x, .004, S.z, room); { const fr = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([[-.45, -.45], [.45, -.45], [.45, .45], [-.45, .45]].map(([x, z]) => new THREE.Vector3(S.x + x, .012, S.z + z))), new THREE.LineBasicMaterial({color: 0xb08a4a})); room.add(fr); }
+const seat = new THREE.Group(); seat.position.copy(S); room.add(seat);
+{ cyl(.09, .11, .5, M.metal, 0, .18, 0, seat);                                                       // the hydraulic column
+  for (const s of [-1, 1]) { const l = cyl(.022, .022, .42, M.brass, s * .2, .2, -.12, seat, 10); l.rotation.x = .35; }   // the hydraulic levers (sink under g)
+  box(.56, .1, .52, M.seat, 0, .44, .04, seat); box(.5, .05, .46, M.cush, 0, .5, .04, seat);
+  const b = box(.56, .8, .12, M.seat, 0, .9, -.24, seat); b.rotation.x = -.24; box(.3, .2, .1, M.seat, 0, 1.36, -.36, seat);
+  for (const s of [-1, 1]) { box(.07, .05, .34, M.seat, s * .31, .64, .02, seat); box(.025, .55, .006, mat(0x5a2a26), s * .12, .9, -.17, seat).rotation.x = -.24; }   // armrests, the harness ("упаковка")
+}
+pin(seat, [0, 1.5, -.3], 1);
+
+// ---------------------------------------------------------------- the curved console (выгнутый пульт), +-75 deg round the seat, analog instruments
+const PR = 1.0;                                             // console inner radius from the seat axis
+const pult = new THREE.Group(); pult.position.copy(S); room.add(pult);
+const ANG0 = -75, ANG1 = 75, YD = .78, YT = 1.12;
+const P3 = (a, r, y) => { const t = a * Math.PI / 180; return new THREE.Vector3(-Math.sin(t) * r, y, Math.cos(t) * r); };
+// the instrument face: drawn as one texture (left wing: mechanisation; then MNU repeater, the crimson dial, the slot, the robot-pilot, the three discs)
+const FW = 4096, FH = 640;
+const faceCanvas = document.createElement("canvas"); faceCanvas.width = FW; faceCanvas.height = FH; const faceTex = new THREE.CanvasTexture(faceCanvas); faceTex.anisotropy = 8;
+const xA = a => (a - ANG0) / (ANG1 - ANG0) * FW;
+function dial(g, cx, cy, r, f, title, col = "#ffd05a", face = "#0c0d10") { g.fillStyle = face; g.beginPath(); g.arc(cx, cy, r, 0, 6.3); g.fill(); g.strokeStyle = "#b08a4a"; g.lineWidth = 6; g.stroke();
+  g.strokeStyle = "#cfd2d8"; g.lineWidth = 3; for (let i = 0; i <= 10; i++) { const a = Math.PI * (.75 + 1.5 * i / 10); g.beginPath(); g.moveTo(cx + Math.cos(a) * r * .78, cy + Math.sin(a) * r * .78); g.lineTo(cx + Math.cos(a) * r * .92, cy + Math.sin(a) * r * .92); g.stroke(); }
+  const a = Math.PI * (.75 + 1.5 * f); g.strokeStyle = col; g.lineWidth = 7; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * r * .85, cy + Math.sin(a) * r * .85); g.stroke();
+  g.fillStyle = "#c8ccd2"; g.font = "bold 30px system-ui"; g.textAlign = "center"; g.fillText(title, cx, cy + r + 40); g.textAlign = "left"; }
+function label(g, x, y, t, s = 28, c = "#c8ccd2") { g.fillStyle = c; g.font = `bold ${s}px system-ui`; g.textAlign = "center"; g.fillText(t, x, y); g.textAlign = "left"; }
+function lamp(g, x, y, c) { g.fillStyle = c; g.beginPath(); g.arc(x, y, 12, 0, 6.3); g.fill(); g.strokeStyle = "#333"; g.lineWidth = 3; g.stroke(); }
+function paintFace(green) {
+  const g = faceCanvas.getContext("2d"); g.fillStyle = "#1a1c20"; g.fillRect(0, 0, FW, FH);
+  for (let i = 1; i < 12; i++) { g.strokeStyle = "#2a2d33"; g.lineWidth = 4; g.beginPath(); g.moveTo(i * FW / 12, 0); g.lineTo(i * FW / 12, FH); g.stroke(); }
+  // left wing (-75..-45): mechanisation mimic over the lever group  ⊕
+  { const x0 = xA(-74), x1 = xA(-46); g.fillStyle = "#050c10"; g.fillRect(x0, 40, x1 - x0, 300); label(g, (x0 + x1) / 2, 30, "МЕХАНИЗАЦИЯ ⊕", 30, "#ffb040");
+    g.strokeStyle = "#5fd8ff"; g.lineWidth = 5; g.beginPath(); g.moveTo(x0 + 40, 200); g.quadraticCurveTo((x0 + x1) / 2, 140, x1 - 60, 180); g.lineTo(x1 - 30, 195); g.lineTo(x1 - 60, 210); g.quadraticCurveTo((x0 + x1) / 2, 245, x0 + 40, 215); g.closePath(); g.stroke();
+    g.beginPath(); g.moveTo(x0 + 140, 228); g.lineTo(x0 + 130, 300); g.moveTo(x0 + 360, 225); g.lineTo(x0 + 380, 300); g.stroke();
+    ["ПОДЪЁМ 0/6", "ГРЕБНИ 90°", "КИЛЬ ▲", "ГОНДОЛЫ", "ПОРТ", "АНГАР", "ЛИФТ"].forEach((t, i) => { lamp(g, x0 + 40 + i * ((x1 - x0 - 60) / 6), 380, i === 0 ? "#3fe07a" : "#2a4a34"); label(g, x0 + 40 + i * ((x1 - x0 - 60) / 6), 430, t, 20); });
+    label(g, (x0 + x1) / 2, 600, "рычаги механизации ↓   рычаг упоров (книга)", 22, "#8a929c"); }
+  // altitude scale with red lights, fuel counters, the day counter, dependent clocks (-44..-22)
+  { const x0 = xA(-44); g.fillStyle = "#0c0d10"; g.fillRect(x0, 40, 90, 520); for (let i = 0; i < 12; i++) { g.fillStyle = i === 8 ? "#ff3030" : "#2a2d33"; g.fillRect(x0 + 15, 520 - i * 40, 60, 26); }
+    label(g, x0 + 45, 600, "ВЫСОТА", 22);
+    for (let i = 0; i < 4; i++) { g.fillStyle = "#0c0d10"; g.fillRect(x0 + 140 + i * 110, 80, 80, 380); g.fillStyle = "#e08a30"; const f = .9 - .12 * i; g.fillRect(x0 + 140 + i * 110, 80 + 380 * (1 - f), 80, 380 * f); g.fillStyle = "#000"; g.fillRect(x0 + 140 + i * 110, 80 + 380 * (1 - f) + 30, 80, 8); }
+    label(g, x0 + 335, 510, "СЧЁТЧИКИ ГОРЮЧЕГО", 24); g.fillStyle = "#06120a"; g.fillRect(x0 + 140, 540, 420, 60); label(g, x0 + 350, 582, "день 1 847 · зав. часы 05:42", 26, "#4ef08a"); }
+  // the MNU-11 repeater  ⊕
+  { const x0 = xA(-20), x1 = xA(-7); g.fillStyle = "#03110a"; g.fillRect(x0, 50, x1 - x0, 360); label(g, (x0 + x1) / 2, 40, "ПОВТОРИТЕЛЬ МНУ-11 ⊕", 26, "#ffb040");
+    g.fillStyle = "#4ef08a"; g.font = "26px monospace"; ["курс   344+2У", "манёвр  2/3", "Δv     42,6 м/с", "через  00:12:40", "β      0,000"].forEach((t, i) => g.fillText(t, x0 + 20, 100 + i * 52));
+    for (let i = 0; i < 12; i++) { g.fillStyle = "#2a2d33"; g.fillRect(x0 + 16 + (i % 6) * ((x1 - x0 - 30) / 6), 440 + Math.floor(i / 6) * 70, (x1 - x0 - 50) / 6, 56); } label(g, (x0 + x1) / 2, 610, "ввод", 22, "#8a929c"); }
+  // the wide crimson dial in the centre
+  dial(g, xA(0), 290, 230, .62, "ПОЛЕ ТЯГОТЕНИЯ (багряный)", "#ffe8a0", "#4a0c0c");
+  // the slot with the four boron-nitride cylinders is a real opening (3D) at +7..+17; a bezel here
+  { const x0 = xA(8), x1 = xA(19); g.fillStyle = "#000"; g.fillRect(x0, 60, x1 - x0, 420); g.strokeStyle = "#b08a4a"; g.lineWidth = 8; g.strokeRect(x0, 60, x1 - x0, 420); label(g, (x0 + x1) / 2, 530, "ПРОРЕЗЬ: ЦИЛИНДРЫ НИТРИДА БОРА", 22); }
+  // the velocity equaliser dial, the robot-pilot  ⊕
+  dial(g, xA(26), 220, 120, .48, "УРАВНИТЕЛЬ СКОРОСТЕЙ");
+  { const x0 = xA(33), x1 = xA(46); g.fillStyle = "#050c10"; g.fillRect(x0, 50, x1 - x0, 380); label(g, (x0 + x1) / 2, 40, "РОБОТ-РУЛЕВОЙ ⊕", 26, "#ffb040");
+    ["КУРС", "СТОП ВРАЩ.", "ПО МНУ", "ПОСАДКА", "ВЫКЛ"].forEach((t, i) => { g.fillStyle = i === 2 ? "#14402c" : "#141a20"; g.fillRect(x0 + 20, 70 + i * 70, x1 - x0 - 40, 56); label(g, (x0 + x1) / 2, 108 + i * 70, t, 24, i === 2 ? "#c8ffd8" : "#c8d2dc"); }); }
+  // the three discs on the right (the artificial gravity field) + the equilibrium repeater  ⊕
+  { [0, 1, 2].forEach(i => dial(g, xA(52) + i * 210, 200, 80, .4 + .1 * i, ["ПОЛЕ 1", "ПОЛЕ 2", "ПОЛЕ 3"][i], "#5fd8ff"));
+    label(g, xA(60), 400, "ПОВТОРИТЕЛЬ СТОЙКИ РАВНОВЕСИЯ ⊕", 24, "#ffb040"); ["компенсатор 1,9 g", "щуп борта: тихо"].forEach((t, i) => label(g, xA(60), 450 + i * 46, t, 24, "#4ef08a")); }
+  // the screen selectors for the four niches  ⊕
+  { const x0 = xA(-6), x1 = xA(6); ["ЛЕВ. ПЕР.", "ПРАВ. ПЕР.", "ЛЕВЫЙ", "ПРАВЫЙ"].forEach((t, i) => { lamp(g, x0 + 30 + i * ((x1 - x0) / 4), 590, "#5fd8ff"); label(g, x0 + 30 + i * ((x1 - x0) / 4), 625, t, 16); }); }
+  if (green) { g.fillStyle = "rgba(0,40,10,.35)"; g.fillRect(0, 0, FW, FH); g.fillStyle = "#3fe07a"; g.fillRect(0, FH - 8, FW, 8); }
+  faceTex.needsUpdate = true;
+}
+{ const N = 120;
+  const strip = (fa, fb, m, uvOn) => { const pos = [], uv = [], idx = []; for (let i = 0; i <= N; i++) { const a = ANG0 + (ANG1 - ANG0) * i / N, p = fa(a), q = fb(a); pos.push(p.x, p.y, p.z, q.x, q.y, q.z); uv.push(i / N, 0, i / N, 1); if (i < N) { const k = 2 * i; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); } }
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); pult.add(new THREE.Mesh(g, m)); };
+  const dbl = m => { const c = m.clone(); c.side = THREE.DoubleSide; return c; };
+  strip(a => P3(a, PR, 0), a => P3(a, PR, YD - .04), dbl(M.body));
+  strip(a => P3(a, PR, YD - .04), a => P3(a, PR + .3, YD), dbl(M.top));                       // the desk shelf (levers, verniers)
+  strip(a => P3(a, PR + .3, YD), a => P3(a, PR + .5, YT), new THREE.MeshStandardMaterial({map: faceTex, side: THREE.DoubleSide, roughness: .6, metalness: .2}), true);   // the instrument face
+  strip(a => P3(a, PR + .5, YT), a => P3(a, PR + .75, YT), dbl(M.top));
+  strip(a => P3(a, PR + .75, YT), a => P3(a, PR + .75, 0), dbl(M.body));
+  const lp = []; for (let i = 0; i <= 60; i++) lp.push(P3(ANG0 + (ANG1 - ANG0) * i / 60, PR + .005, YD - .02)); pult.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(lp), new THREE.LineBasicMaterial({color: 0x2f6a40})));
+}
+// the slot: four tall boron-nitride cylinders seen through the console (glow by the anamezon handle stage)
+const slot = new THREE.Group(); room.add(slot);
+const cylM = new THREE.MeshStandardMaterial({color: 0x9ad8b0, transparent: true, opacity: .35, emissive: 0x000000, roughness: .1});
+const beamM = new THREE.MeshBasicMaterial({color: 0x888888, transparent: true, opacity: 0}), boltM = new THREE.MeshBasicMaterial({color: 0xb050ff, transparent: true, opacity: 0});
+const spirals = [];
+{ const c = P3(13.5, PR + .42, .95).add(S);
+  for (let i = 0; i < 4; i++) { const g = new THREE.Group(); g.position.set(c.x + (i - 1.5) * .045, c.y, c.z); slot.add(g); cyl(.016, .016, .26, cylM, 0, 0, 0, g, 16);
+    const sp = []; for (let k = 0; k <= 80; k++) { const t = k / 80, a = t * 6 * Math.PI; sp.push(new THREE.Vector3(Math.cos(a) * .011, -.12 + t * .24, Math.sin(a) * .011)); }
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(sp), new THREE.LineBasicMaterial({color: 0x40ff70, transparent: true, opacity: 0})); g.add(line); spirals.push(line);
+    const bm = cyl(.004, .004, .24, beamM, 0, 0, 0, g, 6); const bo = cyl(.002, .002, .24, boltM, 0, 0, 0, g, 6); }
+  pin(slot, [c.x, c.y + .2, c.z], 4); }
+// levers and verniers on the shelf: planetary motors in front of the commander, the anamezon handle right at the slot, the legs lever left
+const lev = (a, r, h, col, kr = .02) => { const p = P3(a, r, YD).add(S); const t = cyl(.007, .007, h, M.metal, p.x, p.y + h / 2, p.z, room, 8); cyl(kr, kr, .03, mat(col), p.x, p.y + h + .01, p.z, room, 12); };
+for (let i = 0; i < 4; i++) lev(-9 + i * 4, PR + .14, .12, 0x2a2d33);                 // planetary motors' levers
+for (let i = 0; i < 6; i++) { const p = P3(-12 + i * 5, PR + .24, YD).add(S); cyl(.016, .016, .02, M.brass, p.x, p.y + .01, p.z, room, 14); }   // verniers
+lev(21, PR + .15, .22, 0xc0392b, .028);                                                 // the anamezon handle
+for (let i = 0; i < 7; i++) lev(-72 + i * 4, PR + .15, .1, i === 0 ? 0xd8a020 : 0x2a2d33, .016);   // mechanisation levers; the first = the legs ("упоры")
+pin(room, P3(-2, PR + .2, YD + .2).add(S).toArray(), 2); pin(room, P3(21, PR + .15, YD + .3).add(S).toArray(), 3);
+pin(room, P3(-60, PR + .45, 1.0).add(S).toArray(), 5); pin(room, P3(-13, PR + .45, 1.02).add(S).toArray(), 6); pin(room, P3(0, PR + .4, 1.05).add(S).toArray(), 7);
+pin(room, P3(39, PR + .45, 1.02).add(S).toArray(), 8); pin(room, P3(60, PR + .45, 1.0).add(S).toArray(), 9); pin(room, P3(-33, PR + .45, 1.0).add(S).toArray(), 10);
+
+// ---------------------------------------------------------------- the four mirror screens in deep niches (front left, front right, left, right), high, tilted to the seat
+function nicheScreen(name, center, normal, w, h, planet) {
+  const g = new THREE.Group(); g.position.copy(center); room.add(g); g.lookAt(center.clone().add(normal));
+  const depth = .45, fr = mat(0x2a2620, {metalness: .6});
+  box(w + .3, .1, depth, fr, 0, h / 2 + .05, -depth / 2, g); box(w + .3, .1, depth, fr, 0, -h / 2 - .05, -depth / 2, g); box(.1, h, depth, fr, w / 2 + .1, 0, -depth / 2, g); box(.1, h, depth, fr, -w / 2 - .1, 0, -depth / 2, g);
+  const t = canv(1024, Math.round(1024 * h / w), (c, W, H) => { c.fillStyle = "#010205"; c.fillRect(0, 0, W, H); let s = name.length * 7; const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+    for (let i = 0; i < 400; i++) { c.fillStyle = `rgba(255,255,255,${.25 + r() * .75})`; c.fillRect(r() * W, r() * H, 2, 2); }
+    if (planet) { c.fillStyle = "#6a2a1a"; c.beginPath(); c.arc(W * .7, H * .55, H * .28, 0, 6.3); c.fill(); }
+    c.fillStyle = "#8a929c"; c.font = "bold 26px system-ui"; c.fillText(name, 16, H - 16); });
+  const sc = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({map: t})); sc.position.z = -depth + .02; g.add(sc);
+  return g;
+}
+const toSeat = p => EYE.clone().sub(p).normalize();
+{ const fl = new THREE.Vector3(1.6, 2.15, 4.05), fr = new THREE.Vector3(-1.6, 2.15, 4.05), lw = new THREE.Vector3(4.6, 2.1, 1.0), rw = new THREE.Vector3(-4.6, 2.1, 1.0);
+  const n1 = nicheScreen("ЛЕВЫЙ ПЕРЕДНИЙ · обзор", fl, toSeat(fl), 2.0, 1.25), n2 = nicheScreen("ПРАВЫЙ ПЕРЕДНИЙ · обзор", fr, toSeat(fr), 2.0, 1.25, true);
+  const n3 = nicheScreen("ЛЕВЫЙ · боковой телескоп", lw, toSeat(lw), 1.8, 1.2), n4 = nicheScreen("ПРАВЫЙ · щуп борта", rw, toSeat(rw), 1.8, 1.2);
+  pin(n1, [0, .8, 0], 11); pin(n2, [0, .8, 0], 11); pin(n3, [0, .8, 0], 11); pin(n4, [0, .8, 0], 11); }
+
+// ---------------------------------------------------------------- behind: the MNU-11 desk with its folding chair, the astronavigator's table, the equilibrium rack with the engineer's chair
+const mnu = new THREE.Group(); mnu.position.set(2.4, 0, -1.2); mnu.rotation.y = .5; room.add(mnu);
+box(1.3, .74, .7, M.body, 0, .37, 0, mnu); box(1.34, .05, .74, M.top, 0, .765, 0, mnu);
+{ const t = canv(1024, 512, (c, W, H) => { c.fillStyle = "#14171b"; c.fillRect(0, 0, W, H); for (let i = 0; i < 40; i++) { c.fillStyle = i % 7 ? "#2a2d33" : "#b08a4a"; c.fillRect(30 + (i % 10) * 98, 200 + Math.floor(i / 10) * 70, 70, 50); } c.fillStyle = "#03110a"; c.fillRect(30, 20, W - 60, 160); c.fillStyle = "#4ef08a"; c.font = "34px monospace"; c.fillText("МНУ-11 · курс 344+2У · расчёт манёвра", 50, 110); });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1.26, .62), new THREE.MeshStandardMaterial({map: t})); m.rotation.x = -Math.PI / 2 + .3; m.position.set(0, .82, .02); mnu.add(m); }
+box(.4, .04, .38, M.seat, 0, .42, .62, mnu); box(.02, .42, .02, M.metal, -.17, .21, .78, mnu); box(.02, .42, .02, M.metal, .17, .21, .78, mnu);   // the folding chair, half pulled out
+pin(mnu, [0, 1.1, 0], 12);
+const nav = new THREE.Group(); nav.position.set(.4, 0, -2.0); room.add(nav);
+box(1.1, .72, .65, M.body, 0, .36, 0, nav); box(1.14, .04, .69, M.top, 0, .74, 0, nav);
+{ const t = canv(512, 320, (c, W, H) => { c.fillStyle = "#e8e0c8"; c.fillRect(0, 0, W, H); c.strokeStyle = "#888"; for (let i = 0; i < 9; i++) { c.beginPath(); c.moveTo(20, 30 + i * 30); c.lineTo(W - 20, 30 + i * 30); c.stroke(); } });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(.5, .32), new THREE.MeshStandardMaterial({map: t})); m.rotation.x = -Math.PI / 2; m.position.set(-.2, .765, 0); nav.add(m); }   // the reference sheets
+cyl(.1, .14, .32, M.metal, 0, .16, -.6, nav); box(.5, .09, .48, M.seat, 0, .42, -.6, nav); { const b = box(.5, .7, .1, M.seat, 0, .82, -.86, nav); b.rotation.x = -.2; }
+pin(nav, [0, 1.0, 0], 13);
+const rack = new THREE.Group(); rack.position.set(-3.4, 0, .2); rack.rotation.y = -1.2; room.add(rack);
+box(.7, 2.1, .45, M.body, 0, 1.05, 0, rack);
+{ const t = canv(512, 1536, (c, W, H) => { c.fillStyle = "#1a1c20"; c.fillRect(0, 0, W, H); for (let i = 0; i < 5; i++) { c.fillStyle = "#0c0d10"; c.beginPath(); c.arc(W / 2, 140 + i * 280, 110, 0, 6.3); c.fill(); c.strokeStyle = "#b08a4a"; c.lineWidth = 8; c.stroke(); c.strokeStyle = "#5fd8ff"; c.lineWidth = 8; c.beginPath(); c.moveTo(W / 2, 140 + i * 280); c.lineTo(W / 2 + 80 * Math.cos(i), 140 + i * 280 + 80 * Math.sin(i)); c.stroke(); } });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(.62, 1.9), new THREE.MeshStandardMaterial({map: t})); m.position.set(0, 1.08, .23); rack.add(m); }
+{ const ch = new THREE.Group(); ch.position.set(0, 0, 1.0); rack.add(ch); cyl(.1, .14, .32, M.metal, 0, .16, 0, ch); box(.52, .09, .5, M.seat, 0, .42, 0, ch); const b = box(.52, .78, .1, M.seat, 0, .86, .26, ch); b.rotation.x = .22; }
+pin(rack, [0, 2.3, 0], 14);
+// the main distribution board, the projector screen, the door
+{ const t = canv(512, 512, (c, W, H) => { c.fillStyle = "#24262b"; c.fillRect(0, 0, W, H); for (let i = 0; i < 24; i++) { c.fillStyle = "#0c0d10"; c.fillRect(30 + (i % 4) * 118, 30 + Math.floor(i / 4) * 78, 90, 50); c.fillStyle = i % 5 ? "#3fe07a" : "#e0a030"; c.beginPath(); c.arc(75 + (i % 4) * 118, 55 + Math.floor(i / 4) * 78, 10, 0, 6.3); c.fill(); } });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), new THREE.MeshStandardMaterial({map: t})); m.rotation.y = -Math.PI / 2; m.position.set(4.74, 1.5, -2.4); room.add(m); pin(room, [4.6, 2.3, -2.4], 15); }
+{ const m = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.1), new THREE.MeshBasicMaterial({color: 0xd8d8d0})); m.rotation.y = Math.PI / 2; m.position.set(-4.74, 2.0, -1.6); room.add(m); pin(room, [-4.6, 2.7, -1.6], 16); }
+{ const s = new THREE.Shape(), k = .41; [[-k, -1], [k, -1], [1, -k], [1, k], [k, 1], [-k, 1], [-1, k], [-1, -k]].forEach(([u, v], i) => i ? s.lineTo(u * .55, v) : s.moveTo(u * .55, v));
+  const d = new THREE.Mesh(new THREE.ShapeGeometry(s), new THREE.MeshStandardMaterial({color: 0x2b3037, side: THREE.DoubleSide, metalness: .5})); d.rotation.y = Math.PI / 2; d.position.set(-4.77, 1.0, -3.6); room.add(d); }
+// the green watch light strips along the panels
+const greenStrips = new THREE.Group(); room.add(greenStrips);
+{ const lp = []; for (let i = 0; i <= 60; i++) lp.push(P3(ANG0 + (ANG1 - ANG0) * i / 60, PR + .52, YT + .01).add(S)); greenStrips.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(lp), new THREE.LineBasicMaterial({color: 0x3fe07a}))); }
+greenStrips.visible = false;
+
+// ---------------------------------------------------------------- legend, controls, views
+const LEG = ["Посадочное кресло командира: поднимается из люка перед пультом, гидравлические рычаги под перегрузкой, «упаковка» (ремни)",
+  "Рычаги и верньеры планетарных моторов — прямо перед командиром", "Рукоять анамезонных двигателей — справа у прорези", "Прорезь пульта: четыре цилиндра нитрида бора (зелёные спирали → серый луч → фиолетовая молния)",
+  "⊕ Механизация на левом крыле: мнемосхема и рычаги (рычаг упоров — книжный; подъём 0–6, гребни, киль, гондолы, порт, ангар, лифт)", "⊕ Повторитель МНУ-11 с малой клавиатурой: расчёт виден и вводится с места командира",
+  "Широкий багряный циферблат в центре выгнутого пульта", "Уравнитель скоростей и ⊕ пульт робота-рулевого (автоматика)", "Три диска поля искусственного тяготения и ⊕ повторитель стойки равновесия",
+  "Шкала высоты с красными огнями, счётчики горючего, счётчик дней, зависимые часы", "Четыре зеркальных экрана в глубоких нишах (лев. перед., прав. перед., левый, правый), высоко над пультом",
+  "МНУ-11: стол электронной расчётной машины, складное кресло из-под стола", "Стол астронавигатора со справочными листами", "Стойка механизмов равновесия и кресло инженера",
+  "Главный распределительный щит", "Экран проектора (фильмы)"];
+document.getElementById("legend").innerHTML = LEG.map(s => `<li>${s}</li>`).join("");
+const wrap = document.getElementById("wrap"); const pinEls = pins.map(([, n]) => { const d = document.createElement("div"); d.className = "pin"; d.textContent = n; wrap.appendChild(d); return d; });
+let showPins = true;
+function updPins() { const r = R.domElement.getBoundingClientRect(); pins.forEach(([f], i) => { const v = f().project(cam); const el = pinEls[i]; const vis = showPins && v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05; el.style.display = vis ? "block" : "none"; el.style.left = ((v.x + 1) / 2 * r.width) + "px"; el.style.top = ((1 - v.y) / 2 * r.height) + "px"; }); }
+const look = (yaw, pitch) => { const y = yaw * Math.PI / 180, p = pitch * Math.PI / 180; return EYE.clone().add(new THREE.Vector3(-Math.sin(y) * Math.cos(p), Math.sin(p), Math.cos(y) * Math.cos(p))); };
+const VIEWS = { cmd: [EYE, look(0, -8), 60], cmd90: [EYE, look(0, -8), 90], up: [EYE, look(0, 22), 75], q: [new THREE.Vector3(2.4, 2.8, -3.0), new THREE.Vector3(0, 1.0, 1.6), 60],
+  mnu: [new THREE.Vector3(.6, 1.7, -.2), new THREE.Vector3(2.4, .8, -1.2), 60], rack: [new THREE.Vector3(-1.4, 1.6, -1.2), new THREE.Vector3(-3.4, 1.2, .2), 60], top: [new THREE.Vector3(0, 10, .3), new THREE.Vector3(0, 0, .31), 60] };
+function setView(k) { const [p, t, f] = VIEWS[k]; cam.fov = f; cam.updateProjectionMatrix(); cam.position.copy(p); ctl.target.copy(t); ctl.update(); shell.visible = k !== "top" && k !== "q";
+  document.querySelectorAll("[data-v]").forEach(b => b.classList.toggle("on", b.dataset.v === k)); }
+document.querySelectorAll("[data-v]").forEach(b => b.onclick = () => setView(b.dataset.v));
+let seatUp = true, seatY = 0, stage = 0, green = false;
+document.getElementById("seatUp").onclick = e => { seatUp = !seatUp; e.target.classList.toggle("on", seatUp); e.target.textContent = seatUp ? "Посадочное кресло: поднято из люка" : "Посадочное кресло: в люке"; };
+document.getElementById("green").onclick = e => { green = !green; e.target.classList.toggle("on", green); amb.intensity = green ? .12 : .55; pl.intensity = green ? .05 : .55; dl.intensity = green ? .05 : .45; greenStrips.visible = green; paintFace(green); };
+document.querySelectorAll("[data-s]").forEach(b => b.onclick = () => { stage = +b.dataset.s; document.querySelectorAll("[data-s]").forEach(c => c.classList.toggle("on", c === b)); });
+document.getElementById("pins").onclick = e => { showPins = !showPins; e.target.classList.toggle("on", showPins); };
+function resize() { const r = host.getBoundingClientRect(); R.setSize(r.width, r.height); cam.aspect = r.width / r.height; cam.updateProjectionMatrix(); }
+addEventListener("resize", resize); resize(); paintFace(false); setView("cmd");
+let tt = 0; (function loop() { requestAnimationFrame(loop); tt += .016;
+  seatY += ((seatUp ? 0 : -.62) - seatY) * .06; seat.position.y = seatY;
+  spirals.forEach((s, i) => { s.material.opacity = stage >= 1 ? .9 : 0; s.rotation.y = tt * 6 + i; }); cylM.emissive.setHex(stage >= 1 ? 0x0a3a18 : 0x000000);
+  beamM.opacity = stage >= 2 ? .8 : 0; boltM.opacity = stage >= 3 ? (Math.sin(tt * 40) > 0 ? 1 : .3) : 0;
+  ctl.update(); R.render(scene, cam); updPins(); })();
+</script></body></html>
