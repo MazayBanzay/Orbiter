@@ -12,8 +12,8 @@ namespace tantra::damage {
 enum Part {
     kNose, kBelly, kCrestPort, kCrestStbd, kFin,
     kPod0, kPod1, kPod2, kPod3,
-    kLegPort, kLegStbd, kSternLeg0, kSternLeg1, kSternLeg2, kSternLeg3,
-    kHangarDoors, kBayDoors, kSternCups, kHull,
+    kLegPort, kLegStbd, kSternLeg0, kSternLeg1, kSternLeg2, kSternLeg3, kKangLeg,
+    kHangarDoors, kBayDoors, kMarchCup, kHull,
     kPartCount
 };
 
@@ -30,7 +30,7 @@ struct Flight {
 };
 
 struct Exposure {            // 0 closed / stowed .. 1 open / out
-    double crests = 1.0, fin = 1.0, pods = 0.0, gear = 0.0, hangar = 0.0, bays = 0.0, sternCups = 0.0;
+    double crests = 1.0, fin = 1.0, pods = 0.0, gear = 0.0, hangar = 0.0, bays = 0.0, sternCups = 0.0;  // sternCups: marching cup out / anamezon irises open
 };
 
 struct Ground {
@@ -39,7 +39,7 @@ struct Ground {
     double vDown = 0.0;      // vertical speed at touchdown [m/s], positive down
     double vSoft = 3.0, vBreak = 6.0;  // the gear set's ankle struts take these (core/Legs Limits) [m/s]
     bool gearDown = false;
-    double legRatio[6] = {}; // load / rating: carriage port, stbd, stern legs 0..3
+    double legRatio[7] = {}; // load / rating: blade port, stbd, stern legs 0..3, kangaroo
 };
 
 struct Event { int part; bool destroyed; const char* ru; const char* en; };

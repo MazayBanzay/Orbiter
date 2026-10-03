@@ -1,9 +1,11 @@
 // OrbiterCrew - a crew member as an Orbiter vessel (see CrewMember.h).
 #include "CrewMember.h"
+#include "../include/OrbiterCrewApi.h"
 #include "Surface.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <sstream>
 #include <fstream>
 #include <map>
@@ -36,6 +38,25 @@ namespace ocrew
 	}
 
 	namespace { std::vector<CrewMember*> everyone; }   // for the suit computer: names of the other crew
+	std::vector<CrewMember*>& everyoneRef() { return everyone; }
+	// ships that told OrbiterCrew about their insides (ocRegisterInterior): their entrances, seats, terminals
+	struct ShipInterior
+	{
+		OBJHANDLE ship; OcInterior fns; void* ctx; OcInteriorExt ext{};
+		VECTOR3 Origin() const { VECTOR3 o{}; if (ext.Origin) ext.Origin(ctx, &o); return o; }
+	};
+	std::vector<ShipInterior>& interiors() { static std::vector<ShipInterior> v; return v; }
+	ShipInterior* InteriorOf(OBJHANDLE ship) { for (ShipInterior& s : interiors()) if (s.ship == ship) return &s; return nullptr; }
+	struct PendingPlace { OBJHANDLE ship{}; VECTOR3 feet{}; double hdg{}; };
+	PendingPlace& PendingInterior() { static PendingPlace p; return p; }
+	// the ship's label (its own code page, windows-1251) to UTF-8 for our HUD
+	std::string Utf8(const char* ansi)
+	{
+		wchar_t w[128]; char u[384];
+		const int n = MultiByteToWideChar(1251, 0, ansi, -1, w, 128);
+		if (n <= 0) return ansi;
+		return WideCharToMultiByte(CP_UTF8, 0, w, -1, u, sizeof u, nullptr, nullptr) > 0 ? std::string(u) : std::string(ansi);
+	}
 
 	namespace
 	{
@@ -49,7 +70,7 @@ namespace ocrew
 			std::vector<PadShape>& out = cache[base];
 			char bname[256] = "", pname[256] = "";
 			oapiGetObjectName(base, bname, 255); oapiGetObjectName(planet, pname, 255);
-			const std::string dir = std::string("Config\\") + pname + "\Base\\";
+			const std::string dir = std::string("Config\\") + pname + "\\Base\\";
 			WIN32_FIND_DATAA fd; HANDLE h = FindFirstFileA((dir + "*.cfg").c_str(), &fd);
 			if (h == INVALID_HANDLE_VALUE) return out;
 			do
@@ -78,12 +99,16 @@ namespace ocrew
 		}
 	}
 	CrewMember::CrewMember(OBJHANDLE hVessel, int fModel) : VESSEL4(hVessel, fModel),
-		who(Crew::Create()), name(who.name), role(who.role), sex(who.sex), age(who.age), heightM(who.heightM), bio(who.body),
+		who(Crew::Claim()), name(who.name), role(who.role), sex(who.sex), age(who.age), heightM(who.heightM), bio(who.body),
 		suitOn(who.worn.suit.on), suitFromScenario(who.worn.suit.fromScenario), suitMass(who.worn.suit.mass), suit(who.worn.suit.life),
 		jet(*who.worn.pack), hud(who.worn.suit.computer->hud), ap(who.worn.suit.computer->ap), jetFromScenario(who.worn.packFromScenario)
 	{
 		everyone.push_back(this);
-		who.where = Person::IN_WORLD; who.vessel = hVessel;
+		reborn = Crew::ClaimedExisting();
+		if (reborn && PendingInterior().ship) { inShip = PendingInterior().ship; inFeet = PendingInterior().feet; inHdg = PendingInterior().hdg; attachWait = 3; }
+		PendingInterior() = {};
+		if (reborn) { suitFromScenario = true; jetFromScenario = true; }   // what is worn keeps its state
+		who.where = inShip ? Person::INTERIOR : Person::IN_WORLD; who.vessel = hVessel; if (inShip) who.ship = inShip;
 	}
 
 	CrewMember::~CrewMember()
@@ -93,9 +118,10 @@ namespace ocrew
 		// the worn items take their state back from the body's parts (fuel, cold gas) and let go of them
 		jet.Detach();
 		who.worn.suit.computer->Detach();
-		who.where = Person::NOWHERE; who.vessel = nullptr;
-		// (until the crew can be aboard ships, no body left means the simulation is closing: start clean next time)
-		if (everyone.empty()) Crew::Clear();
+		if (inShip) LeaveShip();
+		if (who.where == Person::IN_WORLD || who.where == Person::INTERIOR) { who.where = Person::NOWHERE; who.vessel = nullptr; }   // (boarding has set ABOARD)
+		// no body left and nobody aboard a ship: the simulation is closing - start clean next time
+		if (everyone.empty() && !Crew::AnyAboard()) Crew::Clear();
 	}
 
 	void CrewMember::clbkSetClassCaps(FILEHANDLE cfg)
@@ -103,6 +129,8 @@ namespace ocrew
 		if (!atmospheres.Loaded()) atmospheres.Load();
 		char buf[256];
 		double v;
+		who.bodyClass = GetClassNameA();
+		if (!reborn) {   // the person's own data (a person out of a ship keeps his or hers)
 		if (oapiReadItem_string(cfg, const_cast<char*>("Name"), buf)) name = buf;
 		if (oapiReadItem_string(cfg, const_cast<char*>("Role"), buf)) role = buf;
 		if (oapiReadItem_string(cfg, const_cast<char*>("Voice"), buf)) voice = buf;
@@ -113,14 +141,17 @@ namespace ocrew
 		oapiReadItem_float(cfg, const_cast<char*>("Height"), heightM);
 		if (oapiReadItem_float(cfg, const_cast<char*>("LiftMax"), v)) bio.liftMax = v;
 		if (oapiReadItem_float(cfg, const_cast<char*>("BodyFat"), v)) bio.fat = v;
+		}
 		oapiReadItem_float(cfg, const_cast<char*>("SuitMass"), suitMass);
 		oapiReadItem_float(cfg, const_cast<char*>("StandHeight"), height);
 		oapiReadItem_float(cfg, const_cast<char*>("WalkSpeed"), walkSpeed);
 		oapiReadItem_float(cfg, const_cast<char*>("RunSpeed"), runSpeed);
 		oapiReadItem_vec(cfg, const_cast<char*>("EyePos"), eye);
+		if (!reborn) {   // the suit's supplies as issued (a person out of a ship has what is left)
 		if (oapiReadItem_float(cfg, const_cast<char*>("SuitO2"), v)) suit.o2 = suit.o2Cap = v;
 		if (oapiReadItem_float(cfg, const_cast<char*>("SuitSorbent"), v)) suit.sorbCap = v;
 		if (oapiReadItem_float(cfg, const_cast<char*>("SuitBattery"), v)) suit.batt = suit.battCap = v * 3.6e6;
+		}
 		oapiReadItem_float(cfg, const_cast<char*>("SuitPressure"), suit.pressure);
 		suit.Seal();
 
@@ -145,7 +176,7 @@ namespace ocrew
 		SetCameraOffset(eye);
 		// the head turns inside the helmet, the visor bounds the view: as far as a neck and a visor allow, not round
 		// to her own back and shoulders (from inside, the suit's parts at the camera show cut edges)
-		SetCameraRotationRange(70 * RAD, 70 * RAD, 45 * RAD, 55 * RAD);
+		SetCameraRotationRange(70 * RAD, 70 * RAD, 75 * RAD, 75 * RAD);   // the head and the eyes; past 60 deg aside the body turns (inside)
 
 		// feet first (they define the stance), then head, shoulders, hips and chest for tumbles
 		const double k = 2e4, d = 2.6e3;
@@ -155,6 +186,7 @@ namespace ocrew
 		for (int i = 0; i < 8; ++i) td[i] = { pts[i], k, d, 1.5, 1.5 };
 		SetTouchdownPoints(td, 8);
 		SetupRcs();
+		inChild = CreateAttachment(true, _V(0, -height, 0), _V(0, 0, -1), _V(0, 1, 0), "OCINT");   // dir anti-parallel to the parent's: she faces along it
 		jet.Setup(this);
 		jet.SetupDust(-height);
 
@@ -179,17 +211,10 @@ namespace ocrew
 			std::istringstream ss(line);
 			std::string key;
 			ss >> key;
-			if (key == "NAME") { std::getline(ss >> std::ws, name); }
-			else if (key == "ROLE") { std::getline(ss >> std::ws, role); }
-			else if (who.worn.Load(key, ss)) {}   // the suit, its computer and the pack: their own lines
-			else if (key == "STAMINA") ss >> bio.wbal;
-			else if (key == "DOSE") ss >> bio.doseSv >> bio.careerSv;
-			else if (key == "NOURISH") ss >> bio.waterDef >> bio.glycogen >> bio.fat >> bio.fastDays;
-			else if (key == "HURT") for (double& h : bio.hurt) ss >> h;
-			else if (key == "RESERVE") ss >> bio.reserve;
+			if (who.LoadLine(key, ss)) {}   // the person: who, the organism, what is worn
+			else if (key == "INTERIOR") { ss >> inFeet.x >> inFeet.y >> inFeet.z >> inHdg; std::getline(ss >> std::ws, inShipName); }
 			else if (key == "SHADE") { ss >> shadeTarget; shade = shadeTarget; }
 			else if (key == "LAMP") ss >> lampOn;
-			else if (key == "BODY") { int st; ss >> st; bio.state = static_cast<Body::State>(std::clamp(st, 0, 2)); }
 			else ParseScenarioLineEx(line, status);
 		}
 		suit.Seal();
@@ -198,19 +223,15 @@ namespace ocrew
 	void CrewMember::clbkSaveState(FILEHANDLE scn)
 	{
 		VESSEL4::clbkSaveState(scn);
-		oapiWriteScenario_string(scn, const_cast<char*>("NAME"), const_cast<char*>(name.c_str()));
-		oapiWriteScenario_string(scn, const_cast<char*>("ROLE"), const_cast<char*>(role.c_str()));
-		oapiWriteScenario_float(scn, const_cast<char*>("STAMINA"), bio.wbal);
-		{ char rb[64]; snprintf(rb, sizeof rb, "%.5f %.5f", bio.doseSv, bio.careerSv); oapiWriteScenario_string(scn, const_cast<char*>("DOSE"), rb); }
-		{ char rb[96]; snprintf(rb, sizeof rb, "%.4f %.0f %.3f %.3f", bio.waterDef, bio.glycogen, bio.fat, bio.fastDays); oapiWriteScenario_string(scn, const_cast<char*>("NOURISH"), rb); }
-		{ char rb[64]; snprintf(rb, sizeof rb, "%.3f %.3f %.3f %.3f", bio.hurt[0], bio.hurt[1], bio.hurt[2], bio.hurt[3]); oapiWriteScenario_string(scn, const_cast<char*>("HURT"), rb); }
-		oapiWriteScenario_float(scn, const_cast<char*>("RESERVE"), bio.reserve);
-		oapiWriteScenario_int(scn, const_cast<char*>("BODY"), static_cast<int>(bio.state));
-		oapiWriteScenario_float(scn, const_cast<char*>("SHADE"), shadeTarget);
+		if (n2) who.worn.suit.n2Kg = GetPropellantMass(n2);   // the suit's cold gas as the body holds it now
+		who.Save(scn);                 // the person: who, the organism, what is worn
+		oapiWriteScenario_float(scn, const_cast<char*>("SHADE"), shadeTarget);   // the body's own state
 		oapiWriteScenario_int(scn, const_cast<char*>("LAMP"), lampOn);
-		// what the person wears, written by the worn items themselves (the suit's cold gas as the body holds it now)
-		if (n2) who.worn.suit.n2Kg = GetPropellantMass(n2);
-		who.worn.Save(scn);
+		if (inShip && oapiIsVessel(inShip))
+		{
+			char b[160]; std::snprintf(b, sizeof b, "%.3f %.3f %.3f %.4f %s", inFeet.x, inFeet.y, inFeet.z, inHdg, oapiGetVesselInterface(inShip)->GetName());
+			oapiWriteScenario_string(scn, const_cast<char*>("INTERIOR"), b);
+		}
 	}
 
 	void CrewMember::clbkPostCreation()
@@ -315,7 +336,7 @@ namespace ocrew
 			}
 			flightFresh = true;
 		}
-		if (!(GetFlightStatus() & 1) && !airborne) return 0;   // in space the keys stay with Orbiter
+		if (!(GetFlightStatus() & 1) && !airborne && !inShip) return 0;   // in space the keys stay with Orbiter (inside a ship: walking)
 		keys.fwd = KEYDOWN(kstate, OAPI_KEY_W) != 0;
 		keys.back = KEYDOWN(kstate, OAPI_KEY_S) != 0;
 		keys.left = KEYDOWN(kstate, OAPI_KEY_A) != 0;
@@ -331,6 +352,9 @@ namespace ocrew
 	int CrewMember::clbkConsumeBufferedKey(DWORD key, bool down, char* kstate)
 	{
 		if (KEYMOD_CONTROL(kstate) || KEYMOD_ALT(kstate)) return 0;
+		if (key == OAPI_KEY_F) { if (down) DoUse(); return 1; }   // the action
+		// walking keys are hers: Orbiter must not take them as its own (A - its autopilot, etc.)
+		if ((inShip || (GetFlightStatus() & 1) || airborne) && !jet.Worn()) for (DWORD k : MOVE_KEYS) if (key == k) return 1;
 		if (key == OAPI_KEY_K) { if (down) SetSuit(!suitOn); return 1; }
 		if (key == OAPI_KEY_CAPITAL && jet.Worn()) { if (down) ApRequest(SuitHud::AP_FINE); return 1; }   // the limiter
 		if (key == OAPI_KEY_V && suitOn) { if (down) { shadeTarget = shadeTarget > 0.5 ? 0 : 1; Say(shadeTarget > 0.5 ? "Щиток опущен" : "Щиток поднят"); } return 1; }
@@ -784,6 +808,17 @@ namespace ocrew
 		if (dt <= 0) return;
 		air = atmospheres.Sample(this);
 		if (n2) who.worn.suit.n2Kg = GetPropellantMass(n2);   // the suit's own record of its cold gas, kept current
+		FindUse(dt);
+		if (!inShip && !inShipName.empty())   // a scenario with her inside a ship: find it
+		{
+			OBJHANDLE s = oapiGetVesselByName(const_cast<char*>(inShipName.c_str()));
+			const VECTOR3 f = inFeet; const double h = inHdg;
+			if (s) { EnterShip(s, f, _V(std::sin(h), 0, std::cos(h))); if (inShip) inShipName.clear(); }   // (the ship may register its interior later)
+		}
+		// the user's view of this person, remembered in the person (through the eyes / from outside at that distance)
+		if (!takeView && oapiCameraTarget() == GetHandle()) { who.viewOutside = !oapiCameraInternal(); if (who.viewOutside) who.viewDist = oapiCameraTargetDist(); }
+		if (takeView && !inShip) ApplyView();
+		if (inShip) { InteriorStep(dt); if (takeView && inParent) ApplyView(); return; }
 		jet.SetOxygen(air.ppO2 > 1.0);   // steam behind the jets only where hydrogen can burn
 		const double g = Gravity();
 		const bool landed = (GetFlightStatus() & 1) != 0;
@@ -880,12 +915,25 @@ namespace ocrew
 		}
 		else fwd = lat = turn = accel = 0;
 		keysFresh = false;
+		HudBySuit();
+		Animate(dt, g, landed);
+	}
 
+	void CrewMember::HudBySuit()
+	{
 		// ---- no HUD without the suit (the generic cockpit has one; switch it off, give it back with the suit) ----
 		const bool inHead = oapiCameraInternal() && oapiCameraTarget() == GetHandle();
 		if (inHead && !suitOn && !hudHidden && oapiGetHUDMode() != HUD_NONE) { oapiSetHUDMode(HUD_NONE); hudHidden = true; }
 		else if (hudHidden && (suitOn || !inHead)) { if (suitOn && inHead) oapiSetHUDMode(HUD_SURFACE); hudHidden = false; }
+		// the suit computer comes on whenever she is in the helmet: after the suit is put on, or on coming back into the
+		// helmet view (the HUD may have been switched off without the suit and the view changed since)
+		const bool inHelmet = inHead && suitOn;
+		if (inHelmet && !wasInHelmet && oapiGetHUDMode() == HUD_NONE) oapiSetHUDMode(HUD_SURFACE);
+		wasInHelmet = inHelmet;
+	}
 
+	void CrewMember::Animate(double dt, double g, bool landed)
+	{
 		// ---- animation ----
 		int footfalls = 0;
 		Figure& fig = Active();
@@ -975,6 +1023,7 @@ namespace ocrew
 		for (const auto& p : WARN) if (w == p.first) w = p.second;
 		d.warning = w;
 		if (messageTime > 0) { d.message = message; d.messageLevel = messageLevel; }
+		else if (!useHint.empty()) { d.message = "F - " + useHint; d.messageLevel = 0; }
 		const bool down = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
 		if (down && !mouseWasDown && suitOn)
 		{
@@ -994,6 +1043,215 @@ namespace ocrew
 
 namespace ocrew
 {
+	// ---- inside a ship ----
+	void CrewMember::EnterShip(OBJHANDLE ship, const VECTOR3& feet, const VECTOR3& dir)
+	{
+		ShipInterior* si = InteriorOf(ship);
+		if (!si || !si->fns.Attach || !oapiIsVessel(ship)) return;
+		VESSEL* sv = oapiGetVesselInterface(ship);
+		inParent = si->fns.Attach(si->ctx);
+		if (!inParent) return;
+		inShip = ship; inFeet = feet; inHdg = std::atan2(dir.x, dir.z);
+		double fy = 0;
+		if (si->fns.Ground && !si->fns.Ground(si->ctx, &inFeet, 0.45, &fy) && si->fns.Count && si->fns.Item)
+		{
+			// no floor under her (a place saved in a frame that has moved since, e.g. with the ship's CG): behind the first seat
+			for (int i = 0, n = si->fns.Count(si->ctx); i < n; ++i)
+			{
+				OcItem it{};
+				if (!si->fns.Item(si->ctx, i, &it) || it.kind != OC_SEAT) continue;
+				inFeet = it.pos - it.dir * 0.95; inHdg = std::atan2(it.dir.x, it.dir.z);
+				oapiWriteLogV("OrbiterCrew: %s: no floor at (%.2f %.2f %.2f) in %s, stands behind '%s'", name.c_str(), feet.x, feet.y, feet.z,
+					sv->GetName(), it.label);
+				break;
+			}
+		}
+		else if (si->fns.Ground) inFeet.y = fy;
+		oapiWriteLogV("OrbiterCrew: %s inside %s at (%.2f %.2f %.2f)", name.c_str(), sv->GetName(), inFeet.x, inFeet.y, inFeet.z);
+		fwd = lat = turn = accel = 0; airborne = lying = false;
+		sv->SetAttachmentParams(inParent, inFeet + si->Origin(), _V(std::sin(inHdg), 0, std::cos(inHdg)), _V(0, 1, 0));
+		if (GetAttachmentStatus(inChild) != ship) sv->AttachChild(GetHandle(), inParent, inChild);
+		who.where = Person::INTERIOR; who.ship = ship; who.vessel = GetHandle();
+		if (si->fns.Viewing) { si->fns.Viewing(si->ctx, 1); inViewing = true; }
+	}
+
+	void CrewMember::LeaveShip()
+	{
+		if (!inShip) return;
+		if (oapiIsVessel(inShip))
+		{
+			if (ShipInterior* si = InteriorOf(inShip)) if (inViewing && si->fns.Viewing) si->fns.Viewing(si->ctx, 0);
+			if (inParent) oapiGetVesselInterface(inShip)->DetachChild(inParent);
+		}
+		inViewing = false; inShip = nullptr; inParent = nullptr;
+		who.where = Person::IN_WORLD; who.ship = nullptr;
+	}
+
+	// the focus and the person's own view: through the eyes, or from outside at the distance the user had
+	void CrewMember::ApplyView()
+	{
+		takeView = false;
+		oapiSetFocusObject(GetHandle());
+		if (!who.viewOutside) { oapiCameraAttach(GetHandle(), 1); return; }
+		oapiCameraAttach(GetHandle(), 0);
+		const double d = oapiCameraTargetDist();
+		if (who.viewDist > 0.5 && d > 0) oapiCameraScaleDist(who.viewDist / d);
+	}
+
+	// the camera's direction relative to the body (her head): yaw right +, pitch up +
+	void CrewMember::LookDir(double& yaw, double& pitch)
+	{
+		VECTOR3 g; oapiCameraGlobalDir(&g);
+		MATRIX3 R; GetRotationMatrix(R);
+		const VECTOR3 l = tmul(R, g);
+		yaw = std::atan2(l.x, l.z); pitch = std::atan2(l.y, std::hypot(l.x, l.z));
+	}
+
+	// sets the look relative to the body, with the mapping found by Calibrate
+	void CrewMember::SetLook(double yaw, double pitch)
+	{
+		oapiCameraSetCockpitDir(lookSp * pitch, lookSa * yaw);
+	}
+
+	// Orbiter's polar/azimuth signs are not documented: one probe direction is set, and read back in the next frame
+	// (the camera takes a new direction only when it updates). Returns true once the mapping is known
+	bool CrewMember::CalibrateLook()
+	{
+		if (lookCal == 2) return true;
+		if (lookCal < 0) return false;
+		double y, p;
+		LookDir(y, p);
+		if (lookCal == 0) { lookY0 = y; lookP0 = p; oapiCameraSetCockpitDir(0.15, 0.3); lookCal = 1; return false; }
+		const bool aOk = std::abs(std::abs(y) - 0.3) < 0.05, pOk = std::abs(std::abs(p) - 0.15) < 0.05;
+		oapiWriteLogV("OrbiterCrew: look probe (polar 0.15, azimuth 0.30) -> pitch %.3f yaw %.3f", p, y);
+		if (!aOk || !pOk) { lookCal = -1; oapiCameraSetCockpitDir(0, 0); oapiWriteLogV("OrbiterCrew: look mapping unknown - the body does not follow the mouse"); return false; }
+		lookSa = y > 0 ? 1 : -1; lookSp = p > 0 ? 1 : -1; lookCal = 2;
+		SetLook(lookY0, lookP0);
+		oapiWriteLogV("OrbiterCrew: look signs azimuth %+.0f polar %+.0f", lookSa, lookSp);
+		return true;
+	}
+
+	// a step inside: the ship's air (its life support), its felt gravity, walking on its floors between its walls
+	void CrewMember::InteriorStep(double dt)
+	{
+		ShipInterior* si = InteriorOf(inShip);
+		if (!si || !oapiIsVessel(inShip)) { LeaveShip(); return; }
+		VESSEL* sv = oapiGetVesselInterface(inShip);
+		// a body made this frame must not be attached yet: Orbiter has not set it up, and moving the attachment of such a
+		// child crashes it (SetAttachmentParams -> null +0x38; every stand-up crash 2026-10-03). It waits a few frames
+		if (!inParent && attachWait > 0) { --attachWait; return; }
+		if (!inParent) { const OBJHANDLE s = inShip; const VECTOR3 f0 = inFeet; const double h0 = inHdg; inShip = nullptr;
+			EnterShip(s, f0, _V(std::sin(h0), 0, std::cos(h0))); if (!inShip) { who.where = Person::IN_WORLD; return; } }
+		air = Air{}; air.body = "ship"; air.p = 101.3; air.T = 294; air.ppO2 = 21.2; air.ppCO2 = 0.04;
+		double g = 9.81;
+		if (si->fns.Gravity) { VECTOR3 gv{}; si->fns.Gravity(si->ctx, &inFeet, &gv); g = length(gv); }
+		// the organism: walking costs, the ship's air, shielded (the ship's own radiation model belongs to the ship)
+		const double v = std::hypot(fwd, lat);
+		humanW = LocomotionPower(suitOn ? Mass() : bio.mass, v, g);
+		double heat = 0;
+		suit.vent = true; suit.ventPpO2 = air.ppO2; suit.ventPpCO2 = air.ppCO2; suit.pOut = air.p;
+		if (suitOn) heat = suitResidual = suit.Step(dt, bio.O2Use(), bio.CO2Made(), 0, bio.Heat(), air.T);
+		bio.Step(dt, humanW + (turn ? 25 : 0), suitOn ? suit.ppO2 : air.ppO2, suitOn ? suit.ppCO2 : air.ppCO2, air.p, suitOn, heat);
+		bio.Irradiate(dt, 0);
+		bio.Sustain(dt, true, suitOn ? &suit.water : nullptr, air.T, suitOn);
+
+		// walking: the keys as outside, in the ship's frame
+		const Keys k = keysFresh ? keys : Keys{};
+		keysFresh = false;
+		// the ship says whether one may walk now (takeoff, landing, the anamezon drive: no); she stays where she stands
+		char why[96] = "";
+		const bool shipLets = !si->ext.CanWalk || si->ext.CanWalk(si->ctx, why, sizeof why);
+		if (!shipLets && (k.fwd || k.back || k.left || k.right || k.stepL || k.stepR) && messageTime <= 0)
+			Say(why[0] ? Utf8(why) : std::string("Ходить сейчас нельзя"));
+		const bool act = bio.CanAct() && shipLets;
+		const double target = !act ? 0 : k.fwd && !k.back ? (k.run ? (std::min)(runSpeed, 3.0) : walkSpeed) : k.back && !k.fwd ? -0.9 : 0;
+		const double nf = Approach(fwd, target, std::abs(target) > std::abs(fwd) ? 2.5 : 6.0, dt);
+		accel = (nf - fwd) / dt; fwd = nf;
+		lat = Approach(lat, act ? (k.stepR - k.stepL) * 0.9 : 0, 4.0, dt);
+		turn = Approach(turn, act ? (k.right - k.left) * 1.8 : 0, 12.0, dt);
+		// through her eyes, the mouse turns her: past the comfortable turn of the head (60 deg) the body follows the look
+		// (the head alone would stop at the neck's range, which felt like an invisible wall)
+		if (act && oapiCameraInternal() && oapiCameraTarget() == GetHandle())
+		{
+			const double keep = 60 * RAD;
+			double yaw = 0, pitch = 0;
+			if (CalibrateLook()) LookDir(yaw, pitch);
+			if (std::abs(yaw) > keep)
+			{
+				const double ex = yaw - std::copysign(keep, yaw);
+				inHdg += ex;
+				SetLook(yaw - ex, pitch);
+			}
+		}
+		inHdg = std::fmod(inHdg + turn * dt + PI2, PI2);
+		const VECTOR3 f = _V(std::sin(inHdg), 0, std::cos(inHdg)), r = _V(std::cos(inHdg), 0, -std::sin(inHdg));
+		VECTOR3 to = inFeet + f * (fwd * dt) + r * (lat * dt);
+		if (si->fns.Walls) si->fns.Walls(si->ctx, &inFeet, &to, 0.25, heightM > 0 ? heightM : 1.75);
+		double fy = to.y;
+		if (!si->fns.Ground || si->fns.Ground(si->ctx, &to, 0.45, &fy)) { to.y = fy; inFeet = to; }
+		else { fwd = lat = 0; }                       // no floor there: she does not step into the void
+		sv->SetAttachmentParams(inParent, inFeet + si->Origin(), f, _V(0, 1, 0));
+		if (GetAttachmentStatus(inChild) != inShip) sv->AttachChild(GetHandle(), inParent, inChild);
+
+		const int req = hud.TakeRequest();
+		if (req >= 0) ApRequest(req);
+		HudBySuit();
+		Animate(dt, g, true);
+	}
+
+	// what is within reach: the nearest entrance of a ship (outside: its lifts and airlocks)
+	void CrewMember::FindUse(double dt)
+	{
+		useScan -= dt;
+		if (useScan > 0) return;
+		useScan = 0.2;
+		useShip = nullptr; useId = -1; useHint.clear();
+		if ((who.where != Person::IN_WORLD && who.where != Person::INTERIOR) || !bio.CanAct()) return;
+		if (inShip)
+		{
+			ShipInterior* si = InteriorOf(inShip);
+			if (!si || !si->fns.Count || !si->fns.Item) return;
+			double best = 1e9;
+			const int n = si->fns.Count(si->ctx);
+			for (int i = 0; i < n; ++i)
+			{
+				OcItem it{};
+				if (!si->fns.Item(si->ctx, i, &it)) continue;
+				const VECTOR3 dv = it.pos - inFeet;
+				const double d = std::hypot(dv.x, dv.z);
+				if (d < it.radius && std::abs(dv.y) < 2.0 && d < best) { best = d; useShip = inShip; useId = it.id; useHint = Utf8(it.label); }
+			}
+			return;
+		}
+		VECTOR3 feet; Local2Global(_V(0, -height, 0), feet);
+		double best = 1e9;
+		for (ShipInterior& si : interiors())
+		{
+			if (!oapiIsVessel(si.ship) || !si.fns.Count || !si.fns.Item) continue;
+			VECTOR3 sp; oapiGetGlobalPos(si.ship, &sp);
+			VESSEL* sv = oapiGetVesselInterface(si.ship);
+			if (length(sp - feet) > sv->GetSize() + 50) continue;
+			const int n = si.fns.Count(si.ctx);
+			for (int i = 0; i < n; ++i)
+			{
+				OcItem it{};
+				if (!si.fns.Item(si.ctx, i, &it)) continue;
+				if (it.kind != OC_LIFT && it.kind != OC_AIRLOCK && it.kind != OC_EXIT) continue;   // from outside: the entrances
+				VECTOR3 g; sv->Local2Global(it.pos, g);
+				const double d = length(g - feet);
+				if (d < it.radius && d < best) { best = d; useShip = si.ship; useId = it.id; useHint = Utf8(it.label); }
+			}
+		}
+	}
+
+	bool CrewMember::DoUse()
+	{
+		if (useId < 0 || !useShip) return false;
+		for (ShipInterior& si : interiors())
+			if (si.ship == useShip && si.fns.Use && oapiIsVessel(si.ship)) { si.fns.Use(si.ctx, useId, who.id); return true; }
+		return false;
+	}
+
 	// a button of the suit computer: the pack's height hold and landing, or one of the autopilots on the selected target
 	void CrewMember::ApRequest(int req)
 	{
@@ -1054,3 +1312,182 @@ namespace ocrew
 
 DLLCLBK VESSEL* ovcInit(OBJHANDLE hVessel, int fModel) { return new ocrew::CrewMember(hVessel, fModel); }
 DLLCLBK void ovcExit(VESSEL* vessel) { delete static_cast<ocrew::CrewMember*>(vessel); }
+
+// ---- the interface for ships (include/OrbiterCrewApi.h) ----
+
+namespace
+{
+	ocrew::CrewMember* BodyOf(OBJHANDLE h)
+	{
+		for (ocrew::CrewMember* c : ocrew::everyoneRef()) if (c->GetHandle() == h) return c;
+		return nullptr;
+	}
+}
+extern "C" __declspec(dllexport) int ocCreatePerson(const char* name, const char* role, double age, double massKg)
+{
+	ocrew::Person& p = ocrew::Crew::Create();
+	if (name) p.name = name;
+	if (role) p.role = role;
+	if (age > 0) p.age = age;
+	if (massKg > 0) p.body.mass = massKg;
+	return p.id;
+}
+extern "C" __declspec(dllexport) void ocSetAboard(int id, OBJHANDLE ship)
+{
+	if (ocrew::Person* p = ocrew::Crew::Find(id)) { p->where = ocrew::Person::ABOARD; p->vessel = ship; }
+}
+extern "C" __declspec(dllexport) int ocPersonOfBody(OBJHANDLE body)
+{
+	ocrew::CrewMember* c = BodyOf(body);
+	return c ? c->Who().id : 0;
+}
+extern "C" __declspec(dllexport) int ocBoard(OBJHANDLE body, OBJHANDLE ship)
+{
+	ocrew::CrewMember* c = BodyOf(body);
+	if (!c) return 0;
+	ocrew::Person& p = c->Who();
+	c->KeepWorn();                     // the suit's cold gas as the body holds it now
+	p.where = ocrew::Person::ABOARD; p.vessel = ship;
+	if (oapiGetFocusObject() == body) oapiSetFocusObject(ship);
+	oapiDeleteVessel(body);            // the destructor lets the worn items go and keeps ABOARD
+	return p.id;
+}
+extern "C" __declspec(dllexport) OBJHANDLE ocDisembark(int id, const char* vesselName, const VESSELSTATUS2* vs)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p || !vs || p->where == ocrew::Person::IN_WORLD) return nullptr;
+	ocrew::Crew::ExpectBody(id);
+	OBJHANDLE h = oapiCreateVesselEx(vesselName, p->bodyClass.c_str(), vs);
+	ocrew::Crew::ExpectBody(0);
+	if (ocrew::CrewMember* c = BodyOf(h)) c->takeView = true;   // the camera goes with the person, as the user last had it
+	return h;
+}
+extern "C" __declspec(dllexport) int ocInfo(int id, OcInfo* out)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p || !out) return 0;
+	std::memset(out, 0, sizeof *out);
+	strncpy_s(out->name, p->name.c_str(), _TRUNCATE); strncpy_s(out->role, p->role.c_str(), _TRUNCATE); strncpy_s(out->sex, p->sex.c_str(), _TRUNCATE);
+	out->age = p->age; out->heightM = p->heightM; out->massKg = p->body.mass;
+	out->pulse = p->body.pulse; out->coreT = p->body.coreT; out->state = static_cast<int>(p->body.state);
+	out->where = static_cast<int>(p->where); out->vessel = p->vessel;   // 3 = INTERIOR (the body)
+	return 1;
+}
+extern "C" __declspec(dllexport) void ocSavePerson(int id, FILEHANDLE scn)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p || p->where == ocrew::Person::INTERIOR) return;   // walking inside: his or her body saves the person
+	oapiWriteScenario_int(scn, const_cast<char*>("OC_PERSON"), p->id);
+	p->Save(scn);
+	oapiWriteScenario_string(scn, const_cast<char*>("OC_END"), const_cast<char*>(""));
+}
+extern "C" __declspec(dllexport) int ocLoadPerson(const char* lines)
+{
+	if (!lines) return 0;
+	ocrew::Person& p = ocrew::Crew::Create();
+	std::istringstream all(lines); std::string line;
+	while (std::getline(all, line))
+	{
+		std::istringstream ss(line); std::string key; ss >> key;
+		if (!key.empty()) p.LoadLine(key, ss);
+	}
+	p.worn.suit.fromScenario = true; p.worn.packFromScenario = true;   // what is worn is as saved
+	return p.id;
+}
+extern "C" __declspec(dllexport) void ocRegisterInterior(OBJHANDLE ship, const OcInterior* fns, void* ctx)
+{
+	auto& v = ocrew::interiors();
+	v.erase(std::remove_if(v.begin(), v.end(), [&](const ocrew::ShipInterior& s) { return s.ship == ship; }), v.end());
+	if (fns) v.push_back({ ship, *fns, ctx });
+}
+extern "C" __declspec(dllexport) void ocUnregisterInterior(OBJHANDLE ship)
+{
+	auto& v = ocrew::interiors();
+	v.erase(std::remove_if(v.begin(), v.end(), [&](const ocrew::ShipInterior& s) { return s.ship == ship; }), v.end());
+}
+extern "C" __declspec(dllexport) void ocSetInteriorExt(OBJHANDLE ship, const OcInteriorExt* ext)
+{
+	ocrew::ShipInterior* si = ocrew::InteriorOf(ship);
+	if (!si) return;
+	si->ext = OcInteriorExt{};
+	if (ext && ext->size > 0) std::memcpy(&si->ext, ext, (std::min)(static_cast<size_t>(ext->size), sizeof si->ext));
+	si->ext.size = sizeof si->ext;
+}
+extern "C" __declspec(dllexport) OBJHANDLE ocShipOf(int id)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p) return nullptr;
+	return p->where == ocrew::Person::ABOARD ? p->vessel : p->where == ocrew::Person::INTERIOR ? p->ship : nullptr;
+}
+namespace
+{
+	std::string FreeName(const std::string& base)
+	{
+		std::string v = base; for (char& c : v) if (c == ' ') c = '_';
+		std::string out = v;
+		for (int i = 2; oapiGetVesselByName(const_cast<char*>(out.c_str())); ++i) out = v + "_" + std::to_string(i);
+		return out;
+	}
+}
+// aboard without a body -> the body stands in the interior at that place (ship frame); the focus goes to the body
+extern "C" __declspec(dllexport) OBJHANDLE ocEnterInterior(int id, const VECTOR3* pos, const VECTOR3* dir)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p || !pos || p->where != ocrew::Person::ABOARD || !p->vessel || !oapiIsVessel(p->vessel)) return nullptr;
+	OBJHANDLE ship = p->vessel;
+	if (!ocrew::InteriorOf(ship)) return nullptr;
+	VESSEL* sv = oapiGetVesselInterface(ship);
+	VESSELSTATUS2 vs; std::memset(&vs, 0, sizeof vs); vs.version = 2;
+	sv->GetStatusEx(&vs);                               // where the ship is; the attachment places her at once
+	vs.flag = 0; vs.fuel = nullptr; vs.thruster = nullptr; vs.dockinfo = nullptr; vs.nfuel = vs.nthruster = vs.ndockinfo = 0;
+	const VECTOR3 d = dir ? *dir : _V(0, 0, 1);
+	auto& pi = ocrew::PendingInterior(); pi.ship = ship; pi.feet = *pos; pi.hdg = std::atan2(d.x, d.z);
+	p->ship = ship;
+	ocrew::Crew::ExpectBody(id);
+	OBJHANDLE h = oapiCreateVesselEx(FreeName(p->name).c_str(), p->bodyClass.c_str(), &vs);
+	ocrew::Crew::ExpectBody(0); pi = {};
+	if (!h) return nullptr;
+	// attaching a vessel in the frame it is made in, and moving the focus inside the ship's key callback, crash Orbiter:
+	// the body hangs itself on the ship, takes the focus and the camera in its own first step
+	if (ocrew::CrewMember* c = BodyOf(h)) c->takeView = true;
+	return h;
+}
+// the person's body walks into the ship (through a lift or an airlock): the same body, now inside at that place
+// (interior frame); the focus and the camera stay as they are
+extern "C" __declspec(dllexport) int ocEnterShip(OBJHANDLE body, OBJHANDLE ship, const VECTOR3* pos, const VECTOR3* dir)
+{
+	ocrew::CrewMember* c = BodyOf(body);
+	if (!c || !pos || c->inShip || c->Who().where != ocrew::Person::IN_WORLD || !ocrew::InteriorOf(ship)) return 0;
+	c->EnterShip(ship, *pos, dir ? *dir : _V(0, 0, 1));
+	return c->inShip ? c->Who().id : 0;
+}
+// the body leaves the world (into the seat 'seatId', or stored with -1); the focus goes to the ship
+extern "C" __declspec(dllexport) void ocLeaveInterior(int id, int seatId)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p || p->where != ocrew::Person::INTERIOR) return;
+	ocrew::CrewMember* c = BodyOf(p->vessel);
+	OBJHANDLE ship = p->ship;
+	if (c) { c->KeepWorn(); c->LeaveShip(); }
+	p->where = ocrew::Person::ABOARD; p->vessel = ship;
+	if (c) { if (oapiGetFocusObject() == c->GetHandle() && ship) oapiSetFocusObject(ship); oapiDeleteVessel(c->GetHandle()); }
+	(void)seatId;
+}
+// out of the ship (an airlock): the body stands at vs, detached, in the world
+extern "C" __declspec(dllexport) OBJHANDLE ocExitTo(int id, const char* vesselName, const VESSELSTATUS2* vs)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p || !vs) return nullptr;
+	if (p->where == ocrew::Person::INTERIOR)
+	{
+		ocrew::CrewMember* c = BodyOf(p->vessel);
+		if (!c) return nullptr;
+		c->LeaveShip();
+		c->DefSetStateEx(vs);
+		p->where = ocrew::Person::IN_WORLD;
+		return c->GetHandle();
+	}
+	if (p->where == ocrew::Person::ABOARD) return ocDisembark(id, vesselName, vs);
+	return nullptr;
+}
+DLLCLBK void ExitModule(HINSTANCE) { ocrew::Crew::Clear(); ocrew::interiors().clear(); }   // the simulation ends: nobody is left

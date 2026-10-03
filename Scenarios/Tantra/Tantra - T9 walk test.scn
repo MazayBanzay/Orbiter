@@ -1,0 +1,36 @@
+BEGIN_DESC
+T9 walk test: the ship lies on its blades; cockpit view. Select the virtual cockpit (F8 toggles panel / virtual cockpit), then walk inside:
+W A S D move, Shift run, E sit down / stand up, 1-6 teleport (1 = bridge capsule, 2 = upper lobby, 3 = lower lobby, 4 = keel, 5 = roof passage, 6 = upper corridor).
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52000.5
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Tantra
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Tantra
+  MODE Cockpit
+  FOV 60.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Tantra:Tantra
+  STATUS Landed Earth
+  POS 12.5000000 29.5000000
+  HEADING 90.00
+  PRPLEVEL 0:1.000 1:1.000 2:1.000 3:1.000 4:1.000 5:1.000
+  ENGSET 0
+  IGNITION 0
+  GLIMIT 1 5.00
+  CARRIAGE 0.0000 0.0 1.000 1 0 0
+END
+END_SHIPS

@@ -19,6 +19,7 @@ button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
 .row{display:grid;grid-template-columns:150px 1fr 42px;gap:6px;align-items:center;font-size:12px}
 .row input{width:100%}
 #hud{position:absolute;left:10px;top:10px;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:8px;padding:5px 9px;font-size:12px;z-index:2}
+.rl{position:absolute;pointer-events:none;font:10px/1.15 system-ui,sans-serif;color:#102030;background:rgba(255,255,255,.82);border:1px solid #9fb0c4;border-radius:3px;padding:0 3px;white-space:nowrap;transform:translate(-50%,-50%);z-index:1}
 #groups label{display:inline-block;margin:1px 6px 1px 0;font-size:12px}
 </style>
 </head>
@@ -31,7 +32,13 @@ button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
 <h2>Позы</h2><div id="poses"></div>
 <h2>Корабль</h2>
 <div class="row"><span>тангаж, °</span><input id="pitch" type="range" min="0" max="90" step="1" value="0"><span id="pitchV">0</span></div>
+<div><button id="pLie">лёжа 0°</button><button id="pStella">стелла 72,5°</button><button id="pStand">стоя 90°</button></div>
 <div class="row"><span>подъём оси, м</span><input id="lift" type="range" min="0" max="80" step="0.5" value="0"><span id="liftV">0</span></div>
+<h2>Разрез</h2>
+<div><button id="cutX" class="on">вдоль (по оси)</button><button id="cutY">горизонтальный</button><button id="cutZ">поперёк</button><button id="cutOff">без разреза</button></div>
+<div class="row"><span>положение, м</span><input id="cut" type="range" min="-30" max="30" step="0.1" value="0"><span id="cutV">0</span></div>
+<div class="row"><span>подписи помещений</span><input id="rlOn" type="checkbox" checked><span></span></div>
+<div class="row"><span>отсеки (TantraVC)</span><input id="vcOn" type="checkbox" checked><span></span></div>
 <h2>Группы</h2><div id="groups"></div>
 <h2>Анимации</h2><div id="anims"></div>
 </div>
@@ -39,12 +46,13 @@ button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="t9_data.js"></script>
+<script src="t9_vc.js"></script>
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
 function b64f(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; }
 const view = $("view");
-const renderer = new THREE.WebGLRenderer({antialias: true});
+const renderer = new THREE.WebGLRenderer({antialias: true}); renderer.localClippingEnabled = true;
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio)); view.appendChild(renderer.domElement);
 const scene = new THREE.Scene(); scene.background = new THREE.Color(0xeef1f4);
 const cam = new THREE.PerspectiveCamera(40, 1, 0.3, 4000); const ctl = new THREE.OrbitControls(cam, renderer.domElement);
@@ -60,7 +68,30 @@ for (const p of T9.parts) {
   const v = new Float32Array(b64f(p.v)), idx = new Uint32Array(b64f(p.i));
   const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(v.slice(), 3)); g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeVertexNormals();
   const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({color: new THREE.Color(...p.color), side: THREE.DoubleSide}));
-  m.name = p.name; inner.add(m); MESH[p.name] = m; BASE[p.name] = v;
+  m.name = p.name; m.frustumCulled = false; inner.add(m); MESH[p.name] = m; BASE[p.name] = v;  // rigged parts move far from their bounds
+}
+// interior compartments
+const CLIP = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0); const CLIPS = [CLIP];
+for (const p of T9VC.parts) {
+  const v = new Float32Array(b64f(p.v)), idx = new Uint32Array(b64f(p.i));
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(v, 3)); g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({color: new THREE.Color(...p.color), side: THREE.DoubleSide}));
+  m.name = p.name; inner.add(m); MESH[p.name] = m;
+}
+// section plane: keeps the part of the ship behind the plane; the cut faces show the inner (back) side darker
+for (const m of Object.values(MESH)) { m.material.clippingPlanes = CLIPS; m.material.clipShadows = true; }
+let cutAxis = "x";
+const RANGE = {x: [-30, 30], y: [-20, 25], z: [-62, 120]};
+function setCut(ax) {
+  cutAxis = ax; for (const k of ["X", "Y", "Z", "Off"]) $("cut" + k).classList.toggle("on", k.toLowerCase() === ax);
+  const r = RANGE[ax] || [0, 0]; $("cut").min = r[0]; $("cut").max = r[1]; $("cut").value = ax === "z" ? 40 : 0; applyCut();
+}
+function applyCut() {
+  const c = +$("cut").value; $("cutV").textContent = c.toFixed(1);
+  for (const m of Object.values(MESH)) m.material.clippingPlanes = cutAxis === "off" ? [] : CLIPS;
+  const n = {x: [-1, 0, 0], y: [0, -1, 0], z: [0, 0, -1]}[cutAxis] || [1, 0, 0];
+  CLIP.set(new THREE.Vector3(...n), c);  // visible where n·p + c >= 0  ->  p.axis <= c
+  CLIP.applyMatrix4(inner.matrixWorld);
 }
 // rig (same math as gen_mesh.comp_matrices)
 const S = {}; for (const a of T9.anims) S[a] = 0; for (const c of T9.comps) S[c.anim] = c.d;
@@ -88,9 +119,22 @@ function applyRig() {
   T9.comps.forEach((c, i) => { for (const gname of c.groups) { const m = MESH[gname]; if (!m) continue; const pos = m.geometry.attributes.position.array, base = BASE[gname]; const v = new THREE.Vector3(); for (let k = 0; k < base.length; k += 3) { v.set(base[k], base[k + 1], base[k + 2]).applyMatrix4(M[i]); pos[k] = v.x; pos[k + 1] = v.y; pos[k + 2] = v.z; } m.geometry.attributes.position.needsUpdate = true; m.geometry.computeVertexNormals(); done.add(gname); } });
 }
 let pitch = 0, lift = 0;
-function applyShip() { shipG.position.set(0, lift, 0); shipG.rotation.x = -pitch * Math.PI / 180; inner.position.set(0, 0, 0); }
+function applyShip() {
+  shipG.position.set(0, lift, 0); shipG.rotation.x = -pitch * Math.PI / 180; inner.position.set(0, 0, 0);
+  // command bridge capsule: counter-rotates about the cross axis so that the room stays level
+  const cap = MESH.vc_command_bridge;
+  if (cap) {
+    const piv = new THREE.Vector3(0, 2.0, 79.0), a = pitch * Math.PI / 180;
+    cap.matrixAutoUpdate = false;
+    cap.matrix.copy(new THREE.Matrix4().makeTranslation(piv.x, piv.y, piv.z).multiply(new THREE.Matrix4().makeRotationX(a)).multiply(new THREE.Matrix4().makeTranslation(-piv.x, -piv.y, -piv.z)));
+    cap.matrixWorldNeedsUpdate = true;
+  }
+}
 // UI: poses
 for (const p of T9.poses) { const b = document.createElement("button"); b.textContent = p.name; b.onclick = () => { for (const a of T9.anims) S[a] = 0; for (const c of T9.comps) S[c.anim] = c.d; Object.assign(S, p.states); pitch = p.pitch; lift = p.lift; sync(); }; $("poses").appendChild(b); }
+for (const k of ["X", "Y", "Z", "Off"]) $("cut" + k).onclick = () => setCut(k.toLowerCase());
+$("cut").oninput = applyCut; $("vcOn").onchange = e => { for (const p of T9VC.parts) MESH[p.name].visible = e.target.checked; };
+$("pLie").onclick = () => { pitch = 0; sync(); }; $("pStella").onclick = () => { pitch = 72.5; sync(); }; $("pStand").onclick = () => { pitch = 90; sync(); };
 $("pitch").oninput = e => { pitch = +e.target.value; sync(); }; $("lift").oninput = e => { lift = +e.target.value; sync(); };
 // UI: groups by prefix
 const prefixes = [...new Set(T9.parts.map(p => p.name.replace(/[_\d]+$/, "").replace(/_(port|starboard)$/, "").replace(/\d+$/, "")))].sort();
@@ -98,16 +142,28 @@ for (const pre of prefixes) { const l = document.createElement("label"); const c
 // UI: anims
 const sliders = {};
 for (const a of T9.anims) { const r = document.createElement("div"); r.className = "row"; r.innerHTML = `<span>${a}</span><input type="range" min="0" max="1" step="0.01"><span></span>`; const inp = r.querySelector("input"); inp.oninput = () => { S[a] = +inp.value; sync(false); }; sliders[a] = r; $("anims").appendChild(r); }
-function sync(all = true) { for (const a of T9.anims) { const r = sliders[a]; r.querySelector("input").value = S[a]; r.querySelector("span:last-child").textContent = S[a].toFixed(2); } $("pitch").value = pitch; $("lift").value = lift; $("pitchV").textContent = pitch; $("liftV").textContent = lift; applyRig(); applyShip(); $("hud").textContent = `тангаж ${pitch}° · ось на ${(T9.axisH + lift).toFixed(1)} м`; }
+function sync(all = true) { for (const a of T9.anims) { const r = sliders[a]; r.querySelector("input").value = S[a]; r.querySelector("span:last-child").textContent = S[a].toFixed(2); } $("pitch").value = pitch; $("lift").value = lift; $("pitchV").textContent = pitch; $("liftV").textContent = lift; applyRig(); applyShip(); shipG.updateMatrixWorld(true); applyCut(); $("hud").textContent = `тангаж ${pitch}° · ось на ${(T9.axisH + lift).toFixed(1)} м`; }
 $("info").textContent = `${T9.parts.length} групп, ${T9.comps.length} компонентов рига, ${T9.anims.length} анимаций, длина ${T9.L.toFixed(1)} м`;
 function resize() { const r = view.getBoundingClientRect(); renderer.setSize(r.width, r.height); cam.aspect = r.width / r.height; cam.updateProjectionMatrix(); }
 window.addEventListener("resize", resize); if (window.ResizeObserver) new ResizeObserver(resize).observe(view);
 cam.position.set(120, 60, -160); ctl.target.set(0, 0, -20); ctl.update();
 window.setCam = (p, t) => { cam.position.set(...p); ctl.target.set(...t); ctl.update(); };
 window.setAnim = (a, v) => { S[a] = v; sync(); };
-window.S = S;
+window.S = S; window.setCut = setCut;
 resize(); sync();
-(function loop() { renderer.render(scene, cam); requestAnimationFrame(loop); })();
+const LAB = T9ROOMS.map(r => { const d = document.createElement("div"); d.className = "rl"; d.textContent = `${r.ru} ${r.area}`; view.appendChild(d); return {d, r, v: new THREE.Vector3(...r.pos)}; });
+function updLabels() {
+  const on = $("rlOn").checked, rect = view.getBoundingClientRect(); inner.updateWorldMatrix(true, false);
+  for (const L of LAB) {
+    if (!on) { L.d.style.display = "none"; continue; }
+    const w = L.v.clone(); if (L.r.kind === "bridge" && MESH.vc_command_bridge) w.set(0, 2.5, 79); inner.localToWorld(w);
+    const visible = cutAxis === "off" || CLIP.distanceToPoint(w) >= 0;
+    const p = w.clone().project(cam);
+    if (!visible || p.z > 1) { L.d.style.display = "none"; continue; }
+    L.d.style.display = "block"; L.d.style.left = ((p.x + 1) / 2 * rect.width) + "px"; L.d.style.top = ((1 - p.y) / 2 * rect.height) + "px";
+  }
+}
+(function loop() { renderer.render(scene, cam); updLabels(); requestAnimationFrame(loop); })();
 </script>
 </body>
 </html>

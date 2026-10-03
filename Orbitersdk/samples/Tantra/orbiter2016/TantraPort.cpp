@@ -132,14 +132,9 @@ void Tantra::ActPortDrop() {
 }
 
 void Tantra::ActPortLift() {
-    if (portStep_ != PortStep::Idle) { Message("Порт анамезона занят", "Anamezon port busy"); return; }
-    const bool up = !(carriage_.Target() == tantra::Carriage::kLoadP);
-    if (!carriage_.CommandLoadHeight(up, GroundContact())) {
-        Message("Высота загрузки: только лёжа на грунте, шасси выпущено", "Loading height: level on the ground, gear down");
-        return;
-    }
-    Message(up ? "Лафет поднимает корабль: под брюхом 22 м (транспортёр)" : "Лафет опускает корабль",
-            up ? "Lifting the ship: 22 m under the belly" : "Lowering the ship");
+    // T9: lying on the blades the hull axis stands 31.6 m up - that is the loading height; nothing to lift.
+    if (carriage_.AtLoadHeight()) Message("Высота загрузки: корабль лёжа на лопастях уже на ней (ось 31,6 м)", "Loading height: lying on the blades the ship is already there (axis 31.6 m)");
+    else Message("Высота загрузки: только лёжа на грунте, шасси выпущено", "Loading height: lying on the ground, gear down");
 }
 
 void Tantra::ActPortStop() {

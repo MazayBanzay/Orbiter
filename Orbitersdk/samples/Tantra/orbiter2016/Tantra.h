@@ -6,6 +6,10 @@
 #include "orbitersdk.h"
 #include "XRSound.h"
 #include "TantraCrew.h"
+#include "TantraLift.h"
+#include "TantraWalk.h"
+#include "TantraScreen.h"
+#include "TantraInterior.h"
 
 #include "../core/Carriage.h"
 #include "../core/Damage.h"
@@ -34,6 +38,10 @@ public:
     void clbkPreStep(double simt, double simdt, double mjd) override;
     void clbkPostStep(double simt, double simdt, double mjd) override;
     int clbkConsumeBufferedKey(DWORD key, bool down, char* kstate) override;
+    void clbkNavMode(int mode, bool active) override;        // Orbiter's autopilots are not used in the Tantra: switched off at once
+    int clbkConsumeDirectKey(char* kstate) override;        // walk mode keys (TantraWalk)
+    bool clbkVCMouseEvent(int id, int event, VECTOR3& p) override;   // the screen button
+    bool clbkLoadVC(int id) override;                        // the interior as a virtual cockpit (TantraVC.msh)
     bool clbkDrawHUD(int mode, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp) override;
 
     // 2D panel (TantraPanel.cpp)
@@ -57,8 +65,10 @@ private:
     bool Settled() const { return settleTimer_ <= 0.0 && settledFor_ >= 2.0; }  // gate for load / damage checks
 
     void BindMainGroup(EngineSet set);
-    void RebindGroups();              // main: anamezon or stern ring; hover: pods swivelled down
-    bool AnaIsMain() const;           // anamezon chambers hold the main throttle (only while feeding)
+    void RebindGroups();              // main: anamezon or marching cup; hover: pods swivelled down; retro: nose cups
+    void UpdateReactionMass();        // argon below 30 km, iron above: resource and Isp of the planetary cups
+    bool AnaIsMain() const;
+    int CanWalk(char* reason, int n) const;   // may the people walk inside now (OrbiterCrew); 0 + reason if not           // anamezon chambers hold the main throttle (only while feeding)
     void UpdatePods(double dt);
     void ActPods(bool hover);          // B: pods out and cups down / cups aft and pods in; Shift+B: out, cups aft
     void ActPodsTo(double deg);
@@ -87,6 +97,7 @@ private:
     void ActCycleGLimit();
     void ActNextTrap();
     void ActToggleAirlock();
+    void ActLift();                // Shift+A: main airlock crew lift down to the ground / up
     void ActEva();
     void ActSelectCrew(int delta);
     void ActErect();                  // carriage: stand the ship on its stern / lay it level
@@ -126,13 +137,14 @@ private:
 
     tantra::ShipParams prm_;
 
-    // Propellant: four keel traps (anamezon) and the ion-trigger charges.
+    // Propellant: four keel traps (anamezon), argon (below 30 km) and iron (above) for the planetary engines.
     PROPELLANT_HANDLE trap_[tantra::spec::kTrapCount] = {};
-    PROPELLANT_HANDLE ion_ = nullptr;
+    PROPELLANT_HANDLE argon_ = nullptr, iron_ = nullptr;
     int activeTrap_ = 0;
 
     THRUSTER_HANDLE ana_[tantra::spec::kAnaCount] = {};
-    THRUSTER_HANDLE plan_[tantra::spec::kPlanCount] = {};   // central stern ring
+    THRUSTER_HANDLE march_ = nullptr;                       // marching planetary cup in the stern well
+    THRUSTER_HANDLE retro_[tantra::spec::kRetroCount] = {};  // nose retro anamezon cups
     THRUSTER_HANDLE pod_[tantra::spec::kPodCups] = {};      // auxiliary pods
     VECTOR3 podExhPos_[tantra::spec::kPodCups] = {}, podExhDir_[tantra::spec::kPodCups] = {};
     EXHAUSTSPEC podExh_[tantra::spec::kPodCups] = {};
@@ -177,18 +189,37 @@ private:
     bool shownLost_[tantra::damage::kPartCount] = {};
     double glowT_[2] = {-1.0, -1.0};
     bool TouchPointLost(int i, const tantra::CarriagePose& p) const;
-    int TouchLeg(int i, const tantra::CarriagePose& p) const;  // leg carrying touchdown point i: 0 carriage port,
-                                                                // 1 starboard, 2..5 stern legs; -1 hull
+    int TouchLeg(int i, const tantra::CarriagePose& p) const;  // leg carrying touchdown point i: 0 blade port,
+                                                                // 1 starboard, 2..5 stern legs, 6 kangaroo; -1 hull
     // Leg systems (core/Legs): MR ankle struts, jamming soles with anchors, fibre sensors, magnetic bearings.
     tantra::legs::Soles solesCar_, solesStern_;
     tantra::legs::Regen regen_;
-    double strut_[6] = {};                     // ankle struts unloaded 0..1 (rod out)
-    double legN_[6] = {}, legR_[6] = {};       // sensed load [N] and its share of the rating, per leg
-    bool legAlarm_[6] = {};
+    double strut_[7] = {};                     // ankle struts unloaded 0..1 (rod out)
+    double legN_[7] = {}, legR_[7] = {};       // sensed load [N] and its share of the rating, per leg (6 = kangaroo)
+    bool legAlarm_[7] = {};
     bool hipCatcher_ = false;                  // hip magnetic bearings over capacity: running on the catchers
     double touchMu_[tantra::CarriagePose::kMaxTouch] = {0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7};
     double touchMuLng_[tantra::CarriagePose::kMaxTouch] = {0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7};  // along the hull
     double tipWind_ = 0.0;                     // wind that would overturn the ship now [m/s]
+    // Balance device: hull angle and rate against the commanded erection angle, the holding moment, the pause.
+    void UpdateBalance(double dt);
+    double balErr_[2] = {0.0, 0.0}, balRate_[2] = {0.0, 0.0};   // pitch (about x), roll (about z) [rad], [rad/s]
+    double balTorque_[2] = {0.0, 0.0};                           // applied [N m]
+    double balBias_[2] = {0.0, 0.0};                             // slow zero: the static lean of the hull on its feet [rad]
+    bool balHold_ = false;                                       // erection paused: swaying
+    void UpdateWarpFreeze();                                     // high time warp on the ground: freeze (landed status)
+    bool frozen_ = false;
+    // ground mechanism: the hull placed over the planted feet while the carriage moves on the ground
+    void GroundMechanism(double dt, const VECTOR3* t, const int* legOf, int nt);
+    bool mechOn_ = false;
+    VECTOR3 mechSide_ = {1, 0, 0};
+    bool planted_[8] = {};
+    double plLng_[8] = {}, plLat_[8] = {}, plRad_[8] = {};
+    double mechSway_ = 0.0, mechRate_ = 0.0, mechKick_ = 0.0, mechLog_ = 0.0;
+    double mechLastTheta_ = -1.0, mechLastHip_ = 0.0, mechThRate_ = 0.0, mechHipRate_ = 0.0, mechShare_ = 0.0;
+    double balCalm_ = 0.0;                                       // s calm so far
+    double balRamp_ = 1.0;                                       // soft start of the erection after a pause, 0..1
+    double balOver_ = 0.0;                                       // s the sway rate has been over the limit
     const char* legName_ = "";
     void UpdateWind(double dt);
     void GuardAgainstLaunch(double dt);  // a contact bounce must never throw the ship off the ground
@@ -222,7 +253,7 @@ private:
     double elevon_[2] = {0.0, 0.0}, bodyFlap_ = 0.5;  // mesh states (port, starboard; flap 0..1 = 0..25 deg)
     EngineSet engineSet_ = EngineSet::Planetary;
     double podAngle_ = 0.0, podTarget_ = 0.0;  // deg: 0 thrust forward, 90 thrust up
-    int planGroup_ = -1;                       // main throttle: 0 anamezon, 1 planetary stern ring
+    int planGroup_ = -1;                       // main throttle: 0 anamezon, 1 marching planetary cup
     tantra::Ignition ignition_;
     tantra::Drive drive_;
     TantraExhaust* exhaust_ = nullptr;
@@ -250,6 +281,10 @@ private:
     tantra::Carriage carriage_;
     TantraGear* gear_ = nullptr;
     UINT meshIdx_ = 0;
+    UINT vcMeshIdx_ = 0;
+    TantraWalk walk_;
+    TantraInterior interior_; // the interior for OrbiterCrew: people walk inside with their bodies
+    TantraScreen screen_;     // bridge: big screen (outside view), its button, console MFD
     VECTOR3 touch_[tantra::CarriagePose::kMaxTouch] = {};
     int nTouch_ = 0;
     double touchMass_ = 0.0;          // mass the suspension was last tuned for
@@ -263,7 +298,8 @@ private:
     double wingIn_ = 0.0, wingOut_ = 0.0;   // inner panels 0..1 (of kWingFoldDeg), outer panels 0..1 (folded under)
     double tuck_ = 0.0;               // crests/pods, flight mode part
     double hangar_ = 0.0, hangarT_ = 0.0, rovers_ = 0.0, roversT_ = 0.0;
-    double irisAna_ = 0.0, irisPlan_ = 1.0, airlockUp_ = 0.0;
+    double irisAna_ = 0.0, irisMarch_ = 0.0, marchOut_ = 0.0, irisNose_ = 0.0, airlockUp_ = 0.0;
+    bool marchHigh_ = false;          // marching cup and pods run on iron (above kMarchArgonAlt), else argon
 
     // Anamezon port.
     double liftY_[2] = {}, liftYT_[2] = {};   // fork heads of the column lifts (cassette centre, ship y)
@@ -277,6 +313,8 @@ private:
 
     // Crew (OrbiterCrew figures outside).
     TantraCrew crew_;
+    TantraLift lift_;              // main airlock crew lift (port flank s 129)
+    bool liftWasDown_ = false;
     int selectedCrew_ = 0;
 
     // XRSound.

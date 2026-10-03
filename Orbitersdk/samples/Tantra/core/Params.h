@@ -1,8 +1,7 @@
 // Tantra core: tunable ship parameters. No Orbiter dependencies.
-// Defaults are the agreed design values (docs/DESIGN.md); every field can be
-// overridden from Config\Vessels\Tantra.cfg without rebuilding (see the key
-// table in orbiter2010/Tantra.cpp, LoadParams). Geometry stays in Spec.h
-// because it must match the mesh.
+// Defaults are the agreed design values (docs/DESIGN.md, Tantra_Design/DESIGN_LOCAL.md); every field can be
+// overridden from Config\Vessels\Tantra.cfg without rebuilding (see the key table in orbiter2016/Tantra.cpp,
+// LoadParams). Geometry stays in Spec.h because it must match the mesh.
 #pragma once
 #include <cmath>
 
@@ -14,10 +13,11 @@ namespace tantra {
 
 struct ShipParams {
     // Masses [kg]
-    double dryMass = 1.786e6;          // C-146: hull, gear, hangar kit, collar
+    double dryMass = 4.203e6;          // T9: hull, legs, pods, hangar kit, nose cups, planetary installation (Spec kDryCGS)
     double trapStructMass = 164.0e3;   // per trap (30 T virial bound)
     double trapFuelMass = 9370.0e3;    // anamezon per trap (4.8 t/m^3)
-    double ionChargeMass = 4.4e6;      // loaded lift-off, dv ~31 km/s
+    double argonMass = 6.2e6;          // planetary reaction mass below 30 km (liquid, 87 K)
+    double ironMass = 3.8e6;           // planetary reaction mass above 30 km and between the planets
 
     // Anamezon drive (also feeds DriveSpec)
     double anaThrust = 2.17e10;        // N per chamber (~200 g at 44 kt)
@@ -43,11 +43,12 @@ struct ShipParams {
     double hotStartPerDecade = 10.0e3; // m per factor of 10 in jet power
     double hotStartRefPower = 1.2e17;  // W
 
-    // Planetary (ion-trigger) engines: 12 central cups in the stern ring (vertical take-off),
-    // plus two small auxiliary pods on the shoulder (hover of the light ship, Moon-class moves).
-    double planThrustTotal = 1.36e9;   // N, stern ring (T/W 1.25 at 2.5 g loaded)
-    double podThrustTotal = 1.5e8;     // N, both pods
-    double planExhaust = 3.0e5;        // m/s
+    // Planetary engines (p-11B pulsed fusion, magnetic confinement and acceleration of the reaction mass):
+    // the marching cup in the stern well (R 2.2, 12.1 T) and four pods x 3 cups (350 MN each).
+    double marchThrust = 8.86e8;       // N (T/W 1.81 loaded at 1 g; 0.95 at 1.9 g - the pods help there)
+    double podThrustTotal = 1.4e9;     // N, four pods
+    double argonExhaust = 3.0e4;       // m/s near the ground (mixing-layer heating limits the jet speed)
+    double ironExhaust = 3.0e5;        // m/s above 30 km
 
     // Attitude micro-motors
     double attAngAccel = 0.01;         // rad/s^2

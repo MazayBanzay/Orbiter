@@ -35,13 +35,13 @@ constexpr double kTdBelly = 1.0, kTdBellyBreak = 5.0;  // [m/s]; the legs' limit
 
 const char* kRu[kPartCount] = {"щит носа", "днище", "крыло левое", "крыло правое", "перо",
                                "гондола 1", "гондола 2", "гондола 3", "гондола 4",
-                               "нога лафета левая", "нога лафета правая", "кормовая нога 1", "кормовая нога 2",
-                               "кормовая нога 3", "кормовая нога 4", "створки ангара", "створки отсеков",
-                               "чаши кормы", "корпус"};
+                               "лопасть левая", "лопасть правая", "кормовая нога 1", "кормовая нога 2",
+                               "кормовая нога 3", "кормовая нога 4", "нога-кенгуру", "створки ангара", "створки отсеков",
+                               "маршевая чаша", "корпус"};
 const char* kEn[kPartCount] = {"nose shield", "belly", "port wing", "starboard wing", "fin",
                                "pod 1", "pod 2", "pod 3", "pod 4",
-                               "port carriage leg", "starboard carriage leg", "stern leg 1", "stern leg 2",
-                               "stern leg 3", "stern leg 4", "hangar doors", "bay doors", "stern cups", "hull"};
+                               "port blade leg", "starboard blade leg", "stern leg 1", "stern leg 2",
+                               "stern leg 3", "stern leg 4", "kangaroo leg", "hangar doors", "bay doors", "marching cup", "hull"};
 }  // namespace
 
 Model::Model() { Repair(); }
@@ -92,8 +92,8 @@ void Model::Step(double dt, const Flight& f, const Exposure& x, const Ground& g,
                 case kZoneBelly: Hurt(kBelly, hurt, enabled); break;
                 case kZoneCrestEdge: Hurt(kCrestPort, hurt, enabled); Hurt(kCrestStbd, hurt, enabled); break;
                 case kZoneFin: Hurt(kFin, hurt, enabled); break;
-                case kZoneStern: Hurt(kHull, 0.5 * hurt, enabled); Hurt(kSternCups, x.sternCups > 0.1 ? 4.0 * hurt : hurt, enabled); break;
-                case kZoneGear: for (int p = kLegPort; p <= kSternLeg3; ++p) Hurt(p, hurt, enabled); break;
+                case kZoneStern: Hurt(kHull, 0.5 * hurt, enabled); Hurt(kMarchCup, x.sternCups > 0.1 ? 4.0 * hurt : hurt, enabled); break;
+                case kZoneGear: for (int p = kLegPort; p <= kKangLeg; ++p) Hurt(p, hurt, enabled); break;
                 case kZonePods: for (int p = kPod0; p <= kPod3; ++p) Hurt(p, hurt, enabled); break;
             }
         }
@@ -115,7 +115,7 @@ void Model::Step(double dt, const Flight& f, const Exposure& x, const Ground& g,
     if (x.pods > 0.1 && q_ > kPodQ)
         for (int p = kPod0; p <= kPod3; ++p) Hurt(p, q_ > 1.5 * kPodQ ? 1.0 : (q_ / kPodQ - 1.0) * dt, enabled);
     if (x.gear > 0.1 && q_ > kGearQ)
-        for (int p = kLegPort; p <= kSternLeg3; ++p) Hurt(p, (q_ / kGearQ - 1.0) * 0.3 * dt, enabled);
+        for (int p = kLegPort; p <= kKangLeg; ++p) Hurt(p, (q_ / kGearQ - 1.0) * 0.3 * dt, enabled);
     if (x.hangar > 0.1 && q_ > kDoorQ) Hurt(kHangarDoors, q_ > 3.0 * kDoorQ ? 1.0 : 0.3 * dt, enabled);
     if (x.bays > 0.1 && q_ > kDoorQ) Hurt(kBayDoors, q_ > 3.0 * kDoorQ ? 1.0 : 0.3 * dt, enabled);
     // --- g-load on the hull
@@ -125,8 +125,8 @@ void Model::Step(double dt, const Flight& f, const Exposure& x, const Ground& g,
     if (g.touchdown) {
         double v = g.vDown;  // what is left for the hull after the legs
         if (g.gearDown) {
-            if (v > g.vBreak) for (int p = kLegPort; p <= kSternLeg3; ++p) Hurt(p, 1.0, enabled);
-            else if (v > g.vSoft) for (int p = kLegPort; p <= kSternLeg3; ++p) Hurt(p, (v - g.vSoft) / (g.vBreak - g.vSoft), enabled);
+            if (v > g.vBreak) for (int p = kLegPort; p <= kKangLeg; ++p) Hurt(p, 1.0, enabled);
+            else if (v > g.vSoft) for (int p = kLegPort; p <= kKangLeg; ++p) Hurt(p, (v - g.vSoft) / (g.vBreak - g.vSoft), enabled);
             // the struts absorb the energy of a vBreak touchdown at most (stroke bottomed out); the rest reaches the hull
             v = v > g.vBreak ? std::sqrt(v * v - g.vBreak * g.vBreak) : 0.0;
         }
@@ -134,7 +134,7 @@ void Model::Step(double dt, const Flight& f, const Exposure& x, const Ground& g,
         else if (v > kTdBelly) { Hurt(kBelly, 0.2 * (v - kTdBelly), enabled); Hurt(kHull, 0.1 * (v - kTdBelly), enabled); }
     }
     if (g.contact && g.gearDown)
-        for (int i = 0; i < 6; ++i) {
+        for (int i = 0; i < 7; ++i) {
             const double r = g.legRatio[i];
             if (r > 1.5) Hurt(kLegPort + i, 1.0, enabled);
             else if (r > 1.0) Hurt(kLegPort + i, (r - 1.0) * 0.5 * dt, enabled);

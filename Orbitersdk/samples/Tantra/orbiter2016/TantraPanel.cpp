@@ -187,7 +187,7 @@ bool Tantra::clbkPanelMouseEvent(int id, int event, int mx, int my, void*) {
         case A_GSTEP: ActCycleGLimit(); return true;
         case A_OVERRIDE: ActToggleOverride(); return true;
         case A_AIRLOCK: case L_AIRLOCK: ActToggleAirlock(); return true;
-        case A_EVA: case L_EVA: ActEva(); return true;
+        case A_EVA: case L_EVA: if (mx < AreaW(id) / 2) ActLift(); else ActEva(); return true;   // left: crew lift, right: EVA
         case A_CREWSEL: case L_CREWSEL: ActSelectCrew(mx < AreaW(id) / 2 ? -1 : +1); return true;
     }
     return false;
@@ -360,7 +360,7 @@ bool Tantra::clbkPanelRedrawEvent(int id, int, SURFHANDLE s, void*) {
             return true;
         }
         case A_IONRODS: {  // rods of ion charges
-            const double pct = 100.0 * GetPropellantMass(ion_) / prm_.ionChargeMass;
+            const double pct = 100.0 * (GetPropellantMass(argon_) + GetPropellantMass(iron_)) / (prm_.argonMass + prm_.ironMass);
             std::snprintf(key, sizeof key, "%.1f", pct);
             if (!PanelChanged(id, key)) return false;
             PanelClear(s, id);
@@ -372,7 +372,7 @@ bool Tantra::clbkPanelRedrawEvent(int id, int, SURFHANDLE s, void*) {
                 const int fh = int(h * part + 0.5);
                 PanelFill(s, x, kRodY1 - fh, kRodW, fh, 110, 170, 230);
             }
-            std::snprintf(buf, sizeof buf, "%.1f%%  %.0f т", pct, GetPropellantMass(ion_) / 1000.0);
+            std::snprintf(buf, sizeof buf, "%.1f%%  %.0f т", pct, (GetPropellantMass(argon_) + GetPropellantMass(iron_)) / 1000.0);
             PanelText(s, r[0] + 8, kRodY1 + 4, buf, FONT_AMBER);
             return true;
         }
@@ -460,9 +460,14 @@ bool Tantra::clbkPanelRedrawEvent(int id, int, SURFHANDLE s, void*) {
             PanelButton(s, id, open ? "ШЛЮЗ ОТКРЫТ" : "ШЛЮЗ ЗАКРЫТ", open ? 1 : 0);
             return true;
         }
-        case A_EVA: case L_EVA:
-            PanelButton(s, id, "ВЫХОД", 0);
+        case A_EVA: case L_EVA: {   // left half: the airlock crew lift (Shift+A), right half: EVA (E)
+            const double prog = (lift_.Door() + lift_.Out() + lift_.Mast() + lift_.Down()) / 4.0;
+            if (lift_.AtGround()) std::snprintf(buf, sizeof buf, "ЛИФТ ВВЕРХ | ВЫХОД");
+            else if (lift_.Stowed() && !lift_.Lowering()) std::snprintf(buf, sizeof buf, "ЛИФТ ВНИЗ | ВЫХОД");
+            else std::snprintf(buf, sizeof buf, "ЛИФТ %3.0f%% | ВЫХОД", prog * 100.0);
+            PanelButton(s, id, buf, lift_.AtGround() ? 1 : 0);
             return true;
+        }
         case A_CREWSEL: case L_CREWSEL: {
             const int total = crew_.Total();
             if (total > 0) std::snprintf(buf, sizeof buf, "«  %s (%s)  »", crew_.Name(selectedCrew_), crew_.Role(selectedCrew_));
@@ -597,9 +602,9 @@ bool Tantra::RedrawLower(int id, SURFHANDLE s) {
     char key[256], buf[128];
     const int* r = AreaRect(id);
     const tantra::CarriagePose& cp = carriage_.Pose();
-    static const char* kPh[] = {"лежит на колоннах лафета", "подготовка: гребни, гондолы", "подъём на колоннах",
-                                "поворот вокруг цапф", "кормовые лапы выходят", "опускание на лапы",
-                                "мачты сворачиваются", "стоит на корме"};
+    static const char* kPh[] = {"лежит на лопастях и кенгуру", "подъём на лопастях", "цапфы под ЦМ, кенгуру в карман",
+                                "поворот вокруг цапф", "кормовые ноги выходят", "нагрузка на корму",
+                                "лопасти убираются", "стоит на корме"};
     switch (id) {
         case L_MIMIC: {
             int pose = MIMIC_LEVEL;
@@ -684,15 +689,15 @@ bool Tantra::RedrawLower(int id, SURFHANDLE s) {
             const int dy = 21, y0 = r[1] + 4;
             std::snprintf(buf, sizeof buf, "вес        %8.1f МН", W / 1e6);
             PanelText(s, r[0] + 8, y0, buf, FONT_WHITE);
-            std::snprintf(buf, sizeof buf, "колонна x2 %8.1f МН", ld.columnEach / 1e6);
+            std::snprintf(buf, sizeof buf, "лопасть x2 %7.1f МН  кенгуру %5.1f", ld.columnEach / 1e6, ld.kangaroo / 1e6);
             PanelText(s, r[0] + 8, y0 + dy, buf, FONT_AMBER);
-            std::snprintf(buf, sizeof buf, "%s %8.1f МН", carriage_.Port() ? "стол      " : "лапы      ", ld.legs / 1e6);
+            std::snprintf(buf, sizeof buf, "%s %8.1f МН", carriage_.Port() ? "стол      " : "корм.ноги ", ld.legs / 1e6);
             PanelText(s, r[0] + 8, y0 + 2 * dy, buf, FONT_AMBER);
             std::snprintf(buf, sizeof buf, "привод цапф %6.0f МН·м", ld.driveMoment / 1e6);
             PanelText(s, r[0] + 8, y0 + 3 * dy, buf, FONT_AMBER);
             {   // column buckling: F L^2 against pi^2 E I / safety of the band mast (Spec.h)
-                const double flLim = PI * PI * tantra::spec::kCntE * tantra::spec::kLafShinI / tantra::spec::kSafety;
-                std::snprintf(buf, sizeof buf, "изгиб мачт %6.0f %%", 100.0 * ld.columnFL2 / flLim);
+                const double flLim = PI * PI * tantra::spec::kCntE * tantra::spec::kBladeI / tantra::spec::kSafety;
+                std::snprintf(buf, sizeof buf, "изгиб лопастей %5.0f %%", 100.0 * ld.columnFL2 / flLim);
                 PanelText(s, r[0] + 8, y0 + 4 * dy, buf, ld.columnFL2 > flLim ? FONT_RED : FONT_GREEN);
             }
             {   // fibre sensors: every leg against its rating
@@ -702,8 +707,8 @@ bool Tantra::RedrawLower(int id, SURFHANDLE s) {
                               100 * legR_[2], 100 * legR_[3], 100 * legR_[4], 100 * legR_[5]);
                 PanelText(s, r[0] + 8, y0 + 5 * dy, buf, worst >= 1.0 ? FONT_RED : worst >= tantra::legs::kAlarm ? FONT_AMBER : FONT_GREEN);
             }
-            std::snprintf(buf, sizeof buf, "цапфы %s пятки %s", hipCatcher_ ? "страх." : "магн. ",
-                          sa > 0.99 ? "якоря" : sj > 0.99 ? "замкн." : "облег.");
+            std::snprintf(buf, sizeof buf, "цапфы %s грунт %s", hipCatcher_ ? "страх." : "магн. ",
+                          sa > 0.99 ? "спечён" : sj > 0.99 ? "осел" : "осед.");
             PanelText(s, r[0] + 8, y0 + 6 * dy, buf, hipCatcher_ ? FONT_AMBER : FONT_GREEN);
             return true;
         }
@@ -711,13 +716,13 @@ bool Tantra::RedrawLower(int id, SURFHANDLE s) {
             PanelButton(s, id, wingMode_ == 2 ? "КРЫЛЬЯ СЛОЖЕНЫ" : (wingMode_ == 1 ? "КРЫЛЬЯ 30°" : "КРЫЛЬЯ 90°"), wingMode_ ? 1 : 0);
             return true;
         case L_IRIS: {
-            std::snprintf(key, sizeof key, "%.2f %.2f %.2f", irisAna_, irisPlan_, tuck_);
+            std::snprintf(key, sizeof key, "%.2f %.2f %.2f %.2f", irisAna_, irisMarch_, marchOut_, tuck_);
             if (!PanelChanged(id, key)) return false;
             PanelClear(s, id);
             std::snprintf(buf, sizeof buf, "чаши анамезона: %s", irisAna_ > 0.99 ? "ОТКРЫТЫ" : irisAna_ < 0.01 ? "закрыты" : "...");
             PanelText(s, r[0] + 8, r[1] + 6, buf, irisAna_ > 0.99 ? FONT_GREEN : FONT_AMBER);
-            std::snprintf(buf, sizeof buf, "планетарные: %s", irisPlan_ > 0.99 ? "открыты" : irisPlan_ < 0.01 ? "ЗАКРЫТЫ" : "...");
-            PanelText(s, r[0] + 8, r[1] + 32, buf, irisPlan_ > 0.99 ? FONT_GREEN : FONT_AMBER);
+            std::snprintf(buf, sizeof buf, "маршевая: %s", marchOut_ > 0.99 ? "ВЫДВИНУТА" : marchOut_ > 0.0 || irisMarch_ > 0.0 ? "..." : "в колодце");
+            PanelText(s, r[0] + 8, r[1] + 32, buf, marchOut_ > 0.99 ? FONT_GREEN : FONT_AMBER);
             std::snprintf(buf, sizeof buf, "гондолы: %s", (std::max)(tuck_, cp.tuck) > 0.5 ? "утоплены" : "выдвинуты");
             PanelText(s, r[0] + 8, r[1] + 58, buf, FONT_AMBER);
             return true;
@@ -728,12 +733,9 @@ bool Tantra::RedrawLower(int id, SURFHANDLE s) {
         case L_ROVERS:
             PanelButton(s, id, roversT_ > 0.5 ? "РОВЕРЫ ВНИЗУ" : "РОВЕРЫ НАВЕРХУ", roversT_ > 0.5 ? 1 : 0);
             return true;
-        case L_PT_LIFT: {
-            const bool up = carriage_.Target() == tantra::Carriage::kLoadP;
-            PanelButton(s, id, up ? (carriage_.AtLoadHeight() ? "ВЫСОТА ЗАГРУЗКИ" : "ПОДЪЁМ...") : "ПОДНЯТЬ ДЛЯ ЗАГРУЗКИ",
-                        up ? (carriage_.AtLoadHeight() ? 1 : 2) : 0);
+        case L_PT_LIFT:
+            PanelButton(s, id, carriage_.AtLoadHeight() ? "ВЫСОТА ЗАГРУЗКИ (ЛЁЖА)" : "ЗАГРУЗКА: ТОЛЬКО ЛЁЖА", carriage_.AtLoadHeight() ? 1 : 0);
             return true;
-        }
         case L_PT_LOAD:
             PanelButton(s, id, "ПРИНЯТЬ КАССЕТУ", portStep_ != PortStep::Idle && portLoading_ ? 2 : 0);
             return true;

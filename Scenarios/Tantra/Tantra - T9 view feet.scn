@@ -1,0 +1,36 @@
+BEGIN_DESC
+T9 view: the cup feet, ship lying on the blades and the kangaroo leg (P 0), ground camera.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52000.5
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Tantra
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Tantra
+  MODE Extern
+  POS 0.42 -125.00 -22.00
+  TRACKMODE TargetRelative
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Tantra:Tantra
+  STATUS Landed Earth
+  POS 12.5000000 29.5000000
+  HEADING 90.00
+  PRPLEVEL 0:1.000 1:1.000 2:1.000 3:1.000 4:1.000 5:1.000
+  ENGSET 0
+  IGNITION 0
+  GLIMIT 1 5.00
+  CARRIAGE 0.0000 0.0 1.000 1 0 0
+END
+END_SHIPS

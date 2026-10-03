@@ -14,6 +14,7 @@ ORBITER = os.path.abspath(os.path.join(ROOT, ".."))
 VARIANT = os.environ.get("TANTRA_VARIANT", "coverall")
 BLEND, MESH_NAME, SKIN_NAME, CLIP_SUB = {"coverall": ("astronavigator_coverall.blend", "AstronavigatorSkin", "Astronavigator", "anim"),
                                          "suit": ("astronavigator_suit.blend", "AstronavigatorSuit", "AstronavigatorSuit", "anim_suit")}[VARIANT]
+BLEND = os.environ.get("TANTRA_BLEND", BLEND)   # e.g. astronavigator_body.blend: the person without clothes
 MESH_OUT = os.path.join(ORBITER, "Meshes", "Tantra", MESH_NAME + ".msh")
 CFG_DIR = os.path.join(ORBITER, "Config", "Tantra"); CLIP_DIR = os.path.join(CFG_DIR, CLIP_SUB)
 os.makedirs(CLIP_DIR, exist_ok=True)

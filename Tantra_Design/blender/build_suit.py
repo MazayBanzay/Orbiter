@@ -137,6 +137,25 @@ def ring_loft(bm, rings, mat=0, closed=True):
             f = bm.faces.new((A[j], A[(j + 1) % n], B[(j + 1) % n], B[j])); f.material_index = mat
     return V
 
+def tube(bm, ctrl, r, seg=14, per=10, mat=0):
+    """a smooth round tube through the control points (Catmull-Rom), capped; frames carried along without twist"""
+    P = [ctrl[0] * 2 - ctrl[1]] + list(ctrl) + [ctrl[-1] * 2 - ctrl[-2]]
+    pts = []
+    for i in range(1, len(P) - 2):
+        p0, p1, p2, p3 = P[i - 1], P[i], P[i + 1], P[i + 2]
+        for k in range(per):
+            t = k / per; t2 = t * t; t3 = t2 * t
+            pts.append(0.5 * ((2 * p1) + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (3 * p1 - p0 - 3 * p2 + p3) * t3))
+    pts.append(ctrl[-1].copy())
+    T = [(pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized() for i in range(len(pts))]
+    n = T[0].orthogonal().normalized(); rings = []
+    for i, p in enumerate(pts):
+        n = (n - T[i] * n.dot(T[i])).normalized(); bv = T[i].cross(n)
+        rings.append([tuple(p + (n * math.cos(2 * math.pi * j / seg) + bv * math.sin(2 * math.pi * j / seg)) * r) for j in range(seg)])
+    V = ring_loft(bm, rings, mat, closed=False)
+    bm.faces.new(V[0]).material_index = mat; bm.faces.new(V[-1][::-1]).material_index = mat
+    return pts
+
 def box_beam(bm, a, c, w, t, outward, mat=0):
     """flat structural link from a to c: width w in the limb plane, thickness t along 'outward'"""
     d = (c - a).normalized(); n = (outward - d * outward.dot(d)).normalized(); s_ = d.cross(n).normalized()
@@ -329,14 +348,28 @@ try:
     bpy.ops.wm.open_mainfile(filepath=os.path.join(HERE, "astronavigator_base.blend"))
     arm = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
     arm.data.pose_position = 'REST'; bpy.context.view_layer.update()
+    # one person, one body in any clothes (2026-10-02): the full base mesh with the person's shape (body_shape.py, the
+    # same as the coverall's), not the low-poly proxy - the face behind the visor and the garment follow the same body
+    import sys; sys.path.insert(0, HERE); import body_shape
+    # the face behind the visor: the proxy's (the user prefers it, 2026-10-02); the garment: from the full base mesh with
+    # the person's shape (body_shape.py, the coverall's body) - the base mesh itself is not shown
     body = next(o for o in bpy.data.objects if o.type == 'MESH' and 'female1605' in o.name)
-    names = {g.index: g.name for g in body.vertex_groups}
+    base = next(o for o in bpy.data.objects if o.type == 'MESH' and o.name.endswith('.body'))
+    for o in bpy.context.view_layer.objects: o.select_set(False)
+    bpy.context.view_layer.objects.active = base; base.select_set(True)
+    if base.data.shape_keys: bpy.ops.object.shape_key_remove(all=True, apply_mix=True)
+    for m in list(base.modifiers):
+        if m.type == 'MASK' and m.name == "Hide base mesh": base.modifiers.remove(m)
+    body_shape.body_extras(base, arm, log)
+    base.hide_render = True; base.hide_viewport = True
+    names = {g.index: g.name for g in base.vertex_groups}
+    pnames = {g.index: g.name for g in body.vertex_groups}
     BONES = set(arm.data.bones.keys())
     BW = lambda b: arm.matrix_world @ arm.data.bones[b].head_local
 
     # ================= protective garment: close fitting, dense, no anatomy =================
-    suit = body.copy(); suit.data = body.data.copy(); suit.name = "SuitBody"; suit.data.name = "SuitBody"
-    body.users_collection[0].objects.link(suit)
+    suit = base.copy(); suit.data = base.data.copy(); suit.name = "SuitBody"; suit.data.name = "SuitBody"
+    base.users_collection[0].objects.link(suit); suit.hide_render = False; suit.hide_viewport = False
     for m in list(suit.modifiers):
         if m.type != 'ARMATURE': suit.modifiers.remove(m)
     suit.data.materials.clear()
@@ -345,22 +378,24 @@ try:
     HEADG = {'Head', 'Neck1'}
     def dom(v):
         d = {k: w for k, w in v[deform].items() if names[k] in BONES}; return names[max(d, key=d.get)] if d else None
-    bmesh.ops.delete(bm, geom=[v for v in bm.verts if dom(v) in HEADG or v.co.z > 1.485], context='VERTS')
-    # the layered suit does not follow the bust or the buttocks: pull them in, then relax the torso surface
+    gskin = next((k for k, n in names.items() if n == 'body'), -1)   # the base mesh's skin surface (not its helpers)
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if dom(v) in HEADG or v.co.z > 1.485 or (gskin >= 0 and v[deform].get(gskin, 0) <= 0)], context='VERTS')
+    # the bust is never pressed in (the plate stands in front of it); the buttocks are drawn in a little by the layers
     for v in bm.verts:
-        if 1.10 < v.co.z < 1.42 and abs(v.co.x) < 0.19 and v.co.y < -0.06:
-            yr = -0.075 - 0.025 * max(0.0, 1.30 - v.co.z)
-            if v.co.y < yr: v.co.y = yr + (v.co.y - yr) * 0.35
         if 0.80 < v.co.z < 1.02 and v.co.y > 0.04:
             v.co.y = 0.04 + (v.co.y - 0.04) * 0.6
-    torso = [v for v in bm.verts if 0.97 < v.co.z < 1.46 and abs(v.co.x) < 0.25]
-    for it in range(8):                                   # Taubin: smooths detail without shrinking the torso
-        k = 0.5 if it % 2 == 0 else -0.53
-        new = {}
-        for v in torso:
-            nb = [e.other_vert(v).co for e in v.link_edges]
-            if nb: new[v] = v.co + (sum(nb, Vector()) / len(nb) - v.co) * k
-        for v, c in new.items(): v.co = c
+    def taubin(verts, iters):                            # Taubin: smooths detail without shrinking the shape
+        for it in range(iters):
+            k = 0.5 if it % 2 == 0 else -0.53
+            new = {}
+            for v in verts:
+                nb = [e.other_vert(v).co for e in v.link_edges]
+                if nb: new[v] = v.co + (sum(nb, Vector()) / len(nb) - v.co) * k
+            for v, c in new.items(): v.co = c
+    taubin([v for v in bm.verts if 0.97 < v.co.z < 1.46 and abs(v.co.x) < 0.25], 8)
+    # the full base mesh carries detail the proxy never had: the boots must not show the toes, nor the layered suit the
+    # body's forms at the crotch - those regions are smoothed hard (the shape stays, the detail goes)
+    taubin([v for v in bm.verts if 0.76 < v.co.z < 1.00 and abs(v.co.x) < 0.13], 16)
     bm.normal_update()
     for v in bm.verts:
         n = dom(v) or ''
@@ -370,8 +405,28 @@ try:
         else: off = 0.024
         v.co += v.normal * off
     bm.normal_update()
+    # boots: the foot's garment goes, a moulded shell takes its place - the convex hull of the foot (no toes, no instep
+    # folds), a little fuller than the garment, rigid on the foot bone (a stiff sole)
+    boots = []
+    for side, sx in (('Left', 1), ('Right', -1)):
+        foot = [v for v in bm.verts if (('Foot' in (dom(v) or '')) or ('Toe' in (dom(v) or ''))) and v.co.x * sx > 0]
+        if len(foot) < 8: continue
+        pts = [v.co.copy() for v in foot]
+        cz = sum((p.z for p in pts)) / len(pts)
+        bb = bmesh.new()
+        for p in pts: bb.verts.new(p)
+        hull = bmesh.ops.convex_hull(bb, input=bb.verts[:])
+        bmesh.ops.delete(bb, geom=list({g for g in hull['geom_interior'] + hull['geom_unused'] if isinstance(g, bmesh.types.BMVert)}), context='VERTS')
+        bmesh.ops.subdivide_edges(bb, edges=bb.edges[:], cuts=1, use_grid_fill=True)
+        bmesh.ops.smooth_vert(bb, verts=bb.verts[:], factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
+        bmesh.ops.recalc_face_normals(bb, faces=bb.faces[:])
+        boots.append((side, bb))
+        bmesh.ops.delete(bm, geom=foot, context='VERTS')
     bm.to_mesh(suit.data); bm.free()
     for p in suit.data.polygons: p.use_smooth = True
+    boot_mat = material("SuitBoot", PAD, rough=0.55)
+    for side, bb in boots:
+        new_object("Boot" + side[0], bb, [boot_mat], {side + 'Foot': 1.0}, arm)
 
     wrists = [(np.array(BW(s + 'Hand')), np.array((BW(s + 'Hand') - BW(s + 'ForeArm')).normalized())) for s in ('Left', 'Right')]
     elbows = [np.array(BW(s + 'ForeArm')) for s in ('Left', 'Right')]
@@ -421,7 +476,7 @@ try:
         return hit[0] if hit[0] else default
 
     # ---- hard plate projected onto the garment: rounded outline, chamfered edge, closed solid ----
-    def plate(name, origin, U, V, hu, hv, D, off, th, mat, n=16, rk=0.4, weights=None, tree=None, window=None):
+    def plate(name, origin, U, V, hu, hv, D, off, th, mat, n=16, rk=0.4, weights=None, tree=None, window=None, flat=False, anchor=None, wrap=0.0):
         tree = tree or bvh
         grid, depth = [], []
         for i in range(n + 1):
@@ -437,7 +492,16 @@ try:
         # a smooth quadratic cap fitted to the hits: plates are moulded, they do not copy every facet of the garment
         pts = [(r[0], r[1], r[3]) for row in grid for r in row if r[3] is not None]
         A = np.array([[1, a, c, a * a, a * c, c * c] for a, c, _ in pts]); y = np.array([d for _, _, d in pts])
+        if flat: A[:, 4:] = 0                    # a flat plate: straight up and down, only a gentle wrap across
         coef = np.linalg.lstsq(A, y, rcond=None)[0]
+        # stand clear of the proudest point of the garment: the plate covers the forms, it never cuts into them
+        coef[0] += float(min(0.0, np.min(y - A @ coef)))
+        if anchor is not None:
+            # leaning plate: its lower edge stands on a fixed line (anchor = the inner face's depth there), it leans
+            # forward just enough to clear the body above - straight, a gentle wrap across
+            Db = anchor + off; caa = max(wrap, float(coef[3]))   # the edges curve back round the sides
+            cc = min((d - Db - caa * a * a) / (1 + c) for a, c, d in pts if c > -0.8)
+            coef = np.array([Db + cc, 0.0, cc, caa, 0.0, 0.0])
         dep = [[float(np.dot(coef, [1, r[0], r[1], r[0] ** 2, r[0] * r[1], r[1] ** 2])) for r in row] for row in grid]
         if len(pts) < 8: log.append("plate %s: only %d hits" % (name, len(pts)))
         b = bmesh.new()
@@ -457,11 +521,18 @@ try:
         return o
 
     plate_mat = material("SuitPlate", PLATE, rough=0.35); pad_mat = material("SuitPad", PAD, rough=0.5)
-    # chest cuirass (Interstellar-like front plate, carries the marking)
-    chest = plate("Cuirass", Vector((0, -1.0, 1.235)), Vector((1, 0, 0)), Vector((0, 0, 1)), 0.150, 0.200, Vector((0, 1, 0)), 0.004, 0.024, plate_mat)
-    # shoulder blocks: the frame bears on them from the pack
-    for s, sx in (('L', 1), ('R', -1)):
-        plate("Shoulder" + s, Vector((sx * 0.140, -0.015, 1.70)), Vector((1, 0, 0)), Vector((0, 1, 0)), 0.060, 0.085, Vector((0, 0, -1)), 0.004, 0.034, plate_mat, n=12, window=(0.20, 0.40))
+    # chest plate: flat, leaning a little - its lower edge stands on the hip ring's front, it leans forward over the bust
+    # (the body inside is never pressed). Part of the frame: borne by the hip ring below, by the shoulder arcs above.
+    band0 = [v.co for v in suit.data.vertices if abs(v.co.z - 1.00) < 0.035 and abs(math.atan2(v.co.x, -(v.co.y + 0.02))) < 0.14]
+    ring_front = -0.02 - (max(math.hypot(p.x, p.y + 0.02) for p in band0) + 0.032)      # the hip ring's outer front (y)
+    chest = plate("Cuirass", Vector((0, -1.0, 1.236)), Vector((1, 0, 0)), Vector((0, 0, 1)), 0.188, 0.200, Vector((0, 1, 0)), 0.012, 0.024, plate_mat,
+                  flat=True, anchor=ring_front - 0.004 + 1.0, wrap=0.075)
+    cv = [v.co.copy() for v in chest.data.vertices]
+    def plate_back(x, z):                                   # the plate's back (inner) face near (x, z): y, and the front y
+        near = [p for p in cv if abs(p.x - x) < 0.018 and abs(p.z - z) < 0.025]
+        return max(p.y for p in near), min(p.y for p in near)
+    log.append("chest plate: ring front y %.3f" % ring_front)
+    gbvh = bvh
     # knee pads
     for s, sx in (('L', 1), ('R', -1)):
         kb = BW(('Left' if sx > 0 else 'Right') + 'Leg')
@@ -613,7 +684,7 @@ try:
     new_object("NeckSeal", b, [material("NeckSeal", DARK, rough=0.8)], lambda co: {'Spine1': 0.8, 'Neck': 0.2}, arm)
 
     # ================= life-support pack on the frame =================
-    back_y = max((surface_along(Vector((x, 1.0, z)), Vector((0, -1, 0)), Vector((0, 0.10, 0))).y for x in (-0.1, 0, 0.1) for z in (1.15, 1.25, 1.35, 1.42)))
+    back_y = max(((gbvh.ray_cast(Vector((x, 1.0, z)), Vector((0, -1, 0)))[0] or Vector((0, 0.10, 0))).y for x in (-0.1, 0, 0.1) for z in (1.15, 1.25, 1.35, 1.42)))
     PW, PH, PD = 0.37, 0.44, 0.13; pz0, pz1 = 1.06, 1.06 + PH; py0 = back_y + 0.018
     b = bmesh.new(); bmesh.ops.create_cube(b, size=1.0)
     for v in b.verts: v.co = Vector((v.co.x * PW, py0 + (v.co.y + 0.5) * PD, pz0 + (v.co.z + 0.5) * PH))
@@ -663,9 +734,24 @@ try:
     b = bmesh.new()
     for sx in (-1, 1):
         top = surface_down(sx * 0.14, -0.015, 1.42) + 0.040
-        pts = [Vector((sx * 0.12, py0 + 0.03, pz1 - 0.04)), Vector((sx * 0.135, 0.05, top + 0.005)), Vector((sx * 0.14, -0.015, top + 0.002))]
-        for a_, b_ in zip(pts, pts[1:]): cylinder(b, a_, b_, 0.014, 6, 0, math.pi / 6)
+        # on over the shoulder and down to the chest plate's upper corner: the plate hangs on the frame
+        pzt = max(p.z for p in cv) - 0.022; pbk, pfr = plate_back(sx * 0.115, pzt)
+        mid = Vector((sx * 0.13, -0.090, max(top - 0.004, surface_down(sx * 0.13, -0.090, 1.40) + 0.022)))
+        # one smooth tube: out of the pack's top, over the shoulder, down onto the plate's upper corner
+        tube(b, [Vector((sx * 0.12, py0 + 0.02, pz1 - 0.04)), Vector((sx * 0.135, 0.045, top + 0.006)), Vector((sx * 0.138, -0.030, top + 0.004)),
+                 mid, Vector((sx * 0.118, pbk + 0.016, pzt + 0.004))], 0.012)
+        # a small clevis on the plate's back takes the tube's end, a pin across
+        rounded_box(b, Vector((sx * 0.118, pbk + 0.009, pzt + 0.002)), Vector((0.030, 0.018, 0.026)), 0.006)
+        cylinder(b, Vector((sx * 0.118 - 0.017, pbk + 0.010, pzt + 0.004)), Vector((sx * 0.118 + 0.017, pbk + 0.010, pzt + 0.004)), 0.005, 12)
     new_object("ShoulderArcs", b, [frame], lambda co: {'Spine1': 1.0}, arm)
+    # the plate's feet: two lugs from the hip ring's front up to the plate's lower edge, bolted through the plate
+    b = bmesh.new()
+    for sx in (-1, 1):
+        xl = sx * 0.090; zl = min(p.z for p in cv) + 0.022; pbk, pfr = plate_back(xl, zl)
+        yr_ = -0.02 - math.cos(math.asin(min(0.95, abs(xl) / (abs(ring_front) - 0.02)))) * (abs(ring_front) - 0.02)   # ring front at xl
+        rounded_box(b, Vector((xl, 0.5 * (yr_ + pbk) + 0.004, 0.5 * (zb + 0.028 + zl))), Vector((0.030, max(0.012, pbk - yr_ + 0.012), zl - zb - 0.010 + 0.020)), 0.005)
+        cylinder(b, Vector((xl, pfr - 0.003, zl)), Vector((xl, pbk + 0.006, zl)), 0.0075, 12)      # the bolt, head proud of the plate
+    new_object("PlateLugs", b, [frame], {'Hips': 0.6, 'Spine': 0.4}, arm)
 
     # legs: hip drive, thigh beam, knee drive, shin beam, ankle stirrup
     def outer(sx, y, z, extra):
@@ -878,7 +964,10 @@ try:
 
     # ================= hide what the suit covers: keep only the head (face behind the visor) =================
     keep = body.vertex_groups.new(name="covered_by_suit")
-    idx = [v.index for v in body.data.vertices if not (v.groups and names[max(v.groups, key=lambda g: g.weight).group] in HEADG) and v.co.z < 1.50]
+    def bone_of(v):   # the strongest BONE weight (the base mesh also has non-bone groups: body, helpers, joints)
+        d = [(g.weight, pnames[g.group]) for g in v.groups if pnames[g.group] in BONES]
+        return max(d)[1] if d else None
+    idx = [v.index for v in body.data.vertices if not (bone_of(v) in HEADG) and v.co.z < 1.50]
     keep.add(idx, 1.0, 'REPLACE')
     mk = body.modifiers.new("HideUnderSuit", 'MASK'); mk.vertex_group = keep.name; mk.invert_vertex_group = True
 

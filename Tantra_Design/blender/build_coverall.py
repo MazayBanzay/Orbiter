@@ -42,6 +42,7 @@ TIP_R, TIP_ITERS = 0.06, 30   # the breast's tip under the cloth: rounded over 6
 CUP_DOME = False   # the invented ellipsoid cup is off: the body's own shape is set right instead
 CUP_BUILT, CUP = 0.72, 0.64   # an adult woman's bust (0.42-0.50 read as a girl's, user 2026-10-02); MakeHuman's own shape
 CUP_RX, CUP_RZ, CUP_RY, CUP_LIFT = 0.074, 0.066, 0.052, 0.004   # m: the moulded cup's half-width, half-height, depth; its front ahead of the apex
+NIPPLE_R = 0.028   # m: nipple and areola relief smoothed within this radius of the breast apex
 MACRO = {"muscle": 0.60, "weight": 0.48, "firmness": 0.78}
 SLOPE_DROP = 0.010      # m, the shoulder cap lowered over the acromion: the trapezius falls ~20-25 deg (MakeHuman has no target for it)
 MPFB_TARGETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bx", "mpfb", "data", "targets")
@@ -84,6 +85,23 @@ def body_extras(body, arm):
     for i, d in acc.items():
         if i < len(me.vertices): me.vertices[i].co += Vector(d)
     log.append("bust: cup %.2f -> %.2f from %d macro targets, %d verts" % (CUP_BUILT, CUP, nt, len(acc)))
+    # user 2026-10-02: no nipples on the body itself - under any garment (coverall, suit) nothing pokes out. The nipple
+    # and areola relief is relaxed into the breast's own curve (within NIPPLE_R of the apex, fading out); the bust's shape stays.
+    import bmesh as _bm
+    bmn = _bm.new(); bmn.from_mesh(me); dl = bmn.verts.layers.deform.active; gb = body.vertex_groups['body'].index
+    skin = [v for v in bmn.verts if v[dl].get(gb, 0) > 0]
+    Mw = body.matrix_world; n_tot = 0
+    for sd in (-1, 1):
+        cand = [v for v in skin if 0.03 < sd * (Mw @ v.co).x < 0.16 and 1.10 < (Mw @ v.co).z < 1.40 and (Mw @ v.co).y < 0]
+        if not cand: continue
+        c = min(cand, key=lambda v: (Mw @ v.co).y).co.copy()
+        zone = [(v, float(smooth01(NIPPLE_R, NIPPLE_R * 0.4, (v.co - c).length / k * 0.1))) for v in skin if (v.co - c).length / k * 0.1 < NIPPLE_R]
+        for _ in range(40):
+            nw = [(v, v.co.lerp(sum((e.other_vert(v).co for e in v.link_edges), Vector()) / len(v.link_edges), 0.5 * w)) for v, w in zone if v.link_edges]
+            for v, co in nw: v.co = co
+        n_tot += len(zone)
+    bmn.to_mesh(me); bmn.free(); me.update()
+    log.append("nipples smoothed into the breast: %d verts" % n_tot)
     # shoulder line: the base mesh runs almost level from the neck to the shoulder edge (~11 deg) - a square, padded look.
     # Lower the shoulder cap above the joint, most over the acromion, nothing at the neck or down the arm.
     M = body.matrix_world; Mi = M.inverted()

@@ -17,10 +17,12 @@ TouchdownLimits Limits(double stroke) {
     return {std::sqrt(2.0 * stroke * kSoftG * kG0), std::sqrt(2.0 * stroke * kBreakG * kG0)};
 }
 
-void LegLoads(const LegLoadInput& in, double out[6]) {
-    const double col = Clamp01(in.columnShare), stern = 1.0 - col;
+void LegLoads(const LegLoadInput& in, double out[kLegCount]) {
+    const double col = Clamp01(in.columnShare), stern = 1.0 - col, kang = Clamp01(in.kangShare);
+    const double front = col * in.weight;
+    out[kKangaroo] = front * kang;
     const double mSide = in.windSide * in.h;   // force to starboard loads the starboard leg
-    const double base = col * in.weight / 2.0;
+    const double base = front * (1.0 - kang) / 2.0;
     out[0] = col > 0.0 ? (std::max)(0.0, base - mSide / (2.0 * in.hipX)) : 0.0;
     out[1] = col > 0.0 ? (std::max)(0.0, base + mSide / (2.0 * in.hipX)) : 0.0;
     double sx = 0.0, sy = 0.0;
@@ -29,11 +31,6 @@ void LegLoads(const LegLoadInput& in, double out[6]) {
         sy += in.feetY[i] * in.feetY[i];
     }
     const double a = sx > 0.0 ? in.windX * in.h / sx : 0.0, b = sy > 0.0 ? in.windY * in.h / sy : 0.0;
-    if (in.lowerPairOnly) {
-        out[2] = out[3] = 0.0;
-        out[4] = out[5] = stern * in.weight / 2.0;
-        return;
-    }
     for (int i = 0; i < 4; ++i)
         out[2 + i] = stern > 0.0 ? (std::max)(0.0, stern * in.weight / 4.0 + a * in.feetX[i] + b * in.feetY[i]) / in.cosSplay : 0.0;
 }
@@ -41,13 +38,13 @@ void LegLoads(const LegLoadInput& in, double out[6]) {
 void Soles::Update(double dt, bool contact, bool resting) {
     if (!contact) {
         jam_ = rest_ = 0.0;
-        anchors_ = (std::max)(0.0, anchors_ - dt / kAnchorTime);
+        anchors_ = (std::max)(0.0, anchors_ - dt / 10.0);   // the root stays in the ground: the foot just leaves it
         return;
     }
     jam_ = Clamp01(jam_ + dt / kJamTime);
     rest_ = resting ? rest_ + dt : 0.0;
     const bool out = resting && rest_ >= kAnchorDelay;
-    anchors_ = Clamp01(anchors_ + (out ? dt : -dt) / kAnchorTime);
+    anchors_ = Clamp01(anchors_ + (out ? dt / kAnchorTime : -dt / 10.0));
 }
 
 double Soles::Mu() const {

@@ -66,8 +66,7 @@ const FOOT = {L: 32.5, W: 11.0, plate: 0.6, dish: 0.3}, ANK = 0.5;
 const REST_H = STL + ANK + FOOT.plate + FOOT.dish;          // shortest leg: the hull axis stands this high when lying
 const KC = [13.55, -3.04], KT = [10.2, 9.1];
 const el = Math.hypot(KT[0] - KC[0], KT[1] - KC[1]), FE = [(KT[0] - KC[0]) / el, (KT[1] - KC[1]) / el], FN = [FE[1], -FE[0]];
-const H_TOP = 84 + ANK + FOOT.plate + FOOT.dish;      // axis height at 84 m of blade
-const SHIP = {loaded: {s: 58.4, sT: 58.1, name: "гружёный 50 тыс. т"}, light: {s: 64.1, sT: 64.1, name: "пустой 4,9 тыс. т"}};
+const SHIP = {loaded: {s: 58.4, sT: 58.1, name: "гружёный 50 тыс. т"}, light: {s: 83, sT: 71.6, name: "лёгкий ~7 тыс. т"}};
 let ship = "loaded", uneven = false;
 // ---------------------------------------------------------------- scene
 const view = $("view");
@@ -115,15 +114,11 @@ let P = 0, PT = 0;                         // progress 0..4 and target
 const ease = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
 function q4(basisX, basisY, basisZ) { return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(basisX, basisY, basisZ)); }
 function frame() {
-  const S = SHIP[ship];
-  // stern clears the ground by 16 m while turning; the axis goes no higher than 84 m of blade (3 m kept for uneven ground),
-  // so the light ship's trunnions slide aft along the track (s 80 -> 53.4) as it turns: the CG stays near the feet
-  const hTurn = Math.max(REST_H, Math.min(S.sT + 16, H_TOP));
+  const S = SHIP[ship], zt = S.sT - 60;
+  const hTurn = Math.max(REST_H, S.sT + 16);          // stern clears the ground by 16 m while turning about the trunnions
   const lift = ease(P - 2), turn = ease(P - 3);
   const H = REST_H + (hTurn - REST_H) * lift + 0;
   const th = Math.PI / 2 * turn;
-  const sP = th < 1e-3 ? S.sT : Math.max(53.4, Math.min(S.sT, (hTurn - 16) / Math.sin(th))), zt = sP - 60;
-  const cgOff = (S.s - sP) * Math.cos(th);
   shipIn.position.set(0, 0, -zt); shipG.position.set(0, H, 0); shipG.rotation.x = -th;
   const toWorld = p => new THREE.Vector3(p[0], p[1], p[2] - zt).applyAxisAngle(new THREE.Vector3(1, 0, 0), -th).add(new THREE.Vector3(0, H, 0));
   const dep = P - 0;                                    // deploy progress inside phase 1
@@ -162,7 +157,7 @@ function frame() {
   }
   groundR.position.y = uneven ? -3.0 : 0.0;
   const S2 = SHIP[ship];
-  $("hud").innerHTML = `<b>${PH[Math.min(4, Math.round(P))][1]}</b> · ${S2.name} · ось на ${H.toFixed(1)} м · поворот ${(th * 57.3).toFixed(0)}° · лопасти: ${LEGS.map(l => `<span style="color:${l.Lx > 87.05 ? "#c53030" : "inherit"}">${l.Lx.toFixed(1)}</span>`).join(" / ")} м (предел 87) · цапфа s ${sP.toFixed(1)} · ЦМ от цапфы ${cgOff.toFixed(1)} м · запас стоп ×${(16.25 / Math.max(0.3, Math.abs(cgOff))).toFixed(1)}` + (uneven ? " · правый грунт ниже на 3 м" : "") + (LEGS.some(l => l.Lx > 87.05) ? ' · <b style="color:#c53030">не хватает выдвижения</b>' : "");
+  $("hud").innerHTML = `<b>${PH[Math.min(4, Math.round(P))][1]}</b> · ${S2.name} · ось на ${H.toFixed(1)} м · поворот ${(th * 57.3).toFixed(0)}° · лопасти: ${LEGS.map(l => `<span style="color:${l.Lx > 87.05 ? "#c53030" : "inherit"}">${l.Lx.toFixed(1)}</span>`).join(" / ")} м (предел 87)` + (uneven ? " · правый грунт ниже на 3 м" : "") + (LEGS.some(l => l.Lx > 87.05) ? ' · <b style="color:#c53030">не хватает выдвижения</b>' : "");
 }
 // ---------------------------------------------------------------- cross-section inset
 function drawSec() {
@@ -182,26 +177,23 @@ function drawSec() {
 const rows = [
   ["лопасть: 3 ступени × 30 м", "6,0×2,1 → 5,6×1,7 → 5,2×1,3 м, стенки 0,15 м"],
   ["длина: сложена / наибольшая", "30 / 87 м"],
-  ["нагрузка на ногу (1 g / 1,9 g)", "257 / 488 МН (старт 52,3 тыс. т)"],
+  ["нагрузка на ногу (1 g / 1,9 g)", "245 / 466 МН"],
   ["напряжение (допуск 667 МПа)", "101–126 / 192–239 МПа", "ok"],
   ["устойчивость вдоль корабля (консоль от стопы)", "1 786–3 215 МН (нужно 368 / 699)", "ok"],
   ["устойчивость поперёк (рама через корабль)", "829–2 574 МН (нужно 368 / 699)", "ok"],
   ["стопа 32,5 × 11 м: давление", "0,69 МПа (1 g) / 1,30 (1,9 g)"],
   ["грунт", "бетон, скала — держат; плотный песок — чаша уходит на 3–5 м и держит; рыхлый — спекание"],
   ["сложенный стек в кармане", "3,0 м при свободных 3,19 м", "ok"],
-  ["привод поворота без двигателей", "0,21 ГН·м (ЦМ на цапфе ± 0,3 м во всех состояниях)"],
+  ["привод поворота без двигателей", "0,21 ГН·м гружёный, 0,78 лёгкий"],
   ["выдвижение", "сверхпроводящие линейные моторы, 1,5 м/с, 735 МВт (станция 2 ГВт)"],
   ["неровный грунт", "каждая нога своей длины; голеностоп ±15° по уклону, потом заперт"],
-  ["запас выдвижения на повороте", "гружёный: 72,7 из 87 м; пустой: 78,7 из 87 (8 м на неровность)", "ok"],
-  ["опрокидывание вдоль (стопа ±16,25 м)", "гружёный ×36, 12° уклона; пустой ×36, 11°", "ok"],
-  ["опрокидывание поперёк (стопы ±24,5 м), ветер 30 м/с", "гружёный ×149, 18°; пустой ×18, 16°", "ok"],
-  ["ЦМ с установкой в корме", "все состояния s 57,5–67,8 — внутри дорожки цапф s 53,4–71,6; скользить на повороте не нужно"],
+  ["запас выдвижения на повороте", "гружёный: 72,7 из 87 м (14 м на неровность); лёгкий: 86,2 из 87 — ставить на ровную площадку", "warn"],
 ];
 $("tab").innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td class="v ${r[2] || ""}">${r[1]}</td></tr>`).join("");
 $("chg").innerHTML = `Лёжа корабль стоит выше: самая короткая нога — 30 м, ось корпуса на ${REST_H.toFixed(1)} м (было 14 м). Это высота загрузки ловушек — подъём «для загрузки» больше не нужен; лифт экипажа длиннее. Кормовые ноги лёжа не нужны: корабль держат две лопасти, приводы цапф запирают тангаж. Дорожка цапф — до s 80 (из кармана к ЦМ). Стопа идёт к центру по рельсу на голеностопе: в кармане она лежит над всей лопастью, на грунте — по центру под ней.`;
 // ---------------------------------------------------------------- UI
 for (let i = 0; i < PH.length; i++) { const b = document.createElement("button"); b.textContent = PH[i][1]; b.dataset.k = i; b.onclick = () => { PT = i; }; $("phases").appendChild(b); }
-for (const [k, l] of [["loaded", "Гружёный"], ["light", "Пустой"], ["uneven", "Неровный грунт"]]) {
+for (const [k, l] of [["loaded", "Гружёный"], ["light", "Лёгкий"], ["uneven", "Неровный грунт"]]) {
   const b = document.createElement("button"); b.textContent = l; b.dataset.k = k;
   b.onclick = () => { if (k === "uneven") uneven = !uneven; else ship = k; };
   $("opts").appendChild(b);

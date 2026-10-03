@@ -27,6 +27,8 @@ namespace ocrew
 	{
 	public:
 		const std::string& DisplayName() const { return name; }
+		Person& Who() { return who; }
+		void KeepWorn() { if (n2) who.worn.suit.n2Kg = GetPropellantMass(n2); }   // before the body leaves the world
 		~CrewMember();
 	public:
 		CrewMember(OBJHANDLE hVessel, int fModel);
@@ -66,6 +68,7 @@ namespace ocrew
 		// the person this vessel is the body of. The person comes first and lives in the crew registry, not in the
 		// vessel; the names below are the person's own data, kept under their old names
 		Person& who;
+		bool reborn{};                 // the body of a person who already existed (out of a ship): the cfg does not reset him or her
 		std::string& name; std::string& role; std::string& sex;
 		double& age; double& heightM;
 		Figure bodyFig, suitFig;
@@ -123,9 +126,38 @@ namespace ocrew
 		void UpdateRcs(bool free);
 		double RcsDeltaV() const;
 		bool hudHidden{};   // we switched Orbiter's HUD off (no suit, generic cockpit)
+		bool wasInHelmet{}; // suit on and the camera in her head last step (the suit computer is brought up on entering)
 		std::string message;
 		double messageTime{};
 		bool mouseWasDown{};
+		// F - the action (user 2026-10-03: F everywhere): what is within reach - a ship's lift or airlock, later
+		// a seat, a terminal, a door inside
+		OBJHANDLE useShip{}; int useId{ -1 }; std::string useHint; double useScan{};
+		void FindUse(double dt);
+	public:
+		// inside a ship (user 2026-10-03: the person walks inside with her own body): the body hangs on the ship's
+		// attachment point, which we move each frame; the ship gives floors, walls and items (OcInterior)
+		OBJHANDLE inShip{};
+		ATTACHMENTHANDLE inParent{}, inChild{};
+		VECTOR3 inFeet{};                    // feet, in the ship's frame
+		double inHdg{};                      // heading about the ship's up axis (0 = along +z)
+		bool inViewing{};
+		int attachWait{};                    // frames a new body waits before it is attached
+		bool takeView{};                     // take the focus and the person's own view at the next step
+		void ApplyView();
+		std::string inShipName;              // from the scenario, found again after loading
+		void EnterShip(OBJHANDLE ship, const VECTOR3& feet, const VECTOR3& dir);
+		void LeaveShip();                    // detached, back in the world (where she is now)
+		void InteriorStep(double dt);
+		void Animate(double dt, double g, bool landed);
+		void LookDir(double& yaw, double& pitch);
+		void SetLook(double yaw, double pitch);
+		bool CalibrateLook();
+		int lookCal{};                       // 0 not yet, 1 probing, 2 known, -1 failed
+		double lookSa{ 1 }, lookSp{ 1 }, lookY0{}, lookP0{};
+		void HudBySuit();                    // the user's rule: no HUD without the suit, the suit computer in the helmet
+	private:
+		bool DoUse();
 		void ApRequest(int req);
 		// what of an impact reaches the body: in the suit, through its frame and dampers (Suit::ImpactThrough)
 		void HitBody(double v, Body::Contact c) { bio.Impact(suitOn ? Suit::ImpactThrough(v, bio.mass, who.worn.Mass(), c) : v, c); }

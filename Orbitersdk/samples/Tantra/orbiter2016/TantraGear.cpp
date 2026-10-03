@@ -3,6 +3,7 @@
 #include "../core/Spec.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cmath>
 
 namespace m = tantra::mesh;
@@ -11,12 +12,6 @@ namespace {
 
 VECTOR3 ToV(const m::V& a) { return _V(a.x, a.y, a.z); }
 double Clamp01(double v) { return v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v); }
-
-// Right-handed rotation of `p` about unit `axis` (Orbiter's MGROUP_ROTATE convention).
-VECTOR3 Rotate(const VECTOR3& p, const VECTOR3& axis, double ang) {
-    const double c = std::cos(ang), s = std::sin(ang);
-    return p * c + crossp(axis, p) * s + axis * (dotp(axis, p) * (1.0 - c));
-}
 
 }  // namespace
 
@@ -47,6 +42,7 @@ TantraGear::TantraGear(VESSEL* v, UINT mesh) : v_(v) {
                 trans_[i] = new MGROUP_SCALE(meshIdx, grp, ngrp, ToV(c.ref), ToV(c.vec));
                 break;
         }
+        // NB: a scaling component must not be a child (Orbiter 2016 crashes when the parent moves it) - gen_mesh keeps them root
         comp_[i] = v_->AddAnimationComponent(anim_[c.anim], c.s0, c.s1, trans_[i], c.parent >= 0 ? comp_[c.parent] : nullptr);
     }
 }
@@ -62,16 +58,6 @@ void TantraGear::Set(int anim, double state) {
     v_->SetAnimation(anim_[anim], state);
 }
 
-void TantraGear::LegRestFoot(double& x, double& s) {
-    for (const m::LegRig& L : m::kLegs) {
-        if (!L.lower || L.hinge.x < 0.0) continue;
-        const VECTOR3 tip = ToV(L.hinge) + Rotate(_V(0, 0, -(m::kLegLMinS + L.extRest)), ToV(L.axis), L.phiRest);  // stowed along -z
-        x = tip.x;
-        s = tip.z + tantra::spec::kOriginS;  // mesh origin
-        return;
-    }
-}
-
 void TantraGear::Apply(const tantra::CarriagePose& p, double sCG, const Extras& ex) {
     const double tuck = (std::max)(p.tuck, ex.tuck);
     Set(m::ANIM_CREST_DORSAL, tuck);                                       // telescopic fin into its slot
@@ -84,15 +70,23 @@ void TantraGear::Apply(const tantra::CarriagePose& p, double sCG, const Extras& 
     Set(m::ANIM_BODY_FLAP, ex.bodyFlap);
     Set(m::ANIM_POD_SWIVEL, ex.podSwivel);
     Set(m::ANIM_IRIS_ANA, ex.irisAna);
-    Set(m::ANIM_IRIS_PLAN, ex.irisPlan);
+    Set(m::ANIM_IRIS_MARCH, ex.irisMarch);
+    Set(m::ANIM_MARCH_SLIDE, ex.marchOut);
+    Set(m::ANIM_IRIS_NOSE, ex.irisNose);
     Set(m::ANIM_HANGAR, ex.hangar);
     Set(m::ANIM_ROVER_LIFT, ex.rovers);
+    Set(m::ANIM_AIRLOCK_DOOR, ex.lockDoor);       // main airlock crew lift (TantraLift)
+    Set(m::ANIM_AIRLOCK_OUT, ex.lockOut);
+    Set(m::ANIM_AIRLOCK_MAST, ex.lockMast);
+    Set(m::ANIM_AIRLOCK_DOWN, ex.lockDown);
 
-    // Carriage legs: hip on the track, slide 1 = in the pocket, pitch 1 = along the hull (aft),
-    // shin 1 = collapsed into the thigh, pad fold 1 = folded against the thigh.
+    // Blade legs: hip on the track (state 1 = the stow station), slide 1 = in the pocket, pitch 1 = along the hull
+    // (aft), blade_ext 1 = stages in, foot_fold 1 = fan folded flat.
     (void)sCG;
-    const double track = (p.hipS - m::kCarS0) / (m::kCarS1 - m::kCarS0);
-    const double shin = (m::kLegLMax - p.mastLen) / (m::kLegLMax - m::kLegLMin);
+    const double track = (p.hipS - m::kCarS0) / (m::kStowS - m::kCarS0);
+    // each blade as long as its contact really is: the drive lag (Tantra::UpdateGear) shortens a side a little
+    const double extP = (m::kLegLMax - (p.mastLen - ex.bladeLag[0])) / (m::kLegLMax - m::kLegLMin);
+    const double extS = (m::kLegLMax - (p.mastLen - ex.bladeLag[1])) / (m::kLegLMax - m::kLegLMin);
     const double pitch = p.mastPitch / (0.5 * PI);
     Set(m::ANIM_TRACK_PORT, track);
     Set(m::ANIM_TRACK_STARBOARD, track);
@@ -100,38 +94,47 @@ void TantraGear::Apply(const tantra::CarriagePose& p, double sCG, const Extras& 
     Set(m::ANIM_SLIDE_STARBOARD, 1.0 - p.slideOut);
     Set(m::ANIM_PITCH_PORT, pitch);
     Set(m::ANIM_PITCH_STARBOARD, pitch);
-    Set(m::ANIM_SHIN_LEN_PORT, shin);
-    Set(m::ANIM_SHIN_LEN_STARBOARD, shin);
-    Set(m::ANIM_PAD_FOLD_PORT, p.padFold);
-    Set(m::ANIM_PAD_FOLD_STARBOARD, p.padFold);
+    Set(m::ANIM_BLADE_EXT_PORT, extP);
+    Set(m::ANIM_BLADE_EXT_STARBOARD, extS);
+    Set(m::ANIM_FOOT_FOLD_PORT, p.footFold);
+    Set(m::ANIM_FOOT_FOLD_STARBOARD, p.footFold);
     Set(m::ANIM_STRUT_CARRIAGE, (std::max)(ex.strut[0], ex.strut[1]));   // one animation for both sides
-    Set(m::ANIM_ANCHOR_CARRIAGE, (std::max)(ex.anchor[0], ex.anchor[1]));
 
-    // Anamezon port: doors, trap lifts and empty slots, manipulator joints.
+    // Kangaroo leg: rig states straight from the pose.
+    Set(m::ANIM_KANG_DOOR, p.kangDoor);
+    Set(m::ANIM_KANG_HIP, p.kangHip);
+    Set(m::ANIM_KANG_KNEE, p.kangKnee);
+    Set(m::ANIM_KANG_EXT, p.kangExt);
+    Set(m::ANIM_KANG_FOOT, p.kangFoot);
+    Set(m::ANIM_KANG_FOLD, p.kangFold);
+    Set(m::ANIM_KANG_STRUT, ex.strut[6]);
+
+    // Anamezon port: doors, trap lifts and empty slots.
     Set(m::ANIM_BAY_DOORS, ex.bayDoors);
     static const int kHide[4] = {m::ANIM_TRAP0_HIDE, m::ANIM_TRAP1_HIDE, m::ANIM_TRAP2_HIDE, m::ANIM_TRAP3_HIDE};
     for (int i = 0; i < 4; ++i) Set(kHide[i], ex.trapHidden[i] ? 1.0 : 0.0);  // a cassette outside is a vessel
     Set(m::ANIM_LIFT0, (m::kLiftY0 - ex.liftY[0]) / m::kLiftTravel);
     Set(m::ANIM_LIFT1, (m::kLiftY0 - ex.liftY[1]) / m::kLiftTravel);
 
-    // Stern legs: resting pose (lower pair) and standing pose (all four) never overlap.
+    // Stern legs: swing to the standing pose, sections run out over the last part of the swing (shorter by the
+    // standing drop when the blades could not lift an empty ship to the nominal height), the foot hub rides its
+    // rail down to the ankle and the umbrella opens; the foot turns to the ground in the last quarter.
     static const int kSwing[4] = {m::ANIM_LEG0_SWING, m::ANIM_LEG1_SWING, m::ANIM_LEG2_SWING, m::ANIM_LEG3_SWING};
     static const int kExt[4] = {m::ANIM_LEG0_EXT, m::ANIM_LEG1_EXT, m::ANIM_LEG2_EXT, m::ANIM_LEG3_EXT};
-    static const int kRest[4] = {m::ANIM_LEG0_FOOT_REST, m::ANIM_LEG1_FOOT_REST, m::ANIM_LEG2_FOOT_REST, m::ANIM_LEG3_FOOT_REST};
-    static const int kStand[4] = {m::ANIM_LEG0_FOOT_STAND, m::ANIM_LEG1_FOOT_STAND, m::ANIM_LEG2_FOOT_STAND,
-                                  m::ANIM_LEG3_FOOT_STAND};
+    static const int kStand[4] = {m::ANIM_LEG0_FOOT_STAND, m::ANIM_LEG1_FOOT_STAND, m::ANIM_LEG2_FOOT_STAND, m::ANIM_LEG3_FOOT_STAND};
+    static const int kRail[4] = {m::ANIM_LEG0_RAIL, m::ANIM_LEG1_RAIL, m::ANIM_LEG2_RAIL, m::ANIM_LEG3_RAIL};
+    static const int kFold[4] = {m::ANIM_LEG0_FOLD, m::ANIM_LEG1_FOLD, m::ANIM_LEG2_FOLD, m::ANIM_LEG3_FOLD};
+    static const int kStrut[4] = {m::ANIM_LEG0_STRUT, m::ANIM_LEG1_STRUT, m::ANIM_LEG2_STRUT, m::ANIM_LEG3_STRUT};
     for (int i = 0; i < 4; ++i) {
         const m::LegRig& L = m::kLegs[i];
-        const double wr = L.lower ? p.legRest : 0.0, ws = p.legStand;
-        Set(kSwing[i], (wr * L.phiRest + ws * L.phiStand) / L.phiMax);
-        // the shin runs out only once the swing has lifted the leg clear of the stern
-        auto ext = [](double w) { return Clamp01((w - m::kLegExtDelay) / (1.0 - m::kLegExtDelay)); };
-        Set(kExt[i], (ext(wr) * L.extRest + ext(ws) * L.extStand) / m::kLegExtMax);
-        Set(kRest[i], wr);
+        const double ws = p.legStand;
+        Set(kSwing[i], ws * L.phiStand / L.phiMax);
+        const double run = Clamp01((ws - m::kLegExtDelay) / (1.0 - m::kLegExtDelay));
+        const double extStand = (std::max)(0.0, L.extStand - p.standDrop / std::cos(16.0 * RAD));
+        Set(kExt[i], run * extStand / m::kLegExtMax);
         Set(kStand[i], ws);
-        static const int kStrut[4] = {m::ANIM_LEG0_STRUT, m::ANIM_LEG1_STRUT, m::ANIM_LEG2_STRUT, m::ANIM_LEG3_STRUT};
-        static const int kAnchor[4] = {m::ANIM_LEG0_ANCHOR, m::ANIM_LEG1_ANCHOR, m::ANIM_LEG2_ANCHOR, m::ANIM_LEG3_ANCHOR};
+        Set(kRail[i], p.legRail);
+        Set(kFold[i], p.legFold);
         Set(kStrut[i], ex.strut[2 + i]);
-        Set(kAnchor[i], ex.anchor[2 + i]);
     }
 }
