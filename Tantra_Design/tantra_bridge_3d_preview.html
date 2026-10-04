@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Рубка в 3D</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#0a0d10;color:#d8e2ea;font:13px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+#view{position:absolute;inset:0}
+#view canvas{display:block}
+#bar{position:absolute;left:10px;top:10px;z-index:2;max-height:calc(100% - 20px);overflow:auto;background:rgba(10,19,17,.88);border:1px solid #1f3a35;border-radius:8px;padding:8px 10px;max-width:520px}
+#bar h1{font-size:14px;margin:0 0 4px;color:#7fe0d0}
+#bar .note{font-size:12px;color:#93a3b1;margin-bottom:6px}
+button{font:inherit;padding:4px 9px;border:1px solid #2c6a54;border-radius:6px;background:#121d1b;color:#7fe0d0;cursor:pointer;margin:2px}
+button.on{background:#2c6a54;color:#e8fffa}
+#hidden{position:absolute;left:-12000px;top:0;width:6200px;height:3000px}
+#hidden iframe{width:6200px;height:3000px;border:0}
+#load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#4f8f86;font-size:16px;z-index:1}
+</style>
+</head>
+<body>
+<div id="view"></div>
+<div id="load">Загружаю рубку и экраны…</div>
+<div id="bar">
+  <h1>Рубка Тантры в 3D <button id="fold">свернуть</button></h1>
+  <div id="barBody">
+  <div>вариант: <span id="varBtns"></span></div>
+  <div id="vInfo" class="note"></div>
+  <div>кресло: <button id="seatIn" class="on">сел — подъехало</button><button id="seatOut">пустое — отъехало</button> регулировка <input id="adj" type="range" min="-0.10" max="0.20" step="0.01" value="0" style="width:90px;vertical-align:middle"> <b id="adjV">+0.00 м</b></div>
+  <div>человек: <button id="manN">нет</button><button id="m95" class="on">95 % муж.</button><button id="f05">5 % жен.</button> <button id="reach">досягаемость</button></div>
+  <div class="note">Ввод — у человека: рули и клавиши на подлокотниках и боковых пультах в досягаемости (кресло едет 0,6 м + регулировка). Дальний стол — для слежения: приборы, лампы систем, расчётная машина с люминофорным экраном. Фигура человека и «досягаемость» — проверка зазоров.</div>
+  <div><button id="vSeat" class="on">из кресла командира</button><button id="vSide">сбоку</button><button id="vTop">сверху</button><button id="vBack">со спины</button></div>
+  <div><button id="varA">как сейчас в игре</button><button id="varB" class="on">фотоника</button></div>
+  <div><button id="mWork" class="on">РАБОТА: три стекла с MFD</button><button id="mPano">ЛЕНТА: боковые к центру, сцепка</button></div>
+  <div><button id="ign">погасить</button> непрозрачность <input id="opq" type="range" min="0" max="1" step="0.05" value="1" style="width:120px;vertical-align:middle"> <b id="opqV">100 % — обычный экран</b>
+  <button id="cut" class="on">стол в разрезе</button></div>
+  <div>изображение: <button id="pPlain" class="on">обычный экран (100 %)</button><button id="pPh">фотоника (90 %)</button> &nbsp; старый пульт у командира: <button id="oldOn">оставить</button><button id="oldOff" class="on">убрать лишнее</button></div>
+  <div>передний экран: <button id="fFix" class="on">постоянный на жёсткой основе</button><button id="fLift">выдвижной</button> &nbsp; <button id="fRect" class="on">как было (полёт · двигатели)</button><button id="fRound">круглый прибор на стекле</button></div>
+  <div>свет: <button id="palB" class="on">голубая фотоника шлема</button><button id="palE">изумрудный эл-режим</button> &nbsp; шрифт: <select id="font"><option value='"GOST 2.304 type A"' selected>ГОСТ 2.304 тип А (чертёжный)</option><option value='ISOCPEUR'>ISOCPEUR</option><option value='Bahnschrift'>Bahnschrift (DIN)</option><option value="">Segoe (как было)</option></select></div>
+  <div><button id="tOld">показать прежние экраны в игре</button></div>
+  </div>
+</div>
+<div id="hidden"><iframe id="fp" src="tantra_bridge_panels_mockup.html?w=6000"></iframe></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="bridge_vc.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+function b64f(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; }
+// Orbiter's frame is left-handed (x right, y up, z forward): three.js gets (x, y, -z)
+const V3 = (x, y, z) => new THREE.Vector3(x, y, -z);
+const view = $("view");
+const renderer = new THREE.WebGLRenderer({antialias: true});
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio)); view.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x07090b);
+const cam = new THREE.PerspectiveCamera(74, 1, 0.05, 200);
+const ctl = new THREE.OrbitControls(cam, renderer.domElement);
+scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+scene.add(new THREE.HemisphereLight(0xbfd8e8, 0x202428, 0.45));
+const lamp = new THREE.PointLight(0xffe2bf, 0.8, 12); lamp.position.copy(V3(0, 5.2, 79)); scene.add(lamp);
+// ---- the bridge from the game's mesh ----
+const HIDE = new Set(["bridge_sidescr0", "bridge_sidescr1", "bridge_sidedisp0", "bridge_sidedisp1", "bridge_centre", "bridge_frontdisp"]);   // drawn here by the variant
+const SCREENISH = new Set(["bridge_screen_c", "bridge_screen_ls", "bridge_screen_rs", "bridge_astro_screen", "bridge_mfd0", "bridge_mfd1", "bridge_mfd2", "bridge_mfd3", "bridge_mfd4", "bridge_mfd5", "bridge_mfd6", "bridge_seat_adj"]);
+const old = [], OLD_SECTOR = {};   // per group: the full index and the index without the commander's sector
+const CMD_PARTS = new Set(["bridge_tub", "bridge_console", "bridge_console_face", "bridge_leds", "bridge_keys"]);
+// the parts a variant may cut away (the old console round the commander and the crew), per triangle by its centre
+const CUT_PARTS = new Set([...CMD_PARTS, "bridge_nav", "bridge_metal", "bridge_mfd0", "bridge_mfd1", "bridge_mfd2", "bridge_mfd3", "bridge_mfd4", "bridge_mfd5", "bridge_mfd6"]);
+const CMD_CUT = (x, y, z, part) => { if (!CMD_PARTS.has(part)) return false; const dz = z - 79.75, r = Math.hypot(x, dz), a = Math.atan2(x, dz) * 180 / Math.PI; return r < 1.6 && Math.abs(a) < 115; };
+let CUT_FN = CMD_CUT, OLD_ON = false;
+function applyCut() { for (const k in OLD_SECTOR) { const o = OLD_SECTOR[k]; let idx = o.full;
+  if (!OLD_ON && CUT_FN) { const keep = []; for (let t = 0; t < o.full.length / 3; t++) if (!CUT_FN(o.cen[t * 3], o.cen[t * 3 + 1], o.cen[t * 3 + 2], k)) keep.push(o.full[t * 3], o.full[t * 3 + 1], o.full[t * 3 + 2]); idx = new Uint32Array(keep); }
+  o.mesh.geometry.setIndex(new THREE.BufferAttribute(idx, 1)); } }
+function setOld(on) { OLD_ON = on; applyCut(); }
+// the seats: the commander's (with its slider and button) and the crew's ride to their consoles (kSeatTravel 0.6 along the facing)
+const seatGrp = new THREE.Group(); scene.add(seatGrp);
+const CREW_SEATS = {1: {f: [.6204, .7843], rest: [1.665, 78.935], grp: new THREE.Group()}, 2: {f: [-.6204, .7843], rest: [-1.665, 78.935], grp: new THREE.Group()}, 3: {f: [0, 1], rest: [-2.4, 75.6], grp: new THREE.Group()}};
+for (const k in CREW_SEATS) scene.add(CREW_SEATS[k].grp);
+for (const p of BRIDGE.parts) {
+  const v = new Float32Array(b64f(p.v)); for (let i = 2; i < v.length; i += 3) v[i] = -v[i];
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(v, 3)); g.setIndex(new THREE.BufferAttribute(new Uint32Array(b64f(p.i)), 1)); g.computeVertexNormals();
+  let col = new THREE.Color(...p.color), mat;
+  if (p.name === "bridge_screen_c") mat = new THREE.MeshBasicMaterial({color: 0x6f9fc2, side: THREE.DoubleSide});          // the outside view: a sky
+  else if (SCREENISH.has(p.name) || HIDE.has(p.name)) mat = new THREE.MeshBasicMaterial({color: HIDE.has(p.name) ? 0x3a2a14 : 0x0c1513, side: THREE.DoubleSide});
+  else if (/leds|glow|cove|lamps|button|scr_led|scr_blink/.test(p.name)) mat = new THREE.MeshBasicMaterial({color: col, side: THREE.DoubleSide});
+  else mat = new THREE.MeshLambertMaterial({color: col.multiplyScalar(1.1), side: THREE.DoubleSide});
+  const m = new THREE.Mesh(g, mat); m.name = p.name;
+  const cs = /^bridge_seat([123])/.exec(p.name);
+  (/^bridge_seat0/.test(p.name) || /^bridge_button_(on|off)$/.test(p.name) || p.name === "bridge_seat_adj" ? seatGrp : cs ? CREW_SEATS[cs[1]].grp : scene).add(m);
+  if (CUT_PARTS.has(p.name)) {
+    const full = g.index.array, cen = new Float32Array(full.length);
+    for (let i = 0; i < full.length; i += 3) for (let k = 0; k < 3; k++) { cen[i] += v[full[i + k] * 3] / 3; cen[i + 1] += v[full[i + k] * 3 + 1] / 3; cen[i + 2] += -v[full[i + k] * 3 + 2] / 3; }
+    OLD_SECTOR[p.name] = {mesh: m, full: new Uint32Array(full), cen};
+  }
+  if (HIDE.has(p.name)) { m.visible = false; old.push(m); }
+}
+// ---- the panels, as the generator builds them: round the console axis (0, 79.75), angles from his front ----
+const AX = {x: 0, z: 79.75}, FLOOR = 1.0;
+const grp = {A: new THREE.Group(), B: new THREE.Group()};
+for (const k in grp) scene.add(grp[k]);
+const SURF = {}, TEX = {};
+for (const k of ["L", "F", "R"]) { SURF[k] = document.createElement("canvas"); TEX[k] = new THREE.CanvasTexture(SURF[k]); TEX[k].anisotropy = 8; TEX[k].minFilter = THREE.LinearMipmapLinearFilter; }
+const P3 = (a, r, y) => V3(AX.x + r * Math.sin(a * Math.PI / 180), y, AX.z + r * Math.cos(a * Math.PI / 180));
+function band(az0, az1, R, y0, y1, leanDeg) {
+  const NU = 40, NV = 10, pos = [], uv = [], idx = [], t = Math.tan(leanDeg * Math.PI / 180);
+  for (let j = 0; j <= NV; j++) for (let i = 0; i <= NU; i++) {
+    const u = i / NU, v = j / NV, a = az0 + (az1 - az0) * u, y = y0 + (y1 - y0) * v, p = P3(a, R + (y - y0) * t, y);
+    pos.push(p.x, p.y, p.z); uv.push(u, v);
+  }
+  for (let j = 0; j < NV; j++) for (let i = 0; i < NU; i++) { const a = j * (NU + 1) + i, b = a + 1, c = a + NU + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+const deg = (len, R) => len / R * 180 / Math.PI;
+// ---- the photonic screens. Each is a span (mid, half angle, R, y0, h, lean) drawn as light: a sheet, a contour, the light
+// running round it. IGNITION: from a source - the console's centre (threads run along arcs to the middle of each sheet, the
+// sheet opens from its middle line sideways) or the emitter line under it (the sheet rises from the console). TWO MODES of one
+// light surface: РАБОТА - three sheets (MFDs over the screens), ПАНОРАМА - one ribbon (the MFDs out, the screens joined).
+const PH_SHEETS = [];
+// THE EMITTERS: a window in the console's top under each image (closer to him than the image). Its optics converge the light
+// into real image points in the air over the console; the rays go on to his eye, so the image is seen from his seat only
+// (a cone round his line of sight), it only adds light (no opacity in air), it needs no glass and no mechanics.
+const EYE_C = V3(0, 2.25, 79.58);
+const DEPTH = .30;   // the window: this much nearer to his axis than the image
+function apertureGeom(sp, ign) {
+  const R = sp.R - DEPTH, NU = 30, pos = [], idx = [], col = [];
+  for (let j = 0; j <= 1; j++) for (let i = 0; i <= NU; i++) {
+    const a = sp.mid - sp.hs * (R / sp.R) * .95 + 2 * sp.hs * (R / sp.R) * .95 * i / NU, q = P3(a, R + (j ? .07 : 0), FLOOR + .725);
+    pos.push(q.x, q.y, q.z);
+  }
+  for (let i = 0; i < NU; i++) { const a = i, b = i + 1, c = i + NU + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); return g;
+}
+// the light volume: from the window's two edges to the image's bottom and top (faint), and a few bright rays
+function volumeGeom(sp) {
+  const R = sp.R - DEPTH, NU = 20, pos = [], idx = [], t = Math.tan(sp.lean * Math.PI / 180);
+  const rows = [(i) => P3(sp.mid - sp.hs * (R / sp.R) * .95 + 2 * sp.hs * (R / sp.R) * .95 * i / NU, R + .035, FLOOR + .725),
+                (i) => P3(sp.mid - sp.hs + 2 * sp.hs * i / NU, sp.R, sp.y0), (i) => P3(sp.mid - sp.hs + 2 * sp.hs * i / NU, sp.R + sp.h * t, sp.y0 + sp.h)];
+  for (const r of rows) for (let i = 0; i <= NU; i++) { const q = r(i); pos.push(q.x, q.y, q.z); }
+  for (const [r0, r1] of [[0, 1], [0, 2]]) for (let i = 0; i < NU; i++) { const a = r0 * (NU + 1) + i, c = r1 * (NU + 1) + i; idx.push(a, c, a + 1, a + 1, c, c + 1); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); return g;
+}
+function raysGeom(sp, n = 9) {
+  const R = sp.R - DEPTH, t = Math.tan(sp.lean * Math.PI / 180), pts = [];
+  for (let i = 0; i < n; i++) for (let j = 0; j < 3; j++) {
+    const u = (i + .5) / n, v = (j + .5) / 3, aw = sp.mid - sp.hs * (R / sp.R) * .95 + 2 * sp.hs * (R / sp.R) * .95 * (1 - u), y = sp.y0 + sp.h * v;
+    const from = P3(aw, R + .035, FLOOR + .725), to = P3(sp.mid - sp.hs + 2 * sp.hs * u, sp.R + (y - sp.y0) * t, y);
+    pts.push(from, to);
+  }
+  return new THREE.BufferGeometry().setFromPoints(pts);
+}
+// THE SIDE POSTS of each screen (the user): either a SLIT - a projector in each post throws the light across, the image
+// opens from both edges to the middle (any shape: the modes can change) - or GLASS - two panes slide out of the posts toward
+// each other and light up (a fixed shape: one mode only).
+function postGeom(sp, side, w = .045) {   // side -1 the left edge, +1 the right edge; a thin curved post, its slit facing in
+  const t = Math.tan(sp.lean * Math.PI / 180), a0 = side < 0 ? sp.mid - sp.hs : sp.mid + sp.hs, da = deg(w, sp.R) * (side < 0 ? -1 : 1);
+  const pos = [], idx = [], NV = 8, ys = [sp.y0 - .06, sp.y0 + sp.h + .06];
+  for (let j = 0; j <= NV; j++) {
+    const y = ys[0] + (ys[1] - ys[0]) * j / NV, r = sp.R + Math.max(0, y - sp.y0) * t;
+    for (const [a, dr] of [[a0, -.02], [a0 + da, -.02], [a0 + da, .04], [a0, .04]]) { const q = P3(a, r + dr, y); pos.push(q.x, q.y, q.z); }
+  }
+  for (let j = 0; j < NV; j++) for (let k = 0; k < 4; k++) { const a = j * 4 + k, b = j * 4 + (k + 1) % 4, c = a + 4, d = b + 4; idx.push(a, c, b, b, c, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return g;
+}
+function slitGeom(sp, side) {   // the bright slit on the post's inner face
+  const t = Math.tan(sp.lean * Math.PI / 180), a0 = (side < 0 ? sp.mid - sp.hs : sp.mid + sp.hs) + deg(.004, sp.R) * (side < 0 ? -1 : 1), pts = [];
+  for (let j = 0; j <= 8; j++) { const y = sp.y0 + sp.h * j / 8; pts.push(P3(a0, sp.R + (y - sp.y0) * t + .005, y)); }
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, .006, 6, false);
+}
+function slotGeom(sp) {   // the slot under the screen: a dark curved bar along its bottom edge
+  const NU = 30, pos = [], idx = [];
+  for (let i = 0; i <= NU; i++) {
+    const a = sp.mid - sp.hs * 1.02 + 2 * sp.hs * 1.02 * i / NU;
+    for (const [dr, dy] of [[-.05, -.07], [-.05, 0], [.06, 0], [.06, -.07]]) { const q = P3(a, sp.R + dr, sp.y0 + dy); pos.push(q.x, q.y, q.z); }
+  }
+  for (let i = 0; i < NU; i++) for (let k = 0; k < 4; k++) { const a = i * 4 + k, b = i * 4 + (k + 1) % 4, c = a + 4, d = b + 4; idx.push(a, c, b, b, c, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return g;
+}
+function photonSheet(group, key, tex, sp) {
+  const mat = new THREE.MeshBasicMaterial({map: tex, side: THREE.DoubleSide, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false});
+  const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat); mesh.userData.key = key; group.add(mesh);
+  const glass = [0, 1].map(() => { const m = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({color: 0x6f9fb8, transparent: true, opacity: .10, side: THREE.DoubleSide, depthWrite: false})); group.add(m); return m; });
+  const glassEdge = [0, 1].map(() => { const l = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({color: 0x6f9fb8, transparent: true, opacity: .5})); group.add(l); return l; });
+  const postMat = new THREE.MeshLambertMaterial({color: 0x2a3036});
+  const posts = [-1, 1].map(() => { const m = new THREE.Mesh(new THREE.BufferGeometry(), postMat); group.add(m); return m; });
+  const slits = [-1, 1].map(() => { const m = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({color: 0xb8ecff, transparent: true, opacity: 1})); group.add(m); return m; });
+  const slot = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshLambertMaterial({color: 0x23282d})); group.add(slot);
+  const o = {key, sp, mesh, mat, glass, glassEdge, posts, slits, slot, edge: []};
+  PH_SHEETS.push(o); return o;
+}
+// the visible part of a sheet: u0..u1 across, v0..v1 up (0..1), as geometry with the texture's own uv
+function sheetGeom(sp, u0, u1, v0, v1, dR = 0) {
+  const NU = 30, NV = 8, pos = [], uv = [], idx = [], t = Math.tan(sp.lean * Math.PI / 180);
+  for (let j = 0; j <= NV; j++) for (let i = 0; i <= NU; i++) {
+    const u = u0 + (u1 - u0) * i / NU, v = v0 + (v1 - v0) * j / NV, a = sp.mid - sp.hs + 2 * sp.hs * u, y = sp.y0 + sp.h * v, q = P3(a, sp.R + dR + (y - sp.y0) * t, y);
+    pos.push(q.x, q.y, q.z); uv.push(sp.uv0 + (sp.uv1 - sp.uv0) * u, sp.vv0 + (sp.vv1 - sp.vv0) * v);
+  }
+  for (let j = 0; j < NV; j++) for (let i = 0; i < NU; i++) { const a = j * (NU + 1) + i, b = a + 1, c = a + NU + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); return g;
+}
+function edgeOf(sp, u0, u1, v0, v1) {
+  const t = Math.tan(sp.lean * Math.PI / 180), P = (u, v) => { const y = sp.y0 + sp.h * v; return P3(sp.mid - sp.hs + 2 * sp.hs * u, sp.R + (y - sp.y0) * t, y); }, e = [];
+  for (let i = 0; i <= 20; i++) e.push(P(u0 + (u1 - u0) * i / 20, v0)); for (let i = 1; i <= 6; i++) e.push(P(u1, v0 + (v1 - v0) * i / 6));
+  for (let i = 19; i >= 0; i--) e.push(P(u0 + (u1 - u0) * i / 20, v1)); for (let i = 5; i >= 0; i--) e.push(P(u0, v0 + (v1 - v0) * i / 6));
+  return e;
+}
+const SP = (mid, w, R, y0, h, lean, uvs = [0, 1, 0, 1]) => ({mid, hs: deg(w, R) / 2, R, y0: FLOOR + y0, h, lean, uv0: uvs[0], uv1: uvs[1], vv0: uvs[2], vv1: uvs[3]});
+// the two modes. РАБОТА: the front as now, the sides 1.30 x 1.08 just past its ends. ПАНОРАМА: one ribbon at 1.20 m, the side
+// screens without their MFDs (the texture's lower part: the panel's screen zone) joined to the front.
+const ZV = 520 / 960;   // the screen zone's share of a side panel's texture height (its bottom part)
+// ONE GROOVE: all the screens stand in one curved slot along the top of the desk (R 1.25 m, 0.72 m over the floor), the same
+// lean; the side units are carriages in that groove - in the ribbon they ride along it to the front unit (no height change).
+const RG = 1.25, YD = .72, LEAN = 14, hsF0 = deg(1.50, RG) / 2, hsS0 = deg(1.30, RG) / 2;
+const MODES_SP = {
+  work: {L: SP(-(hsF0 + 4 + hsS0), 1.30, RG, YD, .96, LEAN), F: SP(0, 1.50, RG, YD, .65, LEAN), R: SP(hsF0 + 4 + hsS0, 1.30, RG, YD, .96, LEAN)},
+  pano: {L: SP(-(hsF0 + hsS0), 1.30, RG, YD, .65, LEAN, [0, 1, 0, ZV]), F: SP(0, 1.50, RG, YD, .65, LEAN), R: SP(hsF0 + hsS0, 1.30, RG, YD, .65, LEAN, [0, 1, 0, ZV])},
+};
+MODES_SP.panoMech = MODES_SP.pano;
+const GLASS_H = {L: .96, F: .65, R: .96}, SECTIONS = {L: 2, F: 1, R: 2};
+// THE DESK: the default body (a variant may build its own): one curved body under the screens, its groove in the top
+const DESK = {a0: -(hsF0 + 4 + 2 * hsS0 + 4), a1: hsF0 + 4 + 2 * hsS0 + 4, ri: .92, ro: 1.42};
+// the look of the light and of the lettering: the palette (the helmet's blue photonics or the suit's emerald EL mode) and the font
+// B: the helmet's photonics (a halo, a flicker, no fills: «on» = a double contour); E: the suit's EL mode (a flat even phosphor:
+// no halo, no flicker; fills: «on» = a solid accent plate with black text, «off» = a 1 px contour at 0.6 over a 0.08 fill)
+const PAL = {B: {main: "#b8ecff", dim: "#6f9fb8", acc: "#ffc46a", red: "#ff3b30", white: "#e6f6ff", hue: 22, sat: .75, halo: true, fill: false},
+             E: {main: "#5cffc8", dim: "#2b8a72", acc: "#ffb84a", red: "#ff5a4a", white: "#c9fff0", hue: 0, sat: .95, halo: false, fill: true}};
+const STYLE = {pal: "B"}, FONT = {fam: '"GOST 2.304 type A"'};
+function hookFont(win) {   // every canvas font of this page (and of the mockup's frame) gets the chosen family, its size kept
+  const P = win.CanvasRenderingContext2D.prototype; if (P.__tantraFont) return; P.__tantraFont = true;
+  const d = Object.getOwnPropertyDescriptor(P, "font");
+  Object.defineProperty(P, "font", {configurable: true, get() { return d.get.call(this); },
+    set(v) { d.set.call(this, FONT.fam ? String(v).replace(/(\d+(?:\.\d+)?px(?:\/\S+)?)\s+.+$/, "$1 " + FONT.fam) : v); }});
+}
+hookFont(window);
+const arcPts = (cr, cy, R, f0, f1, n = 8) => { const o = []; for (let i = 0; i <= n; i++) { const f = (f0 + (f1 - f0) * i / n) * Math.PI / 180; o.push([cr + R * Math.cos(f), cy + R * Math.sin(f)]); } return o; };
+// a body swept along the arc a0..a1 from its section SEG: polylines of [r, h over the floor], each next starting where the last
+// ended; corners between the polylines are sharp, inside one polyline smooth; the ends are capped. uv: metres / 0.6.
+function arcBody(SEG, a0, a1, NU = 120) {
+  const pos = [], uv = [], idx = [];
+  let vacc = 0;
+  for (const seg of SEG) {
+    const base = pos.length / 3; let v = vacc;
+    for (let k = 0; k < seg.length; k++) {
+      if (k) v += Math.hypot(seg[k][0] - seg[k - 1][0], seg[k][1] - seg[k - 1][1]);
+      for (let i = 0; i <= NU; i++) { const a = a0 + (a1 - a0) * i / NU, q = P3(a, seg[k][0], FLOOR + seg[k][1]); pos.push(q.x, q.y, q.z); uv.push(a * Math.PI / 180 * seg[k][0] / .6, v / .6); }
+    }
+    vacc = v;
+    for (let k = 0; k < seg.length - 1; k++) for (let i = 0; i < NU; i++) { const a = base + k * (NU + 1) + i, b = a + 1, c = a + NU + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+  }
+  const ring = []; for (const seg of SEG) for (let k = 0; k < seg.length - 1; k++) ring.push(seg[k]);
+  const tris = THREE.ShapeUtils.triangulateShape(ring.map(p => new THREE.Vector2(p[0], p[1])), []);
+  for (const a of [a0, a1]) { const base = pos.length / 3; for (const p of ring) { const q = P3(a, p[0], FLOOR + p[1]); pos.push(q.x, q.y, q.z); uv.push(p[0] / .6, p[1] / .6); } for (const t of tris) idx.push(base + t[0], base + t[1], base + t[2]); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g;
+}
+// the default desk's section from his side round to the far side: the toe recess, his rounded edge, the top, the groove, the far edge
+function deskSection(ri = DESK.ri, ro = DESK.ro, top = YD) {
+  const gi = RG - .035, go = RG + .035;
+  return [[[ri + .10, 0], [ri + .10, .09]], [[ri + .10, .09], [ri, .24]], [[ri, .24], [ri, top - .03]], arcPts(ri + .03, top - .03, .03, 180, 90),
+          [[ri + .03, top], [gi, top]], [[gi, top], [gi, top - .06]], [[gi, top - .06], [go, top - .06]], [[go, top - .06], [go, top]], [[go, top], [ro - .03, top]],
+          arcPts(ro - .03, top - .03, .03, 90, 0), [[ro, top - .03], [ro, 0]], [[ro, 0], [ri + .10, 0]]];
+}
+function deskGeom() { return arcBody(deskSection(), DESK.a0, DESK.a1); }
+// a curved box a0..a1, rA..rB, y0..y1 (absolute heights)
+function arcBox(a0, a1, rA, rB, y0, y1, NU = 24) {
+  const h0 = y0 - FLOOR, h1 = y1 - FLOOR;
+  return arcBody([[[rA, h0], [rA, h1]], [[rA, h1], [rB, h1]], [[rB, h1], [rB, h0]], [[rB, h0], [rA, h0]]], a0, a1, NU);
+}
+function canvasTex(w, h) { const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const tex = new THREE.CanvasTexture(cv); tex.anisotropy = 8; return {cv, ctx: cv.getContext("2d"), tex}; }
+// a canvas-textured band lying flat at height y over a0..a1, rA..rB: the canvas x runs with the angle, its y from rB (top) to rA
+function arcPlate(a0, a1, rA, rB, y, w, h, mat) {
+  const {cv, tex} = canvasTex(w, h), NU = 40, pos = [], uv = [], idx = [];
+  for (let j = 0; j <= 1; j++) for (let i = 0; i <= NU; i++) { const a = a0 + (a1 - a0) * i / NU, q = P3(a, j ? rB : rA, y); pos.push(q.x, q.y, q.z); uv.push(i / NU, j); }
+  for (let i = 0; i < NU; i++) { const a = i, b = i + 1, c = i + NU + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+  const mesh = new THREE.Mesh(g, mat || new THREE.MeshBasicMaterial({map: tex, side: THREE.DoubleSide}));
+  if (mat) mat.map = tex;
+  return {mesh, cv, tex, w, h, X: a => (a - a0) / (a1 - a0) * w, Y: r => (1 - (r - rA) / (rB - rA)) * h};
+}
+// the desk's skin: a fine grain (the colour comes from the material)
+const deskTex = (() => { const cv = document.createElement("canvas"); cv.width = cv.height = 256; const c = cv.getContext("2d"), im = c.createImageData(256, 256);
+  for (let i = 0; i < 256 * 256; i++) { const x = i % 256, y = Math.floor(i / 256), n = 150 + Math.random() * 34 + 10 * Math.sin(x * .049 + y * .011) + 6 * Math.sin(y * .21);
+    im.data[i * 4] = n; im.data[i * 4 + 1] = n * .97; im.data[i * 4 + 2] = n * .92; im.data[i * 4 + 3] = 255; }
+  c.putImageData(im, 0, 0); const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; })();
+// ---- THE KEYS: caps on arcs, their labels on canvas tops (GOST lettering, the palette's light) ----
+const TOP = {r0: .975, r1: 1.2, y: FLOOR + YD + .001};
+const KEYS = [];      // all keys of all variants (the palette and the font repaint them)
+let BT = null;        // the variant being built: {group, keys}
+const KW = .078, KD = .046, KH = .014, KCH = .003, NROW = 4, ROWP = (TOP.r1 - TOP.r0) / NROW, rowR = i => TOP.r1 - (i + .5) * ROWP;
+const RM = (TOP.r0 + TOP.r1) / 2, pitchA = .095 / RM * 180 / Math.PI, colsIn = (a0, a1) => Math.floor((a1 - a0) / pitchA);
+function capGeom(a0, a1, rA, rB, kh = KH) {   // a key: a curved block, its top chamfered all round; the label on the top face
+  const NU = 6, pos = [], uv = [], idx = [], ia = KCH / ((rA + rB) / 2) * 180 / Math.PI;
+  const ring = (r, y, ins, uvv) => { const row = []; for (let i = 0; i <= NU; i++) { const a = a0 + ins + (a1 - a0 - 2 * ins) * i / NU, q = P3(a, r, y); row.push(pos.length / 3); pos.push(q.x, q.y, q.z); uv.push(i / NU, uvv); } return row; };
+  const T0 = ring(rA + KCH, kh, ia, 0), T1 = ring(rB - KCH, kh, ia, 1), M0 = ring(rA, kh - KCH, 0, 0), M1 = ring(rB, kh - KCH, 0, 1), B0 = ring(rA, 0, 0, 0), B1 = ring(rB, 0, 0, 1);
+  const quad = (A, B) => { for (let i = 0; i < NU; i++) idx.push(A[i], B[i], A[i + 1], A[i + 1], B[i], B[i + 1]); };
+  quad(T0, T1); const nTop = idx.length;
+  quad(M0, T0); quad(T1, M1); quad(B0, M0); quad(M1, B1);
+  for (const e of [0, NU]) idx.push(B0[e], M0[e], M1[e], B0[e], M1[e], B1[e], M0[e], T0[e], T1[e], M0[e], T1[e], M1[e]);
+  for (let i = 0; i < idx.length; i += 3) { const t = idx[i + 1]; idx[i + 1] = idx[i + 2]; idx[i + 2] = t; }   // the faces outward
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+  g.addGroup(0, nTop, 0); g.addGroup(nTop, idx.length - nTop, 1); return g;
+}
+const keySide = new THREE.MeshStandardMaterial({color: 0x262b2f, roughness: .5, metalness: .15, side: THREE.DoubleSide});
+// a key centred at angle aC, radius rC. o: {w, d (m), h (cap height), y (its base height), side (material of its sides),
+// paint(k, c, W, H) (own drawing of the top), cw, ch (canvas size)}
+function key(aC, rC, label, group, col, o = {}) {
+  const w = o.w || KW, d = o.d || KD, cw = o.cw || 256, ch = o.ch || Math.round(cw * d / w);
+  const cv = document.createElement("canvas"); cv.width = cw; cv.height = ch; const tex = new THREE.CanvasTexture(cv); tex.anisotropy = 8;
+  const ha = w / 2 / rC * 180 / Math.PI;
+  const mesh = new THREE.Mesh(capGeom(aC - ha, aC + ha, rC - d / 2, rC + d / 2, o.h || KH), [new THREE.MeshLambertMaterial({map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: .5}), o.side || keySide]);
+  const y0 = o.y !== undefined ? o.y : TOP.y; mesh.position.y = y0; (BT ? BT.group : grp.B).add(mesh);
+  const k = {mesh, cv, tex, on: false, group, label, col, y0, paint: o.paint, aC, rC}; KEYS.push(k); if (BT) BT.keys.push(k); mesh.userData.key = k; paintKey(k); return k;
+}
+function paintKey(k) {
+  const c = k.cv.getContext("2d"), W = k.cv.width, H = k.cv.height, P = PAL[STYLE.pal], col = k.col === AMB ? P.acc : k.col === RED ? P.red : k.col || P.main;
+  if (k.paint) { k.paint(k, c, W, H, P, col); k.tex.needsUpdate = true; return; }
+  c.fillStyle = k.on ? "#2c383e" : "#1c2226"; c.fillRect(0, 0, W, H);
+  const g = c.createRadialGradient(W / 2, H / 2, 10, W / 2, H / 2, W * .62); g.addColorStop(0, "rgba(255,255,255,.06)"); g.addColorStop(1, "rgba(0,0,0,.3)"); c.fillStyle = g; c.fillRect(0, 0, W, H);   // the dish of the cap
+  if (k.label) {
+    if (P.fill) {   // EL: «on» a solid plate, «off» a thin contour over a faint fill
+      if (k.on) { c.fillStyle = k.col ? col : P.acc; c.fillRect(9, 9, W - 18, H - 18); }
+      else { c.globalAlpha = .08; c.fillStyle = col; c.fillRect(9, 9, W - 18, H - 18); c.globalAlpha = .6; c.strokeStyle = col; c.lineWidth = 3; c.strokeRect(9, 9, W - 18, H - 18); c.globalAlpha = 1; }
+    } else {
+      c.strokeStyle = k.on ? col : "#3a464f"; c.lineWidth = k.on ? 6 : 3; c.strokeRect(9, 9, W - 18, H - 18);
+      if (k.on) { c.lineWidth = 2; c.strokeRect(20, 20, W - 40, H - 40); }   // the helmet's «on»: a double contour
+    }
+    keyLabel(k, c, W, H, P.fill && k.on ? "#000" : k.on ? col : (k.col ? col : P.fill ? P.main : "#a9c2cc"), k.on ? 1 : .82);
+  }
+  k.tex.needsUpdate = true;
+}
+function keyLabel(k, c, W, H, fill, alpha = 1) {   // the label fitted into the cap, in two lines when long
+  const fit = (t, max) => { let fs = Math.round(H * .36); c.font = `700 ${fs}px Segoe UI`; while (c.measureText(t).width > max && fs > 12) { fs -= 2; c.font = `700 ${fs}px Segoe UI`; } return fs; };
+  c.fillStyle = fill; c.globalAlpha = alpha; c.textAlign = "center"; c.textBaseline = "middle";
+  const sp = k.label.indexOf(" ");
+  if (sp > 0 && fit(k.label, W - 44) < H * .27) { const l1 = k.label.slice(0, sp), l2 = k.label.slice(sp + 1), fs = Math.min(fit(l1, W - 44), fit(l2, W - 44)); c.font = `700 ${fs}px Segoe UI`; c.fillText(l1, W / 2, H / 2 - fs * .55); c.fillText(l2, W / 2, H / 2 + fs * .6); }
+  else { fit(k.label, W - 44); c.fillText(k.label, W / 2, H / 2 + 2); }
+  c.globalAlpha = 1;
+}
+function setKey(k, on) { k.on = on; k.mesh.position.y = k.y0 - (on ? .004 : 0); paintKey(k); }
+function flash(k, ms = 160) { setKey(k, true); setTimeout(() => setKey(k, false), ms); }
+// a block of columns from angle x0: rows[i][c] = [label, group, colour?]; null = a spare key (no label), a missing entry = no key
+function block(x0, cols, rows) {
+  rows.forEach((r, i) => { for (let c = 0; c < cols; c++) { if (r[c] === undefined) continue; const it = r[c] || ["", "spare"]; key(x0 + (c + .5) * pitchA, rowR(i), it[0], it[1], it[2]); } });
+  return x0 + cols * pitchA;
+}
+const cen = (a0, a1) => { const n = colsIn(a0, a1); return [n, a0 + ((a1 - a0) - n * pitchA) / 2]; };
+const AMB = "#ffc46a", RED = "#ff3b30";
+// ---- THE SEAT and HIM: the commander's seat rides 0.6 m to the desk after he sits (kSeatTravel), plus his own adjustment
+// -0.10..+0.20 (kSeatAdjMin/Max); the check figure sits in it (95 % man / 5 % woman) to prove the clearances ----
+const SEAT = {target: 1, cur: 1, adj: 0, offset() { return .6 * this.cur + this.adj; }, place() { return {x: 0, z: 78.95 + this.offset()}; }};
+// the figure (m): the hip joint 0.085 over the seat cushion (its top y 1.635, the mesh) at the seat's place (z 78.95 at rest:
+// the backrest's foot is at 78.82-78.87), the segments of a 95 % man / 5 % woman (the seated pose of OrbiterCrew: the knees
+// 0.37-0.40 ahead of the hips, the shoulders 0.45 over them and 0.10 behind, the eye 0.63 over them)
+const MAN_DIMS = {
+  m95: {hipY: 1.72, hipDZ: 0, thigh: .46, shank: .53, footL: .28, torso: .50, neckHead: .20, upperArm: .37, foreArm: .29, hand: .19, shoulderW: .50, hipW: .40, r: .072},
+  f05: {hipY: 1.71, hipDZ: 0, thigh: .38, shank: .43, footL: .22, torso: .42, neckHead: .17, upperArm: .29, foreArm: .23, hand: .16, shoulderW: .38, hipW: .36, r: .056}};
+const MAN = {show: "m95", reach: false, group: new THREE.Group()};
+seatGrp.add(MAN.group);
+function buildMan() {
+  const g = MAN.group; while (g.children.length) { const c = g.children.pop(); c.geometry && c.geometry.dispose(); }
+  g.visible = MAN.show !== "none"; if (!g.visible) return;
+  const D = MAN_DIMS[MAN.show], mat = new THREE.MeshLambertMaterial({color: 0xd58c58, transparent: true, opacity: .62, depthWrite: false}), O = (x, y, z) => V3(x, y, z);
+  const limb = (p, q, r) => { const len = p.distanceTo(q), m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 12), mat); m.position.copy(p).add(q).multiplyScalar(.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), q.clone().sub(p).normalize()); g.add(m); for (const s of [p, q]) { const b = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 8), mat); b.position.copy(s); g.add(b); } };
+  const z0 = 78.95 + D.hipDZ, recl = 11 * Math.PI / 180, up = 4 * Math.PI / 180;
+  for (const sx of [-1, 1]) {
+    const hx = sx * D.hipW / 2 * .55, hip = O(hx, D.hipY, z0), knee = O(hx, D.hipY + D.thigh * Math.sin(up), z0 + D.thigh * Math.cos(up));
+    const kY = D.hipY + D.thigh * Math.sin(up), ankY = FLOOR + .08, dy = kY - ankY, dz = dy < D.shank ? Math.sqrt(D.shank * D.shank - dy * dy) : 0;
+    const ank = O(hx, Math.max(ankY, kY - D.shank), z0 + D.thigh * Math.cos(up) + dz * .6), toe = O(hx, FLOOR + .04, -ank.z + D.footL * .8);
+    limb(hip, knee, D.r * .95); limb(knee, ank, D.r * .7); limb(ank, toe, D.r * .5);
+  }
+  const pelvis = O(0, D.hipY + .02, z0), neck = O(0, D.hipY + D.torso * Math.cos(recl), z0 - D.torso * Math.sin(recl));
+  limb(pelvis, neck, D.r * 1.6);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(D.r * 1.35, 16, 12), mat); head.position.copy(O(0, D.hipY + (D.torso + D.neckHead * .6) * Math.cos(recl), z0 - (D.torso + D.neckHead * .6) * Math.sin(recl))); g.add(head);
+  for (const sx of [-1, 1]) {   // the arms hang, the elbows bent: the forearms forward (to the armrest ends)
+    const sh = O(sx * D.shoulderW / 2 * .85, neck.y - .04, -neck.z), el = O(sx * D.shoulderW / 2 * .9, sh.y - D.upperArm * .95, -sh.z + D.upperArm * .25);
+    const wr = O(sx * D.shoulderW / 2 * .8, el.y + .02, -el.z + D.foreArm), hand = O(sx * D.shoulderW / 2 * .78, wr.y - .01, -wr.z + D.hand * .8);
+    limb(sh, el, D.r * .55); limb(el, wr, D.r * .48); limb(wr, hand, D.r * .4);
+    if (MAN.reach) {   // the reach: the fingertip sphere round the shoulder (upper arm + forearm + hand), its lower front quarter
+      const R = D.upperArm + D.foreArm + D.hand, sphM = new THREE.MeshBasicMaterial({color: sx < 0 ? 0x46e2ff : 0x7dffc0, transparent: true, opacity: .13, side: THREE.DoubleSide, depthWrite: false});
+      const shell = new THREE.Mesh(new THREE.SphereGeometry(R, 40, 20, Math.PI * (sx < 0 ? 1 : .5), Math.PI * .5, Math.PI * .45, Math.PI * .4), sphM); shell.position.copy(sh); g.add(shell);
+      const ring = new THREE.Mesh(new THREE.RingGeometry(Math.sqrt(Math.max(0, R * R - (sh.y - (FLOOR + YD)) ** 2)) - .004, Math.sqrt(Math.max(0, R * R - (sh.y - (FLOOR + YD)) ** 2)), 64, 1, 0, Math.PI * 2), new THREE.MeshBasicMaterial({color: sphM.color, side: THREE.DoubleSide}));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(sh.x, FLOOR + YD + .003, sh.z); g.add(ring);   // where it cuts the desk-top height
+    }
+  }
+}
+buildMan();
+setInterval(() => { const d = SEAT.target - SEAT.cur; SEAT.cur += Math.sign(d) * Math.min(Math.abs(d), .03 * .25 / .6); seatGrp.position.z = -SEAT.offset();
+  for (const k in CREW_SEATS) { const c = CREW_SEATS[k]; c.grp.position.set(c.f[0] * .6 * SEAT.cur, 0, -c.f[1] * .6 * SEAT.cur); } }, 30);
+// ---- THE VARIANTS of the desk. Each builds its own group; the files bridge_variants/v*.js register with VARIANTS.push({id, name,
+// info, build(ctx)}); build returns {onKey(k), step(dt), repaint(), cutMats, cut(x, y, z, part) -> hide that old triangle} ----
+const VARIANTS = [], BUILT = {};
+let VAR = null;
+// group: the variant's fixed parts; seatGroup: the parts riding with the commander's seat (built at its rest place, z 78.95);
+// crewGroups[1..3]: riding with the crew seats (built at their rest places, CREW_SEATS[k].rest, facing f)
+function variantCtx(group, clicks, seatGroup, crewGroups) {
+  return {THREE, P3, V3, AX, FLOOR, YD, RG, hsF0, hsS0, MODES_SP, GLASS_H, DESK, TOP, group, seatGroup, crewGroups, CREW_SEATS, PAL, STYLE, FONT, LOOK, AMB, RED, SEAT, MAN_DIMS,
+    arcPts, arcBody, arcBox, arcPlate, canvasTex, deskSection, deskGeom, deskTex, key, setKey, paintKey, keyLabel, flash, block, cen, capGeom, keySide,
+    clickable: (mesh, fn) => clicks.push({mesh, fn}), mockup: {click: clickMockup, win: () => $("fp").contentWindow, regions: () => regions},
+    cmdCut: CMD_CUT, setOpq: v => setOpq(v), deg};
+}
+function buildVariant(def) {
+  const group = new THREE.Group(); grp.B.add(group); const clicks = [], seatGroup = new THREE.Group(), crewGroups = {};
+  seatGrp.add(seatGroup); for (const k in CREW_SEATS) { crewGroups[k] = new THREE.Group(); CREW_SEATS[k].grp.add(crewGroups[k]); }
+  BT = {group, keys: []}; let res = {};
+  try { res = def.build(variantCtx(group, clicks, seatGroup, crewGroups)) || {}; } catch (e) { console.error("variant " + def.id + ": ", e); }
+  const b = {def, group, seatGroup, crewGroups, keys: BT.keys, clicks, cutMats: [], ...res}; BT = null; return b;
+}
+function selectVariant(id) {
+  const def = VARIANTS.find(v => v.id === id) || VARIANTS[0]; if (!def) return;
+  if (!BUILT[def.id]) BUILT[def.id] = buildVariant(def);
+  for (const k in BUILT) { const on = k === def.id, b = BUILT[k]; b.group.visible = b.seatGroup.visible = on; for (const c in b.crewGroups) b.crewGroups[c].visible = on; }
+  VAR = BUILT[def.id]; CUT_FN = VAR.cut || CMD_CUT; applyCut();
+  for (const k in BUILT) if (BUILT[k].onActive) BUILT[k].onActive(k === def.id);
+  if (VAR.repaint) VAR.repaint(); else VAR.keys.forEach(paintKey);
+  for (const b of document.querySelectorAll("#varBtns button")) b.classList.toggle("on", b.dataset.id === def.id);
+  $("vInfo").textContent = def.info || "";
+  try { history.replaceState(null, "", "?v=" + def.id); } catch (e) {}
+}
+// THE PREVIOUS DESK (the uniform keyboard) as variant 0, for comparison
+VARIANTS.push({id: "V0", name: "0 · прежний", info: "Прежний стол: сетка одинаковых клавиш по всей глубине (131 шт.), рычаг тяги. Для сравнения.", build(ctx) {
+  const deskMat = new THREE.MeshStandardMaterial({color: 0x45413c, map: deskTex, roughness: .8, metalness: .08, side: THREE.DoubleSide, transparent: true, opacity: 1});
+  ctx.group.add(new THREE.Mesh(deskGeom(), deskMat));
+  { const pts = []; for (let i = 0; i <= 90; i++) pts.push(P3(DESK.a0 + .6 + (DESK.a1 - DESK.a0 - 1.2) * i / 90, DESK.ri + .022, FLOOR + YD));
+    const padMat = new THREE.MeshStandardMaterial({color: 0x3b2d25, roughness: .62, metalness: 0});
+    ctx.group.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 160, .024, 14, false), padMat));
+    for (const p of [pts[0], pts[90]]) { const e = new THREE.Mesh(new THREE.SphereGeometry(.024, 14, 10), padMat); e.position.copy(p); ctx.group.add(e); } }
+  const keys = BT.keys, zoneA = {L: [DESK.a0, -hsF0], F: [-hsF0, hsF0], R: [hsF0, DESK.a1]};
+// LEFT: the mechanisation (13 x 4)
+{ const [n, x0] = cen(...zoneA.L), P = "pos", T = "t", _ = null;
+  block(x0, n, [
+    [["В ГОРИЗОНТ", P], ["НА ТРЁХ", P], ["НА НОГИ", P], ["75°", P], ["ВЗЛЁТНОЕ", P], ["СТОП", "stop", AMB], _, ["МЕХАНИЗАЦИЯ", "lscr"], ["ТЕПЛО", "lscr"], ["АВТОПИЛОТ", "lscr"], _, ["ОГНИ НАВИГ.", T], ["ПРОЖЕКТОРЫ", T]],
+    [["ШАССИ", T], ["ЛЁЖА", "set"], ["НА КОРМУ", "set"], _, ["КРЫЛЬЯ", T], ["ГОНДОЛЫ", T], ["СОПЛА НАЗАД", "noz"], ["СОПЛА ВНИЗ", "noz"], _, ["ВЕЗДЕХОДЫ", T], ["АНГАР", T], ["СТВОРКИ", T], ["ОГНИ ПОСАДКИ", T]],
+    [["ШЛЮЗ", T], ["ЛИФТ ВНИЗ", "lift"], ["ЛИФТ ВВЕРХ", "lift"], _, ["ПОРТ", T], ["СТОЛ ВВЕРХ", "tbl"], ["СТОЛ СТОП", "tbl", AMB], _, ["ИРИС НОС", T], ["ИРИС КОРМА", T], ["МАРШ ВЫДВ.", T], _, _],
+    [_, _, _, _, _, _, _, _, _, _, _, _, ["АВАР. СТОП", T, RED]]]); }
+// FRONT: by the screen its modes, the opacity and the HUD; then the RCS and the guards; by him the autopilots (10 x 4);
+// the brightness knob and the throttle lever take the ends
+const knobW = 8, levW = 8;
+{ const [z0, z1] = zoneA.F, [n, x0] = cen(z0 + knobW, z1 - levW), _ = null;
+  block(x0, n, [
+    [["ПОЛЁТ", "scr"], ["ДВИГАТЕЛИ", "scr"], ["ПАРАМЕТРЫ", "scr"], ["НЕПРОЗР. −", "opq"], ["НЕПРОЗР. +", "opq"], ["HUD ГОРИЗОНТ", "hud"], ["HUD ОРБИТА", "hud"], ["HUD СТЫКОВКА", "hud"], ["HUD ЦВЕТ", "t"], ["HUD ВЫКЛ", "hud"]],
+    [["РСУ ВРАЩ.", "rcs"], ["РСУ ЛИН.", "rcs"], ["РСУ ВЫКЛ", "rcs"], ["РСУ ТОЧНО", "t"], _, ["ПРЕДЕЛ g", "t"], ["ОБХОД БЛОК.", "t", RED], ["ОТСЕЧКА", "t", RED], ["ОТМЕНА", "flash"], ["ПОДТВЕРДИТЬ", "flash", AMB]],
+    [["СТОП ВРАЩ.", "ap"], ["ГОРИЗОНТ", "ap"], ["ПРОГРАД", "ap"], ["РЕТРОГРАД", "ap"], ["НОРМАЛЬ +", "ap"], ["НОРМАЛЬ −", "ap"], ["РАДИАЛ +", "ap"], ["РАДИАЛ −", "ap"], ["ВЫСОТА", "ap"], ["КУРС", "ap"]],
+    [_, ["ВЗЛЁТ", "ap"], ["ПОСАДКА", "ap"], ["НА ХВОСТ", "ap"], ["РУЧН.", "ap", AMB], ["ПАРЕНИЕ", "ap"], ["СБЛИЖЕНИЕ", "ap"], ["СТЫКОВКА", "ap"], _, _]]);
+  const kq = P3(z0 + knobW / 2, RM, TOP.y);
+  const knob = new THREE.Mesh(new THREE.CylinderGeometry(.035, .04, .03, 28), new THREE.MeshStandardMaterial({color: 0x2a3036, roughness: .45, metalness: .4})); knob.position.copy(kq); knob.position.y += .015; ctx.group.add(knob);
+  const knobMark = new THREE.Mesh(new THREE.BoxGeometry(.006, .004, .03), new THREE.MeshBasicMaterial({color: 0xffc46a})); knobMark.position.set(0, .017, .012); knob.add(knobMark);
+  const lq = P3(z1 - levW / 2, RM, TOP.y), lever = new THREE.Group(); lever.position.copy(lq); lever.rotation.y = Math.PI - (z1 - levW / 2) * Math.PI / 180; ctx.group.add(lever);
+  lever.add(new THREE.Mesh(new THREE.BoxGeometry(.03, .006, .2), new THREE.MeshLambertMaterial({color: 0x0b0e10})));
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(.009, .009, .14, 10), new THREE.MeshStandardMaterial({color: 0x8a96a4, roughness: .3, metalness: .7})); arm.position.set(0, .07, .02); arm.rotation.x = -.3; lever.add(arm);
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(.024, 16, 12), new THREE.MeshStandardMaterial({color: 0xffc46a, roughness: .35, emissive: 0x3a2400})); ball.position.set(0, .135, -.02); lever.add(ball); }
+// RIGHT: the computing machine next to the front (8 columns) and the store beyond it; their displays take the row by the groove
+let aRs, pR;
+const CALC_S = {disp: "0", log: ["Δv перелёт  9 260 м/с", "азимут  43,4°", "окно  Т+02:14:00"], cells: ["9 260", "43,4", "", "", "", "", "", ""], page: 0};
+{ const [n, x0] = cen(...zoneA.R), C = "calc", S = "sto";
+  const x1 = block(x0, 8, [[],
+    [["7", C], ["8", C], ["9", C], ["÷", C], ["√", C], ["x²", C], ["sin", C], ["C", C, RED]],
+    [["4", C], ["5", C], ["6", C], ["×", C], ["π", C], ["±", C], ["cos", C], ["tan", C]],
+    [["1", C], ["2", C], ["3", C], ["−", C], ["0", C], [",", C], ["+", C], ["=", C, AMB]]]);
+  aRs = x1;
+  block(x1, n - 8, [[],
+    [["ЗАПИСЬ", S], ["ВЫЗОВ", S], ["В ЖУРНАЛ", S], ["В НАВИГ.", S], ["СТЕРЕТЬ", S, RED]],
+    [["ЯЧ 1", "cell"], ["ЯЧ 2", "cell"], ["ЯЧ 3", "cell"], ["ЯЧ 4", "cell"], ["ЯЧ 5", "cell"]],
+    [["ЯЧ 6", "cell"], ["ЯЧ 7", "cell"], ["ЯЧ 8", "cell"], ["ЛИСТ ↑", S], ["ЛИСТ ↓", S]]]);
+  // the display strip: the row by the groove over the whole zone
+  const a0 = x0, a1 = x0 + n * pitchA, rA = TOP.r1 - ROWP + .005, rB = TOP.r1 - .004;
+  const cv = document.createElement("canvas"); cv.width = 2400; cv.height = 96; const tex = new THREE.CanvasTexture(cv); tex.anisotropy = 8;
+  const NU = 40, pos = [], uv = [], idx = [];
+  for (let j = 0; j <= 1; j++) for (let i = 0; i <= NU; i++) { const a = a0 + (a1 - a0) * i / NU, q = P3(a, j ? rB : rA, TOP.y + .002); pos.push(q.x, q.y, q.z); uv.push(i / NU, j); }
+  for (let i = 0; i < NU; i++) { const a = i, b = i + 1, c = i + NU + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+  ctx.group.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({map: tex, side: THREE.DoubleSide})));
+  // its glass frame
+  const fr = []; for (const [r, f] of [[rA - .004, 0], [rB + .004, 1]]) { const pts = []; for (let i = 0; i <= 40; i++) pts.push(P3(a0 + (a1 - a0) * i / 40, r, TOP.y + .004)); fr.push(pts); }
+  for (const pts of fr) ctx.group.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 60, .004, 6, false), keySide));
+  pR = {cv, tex, w: 2400, h: 96, X: a => (a - a0) / (a1 - a0) * 2400};
+}
+function drawPlates() {
+  const pl = pR, c = pl.cv.getContext("2d"), P = PAL[STYLE.pal], xs = pl.X(aRs), H = pl.h;
+  c.fillStyle = "#030807"; c.fillRect(0, 0, pl.w, H);
+  c.fillStyle = "#0a1512"; c.fillRect(0, 0, xs - 6, H); c.fillRect(xs + 6, 0, pl.w - xs - 6, H);
+  c.fillStyle = P.dim; c.font = "700 20px Segoe UI"; c.textAlign = "left"; c.textBaseline = "alphabetic"; c.fillText("РАСЧЁТНАЯ МАШИНА", 20, 30);
+  c.fillStyle = P.main; c.font = "700 66px Consolas, monospace"; c.textAlign = "right"; c.fillText(CALC_S.disp, xs - 26, 76);
+  const line = CALC_S.log[CALC_S.page] || "—";
+  c.fillStyle = P.dim; c.font = "700 20px Segoe UI"; c.textAlign = "left"; c.fillText(`ЖУРНАЛ  ${CALC_S.page + 1} / ${Math.max(1, CALC_S.log.length)}`, xs + 22, 30);
+  c.fillStyle = P.main; c.font = "600 38px Segoe UI"; c.fillText(line, xs + 22, 78);
+  pl.tex.needsUpdate = true;
+}
+function flash(k, ms = 160) { setKey(k, true); setTimeout(() => setKey(k, false), ms); }
+function paintCells() { for (const k of keys) if (k.group === "cell") { const i = +k.label.slice(3) - 1; k.col = CALC_S.cells[i] ? PAL[STYLE.pal].white : null; paintKey(k); } }
+function pressKey(k) {
+  if (["ap", "pos", "scr", "hud", "rcs", "set", "lscr", "noz", "lift", "tbl"].includes(k.group)) { for (const o of keys) if (o.group === k.group) setKey(o, false); setKey(k, true); }
+  else if (k.group === "calc") {
+    const d = CALC_S.disp, n = k.label;
+    if (/^[0-9]$/.test(n)) CALC_S.disp = d === "0" ? n : d + n; else if (n === ",") CALC_S.disp = d.includes(",") ? d : d + ",";
+    else if (n === "C") CALC_S.disp = "0"; else if (n === "±") CALC_S.disp = d.startsWith("-") ? d.slice(1) : "-" + d; else if (n === "π") CALC_S.disp = "3,1415927";
+    else { const x = parseFloat(d.replace(",", ".")) || 0, f = {"√": Math.sqrt, "x²": v => v * v, "sin": v => Math.sin(v * Math.PI / 180), "cos": v => Math.cos(v * Math.PI / 180), "tan": v => Math.tan(v * Math.PI / 180)}[n];
+      if (f) CALC_S.disp = String(+f(x).toPrecision(8)).replace(".", ","); }
+    flash(k);
+  } else if (k.group === "sto") {
+    const L = k.label;
+    if (L === "ЗАПИСЬ") { const i = CALC_S.cells.indexOf(""); if (i >= 0) CALC_S.cells[i] = CALC_S.disp; CALC_S.log.unshift(`ЯЧ ${i + 1}  ` + CALC_S.disp); CALC_S.page = 0; paintCells(); }
+    else if (L === "В ЖУРНАЛ") { CALC_S.log.unshift("запись  " + CALC_S.disp); CALC_S.page = 0; }
+    else if (L === "ВЫЗОВ" && CALC_S.log.length) CALC_S.disp = CALC_S.log[CALC_S.page].replace(/^.*  /, "").replace(/ .*$/, "");
+    else if (L === "СТЕРЕТЬ") { CALC_S.log.splice(CALC_S.page, 1); CALC_S.page = Math.min(CALC_S.page, Math.max(0, CALC_S.log.length - 1)); }
+    else if (L === "ЛИСТ ↑") CALC_S.page = Math.max(0, CALC_S.page - 1);
+    else if (L === "ЛИСТ ↓") CALC_S.page = Math.min(CALC_S.log.length - 1, CALC_S.page + 1);
+    flash(k);
+  } else if (k.group === "cell") { const v = CALC_S.cells[+k.label.slice(3) - 1]; if (v) CALC_S.disp = v; setKey(k, true); setTimeout(() => { setKey(k, false); paintCells(); }, 160); }
+  else if (k.group === "opq") { setOpq(Math.max(0, Math.min(1, LOOK.opq + (k.label.endsWith("+") ? .1 : -.1)))); flash(k); }
+  else if (k.group === "stop") { for (const o of keys) if (o.group === "pos") setKey(o, false); flash(k, 300); }
+  else if (k.group === "flash" || k.group === "spare") flash(k);
+  else setKey(k, !k.on);
+}
+for (const n of ["РУЧН.", "В ГОРИЗОНТ", "ПОЛЁТ", "РСУ ВРАЩ.", "HUD ГОРИЗОНТ", "ЛЁЖА", "ШАССИ", "МЕХАНИЗАЦИЯ", "СОПЛА НАЗАД"]) { const k = keys.find(o => o.label === n); if (k) setKey(k, true); }
+paintCells();
+
+  return {onKey: pressKey, repaint: () => { keys.forEach(paintKey); paintCells(); }, cutMats: [deskMat],
+          step: (() => { let t = 0; return dt => { t += dt; if (t > .15) { t = 0; drawPlates(); } }; })()};
+}});
+const PANELS = {};
+PANELS.A = (() => { const o = {}; for (const [k, mid, w, R, y0, h, lean] of [["L", -72, 1.16, 1.00, .72, .96, 12], ["F", 0, 1.50, 1.25, .74, .65, 18], ["R", 72, 1.16, 1.00, .72, .96, 12]]) {
+  const sp = SP(mid, w, R, y0, h, lean); const m = new THREE.Mesh(sheetGeom(sp, 0, 1, 0, 1), new THREE.MeshBasicMaterial({map: TEX[k], side: THREE.DoubleSide})); m.userData.key = k; grp.A.add(m);
+  grp.A.add(new THREE.Mesh(sheetGeom(SP(mid, w + .06, R, y0 - .03, h + .06, lean), 0, 1, 0, 1, .03), new THREE.MeshLambertMaterial({color: 0x1c1816, side: THREE.DoubleSide}))); o[k] = m; } return o; })();
+const ROUND = {on: false, r: .42};
+const roundCv = document.createElement("canvas"); roundCv.width = roundCv.height = 1024; const roundTex = new THREE.CanvasTexture(roundCv);
+function drawRound() {
+  const c = roundCv.getContext("2d"), W = 1024, cx = 512, cy = 512, tt = performance.now() / 1000;
+  c.fillStyle = "#000"; c.fillRect(0, 0, W, W);
+  const B = PAL[STYLE.pal].main, A = "#ffc46a", D = PAL[STYLE.pal].dim;
+  c.save(); c.beginPath(); c.arc(cx, cy, 300, 0, 7); c.clip();
+  const pitch = 4 + 2 * Math.sin(tt * .2), bank = 8 * Math.sin(tt * .13);
+  c.translate(cx, cy); c.rotate(-bank * Math.PI / 180);
+  c.strokeStyle = B; c.lineWidth = 3; c.beginPath(); c.moveTo(-400, pitch * 10); c.lineTo(400, pitch * 10); c.stroke();
+  c.lineWidth = 2; c.font = "600 26px Segoe UI"; c.fillStyle = B; c.textAlign = "center";
+  for (let p = -30; p <= 30; p += 10) { if (!p) continue; const y = pitch * 10 - p * 10; c.beginPath(); c.moveTo(-90, y); c.lineTo(90, y); c.stroke(); c.fillText(Math.abs(p), -125, y + 9); c.fillText(Math.abs(p), 125, y + 9); }
+  c.restore();
+  c.strokeStyle = A; c.lineWidth = 5; c.beginPath(); c.moveTo(cx - 130, cy); c.lineTo(cx - 50, cy); c.lineTo(cx - 32, cy + 18); c.moveTo(cx + 130, cy); c.lineTo(cx + 50, cy); c.lineTo(cx + 32, cy + 18); c.stroke();
+  c.strokeStyle = B; c.lineWidth = 3; c.beginPath(); c.arc(cx, cy, 300, 0, 7); c.stroke(); c.beginPath(); c.arc(cx, cy, 306, 0, 7); c.stroke();
+  // the modes on a ring
+  const modes = ["ПОЛЁТ", "ДВИГАТЕЛИ", "ОРБИТА", "СТЫКОВКА", "ПАРАМЕТРЫ", "ТЕПЛО"];
+  modes.forEach((m, i) => { const a0 = (-150 + i * 50) * Math.PI / 180, a1 = a0 + 44 * Math.PI / 180;
+    c.strokeStyle = i ? D : B; c.lineWidth = i ? 2 : 4; c.beginPath(); c.arc(cx, cy, 360, a0, a1); c.arc(cx, cy, 420, a1, a0, true); c.closePath(); c.stroke();
+    if (!i) { c.beginPath(); c.arc(cx, cy, 366, a0 + .02, a1 - .02); c.arc(cx, cy, 414, a1 - .02, a0 + .02, true); c.closePath(); c.stroke(); }
+    const am = (a0 + a1) / 2; c.save(); c.translate(cx + 390 * Math.cos(am), cy + 390 * Math.sin(am)); c.rotate(am + Math.PI / 2); c.fillStyle = i ? D : B; c.font = "700 24px Segoe UI"; c.textAlign = "center"; c.fillText(m, 0, 8); c.restore(); });
+  // the thrust and the g on the lower side arcs
+  const arcBar = (a0, a1, f, col, label, val) => { c.strokeStyle = D; c.lineWidth = 16; c.beginPath(); c.arc(cx, cy, 470, a0, a1, a1 < a0); c.stroke(); c.strokeStyle = col; c.beginPath(); c.arc(cx, cy, 470, a0, a0 + (a1 - a0) * f, a1 < a0); c.stroke();
+    const am = a0 + (a1 - a0) * .5; c.fillStyle = col; c.font = "700 26px Segoe UI"; c.textAlign = "center"; c.fillText(label + " " + val, cx + 440 * Math.cos(am) * 1.0, cy + 440 * Math.sin(am) + 50); };
+  const thr = window.THR ? window.THR.cur : .45 + .05 * Math.sin(tt * .3);   // the thrust: the variant's lever when it has one
+  arcBar(160 * Math.PI / 180, 100 * Math.PI / 180, thr, A, "ТЯГА", Math.round(thr * 100) + "%");
+  arcBar(20 * Math.PI / 180, 80 * Math.PI / 180, .3, B, "g", "1,8");
+  c.fillStyle = B; c.font = "700 34px Segoe UI"; c.textAlign = "center"; c.fillText("2 490 м", cx, cy - 330 + 70); c.fillText("212 м/с", cx, cy + 330 - 40);
+  roundTex.needsUpdate = true;
+}
+function roundGeom(sp, rise) {   // a disc on the groove's cylinder: radius r (arc length / height), its bottom on the slot
+  const r = ROUND.r, NU = 140, NV = 140, pos = [], uv = [], idx = [], t = Math.tan(sp.lean * Math.PI / 180), yc = sp.y0 + r, drop = (1 - rise) * 2 * r;
+  for (let j = 0; j <= NV; j++) for (let i = 0; i <= NU; i++) {
+    const u = i / NU, v = j / NV, sx = (u - .5) * 2 * r, sy = (v - .5) * 2 * r, y = yc + sy - drop;
+    const inside = Math.hypot(sx, sy) <= r * 1.001 && y >= sp.y0 - .001;
+    const yy = Math.max(sp.y0, y), a = sp.mid + sx / sp.R * 180 / Math.PI, q = P3(a, sp.R + (yy - sp.y0) * t, yy);
+    pos.push(q.x, q.y, q.z); uv.push(u, inside ? v : -1);
+  }
+  for (let j = 0; j < NV; j++) for (let i = 0; i < NU; i++) {
+    const a = j * (NU + 1) + i, b = a + 1, c = a + NU + 1, d = c + 1;
+    if (uv[a * 2 + 1] < 0 || uv[b * 2 + 1] < 0 || uv[c * 2 + 1] < 0 || uv[d * 2 + 1] < 0) continue;
+    idx.push(a, c, b, b, c, d);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); return g;
+}
+const RC = .07;   // the glass's corner radius [m] (strength, safety, the seal of the slot)
+function rowSpan(W, out, sy, rc) {   // the glass's left and right edge at height sy (the top corners rounded)
+  const dy = sy - (out - rc); if (dy <= 0) return [0, W];
+  const dx = rc - Math.sqrt(Math.max(0, rc * rc - dy * dy)); return [dx, W - dx];
+}
+function roundedSheet(sp, out, dR = 0) {
+  const NU = 72, pos = [], uv = [], idx = [], t = Math.tan(sp.lean * Math.PI / 180), W = 2 * sp.hs * Math.PI / 180 * sp.R, rc = Math.min(RC, out / 2, W / 2);
+  const rows = []; for (let j = 0; j <= 24; j++) rows.push((out - rc) * j / 24); for (let j = 1; j <= 16; j++) rows.push(out - rc + rc * Math.sin(j / 16 * Math.PI / 2));
+  rows.forEach(sy => {
+    const [xl, xr] = rowSpan(W, out, sy, rc);
+    for (let i = 0; i <= NU; i++) {
+      const sx = xl + (xr - xl) * i / NU, u = sx / W, y = sp.y0 + sy, q = P3(sp.mid - sp.hs + 2 * sp.hs * u, sp.R + dR + (y - sp.y0) * t, y);
+      pos.push(q.x, q.y, q.z); uv.push(sp.uv0 + (sp.uv1 - sp.uv0) * u, sp.vv0 + (sp.vv1 - sp.vv0) * (out > 0 ? sy / out : 0));
+    }
+  });
+  for (let j = 0; j < rows.length - 1; j++) for (let i = 0; i < NU; i++) { const a = j * (NU + 1) + i, b = a + 1, c = a + NU + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); return g;
+}
+// the glass's volume: its edge band (the thickness) along the sides and the rounded top
+const GLASS_T = .018;
+function glassRim(sp, out) {
+  const front = roundedEdge(sp, out, 0), back = roundedEdge(sp, out, GLASS_T), pos = [], idx = [];
+  for (let i = 0; i < front.length; i++) { pos.push(front[i].x, front[i].y, front[i].z, back[i].x, back[i].y, back[i].z); }
+  for (let i = 0; i < front.length - 1; i++) { const a = 2 * i, b = a + 1, c = a + 2, d = a + 3; idx.push(a, b, c, c, b, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); return g;
+}
+function roundedEdge(sp, out, dR = .002) {
+  const t = Math.tan(sp.lean * Math.PI / 180), W = 2 * sp.hs * Math.PI / 180 * sp.R, rc = Math.min(RC, out / 2, W / 2);
+  const P = (sx, sy) => { const y = sp.y0 + sy; return P3(sp.mid - sp.hs + 2 * sp.hs * sx / W, sp.R + (y - sp.y0) * t + dR, y); }, e = [];
+  e.push(P(0, 0), P(W, 0), P(W, out - rc));
+  for (let k = 1; k <= 16; k++) { const f = k / 16 * Math.PI / 2; e.push(P(W - rc + rc * Math.cos(f), out - rc + rc * Math.sin(f))); }
+  e.push(P(rc, out));
+  for (let k = 1; k <= 16; k++) { const f = Math.PI / 2 + k / 16 * Math.PI / 2; e.push(P(rc + rc * Math.cos(f), out - rc + rc * Math.sin(f))); }
+  e.push(P(0, 0)); return e;
+}
+// the front glass's picture: a round instrument in the middle (the attitude, the modes on a ring), the flight on the left, the engines on the right
+const frontCv = document.createElement("canvas"); frontCv.width = 2300; frontCv.height = 1000; const frontTex = new THREE.CanvasTexture(frontCv); frontTex.anisotropy = 8;
+function drawFront() {
+  drawRound();
+  const c = frontCv.getContext("2d"), W = frontCv.width, H = frontCv.height, B = PAL[STYLE.pal].main, A = "#ffc46a", D = PAL[STYLE.pal].dim, tt = performance.now() / 1000;
+  c.fillStyle = "#000"; c.fillRect(0, 0, W, H);
+  c.drawImage(roundCv, W / 2 - 500, H / 2 - 500, 1000, 1000);
+  const big = (lab, val, x, y, col = B) => { c.fillStyle = D; c.font = "600 34px Segoe UI"; c.textAlign = "left"; c.fillText(lab, x, y); c.fillStyle = col; c.font = "700 68px Segoe UI"; c.fillText(val, x, y + 74); };
+  big("ВЫСОТА", "2 490 м", 90, 150); big("СКОРОСТЬ", "212 м/с", 90, 330); big("ВЕРТИКАЛЬНАЯ", "+11,7 м/с", 90, 510); big("КУРС", "090°", 90, 690);
+  // the engines: vertical light bars, the set-point as a double contour mark (the helmet's way: no fills, brightness means)
+  const bar = (lab, f, set, x, col) => { const y0 = 140, h = 640; c.strokeStyle = D; c.lineWidth = 3; c.strokeRect(x, y0, 70, h);
+    c.strokeStyle = col; c.lineWidth = 6; c.beginPath(); c.moveTo(x + 35, y0 + h); c.lineTo(x + 35, y0 + h - h * f); c.stroke();
+    const ys = y0 + h - h * set; c.strokeStyle = A; c.lineWidth = 3; c.strokeRect(x - 10, ys - 8, 90, 16); c.strokeRect(x - 15, ys - 13, 100, 26);
+    c.fillStyle = col; c.font = "700 34px Segoe UI"; c.textAlign = "center"; c.fillText(lab, x + 35, y0 - 24); c.fillText(Math.round(f * 100) + "%", x + 35, y0 + h + 54); };
+  const th = window.THR ? window.THR.cur : .45 + .04 * Math.sin(tt * .3);
+  bar("МАРШ", th, window.THR ? window.THR.set : .45, W - 520, B); bar("ГОНД", window.POD ? window.POD.cur : .3, window.POD ? window.POD.set : .3, W - 380, B); bar("g", .23, .62, W - 240, B);
+  c.fillStyle = D; c.font = "600 30px Segoe UI"; c.textAlign = "right"; c.fillText("ПОЛЁТ · АТМОСФЕРА", W - 90, 60);
+  frontTex.needsUpdate = true;
+}
+const PH_SURF = {}; const PTEX = {}; for (const k of ["L", "F", "R"]) { PH_SURF[k] = document.createElement("canvas"); PTEX[k] = new THREE.CanvasTexture(PH_SURF[k]); PTEX[k].anisotropy = 8; photonSheet(grp.B, k, PTEX[k], MODES_SP.work[k]); }
+PANELS.B = {L: PH_SHEETS[0].mesh, F: PH_SHEETS[1].mesh, R: PH_SHEETS[2].mesh};
+let variant = "B";
+function setVariant(v) { variant = v; grp.A.visible = v === "A"; grp.B.visible = v === "B"; for (const k of ["A", "B"]) $("var" + k).classList.toggle("on", k === v); }
+const PANEL = new Proxy({}, {get: (o, k) => PANELS[variant][k]});
+// the state of the light: the mode (blend 0 work .. 1 panorama), ignition (0 dark .. 1 lit), the source, the look
+const LOOK = {opacity: 0.95, opq: 1.0, plain: true, fixedFront: true, cut: true, mount: "mech", ign: 1, ignT: 1, mode: 0, modeT: 0};
+const lerpSp = (a, b, f) => { const o = {}; for (const k in a) o[k] = a[k] + (b[k] - a[k]) * f; return o; };
+const ghostMat = new THREE.MeshBasicMaterial({color: 0x3a4650, transparent: true, opacity: .22, side: THREE.DoubleSide, depthWrite: false});
+const ghostEdge = new THREE.LineBasicMaterial({color: 0x8a96a4, transparent: true, opacity: .7});
+function boxBand(sp, y0, y1, dr0, dr1) {   // a curved box along the screen's arc (the bay under the slot), lean 0
+  const NU = 24, pos = [], idx = [];
+  for (let i = 0; i <= NU; i++) { const a = sp.mid - sp.hs * 1.03 + 2 * sp.hs * 1.03 * i / NU;
+    for (const [dr, y] of [[dr0, y0], [dr0, y1], [dr1, y1], [dr1, y0]]) { const q = P3(a, sp.R + dr, y); pos.push(q.x, q.y, q.z); } }
+  for (let i = 0; i < NU; i++) for (let k = 0; k < 4; k++) { const a = i * 4 + k, b = i * 4 + (k + 1) % 4, c = a + 4, d = b + 4; idx.push(a, c, b, b, c, d); }
+  for (const e of [0, NU]) { const o = e * 4; idx.push(o, o + 1, o + 2, o, o + 2, o + 3); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); return g;
+}
+function photonStep(dt) {
+  LOOK.ign += Math.sign(LOOK.ignT - LOOK.ign) * Math.min(Math.abs(LOOK.ignT - LOOK.ign), dt / 2.4);
+  LOOK.mode += Math.sign(LOOK.modeT - LOOK.mode) * Math.min(Math.abs(LOOK.modeT - LOOK.mode), dt / 2.6);
+  const cl = x => Math.max(0, Math.min(1, x)), ease = x => cl(x) * cl(x) * (3 - 2 * cl(x));
+  const ig = LOOK.ign, eRise = ease(ig / .6), eLight = ease((ig - .55) / .45), flick = PAL[STYLE.pal].halo ? 0.94 + 0.06 * Math.random() : 1;
+  // the ribbon: the sides' image out (0..0.15), their glass shortens while the carriage rides (0.15..0.85), the lock (0.85..1)
+  const m = LOOK.mode, eMove = ease((m - .15) / .7), eLock = ease((m - .85) / .15), sideDim = m > .02 && m < .98 ? Math.max(0, 1 - Math.min(1, m / .15)) + Math.max(0, (m - .85) / .15) * (m >= .85 ? 1 : 0) : 1;
+  if (ROUND.on) drawFront();
+  for (const o of PH_SHEETS) {
+    const W = MODES_SP.work[o.key], Pm = MODES_SP.pano[o.key], side = o.key !== "F", round = !side && ROUND.on;
+    o.sp = side ? lerpSp(W, Pm, eMove) : {...W};
+    const lit = eLight * (side ? (m <= .02 || m >= .98 ? 1 : sideDim) : 1);
+    const fixed = !side && LOOK.fixedFront, out = o.sp.h * (fixed ? 1 : eRise), spR = {...o.sp, h: out};
+    o.mesh.geometry.dispose();
+    o.mesh.geometry = roundedSheet(o.sp, out);
+    o.mat.map = LOOK.plain ? (round ? frontTex : TEX[o.key]) : (round ? frontTex : PTEX[o.key]);
+    o.mat.blending = LOOK.plain ? THREE.NormalBlending : THREE.AdditiveBlending; o.mat.transparent = !LOOK.plain || lit < .999; o.mat.depthWrite = LOOK.plain;
+    o.mat.needsUpdate = true;
+    o.mesh.visible = out > .002 && lit > .01; o.mat.opacity = LOOK.plain ? lit : LOOK.opacity * flick * lit;
+    if (o.mesh2) o.mesh2.visible = false;
+    if (!o.mod) { o.mod = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({color: 0x03080a, transparent: true, opacity: .9, side: THREE.DoubleSide, depthWrite: false})); o.mod.renderOrder = -1; o.mesh.parent.add(o.mod); }
+    o.mod.geometry.dispose(); o.mod.geometry = roundedSheet(o.sp, out, .006);
+    o.mod.visible = out > .002; o.mod.material.opacity = LOOK.plain ? 1 : LOOK.opq * (.15 + .85 * lit);
+    o.glass[1].visible = o.glassEdge[1].visible = false;
+    o.glass[0].visible = out > .002; o.glassEdge[0].visible = out > .002;
+    if (!o.rim) { o.rim = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({color: 0x9fd8ec, transparent: true, opacity: .55, side: THREE.DoubleSide, depthWrite: false})); o.mesh.parent.add(o.rim);
+                 o.backFace = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({color: 0x6f9fb8, transparent: true, opacity: .08, side: THREE.DoubleSide, depthWrite: false})); o.mesh.parent.add(o.backFace); }
+    o.rim.visible = o.backFace.visible = out > .002;
+    o.rim.material.color.set(PAL[STYLE.pal].main); o.rim.material.opacity = .3 + .5 * lit;
+    if (!o.light) { o.light = new THREE.PointLight(0xffffff, 0, 2.4, 1.6); o.mesh.parent.add(o.light); }
+    o.light.color.set(PAL[STYLE.pal].main); o.light.intensity = (out > .002 ? .9 : 0) * lit * (LOOK.plain ? 1 : .75) * (side ? 1 : 1.2) * (LOOK.lightK === undefined ? 1 : LOOK.lightK);
+    o.light.position.copy(P3(o.sp.mid, o.sp.R - .35, o.sp.y0 + Math.max(.05, out * .45)));
+    if (out > .002) {
+      o.rim.geometry.dispose(); o.rim.geometry = glassRim(o.sp, out); o.backFace.geometry.dispose(); o.backFace.geometry = roundedSheet(o.sp, out, GLASS_T);
+      o.glass[0].geometry.dispose(); o.glass[0].geometry = roundedSheet(o.sp, out, .004);
+      o.glassEdge[0].geometry.dispose(); o.glassEdge[0].geometry = new THREE.BufferGeometry().setFromPoints(roundedEdge(o.sp, out));
+    }
+    if (!o.joint) { o.joint = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({color: 0x8a96a4, transparent: true, opacity: .8})); o.mesh.parent.add(o.joint); }
+    const sec = GLASS_H[o.key] / SECTIONS[o.key];
+    o.joint.visible = SECTIONS[o.key] > 1 && out > sec + .01;
+    if (o.joint.visible) { const t = Math.tan(o.sp.lean * Math.PI / 180), y = o.sp.y0 + sec, pts = []; for (let i = 0; i <= 20; i++) pts.push(P3(o.sp.mid - o.sp.hs + 2 * o.sp.hs * i / 20, o.sp.R + (y - o.sp.y0) * t + .007, y)); o.joint.geometry.dispose(); o.joint.geometry = new THREE.BufferGeometry().setFromPoints(pts); }
+    for (let i = 0; i < 2; i++) { o.posts[i].visible = false; o.slits[i].visible = false; }
+    o.slot.visible = false;
+    // the carriage in the desk (cut away): it holds the glass sections; it rides with the unit
+    const depth = sec + .05;
+    if (!o.bay) { o.bay = new THREE.Mesh(new THREE.BufferGeometry(), ghostMat); o.mesh.parent.add(o.bay); o.bayEdge = new THREE.LineSegments(new THREE.BufferGeometry(), ghostEdge); o.mesh.parent.add(o.bayEdge);
+                  o.stow = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({color: 0x6f9fb8, transparent: true, opacity: .35, side: THREE.DoubleSide, depthWrite: false})); o.mesh.parent.add(o.stow); }
+    o.bay.visible = o.bayEdge.visible = LOOK.cut && !fixed;
+    if (!o.base) {   // the rigid base of the fixed front screen: a frame round the glass, the bracket into the desk
+      const bm = new THREE.MeshLambertMaterial({color: 0x2a3036});
+      o.base = new THREE.Group(); o.mesh.parent.add(o.base);
+      const s2 = MODES_SP.work.F, fr = roundedEdge(s2, s2.h + .03, .03).map(p => p);
+      o.base.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(roundedEdge({...s2, hs: s2.hs + deg(.02, s2.R), y0: s2.y0 - .01}, s2.h + .03, .02)), 200, .016, 8, false), bm));
+      o.base.add(new THREE.Mesh(boxBand({...s2, hs: s2.hs * .6}, FLOOR + YD - .02, FLOOR + YD + .05, -.06, .07), bm));
+      for (const sg of [-1, 1]) { const a = s2.mid + sg * s2.hs * .8, q0 = P3(a, s2.R + .05, FLOOR + YD), q1 = P3(a, s2.R + .05 + s2.h * .5 * Math.tan(s2.lean * Math.PI / 180), FLOOR + YD + s2.h * .5);
+        o.base.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([q0, q1]), 4, .025, 8, false), bm)); }
+    }
+    o.base.visible = fixed;
+    if (LOOK.cut) { o.bay.geometry.dispose(); o.bay.geometry = boxBand(o.sp, FLOOR + YD - Math.min(depth, YD - .02), FLOOR + YD - .06, -.045, .045); o.bayEdge.geometry.dispose(); o.bayEdge.geometry = new THREE.EdgesGeometry(o.bay.geometry, 30); }
+    const inside = Math.min(depth - .07, sec * (1 - eRise) + (side ? (GLASS_H[o.key] - o.sp.h) / SECTIONS[o.key] : 0));
+    o.stow.visible = LOOK.cut && inside > .01;
+    if (o.stow.visible) { o.stow.geometry.dispose(); o.stow.geometry = sheetGeom({...o.sp, lean: 0, y0: FLOOR + YD - .06 - inside, h: inside}, 0, 1, 0, 1); }
+  }
+  if (VAR) { for (const m of VAR.cutMats) { m.transparent = true; m.opacity = LOOK.cut ? .55 : 1; m.depthWrite = !LOOK.cut; } if (VAR.step) VAR.step(dt); }
+  const F = PH_SHEETS.find(o => o.key === "F");
+  if (F) {
+    if (!F.locks) F.locks = [-1, 1].map(() => { const mm = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({color: 0xffc46a})); F.mesh.parent.add(mm); return mm; });
+    F.locks.forEach((mm, i) => { mm.visible = eLock > .05; if (!mm.visible) return; mm.geometry.dispose(); mm.geometry = slitGeom({...F.sp, h: F.sp.h * eRise}, i ? 1 : -1); mm.material.color.setRGB(1, .77 * eLock + .2, .42 * eLock); });
+    if (F.rails) { F.rails.forEach(r => r.visible = false); }
+  }
+}
+// THE HELMET'S LOOK on the screens: the photonic palette (the emerald shifted to #B8ECFF, the amber kept), no fills (the dark
+// grounds add no light), a halo of scattered light round every line
+function photonLook(k) {
+  const src = SURF[k]; if (!src.width) return;
+  const c = PH_SURF[k] || (PH_SURF[k] = document.createElement("canvas"));
+  if (c.width !== src.width) { c.width = src.width; c.height = src.height; }
+  const g2 = c.getContext("2d");
+  g2.globalCompositeOperation = "source-over"; g2.filter = "none"; g2.fillStyle = "#000"; g2.fillRect(0, 0, c.width, c.height);
+  const pl = PAL[STYLE.pal]; g2.filter = `hue-rotate(${pl.hue}deg) saturate(${pl.sat}) brightness(1.25) contrast(1.35)`; g2.drawImage(src, 0, 0);
+  g2.globalCompositeOperation = "lighter"; if (pl.halo) g2.filter = `blur(5px) hue-rotate(${pl.hue}deg) saturate(${pl.sat * .8}) brightness(0.55)`; if (pl.halo) g2.drawImage(src, 0, 0);
+  g2.filter = "none"; g2.globalCompositeOperation = "source-over";
+}
+let lastT = performance.now();
+setInterval(() => { const now = performance.now(); photonStep((now - lastT) / 1000); lastT = now; }, 30);
+let regions = null;
+function grab() {
+  const fw = $("fp").contentWindow; let src;
+  (function hookAll(w) { try { hookFont(w); for (let i = 0; i < w.frames.length; i++) hookAll(w.frames[i]); } catch (e) {} })(fw);   // the mockup and the screens nested in it
+  try { src = fw.document.getElementById("cv"); } catch (e) { return; }
+  if (!src || !src.width) return;
+  if (!regions) {
+    try {
+      const K = fw.eval("K"), PW = fw.eval("PW"), PH = fw.eval("PH"), FW = fw.eval("FW"), FH = fw.eval("FH"), GAP = fw.eval("GAP");
+      if (!K) return;
+      hookFont(fw);
+      regions = {L: [0, 10, PW * K, PH * K], F: [(PW + GAP) * K + 10 * K, 10 + (PH - FH) / 2 * K + 10 * K, (FW - 20) * K, (FH - 20) * K], R: [(PW + GAP + FW + GAP) * K, 10, PW * K, PH * K]};
+      for (const k in regions) { SURF[k].width = Math.round(regions[k][2]); SURF[k].height = Math.round(regions[k][3]); }
+      $("load").style.display = "none";
+    } catch (e) { return; }
+  }
+  for (const k in regions) { const [x, y, w, h] = regions[k]; const c = SURF[k].getContext("2d"); c.drawImage(src, x, y, w, h, 0, 0, SURF[k].width, SURF[k].height); TEX[k].needsUpdate = true;
+    if (typeof photonLook === "function") { photonLook(k); if (PTEX[k]) PTEX[k].needsUpdate = true; } }
+}
+// clicks on the panels -> the same point of the mockup's canvas
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+let down = null;
+renderer.domElement.addEventListener("pointerdown", e => { down = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener("pointerup", e => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4 || !regions) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  mouse.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+  ray.setFromCamera(mouse, cam);
+  if (VAR && VAR.group.visible) {
+    const kh = ray.intersectObjects(VAR.keys.map(k => k.mesh))[0], ch = ray.intersectObjects(VAR.clicks.map(c => c.mesh), true)[0];
+    if (kh && (!ch || kh.distance <= ch.distance)) { const k = kh.object.userData.key; if (VAR.onKey) VAR.onKey(k); else flash(k); return; }
+    if (ch) { let o = ch.object; const hitC = () => VAR.clicks.find(c => c.mesh === o); while (o && !hitC()) o = o.parent; if (o) { hitC().fn(ch); return; } }
+  }
+  const cands = [PANEL.L, PANEL.F, PANEL.R]; for (const o of PH_SHEETS) if (o.mesh2 && variant === "B") cands.push(o.mesh2);
+  const hit = ray.intersectObjects(cands)[0]; if (!hit) return;
+  const k = hit.object.userData.key || (hit.object === PANEL.L ? "L" : hit.object === PANEL.F ? "F" : "R");
+  clickMockup(k, hit.uv.x, 1 - hit.uv.y);   // uv already carries the window (panorama: the screen zone)
+});
+// a click on the mockup's panel k ('L', 'F', 'R') at (u, v) of its image (v from the top)
+function clickMockup(k, u, v) {
+  if (!regions) return false; const [x, y, w, h] = regions[k], px = x + u * w, py = y + v * h;
+  const fw = $("fp").contentWindow, src = fw.document.getElementById("cv"), cr = src.getBoundingClientRect();
+  src.dispatchEvent(new fw.MouseEvent("click", {clientX: cr.left + px * cr.width / src.width, clientY: cr.top + py * cr.height / src.height, bubbles: true})); return true;
+}
+// views
+function setView(k) {
+  for (const id of ["vSeat", "vSide", "vTop", "vBack"]) $(id).classList.toggle("on", id === k);
+  const t = {vSeat: [[0, 2.25, 79.58], [0, 2.0, 81.0]], vSide: [[-3.2, 3.2, 77.0], [0, 1.9, 80.0]], vTop: [[0, 6.0, 78.0], [0, 1.6, 80.0]], vBack: [[0, 3.0, 75.8], [0, 1.9, 80.2]]}[k];
+  cam.position.copy(V3(...t[0])); ctl.target.copy(V3(...t[1])); ctl.update();
+}
+for (const id of ["vSeat", "vSide", "vTop", "vBack"]) $(id).onclick = () => setView(id);
+for (const v of ["A", "B"]) $("var" + v).onclick = () => setVariant(v);
+setVariant("B");
+const tog = (ids, on) => ids.forEach(([id, v]) => $(id).classList.toggle("on", v === on));
+$("mWork").onclick = () => { LOOK.modeT = 0; tog([["mWork", 0], ["mPano", 1]], 0); };
+$("mPano").onclick = () => { LOOK.modeT = 1; tog([["mWork", 0], ["mPano", 1]], 1); };
+$("ign").onclick = () => { LOOK.ignT = LOOK.ignT ? 0 : 1; $("ign").textContent = LOOK.ignT ? "погасить" : "зажечь"; };
+$("opq").oninput = e => { LOOK.opq = +e.target.value; LOOK.plain = LOOK.opq >= .999; $("opqV").textContent = Math.round(LOOK.opq * 100) + " %" + (LOOK.plain ? " — обычный экран" : " — фотоника, сквозь видно");
+  $("pPlain").classList.toggle("on", LOOK.plain); $("pPh").classList.toggle("on", !LOOK.plain); };
+$("cut").onclick = () => { LOOK.cut = !LOOK.cut; $("cut").classList.toggle("on", LOOK.cut); };
+const setOpq = v => { $("opq").value = v; $("opq").oninput({target: $("opq")}); };
+$("pPh").onclick = () => setOpq(.9);
+$("pPlain").onclick = () => setOpq(1);
+$("oldOn").onclick = () => { setOld(true); $("oldOn").classList.add("on"); $("oldOff").classList.remove("on"); };
+$("oldOff").onclick = () => { setOld(false); $("oldOff").classList.add("on"); $("oldOn").classList.remove("on"); };
+setOld(false);
+$("fFix").onclick = () => { LOOK.fixedFront = true; $("fFix").classList.add("on"); $("fLift").classList.remove("on"); };
+$("fLift").onclick = () => { LOOK.fixedFront = false; $("fLift").classList.add("on"); $("fFix").classList.remove("on"); };
+$("fRect").onclick = () => { ROUND.on = false; $("fRect").classList.add("on"); $("fRound").classList.remove("on"); };
+$("fRound").onclick = () => { ROUND.on = true; $("fRound").classList.add("on"); $("fRect").classList.remove("on"); };
+ROUND.on = true; $("fRound").classList.add("on"); $("fRect").classList.remove("on");
+LOOK.ign = 0;
+$("tOld").onclick = () => { const on = !old[0].visible; old.forEach(m => m.visible = on); $("tOld").classList.toggle("on", on); $("tOld").textContent = on ? "скрыть прежние экраны в игре" : "показать прежние экраны в игре"; };
+const repaintAll = () => { for (const k in BUILT) { const b = BUILT[k]; if (b.repaint) b.repaint(); else b.keys.forEach(paintKey); } };
+const setPal = p => { STYLE.pal = p; $("palB").classList.toggle("on", p === "B"); $("palE").classList.toggle("on", p === "E"); repaintAll(); };
+$("palB").onclick = () => setPal("B"); $("palE").onclick = () => setPal("E");
+$("font").onchange = e => { FONT.fam = e.target.value || null; repaintAll(); };
+$("seatIn").onclick = () => { SEAT.target = 1; tog([["seatIn", 1], ["seatOut", 0]], 1); };
+$("seatOut").onclick = () => { SEAT.target = 0; tog([["seatIn", 1], ["seatOut", 0]], 0); };
+$("adj").oninput = e => { SEAT.adj = +e.target.value; $("adjV").textContent = (SEAT.adj >= 0 ? "+" : "") + SEAT.adj.toFixed(2) + " м"; };
+for (const [id, v] of [["manN", "none"], ["m95", "m95"], ["f05", "f05"]]) $(id).onclick = () => { MAN.show = v; buildMan(); tog([["manN", "none"], ["m95", "m95"], ["f05", "f05"]], v); };
+$("reach").onclick = () => { MAN.reach = !MAN.reach; $("reach").classList.toggle("on", MAN.reach); buildMan(); };
+$("fold").onclick = () => { const b = $("barBody"); b.style.display = b.style.display === "none" ? "" : "none"; $("fold").textContent = b.style.display === "none" ? "развернуть" : "свернуть"; };
+function initVariants() {
+  const box = $("varBtns"); for (const v of VARIANTS) { const b = document.createElement("button"); b.textContent = v.name; b.dataset.id = v.id; b.onclick = () => selectVariant(v.id); box.appendChild(b); }
+  const q = /[?&]v=(\w+)/.exec(location.search); selectVariant(q ? q[1] : (VARIANTS.find(v => v.id === "V7") || VARIANTS[0]).id);
+}
+setView("vSeat");
+function size() { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h); cam.aspect = w / h; cam.updateProjectionMatrix(); }
+window.addEventListener("resize", size); size();
+setInterval(grab, 120);
+(function loop() { renderer.render(scene, cam); requestAnimationFrame(loop); })();
+setInterval(() => renderer.render(scene, cam), 100);   // also when the pane is hidden
+</script>
+<script src="bridge_variants/common.js"></script>
+<script src="bridge_variants/v1.js"></script>
+<script src="bridge_variants/v2.js"></script>
+<script src="bridge_variants/v3.js"></script>
+<script src="bridge_variants/v4.js"></script>
+<script src="bridge_variants/v5.js"></script>
+<script src="bridge_variants/v6.js"></script>
+<script src="bridge_variants/v7.js"></script>
+<script>initVariants();</script>
+</body>
+</html>

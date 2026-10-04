@@ -236,9 +236,10 @@ function step0() { const k = cupNow(); return {mass: k.mass, c: k.c, k, F: 0, md
 // ---------------- drawing helpers ----------------
 const HIT = [];
 const T = (s, x, y, col = COL.tx, size = 15, al = "left", w = "500") => { g.fillStyle = col; g.font = `${w} ${size}px Segoe UI, system-ui`; g.textAlign = al; g.fillText(s, x, y); };
+const fitSz = (s, mw, size, wt) => { while (size > 9) { g.font = `${wt} ${size}px Segoe UI, system-ui`; if (g.measureText(s).width <= mw) break; size -= 0.5; } return size; };   // the label never leaves its key
 function btn(s, x, y, w, h, on, act, col = COL.or) {
   g.fillStyle = on ? "#3b2a14" : "#121d1b"; g.fillRect(x, y, w, h); g.strokeStyle = on ? col : "#5a4325"; g.lineWidth = on ? 2 : 1; g.strokeRect(x, y, w, h);
-  T(s, x + w / 2, y + h / 2 + 5, on ? "#ffd29a" : col, 14, "center", "600"); HIT.push({x, y, w, h, act});
+  T(s, x + w / 2, y + h / 2 + 5, on ? "#ffd29a" : col, fitSz(s, w - 10, 14, "600"), "center", "600"); HIT.push({x, y, w, h, act});
 }
 function frame(x, y, w, h, title) {
   g.strokeStyle = COL.fr; g.lineWidth = 1.5; g.strokeRect(x, y, w, h);

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Тантра: автопилот взлёта</title>
+<title>Тантра: автопилот</title>
 <style>
 *{box-sizing:border-box}
 html,body{overflow-x:hidden}
@@ -19,9 +19,10 @@ button.on{background:#2b6cb0;border-color:#2b6cb0;color:#fff}
 </head>
 <body>
 <div id="wrap">
-  <h1>Автопилот взлёта — мокап (экран мостика: от стола до заданной орбиты)</h1>
+  <h1>Автопилот — мокап экрана мостика: взлёт со стола на орбиту и посадка на корму</h1>
   <div class="note">Цель задаётся стрелками прямо на экране: площадка, наклонение (или азимут), перицентр, апоцентр, предел перегрузки.
-  Порядок: ВЗВЕСТИ (проверка готовности) → ПУСК → ПОДТВЕРДИТЬ. Тяга — общая модель tantra_plant_model.js, как вкладка «Взлёт»: аргон ниже 30 км, железо выше, гондолы до М 0,8.</div>
+  Порядок: ВЗВЕСТИ (проверка готовности) → ПУСК → ПОДТВЕРДИТЬ. Тяга — общая модель tantra_plant_model.js, как вкладка «Взлёт»: аргон ниже 30 км, железо выше, гондолы до М 0,8.
+  Страница «ПОСАДКА НА КОРМУ»: снижение с 5 км при 150 м/с, ветер 0…15 м/с; посадка только при поле АВТО (переключатель АВТО/РУЧН на экране).</div>
   <canvas id="scr" width="1600" height="800"></canvas>
   <div class="btns"><span class="note">Ускорение времени мокапа</span><span id="spdB" class="btns" style="margin:0"></span></div>
   <div class="note">
@@ -439,13 +440,14 @@ function onAbort() {
 // ---------------- drawing helpers ----------------
 const HIT = [];
 const T = (s, x, y, col = COL.tx, size = 15, al = "left", w = "500") => { g.fillStyle = col; g.font = `${w} ${size}px Segoe UI, system-ui`; g.textAlign = al; g.fillText(s, x, y); };
+const fitSz = (s, mw, size, wt) => { while (size > 9) { g.font = `${wt} ${size}px Segoe UI, system-ui`; if (g.measureText(s).width <= mw) break; size -= 0.5; } return size; };   // the label never leaves its key
 function btn(s, x, y, w, h, on, act, col = COL.or, en = true) {
   if (!en) {
     g.fillStyle = "#0d1513"; g.fillRect(x, y, w, h); g.strokeStyle = "#22302c"; g.lineWidth = 1; g.strokeRect(x, y, w, h);
-    T(s, x + w / 2, y + h / 2 + 5, "#34504a", 14, "center", "600"); return;
+    T(s, x + w / 2, y + h / 2 + 5, "#34504a", fitSz(s, w - 10, 14, "600"), "center", "600"); return;
   }
   g.fillStyle = on ? "#3b2a14" : "#121d1b"; g.fillRect(x, y, w, h); g.strokeStyle = on ? col : "#5a4325"; g.lineWidth = on ? 2 : 1; g.strokeRect(x, y, w, h);
-  T(s, x + w / 2, y + h / 2 + 5, on ? "#ffd29a" : col, 14, "center", "600"); HIT.push({x, y, w, h, act});
+  T(s, x + w / 2, y + h / 2 + 5, on ? "#ffd29a" : col, fitSz(s, w - 10, 14, "600"), "center", "600"); HIT.push({x, y, w, h, act});
 }
 // a touch arrow button: dir -1 / +1, double = the coarse step
 function arrowBtn(x, y, w, h, dir, dbl, act, en) {
@@ -488,18 +490,25 @@ function status() {
 }
 
 // ---------------- the screen ----------------
-function draw() {
-  HIT.length = 0;
-  const s = SIM, k = derive(s);
+let PAGE = "asc";                                 // "asc" take-off to orbit, "land" landing on the stern
+// the title bar shared by both pages: the page switch, the status lamp, time and model speed
+function header(txt, lc, blink, right) {
   g.fillStyle = COL.bg; g.fillRect(0, 0, W, H);
   g.strokeStyle = COL.fr; g.lineWidth = 2; g.strokeRect(5, 5, W - 10, H - 10);
-  // ---- title bar ----
-  T("АВТОПИЛОТ · ВЗЛЁТ НА ОРБИТУ", 22, 36, COL.tx, 20, "left", "700");
+  T("АВТОПИЛОТ", 22, 38, COL.tx, 22, "left", "700");
+  btn("ВЗЛЁТ НА ОРБИТУ", 184, 14, 190, 36, PAGE === "asc", () => { PAGE = "asc"; });
+  btn("ПОСАДКА НА КОРМУ", 382, 14, 190, 36, PAGE === "land", () => { PAGE = "land"; });
+  g.fillStyle = blink ? lc : "#14211e"; g.beginPath(); g.arc(600, 32, 9, 0, 7); g.fill(); g.strokeStyle = lc; g.lineWidth = 1.5; g.stroke();
+  T(txt, 616, 38, lc, 16, "left", "700");
+  T(right, W - 22, 38, COL.dim, 13, "right");
+}
+function draw() {
+  HIT.length = 0;
+  if (PAGE === "land") { drawLand(); return; }
+  const s = SIM, k = derive(s);
   const lc = lampCol(), blink = (s.mode === "idle" && (UI.armed || UI.checkT >= 0)) || s.mode === "abort" || s.mode === "crash" ? UI.t % 1 < 0.6 : true;
-  g.fillStyle = blink ? lc : "#14211e"; g.beginPath(); g.arc(420, 30, 9, 0, 7); g.fill(); g.strokeStyle = lc; g.lineWidth = 1.5; g.stroke();
-  T(status(), 436, 36, lc, 16, "left", "700");
   const site = SITES[s.tg.site];
-  T(`${tLabel()} · ${site.t} ${fmt(site.lat, 1)}° с.ш. · модель ×${UI.speed}`, W - 22, 36, COL.dim, 13, "right");
+  header(status(), lc, blink, `${tLabel()} · ${site.t} ${fmt(site.lat, 1)}° с.ш. · модель ×${UI.speed}`);
   drawTrajectory(s, k); drawCourse(s, k); drawTarget(s); drawNow(s, k); drawCommands(s, k); drawJournal(); drawTrends(s);
 }
 
@@ -638,7 +647,7 @@ function drawTarget(s) {
 
 function drawNow(s, k) {
   frame(675, 378, 435, 182, "СЕЙЧАС");
-  const el = k.el, o = s.out, up = s.lifted, inAir = k.rho > 1e-6;
+  const el = k.el, o = s.out, up = s.lifted && s.mode !== "crash", inAir = k.rho > 1e-6;
   const col1 = [["высота", fKm(k.h), COL.wh], ["верт. скорость", fmt(k.vr, 0) + " м/с", COL.wh],
     ["гориз. скорость", fmt(k.vh / 1e3, 3) + " км/с", COL.wh], ["число Маха", inAir ? "М " + fmt(k.mach, 2) : "— (вакуум)", k.mach >= 0.8 && s.pods ? COL.ye : COL.tx],
     ["скоростной напор", fmt(k.q / 1e3, 1) + " кПа", COL.tx], ["перегрузка (тяга)", fmt(o.felt, 2) + " g", o.felt >= s.tg.gLim - 0.01 ? COL.ye : COL.tx],
@@ -752,6 +761,469 @@ function drawTrends(s) {
   if (s.mode !== "idle") { const x = X(s.t); g.strokeStyle = "#3a6a60"; g.lineWidth = 1; g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke(); }
 }
 
+// ======================= LANDING ON THE STERN =======================
+// Standing on the stern, nose up; a 2-D model in the vertical plane of the wind: the stern height z over the pad, the
+// drift x, the hull tilt th from the vertical with its rotation (moments of the march TVC and the pods about the CG).
+// Thrust: the march cup with the field run by the plant (AUTO: 6...12.1 T, slew 0.8 T/s, F <= B^2/2mu0 x A) and 12 pod
+// cups of 117 MN; argon only (30 km/s). Heat on the stern: PM.groundHeat (the jet off the ground) against the jacket
+// (argon flow x 1.5 MJ/kg) and the crests, as on the plant screen.
+const LD = {
+  m0: 52.34e6, argon0: 6.2e6, z0: 5000, vz0: -150, x0: -300, vx0: 25, T0: 360,   // scenario: 5 km, 150 m/s down, 300 m short, 25 m/s
+  sternH: 22.5, sCG: 58.1, k: 51,              // stern over the ground on the legs; CG over the stern; radius of gyration (178 m hull)
+  podArm: 5.9, cpArm: 30.9,                    // m: mean arm of the pods' side force (pairs at s 44 and 84); side pressure centre over the CG
+  CdA: 0.4 * 650, sideCdA: 1.0 * 3500,         // axial drag as the ascent; the side of the standing hull
+  Bmin: 6, Bmax: PM.B_NOM, Brate: 0.8,         // the auto field range and slew, T and T/s
+  rateM: 0.20, rateP: 0.25,                    // throttle slew, of the maximum per second
+  tvcM: 10, tvcP: 7, tvcRate: 5,               // TVC of the march and of the pods, deg; their slew, deg/s
+  gLim: 5, brakeK: 0.7, podBase: 0.2,          // the g interlock; braking plans 70 % of the deceleration; the pods' base share
+  legT: 20, legAlt: 400, legMin: 300, legDone: 50,
+  vDesc: 2, vTouch: 1.5, unloadT: 8,
+  norm: {vz: 2, vx: 0.5, tilt: 2},
+};
+const marchCupL = B => PM.cup({B, PfMax: PM.PF_MARCH, mass: "argon", chi: CHI, d: 15, deployed: true});
+const L_MARCH_MAX = marchCupL(PM.B_NOM).F, L_PODS_MAX = PM.N_POD * POD.F, V_AR = POD.v, C_STERN = PM.STERN_STORE / 1400, LDT = 0.02;
+const LPHASES = ["ГОТОВНОСТЬ", "ЗАХОД", "ТОРМОЖЕНИЕ", "ВЫПУСК НОГ", "ВИСЕНИЕ", "СПУСК", "КАСАНИЕ", "НАГРУЗКА", "ОТСЕЧКА"];
+const fieldFor = F => Math.sqrt(2 * PM.MU0 * Math.max(0, F) / PM.A_MARCH);             // the field a march thrust needs
+const gust = (w, t) => w * (1 + 0.25 * Math.sin(0.31 * t) + 0.15 * Math.sin(0.83 * t + 1.3));
+// the plant's split of a thrust demand: the pods keep a base share (side force), the march takes the rest up to 12.1 T,
+// the pods the excess; the field the march share needs (auto range 6...12.1 T)
+function allocL(F) {
+  const base = Math.min(F, LD.podBase * L_PODS_MAX), Fm = Math.min(F - base, L_MARCH_MAX);
+  return {Fm, Fp: Math.min(L_PODS_MAX, F - Fm), B: clamp(fieldFor(Fm), LD.Bmin, LD.Bmax)};
+}
+function newLand(o, fieldAuto = true) {
+  const s = {o, t: 0, x: LD.x0, z: LD.z0, vx: LD.vx0, vz: LD.vz0, th: 0, om: 0, m: LD.m0, argon: LD.argon0, used: 0,
+    air: true, legs: 0, legsOn: false, Ts: LD.T0, maxTs: LD.T0, mode: "idle", phase: 0, phT: 0, fieldAuto, Bhold: 0,
+    Fm: 0, Fp: 0, B: LD.Bmin, Breq: LD.Bmin, Fcmd: 0, FmC: 0, FpC: 0, dM: 0, dP: 0, dPcmd: 0, thCmd: 0,
+    dBrake: 0, tRamp: 0, aB: 0, maxG: 0, td: null, F0u: 0, zHold: 0, wNow: 0, Dx: 0, q: {qG: 0, qR: 0, regen: 0, rad: 0},
+    ev: [], track: [], nextS: 0, log: null};
+  // a steady descent at the start: the thrust ~ the weight less the drag, as the plant splits it
+  const Dz = 0.5 * RHO0 * Math.exp(-s.z / HS) * s.vz * s.vz * LD.CdA;
+  s.Fcmd = s.m * G0 - Dz; const a = allocL(s.Fcmd); s.Fm = a.Fm; s.Fp = a.Fp; s.B = s.Breq = a.B;
+  return s;
+}
+function lev(s, key, txt, lvl = "ok") { const e = {key, t: s.t, txt, lvl, z: s.z}; s.ev.push(e); if (s.log) s.log(e); }
+function setPhaseL(s, p) { s.phase = p; s.phT = 0; }
+// how long the thrust takes to rise to F: the field climbs 0.8 T/s (the march holds <= B^2/2mu0 x A), the march and the
+// pods throttle at 20 and 25 %/s, the pods filling while the field climbs
+function rampTime(s, F) {
+  for (let t = 0; t <= 20; t += 0.1) {
+    const Fm = Math.min(PM.fieldThrust(Math.min(LD.Bmax, s.B + LD.Brate * t), PM.A_MARCH), s.Fm + LD.rateM * L_MARCH_MAX * t);
+    const Fp = Math.min(L_PODS_MAX, s.Fp + LD.rateP * L_PODS_MAX * t);
+    if (Fm + Fp >= F) return t;
+  }
+  return 20;
+}
+function landGuide(s, Dz, Dx) {
+  const hH = s.o.hHover, mode = s.mode;
+  const Fmax = Math.min(L_MARCH_MAX + L_PODS_MAX, LD.gLim * G0 * s.m), aAv = Fmax / s.m - G0, aB = LD.brakeK * aAv;
+  s.aB = aB;
+  if (mode === "idle" || mode === "manual" || mode === "landed" || mode === "crash") return;
+  if (!s.air) {                                       // on the legs: the load goes over from the thrust to the legs
+    s.thCmd = 0; s.dPcmd = 0;
+    if (mode !== "auto") return;
+    if (s.phase === 6 && s.phT >= 1) { s.F0u = s.Fm + s.Fp; setPhaseL(s, 7); lev(s, "unload", `Нагрузка на ноги: тяга ${fF(s.F0u)} → 0 за 8 с`); }
+    if (s.phase === 7) {
+      s.Fcmd = s.F0u * Math.max(0, 1 - s.phT / LD.unloadT);
+      if (s.phT >= LD.unloadT) { s.Fcmd = 0; setPhaseL(s, 8); s.mode = "landed"; lev(s, "cut", "ОТСЕЧКА: двигатели выключены, корабль на ногах"); }
+    }
+    return;
+  }
+  let azDes = 0, latW = 0.25, tiltMax = 2;
+  if (mode === "goaround") { azDes = s.vz < 60 ? aAv + 5 : 0.5 * (60 - s.vz); latW = 0.12; }        // full thrust up, then climb at 60 m/s
+  else if (mode === "hold") azDes = Math.min(aAv, 1.0 * (clamp(0.3 * (s.zHold - s.z), -3, 3) - s.vz));
+  else switch (s.phase) {
+    case 1: {                                         // approach: hold the descent rate, over the point; brake at the suicide-burn height
+      azDes = 0.5 * (LD.vz0 - s.vz); latW = 0.1; tiltMax = 5;
+      s.tRamp = rampTime(s, s.m * (G0 + aB));
+      s.dBrake = s.vz < 0 ? s.vz * s.vz / (2 * aB) - s.vz * s.tRamp / 2 : 0;
+      if (s.z - hH <= s.dBrake) { setPhaseL(s, 2); lev(s, "brake", `Торможение с ${fmt(s.z, 0)} м при ${fmt(-s.vz, 0)} м/с: ${fmt(aB / G0 + 1, 1)} g, подъём тяги ${fmt(s.tRamp, 1)} с`); }
+      break;
+    }
+    case 2: {                                         // braking: the constant deceleration that stops at the hover height (+5 %)
+      const d = s.z - hH;
+      azDes = d > 0.5 ? Math.min(aAv, 1.05 * s.vz * s.vz / (2 * d)) : aAv; tiltMax = 3;
+      // the thrust cannot drop at once (20 and 25 %/s): hand over to the hover while the ramp-down still kills the rest
+      const F = s.Fm + s.Fp, aNow = Math.max(0, F / s.m - G0), tDown = Math.max(0, F - s.m * G0) / (LD.rateM * L_MARCH_MAX + LD.rateP * L_PODS_MAX);
+      if (s.vz > -Math.max(2, aNow * tDown / 2)) { setPhaseL(s, s.legs >= 1 ? 4 : 3); lev(s, "hover", `Висение ${fmt(s.z, 0)} м` + (s.legs < 1 ? " · ждём ноги" : "")); }
+      break;
+    }
+    case 3: case 4: {                                 // hover; the legs, then steady over the point
+      const vzT = s.z > hH ? -Math.min(Math.sqrt(2 * 1.5 * (s.z - hH)), 30) : Math.min(3, 0.3 * (hH - s.z));   // settle softly from above
+      azDes = 1.0 * (vzT - s.vz);
+      if (s.phase === 3 && s.legs >= 1) setPhaseL(s, 4);
+      else if (s.phase === 4 && s.phT >= 4 && Math.abs(s.x) < 1.5 && Math.abs(s.vx) < 0.3 && Math.abs(s.vz) < 0.3 && Math.abs(s.th) < 1) {
+        setPhaseL(s, 5); lev(s, "desc", `Спуск ${fmt(LD.vDesc, 0)} м/с с ${fmt(s.z, 0)} м`);
+      }
+      break;
+    }
+    case 5: {                                         // descent 2 m/s, the last 8 m at 1.5 m/s
+      const near = s.z - LD.sternH * s.legs < 8;
+      azDes = 1.0 * ((near ? -LD.vTouch : -LD.vDesc) - s.vz); tiltMax = s.z - LD.sternH < 15 ? 0.5 : 1.5;
+      break;
+    }
+  }
+  // the thrust whose vertical part gives azDes against gravity and drag
+  s.Fcmd = Math.max(0, (s.m * (G0 + azDes) - Dz) / Math.max(0.5, Math.cos(s.th * D2R)));
+  // over the point: a PD on the drift; the pods' nozzles first, the rest by tilting the hull
+  const ax = clamp(-latW * latW * s.x - 2 * 0.9 * latW * s.vx, -1.5, 1.5), L = s.m * ax - Dx, sp = Math.sin(LD.tvcP * D2R);
+  s.dPcmd = s.Fp > 1e6 ? Math.asin(clamp(L / s.Fp, -sp, sp)) * R2D : 0;
+  const Lrem = L - s.Fp * Math.sin(s.dP * D2R);
+  s.thCmd = clamp(Math.asin(clamp(Lrem / Math.max(1e6, s.Fm + s.Fp), -0.2, 0.2)) * R2D, -tiltMax, tiltMax);
+}
+function touchdown(s) {
+  const vz = -s.vz, vx = Math.abs(s.vx), tilt = Math.abs(s.th), legsOk = s.legs >= 1;
+  s.td = {vz, vx, tilt, legsOk, t: s.t, ok: legsOk && vz <= LD.norm.vz && vx <= LD.norm.vx && tilt <= LD.norm.tilt};
+  s.z = LD.sternH * s.legs; s.vz = 0; s.vx = 0; s.om = 0; s.air = false;
+  if (!legsOk || vz > 6) {
+    s.mode = "crash"; s.Fcmd = 0;
+    lev(s, "crash", !legsOk ? `АВАРИЯ: ноги не на замках (${fmt(s.legs * 100, 0)} %) — корма о грунт ${fmt(vz, 1)} м/с` : `АВАРИЯ: удар ${fmt(vz, 1)} м/с — ноги сломаны`, "bad");
+    return;
+  }
+  lev(s, "touch", `Касание: верт ${fmt(vz, 2)} м/с · гориз ${fmt(vx, 2)} м/с · наклон ${fmt(tilt, 2)}° — ${s.td.ok ? "в норме" : "ВНЕ НОРМЫ"}`, s.td.ok ? "ok" : "warn");
+  if (s.mode === "auto") setPhaseL(s, 6);
+}
+function landStep(s, dt) {
+  const o = s.o; s.t += dt; s.phT += dt;
+  const rho = RHO0 * Math.exp(-Math.max(0, s.z) / HS), w = gust(o.wind, s.t); s.wNow = w;
+  const Dz = -0.5 * rho * s.vz * Math.abs(s.vz) * LD.CdA, rx = w - s.vx, Dx = 0.5 * rho * rx * Math.abs(rx) * LD.sideCdA; s.Dx = Dx;
+  // legs: 20 s; the autopilot starts them at 400 m (the rules: not below 300 m, locked above 50 m)
+  if (!s.legsOn && s.air && (s.mode === "auto" || s.mode === "hold") && s.z <= LD.legAlt) {
+    s.legsOn = true; lev(s, "legs", `Выпуск ног с ${fmt(s.z, 0)} м (20 с)`, s.z >= LD.legMin ? "ok" : "warn");
+  }
+  if (s.legsOn && s.legs < 1) { s.legs = Math.min(1, s.legs + dt / LD.legT); if (s.legs >= 1) lev(s, "legsDone", `Ноги на замках · ${fmt(s.z, 0)} м`, s.z >= LD.legDone ? "ok" : "warn"); }
+  landGuide(s, Dz, Dx);
+  // the plant: AUTO runs the field and the capsule rate under the thrust demand; MANUAL holds the operator's field
+  const Fd = clamp(s.Fcmd, 0, Math.min(L_MARCH_MAX + L_PODS_MAX, LD.gLim * G0 * s.m)), a = allocL(Fd);
+  s.Breq = s.fieldAuto ? a.B : s.Bhold;
+  if (s.fieldAuto) s.B += clamp(s.Breq - s.B, -LD.Brate * dt, LD.Brate * dt);
+  const cm = marchCupL(s.B), cap = cm.F;
+  s.FmC = Math.min(a.Fm, cap); s.FpC = clamp(Fd - s.FmC, 0, L_PODS_MAX);          // the pods carry what the field does not hold yet
+  s.Fm = Math.min(cap, s.Fm + clamp(s.FmC - s.Fm, -LD.rateM * L_MARCH_MAX * dt, LD.rateM * L_MARCH_MAX * dt));
+  s.Fp += clamp(s.FpC - s.Fp, -LD.rateP * L_PODS_MAX * dt, LD.rateP * L_PODS_MAX * dt);
+  // attitude: the march TVC from a PD on the tilt (its moment about the CG), the pods' nozzles from the side demand
+  const I = s.m * LD.k * LD.k, Mp = LD.podArm * s.Fp * Math.sin(s.dP * D2R), Mw = LD.cpArm * Dx;
+  let dMcmd = 0;
+  if (s.air && s.Fm > 5e6) {
+    const wa = 0.6, need = I * (wa * wa * (s.thCmd - s.th) * D2R - 2 * 0.9 * wa * s.om) - Mp - Mw, sm = Math.sin(LD.tvcM * D2R);
+    dMcmd = -Math.asin(clamp(need / (s.Fm * LD.sCG), -sm, sm)) * R2D;
+  }
+  s.dM += clamp(dMcmd - s.dM, -LD.tvcRate * dt, LD.tvcRate * dt);
+  s.dP += clamp((s.air ? s.dPcmd : 0) - s.dP, -LD.tvcRate * dt, LD.tvcRate * dt);
+  const aM = (s.th + s.dM) * D2R, aP = (s.th + s.dP) * D2R;
+  const Fx = s.Fm * Math.sin(aM) + s.Fp * Math.sin(aP) + Dx, Fz = s.Fm * Math.cos(aM) + s.Fp * Math.cos(aP) + Dz;
+  if (s.air) {
+    s.om += (-s.Fm * Math.sin(s.dM * D2R) * LD.sCG + Mp + Mw) / I * dt; s.th += s.om * dt * R2D;
+    s.vx += Fx / s.m * dt; s.vz += (Fz / s.m - G0) * dt; s.x += s.vx * dt; s.z += s.vz * dt;
+    if (s.z <= LD.sternH * s.legs) touchdown(s);
+  } else if (s.mode !== "auto" && s.mode !== "landed" && s.mode !== "crash" && Fz > s.m * G0) s.air = true;   // off the legs again (go-around)
+  // argon and fuel
+  const F = s.Fm + s.Fp, mdot = F / V_AR, fuel = s.Fm / cm.F * cm.fuel + s.Fp / POD.F * POD.fuel;
+  s.argon = Math.max(0, s.argon - mdot * dt); s.used += mdot * dt; s.m -= (mdot + fuel) * dt;
+  s.felt = F / s.m / G0; s.maxG = Math.max(s.maxG, s.felt);
+  // the stern: jet off the ground + the reaction's radiation against the jacket and the crests
+  const Pjet = F * V_AR / 2, qG = PM.groundHeat(Pjet, s.z, "argon"), qR = CHI * F * V_AR / (2 * PM.ETA_N) * PM.sternFraction(15);
+  const regen = mdot * PM.H_COOL.argon, rad = 0.9 * PM.SIG * Math.pow(s.Ts, 4) * PM.RAD_AREA;
+  s.q = {qG, qR, regen, rad};
+  s.Ts = Math.max(290, s.Ts + (qG + qR - regen - rad) * dt / C_STERN); s.maxTs = Math.max(s.maxTs, s.Ts);
+  if (s.t >= s.nextS) { s.track.push({t: s.t, z: s.z, vz: s.vz, x: s.x, F, B: s.B, g: s.felt}); s.nextS = s.t + 0.2; }
+}
+function startLand(s) { s.mode = "auto"; setPhaseL(s, 1); }
+function landPhaseFromState(s) { if (!s.air) return 8; if (s.z - s.o.hHover > 60) return 1; return s.legs >= 1 ? 4 : 3; }
+// the plan: the same model with no wind
+function planLand() {
+  const s = newLand({wind: 0, hHover: LUI.hHover}); startLand(s);
+  while (s.mode === "auto" && s.t < 900) landStep(s, LDT);
+  const tch = s.ev.find(e => e.key === "touch");
+  return {track: s.track, ev: s.ev, ok: s.mode === "landed" && s.td && s.td.ok, td: s.td, tTouch: tch ? tch.t : NaN, tEnd: s.t,
+          used: s.used, maxG: s.maxG, maxTs: s.maxTs, brakeZ: (s.ev.find(e => e.key === "brake") || {}).z};
+}
+function tToTouch(s) {
+  if (!s.air) return 0;
+  const hH = s.o.hHover, legsLeft = (1 - s.legs) * LD.legT, desc = (hH - LD.sternH - 8) / LD.vDesc + 8 / LD.vTouch;
+  const tB = s.aB > 0 ? Math.max(0, -s.vz) / s.aB : 0;
+  switch (s.mode === "auto" ? s.phase : -1) {
+    case 1: return Math.max(0, (s.z - hH - s.dBrake) / Math.max(1, -s.vz)) + tB + Math.max(0, legsLeft - tB - 2) + 4 + desc;
+    case 2: return tB + Math.max(0, legsLeft - tB) + 4 + desc;
+    case 3: return legsLeft + 4 + desc;
+    case 4: return Math.max(0, 4 - s.phT) + desc;
+    case 5: return Math.max(0, s.z - LD.sternH) / Math.max(0.5, -s.vz);
+  }
+  return NaN;
+}
+
+// ---- landing UI state and buttons ----
+const LUI = {wind: 10, hHover: 70, fieldAuto: true, armed: false, checkT: -1, checks: [], goT: -99, abT: -99};
+const LJ = [];
+function lTLabel() { return LAND.mode === "idle" ? "Т−00:00" : "Т+" + fT(LAND.t); }
+function ljlog(txt, lvl = "ok", tt = lTLabel()) { LJ.unshift({tt, txt, lvl}); if (LJ.length > 40) LJ.pop(); }
+let LPLAN = planLand(), LAND = newLand({wind: LUI.wind, hHover: LUI.hHover}, LUI.fieldAuto);
+LAND.log = e => ljlog(e.txt, e.lvl, "Т+" + fT(e.t));
+function landReset() {
+  LPLAN = planLand(); LAND = newLand({wind: LUI.wind, hHover: LUI.hHover}, LUI.fieldAuto); LAND.log = e => ljlog(e.txt, e.lvl, "Т+" + fT(e.t));
+  LUI.armed = false; LUI.checkT = -1; LUI.goT = LUI.abT = -99;
+}
+const landRunning = () => LAND.mode !== "idle" && LAND.mode !== "landed" && LAND.mode !== "crash";
+const landEditable = () => LAND.mode === "idle" && !LUI.armed && LUI.checkT < 0;
+function landChecks() {
+  const P = LPLAN, tw = (L_MARCH_MAX + L_PODS_MAX) / (LAND.m * G0);
+  if (LAND.mode !== "idle") return [{t: "Поле: АВТО", ok: LAND.fieldAuto}, {t: `Аргон ${fmt(LAND.argon / 1e6, 2)} кт`, ok: LAND.argon > 0.3e6},
+                                    {t: `Продолжение с фазы ${landPhaseFromState(LAND)}`, ok: true}];
+  return [
+    {t: "Поле: АВТО — поле и темп капсул ведёт установка", ok: LAND.fieldAuto},
+    {t: `Тяга/вес ${fmt(tw, 2)} (чаша ${fmt(L_MARCH_MAX / (LAND.m * G0), 2)} + гондолы)`, ok: tw > 1.5},
+    {t: `Аргон ${fmt(LAND.argon / 1e6, 2)} кт · по плану ${fmt(P.used / 1e6, 2)} кт`, ok: P.used < LAND.argon},
+    {t: "Ноги убраны, приводы ног в норме", ok: true},
+    {t: P.ok ? `План: касание Т+${fT(P.tTouch)} · ${fmt(P.td.vz, 1)} м/с · пик ${fmt(P.maxG, 1)} g` : "План: посадка вне норм", ok: P.ok},
+  ];
+}
+function landUiTick() {
+  if (LUI.checkT >= 0 && UI.t - LUI.checkT > LUI.checks.length * CHECK_DT + 0.3) {
+    LUI.checkT = -1; const bad = LUI.checks.find(c => !c.ok);
+    if (bad) { LUI.armed = false; ljlog("Готовность не подтверждена: " + bad.t, "bad"); }
+    else { LUI.armed = true; ljlog(LAND.mode === "idle" ? "Автопилот посадки взведён — ПУСК разрешён" : "Взведён — ПУСК вернёт посадку автомату", "ok"); }
+  }
+}
+function onLArm() {
+  if (LUI.armed) { LUI.armed = false; ljlog("Взвод снят", "warn"); return; }
+  if (!LAND.fieldAuto) { ljlog("ВЗВОД ОТКАЗАН: посадка только в автоматическом режиме поля", "bad"); return; }
+  LUI.checks = landChecks(); LUI.checkT = UI.t; ljlog("Проверка готовности…", "warn");
+}
+function onLStart() {
+  if (!LUI.armed) { ljlog("ПУСК заблокирован: сначала ВЗВЕСТИ", "warn"); return; }
+  if (!LAND.fieldAuto) { LUI.armed = false; ljlog("ПУСК отказан: посадка только в автоматическом режиме поля", "bad"); return; }
+  if (UI.t - LUI.goT > 3) { LUI.goT = UI.t; ljlog("ПУСК: подтвердите в течение 3 с", "warn"); return; }
+  LUI.goT = -99; LUI.armed = false;
+  if (LAND.mode === "idle") { startLand(LAND); ljlog(`ПУСК посадки · висение ${LUI.hHover} м · ветер ${LUI.wind} м/с`, "ok", "Т+00:00"); }
+  else { LAND.mode = "auto"; setPhaseL(LAND, landPhaseFromState(LAND)); ljlog(`Автопилот посадки включён: ${LAND.phase} ${LPHASES[LAND.phase]}`, "ok"); }
+}
+function onLGo() { LAND.mode = "goaround"; LUI.armed = false; ljlog("УХОД: полная тяга вверх", "bad"); }
+function onLAbort() {
+  if (UI.t - LUI.abT > 3) { LUI.abT = UI.t; ljlog("ОТМЕНА: подтвердите в течение 3 с", "warn"); return; }
+  LUI.abT = -99;
+  if (LAND.mode === "idle") { LUI.armed = false; ljlog("Посадка отменена, взвод снят", "bad"); return; }
+  LAND.mode = "hold"; LAND.zHold = Math.max(LAND.z, LUI.hHover); LUI.armed = false;
+  ljlog(`ОТМЕНА посадки: остановка снижения, висение ~${fmt(LAND.zHold, 0)} м`, "bad");
+}
+function onLManual() {
+  if (LAND.mode === "manual") { ljlog("Вернуть автомат: ВЗВЕСТИ → ПУСК", "warn"); return; }
+  LAND.mode = "manual"; LUI.armed = false; ljlog("РУЧНОЕ: управление передано пилоту (тяга и наклон — как были)", "warn");
+}
+// the field mode switch (on the ship it is the plant's; here a switch on this screen)
+function onField(auto) {
+  if (LAND.fieldAuto === auto) return;
+  LAND.fieldAuto = LUI.fieldAuto = auto;
+  if (auto) { ljlog("Поле: АВТО — поле и темп капсул ведёт установка", "ok"); return; }
+  LAND.Bhold = LAND.B;
+  if (LUI.armed || LUI.checkT >= 0) { LUI.armed = false; LUI.checkT = -1; ljlog("Поле в РУЧН — взвод снят: посадка только в автоматическом режиме поля", "bad"); }
+  if (LAND.mode === "auto" || LAND.mode === "hold") { LAND.mode = "goaround"; ljlog(`Поле переведено в РУЧН (${fmt(LAND.B, 2)} Тл) — автопилот: УХОД, полная тяга вверх`, "bad"); }
+  else ljlog(`Поле: РУЧН · держится ${fmt(LAND.B, 2)} Тл`, "warn");
+}
+function landStatus() {
+  const m = LAND.mode;
+  if (m === "idle") return LUI.checkT >= 0 ? ["ПРОВЕРКА ГОТОВНОСТИ", COL.ye] : LUI.armed ? ["ГОТОВ К ПОСАДКЕ", COL.gr] : ["СНИЖЕНИЕ · НЕ ВЗВЕДЁН", COL.dim];
+  if (m === "auto") return ["РАБОТАЕТ: " + LPHASES[LAND.phase], COL.gr];
+  if (m === "landed") return [LAND.td && LAND.td.ok ? "ПОСАДКА ЗАВЕРШЕНА" : "ПОСАДКА ВНЕ НОРМ", LAND.td && LAND.td.ok ? COL.gr : COL.ye];
+  if (m === "goaround") return ["УХОД · ПОЛНАЯ ТЯГА ВВЕРХ", COL.rd];
+  if (m === "hold") return ["ОТМЕНА · ВИСЕНИЕ", COL.ye];
+  if (m === "manual") return ["РУЧНОЕ УПРАВЛЕНИЕ", COL.bl];
+  return ["АВАРИЯ", COL.rd];
+}
+
+// ---- landing page drawing ----
+function drawLand() {
+  const s = LAND, [st, lc] = landStatus();
+  const blink = (s.mode === "idle" && (LUI.armed || LUI.checkT >= 0)) || s.mode === "goaround" || s.mode === "crash" ? UI.t % 1 < 0.6 : true;
+  header(st, lc, blink, `${lTLabel()} · ветер ${LUI.wind} м/с · поле ${s.fieldAuto ? "АВТО" : "РУЧН"} · модель ×${UI.speed}`);
+  drawLProfile(s); drawLSide(s); drawLTarget(s); drawLNow(s); drawLCommands(s, lc); drawLJournal(); drawLHeat(s); drawLTrends(s);
+}
+function drawLProfile(s) {
+  frame(15, 62, 645, 340, "ПРОФИЛЬ ПОСАДКИ");
+  const X0 = 64, X1 = 596, Y0 = 102, Y1 = 368, zMax = 6000, vMax = 160, P = LPLAN;
+  const tMax = Math.max(P.tEnd + 5, s.t + 5), X = t => X0 + (X1 - X0) * t / tMax;
+  const Yz = z => Y1 - (Y1 - Y0) * Math.sqrt(clamp(z, 0, zMax) / zMax), Yv = v => Y1 - (Y1 - Y0) * clamp(v, 0, vMax) / vMax;
+  g.setLineDash([7, 5]); g.strokeStyle = COL.dim; g.lineWidth = 1.6; g.beginPath(); g.moveTo(30, 84); g.lineTo(58, 84); g.stroke(); g.setLineDash([]);
+  T("план", 64, 88, COL.dim, 12); g.strokeStyle = COL.wh; g.lineWidth = 2; g.beginPath(); g.moveTo(104, 84); g.lineTo(132, 84); g.stroke(); T("факт", 138, 88, COL.wh, 12);
+  T("высота кормы, м (шкала √)", 184, 88, COL.wh, 12); T("скорость снижения, м/с", 360, 88, COL.bl, 12);
+  T(P.ok ? `ПЛАН: касание Т+${fT(P.tTouch)}` : "ПЛАН: вне норм", 645, 88, P.ok ? COL.tx : COL.rd, 12, "right", "600");
+  g.lineWidth = 1;
+  for (const z of [0, 100, 300, 1000, 2000, 4000, 6000]) { const y = Yz(z); g.strokeStyle = "#13261f"; g.beginPath(); g.moveTo(X0, y); g.lineTo(X1, y); g.stroke(); T(fmt(z, 0), X0 - 5, y + 4, COL.dim, 11, "right"); }
+  for (let v = 0; v <= vMax; v += 40) T(fmt(v, 0), X1 + 5, Yv(v) + 4, COL.bl, 10, "left");
+  const step = [5, 10, 20, 30, 60, 120].find(v => tMax / v <= 9) || 300;
+  for (let t = 0; t <= tMax; t += step) { const x = X(t); g.strokeStyle = "#13261f"; g.beginPath(); g.moveTo(x, Y0); g.lineTo(x, Y1); g.stroke(); T(fmt(t, 0) + " с", x, Y1 + 15, COL.dim, 11, "center"); }
+  g.strokeStyle = COL.fr; g.strokeRect(X0, Y0, X1 - X0, Y1 - Y0);
+  // the hover height and the stern on the legs
+  g.setLineDash([3, 4]); g.strokeStyle = "#7a5220";
+  for (const z of [s.o.hHover, LD.sternH]) { g.beginPath(); g.moveTo(X0, Yz(z)); g.lineTo(X1, Yz(z)); g.stroke(); }
+  g.setLineDash([]);
+  T(`висение ${s.o.hHover} м`, X0 + 6, Yz(s.o.hHover) - 4, "#b07a35", 10); T("корма на ногах 22,5 м", X0 + 6, Yz(LD.sternH) + 12, "#b07a35", 10);
+  const line = (tr, f, Y, col, wdt, dash) => { g.setLineDash(dash); g.strokeStyle = col; g.lineWidth = wdt; g.beginPath(); tr.forEach((p, i) => i ? g.lineTo(X(p.t), Y(f(p))) : g.moveTo(X(p.t), Y(f(p)))); g.stroke(); g.setLineDash([]); };
+  line(P.track, p => -p.vz, Yv, "#3d6a8a", 1.4, [7, 5]); line(P.track, p => p.z, Yz, COL.dim, 1.6, [7, 5]);
+  const LBL = {brake: ["торможение", 6, -6, "left"], legs: ["ноги", 6, 12, "left"], hover: ["висение", 0, -8, "center"], desc: ["спуск", 0, -8, "center"],
+               touch: ["касание", -4, 15, "right"], cut: ["отсечка", 4, -8, "left"]};
+  for (const e of P.ev) {
+    const L = LBL[e.key]; if (!L) continue;
+    const x = X(e.t), y = Yz(e.z);
+    g.strokeStyle = COL.or; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x, y - 5); g.lineTo(x + 5, y); g.lineTo(x, y + 5); g.lineTo(x - 5, y); g.closePath(); g.stroke();
+    T(L[0], x + L[1], y + L[2], "#c98a40", 11, L[3]);
+  }
+  if (s.track.length) { line(s.track, p => -p.vz, Yv, COL.bl, 1.6, []); line(s.track, p => p.z, Yz, COL.wh, 2, []); }
+  g.fillStyle = s.mode === "crash" ? COL.rd : COL.or; g.beginPath(); g.arc(X(s.t), Yz(s.z), 5, 0, 7); g.fill();
+}
+function drawLSide(s) {
+  frame(15, 418, 645, 142, "НАД ТОЧКОЙ · ВЕТЕР · НАКЛОН");
+  // a side view: the pad, the ship's drift (1 px = 1 m, +-120 m) and its tilt shown x5
+  const gx = 180, gy = 540, px = gx + clamp(s.x, -120, 120);
+  g.strokeStyle = "#3f6a5f"; g.lineWidth = 2; g.beginPath(); g.moveTo(40, gy); g.lineTo(320, gy); g.stroke();
+  g.fillStyle = "#2c5a50"; g.fillRect(gx - 18, gy - 3, 36, 6); T("стол", gx, gy + 14, COL.dim, 10, "center");
+  g.save(); g.translate(px, gy - 8 - (s.air ? Math.min(30, Math.max(0, s.z - LD.sternH) * 0.4) : 0)); g.rotate(s.th * 5 * D2R);
+  const legs = s.legs;
+  g.strokeStyle = "#8aa"; g.lineWidth = 2;
+  for (const sx of [-1, 1]) { g.beginPath(); g.moveTo(sx * 6, -6); g.lineTo(sx * (6 + 10 * legs), 2 + 4 * legs); g.stroke(); }
+  g.fillStyle = "#33424a"; g.strokeStyle = "#5a7080"; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(-8, -4); g.lineTo(8, -4); g.lineTo(6, -60); g.lineTo(0, -80); g.lineTo(-6, -60); g.closePath(); g.fill(); g.stroke();
+  const fl = (s.Fm + s.Fp) / L_MARCH_MAX;
+  if (fl > 0.01) { const gr = g.createLinearGradient(0, -4, 0, 30); gr.addColorStop(0, `rgba(255,220,180,${Math.min(0.9, 0.3 + fl * 0.4)})`); gr.addColorStop(1, "rgba(255,140,60,0)");
+    g.fillStyle = gr; g.beginPath(); g.moveTo(-5, -4); g.lineTo(5, -4); g.lineTo(9 + 6 * fl, 26); g.lineTo(-9 - 6 * fl, 26); g.closePath(); g.fill(); }
+  g.restore();
+  if (Math.abs(s.x) > 120) T(`${s.x > 0 ? "→" : "←"} ${fmt(Math.abs(s.x), 0)} м`, s.x > 0 ? 318 : 42, gy - 50, COL.or, 11, s.x > 0 ? "right" : "left", "700");
+  // the wind
+  const wl = 6 + 4 * s.wNow; g.strokeStyle = COL.bl; g.fillStyle = COL.bl; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(44, 440); g.lineTo(44 + wl, 440); g.stroke(); g.beginPath(); g.moveTo(50 + wl, 440); g.lineTo(42 + wl, 435); g.lineTo(42 + wl, 445); g.fill();
+  T(`ветер ${fmt(s.wNow, 1)} м/с`, 44, 458, COL.bl, 11); T("наклон ×5", 318, 440, COL.dim, 10, "right");
+  const rows = [["смещение от точки", fmtS(s.x, 1) + " м", Math.abs(s.x) < 1.5 ? COL.gr : COL.tx], ["гориз. скорость", fmtS(s.vx, 2) + " м/с", Math.abs(s.vx) <= LD.norm.vx ? COL.gr : COL.tx],
+    ["боковая сила ветра", fmt(s.Dx / 1e3, 0) + " кН", COL.tx], ["наклон: команда / факт", `${fmtS(s.thCmd, 2)}° / ${fmtS(s.th, 2)}°`, Math.abs(s.th) <= LD.norm.tilt ? COL.wh : COL.ye],
+    ["УВТ марш / гондолы", `${fmtS(s.dM, 1)}° / ${fmtS(s.dP, 1)}°`, COL.tx]];
+  rows.forEach((r, i) => { const y = 446 + i * 22; T(r[0], 360, y, COL.dim, 12); T(r[1], 645, y, r[2], 13, "right", "700"); });
+}
+function drawLTarget(s) {
+  const en = landEditable();
+  frame(675, 62, 435, 300, "ПОСАДКА · УСЛОВИЯ");
+  // the field mode: the condition of the automatic landing
+  T("ПОЛЕ МАРШЕВОЙ ЧАШИ", 690, 92, COL.dim, 12, "left", "700");
+  btn("АВТО", 860, 74, 110, 32, s.fieldAuto, () => onField(true), COL.gr);
+  btn("РУЧН", 980, 74, 110, 32, !s.fieldAuto, () => onField(false), COL.rd);
+  T(s.fieldAuto ? "поле и темп капсул ведёт установка — автопилот задаёт только тягу" : "поле держит оператор — посадка автоматом невозможна", 690, 124, s.fieldAuto ? COL.tx : COL.rd, 11);
+  const rows = [
+    {l: "ВЕТЕР", v: `${LUI.wind} м/с`, f: d => { LUI.wind = clamp(LUI.wind + d, 0, 15); }, c: d => { LUI.wind = clamp(LUI.wind + 5 * d, 0, 15); }},
+    {l: "ВЫСОТА ВИСЕНИЯ (КОРМА)", v: `${LUI.hHover} м`, f: d => { LUI.hHover = clamp(LUI.hHover + 5 * d, 60, 80); }, c: null},
+  ];
+  rows.forEach((r, i) => {
+    const y = 138 + i * 40, h = 34, act = fn => d => () => { fn(d); landReset(); };
+    if (r.c) { arrowBtn(688, y, 44, h, -1, true, act(r.c)(-1), en); arrowBtn(1052, y, 44, h, 1, true, act(r.c)(1), en); }
+    arrowBtn(736, y, 44, h, -1, false, act(r.f)(-1), en); arrowBtn(1004, y, 44, h, 1, false, act(r.f)(1), en);
+    g.fillStyle = "#0f1c19"; g.fillRect(786, y, 214, h); g.strokeStyle = COL.fr; g.lineWidth = 1; g.strokeRect(786, y, 214, h);
+    T(r.l, 794, y + 12, COL.dim, 10, "left", "700"); T(r.v, 893, y + 29, en ? COL.wh : COL.tx, 16, "center", "700");
+  });
+  const P = LPLAN, info = [
+    ["НАЧАЛО", `${fmt(LD.z0 / 1e3, 1)} км · снижение ${-LD.vz0} м/с · ${-LD.x0} м до точки, ${LD.vx0} м/с`],
+    ["НОРМЫ КАСАНИЯ", `верт ≤ ${LD.norm.vz} м/с · гориз ≤ ${fmt(LD.norm.vx, 1)} м/с · наклон ≤ ${LD.norm.tilt}°`],
+    ["ПРАВИЛА", "ноги 20 с: начать ≥ 300 м, на замках ≥ 50 м · спуск 2 м/с · 5 g"],
+    ["ПЛАН (без ветра)", P.ok ? `торможение с ${fmt(P.brakeZ, 0)} м · касание Т+${fT(P.tTouch)} · ${fmt(P.td.vz, 2)} м/с` : "вне норм"],
+    ["", P.ok ? `аргон ${fmt(P.used / 1e3, 0)} т · пик ${fmt(P.maxG, 2)} g · корма до ${fmt(P.maxTs, 0)} К` : ""],
+  ];
+  info.forEach((r, i) => { const y = 238 + i * 23; T(r[0], 690, y, COL.dim, 11, "left", "700"); T(r[1], 1095, y, COL.tx, 12, "right"); });
+}
+function drawLNow(s) {
+  frame(675, 378, 435, 182, "СЕЙЧАС");
+  const F = s.Fm + s.Fp, Wt = s.m * G0, tt = tToTouch(s);
+  const Favail = Math.min(L_MARCH_MAX + L_PODS_MAX, LD.gLim * G0 * s.m);
+  const col1 = [["высота кормы", fmt(s.z, s.z < 100 ? 1 : 0) + " м", COL.wh], ["верт. скорость", fmtS(s.vz, 2) + " м/с", COL.wh],
+    ["гориз. скорость", fmt(Math.abs(s.vx), 2) + " м/с", Math.abs(s.vx) <= LD.norm.vx ? COL.gr : COL.tx], ["наклон", fmt(Math.abs(s.th), 2) + "°", Math.abs(s.th) <= LD.norm.tilt ? COL.gr : COL.ye],
+    ["перегрузка (тяга)", fmt(s.felt || 0, 2) + " g", (s.felt || 0) > 4.5 ? COL.ye : COL.tx], ["до касания", isFinite(tt) ? fT(tt) : "—", COL.wh],
+    ["ноги", s.legs >= 1 ? "на замках" : s.legsOn ? fmt(s.legs * 100, 0) + " %" : "убраны", s.legs >= 1 ? COL.gr : s.legsOn ? COL.ye : COL.tx]];
+  const col2 = [["тяга / вес", `${fF(F)} / ${fF(Wt)}`, COL.wh], ["запас по тяге", F > 1e6 ? "×" + fmt(Favail / Math.max(F, Wt), 2) : "—", COL.tx],
+    ["аргон израсходовано", fmt(s.used / 1e3, 0) + " т", COL.tx], ["расход аргона", fM(F / V_AR), COL.tx], ["аргон осталось", fmt(s.argon / 1e6, 3) + " кт", COL.tx],
+    ["масса корабля", fmt(s.m / 1e6, 3) + " кт", COL.tx], ["пик перегрузки", fmt(s.maxG, 2) + " g", COL.tx]];
+  col1.forEach((r, i) => { const y = 402 + i * 22; T(r[0], 688, y, COL.dim, 12); T(r[1], 884, y, r[2], 14, "right", "700"); });
+  col2.forEach((r, i) => { const y = 402 + i * 22; T(r[0], 904, y, COL.dim, 12); T(r[1], 1097, y, r[2], 14, "right", "700"); });
+}
+function drawLCommands(s, lc) {
+  frame(1125, 62, 460, 498, "КОМАНДЫ АВТОПИЛОТА");
+  const bx = 1140, bw = 430, F = s.Fm + s.Fp, Fmax = L_MARCH_MAX + L_PODS_MAX, Wt = s.m * G0;
+  const row = (y, label, val, col = COL.wh) => { T(label, bx, y, COL.dim, 12); T(val, bx + bw, y, col, 13, "right", "700"); };
+  const tick = (x, y, h, col) => { g.fillStyle = col; g.fillRect(x - 1.5, y - 3, 3, h + 6); };
+  row(88, "ТЯГА · команда / факт", `${fF(Math.min(s.Fcmd, Fmax))} / ${fF(F)}`);
+  bar(bx, 95, bw, 10, F / Fmax, "#3fa58a"); tick(bx + bw * clamp(s.Fcmd / Fmax, 0, 1), 95, 10, COL.or); tick(bx + bw * Wt / Fmax, 95, 10, COL.wh);
+  T("вес", bx + bw * Wt / Fmax + 4, 117, COL.wh, 10);
+  row(132, "МАРШЕВАЯ ЧАША (20 %/с)", `${fF(s.Fm)} · ${fmt(s.Fm / L_MARCH_MAX * 100, 0)} %`);
+  bar(bx, 139, bw, 9, s.Fm / L_MARCH_MAX, "#3fa58a"); tick(bx + bw * clamp(s.FmC / L_MARCH_MAX, 0, 1), 139, 9, COL.or);
+  row(166, "ГОНДОЛЫ 4 × 3 (25 %/с)", `${fF(s.Fp)} · ${fmt(s.Fp / L_PODS_MAX * 100, 0)} %`);
+  bar(bx, 173, bw, 9, s.Fp / L_PODS_MAX, "#3fa58a"); tick(bx + bw * clamp(s.FpC / L_PODS_MAX, 0, 1), 173, 9, COL.or);
+  // the field bar: actual B, needed B, the 6 T floor and the 12.1 T limiter
+  const BX = B => bx + bw * B / 14;
+  row(200, s.fieldAuto ? "ПОЛЕ B · факт / потребное (≤ 0,8 Тл/с)" : "ПОЛЕ B · РУЧН: держит оператор", `${fmt(s.B, 2)} / ${s.fieldAuto ? fmt(s.Breq, 2) : "—"} Тл`, s.fieldAuto ? COL.wh : COL.rd);
+  bar(bx, 207, bw, 12, s.B / 14, s.fieldAuto ? "#2f6f9a" : "#7a3020");
+  if (s.fieldAuto) tick(BX(s.Breq), 207, 12, COL.or);
+  g.strokeStyle = COL.dim; g.lineWidth = 1; g.beginPath(); g.moveTo(BX(LD.Bmin), 203); g.lineTo(BX(LD.Bmin), 223); g.stroke(); T("6", BX(LD.Bmin), 233, COL.dim, 10, "center");
+  g.strokeStyle = COL.rd; g.lineWidth = 2; g.beginPath(); g.moveTo(BX(LD.Bmax), 201); g.lineTo(BX(LD.Bmax), 225); g.stroke(); T("12,1 огр.", BX(LD.Bmax), 233, COL.rd, 10, "center");
+  const Favail = Math.min(Fmax, LD.gLim * G0 * s.m), capNow = marchCupL(s.B).F + L_PODS_MAX, tUp = s.fieldAuto ? (LD.Bmax - s.B) / LD.Brate : NaN;
+  row(250, "ЗАПАС ПО ТЯГЕ", `×${fmt(Math.min(capNow, Favail) / Math.max(F, Wt), 2)} сейчас · ` + (s.fieldAuto ? `×${fmt(Favail / Math.max(F, Wt), 2)} через ${fmt(tUp, 1)} с` : "поле держит оператор"));
+  row(272, "ТОРМОЖЕНИЕ: начало / подъём тяги", s.mode === "idle" ? `по плану ${fmt(LPLAN.brakeZ, 0)} м` : s.mode === "auto" && s.phase === 1 ? `${fmt(s.o.hHover + s.dBrake, 0)} м / ${fmt(s.tRamp, 1)} с`
+      : `план ${fmt(s.aB / G0 + 1, 2)} g`);
+  row(292, "НОГИ (20 с)", s.legs >= 1 ? "на замках" : s.legsOn ? `${fmt(s.legs * 100, 0)} % · ${fmt((1 - s.legs) * LD.legT, 0)} с` : "убраны", s.legs >= 1 ? COL.gr : s.legsOn ? COL.ye : COL.tx);
+  g.strokeStyle = COL.fr; g.lineWidth = 1; g.beginPath(); g.moveTo(1135, 302); g.lineTo(1575, 302); g.stroke();
+  T("ПРОГРАММА ПОСАДКИ", 1140, 320, COL.dim, 11, "left", "700");
+  const ph = s.mode === "auto" || s.mode === "landed" || s.mode === "idle" ? s.phase : -1;
+  LPHASES.forEach((p, i) => {
+    const y = 340 + i * 24, cur = i === s.phase, done = i < s.phase;
+    if (cur) { g.fillStyle = "#12291f"; g.fillRect(1134, y - 15, 240, 21); g.strokeStyle = lc; g.lineWidth = 1; g.strokeRect(1134, y - 15, 240, 21); }
+    g.beginPath(); g.arc(1146, y - 4, 6, 0, 7);
+    if (cur) { g.fillStyle = lc; g.fill(); } else if (done) { g.fillStyle = "#2c6a52"; g.fill(); } else { g.strokeStyle = COL.fr; g.lineWidth = 1.5; g.stroke(); }
+    T(`${i}  ${p}`, 1160, y, cur ? COL.wh : done ? COL.dim : "#3d6b64", 12, "left", cur ? "700" : "500");
+  });
+  if (ph < 0 && s.mode !== "crash") T("программа приостановлена", 1374, 552, COL.ye, 10, "right");
+  const bX = 1388, bW = 182, bH = 34, m = s.mode, fly = m === "auto" || m === "hold" || m === "manual" || m === "goaround";
+  const armOk = (m === "idle" || m === "manual" || m === "goaround" || m === "hold") && LUI.checkT < 0;
+  btn(LUI.armed ? "ВЗВЕДЁН" : LUI.checkT >= 0 ? "ПРОВЕРКА…" : "ВЗВЕСТИ", bX, 310, bW, bH, LUI.armed || LUI.checkT >= 0, onLArm, COL.or, armOk || LUI.armed);
+  const goArmed = UI.t - LUI.goT < 3;
+  btn(goArmed ? "ПОДТВЕРДИТЬ" : "ПУСК", bX, 351, bW, bH, goArmed, onLStart, COL.gr, LUI.armed);
+  btn("УХОД", bX, 392, bW, bH, m === "goaround", onLGo, COL.rd, fly && s.air && m !== "goaround");
+  const abArmed = UI.t - LUI.abT < 3;
+  btn(abArmed ? "ПОДТВЕРДИТЬ" : "ОТМЕНА", bX, 433, bW, bH, abArmed || m === "hold", onLAbort, COL.ye, (m === "idle" && LUI.armed) || ((m === "auto" || m === "manual" || m === "goaround") && s.air));
+  btn("РУЧНОЕ", bX, 474, bW, bH, m === "manual", onLManual, COL.bl, fly);
+  btn("СБРОС", bX, 515, bW, bH, false, () => { LJ.length = 0; landReset(); ljlog("Сброс: снижение 5 км, 150 м/с", "ok"); }, COL.dim);
+}
+function drawLJournal() {
+  frame(15, 576, 520, 212, "ЖУРНАЛ");
+  LJ.slice(0, 9).forEach((j, i) => {
+    const y = 600 + i * 20, col = j.lvl === "bad" ? COL.rd : j.lvl === "warn" ? COL.ye : COL.gr;
+    T(j.tt, 28, y, COL.dim, 12, "left", "600"); T(j.txt, 100, y, i === 0 ? col : col === COL.gr ? COL.tx : col, 11.5, "left", i === 0 ? "700" : "500");
+  });
+}
+function drawLHeat(s) {
+  frame(550, 576, 450, 212, "КОРМА · ТЕПЛО");
+  const q = s.q, net = q.qG + q.qR - q.regen - q.rad, fW = w => w >= 1e9 ? fmt(w / 1e9, 2) + " ГВт" : fmt(w / 1e6, 0) + " МВт";
+  const rows = [["струя от грунта (PM.groundHeat)", "+" + fW(q.qG), q.qG > 1e9 ? COL.ye : COL.tx], ["излучение реакции (χ 0,001 %)", "+" + fW(q.qR), COL.tx],
+    ["рубашка: аргон × 1,5 МДж/кг", "−" + fW(q.regen), COL.gr], ["гребни-радиаторы", "−" + fW(q.rad), COL.gr],
+    ["баланс", (net > 0 ? "+" : "−") + fW(Math.abs(net)), net > 0 ? COL.rd : COL.gr]];
+  rows.forEach((r, i) => { const y = 600 + i * 19; T(r[0], 564, y, COL.dim, 12); T(r[1], 986, y, r[2], 13, "right", "700"); });
+  // the stern thermometer: safe 800 K, burn-through 2300 K
+  const x0 = 564, w0 = 422, Tm = 2400, TX = t => x0 + w0 * clamp((t - 290) / (Tm - 290), 0, 1);
+  [[290, 800, "#2c7a5a"], [800, 1100, "#9a8a2a"], [1100, 1700, "#b8691f"], [1700, 2300, "#a8322a"], [2300, Tm, "#5a1010"]].forEach(([a, b, c]) => { g.fillStyle = c; g.fillRect(TX(a), 708, TX(b) - TX(a), 10); });
+  g.fillStyle = COL.wh; g.fillRect(TX(s.Ts) - 2, 704, 4, 18);
+  T("800 К", TX(800), 734, COL.dim, 10, "center"); T("прогар 2300 К", TX(2300), 734, COL.rd, 10, "center");
+  T(`корма ${fmt(s.Ts, 0)} К · пик ${fmt(s.maxTs, 0)} К`, 564, 758, s.Ts > 800 ? COL.rd : COL.wh, 14, "left", "700");
+  T(net > 0 ? `до 800 К: ${fmt(Math.max(0, (800 - s.Ts) * C_STERN / net), 0)} с` : "до 800 К: не дойдёт", 986, 758, net > 0 ? COL.ye : COL.gr, 13, "right", "700");
+  T(`высота кормы ${fmt(s.z, 1)} м · доля отражения (20/(20+h))² = ${fmt((20 / (20 + Math.max(0, s.z))) ** 2, 3)}`, 564, 778, COL.dim, 11);
+}
+function drawLTrends(s) {
+  frame(1015, 576, 570, 212, "ТЯГА · ПОЛЕ · ПЕРЕГРУЗКА");
+  const x0 = 1050, x1 = 1540, y0 = 606, y1 = 764, P = LPLAN, tMax = Math.max(P.tEnd + 5, s.t + 5), X = t => x0 + (x1 - x0) * t / tMax;
+  g.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) { const y = y1 - (y1 - y0) * i / 4; g.strokeStyle = "#13261f"; g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke();
+    T(fmt(2.5 * i / 4, 2), x0 - 5, y + 4, COL.wh, 10, "right"); T(fmt(14 * i / 4, 1), x1 + 5, y + 4, "#5fa8d8", 10, "left"); }
+  g.strokeStyle = COL.fr; g.strokeRect(x0, y0, x1 - x0, y1 - y0);
+  T("тяга, ГН", 1050, 598, COL.wh, 11); T("поле B, Тл", 1120, 598, "#5fa8d8", 11); T("перегрузка, g (0–5)", 1200, 598, COL.or, 11); T("— — тяга по плану", 1330, 598, COL.dim, 11);
+  const line = (tr, f, max, col, wdt, dash = []) => { g.setLineDash(dash); g.strokeStyle = col; g.lineWidth = wdt; g.beginPath();
+    tr.forEach((p, i) => { const x = X(p.t), y = y1 - (y1 - y0) * clamp(f(p) / max, 0, 1); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); g.setLineDash([]); };
+  line(P.track, p => p.F / 1e9, 2.5, COL.dim, 1.4, [6, 4]);
+  if (s.track.length) { line(s.track, p => p.g, 5, COL.or, 1.2); line(s.track, p => p.B, 14, "#5fa8d8", 1.6); line(s.track, p => p.F / 1e9, 2.5, COL.wh, 1.8); }
+  const yB = y1 - (y1 - y0) * PM.B_NOM / 14; g.setLineDash([3, 4]); g.strokeStyle = COL.rd; g.beginPath(); g.moveTo(x0, yB); g.lineTo(x1, yB); g.stroke(); g.setLineDash([]);
+  T("12,1 Тл", x1 - 4, yB - 3, COL.rd, 10, "right");
+  for (let t = 0; t <= tMax; t += 20) T(fmt(t, 0) + " с", X(t), y1 + 15, COL.dim, 10, "center");
+}
+
 cv.addEventListener("click", e => {
   const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
   for (const h of HIT) if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) { h.act(); return; }
@@ -760,13 +1232,17 @@ const SPEEDS = [1, 5, 20, 50];
 function spd() { $("spdB").innerHTML = ""; for (const v of SPEEDS) { const b = document.createElement("button"); b.textContent = "×" + v; if (UI.speed === v) b.classList.add("on"); b.onclick = () => { UI.speed = v; spd(); }; $("spdB").appendChild(b); } }
 spd();
 jlog("Корабль на столе. Задайте цель и нажмите ВЗВЕСТИ", "ok");
+ljlog("Снижение 5 км, 150 м/с. Поле — АВТО. Нажмите ВЗВЕСТИ", "ok");
 let last = performance.now(), accT = 0;
 setInterval(() => {
   const now = performance.now(), dtr = Math.min(0.1, (now - last) / 1000); last = now;
-  UI.t += dtr; uiTick();
-  if (inFlight()) {
+  UI.t += dtr; uiTick(); landUiTick();
+  if (PAGE === "asc" && inFlight()) {                // only the page on the screen runs
     accT += dtr * UI.speed; let n = 0;
     while (accT >= SIM.dtNext && n++ < 20000) { accT -= SIM.dtNext; simStep(SIM, SIM.dtNext); if (SIM.mode === "crash") { accT = 0; break; } }
+  } else if (PAGE === "land" && landRunning()) {
+    accT += dtr * UI.speed; let n = 0;
+    while (accT >= LDT && n++ < 20000) { accT -= LDT; landStep(LAND, LDT); if (!landRunning()) { accT = 0; break; } }
   } else accT = 0;
   draw();
 }, 33);

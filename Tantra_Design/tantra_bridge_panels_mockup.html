@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Панели мостика</title>
+<style>
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:#1a1f24;color:#d8e2ea;font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+#wrap{padding:10px 12px;max-width:1900px;margin:0 auto}
+h1{font-size:16px;margin:0 0 4px;color:#e8eef3}
+.note{font-size:12px;color:#93a3b1;max-width:1200px}
+canvas{display:block;border-radius:6px;cursor:pointer;margin-top:8px}
+#hidden{position:absolute;left:-6000px;top:0;width:1700px}
+#hidden iframe{width:1700px;height:1500px;border:0}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Мостик, вариант C: слева три MFD и три режима, по центру передний экран с двигателями, справа три MFD и энергоустановка</h1>
+  <div class="note">Исправлено: внизу целые экраны мокапов на всю зону, без нарезки на блоки. Слева три режима: МЕХАНИЗАЦИЯ · ТЕПЛО · АВТОПИЛОТ, вкладками в заголовке экрана. Справа внизу постоянно энергоустановка и поле. Передний экран увеличен до ~150 × 65 см: вкладка ПОЛЁТ · АТМОСФЕРА (пилотаж со встроенными двигателями и строкой энергоустановки) и вкладка ДВИГАТЕЛИ (полный пульт). MFD в изумрудной палитре.
+  Кнопки положений встали в верхнюю полосу экрана механизации, на место ламп шасси. Кегль 14 мокапа на панели 116 см = 10 мм.</div>
+  <div class="note" style="display:none">Размеры в миллиметрах панели. Каждая панель 1160 × 960 мм: блок MFD 380 мм, нижняя зона 520 мм, ряд режимов 60 мм.
+  Шрифт: основной 22–26 мм, цифры 30–44 мм, мелкий 18 мм. Это в 2–3 раза крупнее прежнего (на райзере было 4 мм, на мониторе 6,5).
+  Страницы нижней зоны сделаны заново под крупный шрифт, только главное. Подробные таблицы мокапов в игре уйдут на вторые страницы.
+  Слева экран переключаемый: МЕХАНИЗАЦИЯ · ПУЛЬТ · ТЕПЛО · ДВИГАТЕЛИ · АВТОПИЛОТ и прежние системы. Справа экран постоянный, без переключения. Данные живые, кнопки нажимаются.</div>
+  <canvas id="cv"></canvas>
+</div>
+<div id="hidden">
+  <iframe id="fMech" src="tantra_mech_screen.html"></iframe>
+  <iframe id="fTherm" src="tantra_thermal_screen.html"></iframe>
+  <iframe id="fEng" src="tantra_engines_screen.html"></iframe>
+  <iframe id="fAuto" src="tantra_autopilot_screen.html"></iframe>
+  <iframe id="fPlant" src="tantra_plant_screen.html"></iframe>
+  <iframe id="fFlight" src="tantra_flight_atmo_screen.html"></iframe>
+  <iframe id="fView" src="tantra_mainview_params_screen.html"></iframe>
+</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const C = {bg: "#0a1311", fr: "#1f3a35", tx: "#7fe0d0", dim: "#4f8f86", or: "#ee9a3a", ye: "#e8d35a", rd: "#ff5a4a", gr: "#5ad0a0", wh: "#e8fffa", bl: "#7fb8ff", vi: "#b59cff", bezel: "#1c1816"};
+const PW = 1160, PH = 960, MFD_H = 380, ZONE_H = 520, KEYS_H = 60, GAP = 60;
+const MODES = ["МЕХАНИЗАЦИЯ", "ПУЛЬТ", "ТЕПЛО", "ДВИГАТЕЛИ", "АВТОПИЛОТ", "РАБ. ТЕЛО", "ЭНЕРГОУСТ.", "ЭКИПАЖ", "НАСТР."];
+let mode = "МЕХАНИЗАЦИЯ", K = 1, OX = 0, OY = 0;   // px per mm, panel origin
+const hits = [];
+function ev(f, code) { try { return $(f).contentWindow.eval(code); } catch (e) { return undefined; } }
+const fmt = (v, d = 0) => isFinite(v) ? v.toLocaleString("ru-RU", {minimumFractionDigits: d, maximumFractionDigits: d}) : "—";
+let g;
+// drawing in panel millimetres
+const X = x => OX + x * K, Y = y => OY + y * K;
+function rect(x, y, w, h, fill, stroke, lw = 1.5) { if (fill) { g.fillStyle = fill; g.fillRect(X(x), Y(y), w * K, h * K); } if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw; g.strokeRect(X(x), Y(y), w * K, h * K); } }
+function text(s, x, y, col, mm, al = "left", w = 600) { g.fillStyle = col; g.font = `${w} ${Math.max(6, mm * K)}px Segoe UI`; g.textAlign = al; g.fillText(s, X(x), Y(y)); return g.measureText(s).width / K; }
+function fitText(s, x, y, maxW, col, mm, al = "center", w = 700) { let m = mm; g.font = `${w} ${m * K}px Segoe UI`; while (g.measureText(s).width / K > maxW && m > 10) { m -= 1; g.font = `${w} ${m * K}px Segoe UI`; } return text(s, x, y, col, m, al, w); }
+function frame(x, y, w, h, title) { rect(x, y, w, h, null, C.fr, 2); if (title) { g.font = `700 ${16 * K}px Segoe UI`; const tw = g.measureText(title).width / K; rect(x + 12, y - 10, tw + 16, 20, C.bg); text(title, x + 20, y + 6, C.dim, 16, "left", 700); } }
+function key(label, x, y, w, h, on, act, col = C.or, sub = "", size = 26) {
+  rect(x, y, w, h, on ? "#3b2a14" : "#121d1b", on ? col : "#5a4325", on ? 3 : 1.5);
+  fitText(label, x + w / 2, y + (sub ? h / 2 : h / 2 + size * 0.35), w - 10, on ? "#ffd29a" : col, size);
+  if (sub) fitText(sub, x + w / 2, y + h / 2 + 26, w - 14, C.dim, 18, "center", 500);
+  if (act) hits.push({x: X(x), y: Y(y), w: w * K, h: h * K, act});
+}
+function lamp(x, y, on, col = C.gr) { g.fillStyle = on ? col : "#1c2a27"; g.beginPath(); g.arc(X(x), Y(y), 9 * K, 0, 7); g.fill(); }
+function bigVal(label, val, x, y, w, col = C.wh) { text(label, x, y, C.dim, 18, "left", 500); fitText(val, x, y + 40, w, col, 36, "left", 700); }
+function fakeMfd(x, y, w, h, n) {
+  rect(x, y, w, h, C.bg, C.fr, 2);
+  const bw = 46, dx = x + bw + 10, dy = y + 30, dw = w - 2 * (bw + 10), dh = h - 90;
+  rect(dx, dy, dw, dh, "#050b0a", "#2c6a54", 1.5);
+  for (let i = 0; i < 6; i++) for (const sx of [x + 4, x + w - bw - 4]) rect(sx, dy + i * dh / 6 + 4, bw, dh / 6 - 8, "#0f1c19", "#2c6a54", 1);
+  ["PWR", "SEL", "MNU"].forEach((t, i) => { const bx = dx + i * dw / 3 + 8; rect(bx, y + h - 50, dw / 3 - 16, 38, "#0f1c19", "#2c6a54", 1); text(t, bx + dw / 6 - 8, y + h - 24, C.tx, 16, "center", 700); });
+  const L = [["Orbit: Earth", "SMa 3.190M", "PeR 8.337k", "ApR 6.372M", "Inc 28.19°"], ["Surface: Earth", "ALT 0.02", "VS +0.00", "AOA -0.0", "HDG 090"], ["HSI / Map", "VOR ---", "ILS ---", "BRG ---", ""],
+             ["Docking", "TGT ---", "DST ---", "", ""], ["Transfer", "Tgt Mars", "dV ---", "", ""], ["Systems", "", "", "", ""]][(n - 1) % 6];
+  L.forEach((t, i) => text(t, dx + 14, dy + 34 + i * 30, C.tx, 22, "left", 500));
+  text("MFD " + n, x + w / 2, y + 22, C.dim, 18, "center", 700);
+}
+// ================= the switchable pages (left) =================
+const PH_SHORT = ["подъём", "цапфы", "поворот", "лапы", "нагрузка", "сбор"];
+function pageMech(x0, y0, W, H) {
+  const S = ev("fMech", "S"), POS = ev("fMech", "POS"); if (!S || !POS) return;
+  const pose = ev("fMech", "pose(S.P)"), moving = S.P !== S.PT && !S.estop;
+  // the position scale: four keys on one lit bar
+  const bx0 = x0 + 40, bx1 = x0 + W - 40, by = y0 + 128, Xp = P => bx0 + (bx1 - bx0) * P / 6;
+  rect(bx0, by, bx1 - bx0, 16, "#0d1715", C.fr, 1);
+  const lit = S.estop ? C.rd : moving ? C.ye : C.gr;
+  rect(bx0, by + 2, Xp(S.P) - bx0, 12, lit);
+  const kw = (W - 28 - 180 - 4 * 12) / 4;
+  POS.forEach((q, i) => {
+    const here = Math.abs(S.P - q.P) < 1e-3, tgt = Math.abs(S.PT - q.P) < 1e-3 && moving, kx = x0 + 14 + i * (kw + 12);
+    key(q.t, kx, y0 + 18, kw, 86, here || tgt, () => ev("fMech", `goTo(POS[${i}])`), here ? C.gr : tgt ? C.ye : C.or);
+    g.strokeStyle = here ? C.gr : tgt ? C.ye : "#3a4a44"; g.lineWidth = 2 * K;
+    g.beginPath(); g.moveTo(X(kx + kw / 2), Y(y0 + 104)); g.lineTo(X(Xp(q.P)), Y(by)); g.stroke();
+    g.fillStyle = here ? C.gr : tgt ? C.ye : C.or; g.beginPath(); g.arc(X(Xp(q.P)), Y(by + 8), 7 * K, 0, 7); g.fill();
+  });
+  key("СТОП", x0 + W - 194, y0 + 18, 180, 86, false, () => ev("fMech", "S.PT = S.P"), C.ye);
+  text(moving ? `идём · фаза ${fmt(S.P, 2)} / 6` : `фаза ${fmt(S.P, 2)} / 6 · ${ev("fMech", "PH_NAME[S.P >= 6 ? 7 : Math.floor(S.P)]")}`, x0 + 40, by + 44, moving ? C.ye : C.tx, 20, "left", 600);
+  // the ship and the main numbers
+  const my = y0 + 200;
+  frame(x0 + 14, my, 520, H - 214, "ПОЛОЖЕНИЕ");
+  // a big thumbnail
+  const ox = x0 + 150, oy = my + 200, sc = 1.0, th = pose.th, H0 = pose.H;
+  rect(x0 + 24, oy, 500, 6, "#2a2a20");
+  const P2 = (s, z) => [X(ox + ((s - pose.hip) * Math.cos(th) - z * Math.sin(th)) * sc), Y(oy - (H0 + (s - pose.hip) * Math.sin(th) + z * Math.cos(th)) * sc)];
+  g.fillStyle = "#3a4a52"; g.beginPath(); [[0, 7], [120, 7], [178, 0], [140, -7.5], [0, -7.5]].forEach((q, i) => { const r = P2(q[0], q[1]); i ? g.lineTo(r[0], r[1]) : g.moveTo(r[0], r[1]); }); g.closePath(); g.fill();
+  g.strokeStyle = "#5b8cc8"; g.lineWidth = 4 * K; g.beginPath(); g.moveTo(X(ox), Y(oy - 5)); g.lineTo(X(ox), Y(oy - H0 * sc)); g.stroke();
+  bigVal("угол", fmt(th * 180 / Math.PI) + "°", x0 + 34, my + 236, 150);
+  bigVal("цапфы", fmt(pose.H, 1) + " м", x0 + 200, my + 236, 150);
+  bigVal("шасси", S.gear >= 1 ? "выпущено" : "убрано", x0 + 360, my + 236, 170, S.gear >= 1 ? C.gr : C.ye);
+  // supports and mechanisms
+  frame(x0 + 550, my, W - 564, H - 214, "ОПОРЫ · КОРПУС");
+  const L = ev("fMech", "loads()");
+  const ring = (n, f, x, y) => { g.strokeStyle = "#1f332f"; g.lineWidth = 12 * K; g.beginPath(); g.arc(X(x), Y(y), 34 * K, 0, 7); g.stroke();
+    if (f > 0.001) { g.strokeStyle = f > 0.85 ? C.rd : f > 0.6 ? C.ye : C.gr; g.beginPath(); g.arc(X(x), Y(y), 34 * K, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, f)); g.stroke(); }
+    text(n, x, y + 8, f > 0.001 ? C.wh : C.dim, 22, "center", 700); text(f > 0.001 ? fmt(f * 100) + " %" : "—", x, y + 64, f > 0.001 ? C.tx : C.dim, 18, "center", 600); };
+  const rx = x0 + 600;
+  ring("Л", L.ratio.b, rx + 10, my + 66); ring("П", L.ratio.b, rx + 110, my + 66); ring("Кн", L.ratio.k, rx + 210, my + 66);
+  ring("К", L.ratio.l, rx + 310, my + 66);
+  const hull = [["крылья", ["90°", "30°", "сложены"][S.wings], S.wings === 0], ["гондолы", S.podsOut ? "выдвинуты" : "в отсеках", S.podsOut], ["ангар", S.hangar > 0.99 ? "открыт" : "закрыт", S.hangar < 0.01], ["шлюз · лифт", S.lift > 0.99 ? "внизу" : "сложен", S.lift < 0.01]];
+  hull.forEach((r, i) => { const y = my + 170 + i * 36; lamp(rx, y - 8, r[2]); text(r[0], rx + 20, y, C.dim, 22, "left", 500); text(r[1], x0 + W - 34, y, C.tx, 24, "right", 700); });
+}
+function pagePult(x0, y0, W, H) {
+  const S = ev("fMech", "S"); if (!S) return;
+  const cols = [["ШАССИ", [["ШАССИ", S.gearT >= 1, "S.gearT = S.gearT >= 1 ? 0 : 1"], ["ЛЁЖА", S.set === "level", "S.set='level'"], ["НА КОРМУ", S.set === "stand", "S.set='stand'"], ["АВАР. СТОП", S.estop, "S.estop = !S.estop", C.rd]]],
+                ["КОРПУС", [["КРЫЛЬЯ", S.wings === 0, "S.wings = (S.wings + 2) % 3"], ["ГОНДОЛЫ", S.podsOut, "S.podsOut = !S.podsOut"], ["СОПЛА НАЗАД", S.podAng === 0, "S.podAng = 0"], ["СОПЛА ВНИЗ", S.podAng === 90, "S.podAng = 90"]]],
+                ["АНГАР · ПОРТ · ШЛЮЗ", [["АНГАР", S.hangarT > 0.5, "S.hangarT = S.hangarT > 0.5 ? 0 : 1"], ["ПОРТ", S.port, "S.port = !S.port"], ["ШЛЮЗ", S.liftT > 0.5, "S.liftT = S.liftT > 0.5 ? 0 : 1"], ["СТОЛ СТОП", false, "0", C.ye]]]];
+  const cw = (W - 56) / 3;
+  cols.forEach(([t, ks], c) => {
+    const fx = x0 + 14 + c * (cw + 14);
+    frame(fx, y0 + 20, cw, H - 34, t);
+    ks.forEach(([n, on, code, col], i) => key(n, fx + 16, y0 + 44 + i * ((H - 80) / 4), cw - 32, (H - 80) / 4 - 14, on, () => ev("fMech", code), col || C.or));
+  });
+}
+function pageThermal(x0, y0, W, H) {
+  const S = ev("fTherm", "S"), Z = ev("fTherm", "ZONES"); if (!S || !Z) return;
+  const adv = ev("fTherm", "advice()") || ["", C.dim];
+  frame(x0 + 14, y0 + 20, 520, H - 34, "ОБШИВКА");
+  // the hull side, its zones coloured
+  const zc = (T, lim) => T >= lim ? C.rd : T >= 0.9 * lim ? C.or : T >= 0.75 * lim ? C.ye : C.gr;
+  const hx = x0 + 40, hy = y0 + 150, k = 2.6;
+  g.fillStyle = ev("fTherm", `heatCol(S.skin[1])`); g.beginPath(); [[0, 10], [120, 10], [178, 0], [140, -11], [0, -11]].forEach((q, i) => { const px = X(hx + q[0] * k), py = Y(hy - q[1] * k); i ? g.lineTo(px, py) : g.moveTo(px, py); }); g.closePath(); g.fill();
+  g.fillStyle = ev("fTherm", `heatCol(S.skin[0])`); g.beginPath(); g.moveTo(X(hx + 140 * k), Y(hy + 11 * k)); g.lineTo(X(hx + 178 * k), Y(hy)); g.lineTo(X(hx + 120 * k), Y(hy - 10 * k)); g.closePath(); g.fill();
+  Z.forEach((z, i) => { if (i > 3) return; const y = y0 + 260 + i * 56; text(z.t, x0 + 34, y, C.dim, 22, "left", 500); text(fmt(S.skin[i]) + " К", x0 + 400, y, zc(S.skin[i], z.lim), 30, "right", 700); text(fmt(100 * S.skin[i] / z.lim) + " %", x0 + 520, y, C.tx, 22, "right", 600); });
+  frame(x0 + 550, y0 + 20, W - 564, H - 34, "ВХОД · ПРОГНОЗ");
+  const f = S.f;
+  bigVal("высота", fmt(f.h / 1e3, 1) + " км", x0 + 574, y0 + 70, 180);
+  bigVal("скорость", fmt(f.v) + " м/с", x0 + 760, y0 + 70, 180);
+  bigVal("перегрузка", fmt(f.n || 0, 1) + " g", x0 + 950, y0 + 70, 180);
+  if (S.pred) {
+    const p = S.pred;
+    bigVal("пик нос", fmt(p.peak[0].T) + " К", x0 + 574, y0 + 170, 180, zc(p.peak[0].T, Z[0].lim));
+    bigVal("пик кромки", fmt(p.peak[2].T) + " К", x0 + 760, y0 + 170, 180, zc(p.peak[2].T, Z[2].lim));
+    bigVal("через", fmt(p.peak[0].t) + " с", x0 + 950, y0 + 170, 180);
+  }
+  g.font = `700 ${24 * K}px Segoe UI`;
+  const words = String(adv[0]).split(" "); let line = "", ly = y0 + 300;
+  for (const w of words) { const t = line ? line + " " + w : w; if (g.measureText(t).width / K > W - 600) { text(line, x0 + 574, ly, adv[1], 24, "left", 700); line = w; ly += 34; } else line = t; }
+  if (line) text(line, x0 + 574, ly, adv[1], 24, "left", 700);
+  key("СЛОЖИТЬ КРЫЛЬЯ", x0 + 574, y0 + H - 110, 260, 80, S.wings === 2, () => ev("fTherm", "S.wings = 2; S.predT = -99"));
+  key("АТАКА +5°", x0 + 850, y0 + H - 110, 240, 80, false, () => ev("fTherm", "S.aoa = Math.min(60, S.aoa + 5); S.predT = -99"));
+}
+function pageEngines(x0, y0, W, H) {
+  const S = ev("fEng", "S"); if (!S) return;
+  const plan = S.page === "planetary";
+  key("ПЛАНЕТАРНЫЕ", x0 + 14, y0 + 14, 260, 64, plan, () => ev("fEng", "S.page='planetary'"));
+  key("АНАМЕЗОН", x0 + 290, y0 + 14, 240, 64, !plan, () => ev("fEng", "S.page='anamezon'"), C.vi);
+  const bar = (label, x, set, act, col, setter, fmtv) => {
+    const by = y0 + 130, bh = H - 230, bw = 90;
+    text(label, x + bw / 2, y0 + 116, col, 22, "center", 700);
+    rect(x, by, bw, bh, "#0d1715", C.fr, 1.5);
+    rect(x + 6, by + bh * (1 - act), bw - 12, bh * act, col);
+    const yp = by + bh * (1 - set); g.fillStyle = C.ye; g.beginPath(); g.moveTo(X(x + bw + 2), Y(yp)); g.lineTo(X(x + bw + 30), Y(yp - 14)); g.lineTo(X(x + bw + 30), Y(yp + 14)); g.fill();
+    text(fmtv(act), x + bw / 2, by + bh + 44, C.wh, 30, "center", 700);
+    hits.push({x: X(x), y: Y(by), w: (bw + 30) * K, h: bh * K, act: (px, py) => setter(Math.max(0, Math.min(1, 1 - (py - Y(by)) / (bh * K))))});
+  };
+  const pct = v => fmt(v * 100) + " %";
+  if (plan) {
+    bar("МАРШ", x0 + 40, S.set.m, S.thrM, C.or, v => ev("fEng", `S.set.m = ${v}`), pct);
+    bar("ГОНД", x0 + 190, S.set.p, S.thrP, C.or, v => ev("fEng", `S.set.p = ${v}`), pct);
+    bar("СОПЛА", x0 + 340, S.set.ang / 180, S.podAng / 180, C.bl, v => ev("fEng", `S.set.ang = ${Math.round(v * 180)}`), v => fmt(v * 180) + "°");
+  } else {
+    bar("КОРМА", x0 + 40, S.set.fs, S.feedS, C.vi, v => ev("fEng", `S.set.fs = ${v}`), pct);
+    bar("РЕВЕРС", x0 + 190, S.set.fr, S.feedR, C.or, v => ev("fEng", `S.set.fr = ${v}`), pct);
+    key(S.aStage === "off" ? "ПУСК КАМЕР" : "СТОП", x0 + 340, y0 + 140, 180, 80, S.aStage !== "off", () => ev("fEng", `if (S.aStage === "off") { S.aStage = "field"; S.aT = 0; } else { S.aStage = "off"; S.set.fs = S.set.fr = 0; }`), C.gr);
+  }
+  frame(x0 + 560, y0 + 100, W - 574, H - 114, plan ? "ТЯГА · РАСЧЁТ" : "АНАМЕЗОН · РАСЧЁТ");
+  const st = ev("fEng", plan ? "planetary(0)" : "anamezon(0)");
+  if (st) {
+    if (plan) {
+      bigVal("тяга", fmt(st.F / 1e6) + " МН", x0 + 584, y0 + 150, 260);
+      bigVal("тяга / вес", st.E.g > 0 ? fmt(st.F / st.W, 2) : "—", x0 + 860, y0 + 150, 240);
+      bigVal("перегрузка", fmt(st.felt, 2) + " g", x0 + 584, y0 + 250, 260, st.felt > S.gLim ? C.rd : C.wh);
+      bigVal("рабочая масса", st.rm === "argon" ? "аргон" : "железо", x0 + 860, y0 + 250, 240);
+      bigVal("аргон / железо", fmt(S.argon / 1e6, 2) + " / " + fmt(S.iron / 1e6, 2) + " кт", x0 + 584, y0 + 350, 500);
+    } else {
+      bigVal("тяга по оси", fmt((st.Fs - st.Fr) / 1e9, 1) + " ГН", x0 + 584, y0 + 150, 260);
+      bigVal("ощущается", fmt(S.resid, 2) + " g", x0 + 860, y0 + 150, 240);
+      bigVal("скорость", fmt(st.beta, 4) + " c", x0 + 584, y0 + 250, 260);
+      bigVal("ловушки", fmt(st.fuel / 1e6, 1) + " кт", x0 + 860, y0 + 250, 240);
+      bigVal("поле камер", fmt(1000 * st.fieldLvl) + " Тл", x0 + 584, y0 + 350, 260);
+    }
+  }
+}
+function pageAutopilot(x0, y0, W, H) {
+  frame(x0 + 14, y0 + 20, W - 28, H - 34, "АВТОПИЛОТ · ВЗЛЁТ НА ОРБИТУ");
+  const ph = ["ГОТОВ", "ВЕРТ.", "КУРС", "ТАНГАЖ", "МАССА", "ОТСЕЧКА", "БАЛЛИСТ.", "СКРУГЛ.", "ОРБИТА"];
+  ph.forEach((p, i) => { const x = x0 + 34 + i * ((W - 68) / 9); rect(x, y0 + 50, (W - 68) / 9 - 10, 50, i === 0 ? "#2c6a54" : "#14211e", C.fr, 1); fitText(p, x + ((W - 68) / 9 - 10) / 2, y0 + 84, (W - 68) / 9 - 20, i === 0 ? C.wh : C.dim, 20); });
+  bigVal("цель", "300 × 300 км, i 51,6°", x0 + 40, y0 + 160, 520);
+  bigVal("азимут пуска", "43,4°", x0 + 600, y0 + 160, 240);
+  bigVal("Δv расчётная", "9,26 км/с", x0 + 860, y0 + 160, 260);
+  key("ВЗВЕСТИ", x0 + 40, y0 + H - 130, 220, 90, false, () => {});
+  key("ПУСК", x0 + 280, y0 + H - 130, 220, 90, false, () => {}, C.gr);
+  key("УДЕРЖАНИЕ", x0 + 520, y0 + H - 130, 220, 90, false, () => {});
+  key("ОТМЕНА", x0 + 760, y0 + H - 130, 220, 90, false, () => {}, C.rd);
+  text("посадка на корму — вторая вкладка этого режима", x0 + 40, y0 + 290, C.dim, 20, "left", 500);
+}
+// ================= the right panel's constant screen =================
+function constScreen(x0, y0, W, H) {
+  frame(x0 + 14, y0 + 20, W - 28, H - 34, "ПОЛЁТ · ПОСТОЯННО");
+  const E = ev("fEng", "S"), T = ev("fTherm", "S"), Z = ev("fTherm", "ZONES");
+  const f = T ? T.f : {h: 0, v: 0, n: 0};
+  const cw = (W - 68) / 4;
+  const cells = [["высота", fmt(f.h / 1e3, 1) + " км"], ["скорость", fmt(f.v) + " м/с"], ["вертикальная", fmt(f.v * Math.sin(f.gam || 0)) + " м/с"], ["перегрузка", fmt(f.n || 0, 1) + " g"],
+                 ["тангаж", "0,0°"], ["крен", "+0,1°"], ["курс", "090°"], ["тяга", E ? fmt(E.thrM * 100) + " %" : "—"]];
+  cells.forEach((c, i) => bigVal(c[0], c[1], x0 + 40 + (i % 4) * cw, y0 + 70 + Math.floor(i / 4) * 110, cw - 20));
+  const worst = T && Z ? Math.max(...Z.map((z, i) => T.skin[i] / z.lim)) : 0;
+  bigVal("аргон", E ? fmt(E.argon / 1e6, 2) + " кт" : "—", x0 + 40, y0 + 290, cw - 20);
+  bigVal("железо", E ? fmt(E.iron / 1e6, 2) + " кт" : "—", x0 + 40 + cw, y0 + 290, cw - 20);
+  bigVal("обшивка", fmt(worst * 100) + " % предела", x0 + 40 + 2 * cw, y0 + 290, 2 * cw - 20, worst >= 1 ? C.rd : worst >= 0.9 ? C.or : worst >= 0.75 ? C.ye : C.gr);
+  rect(x0 + 34, y0 + H - 110, W - 68, 70, "#101b18", C.fr, 1.5);
+  lamp(x0 + 64, y0 + H - 75, true, C.gr); text("ТРЕВОГ НЕТ", x0 + 90, y0 + H - 66, C.gr, 26, "left", 700);
+  text("Т+00:09:12", x0 + W - 54, y0 + H - 66, C.tx, 26, "right", 700);
+}
+const MODES3 = [["МЕХАНИЗАЦИЯ", "fMech", "top"], ["ТЕПЛО", "fTherm", "scr"], ["АВТОПИЛОТ", "fAuto", null]];
+let mode3 = 0;
+function liveCanvas(f, id) { try { const d = $(f).contentDocument; return id ? d.getElementById(id) : d.querySelector("canvas"); } catch (e) { return null; } }
+function forward(frame, cnv, fx, fy) {
+  const r = cnv.getBoundingClientRect(), win = frame.contentWindow, o = {clientX: r.left + fx * r.width, clientY: r.top + fy * r.height, bubbles: true, pointerId: 1};
+  cnv.dispatchEvent(new win.PointerEvent("pointerdown", o)); cnv.dispatchEvent(new win.PointerEvent("pointerup", o)); cnv.dispatchEvent(new win.MouseEvent("click", o));
+}
+// a whole mockup screen over the zone (its own 1600 x 800 layout, scaled to the zone's width)
+function screenIn(f, id, x, y, w, h) {
+  const c = liveCanvas(f, id); if (!c) return null;
+  const ar = c.width / c.height; let dw = w, dh = w / ar; if (dh > h) { dh = h; dw = h * ar; }
+  const dx = x + (w - dw) / 2, dy = y + (h - dh) / 2;
+  g.drawImage(c, X(dx), Y(dy), dw * K, dh * K);
+  hits.push({x: X(dx), y: Y(dy), w: dw * K, h: dh * K, act: (px, py) => forward($(f), c, (px - X(dx)) / (dw * K), (py - Y(dy)) / (dh * K))});
+  return {dx, dy, dw, dh, k: dw / c.width};
+}
+function panel(px, right) {
+  OX = px; OY = 10;
+  rect(0, 0, PW, PH, C.bezel);
+  const mw = (PW - 24) / 3;
+  for (let i = 0; i < 3; i++) fakeMfd(12 + i * mw + 4, 8, mw - 8, MFD_H - 16, right ? i + 4 : i + 1);
+  const zy = MFD_H, zh = PH - MFD_H - 8;
+  rect(8, zy, PW - 16, zh, C.bg);
+  if (right) { screenIn("fPlant", "scr", 8, zy, PW - 16, zh); text("ПРАВАЯ ПАНЕЛЬ · внизу постоянно: энергоустановка и поле", 10, PH + 26, "#93a3b1", 18, "left", 600); return; }
+  const [name, f, id] = MODES3[mode3];
+  const r = screenIn(f, id, 8, zy, PW - 16, zh);
+  if (!r) return;
+  // the mode tabs: in the screen's own title bar, at its right end (three, no more)
+  const tw = 150 * r.k * 1.6, th = 38 * r.k, ty = r.dy + 14 * r.k;
+  MODES3.forEach(([n], i) => {
+    const tx = r.dx + r.dw - (3 - i) * (tw + 8 * r.k) - 14 * r.k;
+    rect(tx, ty, tw, th, i === mode3 ? "#3b2a14" : "#121d1b", i === mode3 ? C.or : "#5a4325", i === mode3 ? 2 : 1);
+    fitText(n, tx + tw / 2, ty + th / 2 + 6 * r.k * 1.4, tw - 8, i === mode3 ? "#ffd29a" : C.or, 14 * r.k * 1.4);
+    hits.push({x: X(tx), y: Y(ty), w: tw * K, h: th * K, act: () => { mode3 = i; }});
+  });
+  // the mechanisation: its position keys in place of the gear lamps of its top band
+  if (name === "МЕХАНИЗАЦИЯ") {
+    const S = ev("fMech", "S"), POS = ev("fMech", "POS");
+    if (S && POS) {
+      const bx = r.dx + 1000 * r.k, by = r.dy + 72 * r.k, bw = (575 * r.k - 4 * 6 * r.k) / 5, bh = 92 * r.k;
+      rect(bx - 6 * r.k, by - 6 * r.k, 590 * r.k, bh + 40 * r.k, C.bg);
+      const keys = [...POS.map((q, i) => [q.t, Math.abs(S.P - q.P) < 1e-3, Math.abs(S.PT - q.P) < 1e-3 && S.P !== S.PT, `goTo(POS[${i}])`]), ["СТОП", false, false, "S.PT = S.P"]];
+      keys.forEach(([t, here, tgt, code], i) => {
+        const kx = bx + i * (bw + 6 * r.k), col = i === 4 ? C.ye : here ? C.gr : tgt ? C.ye : C.or;
+        rect(kx, by, bw, bh, here || tgt ? "#3b2a14" : "#121d1b", here || tgt ? col : "#5a4325", here || tgt ? 2 : 1);
+        fitText(t, kx + bw / 2, by + bh / 2 + 8 * r.k, bw - 6, here || tgt ? "#ffd29a" : col, 18 * r.k);
+        hits.push({x: X(kx), y: Y(by), w: bw * K, h: bh * K, act: () => ev("fMech", code)});
+      });
+      const x0 = bx, x1 = bx + 575 * r.k, yb = by + bh + 14 * r.k, P = S.P / 6;
+      rect(x0, yb, x1 - x0, 10 * r.k, "#0d1715", C.fr, 1); rect(x0, yb + 2 * r.k, (x1 - x0) * P, 6 * r.k, S.P !== S.PT ? C.ye : C.gr);
+    }
+  }
+  text("ЛЕВАЯ ПАНЕЛЬ · внизу три режима", 10, PH + 26, "#93a3b1", 18, "left", 600);
+}
+// the front screen, enlarged (the user's frame: ~150 x 65 cm): the engine console at full size
+const FW = 1500, FH = 650;
+let frontTab = 0;   // 0 ПОЛЁТ · АТМОСФЕРА (with the engines in it), 1 ДВИГАТЕЛИ (the whole console)
+function front(px) {
+  OX = px; OY = 10 + (PH - FH) / 2 * K;
+  rect(0, 0, FW, FH, C.bezel);
+  const r = screenIn(["fFlight", "fEng", "fView"][frontTab], "scr", 10, 10, FW - 20, FH - 20);
+  if (r) {   // the two tabs in the screen's title bar, at its right end
+    const tw = 230 * r.k, th = 38 * r.k, ty = r.dy + 14 * r.k;
+    ["ПОЛЁТ · АТМОСФЕРА", "ДВИГАТЕЛИ", "ПАРАМЕТРЫ ГЛАВНОГО ВИДА"].forEach((n, i) => {
+      const tx = r.dx + r.dw - (3 - i) * (tw + 8 * r.k) - 14 * r.k;
+      rect(tx, ty, tw, th, i === frontTab ? "#3b2a14" : "#121d1b", i === frontTab ? C.or : "#5a4325", i === frontTab ? 2 : 1);
+      fitText(n, tx + tw / 2, ty + th / 2 + 7 * r.k, tw - 8, i === frontTab ? "#ffd29a" : C.or, 15 * r.k);
+      hits.push({x: X(tx), y: Y(ty), w: tw * K, h: th * K, act: () => { frontTab = i; }});
+    });
+  }
+  text("ПЕРЕДНИЙ ЭКРАН ~150 × 65 см · полёт в атмосфере со встроенными двигателями | полный пульт двигателей | параметры главного вида", 10, FH + 26, "#93a3b1", 18, "left", 600);
+}
+function draw() {
+  const cv = $("cv"), avail = (+new URLSearchParams(location.search).get("w")) || $("wrap").clientWidth - 30;   // ?w= : a big canvas for the 3D preview
+  K = avail / (2 * PW + FW + 2 * GAP);
+  const W = Math.round(avail), H = Math.round((PH + 50) * K + 20);
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; cv.style.width = W + "px"; cv.style.height = H + "px"; }
+  g = cv.getContext("2d");
+  g.fillStyle = "#1a1f24"; g.fillRect(0, 0, W, H);
+  hits.length = 0;
+  panel(0, false);
+  front((PW + GAP) * K);
+  panel((PW + GAP + FW + GAP) * K, true);
+}
+$("cv").addEventListener("click", e => {
+  const r = e.target.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  for (let i = hits.length - 1; i >= 0; i--) { const h = hits[i]; if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) { h.act(x, y); return; } }
+});
+setInterval(draw, 100);
+</script>
+</body>
+</html>

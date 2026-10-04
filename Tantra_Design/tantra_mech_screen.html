@@ -120,10 +120,11 @@ function frame(x, y, w, h, title) {
   if (title) { g.font = "700 12px Segoe UI"; const tw = g.measureText(title).width; g.fillStyle = COL.bg; g.fillRect(x + 10, y - 9, tw + 16, 18); T(title, x + 18, y + 5, COL.dim, 12, "left", "700"); }
 }
 function lamp(x, y, on, col = COL.gr) { g.fillStyle = on ? col : "#1c2a27"; g.beginPath(); g.arc(x, y, 6, 0, 7); g.fill(); g.strokeStyle = "#2e4d45"; g.lineWidth = 1; g.stroke(); }
+const fitSz = (s, mw, size, wt) => { while (size > 9) { g.font = `${wt} ${size}px Segoe UI, system-ui`; if (g.measureText(s).width <= mw) break; size -= 0.5; } return size; };   // the label never leaves its key
 function btn(s, x, y, w, h, on, act, col = COL.or, sub, size = 14) {
   g.fillStyle = on ? "#3b2a14" : "#121d1b"; g.fillRect(x, y, w, h); g.strokeStyle = on ? col : "#5a4325"; g.lineWidth = on ? 2 : 1; g.strokeRect(x, y, w, h);
-  T(s, x + w / 2, y + (sub ? h / 2 : h / 2 + 5), on ? "#ffd29a" : col, size, "center", "700");
-  if (sub) T(sub, x + w / 2, y + h / 2 + 18, COL.dim, 11, "center");
+  T(s, x + w / 2, y + (sub ? h / 2 : h / 2 + 5), on ? "#ffd29a" : col, fitSz(s, w - 10, size, "700"), "center", "700");
+  if (sub) T(sub, x + w / 2, y + h / 2 + 18, COL.dim, fitSz(sub, w - 8, 11, "500"), "center");
   hits.push({x, y, w, h, act});
 }
 const ratioCol = f => f > 0.85 ? COL.rd : f > 0.6 ? COL.ye : COL.gr;

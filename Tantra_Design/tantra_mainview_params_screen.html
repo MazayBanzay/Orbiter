@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тантра: параметры главного вида</title>
+<style>
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:#1a1f24;color:#d8e2ea;font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+#wrap{padding:10px 12px;max-width:1950px;margin:0 auto}
+h1{font-size:16px;margin:0 0 4px;color:#e8eef3}
+.note{font-size:12px;color:#93a3b1}
+#scr{display:block;width:100%;aspect-ratio:1914/800;border-radius:10px;cursor:pointer;background:#0a1311}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Передний экран: параметры главного вида (мокап)</h1>
+  <div class="note">Сначала выбор вида HUD на главном экране: ГОРИЗОНТ, ОРБИТА, СТЫКОВКА или выключен. Ниже опции: цвет и яркость HUD, настройки MFD (яркость, контраст, по свету, разрешение), РСУ, единицы, язык подписей. Всё, что в игре настраивается на страницах НАСТР. и ГЛАВНЫЙ ЭКРАН, собрано здесь.</div>
+  <canvas id="scr" width="1914" height="800"></canvas>
+</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const cv = $("scr"), g = cv.getContext("2d"), W = 1914, H = 800;
+const COL = {bg: "#0a1311", fr: "#1f3a35", tx: "#7fe0d0", dim: "#4f8f86", or: "#ee9a3a", ye: "#e8d35a", rd: "#ff5a4a", gr: "#5ad0a0", wh: "#e8fffa", bl: "#7fb8ff", cy: "#46e2ff"};
+const fmt = (v, d = 0) => v.toLocaleString("ru-RU", {minimumFractionDigits: d, maximumFractionDigits: d});
+const T = (s, x, y, col = COL.tx, size = 15, al = "left", w = "500") => { g.fillStyle = col; g.font = `${w} ${size}px Segoe UI, system-ui`; g.textAlign = al; g.fillText(s, x, y); };
+const fitSz = (s, mw, size, wt) => { while (size > 9) { g.font = `${wt} ${size}px Segoe UI, system-ui`; if (g.measureText(s).width <= mw) break; size -= 0.5; } return size; };
+function frame(x, y, w, h, title) { g.strokeStyle = COL.fr; g.lineWidth = 1.5; g.strokeRect(x, y, w, h); if (title) { g.font = "700 12px Segoe UI"; const tw = g.measureText(title).width; g.fillStyle = COL.bg; g.fillRect(x + 10, y - 9, tw + 16, 18); T(title, x + 18, y + 5, COL.dim, 12, "left", "700"); } }
+const HIT = [];
+function btn(s, x, y, w, h, on, act, col = COL.or, sub = "", size = 16) {
+  g.fillStyle = on ? "#3b2a14" : "#121d1b"; g.fillRect(x, y, w, h); g.strokeStyle = on ? col : "#5a4325"; g.lineWidth = on ? 2 : 1; g.strokeRect(x, y, w, h);
+  T(s, x + w / 2, y + (sub ? h / 2 : h / 2 + 6), on ? "#ffd29a" : col, fitSz(s, w - 12, size, "700"), "center", "700");
+  if (sub) T(sub, x + w / 2, y + h / 2 + 20, COL.dim, fitSz(sub, w - 10, 12, "500"), "center");
+  HIT.push({x, y, w, h, act});
+}
+const S = {view: "ГОРИЗОНТ", pal: 0, hud: 1.0, mfdGain: 1.6, mfdGamma: 0.7, autoLum: true, res: 1024, rcs: "ВРАЩЕНИЕ", units: "СИ", ladder: true, fpm: true, tapes: true, alerts: true};
+const VIEWS = [["ГОРИЗОНТ", "атмосфера и посадка: горизонт, тангаж, вектор скорости, ленты"], ["ОРБИТА", "орбита: прогрейд, нормаль, апоцентр и перицентр"], ["СТЫКОВКА", "сближение: цель, дальность, скорость сближения"], ["ВЫКЛ", "чистый вид без HUD"]];
+const PAL = [["ОРАНЖ + ЦИАН", COL.or, COL.cy], ["ЦИАН + ОРАНЖ", COL.cy, COL.or], ["ИЗУМРУД", COL.tx, COL.gr]];
+function stepper(label, val, x, y, w, minus, plus, note) {
+  T(label, x, y + 26, COL.tx, 17, "left", "700");
+  btn("−", x + w - 260, y, 70, 44, false, minus); btn("+", x + w - 70, y, 70, 44, false, plus);
+  T(val, x + w - 135, y + 30, COL.wh, 22, "center", "700");
+  if (note) T(note, x, y + 50, COL.dim, 12);
+}
+function preview(x, y, w, h) {
+  // a small picture of the main view with the chosen HUD in the chosen colours
+  g.fillStyle = "#0f2b2f"; g.fillRect(x, y, w, h * 0.55); g.fillStyle = "#0c1714"; g.fillRect(x, y + h * 0.55, w, h * 0.45);
+  const [, cP, cA] = PAL[S.pal], a = S.hud, cx = x + w / 2, cy = y + h * 0.55;
+  g.globalAlpha = Math.min(1, 0.4 + 0.5 * a);
+  g.strokeStyle = cP; g.lineWidth = 2;
+  if (S.view === "ГОРИЗОНТ") {
+    g.beginPath(); g.moveTo(x + 20, cy); g.lineTo(x + w - 20, cy); g.stroke();
+    if (S.ladder) for (const p of [-20, -10, 10, 20]) { g.beginPath(); g.moveTo(cx - 60, cy - p * 4); g.lineTo(cx + 60, cy - p * 4); g.stroke(); g.fillStyle = cP; g.font = "600 12px Segoe UI"; g.textAlign = "right"; g.fillText(Math.abs(p), cx - 66, cy - p * 4 + 4); g.textAlign = "left"; g.fillText(Math.abs(p), cx + 66, cy - p * 4 + 4); }
+    g.fillStyle = cA; g.font = "700 14px Segoe UI"; g.textAlign = "left"; g.fillText("ТАНГАЖ +4,0°", x + 70, y + 22); g.textAlign = "right"; g.fillText("КРЕН П 3,0°", x + w - 70, y + 22);
+    if (S.fpm) { g.strokeStyle = cA; g.beginPath(); g.arc(cx, cy - 12, 9, 0, 7); g.stroke(); }
+    if (S.tapes) { g.strokeStyle = cP; g.strokeRect(x + 14, y + 30, 40, h - 60); g.strokeRect(x + w - 54, y + 30, 40, h - 60); }
+  } else if (S.view === "ОРБИТА") {
+    g.beginPath(); g.arc(cx, cy, 16, 0, 7); g.moveTo(cx - 28, cy); g.lineTo(cx - 16, cy); g.moveTo(cx + 16, cy); g.lineTo(cx + 28, cy); g.moveTo(cx, cy - 28); g.lineTo(cx, cy - 16); g.stroke();
+    g.fillStyle = cA; g.font = "600 13px Segoe UI"; g.textAlign = "center"; g.fillText("ПРОГРЕЙД", cx, cy + 40);
+  } else if (S.view === "СТЫКОВКА") {
+    g.strokeRect(cx - 30, cy - 30, 60, 60); g.strokeStyle = cA; g.beginPath(); g.moveTo(cx - 50, cy); g.lineTo(cx + 50, cy); g.moveTo(cx, cy - 50); g.lineTo(cx, cy + 50); g.stroke();
+    g.fillStyle = cA; g.font = "600 13px Segoe UI"; g.textAlign = "center"; g.fillText("ЦЕЛЬ · 120 м · −0,4 м/с", cx, cy + 70);
+  }
+  g.globalAlpha = 1;
+  g.strokeStyle = COL.fr; g.lineWidth = 2; g.strokeRect(x, y, w, h);
+  T("так выглядит главный вид", x + w / 2, y + h + 22, COL.dim, 12, "center");
+}
+function draw() {
+  HIT.length = 0;
+  g.fillStyle = COL.bg; g.fillRect(0, 0, W, H); g.strokeStyle = COL.fr; g.lineWidth = 2; g.strokeRect(5, 5, W - 10, H - 10);
+  T("ПАРАМЕТРЫ ГЛАВНОГО ВИДА", 22, 38, COL.tx, 22, "left", "700");
+  g.fillStyle = COL.gr; g.beginPath(); g.arc(380, 31, 9, 0, 7); g.fill(); T(`вид: ${S.view} · ${PAL[S.pal][0]}`, 396, 38, COL.gr, 15, "left", "700");
+  // ---- the view set ----
+  frame(15, 64, 1100, 230, "ВИД НА ГЛАВНОМ ЭКРАНЕ");
+  VIEWS.forEach(([n, d], i) => btn(n, 34 + i * 268, 90, 252, 110, S.view === n, () => { S.view = n; }, n === "ВЫКЛ" ? COL.dim : COL.or, d, 22));
+  T("слои HUD:", 34, 240, COL.dim, 13, "left", "700");
+  [["ЛЕСТНИЦА ТАНГАЖА", "ladder"], ["ВЕКТОР СКОРОСТИ", "fpm"], ["ЛЕНТЫ", "tapes"], ["ТРЕВОГИ", "alerts"]].forEach(([n, k], i) => btn(n, 140 + i * 240, 220, 226, 50, S[k], () => { S[k] = !S[k]; }, COL.or, "", 14));
+  preview(1140, 80, 740, 330);
+  // ---- the options ----
+  frame(15, 316, 1100, 469, "ОПЦИИ");
+  T("ЦВЕТ HUD", 34, 362, COL.tx, 17, "left", "700");
+  PAL.forEach(([n, a, b], i) => {
+    btn(n, 260 + i * 280, 334, 264, 50, S.pal === i, () => { S.pal = i; });
+    g.fillStyle = a; g.fillRect(270 + i * 280, 376, 120, 4); g.fillStyle = b; g.fillRect(394 + i * 280, 376, 120, 4);
+  });
+  stepper("ЯРКОСТЬ HUD", fmt(S.hud, 1), 34, 404, 1060, () => { S.hud = Math.max(0.4, S.hud - 0.1); S.autoLum = false; }, () => { S.hud = Math.min(1.5, S.hud + 0.1); S.autoLum = false; });
+  stepper("ЯРКОСТЬ MFD", fmt(S.mfdGain, 1), 34, 466, 1060, () => { S.mfdGain = Math.max(1, S.mfdGain - 0.2); S.autoLum = false; }, () => { S.mfdGain = Math.min(3, S.mfdGain + 0.2); S.autoLum = false; });
+  stepper("КОНТРАСТ MFD", fmt(1 / S.mfdGamma, 2), 34, 528, 1060, () => { S.mfdGamma = Math.min(1, S.mfdGamma + 0.05); S.autoLum = false; }, () => { S.mfdGamma = Math.max(0.4, S.mfdGamma - 0.05); S.autoLum = false; });
+  T("ПО СВЕТУ", 34, 616, COL.tx, 17, "left", "700");
+  btn(S.autoLum ? "ВКЛ: день · сумерки · ночь" : "ВЫКЛ: вручную", 260, 590, 400, 46, S.autoLum, () => { S.autoLum = !S.autoLum; });
+  T("РАЗРЕШЕНИЕ MFD", 690, 616, COL.tx, 17, "left", "700");
+  btn("1024", 880, 590, 100, 46, S.res === 1024, () => { S.res = 1024; }); btn("2048", 994, 590, 100, 46, S.res === 2048, () => { S.res = 2048; });
+  T("РСУ", 34, 680, COL.tx, 17, "left", "700");
+  ["ВРАЩЕНИЕ", "ЛИНЕЙНОЕ", "ВЫКЛ"].forEach((n, i) => btn(n, 260 + i * 200, 654, 186, 46, S.rcs === n, () => { S.rcs = n; }));
+  T("ЕДИНИЦЫ", 34, 744, COL.tx, 17, "left", "700");
+  ["СИ", "СИ + узлы/футы"].forEach((n, i) => btn(n, 260 + i * 260, 718, 246, 46, S.units === n, () => { S.units = n; }));
+  // ---- the right column: what the settings act on ----
+  frame(1140, 440, 740, 345, "ЧТО МЕНЯЕТСЯ");
+  [["главный экран", `HUD «${S.view}», цвет ${PAL[S.pal][0].toLowerCase()}`], ["MFD 1–6", `яркость ${fmt(S.mfdGain, 1)}, контраст ${fmt(1 / S.mfdGamma, 2)}, ${S.res} px`],
+   ["освещение", S.autoLum ? "следует за светом у корабля" : "вручную"], ["РСУ", S.rcs.toLowerCase()], ["единицы", S.units]]
+    .forEach((r, i) => { T(r[0], 1160, 490 + i * 52, COL.dim, 14); T(r[1], 1860, 490 + i * 52, COL.wh, 17, "right", "700"); });
+  T("настройки сохраняются со сценарием", 1160, 760, COL.dim, 12);
+}
+cv.addEventListener("pointerdown", e => {
+  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
+  for (const h of HIT) if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) { h.act(); return; }
+});
+setInterval(draw, 60);
+</script>
+</body>
+</html>

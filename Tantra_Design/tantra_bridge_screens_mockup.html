@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Экраны на мониторах</title>
+<style>
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:#1a1f24;color:#d8e2ea;font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+#wrap{padding:10px 12px;max-width:1700px;margin:0 auto}
+h1{font-size:16px;margin:0 0 4px;color:#e8eef3}
+h2{font-size:13px;margin:16px 0 6px;color:#93a3b1;text-transform:uppercase;letter-spacing:.04em}
+.note{font-size:12px;color:#93a3b1;max-width:1100px}
+.row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+canvas{display:block;border-radius:6px;background:#0a1311;cursor:pointer}
+.cap{font-size:12px;color:#93a3b1;margin-top:4px}
+.btns{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;align-items:center}
+button{font:inherit;padding:5px 9px;border:1px solid #3a4652;border-radius:6px;background:#26303a;color:#d8e2ea;cursor:pointer}
+button.on{background:#2b6cb0;border-color:#2b6cb0;color:#fff}
+#hidden{position:absolute;left:-6000px;top:0;width:1700px}
+#hidden iframe{width:1700px;height:1500px;border:0}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Экраны механизации, тепла и двигателей на боковых мониторах — мокап</h1>
+  <div class="note">Всё на одной странице в одном масштабе: сантиметр монитора равен сантиметру райзера, поэтому размеры текста можно сравнить напрямую.
+  Боковой изогнутый монитор 75,5 × 52 см. Внизу ряд кнопок режимов, к прежним добавлены ТЕПЛО и ДВИГАТЕЛИ; ряд стал ниже, подписи подгоняются под кнопку. Экран мокапа 1600 × 800 занимает всю ширину монитора, над ним в режиме МЕХАНИЗАЦИЯ стоит шкала положений с кнопками, в остальных режимах строка состояния.
+  Кегль 14 на мониторе даёт 6,5 мм, на райзере было 4 мм. Экраны живые: кнопки режимов и кнопки самих экранов нажимаются.</div>
+  <div class="btns"><span class="note">Масштаб показа</span><span id="scB" class="btns" style="margin:0"></span></div>
+  <h2>Левый боковой монитор (на правом то же, режим у каждого свой)</h2>
+  <div class="row">
+    <div><canvas id="mon"></canvas><div class="cap" id="monCap"></div></div>
+  </div>
+  <h2>Для сравнения в том же масштабе: левый райзер (80,6 × 22,8 см) и левая полка (56 × 20 см)</h2>
+  <div class="row">
+    <div><canvas id="riser"></canvas><div class="cap">Райзер: так экран механизации стоял в игре, отсюда нечитаемость. Предлагаю вернуть на райзер прежние секции и ПОЛОЖЕНИЕ.</div></div>
+    <div><canvas id="shelf"></canvas><div class="cap">Полка: пульт положений (шкала и кнопки) остаётся здесь. Кнопки 6–7 см, их видно и в игре.</div></div>
+  </div>
+  <h2>Вариант B — новые габариты (по твоим снимкам): левая панель с блоком 3 MFD сверху и большим экраном, центральный экран крупнее</h2>
+  <div class="note">Размеры прикинуты по красным рамкам на снимках, их нужно подтвердить.
+  Левая панель: около 116 × 96 см, на месте нынешнего монитора, райзера и полки. Вверху три MFD (по 36 × 28 см). Под ними большой экран 116 × 58 см, мокап 1600 × 800 на всю ширину, кегль 14 = 10 мм. Внизу ряд режимов.
+  Пульт положений стал отдельным режимом ПУЛЬТ: полка ушла под панель. Центральный экран около 128 × 60 см вместо 99 × 42.</div>
+  <div class="row"><div><canvas id="bridgeB"></canvas><div class="cap" id="capB"></div></div></div>
+</div>
+<div id="hidden">
+  <iframe id="fMech" src="tantra_mech_screen.html"></iframe>
+  <iframe id="fTherm" src="tantra_thermal_screen.html"></iframe>
+  <iframe id="fEng" src="tantra_engines_screen.html"></iframe>
+</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const COL = {bg: "#0a1311", fr: "#1f3a35", tx: "#7fe0d0", dim: "#4f8f86", or: "#ee9a3a", bezel: "#1c1816"};
+const MODES = ["MFD", "РАБ. ТЕЛО", "ЭНЕРГОУСТ.", "ЭКИПАЖ", "ЛИФТЫ", "МЕХАНИЗАЦИЯ", "ТЕПЛО", "ДВИГАТЕЛИ", "НАСТР."];
+const LIVE = {"МЕХАНИЗАЦИЯ": ["fMech", "top"], "ТЕПЛО": ["fTherm", "scr"], "ДВИГАТЕЛИ": ["fEng", "scr"]};
+let mode = "МЕХАНИЗАЦИЯ", PXCM = 14;   // display pixels per centimetre
+const MON = {w: 75.5, h: 52.0}, RIS = {w: 80.6, h: 22.83}, SHELF = {w: 56, h: 20};
+// the monitor in its own units (as the game: 1024 x 704, mode keys at the bottom)
+const MU = {w: 1024, h: 704, keysY: 648, keysH: 50};
+function src(name) { const [f, id] = LIVE[name] || []; if (!f) return null; try { return $(f).contentDocument.getElementById(id); } catch (e) { return null; } }
+function frameOf(name) { const [f] = LIVE[name] || []; return f ? $(f) : null; }
+const hitsMon = [];
+function drawMon() {
+  const PM_ = Math.min(PXCM, ($("wrap").clientWidth - 30) / MON.w), c = $("mon"), W = Math.round(MON.w * PM_), H = Math.round(MON.h * PM_);
+  if (c.width !== W) { c.width = W; c.height = H; c.style.width = W + "px"; c.style.height = H + "px"; }
+  const g = c.getContext("2d"), k = W / MU.w;
+  g.fillStyle = COL.bezel; g.fillRect(0, 0, W, H);
+  hitsMon.length = 0;
+  // the content area: the mockup screen at full width at the bottom, the band above it used: the position scale of the
+  // mechanisation (its pult's top row), or a status line for the other modes
+  const cx0 = 8 * k, cw = (MU.w - 16) * k, top = 8 * k, bottom = (MU.keysY - 6) * k;
+  const s = src(mode);
+  g.fillStyle = COL.bg; g.fillRect(cx0, top, cw, bottom - top);
+  if (s) {
+    const sh = cw * s.height / s.width, sy = bottom - sh;
+    g.drawImage(s, cx0, sy, cw, sh);
+    hitsMon.push({x: cx0, y: sy, w: cw, h: sh, live: mode});
+    const bandH = sy - top - 4 * k;
+    let low = null; try { low = $("fMech").contentDocument.getElementById("low"); } catch (e) {}
+    if (mode === "МЕХАНИЗАЦИЯ" && low) {
+      const c0 = 44, c1 = 218, sc = Math.min(cw / low.width, bandH / (c1 - c0)), dw = low.width * sc, dh = (c1 - c0) * sc, dx = cx0 + (cw - dw) / 2, dy = top + 2 * k;
+      g.drawImage(low, 0, c0, low.width, c1 - c0, dx, dy, dw, dh);
+      hitsMon.push({x: dx, y: dy, w: dw, h: dh, pult: [c0, c1]});
+    } else {
+      g.fillStyle = COL.tx; g.font = `700 ${Math.round(16 * k)}px Segoe UI`; g.textAlign = "left";
+      g.fillText(mode, cx0 + 14 * k, top + bandH / 2 + 6 * k);
+      g.fillStyle = COL.dim; g.font = `${Math.round(13 * k)}px Segoe UI`; g.textAlign = "right";
+      g.fillText("Т+00:09:12 · тревог нет", cx0 + cw - 14 * k, top + bandH / 2 + 5 * k);
+    }
+  } else {
+    g.fillStyle = "#6a7480"; g.font = `${Math.round(18 * k)}px Segoe UI`; g.textAlign = "center";
+    g.fillText(`${mode}: как сейчас в игре (не меняется)`, cx0 + cw / 2, (top + bottom) / 2);
+  }
+  // the mode keys
+  const n = MODES.length, kw = (MU.w - 16) / n;
+  MODES.forEach((m, i) => {
+    const x = (8 + i * kw + 3) * k, y = MU.keysY * k, w = (kw - 6) * k, h = MU.keysH * k, on = m === mode, neu = LIVE[m];
+    g.fillStyle = on ? "#3b2a14" : "#121d1b"; g.fillRect(x, y, w, h);
+    g.strokeStyle = on ? COL.or : neu ? "#8a6a35" : "#5a4325"; g.lineWidth = on ? 2 : 1; g.strokeRect(x, y, w, h);
+    let fs = 14 * k; g.font = `700 ${Math.round(fs)}px Segoe UI`;
+    while (g.measureText(m).width > w - 10 * k && fs > 8) { fs -= 0.5; g.font = `700 ${Math.round(fs)}px Segoe UI`; }
+    g.fillStyle = on ? "#ffd29a" : COL.or; g.textAlign = "center";
+    g.fillText(m, x + w / 2, y + h / 2 + fs * 0.36);
+    hitsMon.push({x, y, w, h, mode: m});
+  });
+  const px14 = 14 * cw / 1600 / PM_ * 10;
+  $("monCap").textContent = `Монитор 75,5 × 52 см. Кегль 14 мокапа здесь ${px14.toFixed(1).replace(".", ",")} мм. Нажимайте кнопки режимов и кнопки внутри экрана.`;
+}
+function drawRiser() {
+  const c = $("riser"), W = Math.round(RIS.w * PXCM), H = Math.round(RIS.h * PXCM);
+  if (c.width !== W) { c.width = W; c.height = H; c.style.width = W + "px"; c.style.height = H + "px"; }
+  const g = c.getContext("2d");
+  g.fillStyle = COL.bezel; g.fillRect(0, 0, W, H);
+  const s = src("МЕХАНИЗАЦИЯ"), h0 = H - 0.6 * PXCM, w0 = h0 * 2;
+  if (s) g.drawImage(s, 0.3 * PXCM, 0.3 * PXCM, w0, h0);
+  g.fillStyle = "#0b1410"; g.fillRect(w0 + 0.8 * PXCM, 0.3 * PXCM, W - w0 - 1.1 * PXCM, h0);
+  g.fillStyle = COL.or; g.font = `${Math.round(0.45 * PXCM)}px Segoe UI`; g.textAlign = "left";
+  g.fillText("ПОЛОЖЕНИЕ", w0 + 1.1 * PXCM, 1.0 * PXCM);
+  g.strokeStyle = "#ff5a4a"; g.lineWidth = 2; g.strokeRect(0.3 * PXCM, 0.3 * PXCM, w0, h0);
+  g.fillStyle = "#ff5a4a"; g.font = `700 ${Math.round(0.5 * PXCM)}px Segoe UI`; g.fillText("было: кегль 14 = 4 мм", 0.6 * PXCM, H - 0.6 * PXCM);
+}
+const hitsShelf = [];
+function drawShelf() {
+  const c = $("shelf"), W = Math.round(SHELF.w * PXCM), H = Math.round(SHELF.h * PXCM);
+  if (c.width !== W) { c.width = W; c.height = H; c.style.width = W + "px"; c.style.height = H + "px"; }
+  const g = c.getContext("2d");
+  g.fillStyle = COL.bezel; g.fillRect(0, 0, W, H);
+  let s = null; try { s = $("fMech").contentDocument.getElementById("low"); } catch (e) {}
+  hitsShelf.length = 0;
+  if (s) { const w = W - 0.4 * PXCM, h = w * s.height / s.width, y = (H - h) / 2; g.drawImage(s, 0.2 * PXCM, y, w, h); hitsShelf.push({x: 0.2 * PXCM, y, w, h}); }
+}
+// clicks into the mockup pages: the same point on their own canvas
+function forward(frame, canvasEl, fx, fy) {
+  const r = canvasEl.getBoundingClientRect();
+  const x = r.left + fx * r.width, y = r.top + fy * r.height;
+  const win = frame.contentWindow;
+  const o = {clientX: x, clientY: y, bubbles: true, pointerId: 1};
+  canvasEl.dispatchEvent(new win.PointerEvent("pointerdown", o));
+  canvasEl.dispatchEvent(new win.PointerEvent("pointerup", o));
+  canvasEl.dispatchEvent(new win.MouseEvent("click", o));
+}
+$("mon").addEventListener("click", e => {
+  const r = e.target.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  for (const h of hitsMon) if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) {
+    if (h.mode) { mode = h.mode; return; }
+    if (h.pult) { const low = $("fMech").contentDocument.getElementById("low"); const fy = (h.pult[0] + (y - h.y) / h.h * (h.pult[1] - h.pult[0])) / low.height; forward($("fMech"), low, (x - h.x) / h.w, fy); return; }
+    const f = frameOf(h.live), s = src(h.live); if (f && s) forward(f, s, (x - h.x) / h.w, (y - h.y) / h.h); return;
+  }
+});
+$("shelf").addEventListener("click", e => {
+  const r = e.target.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  for (const h of hitsShelf) if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) {
+    const s = $("fMech").contentDocument.getElementById("low"); forward($("fMech"), s, (x - h.x) / h.w, (y - h.y) / h.h);
+  }
+});
+function scales() { $("scB").innerHTML = ""; for (const v of [10, 14, 18]) { const b = document.createElement("button"); b.textContent = `${v} пикс/см`; if (PXCM === v) b.classList.add("on"); b.onclick = () => { PXCM = v; scales(); }; $("scB").appendChild(b); } }
+
+// ---- variant B: the new left panel and the bigger centre screen ----
+const LB = {w: 116, h: 96, mfdH: 28, scrH: 58, keysH: 8}, CB = {w: 128, h: 60};
+const MODES_B = ["МЕХАНИЗАЦИЯ", "ПУЛЬТ", "ТЕПЛО", "ДВИГАТЕЛИ", "РАБ. ТЕЛО", "ЭНЕРГОУСТ.", "ЭКИПАЖ", "ЛИФТЫ", "НАСТР."];
+let modeB = "МЕХАНИЗАЦИЯ";
+const hitsB = [];
+function srcB(m) { if (m === "ПУЛЬТ") { try { return $("fMech").contentDocument.getElementById("low"); } catch (e) { return null; } } return src(m); }
+function frameB(m) { return m === "ПУЛЬТ" ? $("fMech") : frameOf(m); }
+function fakeMfd(g, x, y, w, h, n, P) {
+  g.fillStyle = "#121212"; g.fillRect(x, y, w, h);
+  const bw = 2.6 * P, dx = x + bw + 0.6 * P, dy = y + 2.2 * P, dw = w - 2 * (bw + 0.6 * P), dh = h - 6.2 * P;
+  g.fillStyle = "#000"; g.fillRect(dx, dy, dw, dh); g.strokeStyle = "#a0601e"; g.lineWidth = 1; g.strokeRect(dx, dy, dw, dh);
+  for (let i = 0; i < 6; i++) for (const sx of [x + 0.3 * P, x + w - bw - 0.3 * P]) { g.fillStyle = "#1c1c1c"; g.fillRect(sx, dy + i * dh / 6 + 0.3 * P, bw, dh / 6 - 0.6 * P); g.strokeStyle = "#5a4325"; g.strokeRect(sx, dy + i * dh / 6 + 0.3 * P, bw, dh / 6 - 0.6 * P); }
+  ["PWR", "SEL", "MNU"].forEach((t, i) => { const bx = dx + i * dw / 3 + 0.5 * P; g.fillStyle = "#1c1c1c"; g.fillRect(bx, y + h - 3.4 * P, dw / 3 - P, 2.6 * P); g.fillStyle = "#c04040"; g.font = `${Math.round(0.9 * P)}px Segoe UI`; g.textAlign = "center"; g.fillText(t, bx + dw / 6 - 0.5 * P, y + h - 1.7 * P); });
+  g.fillStyle = "#3ee06a"; g.font = `${Math.round(1.1 * P)}px Consolas, monospace`; g.textAlign = "left";
+  const lines = n === 1 ? ["Orbit: Earth", "SMa 3.190M", "PeR 8.337k", "ApR 6.372M", "Ecc 0.9974", "Inc 28.19°"] : n === 2 ? ["Surface: Earth", "ALT 0.02", "VS +0.00", "GS 0.00", "AOA -0.0", "HDG 090"] : ["HSI / Map", "VOR  ---", "ILS  ---", "BRG  ---", "DST  ---", ""];
+  lines.forEach((t, i) => g.fillText(t, dx + 0.8 * P, dy + 1.8 * P + i * 1.6 * P));
+  g.fillStyle = "#8a8a8a"; g.font = `600 ${Math.round(1.1 * P)}px Segoe UI`; g.textAlign = "center"; g.fillText("MFD " + n, x + w / 2, y + 1.6 * P);
+}
+function drawB() {
+  const P = Math.min(PXCM, ($("wrap").clientWidth - 30) / (LB.w + CB.w + 6)), gap = 6 * P, W = Math.round((LB.w + CB.w) * P + gap), H = Math.round(LB.h * P);
+  const c = $("bridgeB");
+  if (c.width !== W || c.height !== H) { c.width = W; c.height = H; c.style.width = W + "px"; c.style.height = H + "px"; }
+  const g = c.getContext("2d");
+  g.fillStyle = "#1a1f24"; g.fillRect(0, 0, W, H);
+  hitsB.length = 0;
+  // left panel
+  g.fillStyle = COL.bezel; g.fillRect(0, 0, LB.w * P, LB.h * P);
+  const mw = (LB.w - 2) / 3;
+  for (let i = 0; i < 3; i++) fakeMfd(g, (1 + i * mw + 0.4) * P, 0.6 * P, (mw - 0.8) * P, (LB.mfdH - 1.2) * P, i + 1, P);
+  const sy = LB.mfdH * P, sw = LB.w * P - 1.2 * P, sh = (LB.scrH - 0.6) * P;
+  g.fillStyle = COL.bg; g.fillRect(0.6 * P, sy, sw, sh);
+  const s = srcB(modeB);
+  if (s) {
+    const ar = s.width / s.height; let w = sw, h = sw / ar; if (h > sh) { h = sh; w = sh * ar; }
+    const x = 0.6 * P + (sw - w) / 2, y = sy + (sh - h) / 2;
+    g.drawImage(s, x, y, w, h); hitsB.push({x, y, w, h, live: modeB});
+  } else { g.fillStyle = "#6a7480"; g.font = `${Math.round(1.6 * P)}px Segoe UI`; g.textAlign = "center"; g.fillText(`${modeB}: прежняя страница`, LB.w * P / 2, sy + sh / 2); }
+  const ky = (LB.mfdH + LB.scrH) * P, kw = (LB.w - 1.2) / MODES_B.length;
+  MODES_B.forEach((m, i) => {
+    const x = (0.6 + i * kw + 0.25) * P, y = ky + 0.6 * P, w = (kw - 0.5) * P, h = (LB.keysH - 1.4) * P, on = m === modeB;
+    g.fillStyle = on ? "#3b2a14" : "#121d1b"; g.fillRect(x, y, w, h); g.strokeStyle = on ? COL.or : "#5a4325"; g.lineWidth = on ? 2 : 1; g.strokeRect(x, y, w, h);
+    g.fillStyle = on ? "#ffd29a" : COL.or; g.font = `700 ${Math.round(1.25 * P)}px Segoe UI`; g.textAlign = "center"; g.fillText(m, x + w / 2, y + h / 2 + 0.45 * P);
+    hitsB.push({x, y, w, h, mode: m});
+  });
+  g.fillStyle = COL.dim; g.font = `${Math.round(1.0 * P)}px Segoe UI`; g.textAlign = "left"; g.fillText("ЛЕВАЯ ПАНЕЛЬ ~116 × 96 см", 0.8 * P, H - 0.3 * P);
+  // centre screen
+  const cx0 = LB.w * P + gap, cy0 = (LB.h - CB.h) * P / 2;
+  g.fillStyle = COL.bezel; g.fillRect(cx0, cy0, CB.w * P, CB.h * P);
+  const z = [[0, 0.245, "ГЛАВНЫЙ ЭКРАН · HUD · РСУ"], [0.25, 0.755, "ПОЛЁТ (атмосфера / космос)"], [0.76, 1, "ДВИГАТЕЛИ · тяга, топливо"]];
+  z.forEach(([a, b, t]) => {
+    const x = cx0 + (0.6 + a * (CB.w - 1.2)) * P, w = (b - a) * (CB.w - 1.2) * P - 0.6 * P;
+    g.fillStyle = "#0b1410"; g.fillRect(x, cy0 + 0.6 * P, w, CB.h * P - 1.2 * P); g.strokeStyle = COL.fr; g.strokeRect(x, cy0 + 0.6 * P, w, CB.h * P - 1.2 * P);
+    g.fillStyle = COL.tx; g.font = `700 ${Math.round(1.4 * P)}px Segoe UI`; g.textAlign = "center"; g.fillText(t, x + w / 2, cy0 + 3 * P);
+    g.fillStyle = COL.dim; g.font = `${Math.round(1.1 * P)}px Segoe UI`; g.fillText(`${Math.round((b - a) * CB.w)} × ${CB.h} см`, x + w / 2, cy0 + 5 * P);
+  });
+  g.strokeStyle = "#5a7a9a"; g.setLineDash([6, 5]); g.strokeRect(cx0 + (CB.w - 99) / 2 * P, cy0 + (CB.h - 42) * P / 2, 99 * P, 42 * P); g.setLineDash([]);
+  g.fillStyle = "#7fb8ff"; g.font = `${Math.round(1.0 * P)}px Segoe UI`; g.textAlign = "left";
+  g.fillText("пунктир — нынешний центральный экран 99 × 42 см", cx0 + 1 * P, cy0 + CB.h * P - 1.2 * P);
+  g.fillStyle = COL.dim; g.fillText("ЦЕНТРАЛЬНЫЙ ЭКРАН ~128 × 60 см", cx0, cy0 - 0.5 * P);
+  $("capB").textContent = `Большой экран 116 × 58 см: кегль 14 мокапа = ${(14 * 116 / 1600 * 10).toFixed(1).replace(".", ",")} мм (монитор A — 6,5 мм, райзер — 4 мм). Режимы и кнопки экранов нажимаются.`;
+}
+$("bridgeB").addEventListener("click", e => {
+  const r = e.target.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  for (const h of hitsB) if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) {
+    if (h.mode) { modeB = h.mode; return; }
+    const f = frameB(h.live), s = srcB(h.live); if (f && s) forward(f, s, (x - h.x) / h.w, (y - h.y) / h.h); return;
+  }
+});
+setInterval(drawB, 100);
+scales();
+setInterval(() => { drawMon(); drawRiser(); drawShelf(); }, 100);
+</script>
+</body>
+</html>
