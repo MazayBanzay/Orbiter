@@ -20,7 +20,7 @@ set LFLAGS=/LIBPATH:"%SDK%\lib" orbiter.lib Orbitersdk.lib "%SDK%\XRSound\XRSoun
 
 set A=%ROOT%orbiter2016
 cl %CFLAGS% /Fo"%OUT%\\" /Fe"%OUT%\Tantra.dll" ^
- "%ROOT%core\Ignition.cpp" "%ROOT%core\Drive.cpp" "%ROOT%core\ExhaustModel.cpp" "%ROOT%core\Carriage.cpp" "%ROOT%core\Legs.cpp" "%ROOT%core\Aero.cpp" "%ROOT%core\Damage.cpp" "%ROOT%core\Radiation.cpp" ^
+ "%ROOT%core\Ignition.cpp" "%ROOT%core\Drive.cpp" "%ROOT%core\ExhaustModel.cpp" "%ROOT%core\Carriage.cpp" "%ROOT%core\Legs.cpp" "%ROOT%core\Aero.cpp" "%ROOT%core\Damage.cpp" "%ROOT%core\Radiation.cpp" "%ROOT%core\Plant.cpp" ^
  "%A%\Tantra.cpp" "%A%\TantraPanel.cpp" "%A%\TantraExhaust.cpp" "%A%\TantraSafety.cpp" "%A%\TantraGear.cpp" "%A%\TantraPort.cpp" "%A%\TantraCrew.cpp" "%A%\TantraLift.cpp" "%A%\TantraWalk.cpp" "%A%\TantraScreen.cpp" "%A%\TantraInterior.cpp" "%A%\TantraDisplays.cpp" "%SDK%\samples\ShipView\ViewScreen.cpp" "%SDK%\samples\ShipView\ShipMfd.cpp" ^
  /link %LFLAGS%
 if errorlevel 1 (echo BUILD FAILED & exit /b 1)

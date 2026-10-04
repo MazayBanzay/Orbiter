@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тантра: механизация</title>
+<style>
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:#1a1f24;color:#d8e2ea;font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+#wrap{padding:10px 12px;max-width:1700px;margin:0 auto}
+h1{font-size:16px;margin:0 0 4px;color:#e8eef3}
+h2{font-size:13px;margin:12px 0 4px;color:#93a3b1;text-transform:uppercase;letter-spacing:.04em}
+.note{font-size:12px;color:#93a3b1}
+canvas{display:block;width:100%;border-radius:10px;cursor:pointer;background:#0a1311}
+#top{aspect-ratio:1600/800}#low{aspect-ratio:1600/400;margin-top:10px}
+.btns{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;align-items:center}
+button{font:inherit;padding:5px 9px;border:1px solid #3a4652;border-radius:6px;background:#26303a;color:#d8e2ea;cursor:pointer}
+button.on{background:#2b6cb0;border-color:#2b6cb0;color:#fff}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Механизация — мокап v2: экран (левый МФД) и нижний пульт</h1>
+  <div class="note">Положение и шасси — одна узкая полоса сверху, без повторов. Положения задаются на пульте одной горящей шкалой с четырьмя кнопками:
+  В ГОРИЗОНТ · НА НОГИ · 75° · ВЗЛЁТНОЕ. Фазы те же; корабль идёт до выбранной кнопки и останавливается. Остальной экран — опоры с нагрузками и механизмы корпуса.</div>
+  <h2>Экран механизации</h2>
+  <canvas id="top" width="1600" height="800"></canvas>
+  <h2>Нижний пульт</h2>
+  <canvas id="low" width="1600" height="400"></canvas>
+  <div class="btns"><span class="note">Ускорение мокапа</span><span id="spdB" class="btns" style="margin:0"></span></div>
+</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const COL = {bg: "#0a1311", fr: "#1f3a35", tx: "#7fe0d0", dim: "#4f8f86", or: "#ee9a3a", ye: "#e8d35a", rd: "#ff5a4a", gr: "#5ad0a0", wh: "#e8fffa", bl: "#7fb8ff", hull: "#3a4a52", leg: "#5b8cc8"};
+const fmt = (v, d = 1) => isFinite(v) ? v.toLocaleString("ru-RU", {minimumFractionDigits: d, maximumFractionDigits: d}) : "—";
+const G = 9.81, MASS = 52.34e6, SCG = 58.1, TRACK0 = 53.4, FOOT_H = 5.2, AXIS0 = 24.0, HTOP = SCG + 22.5;
+// the erection phases, as in the game: lift 20 s, trunnions and rails 20 s, the turn 45 s, stern legs 20 s, the load 8 s, blades home 20 s
+const PH = [20, 20, 45, 20, 8, 20];
+const PH_NAME = ["лежит на лопастях и кенгуру", "подъём на лопастях", "цапфы под ЦМ, кенгуру в карман", "поворот вокруг цапф", "кормовые ноги выходят", "нагрузка на корму", "лопасти убираются", "стоит на корме"];
+const PH_SHORT = ["подъём", "цапфы", "поворот", "лапы", "нагрузка", "сбор"];
+const WING_TXT = ["развёрнуты 90°", "подняты 30°", "сложены"], WING_DEG = [0, 30, 85];
+const ease = u => { u = Math.max(0, Math.min(1, u)); return u * u * u * (10 + u * (-15 + 6 * u)); };
+function easeInv(y) { let lo = 0, hi = 1; for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (ease(m) < y) lo = m; else hi = m; } return (lo + hi) / 2; }
+// the four positions on the one scale (the carriage progress P, 0..6)
+const POS = [
+  {t: "В ГОРИЗОНТ", sub: "лёжа на лопастях", P: 0},
+  {t: "НА НОГИ", sub: "подъём до верхней точки", P: 1},
+  {t: "75°", sub: "стела: подъём и поворот", P: 2 + easeInv(75 / 90)},
+  {t: "ВЗЛЁТНОЕ", sub: "на 4 кормовых ногах", P: 6},
+];
+const S = {
+  t: 0, speed: 1, P: 0, PT: 0, gear: 1, gearT: 1, set: "level", port: false, wings: 2, wingPos: 2, podAng: 0, podsOut: false, podGroup: true,
+  irisAna: 0, march: 1, hangar: 0, hangarT: 0, bay: 0, lift: 0, liftT: 0, alarms: [], estop: false, cgRes: 0.3, sway: 0, swayV: 0,
+};
+function alarm(txt, lvl = "warn") { S.alarms.unshift({t: S.t, txt, lvl}); if (S.alarms.length > 8) S.alarms.pop(); }
+const near = (a, b) => Math.abs(a - b) < 1e-4;
+function posAt(P) { return POS.find(q => near(P, q.P)); }
+function pose(P) {
+  const ph = k => Math.max(0, Math.min(1, P - k));
+  const H = P >= 6 ? HTOP : AXIS0 + (HTOP - AXIS0) * ease(ph(0));
+  const hip = TRACK0 + (SCG - 0.3 - TRACK0) * ease(ph(1));
+  const th = Math.PI / 2 * ease(ph(2));
+  const kang = P < 1.5 ? 1 : P < 2 ? 1 - ease((P - 1.5) * 2) : 0;
+  return {H, hip, th, kang, stern: ease(ph(3)), load: ease(ph(4)), stow: ease(ph(5)), mast: H - FOOT_H};
+}
+// seconds left to the target: the wings fold first, then the phases
+function timeLeft() {
+  let t = S.P !== S.PT ? (2 - S.wingPos) * 4 : 0, p = S.P;
+  if (S.PT > p) while (p < S.PT - 1e-9) { const k = Math.floor(p + 1e-9), e = Math.min(S.PT, k + 1); t += (e - p) * PH[k]; p = e; }
+  else while (p > S.PT + 1e-9) { const k = Math.ceil(p - 1e-9) - 1, e = Math.max(S.PT, k); t += (p - e) * PH[k]; p = e; }
+  return t;
+}
+function goTo(q) {
+  if (S.gear < 1) { alarm("Положения: сначала выпустите шасси", "warn"); return; }
+  if (S.hangar > 0.01 || S.lift > 0.01) { alarm("Нельзя: ангар или лифт шлюза не закрыты", "bad"); return; }
+  if (near(S.P, q.P)) return;
+  S.PT = q.P; S.estop = false; S.wings = 2;   // the rule: the wings and the fin fold before the carriage moves
+  alarm(`«${q.t}»: ${S.PT > S.P ? "подъём" : "опускание"}`, "ok");
+}
+function step(dt) {
+  S.t += dt;
+  // the columns' sway (the leg-dynamics model, simplified): the turn's angular acceleration pushes the tops
+  const moving = S.P !== S.PT && !S.estop && S.wingPos >= 2 - 1e-9, u = S.P - 2;
+  const acc = moving && S.P > 2 && S.P < 3 ? (Math.PI / 2) * (60 * u - 180 * u * u + 120 * u * u * u) / (PH[2] * PH[2]) : 0;
+  S.swayV += (-0.4 * S.sway - 0.35 * S.swayV - acc * 9) * dt; S.sway += S.swayV * dt;
+  if (S.estop) return;
+  const drive = (v, tgt, rate) => v + Math.sign(tgt - v) * Math.min(Math.abs(tgt - v), dt * rate);
+  S.gear = drive(S.gear, S.gearT, 1 / 12);
+  S.wingPos = drive(S.wingPos, S.wings, 1 / 4);
+  S.lift = drive(S.lift, S.liftT, 1 / 18);
+  S.hangar = drive(S.hangar, S.hangarT, 1 / 12);
+  S.bay = drive(S.bay, S.port ? 1 : 0, 1 / 10);
+  if (moving && S.gear >= 1) {
+    const up = S.PT > S.P, k = up ? Math.floor(S.P + 1e-9) : Math.ceil(S.P - 1e-9) - 1;
+    const lim = up ? Math.min(S.PT, k + 1) : Math.max(S.PT, k);   // never step over a phase boundary in one tick
+    S.P = up ? Math.min(lim, S.P + dt / PH[k]) : Math.max(lim, S.P - dt / PH[k]);
+    if (S.P === S.PT) {
+      const q = posAt(S.P); alarm(q ? `Положение «${q.t}»` : "Лафет остановлен", "ok");
+      if (S.P >= 6) { S.wings = 0; alarm("Стоит на корме: крылья и перо раскрываются", "ok"); }
+    }
+  }
+  if (S.P >= 1.75 && S.P < 4) S.cgRes += (0.02 - S.cgRes) * Math.min(1, dt / 4); else if (S.P <= 1) S.cgRes = 0.3;
+}
+// loads (Carriage::Statics, simplified): the weight on the blades, the kangaroo and the stern legs
+function loads() {
+  const p = pose(S.P), W = MASS * G, kang = p.kang * 0.25, stern = S.P >= 4 ? p.load : 0;
+  const col = W * (1 - kang) * (1 - stern);
+  return {W, blade: col / 2, kang: W * kang * (1 - stern), leg: W * stern / 4, drive: W * S.cgRes,
+          bend: col / 2 / 1346e6 * (0.5 + 0.5 * p.mast / 80), ratio: {b: col / 2 / 520e6, k: W * kang * (1 - stern) / 175e6, l: W * stern / 4 / 460e6}};
+}
+
+// ================= drawing =================
+const HIT = {top: [], low: []};
+let g = null, hits = null;
+const T = (s, x, y, col = COL.tx, size = 15, al = "left", w = "500") => { g.fillStyle = col; g.font = `${w} ${size}px Segoe UI, system-ui`; g.textAlign = al; g.fillText(s, x, y); };
+function frame(x, y, w, h, title) {
+  g.strokeStyle = COL.fr; g.lineWidth = 1.5; g.strokeRect(x, y, w, h);
+  if (title) { g.font = "700 12px Segoe UI"; const tw = g.measureText(title).width; g.fillStyle = COL.bg; g.fillRect(x + 10, y - 9, tw + 16, 18); T(title, x + 18, y + 5, COL.dim, 12, "left", "700"); }
+}
+function lamp(x, y, on, col = COL.gr) { g.fillStyle = on ? col : "#1c2a27"; g.beginPath(); g.arc(x, y, 6, 0, 7); g.fill(); g.strokeStyle = "#2e4d45"; g.lineWidth = 1; g.stroke(); }
+function btn(s, x, y, w, h, on, act, col = COL.or, sub, size = 14) {
+  g.fillStyle = on ? "#3b2a14" : "#121d1b"; g.fillRect(x, y, w, h); g.strokeStyle = on ? col : "#5a4325"; g.lineWidth = on ? 2 : 1; g.strokeRect(x, y, w, h);
+  T(s, x + w / 2, y + (sub ? h / 2 : h / 2 + 5), on ? "#ffd29a" : col, size, "center", "700");
+  if (sub) T(sub, x + w / 2, y + h / 2 + 18, COL.dim, 11, "center");
+  hits.push({x, y, w, h, act});
+}
+const ratioCol = f => f > 0.85 ? COL.rd : f > 0.6 ? COL.ye : COL.gr;
+// the side thumbnail: ground, blades, kangaroo, stern legs, CG
+function shipThumb(x0, y0, w, h, sc) {
+  const p = pose(S.P), sw = S.sway * 0.25, ox = x0 + w * 0.3, oy = y0 + h - 10;
+  const P = (x, y) => [ox + x * sc, oy - y * sc];
+  g.fillStyle = "#1a2420"; g.fillRect(x0 + 2, oy, w - 4, 8); g.strokeStyle = "#5a5038"; g.lineWidth = 1; g.beginPath(); g.moveTo(x0 + 2, oy); g.lineTo(x0 + w - 2, oy); g.stroke();
+  const top = [sw, p.H], ca = Math.cos(p.th), sa = Math.sin(p.th);
+  const H2W = (s, z) => P(top[0] + (s - p.hip) * ca - z * sa, top[1] + (s - p.hip) * sa + z * ca);
+  if (S.gear > 0.05) { g.globalAlpha = Math.max(0.12, 1 - p.stow); g.strokeStyle = COL.leg; g.lineWidth = 2.5; const f = P(0, FOOT_H), t2 = P(top[0], top[1]); g.beginPath(); g.moveTo(f[0], f[1]); g.lineTo(t2[0], t2[1]); g.stroke(); g.globalAlpha = 1; }
+  g.fillStyle = COL.hull; g.strokeStyle = "#6a8090"; g.lineWidth = 1; g.beginPath();
+  [[0, 7], [120, 7], [178, 0], [140, -7.5], [0, -7.5]].forEach((q, i) => { const r = H2W(q[0], q[1]); i ? g.lineTo(r[0], r[1]) : g.moveTo(r[0], r[1]); }); g.closePath(); g.fill(); g.stroke();
+  const cg = H2W(SCG, 0); g.strokeStyle = COL.rd; g.lineWidth = 1.5; g.beginPath(); g.arc(cg[0], cg[1], 3, 0, 7); g.stroke();
+  if (p.kang > 0.02 && S.gear > 0.5) { const kh = H2W(99.4, -7.5), kf = P(99.4 - TRACK0 + 12, 0); g.globalAlpha = p.kang; g.strokeStyle = "#7a8db0"; g.lineWidth = 2; g.beginPath(); g.moveTo(kh[0], kh[1]); g.lineTo(kf[0], kf[1]); g.stroke(); g.globalAlpha = 1; }
+  if (p.stern > 0.01) { const spt = H2W(0, 0); for (const s of [-1, 1]) { const hg = H2W(30, -9 * s), ft = [spt[0] + s * 27 * sc, oy]; g.strokeStyle = COL.leg; g.lineWidth = 2; g.beginPath(); g.moveTo(hg[0], hg[1]); g.lineTo(hg[0] + (ft[0] - hg[0]) * p.stern, hg[1] + (ft[1] - hg[1]) * p.stern); g.stroke(); } }
+}
+
+function drawTop() {
+  g = $("top").getContext("2d"); hits = HIT.top; hits.length = 0;
+  const W = 1600, H = 800, p = pose(S.P), L = loads(), moving = S.P !== S.PT && !S.estop;
+  g.fillStyle = COL.bg; g.fillRect(0, 0, W, H); g.strokeStyle = COL.fr; g.lineWidth = 2; g.strokeRect(5, 5, W - 10, H - 10);
+  T("МЕХАНИЗАЦИЯ", 22, 38, COL.tx, 22, "left", "700");
+  const at = posAt(S.P), to = posAt(S.PT);
+  const stTxt = S.estop ? "АВАРИЙНЫЙ СТОП · приводы заперты" : moving ? `${S.PT > S.P ? "ПОДЪЁМ" : "ОПУСКАНИЕ"} → «${to ? to.t : "?"}» · ${fmt(timeLeft(), 0)} с` : at ? `ПОЛОЖЕНИЕ «${at.t}»` : "ЛАФЕТ ОСТАНОВЛЕН МЕЖДУ ПОЛОЖЕНИЯМИ";
+  const stCol = S.estop ? COL.rd : moving ? COL.ye : at ? COL.gr : COL.ye;
+  g.fillStyle = stCol; g.beginPath(); g.arc(270, 31, 9, 0, 7); g.fill(); T(stTxt, 286, 38, stCol, 17, "left", "700");
+  T(`${S.port ? "ПОРТ (стол)" : "грунт"} · посадка ${S.set === "level" ? "лёжа" : "на корму"}`, W - 22, 38, COL.dim, 13, "right");
+  // ---- band 1 (~20 % of the screen): the pose and the gear ----
+  frame(15, 62, 1570, 150, "ПОЛОЖЕНИЕ · ШАССИ");
+  shipThumb(25, 74, 330, 132, 0.55);
+  const vals = [["угол корпуса", fmt(p.th * 180 / Math.PI, 0) + "°"], ["цапфы", fmt(p.H, 1) + " м"], ["колонна", fmt(p.mast, 1) + " м"],
+                ["ЦМ от цапф", fmt(S.cgRes, 2) + " м"], ["раскачка", fmt(Math.abs(S.sway) * 10, 0) + " см"], ["фаза", fmt(S.P, 2) + " / 6"]];
+  vals.forEach((v, i) => { const x = 380 + Math.floor(i / 2) * 205, y = 98 + (i % 2) * 28; T(v[0], x, y, COL.dim, 13); T(v[1], x + 185, y, COL.tx, 15, "right", "700"); });
+  T(PH_NAME[S.P >= 6 ? 7 : Math.floor(S.P + 1e-9)], 380, 162, COL.tx, 14, "left", "600");
+  T(moving ? `до положения ${fmt(timeLeft(), 0)} с` : "", 380, 188, COL.ye, 13);
+  const gl = [["шасси", S.gear >= 1 ? "ВЫПУЩЕНО" : S.gear <= 0 ? "убрано" : fmt(S.gear * 100, 0) + " %", S.gear >= 1 ? COL.gr : COL.ye],
+              ["лафет", S.estop ? "ЗАПЕРТ" : moving ? (S.wingPos < 2 - 1e-9 ? "ждёт крылья" : "в движении") : "в покое", S.estop ? COL.rd : moving ? COL.ye : COL.gr],
+              ["посадка", S.set === "level" ? "лёжа" : "на корму", COL.gr], ["стоянка", S.port ? "порт (стол)" : "грунт", COL.gr]];
+  gl.forEach((s, i) => { const x = 1010 + Math.floor(i / 2) * 290, y = 98 + (i % 2) * 28; lamp(x, y - 5, true, s[2]); T(s[0], x + 14, y, COL.dim, 13); T(s[1], x + 270, y, COL.tx, 14, "right", "700"); });
+  T("положения — кнопками на шкале пульта", 1010, 162, COL.dim, 12);
+  // ---- band 2 left: the supports ----
+  frame(15, 228, 790, 330, "ОПОРЫ · НАГРУЗКИ");
+  T("опорная схема (корма ←, нос →), % допуска", 32, 254, COL.dim, 11);
+  const sx = s => 60 + s * 2.85, sy = y => 400 + y * 3;
+  g.strokeStyle = "#2c4a44"; g.lineWidth = 1.5; g.beginPath();
+  [[0, -13.5], [120, -13.5], [178, 0], [120, 13.5], [0, 13.5]].forEach((q, i) => { const X = sx(q[0]), Y = sy(q[1]); i ? g.lineTo(X, Y) : g.moveTo(X, Y); }); g.closePath(); g.stroke();
+  g.setLineDash([4, 4]); g.beginPath(); g.moveTo(sx(0), sy(0)); g.lineTo(sx(178), sy(0)); g.stroke(); g.setLineDash([]);
+  g.strokeStyle = COL.rd; g.beginPath(); g.arc(sx(SCG), sy(0), 5, 0, 7); g.stroke(); T("ЦМ", sx(SCG), sy(0) - 10, COL.rd, 10, "center");
+  const sup = [{n: "Л", s: p.hip, y: -32, f: L.ratio.b, F: L.blade}, {n: "П", s: p.hip, y: 32, f: L.ratio.b, F: L.blade}, {n: "Кн", s: 99.4, y: 0, f: L.ratio.k, F: L.kang},
+               {n: "К1", s: 4, y: -24, f: L.ratio.l, F: L.leg, sh: 1}, {n: "К2", s: 4, y: 24, f: L.ratio.l, F: L.leg, sh: 1}, {n: "К3", s: 24, y: -24, f: L.ratio.l, F: L.leg, sh: 1}, {n: "К4", s: 24, y: 24, f: L.ratio.l, F: L.leg, sh: 1}];
+  sup.forEach(s => {
+    const X = sx(s.s), Y = sy(s.y), r = 22;
+    g.strokeStyle = "#1f332f"; g.lineWidth = 7; g.beginPath(); g.arc(X, Y, r, 0, 7); g.stroke();
+    if (s.f > 0.001) { g.strokeStyle = ratioCol(s.f); g.beginPath(); g.arc(X, Y, r, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, s.f)); g.stroke(); }
+    T(s.n, X, Y + 5, s.f > 0.001 ? COL.wh : COL.dim, 13, "center", "700");
+    T(s.f > 0.001 ? (s.sh ? `${fmt(s.f * 100, 0)} %` : `${fmt(s.F / 1e6, 0)} МН · ${fmt(s.f * 100, 0)} %`) : s.sh ? "—" : "без нагрузки", X, Y + (s.y < 0 ? -r - 8 : r + 17), s.f > 0.001 ? ratioCol(s.f) : COL.dim, 11, "center", "600");
+  });
+  const lr = [["вес", fmt(L.W / 1e6, 0) + " МН", COL.tx], ["лопасти, кажд.", fmt(L.blade / 1e6, 0) + " МН", COL.tx], ["кенгуру", fmt(L.kang / 1e6, 0) + " МН", COL.tx],
+              ["корм. ноги, кажд.", fmt(L.leg / 1e6, 0) + " МН", COL.tx], ["привод цапф", fmt(L.drive / 1e6, 0) + " МН·м", L.drive > 1.5e9 ? COL.ye : COL.tx],
+              ["изгиб лопастей", fmt(L.bend * 100, 0) + " %", ratioCol(L.bend)], ["цапфы", "захват", COL.gr], ["грунт", "осадка в норме", COL.gr]];
+  lr.forEach((r, i) => { const y = 290 + i * 30; T(r[0], 600, y, COL.dim, 12); T(r[1], 792, y, r[2], 13, "right", "700"); });
+  // ---- band 2 right: the hull's mechanisms ----
+  frame(820, 228, 765, 330, "КОРПУС · МЕХАНИЗМЫ");
+  const wTxt = Math.abs(S.wingPos - S.wings) > 1e-6 ? (S.wings === 2 ? "складываются…" : "раскрываются…") : WING_TXT[S.wings];
+  const hull = [["крылья", wTxt, S.wingPos < 1e-6], ["перо (киль)", S.wingPos > 1.5 ? "убрано" : "выдвинуто", S.wingPos <= 1.5],
+    ["гондолы", S.podsOut ? `выдвинуты · сопла ${S.podAng}°` : "утоплены", S.podsOut], ["группа гондол", S.podGroup ? "в группе" : "НЕ В ГРУППЕ", S.podGroup],
+    ["чаши анамезона", S.irisAna > 0.5 ? "ОТКРЫТЫ" : "закрыты", S.irisAna < 0.5], ["маршевая", S.march > 0.5 ? "ВЫДВИНУТА" : "в колодце", true],
+    ["порт", S.port ? `на столе · створки ${fmt(S.bay * 100, 0)} %` : "не используется", true], ["ангар · платформа", S.hangar > 0.99 ? "открыт · у грунта" : S.hangar < 0.01 ? "закрыт" : "…", S.hangar < 0.01],
+    ["шлюз · лифт", S.lift > 0.99 ? "кабина у грунта" : S.lift < 0.01 ? "сложен" : fmt(S.lift * 100, 0) + " %", S.lift < 0.01]];
+  hull.forEach((r, i) => { const y = 262 + i * 32; lamp(840, y - 5, r[2]); T(r[0], 856, y, COL.dim, 13); T(r[1], 1250, y, COL.tx, 14, "right", "700"); });
+  const cx = 1420, cy = 410, k = 4.3;
+  g.fillStyle = "#16241f"; g.strokeStyle = "#3f6a5f"; g.lineWidth = 2; g.beginPath(); g.ellipse(cx, cy, 13.5 * k, 9 * k, 0, 0, 7); g.fill(); g.stroke();
+  const wi = Math.min(1, Math.floor(S.wingPos)), wf = S.wingPos - wi, wa = (WING_DEG[wi] + (WING_DEG[wi + 1] - WING_DEG[wi]) * wf) * Math.PI / 180;
+  g.strokeStyle = COL.or; g.lineWidth = 3;
+  for (const s of [-1, 1]) { g.beginPath(); g.moveTo(cx + s * 13 * k, cy); g.lineTo(cx + s * (13 + 16 * Math.cos(wa)) * k, cy - 16 * Math.sin(wa) * k); g.stroke(); }
+  const fin = Math.max(0, Math.min(1, 2 - S.wingPos)); if (fin > 0) { g.beginPath(); g.moveTo(cx, cy - 9 * k); g.lineTo(cx, cy - (9 + 13 * fin) * k); g.stroke(); }
+  if (S.podsOut) for (const s of [-1, 1]) { g.fillStyle = COL.or; g.beginPath(); g.arc(cx + s * 16 * k, cy + 2 * k, 2.2 * k, 0, 7); g.fill(); }
+  T("вид с кормы", cx, cy + 62, COL.dim, 11, "center");
+  // ---- band 3: warnings and the journal ----
+  frame(15, 574, 780, 210, "ПРЕДУПРЕЖДЕНИЯ");
+  const warn = [];
+  if (S.P !== S.PT && S.wingPos < 2 - 1e-9) warn.push(["крылья и перо складываются — лафет ждёт", COL.ye]);
+  if (S.hangar > 0.01) warn.push(["ангар открыт — положения заперты", COL.ye]);
+  if (S.lift > 0.01) warn.push(["лифт шлюза не сложен — положения заперты", COL.ye]);
+  if (S.gear < 1) warn.push(["шасси не выпущено — положения недоступны", COL.ye]);
+  if (L.bend > 0.85) warn.push(["изгиб лопастей у предела", COL.rd]);
+  if (Math.abs(S.sway) * 10 > 30) warn.push(["раскачка колонн больше 30 см", COL.ye]);
+  if (S.P > 2 && S.P < 4 && !moving) warn.push(["стоит на лопастях без кормовых ног — только в безветрие", COL.ye]);
+  if (S.estop) warn.push(["аварийный стоп — все приводы заперты", COL.rd]);
+  if (!warn.length) warn.push(["нет", COL.gr]);
+  warn.forEach((w, i) => T(w[0], 32, 606 + i * 24, w[1], 14));
+  frame(810, 574, 775, 210, "ЖУРНАЛ");
+  S.alarms.forEach((a, i) => T(`${fmt(a.t, 0)} с  ${a.txt}`, 828, 604 + i * 22, a.lvl === "bad" ? COL.rd : a.lvl === "ok" ? COL.gr : COL.ye, 13));
+}
+
+function drawLow() {
+  g = $("low").getContext("2d"); hits = HIT.low; hits.length = 0;
+  const W = 1600, H = 400, moving = S.P !== S.PT && !S.estop;
+  g.fillStyle = COL.bg; g.fillRect(0, 0, W, H); g.strokeStyle = COL.fr; g.lineWidth = 2; g.strokeRect(5, 5, W - 10, H - 10);
+  T("МЕХАНИЗАЦИЯ · ПУЛЬТ", 22, 34, COL.tx, 18, "left", "700");
+  // ---- the position scale: four buttons on one lit bar ----
+  frame(15, 52, 1570, 160, "ПОЛОЖЕНИЕ");
+  const x0 = 115, x1 = 1300, by = 158, X = P => x0 + (x1 - x0) * P / 6;
+  g.fillStyle = "#0d1715"; g.fillRect(x0, by, x1 - x0, 16); g.strokeStyle = COL.fr; g.lineWidth = 1; g.strokeRect(x0, by, x1 - x0, 16);
+  // the lit fill to the present position: green at rest, amber pulsing on the move
+  const lit = moving ? `rgba(232,190,80,${0.7 + 0.3 * Math.sin(S.t * 6)})` : S.estop ? COL.rd : COL.gr;
+  g.save(); g.shadowColor = lit; g.shadowBlur = 14; g.fillStyle = lit; g.fillRect(x0, by + 2, Math.max(0, X(S.P) - x0), 12); g.restore();
+  if (moving) {   // the run still to go
+    g.strokeStyle = COL.ye; g.lineWidth = 1; g.setLineDash([6, 5]); g.strokeRect(Math.min(X(S.P), X(S.PT)), by + 2, Math.abs(X(S.PT) - X(S.P)), 12); g.setLineDash([]);
+  }
+  for (let k = 0; k <= 6; k++) { g.fillStyle = "#2c4a44"; g.fillRect(X(k) - 1, by + 16, 2, 7); if (k < 6) T(PH_SHORT[k], (X(k) + X(k + 1)) / 2, by + 36, Math.floor(S.P + 1e-9) === k && moving ? COL.ye : COL.dim, 11, "center"); }
+  POS.forEach(q => {
+    const here = near(S.P, q.P), target = near(S.PT, q.P) && moving, bw = 190, bx = Math.max(22, X(q.P) - bw / 2);
+    const col = here ? COL.gr : target ? COL.ye : COL.or;
+    g.strokeStyle = here ? COL.gr : target ? COL.ye : "#3a4a44"; g.lineWidth = 2; g.beginPath(); g.moveTo(X(q.P), 140); g.lineTo(X(q.P), by); g.stroke();
+    g.fillStyle = col; g.beginPath(); g.arc(X(q.P), by + 8, 5, 0, 7); g.fill();
+    btn(q.t, bx, 68, bw, 72, here || target, () => goTo(q), col, here ? "ПОЛОЖЕНИЕ" : target ? `идём · ${fmt(timeLeft(), 0)} с` : q.sub, 16);
+  });
+  btn("СТОП", 1420, 68, 150, 72, false, () => { if (S.P !== S.PT) { S.PT = S.P; alarm("Лафет остановлен между положениями", "warn"); } }, COL.ye, "держать позу", 16);
+  // ---- the other groups ----
+  frame(15, 228, 470, 160, "ШАССИ");
+  btn("ШАССИ", 30, 246, 140, 60, S.gearT >= 1, () => { if (S.P > 0) { alarm("Шасси убирают только лёжа", "warn"); return; } S.gearT = S.gearT >= 1 ? 0 : 1; alarm(S.gearT ? "Шасси выпускается" : "Шасси убирается", "ok"); }, COL.or, S.gear >= 1 ? "выпущено" : S.gear <= 0 ? "убрано" : "…");
+  btn("ЛЁЖА", 180, 246, 140, 60, S.set === "level", () => { if (S.gear > 0) { alarm("Посадку выбирают при убранном шасси", "warn"); return; } S.set = "level"; }, COL.or, "посадка");
+  btn("НА КОРМУ", 330, 246, 140, 60, S.set === "stand", () => { if (S.gear > 0) { alarm("Посадку выбирают при убранном шасси", "warn"); return; } S.set = "stand"; }, COL.or, "посадка");
+  btn("АВАРИЙНЫЙ СТОП", 30, 316, 440, 60, S.estop, () => { S.estop = !S.estop; alarm(S.estop ? "АВАРИЙНЫЙ СТОП: приводы заперты" : "Аварийный стоп снят", S.estop ? "bad" : "ok"); }, COL.rd, S.estop ? "снять" : "все приводы");
+  frame(500, 228, 560, 160, "КОРПУС");
+  btn("КРЫЛЬЯ", 515, 246, 170, 60, S.wings === 0, () => {
+    if (S.gear > 0 && S.P < 6) { alarm("На грунте крылья сложены, раскрываются стоя на корме", "warn"); return; }
+    S.wings = (S.wings + 2) % 3; }, COL.or, WING_TXT[S.wings]);
+  btn("ГОНДОЛЫ", 695, 246, 170, 60, S.podsOut, () => { S.podsOut = !S.podsOut; }, COL.or, S.podsOut ? "выдвинуты" : "утоплены");
+  btn("ГРУППА", 875, 246, 170, 60, S.podGroup, () => { S.podGroup = !S.podGroup; }, COL.or, S.podGroup ? "в группе" : "отдельно");
+  btn("НАЗАД", 515, 316, 125, 60, S.podAng === 0, () => { S.podAng = 0; }, COL.or, "сопла 0°");
+  btn("ВНИЗ", 648, 316, 125, 60, S.podAng === 90, () => { S.podAng = 90; }, COL.or, "сопла 90°");
+  btn("ЧАШИ", 781, 316, 125, 60, S.irisAna > 0.5, () => { S.irisAna = S.irisAna > 0.5 ? 0 : 1; }, "#b59cff", S.irisAna > 0.5 ? "открыты" : "закрыты");
+  btn("МАРШЕВАЯ", 914, 316, 131, 60, S.march > 0.5, () => { S.march = S.march > 0.5 ? 0 : 1; }, COL.or, S.march > 0.5 ? "выдвинута" : "в колодце");
+  frame(1075, 228, 510, 160, "АНГАР · ПОРТ · ШЛЮЗ");
+  btn("АНГАР", 1090, 246, 155, 60, S.hangarT > 0.5, () => { if (S.P > 0) { alarm("Ангар открывается только лёжа", "warn"); return; } S.hangarT = S.hangarT > 0.5 ? 0 : 1; }, COL.or, S.hangar > 0.99 ? "открыт" : S.hangar < 0.01 ? "закрыт" : "…");
+  btn("ПОРТ", 1253, 246, 155, 60, S.port, () => { S.port = !S.port; }, COL.or, S.port ? "на столе" : "грунт");
+  btn("ШЛЮЗ", 1416, 246, 155, 60, S.liftT > 0.5, () => { if (S.P > 0) { alarm("Лифт шлюза — только лёжа", "warn"); return; } S.liftT = S.liftT > 0.5 ? 0 : 1; }, COL.or, S.lift > 0.99 ? "кабина внизу" : S.lift < 0.01 ? "сложен" : "…");
+  btn("ЛИФТ ВВЕРХ", 1090, 316, 236, 60, false, () => { S.liftT = 0; }, COL.or, "кабину на борт");
+  btn("ЛИФТ СТОП", 1335, 316, 236, 60, false, () => { S.liftT = S.lift; }, COL.ye, "держать");
+}
+for (const id of ["top", "low"]) $(id).addEventListener("click", e => {
+  const c = $(id), r = c.getBoundingClientRect(), x = (e.clientX - r.left) * c.width / r.width, y = (e.clientY - r.top) * c.height / r.height;
+  for (const h of HIT[id]) if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) { h.act(); return; }
+});
+const SPEEDS = [1, 2, 5, 10];
+function spd() { $("spdB").innerHTML = ""; for (const v of SPEEDS) { const b = document.createElement("button"); b.textContent = "×" + v; if (S.speed === v) b.classList.add("on"); b.onclick = () => { S.speed = v; spd(); }; $("spdB").appendChild(b); } }
+spd();
+alarm("Положение «В ГОРИЗОНТ»", "ok");
+let last = performance.now();
+setInterval(() => { const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000) * S.speed; last = now; const n = Math.max(1, Math.ceil(dt / 0.05)); for (let i = 0; i < n; i++) step(dt / n); drawTop(); drawLow(); }, 33);
+</script>
+</body>
+</html>

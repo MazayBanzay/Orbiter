@@ -2,6 +2,7 @@
 // Everything is laid out on 1280x720 display units: left parts hang on the left edge, right parts on the right edge,
 // the rest on the centre, so any aspect ratio works. The MFD pages use their own 340x300 units, as in the mockup.
 #include "SuitHud.h"
+#include "LifeSupport.h"
 #include <gcCoreAPI.h>
 #include <algorithm>
 #include <cmath>
@@ -27,7 +28,7 @@ namespace ocrew
 		// light-built: cold blue-white light; electroluminescent: flat blue-green. Accent and red stay as they are.
 		const Palette LOOK_PAL[3] = {
 			{},
-			{ { 0xFFFFF2C4, 0xFF6ACFFF, 0xFFFFFEF4, 0xFFA8986F, 0xFF5A6AFF, 0xFF000000 }, { 2, 1, 2, 6, 3, 6 } },
+			{ { 0xFFFFECB8, 0xFF6AC4FF, 0xFFFFF6E6, 0xFFB89F6F, 0xFF303BFF, 0xFF000000 }, { 2, 1, 2, 6, 3, 6 } },   // photonics (the mockup)
 			{ { 0xFFC8FF5C, 0xFF4AB8FF, 0xFFF0FFC9, 0xFF728A2B, 0xFF4A5AFF, 0xFF000000 }, { 2, 1, 2, 6, 3, 6 } } };
 		// the GRI ring: neon orange gas-discharge digits and lamps in dark helmet hardware (its own iron, not the light display)
 		const Palette GRI_PAL = { { 0xFF3A8AFF, 0xFF4AC0FF, 0xFF70B0FF, 0xFF223A5A, 0xFF2A3BFF, 0xFF080A0B }, { 1, 1, 1, 5, 3, 5 } };
@@ -36,7 +37,7 @@ namespace ocrew
 			{},
 			{ { 0.80f, 0.95f, 1.0f }, {}, { 0.95f, 1.0f, 1.0f }, { 0.75f, 0.95f, 1.1f }, {}, {} },
 			{ { 0.36f, 1.0f, 0.78f }, {}, { 0.80f, 1.0f, 0.94f }, { 0.35f, 0.90f, 0.75f }, {}, {} } };
-		const char* LOOK_NAME[3] = { "ГОЛО", "СВЕТОПОСТР", "ЭЛ" };
+		const char* LOOK_NAME[3] = { "ГОЛО", "ФОТОНИКА", "ЭЛ" };
 		const char* PAL_NAME[3] = { "ЦИАН + ОРАНЖ", "ОРАНЖ + ЦИАН", "БЕЛЫЙ + ОРАНЖ" };
 		const char* PAL_NOTE[3] = { "основной циан, автопилот оранжевый", "основной оранжевый, автопилот циан", "основной белый, автопилот оранжевый" };
 		const double SIZE_BASE[4] = { 9.5, 11, 13, 15 };
@@ -184,12 +185,12 @@ namespace ocrew
 		return w * scale / unit;
 	}
 
-	bool HudText::Draw(oapi::Sketchpad* skp, double x, double y, const std::string& utf8, int size, int colour, int align, double scale) const
+	bool HudText::Draw(oapi::Sketchpad* skp, double x, double y, const std::string& utf8, int size, int colour, int align, double scale, double kx, double ky) const
 	{
 		auto* s2 = Ext(skp);
 		if (!tex || !s2) return false;
-		const double f = scale / unit;
-		double px = x - (align == 1 ? 0.5 : align == 2 ? 1.0 : 0.0) * Width(utf8, size, scale);
+		const double f = scale / unit, fx = f * kx, fy = f * ky;
+		double px = x - (align == 1 ? 0.5 : align == 2 ? 1.0 : 0.0) * Width(utf8, size, scale) * kx;
 		for (unsigned cp : Decode(utf8))
 		{
 			const Glyph* g = Find(size, colour, cp);
@@ -197,11 +198,11 @@ namespace ocrew
 			if (g->w > 0)
 			{
 				RECT src = { g->x, g->y, g->x + g->w, g->y + g->h };
-				const double dx = px + g->ox * f, dy = y + g->oy * f;
-				RECT dst = { static_cast<LONG>(std::lround(dx)), static_cast<LONG>(std::lround(dy)), static_cast<LONG>(std::lround(dx + g->w * f)), static_cast<LONG>(std::lround(dy + g->h * f)) };
+				const double dx = px + g->ox * fx, dy = y + g->oy * fy;
+				RECT dst = { static_cast<LONG>(std::lround(dx)), static_cast<LONG>(std::lround(dy)), static_cast<LONG>(std::lround(dx + g->w * fx)), static_cast<LONG>(std::lround(dy + g->h * fy)) };
 				s2->StretchRect(tex, &src, &dst);
 			}
-			px += g->adv * f;
+			px += g->adv * fx;
 		}
 		return true;
 	}
@@ -224,16 +225,17 @@ namespace ocrew
 		// a shift of the whole display (pixels; 0 - it rides the view). world = true: signs projected through the camera
 		double hx{}, hy{}; bool world{};
 		double clipL{ -1e9 }, clipR{ 1e9 };   // the panel's inner edges in frame units: text is fitted inside
+		double kx{ 1 }, ky{ 1 };              // surface pixels per screen pixel (1 on the screen; the helmet display's square texture)
 		void Frame(double x0, double y0, double scale) { ox = x0; oy = y0; u = scale; }
 		double X(double x) const { return ox + x * u + (world ? 0.0 : hx); }
 		double Y(double y) const { return oy + y * u + (world ? 0.0 : hy); }
-		int IX(double x) const { return static_cast<int>(std::lround(X(x))); }
-		int IY(double y) const { return static_cast<int>(std::lround(Y(y))); }
+		int IX(double x) const { return static_cast<int>(std::lround(X(x) * kx)); }
+		int IY(double y) const { return static_cast<int>(std::lround(Y(y) * ky)); }
 		DWORD C(int c, double a) const { return (P.col[c] & 0xFFFFFF) | (static_cast<DWORD>(std::clamp(a, 0.0, 1.0) * 255) << 24); }
 
 		void Pen(int c, double w, double a, bool dash)
 		{
-			const double px = (std::max)(1.0, w * u * 0.8 * (1 + 0.6 * boost));
+			const double px = (std::max)(1.0, w * u * 0.8 * (1 + 0.6 * boost) * 0.5 * (kx + ky));
 			if (s2) { s2->QuickPen(C(c, a), static_cast<float>(px), dash ? 2 : 1); return; }
 			const unsigned long long key = (static_cast<unsigned long long>(P.col[c] & 0xFFFFFF) << 16) | (static_cast<int>(px) << 1) | (dash ? 1 : 0);
 			oapi::Pen*& p = o.pens[key];
@@ -336,7 +338,7 @@ namespace ocrew
 			const float* tn = look ? LOOK_TINT[look][c] : nullptr;
 			const bool tint = s3 && tn && (tn[0] > 0 || tn[1] > 0);
 			if (tint) { const float k = look == 1 ? static_cast<float>(shimmer) : 1.0f; const oapi::FVECTOR4 b(tn[0] * k, tn[1] * k, tn[2] * k, 1.0f); s3->SetBrightness(&b); }
-			const bool ok = txt.Draw(skp, X(x), Y(y), s, si, P.atlas[c], align, u * sz / SIZE_BASE[si]);
+			const bool ok = txt.Draw(skp, X(x) * kx, Y(y) * ky, s, si, P.atlas[c], align, u * sz / SIZE_BASE[si], kx, ky);
 			if (tint) s3->SetBrightness(nullptr);
 			if (ok) return;
 			const int ph = (std::max)(8, static_cast<int>(sz * u * 1.3));
@@ -392,6 +394,7 @@ namespace ocrew
 		for (auto& f : fonts) if (f.second) oapiReleaseFont(f.second);
 		if (nvCam) Core()->DeleteCustomCamera(nvCam);   // cameras first, then their surface
 		if (nvSrf) oapiDestroySurface(nvSrf);
+		if (modSrf) oapiDestroySurface(modSrf);
 	}
 
 	void SuitHud::Detach()
@@ -399,7 +402,7 @@ namespace ocrew
 		if (nvCam) { Core()->DeleteCustomCamera(nvCam); nvCam = nullptr; }
 	}
 
-	void SuitHud::NightVision(oapi::Sketchpad* skp, VESSEL* v, double W, double H)
+	void SuitHud::NightVision(oapi::Sketchpad* skp, VESSEL* v, double W, double H, double SW, double SH)
 	{
 		if (!gcTried) { gcTried = true; gcOk = Core() != nullptr; }
 		if (!gcOk || !Ext(skp)) { nvNote = "ПНВ недоступен: нужен клиент D3D9"; return; }
@@ -431,7 +434,7 @@ namespace ocrew
 		const oapi::FVECTOR4 bright(static_cast<float>(gain), static_cast<float>(gain), static_cast<float>(gain * 1.04), 1.0f);
 		const oapi::FVECTOR4 gamma(0.55f, 0.55f, 0.55f, 1.0f), noise(0.10f, 0.10f, 0.10f, 0.0f);
 		s3->SetBrightness(&bright); s3->SetRenderParam(oapi::Sketchpad::PRM_GAMMA, &gamma); s3->SetRenderParam(oapi::Sketchpad::PRM_NOISE, &noise);
-		RECT src = { 0, 0, nvW, nvH }, dst = { 0, 0, static_cast<LONG>(W), static_cast<LONG>(H) };
+		RECT src = { 0, 0, nvW, nvH }, dst = { 0, 0, static_cast<LONG>(SW), static_cast<LONG>(SH) };
 		s3->StretchRect(nvSrf, &src, &dst);
 		s3->SetBrightness(nullptr); s3->SetRenderParam(oapi::Sketchpad::PRM_GAMMA, nullptr); s3->SetRenderParam(oapi::Sketchpad::PRM_NOISE, nullptr);
 	}
@@ -439,7 +442,7 @@ namespace ocrew
 	std::string SuitHud::Save() const
 	{
 		char b[96];
-		snprintf(b, sizeof b, "%d %d %d %d %d %d %d %d %d %.2f %d %d", pal, mode, autoMode ? 1 : 0, lpage, rpage, openL ? 1 : 0, openR ? 1 : 0, zoom, brightAuto ? 1 : 0, brightManual, look, mapMono ? 1 : 0);
+		snprintf(b, sizeof b, "%d %d %d %d %d %d %d %d %d %.2f %d %d 2", pal, mode, autoMode ? 1 : 0, lpage, rpage, openL ? 1 : 0, openR ? 1 : 0, zoom, brightAuto ? 1 : 0, brightManual, look, mapMono ? 1 : 0);
 		return b;
 	}
 
@@ -454,6 +457,8 @@ namespace ocrew
 		if (ss >> ba >> bm) { brightAuto = ba != 0; brightManual = std::clamp(bm, 0.0, 1.5); }
 		int lk = 0; if (ss >> lk) look = std::clamp(lk, 0, 2);
 		int mm = 0; if (ss >> mm) mapMono = mm != 0;
+		int ver = 0; ss >> ver;
+		if (ver < 2) look = 1;   // lines saved before photonics became the default: photonics
 	}
 
 	void SuitHud::SetMode(int m, bool manual)
@@ -495,6 +500,7 @@ namespace ocrew
 			case H_PAL: pal = std::clamp(it->arg, 0, 2); break;
 			case H_ZOOM: zoom = std::clamp(zoom + it->arg, 0, 9); grid.t = -1; break;
 			case H_MODE: if (!autoMode && it->arg == mode) autoMode = true; else SetMode(it->arg, true); break;
+			case H_SUIT: if (life) { if (it->arg == 0) life->drivesOn = !life->drivesOn; else life->econ = !life->econ; } break;
 			case H_NVG: nvg = !nvg; if (!nvg && nvCam) Core()->CustomCameraOnOff(nvCam, false); break;
 			case H_ACK:
 				if (it->arg < 0) { for (auto& a : alerts) if (a.active) a.ack = true; }
@@ -582,6 +588,21 @@ namespace ocrew
 			else if (doseRate > 1000) now.push_back({ "rad", "РАДИАЦ", 1, "РАДИАЦИЯ " + Num(doseRate / 1000, 2) + " мЗв/ч" + hint });
 			if (dose > 2.5e5) now.push_back({ "dose", "РАДИАЦ", 2, "ДОЗА " + Num(dose / 1000, 0) + " мЗв" });
 			else if (dose > 1e5) now.push_back({ "dose", "РАДИАЦ", 1, "ДОЗА " + Num(dose / 1000, 0) + " мЗв" });
+			if (const Suit* s = d.life)
+			{
+				// the supply over its limit: what was shed, by the loops (task first)
+				if (s->overload)
+				{
+					std::string off;
+					auto add = [&](bool b, const char* n) { if (b) off += (off.empty() ? "" : ", ") + std::string(n); };
+					add(s->shedField, "поле"); add(s->shedLamps, "фонари"); add(s->shedDrives, "сервоприводы");
+					now.push_back({ "over", "БАТ", 1, "ПЕРЕГРУЗКА ПИТАНИЯ" + (off.empty() ? std::string(" · урезан теплообмен") : " · отключено: " + off) });
+				}
+				const double te = s->tEq - 273.15;
+				if (s->tEq > Suit::EQ_LIMIT) now.push_back({ "eq", "ТЕПЛО", 2, "ПЕРЕГРЕВ АППАРАТУРЫ " + Num(te, 0, true) + " °C · поле и сервоприводы отключены" });
+				else if (s->tEq > Suit::EQ_WARN) now.push_back({ "eq", "ТЕПЛО", 1, "АППАРАТУРА " + Num(te, 0, true) + " °C · отключение при +90" });
+				if (s->restartT > 0) now.push_back({ "restart", "БАТ", 1, "ПЕРЕЗАПУСК ПОСЛЕ ПЕРЕГРЕВА · сначала жизнеобеспечение" });
+			}
 			if (d.jet && d.jetFuel < 0.05) now.push_back({ "fuel", "РЕЗЕРВ", 2, "ТОПЛИВО РАНЦА " + Num(100 * d.jetFuel, 0) + " % · " + Num(d.jetDv, 0) + " м/с" });
 			else if (d.jet && d.jetFuel < 0.15) now.push_back({ "fuel", "РЕЗЕРВ", 1, "ТОПЛИВО РАНЦА " + Num(100 * d.jetFuel, 0) + " % · " + Num(d.jetDv, 0) + " м/с" });
 			// coming down too fast for the height left (the pack's own guard line): a warning, not a hint
@@ -590,7 +611,8 @@ namespace ocrew
 			if (d.jet && d.jetTerrain) now.push_back({ "terr", "", 1, "РЕЛЬЕФ ВПЕРЕДИ" });
 			if (const Target* s = Selected(); s && space && s->dist < 30 && -s->rate > 0.25) now.push_back({ "zone", "", 1, "ЗОНА 30 м · СБЛИЖЕНИЕ БЫСТРЕЕ 0,25 м/с" });
 		}
-		if (!d.warning.empty()) now.push_back({ "bio", "", 2, d.warning });
+		if (d.state == 2) now.push_back({ "dead", "", 2, "ГИБЕЛЬ" });
+		else if (!d.warning.empty()) now.push_back({ "bio", "", 2, d.warning });
 
 		const double mjd = oapiGetSimMJD(), day = (mjd - std::floor(mjd)) * 86400;
 		for (auto& a : alerts) a.seen = false;
@@ -1202,7 +1224,7 @@ namespace ocrew
 				g.Rect(10, y, 320, 42, on ? CA : CD, on ? 1.6 : 1, 1, on ? CA : -1, 0.1);
 				g.Hit(10, y, 320, 42, SuitHud::H_PAL, i);
 				// swatches: the palette's own colours
-				Gfx sw(g.skp, g.o, g.txt, i); sw.Frame(g.ox, g.oy, g.u);
+				Gfx sw(g.skp, g.o, g.txt, i); sw.Frame(g.ox, g.oy, g.u); sw.kx = g.kx; sw.ky = g.ky;
 				sw.Rect(22, y + 9, 24, 24, -1, 0, 0, CP, 1); sw.Rect(50, y + 9, 24, 24, -1, 0, 0, CA, 1);
 				g.T(88, y + 19, std::string(on ? "▶ " : "") + PAL_NAME[i], on ? CA : CW, 12.5);
 				g.T(88, y + 34, PAL_NOTE[i], CD, 9.5);
@@ -1523,8 +1545,10 @@ namespace ocrew
 	}
 
 	// ================= the display =================
-	void SuitHud::Mouse(double W, double H)
+	void SuitHud::Mouse(double, double)
 	{
+		DWORD vw = 0, vh = 0; oapiGetViewportSize(&vw, &vh);
+		const double W = vw, H = vh;
 		// the left button, caught on its press; only inside Orbiter's own window and only if that window is the view
 		// (its proportions match the display), mapped to the display's pixels
 		const bool down = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
@@ -1541,13 +1565,20 @@ namespace ocrew
 		mouseWasDown = down;
 	}
 
-	void SuitHud::Draw(oapi::Sketchpad* skp, double W, double H, const HudData& d, VESSEL* v)
+	void SuitHud::Draw(oapi::Sketchpad* skp, double SW, double SH, const HudData& d, VESSEL* v)
 	{
 		if (!glyphsTried) { glyphsTried = true; glyphs.Load(); }
+		// the display is the suit's: it goes dark only without power (and, when it is modelled, when it is damaged)
+		if (!d.powered) { if (nvCam && nvg) Core()->CustomCameraOnOff(nvCam, false); return; }
+		// the layout is the viewport's; the surface may be another size (the helmet display's square texture)
+		DWORD vw = 0, vh = 0; oapiGetViewportSize(&vw, &vh);
+		const double W = vw > 0 ? vw : SW, H = vh > 0 ? vh : SH;
 		const double k = H / 720.0;
 		const double L0 = 0, C0 = W / 2 - 640 * k, R0 = W - 1280 * k;
 		hits.clear();
-		Gfx g(skp, *this, glyphs, pal, look);
+		lastShade = d.shade; lastSunlit = d.sunlit; life = d.life;
+		if (onVisor && v && d.firstPerson) PlaceVisor(v);   // the camera is final now: the plate follows it exactly
+		Gfx g(skp, *this, glyphs, pal, look); g.kx = SW / W; g.ky = SH / H;
 		if (look == 1) { const double r = std::sin(oapiGetSimTime() * 1234.567 + oapiGetSysTime() * 789.1) * 43758.5453; g.shimmer = 0.94 + 0.06 * (r - std::floor(r)); }
 		Ctx c{ g, d, *this, v, W, H, k, std::fmod(d.simt, 1.0) < 0.62 };
 		Nav(v, d);
@@ -1580,7 +1611,7 @@ namespace ocrew
 		}
 		if (d.suit && d.firstPerson)
 		{
-			if (nvg) NightVision(skp, v, W, H);
+			if (nvg) NightVision(skp, v, W, H, SW, SH);
 			if (nvg && surface && hBody)
 			{
 				// the ranger's relief: rings and spokes of the ground round her, drawn into the view through the camera;
@@ -1621,19 +1652,20 @@ namespace ocrew
 					}
 				}
 			}
-			// the sun shade: a gold filter against bright sources; the brighter it is around, the more it takes
-			if (d.shade > 0.02 && g.s2)
+			// the sun shade: a gold filter against bright sources; the brighter it is around, the more it takes. On the helmet
+			// display (light added to the view) a filter cannot be drawn: there the shade is its own glass
+			if (d.shade > 0.02 && g.s2 && !onVisor)
 			{
 				const DWORD a = static_cast<DWORD>((0x40 + 0x50 * g.boost) * std::clamp(d.shade, 0.0, 1.0));
 				g.s2->QuickPen(0); g.s2->QuickBrush((a << 24) | 0x00081830);   // 0xAABBGGRR: dark amber
-				skp->Rectangle(0, 0, static_cast<int>(W), static_cast<int>(H)); g.s2->QuickBrush(0);
+				skp->Rectangle(0, 0, static_cast<int>(SW), static_cast<int>(SH)); g.s2->QuickBrush(0);
 			}
 		}
 		else if (nvCam && nvg) Core()->CustomCameraOnOff(nvCam, false);
 
 		// a dark tint behind the display: soft bands along the visor's upper and lower edge, and feathered backings under
 		// the two side panels - no hard boxes. The brighter around, the denser (lines stay readable on a sunlit ground)
-		if (d.suit && g.boost > 0.05)
+		if (d.suit && g.boost > 0.05 && !onVisor)   // projected light cannot darken: no backing on the helmet display
 		{
 			const double a = 0.10 + 0.40 * (std::min)(1.0, g.boost);
 			g.Frame(0, 0, 1); g.world = true;
@@ -1655,7 +1687,7 @@ namespace ocrew
 			g.Frame(R0, 0, k); soft(1020, 166, 242, 192);
 		}
 		g.Frame(C0, 0, k);
-		if (d.state == 2) { g.T(640, 360, "ГИБЕЛЬ", CR, 15, 1); return; }
+		// the person's state is data on the display (the body page, the ribbon), never a reason for it to go dark
 
 		// ---- the rim: body and suit in one line each, on the visor's edge ----
 		{
@@ -1732,9 +1764,8 @@ namespace ocrew
 					bx -= 5;
 				};
 				for (int i = 3; i >= 0; --i) button(suitTg[i]);
-				if (d.jet)
 				{
-					// the pack's block: its own row under the suit's switches, right-aligned (the rim's numbers stay clear)
+					// the second row: the pack's block (when worn) right-aligned, then the suit's servo and economy on its left
 					bx = 1256;
 					auto button2 = [&](const Tg& t)
 					{
@@ -1744,7 +1775,12 @@ namespace ocrew
 						g.Hit(bx, 104, w, 20, t.kind, t.arg);
 						bx -= 5;
 					};
-					for (int i = 1; i >= 0; --i) button2(jetTg[i]);
+					if (d.jet) { for (int i = 1; i >= 0; --i) button2(jetTg[i]); bx -= 12; }
+					if (d.life)
+					{
+						const Tg suit2[2] = { { "СЕРВО", d.life->drivesOn, H_SUIT, 0 }, { "ЭКОНОМ", d.life->econ, H_SUIT, 1 } };
+						for (int i = 1; i >= 0; --i) button2(suit2[i]);
+					}
 				}
 				if (nvg && d.firstPerson && nvNote != "ПНВ") g.T(1256, 94, nvNote, CA, 10, 2);
 			}
@@ -1862,7 +1898,8 @@ namespace ocrew
 					d.suitBreached || d.airKPa > d.suitPMax ? CR : d.airKPa > 0.75 * d.suitPMax ? CA : CW },
 				{ d.vacuum ? "Среда (излучение)" : "Воздух", d.vacuum ? Num(d.envC, 0, true) + " °C" + (d.sunlit ? " · солнце" : " · тень") : Num(d.airC, 0, true) + " °C" + (d.sunlit ? " · солнце" : " · тень"), d.inSpec ? CW : CR } };
 			if (d.hasGround) rows.push_back({ "Грунт", Num(d.groundC, 0, true) + " °C", d.groundC > 80 || d.groundC < -100 ? CA : CW });
-			rows.push_back({ "Теплообмен", std::string(d.heatW >= 0 ? "ОХЛАЖДЕНИЕ " : "ОБОГРЕВ ") + Num(std::abs(d.heatW), 0) + " Вт", CP });
+			rows.push_back({ "Теплообмен", std::string(d.heatW >= 0 ? "ОХЛАЖДЕНИЕ " : "ОБОГРЕВ ") + Num(std::abs(d.heatW), 0) + " Вт" + (d.life && d.life->econ ? " · эконом" : ""), CP });
+			if (d.life) rows.push_back({ "Аппаратура", Num(d.life->tEq - 273.15, 0, true) + " °C", d.life->tEq > Suit::EQ_LIMIT ? CR : d.life->tEq > Suit::EQ_WARN ? CA : CW });
 			rows.push_back({ std::string("Радиация") + (d.fieldOn ? " · поле" : ""),
 				(doseRate >= 1000 ? Num(doseRate / 1000, 2) + " мЗв/ч" : Num(doseRate, doseRate < 1 ? 2 : 0) + " мкЗв/ч") + " · " + Num(dose / 1000, 2) + " мЗв",
 				doseRate > 10000 ? CR : doseRate > 1000 ? CA : CW });
@@ -2214,5 +2251,144 @@ namespace ocrew
 		};
 		if (openL) mfd(true); else tab(true);
 		if (openR) mfd(false); else tab(false);
+	}
+
+	// ================= the helmet display =================
+	// One group, four corners: the plate is moved every step to cover the view exactly, so a texture pixel lands on its
+	// screen pixel. Built spanning a box round the eye so its bounds never cull it before the first move.
+	UINT SuitHud::HelmetMesh(VESSEL* v)
+	{
+		if (plateIdx != static_cast<UINT>(-1)) return plateIdx;
+		// Meshes\Tantra\VisorLayers.msh: group 0 the modulator (black, our texture's alpha), group 1 the HUD (FLAG 3, the
+		// client's VC HUD surface). The modulator first: the HUD's light is added over the dimmed view, never dimmed itself.
+		// The template must live on (the vessel copies it each time it builds its visual): global, never deleted
+		static MESHHANDLE tpl = oapiLoadMeshGlobal("Tantra\\VisorLayers");
+		if (!tpl) { oapiWriteLog(const_cast<char*>("OrbiterCrew: Meshes\\Tantra\\VisorLayers.msh missing - no helmet display")); return plateIdx; }
+		plateIdx = v->AddMesh(tpl);
+		v->SetMeshVisibilityMode(plateIdx, MESHVIS_NEVER);
+		return plateIdx;
+	}
+
+	void SuitHud::RegisterVC()
+	{
+		if (plateIdx == static_cast<UINT>(-1)) return;
+		VCHUDSPEC hs{};
+		hs.nmesh = plateIdx; hs.ngroup = 1; hs.hudcnt = _V(0, 0, 0.15); hs.size = 0.1;
+		oapiVCRegisterHUD(&hs);
+	}
+
+	void SuitHud::HelmetFrame(VESSEL* v, VISHANDLE vis, const HelmetView& hv)
+	{
+		if (plateIdx == static_cast<UINT>(-1)) return;
+		onVisor = hv.show; plateVis = vis;
+		v->SetMeshVisibilityMode(plateIdx, hv.show ? MESHVIS_VC : MESHVIS_NEVER);
+		if (hv.show) { PlaceVisor(v); Modulator(v); }
+	}
+
+	// The plate is set from the camera itself, not from the head model: it is close to the eye, so a centimetre of
+	// difference would shift the whole display. Called each step and again when the display is drawn (the camera is
+	// final for the frame then).
+	void SuitHud::PlaceVisor(VESSEL* v)
+	{
+		if (plateIdx == static_cast<UINT>(-1) || !plateVis) return;
+		DEVMESHHANDLE dm = v->GetDevMesh(plateVis, plateIdx);
+		if (!dm) return;
+		DWORD vw = 0, vh = 0; oapiGetViewportSize(&vw, &vh);
+		if (!vw || !vh) return;
+		VECTOR3 cg; oapiCameraGlobalPos(&cg);
+		MATRIX3 Rc; oapiCameraRotationMatrix(&Rc);   // camera frame -> global: columns right, up, forward
+		MATRIX3 Rv; v->GetRotationMatrix(Rv);        // vessel frame -> global
+		VECTOR3 eye; v->Global2Local(cg, eye);
+		const VECTOR3 r = tmul(Rv, _V(Rc.m11, Rc.m21, Rc.m31)), up = tmul(Rv, _V(Rc.m12, Rc.m22, Rc.m32)), f = tmul(Rv, _V(Rc.m13, Rc.m23, Rc.m33));
+		// 0.3 m out (well beyond the VC near plane; the HUD pass ignores depth, so the distance only sets the size)
+		const double dist = 0.3, hh = dist * std::tan(oapiCameraAperture()), hw = hh * vw / vh;
+		const VECTOR3 c = eye + f * dist;
+		const VECTOR3 P[4] = { c - r * hw + up * hh, c + r * hw + up * hh, c + r * hw - up * hh, c - r * hw - up * hh };
+		NTVERTEX vtx[4];
+		const float U[4] = { 0, 1, 1, 0 }, Vv[4] = { 0, 0, 1, 1 };
+		for (int i = 0; i < 4; ++i)
+			vtx[i] = { static_cast<float>(P[i].x), static_cast<float>(P[i].y), static_cast<float>(P[i].z),
+				static_cast<float>(-f.x), static_cast<float>(-f.y), static_cast<float>(-f.z), U[i], Vv[i] };
+		GROUPEDITSPEC ges{};
+		ges.flags = GRPEDIT_VTXCRD | GRPEDIT_VTXNML; ges.Vtx = vtx; ges.nVtx = 4;
+		oapiEditMeshGroup(dm, 0, &ges); oapiEditMeshGroup(dm, 1, &ges);
+	}
+
+	// The modulator's texture: black with the dimming as alpha, written straight (COPY: no blending, the alpha is set, not
+	// mixed). Shapes are drawn from the faintest to the densest where they nest; every alpha already includes the shade.
+	void SuitHud::Modulator(VESSEL* v)
+	{
+		DEVMESHHANDLE dm = v->GetDevMesh(plateVis, plateIdx);
+		if (!dm) return;
+		DWORD vw = 0, vh = 0; oapiGetViewportSize(&vw, &vh);
+		if (!vw || !vh) return;
+		const int w = (std::max)(64, static_cast<int>(vw) / 2), h = (std::max)(64, static_cast<int>(vh) / 2);   // soft shapes: half resolution
+		if (!modSrf || w != modW || h != modH)
+		{
+			if (modSrf) oapiDestroySurface(modSrf);
+			modSrf = oapiCreateSurfaceEx(w, h, OAPISURFACE_TEXTURE | OAPISURFACE_RENDERTARGET | OAPISURFACE_SKETCHPAD | OAPISURFACE_ALPHA | OAPISURFACE_NOMIPMAPS);
+			modW = w; modH = h; modDm = nullptr;
+		}
+		if (!modSrf) { if (!modLogged) { modLogged = true; oapiWriteLog(const_cast<char*>("OrbiterCrew: visor modulator - no surface")); } return; }
+		if (dm != modDm)   // a new visual: bind again (retried until it takes)
+		{
+			const bool ok = oapiSetTexture(dm, 1, modSrf);
+			if (ok) modDm = dm;
+			if (!modLogged || ok) { char b[96]; snprintf(b, sizeof b, "OrbiterCrew: visor modulator %dx%d, texture bound: %s", w, h, ok ? "yes" : "NO"); oapiWriteLog(b); modLogged = true; }
+		}
+		oapi::Sketchpad* skp = oapiGetSketchpad(modSrf);
+		if (!skp) return;
+		if (!Ext(skp)) { oapiReleaseSketchpad(skp); return; }
+		const double sx = w / static_cast<double>(vw), sy = h / static_cast<double>(vh);
+		const double boost = brightAuto ? ambient : brightManual;
+		const double shade = 0.65 * std::clamp(lastShade, 0.0, 1.0) * (0.5 + 0.5 * (std::min)(1.0, boost));   // the shade: the whole view
+		const double a0 = 0.10 + 0.45 * (std::min)(1.0, boost);                                              // bands and backings
+		auto with = [&](double a) { return 1 - (1 - std::clamp(a, 0.0, 1.0)) * (1 - shade); };
+		auto box = [&](double x0, double y0, double x1, double y1, double a)
+		{
+			skp->QuickBrush(static_cast<DWORD>(std::lround(with(a) * 255)) << 24);
+			skp->Rectangle(static_cast<int>(std::floor(x0 * sx)), static_cast<int>(std::floor(y0 * sy)), static_cast<int>(std::ceil(x1 * sx)), static_cast<int>(std::ceil(y1 * sy)));
+		};
+		skp->SetBlendState(oapi::Sketchpad::COPY);
+		skp->QuickPen(0);
+		box(0, 0, vw, vh, 0);
+		// soft bands along the visor's upper and lower edge (as the old backing): thin strips, cosine fall-off
+		const double k = vh / 720.0, topH = 140 * k, botH = 115 * k;
+		const int N = 32;
+		for (int i = 0; i < N; ++i)
+		{
+			const double x = (i + 0.5) / N, f = 0.5 + 0.5 * std::cos(PI * x);
+			box(0, i * topH / N, vw, (i + 1) * topH / N + 1, 0.85 * a0 * f);
+			box(0, vh - (i + 1) * botH / N - 1, vw, vh - i * botH / N, 0.7 * a0 * f);
+		}
+		// feathered backings under the two side panels, faint rim first, dense core last
+		auto soft = [&](double x, double y, double ww, double hh)
+		{
+			for (int i = 7; i >= 0; --i) { const double e = i * 2 * k; box(x - e, y - e, x + ww + e, y + hh + e, a0 * 0.75 * (1 - i / 8.0)); }
+		};
+		const double R0 = vw - 1280 * k;
+		if (openL) soft(18 * k, 166 * k, 242 * k, 170 * k);
+		if (openR) soft(R0 + 1020 * k, 166 * k, 242 * k, 192 * k);
+		// the sun: a dense spot over its disc where it is in view, so the eye is not blinded and the signs stay readable
+		if (lastSunlit)
+		{
+			VECTOR3 cp, sp; oapiCameraGlobalPos(&cp); oapiGetGlobalPos(oapiGetGbodyByIndex(0), &sp);
+			MATRIX3 Rc; oapiCameraRotationMatrix(&Rc);
+			const VECTOR3 q = tmul(Rc, sp - cp);
+			if (q.z > 0)
+			{
+				const double fpx = (vh / 2.0) / std::tan((std::max)(0.1, oapiCameraAperture()));
+				const double cx = vw / 2.0 + q.x / q.z * fpx, cy = vh / 2.0 - q.y / q.z * fpx, r = fpx * std::tan(0.07);   // ~4 deg
+				for (int i = 6; i >= 0; --i)
+				{
+					const double rr = r * (1 + i * 0.35), a = 0.9 * (std::min)(1.0, 0.4 + boost) * (1 - i / 7.0);
+					skp->QuickBrush(static_cast<DWORD>(std::lround(with(a) * 255)) << 24);
+					skp->Ellipse(static_cast<int>((cx - rr) * sx), static_cast<int>((cy - rr) * sy), static_cast<int>((cx + rr) * sx), static_cast<int>((cy + rr) * sy));
+				}
+			}
+		}
+		skp->QuickBrush(0);
+		skp->SetBlendState();
+		oapiReleaseSketchpad(skp);
 	}
 }

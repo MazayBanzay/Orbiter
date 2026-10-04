@@ -1,0 +1,33 @@
+MSHX1
+GROUPS 2
+LABEL VisorModulator
+MATERIAL 1
+TEXTURE 1
+FLAG 1
+GEOM 4 2
+-0.5 0.5 -0.5 0 0 -1 0 0
+0.5 0.5 0.5 0 0 -1 1 0
+0.5 -0.5 -0.5 0 0 -1 1 1
+-0.5 -0.5 0.5 0 0 -1 0 1
+0 1 2
+0 2 3
+LABEL VisorHUD
+MATERIAL 0
+TEXTURE 0
+FLAG 3
+GEOM 4 2
+-0.5 0.5 -0.5 0 0 -1 0 0
+0.5 0.5 0.5 0 0 -1 1 0
+0.5 -0.5 -0.5 0 0 -1 1 1
+-0.5 -0.5 0.5 0 0 -1 0 1
+0 1 2
+0 2 3
+MATERIALS 1
+VisorDark
+MATERIAL VisorDark
+0 0 0 1
+0 0 0 1
+0 0 0 1 0
+0 0 0 1
+TEXTURES 1
+Tantra\VisorClear.dds

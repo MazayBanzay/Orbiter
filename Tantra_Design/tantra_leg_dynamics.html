@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тантра: динамика ног</title>
+<style>
+:root{--bg:#eef1f4;--panel:#ffffff;--ink:#1d2430;--muted:#5d6878;--line:#d5dbe3;--ok:#1f8a4c;--warn:#b7791f;--bad:#c53030;--acc:#2b6cb0;--pitch:#2b6cb0;--lat:#c05621;--grid:#e6eaef}
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+#wrap{display:grid;grid-template-columns:1fr 430px;min-height:100vh}
+#plots{padding:12px 14px;min-width:0}
+#side{background:var(--panel);border-left:1px solid var(--line);padding:12px 14px;overflow:auto;max-height:100vh}
+h1{font-size:16px;margin:0 0 4px}
+h2{font-size:13px;margin:14px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:10px}
+.card h3{font-size:13px;margin:0 0 4px}
+canvas{display:block;width:100%;height:170px}
+.legend{font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+.sw{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:4px}
+button{font:inherit;padding:5px 9px;border:1px solid var(--line);border-radius:6px;background:#f7f9fb;color:var(--ink);cursor:pointer}
+button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.row{display:grid;grid-template-columns:150px 1fr 70px;gap:6px;align-items:center;margin:3px 0;font-size:13px}
+.row input[type=range]{width:100%}
+.row .val{text-align:right;font-variant-numeric:tabular-nums}
+.chk{display:flex;gap:6px;align-items:flex-start;margin:4px 0;font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:3px 4px;border-bottom:1px solid #eef1f4;vertical-align:top;text-align:left}
+td.v{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.note{font-size:12px;color:var(--muted)}
+ul{margin:4px 0 4px 18px;padding:0}
+li{margin:2px 0}
+.btns{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
+@media (max-width:900px){#wrap{grid-template-columns:1fr}#side{border-left:0;border-top:1px solid var(--line);max-height:none}}
+</style>
+</head>
+<body>
+<div id="wrap">
+<div id="plots">
+  <h1>Тантра: механика ног на подъёме — раскачка и её гашение</h1>
+  <div class="note">Корабль на двух ногах-лопастях: подъём на высоту, проезд корпуса по рельсам цапф, работа на высоте, поворот на 90°, кормовые ноги.
+  Расчёт по числам кода (core/Spec.h, Carriage): УНТ E 0,6 ТПа, лопасти — ступенчатые колонны, чаши R 12,2 м, приводы цапф 2 ГН·м.</div>
+  <div class="card"><h3>Подъём — анимация по расчёту</h3>
+    <canvas id="anim" style="height:420px"></canvas>
+    <div class="btns" style="align-items:center">
+      <button id="play">▶ Пуск</button>
+      <span class="note">Скорость</span><span id="spdB" class="btns" style="margin:0"></span>
+      <span class="note">Раскачка ×</span><span id="exB" class="btns" style="margin:0"></span>
+    </div>
+    <input id="scrub" type="range" min="0" max="1000" value="0" style="width:100%">
+    <div id="ainfo" class="note"></div>
+  </div>
+  <div class="card"><h3>Раскачка верха колонн (цапф), см</h3><canvas id="cX"></canvas>
+    <div class="legend"><span><i class="sw" style="background:var(--pitch)"></i>вдоль корпуса (тангаж)</span><span><i class="sw" style="background:var(--lat)"></i>поперёк (крен)</span><span>фон: фазы подъёма</span></div></div>
+  <div class="card"><h3>Ускорение на мостике, тысячные g (mg)</h3><canvas id="cA"></canvas>
+    <div class="legend"><span>ощущается ≈ 5 mg, неприятно ≈ 20 mg, работа невозможна ≈ 50 mg (нормы для высотных зданий)</span></div></div>
+  <div class="card"><h3>Момент на стопу, % от допустимого (равнодействующая в пределах 60 % радиуса чаши)</h3><canvas id="cM"></canvas>
+    <div class="legend"><span><i class="sw" style="background:#2f855a"></i>стопа (худшая)</span><span><i class="sw" style="background:#805ad5"></i>гироскопы: запас момента импульса, % занято</span></div></div>
+  <div class="card"><h3>Собственный период раскачки, с</h3><canvas id="cT"></canvas>
+    <div class="legend"><span><i class="sw" style="background:var(--pitch)"></i>вдоль</span><span><i class="sw" style="background:var(--lat)"></i>поперёк</span><span>чем ближе к периоду порывов (≈ 4–20 с), тем сильнее раскачка</span></div></div>
+</div>
+
+<div id="side">
+  <h2>Режим подъёма</h2>
+  <div class="btns"><button id="pGame">Как в игре: фазы 20 с, поворот 20 с</button><button id="pRec" class="on">Рекомендация: фазы 40 с, поворот 90 с</button></div>
+  <h2>Условия</h2>
+  <div class="btns" id="massB"></div>
+  <div class="btns" id="planetB"></div>
+  <div class="row"><span>Ветер средний</span><input id="wMean" type="range" min="0" max="40" step="1" value="12"><span class="val" id="wMeanV"></span></div>
+  <div class="row"><span>Порывы σ</span><input id="wSig" type="range" min="0" max="15" step="0.5" value="5"><span class="val" id="wSigV"></span></div>
+  <div class="row"><span>Ветер от борта</span><input id="wDir" type="range" min="0" max="90" step="5" value="30"><span class="val" id="wDirV"></span></div>
+  <div class="row"><span>Подъём / рельсы, фаза</span><input id="phT" type="range" min="10" max="90" step="5" value="40"><span class="val" id="phTV"></span></div>
+  <div class="row"><span>Поворот на 90°</span><input id="tuT" type="range" min="10" max="240" step="5" value="90"><span class="val" id="tuTV"></span></div>
+  <div class="row"><span>Работа на высоте</span><input id="hold" type="range" min="0" max="180" step="10" value="0"><span class="val" id="holdV"></span></div>
+  <div class="row"><span>Рассинхрон лопастей</span><input id="lag" type="range" min="0" max="150" step="5" value="10"><span class="val" id="lagV"></span></div>
+
+  <h2>Механизмы</h2>
+  <label class="chk"><input type="checkbox" id="mr" checked><span><b>МР-клапаны голеностопов</b> — полуактивное гашение: газогидравлическая стойка, клапан меняет вязкость за миллисекунды. Энергию раскачки — в тепло.</span></label>
+  <label class="chk"><input type="checkbox" id="ank" checked><span><b>Приводы голеностопов</b> (сверхпроводящие) — держат колонну в шаре как защемлённую: жёсткость и гашение. Предел — опрокидывание чаши.</span></label>
+  <label class="chk"><input type="checkbox" id="gyr" checked><span><b>Гироскопы</b> (силовые, на кардане) в корпусе — быстрые поправки без опоры на грунт. Предел — запас момента импульса маховиков.</span></label>
+  <label class="chk"><input type="checkbox" id="cgt" checked><span><b>Слежение за ЦМ</b> — каретки цапф доезжают под фактический ЦМ (0,3 → 0,02 м за ~4 с).</span></label>
+  <div class="row"><span>Маховиков</span><input id="gN" type="range" min="0" max="8" step="1" value="4"><span class="val" id="gNV"></span></div>
+  <div class="row"><span>Масса обода</span><input id="gM" type="range" min="10" max="200" step="10" value="60"><span class="val" id="gMV"></span></div>
+  <div class="row"><span>Радиус обода</span><input id="gR" type="range" min="1" max="6" step="0.5" value="3.5"><span class="val" id="gRV"></span></div>
+  <div class="btns"><button id="reseed">Другие порывы</button></div>
+
+  <h2>Итог</h2>
+  <table id="sum"></table>
+  <h2>Как это работает</h2>
+  <div id="expl" class="note"></div>
+  <h2>Допущения модели</h2>
+  <ul class="note">
+    <li>Две степени свободы — смещение верха колонн вдоль и поперёк; корпус жёсткий. Колонна — упругий стержень с пружинами на концах: голеностоп (шар + привод) внизу; вверху вдоль — привод цапфы (8·10¹⁰ Н·м/рад), поперёк — жёсткая заделка в корпус.</li>
+    <li>Лопасть 6,7×2,8 … 5,2×1,3 м: поперёк — слабая ось (I 1,43 м⁴, как в коде), вдоль — сильная (≈ 7,2 м⁴, широкая сторона вдоль корпуса). Вес снижает жёсткость (P-Δ: −W/L).</li>
+    <li>Кенгуру (наклонная третья нога) держит тангаж до середины проезда цапф. Кормовые ноги (4 × 7,9 ГН/м по оси, наклон 27°) после загрузки делают корабль жёстким — дальше раскачки нет.</li>
+    <li>Порывы — тот же процесс, что в игре (средний ветер + случайные порывы, τ 4 с); площадь борта 2 600 м², торца 650 м² (после поворота — борт с обеих сторон).</li>
+    <li>Гироскоп: обод из УНТ, скорость обода ≤ √(σ/ρ/1,5) ≈ 650 м/с; кардан до 0,5 рад/с. Насыщение — гироскоп больше не даёт момент в эту сторону; сброс накопленного — через приводы голеностопов за 30 с.</li>
+  </ul>
+</div>
+</div>
+
+<script>
+"use strict";
+// ---- numbers from the code (core/Spec.h, core/Carriage.h, core/Params.h) ----
+const E = 0.6e12, SIGMA = 1.0e9, RHO_CNT = 1600;
+const I_LAT = 1.433, I_PITCH = 7.2;                // blade stepped column: weak (across the hull) and strong axis [m^4]
+const FOOT_H = 3.8, AXIS_LYING = 24.0, STAND_CLEAR = 22.5, LEG_MAX = 87.5;
+const TRACK_S0 = 53.4, CG_ERR = 0.3, CG_SENS = 0.02, CG_TRACK_T = 4.0;
+const KT_DRIVE = 8.0e10 / 2;                       // trunnion drive stiffness per column (kBalanceKp shared)
+const PMI_PITCH = 2200.0;                          // m^2
+const R_FOOT = 12.2, FOOT_ETA = 0.6;               // blade cup radius; resultant within 60 % of it
+const KANG_EA = 0.6e12 * 0.245, KANG_FWD = 12.0;
+const STERN_EA = 0.6e12 * 0.782, STERN_L = 59.5, STERN_SIN2 = 0.20;
+const A_SIDE = 2600, A_FRONT = 650, CD = 0.8, GUST_TAU = 4.0;
+const PHASE = 20.0;                                // s per erection phase
+const KA_ACTIVE = 5.0e10, CA_ACTIVE = 2.0e10;      // ankle drive: N m/rad, N m s/rad
+const CA_MR = 3.0e10;                              // MR strut equivalent at the ankle: N m s/rad
+const GIMBAL = 0.5, ZETA_GYRO = 0.25, DESAT_T = 30.0;
+
+const MASSES = [
+  {k:"loaded", t:"Гружёный 52,3 кт", m:52.34e6, s:58.1},
+  {k:"light",  t:"После перелёта 15 кт", m:15.0e6, s:63.0},
+  {k:"empty",  t:"Пустой 4,9 кт", m:4.9e6, s:64.1},
+];
+const PLANETS = [
+  {k:"earth", t:"Земля", g:9.81, rho:1.225},
+  {k:"mars",  t:"Марс", g:3.71, rho:0.020},
+  {k:"moon",  t:"Луна", g:1.62, rho:0.0},
+  {k:"heavy", t:"2,5 g (расчётная)", g:24.5, rho:1.225},
+];
+let massSel = MASSES[0], planetSel = PLANETS[0], seed = 12345;
+
+const $ = id => document.getElementById(id);
+function buttons(el, list, get, set) {
+  el.innerHTML = "";
+  for (const it of list) {
+    const b = document.createElement("button");
+    b.textContent = it.t;
+    if (get() === it) b.classList.add("on");
+    b.onclick = () => { set(it); buttons(el, list, get, set); run(); };
+    el.appendChild(b);
+  }
+}
+// minimum-jerk motion profile of the drives (10u^3 - 15u^4 + 6u^5): speed, acceleration and jerk start and end at zero
+const sstep = u => u <= 0 ? 0 : u >= 1 ? 1 : u * u * u * (10 + u * (-15 + 6 * u));
+const sacc = (u, T) => (u <= 0 || u >= 1) ? 0 : (60 * u - 180 * u * u + 120 * u * u * u) / (T * T);
+
+// Column with end springs (slope-deflection): lateral stiffness of the top and the end rotations per unit top shift.
+function column(EI, L, Ka, Kt) {
+  const a = 2 * EI / L, psi = 1 / L;
+  const det = (2 * a + Ka) * (2 * a + Kt) - a * a;
+  const ti = 3 * a * psi * (a + Kt) / det, tj = 3 * a * psi * (a + Ka) / det;
+  const Mi = a * (2 * ti + tj - 3 * psi), Mj = a * (ti + 2 * tj - 3 * psi);
+  return {k: -(Mi + Mj) / L, ti, tj};
+}
+
+function simulate(o) {
+  const m = o.mass.m, g = o.planet.g, rho = o.planet.rho;
+  const W = m * g;
+  const Htop = Math.min(o.mass.s + STAND_CLEAR, LEG_MAX + FOOT_H - 0.2);
+  const dS = Math.max(0, o.mass.s - CG_ERR - TRACK_S0);
+  const Ip = PMI_PITCH * m;
+  // timeline: lift, slide, work at height, turn, stern legs out, load onto them
+  const PH = o.phaseT, TT = o.turnT;
+  const t1 = PH, t2 = 2 * PH, t3 = t2 + o.hold, t4 = t3 + TT, t5 = t4 + PH, t6 = t5 + PH, tEnd = t6 + 15;
+  // flywheels
+  const vRim = Math.sqrt(SIGMA / RHO_CNT / 1.5);
+  const Htot = o.gyro ? o.gN * o.gM * 1e3 * vRim * o.gR : 0;
+  const Tg = Htot * GIMBAL;
+  // gusts (Ornstein-Uhlenbeck as in the game)
+  let rs = o.seed >>> 0;
+  const uni = () => ((rs = (rs * 1664525 + 1013904223) >>> 0) >>> 8) / 16777216;
+  const gauss = () => Math.sqrt(-2 * Math.log(Math.max(1e-9, uni()))) * Math.cos(2 * Math.PI * uni());
+  let gust = 0;
+  const dt = 0.01;
+  let x = 0, vx = 0, y = 0, vy = 0, hx = 0, hy = 0, cgRes = CG_ERR, prevAx = 0;
+  let dl = 0, vdl = 0;                               // hull rocking on the trunnions about the commanded angle
+  const WD = 1.5, ZD = o.gyro ? 0.8 : 0.5;          // trunnion drives (as in the game); the gyros add damping
+  const out = [];
+  let worst = {x:0, y:0, a:0, foot:0, gyro:0, tMinX:1e9, tMinY:1e9, xHold:0, yHold:0, aHold:0, turnFoot:0};
+  const dirR = o.wDir * Math.PI / 180;
+  for (let t = 0; t <= tEnd; t += dt) {
+    // kinematics
+    let H, aVert = 0, aSlide = 0, theta = 0, alpha = 0, phase;
+    if (t < t1) { const u = t / PH; H = AXIS_LYING + (Htop - AXIS_LYING) * sstep(u); aVert = (Htop - AXIS_LYING) * sacc(u, PH); phase = 0; }
+    else { H = Htop; }
+    if (t >= t1 && t < t2) { aSlide = dS * sacc((t - t1) / PH, PH); phase = 1; }
+    if (t >= t2 && t < t3) phase = 2;
+    if (t >= t3) { const u = Math.min(1, (t - t3) / TT); theta = Math.PI / 2 * sstep(u); alpha = t < t4 ? Math.PI / 2 * sacc(u, TT) : 0; if (t < t4) phase = 3; }
+    if (t >= t4 && t < t5) phase = 4;
+    if (t >= t5) phase = 5;
+    const L = H - FOOT_H;
+    const gEff = g + aVert;
+    // ankle and trunnion springs
+    const Ka = o.ankle ? KA_ACTIVE : 0;
+    const colX = column(E * I_PITCH, L, Ka, KT_DRIVE);
+    const colY = column(E * I_LAT, L, Ka, 1e16);
+    let kx = 2 * colX.k - m * gEff / L, ky = 2 * colY.k - m * gEff / L;
+    // kangaroo: the inclined third leg holds the pitch until the trunnions are halfway along the rails
+    const kShare = t < t1 ? 1 : t < t1 + PH / 2 ? 1 - sstep((t - t1) / (PH / 2)) : 0;
+    if (kShare > 0) { const Lk = H + 1, s = Math.sin(Math.atan(KANG_FWD / Lk)); kx += kShare * KANG_EA / Lk * s * s; }
+    // stern legs: loaded over phase 5
+    const sShare = t < t5 ? 0 : sstep((t - t5) / PH);
+    if (sShare > 0) { const ks = 4 * STERN_EA / STERN_L * STERN_SIN2 / 2; kx += sShare * ks; ky += sShare * ks; }
+    // damping: structure 1 %, MR struts and active ankle damping through the ankle rotation
+    const Ca = (o.mr ? CA_MR : 0) + (o.ankle ? CA_ACTIVE : 0);
+    const cx = 2 * 0.01 * Math.sqrt(Math.max(kx, 1) * m) + 2 * Ca * colX.ti * colX.ti;
+    const cy = 2 * 0.01 * Math.sqrt(Math.max(ky, 1) * m) + 2 * Ca * colY.ti * colY.ti;
+    // wind
+    gust += -gust / GUST_TAU * dt + o.wSig * Math.sqrt(2 * dt / GUST_TAU) * gauss();
+    const V = Math.max(0, o.wMean + gust);
+    const q = 0.5 * rho * V * V * CD;
+    const aPitch = A_FRONT * (1 - Math.sin(theta)) + A_SIDE * Math.sin(theta);
+    const Fwy = q * A_SIDE * Math.cos(dirR) ** 2, Fwx = q * aPitch * Math.sin(dirR) ** 2;
+    // the motion itself: hull run along the rails, reaction of the turn, CG off the trunnions, drive desync
+    if (o.cgTrack && t >= t1) cgRes += (CG_SENS - cgRes) * Math.min(1, dt / CG_TRACK_T);
+    const eRes = o.cgTrack ? cgRes : CG_ERR;
+    const Tturn = Ip * alpha + m * g * eRes * (t >= t2 ? Math.cos(theta) : 0);
+    const Fx_motion = -m * aSlide + (t >= t2 && t < t5 ? Tturn / L : 0);
+    const uL = t / PH, vLift = t < t1 ? (Htop - AXIS_LYING) * 30 * uL * uL * (1 - uL) * (1 - uL) / PH : 0;
+    const Fy_sync = W * (vLift * o.lag / 1000) / (2 * 19.0);
+    // gyros: damping torque, limited by the gimbal rate and the stored momentum, bled off through the ankles
+    let Tgx = 0, Tgy = 0;
+    if (Htot > 0 && sShare < 1) {
+      Tgx = -2 * ZETA_GYRO * Math.sqrt(Math.max(kx, 1) * m) * vx * L;
+      Tgy = -2 * ZETA_GYRO * Math.sqrt(Math.max(ky, 1) * m) * vy * L;
+      const mag = Math.hypot(Tgx, Tgy);
+      if (mag > Tg) { Tgx *= Tg / mag; Tgy *= Tg / mag; }
+      if ((hx + Tgx * dt) * Math.sign(Tgx) > Htot * 0.7071) Tgx = 0;   // saturated this way
+      if ((hy + Tgy * dt) * Math.sign(Tgy) > Htot * 0.7071) Tgy = 0;
+      hx += (Tgx - hx / DESAT_T) * dt; hy += (Tgy - hy / DESAT_T) * dt;
+    }
+    const ax = (Fwx + Fx_motion + Tgx / L - kx * x - cx * vx) / m;
+    const ay = (Fwy + Fy_sync + Tgy / L - ky * y - cy * vy) / m;
+    vx += ax * dt; x += vx * dt; vy += ay * dt; y += vy * dt;
+    vdl += (-WD * WD * dl - 2 * ZD * WD * vdl - alpha) * dt; dl += vdl * dt;
+    if (sShare > 0) { dl *= 1 - sShare * 0.2; vdl *= 1 - sShare * 0.2; }   // on the stern legs the hull is held
+    // foot moments (per foot): ankle spring + damper, the desaturation, the turn reaction, the wind overturning
+    const Nfoot = W / 2;
+    const Mcap = Nfoot * R_FOOT * FOOT_ETA;
+    const Mx = Ka * colX.ti * Math.abs(x) + Ca * colX.ti * Math.abs(vx) + Math.abs(hx) / DESAT_T / 2 + Math.abs(Tturn) / 2;
+    const My = Ka * colY.ti * Math.abs(y) + Ca * colY.ti * Math.abs(vy) + Math.abs(hy) / DESAT_T / 2;
+    const footPct = 100 * Math.max(Mx, My) / Mcap;
+    const gyroPct = Htot > 0 ? 100 * Math.hypot(hx, hy) / Htot : 0;
+    // the bridge: the top's motion (plus the hull pitch is held by the trunnion drives)
+    const aBridge = Math.hypot(ax, ay) / 9.81 * 1000;
+    const Tx = kx > 0 ? 2 * Math.PI * Math.sqrt(m / kx) : Infinity, Ty = ky > 0 ? 2 * Math.PI * Math.sqrt(m / ky) : Infinity;
+    if (Math.round(t / dt) % 10 === 0) out.push({t, x: x * 100, y: y * 100, a: aBridge, foot: footPct, gyro: gyroPct, Tx, Ty, phase, sShare,
+      H, theta, slide: t < t1 ? 0 : t < t2 ? sstep((t - t1) / PH) : 1, kShare, stern: t < t4 ? 0 : sstep((t - t4) / PH), dl, xm: x, ym: y});
+    if (sShare < 1) {
+      worst.x = Math.max(worst.x, Math.abs(x)); worst.y = Math.max(worst.y, Math.abs(y));
+      worst.a = Math.max(worst.a, aBridge); worst.foot = Math.max(worst.foot, footPct); worst.gyro = Math.max(worst.gyro, gyroPct);
+      if (t >= t2 - PH / 2 && t <= t3 + 0.01) { worst.tMinX = Math.max(isFinite(worst.tMinX) && worst.tMinX < 1e8 ? worst.tMinX : 0, Tx); worst.tMinY = Math.max(isFinite(worst.tMinY) && worst.tMinY < 1e8 ? worst.tMinY : 0, Ty); if (kx <= 0 || ky <= 0) worst.unstable = true; }
+      if (phase === 2) { worst.xHold = Math.max(worst.xHold, Math.abs(x)); worst.yHold = Math.max(worst.yHold, Math.abs(y)); worst.aHold = Math.max(worst.aHold, aBridge); }
+      if (phase === 3) worst.turnFoot = Math.max(worst.turnFoot, 100 * Math.abs(Tturn) / 2 / Mcap);
+    }
+  }
+  const Lturn = Ip * (Math.PI / 2) * 1.875 / TT;   // the hull's angular momentum at the turn's peak rate
+  return {out, worst, PH, TT, dS, sCG: o.mass.s, aSlideMax: 5.77 * dS / PH / PH, vLiftMax: (Htop - AXIS_LYING) * 1.875 / PH, t:[t1, t2, t3, t4, t5, t6, tEnd], Htop, L: Htop - FOOT_H, Htot, Tg, vRim, Lturn, W, m, Mcap: W / 2 * R_FOOT * FOOT_ETA, Ip};
+}
+
+// ---- animation: side view (along the lift axis) and front view ----
+let last = null, animT = 0, playing = false, speed = 1, exag = 20, lastFrame = 0;
+const SPEEDS = [0.5, 1, 2, 5, 10, 20], EXAGS = [1, 5, 20, 50];
+function sample(t) {
+  const o = last.out; if (!o.length) return null;
+  const i = Math.max(0, Math.min(o.length - 1, Math.round(t / 0.1)));
+  return o[i];
+}
+const HULL_L = 178, KANG_HIP = 99.4, STERN_HINGE = 30, STERN_FOOT = 38.5;
+function hullOutline() {   // side silhouette in hull coordinates (s from the stern, z up from the axis)
+  const pts = [];
+  const top = s => s < 120 ? 7.5 : 7.5 - (s - 120) * 0.06, bot = s => s < 140 ? -7.5 : -7.5 + (s - 140) * 0.12;
+  for (let s = 0; s <= HULL_L; s += 4) pts.push([s, top(s)]);
+  pts.push([HULL_L, 0]);
+  for (let s = HULL_L; s >= 0; s -= 4) pts.push([s, bot(s)]);
+  return pts;
+}
+const HULL = hullOutline();
+function drawAnim() {
+  if (!last) return;
+  const c = $("anim"), dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr;
+  const g = c.getContext("2d"); g.scale(dpr, dpr); g.clearRect(0, 0, w, h);
+  const p = sample(animT); if (!p) return;
+  // --- side view: 0..72 % of the width ---
+  const sw = w * 0.72, sc = Math.min(sw / 260, (h - 30) / 200), ox = sw * 0.42, oy = h - 22;
+  const P = (x, y) => [ox + x * sc, oy - y * sc];
+  g.fillStyle = "#f2ece1"; g.fillRect(0, oy, sw, h - oy);
+  g.strokeStyle = "#b9a98a"; g.beginPath(); g.moveTo(0, oy); g.lineTo(sw, oy); g.stroke();
+  const ex = exag, top = [p.xm * ex, p.H], footY = FOOT_H;
+  // blade column (the near one; the far one is behind it): bent line foot -> trunnion
+  const ankle = $("ank").checked;
+  const bladeA = 1 - p.sShare;   // on the stern legs the blades go home into their pockets
+  g.globalAlpha = Math.max(0.08, bladeA);
+  g.strokeStyle = "#2c4a7a"; g.lineWidth = Math.max(2, 4.5 * sc); g.beginPath();
+  for (let k = 0; k <= 20; k++) { const xi = k / 20, f = ankle ? xi * xi * (3 - 2 * xi) : xi; const q = P(top[0] * f, footY + (p.H - footY) * xi); if (k) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }
+  g.stroke();
+  // cup foot
+  const fp = P(0, 0);
+  g.fillStyle = "#3f5f8f"; g.beginPath(); g.ellipse(fp[0], fp[1] - 1, R_FOOT * sc, 2.5, 0, 0, Math.PI * 2); g.fill();
+  const fa = P(0, footY); g.strokeStyle = "#3f5f8f"; g.lineWidth = 2; g.beginPath(); g.moveTo(fp[0], fp[1] - 2); g.lineTo(fa[0], fa[1]); g.stroke();
+  g.globalAlpha = 1;
+  // hull: the trunnion at hull station sT; angle = commanded + rocking (exaggerated)
+  const sT = TRACK_S0 + p.slide * last.dS, ang = p.theta + p.dl * ex;
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  const H2W = (s, z) => P(top[0] + (s - sT) * ca - z * sa, top[1] + (s - sT) * sa + z * ca);
+  g.fillStyle = "#9aa3ad"; g.strokeStyle = "#4a5260"; g.lineWidth = 1; g.beginPath();
+  HULL.forEach((q, i) => { const r = H2W(q[0], q[1]); if (i) g.lineTo(r[0], r[1]); else g.moveTo(r[0], r[1]); });
+  g.closePath(); g.fill(); g.stroke();
+  // the bridge and the CG
+  const br = H2W(150, 3); g.fillStyle = "#e0b040"; g.beginPath(); g.arc(br[0], br[1], 3.5, 0, 7); g.fill();
+  const cg = H2W(last.sCG, 0); g.strokeStyle = "#c53030"; g.lineWidth = 1.5; g.beginPath(); g.arc(cg[0], cg[1], 4, 0, 7); g.stroke();
+  // trunnion
+  const tp = P(top[0], top[1]); g.fillStyle = "#1d2430"; g.beginPath(); g.arc(tp[0], tp[1], 4, 0, 7); g.fill();
+  // kangaroo: hip on the belly, its foot stays where it was planted
+  if (p.kShare > 0.02) {
+    const kh = H2W(KANG_HIP, -7.5), kf = P(KANG_HIP - TRACK_S0 + KANG_FWD, 0);
+    g.globalAlpha = Math.min(1, p.kShare * 1.5); g.strokeStyle = "#5a6b8a"; g.lineWidth = Math.max(1.5, 2.2 * sc);
+    g.beginPath(); g.moveTo(kh[0], kh[1]); g.lineTo(kf[0], kf[1]); g.stroke();
+    g.fillStyle = "#5a6b8a"; g.beginPath(); g.ellipse(kf[0], kf[1] - 1, 6.35 * sc, 2, 0, 0, 7); g.fill(); g.globalAlpha = 1;
+  }
+  // stern legs: swing out from the hinges to the feet on the radius
+  if (p.stern > 0.01) {
+    const sternPt = H2W(0, 0);
+    for (const side of [-1, 1]) {
+      const hg = H2W(STERN_HINGE, -9 * side);
+      const foot = [sternPt[0] + side * STERN_FOOT * 0.72 * sc, oy];
+      const q = [hg[0] + (foot[0] - hg[0]) * p.stern, hg[1] + (foot[1] - hg[1]) * p.stern];
+      g.strokeStyle = "#2c4a7a"; g.lineWidth = Math.max(1.5, 3 * sc); g.beginPath(); g.moveTo(hg[0], hg[1]); g.lineTo(q[0], q[1]); g.stroke();
+      if (p.stern > 0.9) { g.fillStyle = "#3f5f8f"; g.beginPath(); g.ellipse(foot[0], foot[1] - 1, 11.25 * sc, 2.5, 0, 0, 7); g.fill(); }
+    }
+  }
+  g.fillStyle = "#5d6878"; g.font = "12px system-ui"; g.fillText("Сбоку (вдоль оси подъёма): красный круг — ЦМ, жёлтый — мостик", 8, 16);
+  // --- front view: 72..100 % ---
+  const fx0 = sw + 8, fw = w - fx0 - 6, fsc = Math.min(fw / 80, (h - 30) / 200), fox = fx0 + fw / 2;
+  const F = (x, y) => [fox + x * fsc, oy - y * fsc];
+  g.fillStyle = "#f2ece1"; g.fillRect(fx0, oy, fw, h - oy);
+  g.strokeStyle = "#d5dbe3"; g.beginPath(); g.moveTo(fx0 - 4, 6); g.lineTo(fx0 - 4, h - 4); g.stroke();
+  const ty = p.ym * ex;
+  g.globalAlpha = Math.max(0.08, 1 - p.sShare);
+  for (const side of [-1, 1]) {
+    g.strokeStyle = "#2c4a7a"; g.lineWidth = Math.max(2, 4 * fsc); g.beginPath();
+    for (let k = 0; k <= 20; k++) { const xi = k / 20, f = xi * xi * (3 - 2 * xi); const q = F(side * 19 + ty * f, footY + (p.H - footY) * xi); if (k) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }
+    g.stroke();
+    const fq = F(side * 19, 0); g.fillStyle = "#3f5f8f"; g.beginPath(); g.ellipse(fq[0], fq[1] - 1, R_FOOT * fsc, 2, 0, 0, 7); g.fill();
+  }
+  g.globalAlpha = 1;
+  const hc = F(ty, p.H); g.fillStyle = "#9aa3ad"; g.strokeStyle = "#4a5260"; g.beginPath();
+  g.ellipse(hc[0], hc[1], 15 * fsc, (8 + 7 * Math.sin(p.theta)) * fsc, 0, 0, 7); g.fill(); g.stroke();
+  g.fillStyle = "#5d6878"; g.fillText("Спереди", fx0 + 4, 16);
+  // readout
+  const names = ["подъём на лопастях", "проезд корпуса по рельсам цапф", "работа на высоте", "поворот на корму", "кормовые ноги выходят", "нагрузка на кормовые ноги", "стоит на корме"];
+  const tt = last.t, ph = animT < tt[0] ? 0 : animT < tt[1] ? 1 : animT < tt[2] ? 2 : animT < tt[3] ? 3 : animT < tt[4] ? 4 : animT < tt[5] ? 5 : 6;
+  const mm = v => `${Math.floor(v / 60)}:${String(Math.floor(v % 60)).padStart(2, "0")}`;
+  $("ainfo").innerHTML = `<b>${mm(animT)}</b> из ${mm(tt[5])} — ${names[ph]} · высота цапф ${fmt(p.H, 1)} м · угол ${fmt(p.theta * 180 / Math.PI, 0)}° ·
+    качание корпуса на цапфах ${fmt(p.dl * 180 / Math.PI, 2)}° · раскачка верха: вдоль ${fmt(p.x, 1)} см, поперёк ${fmt(p.y, 1)} см · мостик ${fmt(p.a, 1)} mg
+    <br>Весь подъём ${mm(tt[5])}: подъём ${mm(tt[0])}, рельсы ${mm(tt[1] - tt[0])}, на высоте ${mm(tt[2] - tt[1])}, поворот ${mm(tt[3] - tt[2])}, кормовые ноги ${mm(tt[5] - tt[3])}. Раскачка на рисунке увеличена ×${exag}.`;
+  if (!scrubbing) $("scrub").value = Math.round(1000 * animT / tt[6]);
+}
+let scrubbing = false;
+function tick() {
+  const ts = performance.now();
+  if (playing && last) {
+    const dt = lastFrame ? Math.min(0.1, (ts - lastFrame) / 1000) : 0;
+    animT += dt * speed;
+    if (animT >= last.t[6]) { animT = last.t[6]; playing = false; $("play").textContent = "▶ Пуск"; }
+  }
+  lastFrame = ts;
+  if (playing || dirty) { drawAnim(); dirty = false; }
+}
+let dirty = true;
+function smallButtons(el, list, get, set, fmtf) {
+  el.innerHTML = "";
+  for (const v of list) { const b = document.createElement("button"); b.textContent = fmtf(v); if (get() === v) b.classList.add("on"); b.onclick = () => { set(v); smallButtons(el, list, get, set, fmtf); }; el.appendChild(b); }
+}
+
+// ---- plotting ----
+function plot(id, res, series, yLabel, opts = {}) {
+  const c = $(id), dpr = window.devicePixelRatio || 1;
+  const w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr;
+  const g = c.getContext("2d"); g.scale(dpr, dpr);
+  g.clearRect(0, 0, w, h);
+  const L = 44, R = 8, T = 8, B = 20, pw = w - L - R, ph = h - T - B;
+  const tEnd = res.t[6];
+  let ymin = opts.ymin ?? Infinity, ymax = opts.ymax ?? -Infinity;
+  if (opts.ymin === undefined || opts.ymax === undefined)
+    for (const s of series) for (const p of res.out) { const v = s.f(p); if (!isFinite(v)) continue; ymin = Math.min(ymin, v); ymax = Math.max(ymax, v); }
+  if (opts.cap) { ymin = Math.max(ymin, -opts.cap); ymax = Math.min(ymax, opts.cap); }
+  if (opts.sym) { const a = Math.max(Math.abs(ymin), Math.abs(ymax), 1e-3); ymin = -a; ymax = a; }
+  if (opts.floor !== undefined) ymin = Math.min(ymin, opts.floor);
+  if (opts.ceilMin !== undefined) ymax = Math.max(ymax, opts.ceilMin);
+  if (ymax - ymin < 1e-9) ymax = ymin + 1;
+  const X = t => L + pw * t / tEnd, Y = v => T + ph * (1 - (v - ymin) / (ymax - ymin));
+  // phase bands
+  const bands = [[0, res.t[0], "подъём"], [res.t[0], res.t[1], "рельсы"], [res.t[1], res.t[2], "работа"], [res.t[2], res.t[3], "поворот"], [res.t[3], res.t[4], "корм. ноги"], [res.t[4], res.t[5], "нагрузка"], [res.t[5], res.t[6], "жёстко"]];
+  bands.forEach((b, i) => { if (b[1] <= b[0]) return; g.fillStyle = i % 2 ? "#f4f6f9" : "#fbfcfd"; g.fillRect(X(b[0]), T, X(b[1]) - X(b[0]), ph); g.fillStyle = "#8a94a3"; g.font = "10px system-ui"; g.fillText(b[2], X(b[0]) + 3, T + 10); });
+  g.strokeStyle = "#e6eaef"; g.fillStyle = "#5d6878"; g.font = "11px system-ui"; g.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) { const v = ymin + (ymax - ymin) * i / 4; g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(L + pw, Y(v)); g.stroke(); g.fillText(Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1), 2, Y(v) + 4); }
+  for (let tt = 0; tt <= tEnd; tt += 30) g.fillText(tt + " с", X(tt) - 8, h - 5);
+  for (const lim of opts.lines || []) { if (lim.v < ymin || lim.v > ymax) continue; g.strokeStyle = lim.c; g.setLineDash([4, 3]); g.beginPath(); g.moveTo(L, Y(lim.v)); g.lineTo(L + pw, Y(lim.v)); g.stroke(); g.setLineDash([]); g.fillStyle = lim.c; g.fillText(lim.t, L + pw - g.measureText(lim.t).width - 2, Y(lim.v) - 3); }
+  for (const s of series) {
+    g.strokeStyle = s.c; g.lineWidth = 1.6; g.beginPath(); let first = true;
+    for (const p of res.out) { let v = s.f(p); if (!isFinite(v)) { first = true; continue; } v = Math.max(ymin, Math.min(ymax, v)); if (first) { g.moveTo(X(p.t), Y(v)); first = false; } else g.lineTo(X(p.t), Y(v)); }
+    g.stroke();
+  }
+}
+
+const fmt = (v, d = 1) => v.toLocaleString("ru-RU", {minimumFractionDigits: d, maximumFractionDigits: d});
+const cls = (v, a, b) => v <= a ? "ok" : v <= b ? "warn" : "bad";
+
+function run() {
+  const o = {
+    mass: massSel, planet: planetSel, wMean: +$("wMean").value, wSig: +$("wSig").value, wDir: +$("wDir").value,
+    phaseT: +$("phT").value, turnT: +$("tuT").value, hold: +$("hold").value, lag: +$("lag").value, mr: $("mr").checked, ankle: $("ank").checked, gyro: $("gyr").checked,
+    cgTrack: $("cgt").checked, gN: +$("gN").value, gM: +$("gM").value, gR: +$("gR").value, seed,
+  };
+  $("wMeanV").textContent = o.wMean + " м/с"; $("wSigV").textContent = o.wSig + " м/с"; $("wDirV").textContent = o.wDir + "°";
+  $("phTV").textContent = o.phaseT + " с"; $("tuTV").textContent = o.turnT + " с";
+  $("holdV").textContent = o.hold + " с"; $("lagV").textContent = o.lag + " мс";
+  $("gNV").textContent = o.gN; $("gMV").textContent = o.gM + " т"; $("gRV").textContent = o.gR + " м";
+  const r = simulate(o), w = r.worst;
+  last = r; animT = Math.min(animT, r.t[6]); dirty = true;
+  plot("cX", r, [{f: p => p.x, c: getComputedStyle(document.body).getPropertyValue("--pitch")}, {f: p => p.y, c: getComputedStyle(document.body).getPropertyValue("--lat")}], "см", {sym: true, cap: 300});
+  plot("cA", r, [{f: p => p.a, c: "#2d3748"}], "mg", {floor: 0, ceilMin: 25, cap: 200, lines: [{v: 5, t: "ощущается", c: "#1f8a4c"}, {v: 20, t: "неприятно", c: "#b7791f"}, {v: 50, t: "работа невозможна", c: "#c53030"}]});
+  plot("cM", r, [{f: p => p.foot, c: "#2f855a"}, {f: p => p.gyro, c: "#805ad5"}], "%", {floor: 0, ceilMin: 110, cap: 400, lines: [{v: 100, t: "предел", c: "#c53030"}]});
+  plot("cT", r, [{f: p => p.sShare >= 1 ? NaN : p.Tx, c: getComputedStyle(document.body).getPropertyValue("--pitch")}, {f: p => p.sShare >= 1 ? NaN : p.Ty, c: getComputedStyle(document.body).getPropertyValue("--lat")}], "с", {floor: 0});
+  const tilt = v => Math.atan(v / r.L) * 180 / Math.PI;
+  $("sum").innerHTML = `
+    <tr><td>Высота цапф / колонна</td><td class="v">${fmt(r.Htop, 1)} / ${fmt(r.L, 1)} м</td></tr>
+    <tr><td>Период раскачки на высоте (на лопастях)</td><td class="v ${w.unstable ? "bad" : ""}">${w.unstable ? "НЕУСТОЙЧИВО: перевёрнутый маятник" : `вдоль ${fmt(w.tMinX, 1)} с · поперёк ${fmt(w.tMinY, 1)} с`}</td></tr>
+    <tr><td>Раскачка верха, макс.</td><td class="v ${cls(Math.max(w.x, w.y) * 100, 10, 30)}">вдоль ${fmt(w.x * 100, 1)} · поперёк ${fmt(w.y * 100, 1)} см</td></tr>
+    <tr><td>Наклон колонн, макс.</td><td class="v">${fmt(tilt(Math.max(w.x, w.y)), 2)}°</td></tr>
+    <tr><td>Работа на высоте: раскачка / ускорение</td><td class="v ${cls(w.aHold, 5, 20)}">${fmt(Math.max(w.xHold, w.yHold) * 100, 1)} см · ${fmt(w.aHold, 1)} mg</td></tr>
+    <tr><td>Ускорение на мостике, макс.</td><td class="v ${cls(w.a, 5, 20)}">${fmt(w.a, 1)} mg</td></tr>
+    <tr><td>Стопа, худший момент</td><td class="v ${cls(w.foot, 60, 100)}">${fmt(w.foot, 0)} % допуска</td></tr>
+    <tr><td>Из них реакция поворота</td><td class="v ${cls(w.turnFoot, 60, 100)}">${fmt(w.turnFoot, 0)} %</td></tr>
+    <tr><td>Гироскопы: запас H / момент</td><td class="v">${fmt(r.Htot / 1e6, 0)} МН·м·с / ${fmt(r.Tg / 1e6, 0)} МН·м</td></tr>
+    <tr><td>Гироскопы: занято, макс.</td><td class="v ${cls(w.gyro, 60, 99)}">${fmt(w.gyro, 0)} %</td></tr>`;
+  const turnRatio = r.Htot > 0 ? r.Lturn / r.Htot : Infinity;
+  $("expl").innerHTML = `
+    <p><b>1. Подъём (0–20 с).</b> Лопасти выдвигаются, кенгуру впереди держит тангаж как третья наклонная нога — вдоль корабль почти жёсткий.
+    Поперёк — две колонны и корпус-ригель: рама. Колонна чем выше, тем мягче (жёсткость ∝ 1/L³), а вес её ещё и «размягчает» (P-Δ).
+    Рассинхрон приводов лопастей ${o.lag} мс при скорости подъёма до ${fmt(r.vLiftMax, 1)} м/с даёт разницу высот бортов и толчок вбок.</p>
+    <p><b>2. Проезд по рельсам (20–40 с).</b> Корпус ${fmt(r.m / 1e6, 1)} кт едет над стоящими цапфами под ЦМ; его разгон и торможение (≈ ${fmt(r.aSlideMax, 2)} м/с²) — главный толчок вдоль. Кенгуру отпускает.</p>
+    <p><b>3. Работа на высоте.</b> Корабль стоит на двух колоннах ${fmt(r.L, 0)} м — это маятник на упругих стержнях с периодом ≈ ${fmt(Math.max(w.tMinX, w.tMinY), 0)} с.
+    Порывы ветра (τ ≈ 4 с) сами по себе периодом далеко от него, но их медленная часть раскачивает. Гасят:
+    <br>— <b>МР-клапаны</b> голеностопов — без энергии и без опоры на расчёт: просто превращают качание в тепло;
+    <br>— <b>приводы голеностопов</b> защемляют шар — колонна становится консолью, жёсткость растёт в 2–4 раза, период короче;
+    <br>— <b>гироскопы</b> — моментом на корпус, быстро и без опоры на грунт; их запас ${fmt(r.Htot / 1e6, 0)} МН·м·с хватает на порывы, а накопленное сбрасывается через голеностопы.</p>
+    <p><b>4. Поворот на 90° (${o.turnT} с).</b> Пиковый момент разгона корпуса I·α = ${fmt(r.Ip * Math.PI / 2 * 5.77 / o.turnT / o.turnT / 1e9, 2)} ГН·м (профиль минимального рывка); он идёт через изгиб колонн (их прогиб растёт как 1/T² — вдвое дольше поворот, вчетверо меньше прогиб). Момент импульса корпуса на повороте ≈ ${fmt(r.Lturn / 1e9, 1)} ГН·м·с — это в ${isFinite(turnRatio) ? fmt(turnRatio, 0) : "∞"} раз больше запаса гироскопов.
+    Поэтому поворот гироскопами не сделать: реакцию поворота несут приводы цапф → колонны → голеностопы → чаши → грунт. Чаша держит её моментом опоры (вес × радиус × 0,6 = ${fmt(r.Mcap / 1e9, 1)} ГН·м на стопу), гироскопы лишь подчищают колебания.
+    Ошибка ЦМ относительно цапф (${CG_ERR} м) даёт постоянный момент веса; слежение за ЦМ по моменту приводов уменьшает его до ${CG_SENS} м.</p>
+    <p><b>Вывод.</b> Колонны из УНТ при длине ${fmt(r.L, 0)} м тонкие и упругие: период на высоте ≈ ${fmt(Math.max(w.tMinX, w.tMinY), 0)} с.
+    Раскачку определяют не порывы, а <b>собственные разгоны корпуса</b> — проезд по рельсам и поворот. Их момент идёт через изгиб колонн,
+    и прогиб растёт как 1/T²: поворот за 20 с даёт ≈ 2 м прогиба и перегруз чаш (> 100 %), за 60–90 с — 15–20 см и 5–15 % допуска.
+    Главный механизм против раскачки — <b>приводы голеностопов</b>: защемляют колонну в шаре (без них период ≈ 22 с и прогиб ×5);
+    <b>МР-клапаны</b> гасят остаток без энергии; <b>гироскопы</b> на прогиб почти не влияют, но берут быстрые доли (порывы, стыки фаз) —
+    ускорения на мостике в 3–4 раза меньше: это комфорт и точность работы на высоте. Поворот и проезд гироскопам не по силам — их реакция уходит в грунт.
+    Приводы ведут движение по профилю минимального рывка (скорость, ускорение и рывок в начале и в конце — нули), иначе на стыках фаз удары.
+    На лёгких планетах (Марс, Луна) вес мал, а инерция та же: поворот медленнее (≥ 120 с), стопы держат меньший момент.</p>
+    <p><b>5. Кормовые ноги.</b> Четыре наклонные ноги на радиусе 38,5 м — подкосы: корабль становится жёстким (период доли секунды), раскачка кончается.</p>`;
+}
+
+for (const id of ["phT", "tuT", "wMean", "wSig", "wDir", "hold", "lag", "gN", "gM", "gR"]) $(id).addEventListener("input", run);
+for (const id of ["mr", "ank", "gyr", "cgt"]) $(id).addEventListener("change", run);
+const preset = (ph, tu, on) => { $("phT").value = ph; $("tuT").value = tu; $("pGame").classList.toggle("on", !on); $("pRec").classList.toggle("on", on); run(); };
+$("pGame").onclick = () => preset(20, 20, false);
+$("pRec").onclick = () => preset(40, 90, true);
+$("reseed").onclick = () => { seed = (seed * 48271 + 7) % 2147483647; run(); };
+buttons($("massB"), MASSES, () => massSel, v => massSel = v);
+buttons($("planetB"), PLANETS, () => planetSel, v => planetSel = v);
+window.addEventListener("resize", run);
+$("play").onclick = () => { if (!last) return; if (animT >= last.t[6]) animT = 0; playing = !playing; $("play").textContent = playing ? "❚❚ Пауза" : "▶ Пуск"; };
+$("scrub").addEventListener("input", () => { scrubbing = true; dirty = true; if (last) animT = last.t[6] * $("scrub").value / 1000; });
+$("scrub").addEventListener("change", () => { scrubbing = false; });
+smallButtons($("spdB"), SPEEDS, () => speed, v => speed = v, v => "×" + v);
+smallButtons($("exB"), EXAGS, () => exag, v => { exag = v; dirty = true; }, v => "" + v);
+setInterval(tick, 33);
+run();
+</script>
+</body>
+</html>

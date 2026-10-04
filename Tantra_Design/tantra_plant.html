@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тантра: силовая установка</title>
+<style>
+:root{--bg:#eef1f4;--panel:#ffffff;--ink:#1d2430;--muted:#5d6878;--line:#d5dbe3;--ok:#1f8a4c;--warn:#b7791f;--bad:#c53030;--acc:#2b6cb0}
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+#wrap{display:grid;grid-template-columns:1fr 430px;min-height:100vh}
+#main{padding:10px 14px;min-width:0}
+#side{background:var(--panel);border-left:1px solid var(--line);padding:12px 14px;overflow:auto;max-height:100vh}
+h1{font-size:16px;margin:0 0 4px}
+h2{font-size:13px;margin:14px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+h3{font-size:14px;margin:6px 0}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;margin:8px 0}
+.tab{display:none}.tab.on{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:10px;overflow-x:auto}
+canvas.chart{display:block;width:100%;height:190px}
+button{font:inherit;padding:5px 9px;border:1px solid var(--line);border-radius:6px;background:#f7f9fb;color:var(--ink);cursor:pointer}
+button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.btns{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
+.row{display:grid;grid-template-columns:165px 1fr 92px;gap:6px;align-items:center;margin:3px 0;font-size:13px}
+.row input[type=range]{width:100%}
+.row .val{text-align:right;font-variant-numeric:tabular-nums}
+.chk{display:flex;gap:6px;align-items:flex-start;margin:4px 0;font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:3px 5px;border-bottom:1px solid #eef1f4;vertical-align:top;text-align:left}
+th{color:var(--muted);font-weight:600}
+td.v{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.note{font-size:12px;color:var(--muted)}
+.big{font-size:15px;font-weight:600}
+#view3d{position:relative;height:560px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:#000}
+#view3d canvas{display:block}
+#vhud{position:absolute;left:10px;top:10px;color:#fff;font-size:12px;background:rgba(0,0,0,.45);padding:6px 9px;border-radius:6px;max-width:60%}
+#vbar{position:absolute;left:10px;bottom:10px;display:flex;gap:6px;flex-wrap:wrap}
+#vbar button{background:rgba(255,255,255,.85)}
+#vbar button.on{background:var(--acc);color:#fff}
+#mfd{display:block;width:100%;max-width:640px;aspect-ratio:1/1;border-radius:10px;cursor:pointer}
+#mfdWrap{display:grid;grid-template-columns:minmax(300px,640px) 1fr;gap:12px}
+@media (max-width:1100px){#mfdWrap{grid-template-columns:1fr}}
+@media (max-width:900px){#wrap{grid-template-columns:1fr}#side{border-left:0;border-top:1px solid var(--line);max-height:none}}
+ul{margin:4px 0 4px 18px;padding:0}li{margin:2px 0}
+</style>
+</head>
+<body>
+<div id="wrap">
+<div id="main">
+  <h1>Тантра: силовая установка — ионно-триггерные моторы</h1>
+  <div class="note">Импульсный синтез в горловине магнитного сопла за кормой. Плазма давит на поле, поле — на катушки, катушки — на корабль.
+  Расчёт на числах корабля (Spec.h, Params.h). Единственное неизвестное — доля энергии реакции, уходящая в проникающее излучение (χ): от неё зависит всё.</div>
+  <div class="tabs" id="tabsB"></div>
+
+  <div class="tab" id="t_view">
+    <div id="view3d"><div id="vhud"></div><div id="vbar"></div></div>
+    <div class="note">Мышь: вращение/масштаб. Цвет струи: аргон в воздухе — бело-оранжевый факел со скачками уплотнения; железо — сине-фиолетовый; продукты синтеза (перелёт) — тонкий, почти невидимый.
+    Голубые линии — поле сопла (яркость ∝ давлению поля). Белая точка за чашей — место вспышек капсул.</div>
+  </div>
+
+  <div class="tab" id="t_mfd">
+    <div id="mfdWrap">
+      <canvas id="mfd" width="640" height="640"></canvas>
+      <div>
+        <div class="card"><h3>Экран установки</h3>
+          <div class="note">Нажимайте кнопки на экране: режим рабочей массы, поле ±, мощность ±, «ФОРСАЖ» (снимает ограничитель 12,1 Тл), «ЗАЩИТА» (компьютер держит тепло кормы).
+          Справа — то же ползунками. «ПРОГОН» — 10 минут работы в этом режиме, 2000 раз со случайными отказами.</div></div>
+        <div class="card"><h3>Прогон 10 минут в этом режиме</h3><div id="mc" class="note">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab" id="t_asc">
+    <div class="card"><div id="ascVerdict" class="big"></div><table id="ascSum"></table></div>
+    <div class="card"><h3>Высота и скорость</h3><canvas class="chart" id="cH"></canvas>
+      <div class="note">синий — высота, км; оранжевый — горизонтальная, км/с ×10; зелёный — вертикальная ×10; серый пунктир — орбитальная ×10</div></div>
+    <div class="card"><h3>Тяга/вес, перегрузка; фон — что ограничивает</h3><canvas class="chart" id="cT"></canvas>
+      <div class="note">чёрный — тяга/вес; фиолетовый — перегрузка, g; фон: красный — поле, синий — мощность, оранжевый — тепло, серый — перегрузка; жёлтая полоса — гондолы</div></div>
+    <div class="card"><h3>Тепло кормы и катушки</h3><canvas class="chart" id="cR"></canvas>
+      <div class="note">оранжевый — тепловой запас кормы, %; красный — ресурс катушек, %; пунктир — вероятность хотя бы одного срыва поля к этому моменту, %</div></div>
+  </div>
+
+  <div class="tab" id="t_tr">
+    <div class="card"><div id="trVerdict" class="big"></div><table id="trSum"></table></div>
+    <div class="card"><h3>Скорость по пути</h3><canvas class="chart" id="cV"></canvas>
+      <div class="note">синий — скорость, км/с; оранжевый пунктир — пройдено, % пути</div></div>
+  </div>
+
+  <div class="tab" id="t_risk">
+    <div class="card"><h3>Режимы: что даёт превышение и чем грозит</h3><table id="riskT"></table></div>
+    <div class="card"><h3>Отказы и аварии</h3><table id="failT"></table></div>
+    <div class="card"><h3>Предложения по игре и балансу</h3><div id="balance" class="note"></div></div>
+  </div>
+
+  <div class="tab" id="t_var">
+    <div class="card"><h3>Четыре варианта реакции — что каждый значит для корабля</h3><table id="varT"></table>
+      <div class="note">Всё, кроме χ, одинаково: поле 12,1 Тл (форсаж до 16), мощность синтеза 2,2·10¹⁴ Вт, радиаторы-гребни 2 700 м², тепловой запас кормы 1 ТДж, горение в 15 м за чашей.</div></div>
+    <div class="card"><h3>Вывод</h3><div id="varExpl" class="note"></div></div>
+  </div>
+</div>
+
+<div id="side">
+  <h2>Вариант реакции</h2><div class="btns" id="varB"></div><div id="varD" class="note"></div>
+  <h2>Управление</h2>
+  <div class="btns" id="modeB"></div>
+  <div class="row"><span>Поле маршевой</span><input id="sB" type="range" min="6" max="17.1" step="0.1" value="12.1"><span class="val" id="sBV"></span></div>
+  <div class="row"><span>Мощность (капсул/с)</span><input id="sP" type="range" min="5" max="140" step="5" value="100"><span class="val" id="sPV"></span></div>
+  <div class="row"><span>Струя продуктов</span><input id="sVe" type="range" min="500" max="10000" step="250" value="7000"><span class="val" id="sVeV"></span></div>
+  <label class="chk"><input type="checkbox" id="sProt" checked><span><b>Защита по теплу</b> — компьютер режет мощность, чтобы корма не перегревалась. Без неё — больше тяги, пока не кончится тепловой запас.</span></label>
+  <h2>Конструкция (допущения)</h2>
+  <div class="row"><span>Горение за чашей</span><input id="sD" type="range" min="5" max="40" step="1" value="15"><span class="val" id="sDV"></span></div>
+  <div class="row"><span>Ресурс катушек при 16 Тл</span><input id="sLife" type="range" min="2" max="60" step="1" value="15"><span class="val" id="sLifeV"></span></div>
+  <h2>Взлёт</h2>
+  <div class="btns" id="planetB"></div>
+  <div class="btns" id="massB"></div>
+  <label class="chk"><input type="checkbox" id="sPods" checked><span>Гондолы на старте (до М 0,8)</span></label>
+  <div class="row"><span>Предел перегрузки</span><input id="sG" type="range" min="2" max="8" step="0.5" value="5"><span class="val" id="sGV"></span></div>
+  <h2>Перелёт</h2>
+  <div class="btns" id="routeB"></div>
+  <div class="row"><span>Скорость перелёта</span><input id="sVc" type="range" min="100" max="3000" step="50" value="1500"><span class="val" id="sVcV"></span></div>
+  <div class="row"><span>Масса в начале</span><input id="sM0" type="range" min="10" max="53" step="0.5" value="15"><span class="val" id="sM0V"></span></div>
+  <div class="row"><span>Топливо + рабочая масса</span><input id="sProp" type="range" min="1" max="10" step="0.5" value="8"><span class="val" id="sPropV"></span></div>
+</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="t9_data.js"></script>
+<script src="tantra_plant_model.js"></script>
+<script src="tantra_plant_app.js"></script>
+</body>
+</html>

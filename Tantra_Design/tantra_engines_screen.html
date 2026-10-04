@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тантра: пульт двигателей</title>
+<style>
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:#1a1f24;color:#d8e2ea;font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+#wrap{padding:10px 12px;max-width:1700px;margin:0 auto}
+h1{font-size:16px;margin:0 0 4px;color:#e8eef3}
+.note{font-size:12px;color:#93a3b1}
+#scr{display:block;width:100%;aspect-ratio:1600/800;border-radius:10px;cursor:pointer;background:#0a1311;touch-action:none}
+.btns{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;align-items:center}
+button{font:inherit;padding:5px 9px;border:1px solid #3a4652;border-radius:6px;background:#26303a;color:#d8e2ea;cursor:pointer}
+button.on{background:#2b6cb0;border-color:#2b6cb0;color:#fff}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Пульт двигателей v2 — мокап (правый пульт; страница на весь экран: анамезон или планетарные)</h1>
+  <div class="note">Справа — сенсорные шкалы, как на UCGO Arrow: нажми или тяни по шкале — жёлтая стрелка ◄ ставит уставку, заливка показывает факт (приводы догоняют со своей скоростью); ▲▼ — точный шаг.
+  Слева и в центре — чаши и камеры, векторы, таблицы выхода и расчёт. Анамезон: 4 кормовые камеры и 2 носовые ретро-чаши (реверс, струи вперёд). Блокировки снимаются только вручную, в два нажатия.</div>
+  <canvas id="scr" width="1600" height="800"></canvas>
+  <div class="btns"><span class="note">Ускорение времени мокапа</span><span id="spdB" class="btns" style="margin:0"></span></div>
+</div>
+<script src="tantra_plant_model.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const cv = $("scr"), g = cv.getContext("2d"), W = 1600, H = 800;
+const C_L = 299792458, G0 = 9.80665;
+const COL = {bg: "#0a1311", fr: "#1f3a35", tx: "#7fe0d0", dim: "#4f8f86", or: "#ee9a3a", ye: "#e8d35a", rd: "#ff5a4a", gr: "#5ad0a0", wh: "#e8fffa", bl: "#7fb8ff", vi: "#b59cff"};
+const fmt = (v, d = 1) => isFinite(v) ? v.toLocaleString("ru-RU", {minimumFractionDigits: d, maximumFractionDigits: d}) : "—";
+const fF = F => F >= 1e9 ? fmt(F / 1e9, 2) + " ГН" : F >= 1e6 ? fmt(F / 1e6, 0) + " МН" : F >= 1e3 ? fmt(F / 1e3, 0) + " кН" : "0";
+const fW = W => W >= 1e18 ? fmt(W / 1e18, 1) + " ЭВт" : W >= 1e15 ? fmt(W / 1e15, 1) + " ПВт" : W >= 1e12 ? fmt(W / 1e12, 1) + " ТВт" : W >= 1e9 ? fmt(W / 1e9, 1) + " ГВт" : W >= 1e6 ? fmt(W / 1e6, 0) + " МВт" : "0";
+const fM = m => m >= 1000 ? fmt(m / 1000, 2) + " т/с" : m >= 1 ? fmt(m, 1) + " кг/с" : m > 0 ? fmt(m * 1000, 0) + " г/с" : "0";
+const fT = s => !isFinite(s) ? "—" : s >= 86400 ? fmt(s / 86400, 1) + " сут" : s >= 3600 ? fmt(s / 3600, 1) + " ч" : s >= 60 ? fmt(s / 60, 1) + " мин" : fmt(s, 0) + " с";
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const follow = (v, tgt, rate, dt) => v + Math.sign(tgt - v) * Math.min(Math.abs(tgt - v), rate * dt);
+
+// ---- the anamezon drive (core/Drive.h, core/Params.h): 4 stern chambers, 2 nose retro cups (0.54 of a chamber, jets forward) ----
+const ANA = {F: 2.17e10, Fr: 0.54 * 2.17e10, vJet: 0.98 * C_L, vEff: 0.98 * 0.8 * 0.62 * 0.85 * C_L, rate: 2.0e4, m2e: 0.80, field: 1000, fieldE: 1.56e14,
+             store: 7.0e14, comp: 200 * G0, dry: 4.203e6 + 4 * 164e3, Tfield: 4, Tbeam: 2, Tfeed: 0.5};
+// ---- planetary geometry (mesh: s from the stern; pods aft pair s 44, fore pair s 84; march TVC +-10) ----
+const POD_S = [44, 44, 84, 84], POD_X = [-11.5, 11.5, -11.5, 11.5], TVC_M = 10;
+const ENV = {ground: {t: "грунт", g: 9.81, air: true}, air: {t: "атмосфера", g: 9.81, air: true}, space: {t: "космос", g: 0, air: false}};
+
+const S = {
+  page: "planetary", t: 0, speed: 1, alarms: [], trend: [], lostWhy: "", byArm: -99, bypass: false,
+  // the setpoints (the yellow arrows) and the actual values (the fills)
+  set: {m: 0, p: 0, ang: 0, tvc: 0, fs: 0, fr: 0},
+  env: "ground", rm: "auto", thrM: 0, thrP: 0, podAng: 0, tvcAuto: true, tvc: 0, gLim: 5, mass: 52.34e6, sCG: 58.1, argon: 6.2e6, iron: 3.8e6, overG: 0, limG: false,
+  aStage: "off", aT: 0, feedS: 0, feedR: 0, comp: true, compLim: 3, trapIdx: 0, traps: [9.37e6, 9.37e6, 9.37e6, 9.37e6], rap: 0, dist: 200, starAt: "stern", resid: 0, overR: 0, irradiated: false, limA: false,
+};
+function alarm(txt, lvl = "warn") { S.alarms.unshift({t: S.t, txt, lvl}); if (S.alarms.length > 6) S.alarms.pop(); }
+function lose(why) { if (S.lostWhy) return; S.lostWhy = why; alarm(why, "bad"); S.set.m = S.set.p = S.set.fs = S.set.fr = 0; S.thrM = S.thrP = S.feedS = S.feedR = 0; }
+
+// ================= planetary =================
+function planetary(dt) {
+  const E = ENV[S.env];
+  const rm = S.rm !== "auto" ? S.rm : E.air ? "argon" : "iron";
+  // interlock: in the air only argon (the fast jet's mixing layer would light the air around the hull)
+  const rmUse = !S.bypass && E.air && rm !== "argon" ? "argon" : rm;
+  if (rmUse !== rm && !S.refusedRm) alarm("Блокировка: в атмосфере только аргон", "warn");
+  S.refusedRm = rmUse !== rm;
+  const cm = PM.cup({B: PM.B_NOM, PfMax: PM.PF_MARCH, mass: rmUse, chi: 1e-5, d: 15, deployed: true});
+  const podsOk = E.air || S.bypass;
+  const cp = PM.cup({A: PM.A_POD, B: PM.B_NOM, PfMax: PM.PF_MARCH * PM.A_POD / PM.A_MARCH, mass: "argon", chi: 1e-5, d: 6, deployed: true});
+  // the drives follow the arrows: the march 20 %/s (capsule rate), the pods 25 %/s, the nozzles 15 deg/s, TVC 5 deg/s
+  S.thrM = follow(S.thrM, S.set.m, 0.2, dt);
+  S.thrP = follow(S.thrP, podsOk ? S.set.p : 0, 0.25, dt);
+  S.podAng = follow(S.podAng, S.set.ang, 15, dt);
+  let Fm = cm.F * S.thrM, Fpod = podsOk ? 3 * cp.F * S.thrP : 0;           // one pod = 3 cups
+  // side view: x along the hull forward, y up when lying. Pods: 0 deg nozzles aft = thrust forward, 90 down = up, 180 forward = braking
+  const pa = S.podAng * Math.PI / 180;
+  let Mpods = 0; for (let i = 0; i < 4; i++) Mpods += Fpod * Math.sin(pa) * (POD_S[i] - S.sCG);
+  const arm = S.sCG;
+  if (S.tvcAuto) S.set.tvc = Fm > 1 ? clamp(Math.asin(clamp(-Mpods / (Fm * arm), -1, 1)) * 180 / Math.PI, -TVC_M, TVC_M) : 0;
+  S.tvc = follow(S.tvc, S.set.tvc, 5, dt);
+  const tr = S.tvc * Math.PI / 180;
+  let Fx = Fm * Math.cos(tr) + 4 * Fpod * Math.cos(pa), Fy = Fm * Math.sin(tr) + 4 * Fpod * Math.sin(pa), Mnet = Mpods + Fm * Math.sin(tr) * arm;
+  let F = Math.hypot(Fx, Fy), a = F / S.mass, felt = a / G0;
+  // interlock: the g limit holds the drives below their arrows (no compensator on the planetary motors)
+  S.limG = false;
+  if (!S.bypass && felt > S.gLim) { const k = S.gLim / felt; S.thrM *= k; S.thrP *= k; Fm *= k; Fpod *= k; Fx *= k; Fy *= k; Mnet *= k; Mpods *= k; F *= k; a *= k; felt *= k; S.limG = true; }
+  if (felt > 9) S.overG += dt; else S.overG = Math.max(0, S.overG - dt);
+  if (felt > 9 && S.overG > 1 && S.overG - dt <= 1) alarm(`Перегрузка ${fmt(felt, 1)} g — экипаж на пределе`, "bad");
+  if (S.overG > 6) lose(`ЭКИПАЖ ПОГИБ: перегрузка ${fmt(felt, 1)} g`);
+  const md = cm.mdot * S.thrM + (podsOk ? 12 * cp.mdot * S.thrP : 0);
+  if (rmUse === "argon") S.argon = Math.max(0, S.argon - md * dt); else S.iron = Math.max(0, S.iron - md * dt);
+  S.mass -= md * dt;
+  if (S.bypass && E.air && rmUse !== "argon" && S.thrM > 0.05) { S.burn = (S.burn || 0) + dt * S.thrM; if (S.burn > 12) lose("КОРПУС ПРОГОРЕЛ: железо в атмосфере (слой смешения)"); }
+  return {E, rm: rmUse, cm, cp, podsOk, Fm, Fpod, Fx, Fy, F, a, felt, Mnet, Mpods, tvc: S.tvc, md, W: S.mass * E.g};
+}
+
+// ================= anamezon =================
+function anamezon(dt) {
+  S.aT += dt;
+  if (S.aStage === "field" && S.aT > ANA.Tfield) { S.aStage = "beam"; S.aT = 0; }
+  if (S.aStage === "beam" && S.aT > ANA.Tbeam) { S.aStage = "feed"; S.aT = 0; }
+  if (S.aStage === "feed" && S.aT > ANA.Tfeed) { S.aStage = "run"; S.aT = 0; alarm("Камеры и ретро-чаши на режиме", "ok"); }
+  const fieldLvl = S.aStage === "off" ? 0 : S.aStage === "field" ? Math.min(1, S.aT / ANA.Tfield) : 1;
+  const run = S.aStage === "run", inSys = S.dist < 50;
+  // interlocks: a jet toward the system (the stern chambers when the star is astern, the retro cups when it is ahead); no compensator
+  const blockS = run && inSys && S.starAt === "stern" && !S.bypass, blockR = run && inSys && S.starAt === "nose" && !S.bypass;
+  const blockC = run && !S.comp && !S.bypass;
+  S.blk = {s: blockS ? "струя в систему" : blockC ? "компенсатор выключен" : "", r: blockR ? "струя в систему" : blockC ? "компенсатор выключен" : ""};
+  const bk = S.blk.s + "|" + S.blk.r;
+  if (bk !== S.blkPrev) { if (S.blk.s) alarm(`Блокировка кормы: ${S.blk.s}`, "warn"); if (S.blk.r) alarm(`Блокировка реверса: ${S.blk.r}`, "warn"); S.blkPrev = bk; }
+  // the feed follows its arrow at 10 %/s; an interlock or a stop cuts it at once
+  S.feedS = run && !blockS && !blockC ? follow(S.feedS, S.set.fs, 0.1, dt) : 0;
+  S.feedR = run && !blockR && !blockC ? follow(S.feedR, S.set.fr, 0.1, dt) : 0;
+  const mass = ANA.dry + S.traps.reduce((x, y) => x + y, 0);
+  const capG = S.comp ? ANA.comp : 0;
+  let Fs = 4 * ANA.F * S.feedS, Fr = 2 * ANA.Fr * S.feedR, Fn = Fs - Fr, a = Fn / mass;
+  // the computer keeps the felt acceleration under the limit: both groups held below their arrows
+  S.limA = false;
+  if (!S.bypass) { const maxA = capG + S.compLim * G0; if (Math.abs(a) > maxA) { const k = maxA / Math.abs(a); S.feedS *= k; S.feedR *= k; Fs *= k; Fr *= k; Fn *= k; a *= k; S.limA = true; } }
+  const resid = Math.max(0, Math.abs(a) - capG) + Math.abs(a) * (S.comp ? 0.002 : 1);
+  S.resid = resid / G0;
+  if (S.resid > 25) S.overR += dt; else S.overR = Math.max(0, S.overR - dt);
+  if (S.overR > 0.5) lose(`ЭКИПАЖ ПОГИБ: ${fmt(S.resid, 0)} g сквозь компенсатор`);
+  if (S.bypass && run && inSys && !S.irradiated && ((S.starAt === "stern" && S.feedS > 0.01) || (S.starAt === "nose" && S.feedR > 0.01))) { S.irradiated = true; lose("СТРУЯ ПРОШЛА ЧЕРЕЗ СИСТЕМУ — ОБЛУЧЕНИЕ ПЛАНЕТ"); }
+  const md = (Fs + Fr) / ANA.vEff;
+  let need = md * dt;
+  while (need > 0 && S.trapIdx < 4) { const take = Math.min(need, S.traps[S.trapIdx]); S.traps[S.trapIdx] -= take; need -= take; if (S.traps[S.trapIdx] <= 0) { S.trapIdx++; if (S.trapIdx < 4) alarm(`Ловушка ${S.trapIdx} пуста — подача из ловушки ${S.trapIdx + 1}`, "warn"); } }
+  // relativistic speed along the axis: the proper acceleration adds rapidity (negative: the retro cups won)
+  S.rap += a / C_L * dt;
+  const beta = Math.tanh(S.rap), gam = Math.cosh(S.rap), fuel = S.traps.reduce((x, y) => x + y, 0);
+  const rapLeft = ANA.vEff / C_L * Math.log(mass / Math.max(1, mass - fuel));
+  const mdS = Fs / ANA.vEff, mdR = Fr / ANA.vEff;
+  return {fieldLvl, run, Fs, Fr, Fn, a, mass, md, mdS, mdR, beta, gam, fuel, rapLeft, inSys, capG,
+          rateS: ANA.rate * S.feedS, rateR: ANA.rate * S.feedR, pmS: mdS / 4 / Math.max(1, ANA.rate * S.feedS), pmR: mdR / 2 / Math.max(1, ANA.rate * S.feedR),
+          Pjet: md * ANA.m2e * C_L * C_L * 0.62 * 0.85};
+}
+
+// ================= drawing helpers =================
+const HIT = [], BARS = [];
+const T = (s, x, y, col = COL.tx, size = 15, al = "left", w = "500") => { g.fillStyle = col; g.font = `${w} ${size}px Segoe UI, system-ui`; g.textAlign = al; g.fillText(s, x, y); };
+function btn(s, x, y, w, h, on, act, col = COL.or, size = 14) {
+  g.fillStyle = on ? "#3b2a14" : "#121d1b"; g.fillRect(x, y, w, h); g.strokeStyle = on ? col : "#5a4325"; g.lineWidth = on ? 2 : 1; g.strokeRect(x, y, w, h);
+  T(s, x + w / 2, y + h / 2 + 5, on ? "#ffd29a" : col, size, "center", "600"); HIT.push({x, y, w, h, act});
+}
+function frame(x, y, w, h, title) {
+  g.strokeStyle = COL.fr; g.lineWidth = 1.5; g.strokeRect(x, y, w, h);
+  if (title) { g.font = "700 12px Segoe UI"; const tw = g.measureText(title).width; g.fillStyle = COL.bg; g.fillRect(x + 10, y - 9, tw + 16, 18); T(title, x + 18, y + 5, COL.dim, 12, "left", "700"); }
+}
+function arrow(x0, y0, x1, y1, col, wdt = 3) {
+  g.strokeStyle = col; g.fillStyle = col; g.lineWidth = wdt; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+  const a = Math.atan2(y1 - y0, x1 - x0), L = 10 + wdt * 2;
+  g.beginPath(); g.moveTo(x1, y1); g.lineTo(x1 - L * Math.cos(a - 0.4), y1 - L * Math.sin(a - 0.4)); g.lineTo(x1 - L * Math.cos(a + 0.4), y1 - L * Math.sin(a + 0.4)); g.fill();
+}
+function trends(x, y, w, h, series, label) {
+  frame(x, y, w, h, label);
+  const tr = S.trend, t1 = S.t;
+  for (const s of series) {
+    g.strokeStyle = s.c; g.lineWidth = 1.6; g.beginPath();
+    tr.forEach((p, i) => { const px = x + w - 10 - (t1 - p.t) / 60 * (w - 20), py = y + h - 8 - Math.min(1, Math.max(0, s.f(p) / s.max)) * (h - 34); i ? g.lineTo(px, py) : g.moveTo(px, py); });
+    g.stroke();
+  }
+  series.forEach((s, i) => T(s.name, x + 14 + i * 120, y + 24, s.c, 11));
+  T("60 с", x + w - 10, y + 24, COL.dim, 10, "right");
+}
+function journal(x, y, w, h) { frame(x, y, w, h, "ЖУРНАЛ"); S.alarms.slice(0, 5).forEach((a, i) => T(`${fmt(a.t, 0)} с  ${a.txt}`, x + 12, y + 28 + i * 18, a.lvl === "bad" ? COL.rd : a.lvl === "ok" ? COL.gr : COL.ye, 12)); }
+function bypassBtn(x, y, w) {
+  const armed = S.t - S.byArm < 3;
+  btn(S.bypass ? "БЛОК. СНЯТЫ" : armed ? "ПОДТВЕРДИТЬ" : "ОБХОД БЛОК.", x, y, w, 36, S.bypass || armed, () => {
+    if (S.bypass) { S.bypass = false; alarm("Блокировки восстановлены", "ok"); }
+    else if (!armed) { S.byArm = S.t; alarm("Обход блокировок: подтвердите в течение 3 с", "warn"); }
+    else { S.bypass = true; S.byArm = -99; alarm("БЛОКИРОВКИ СНЯТЫ КОМАНДИРОМ — действует только физика", "bad"); }
+  }, COL.rd);
+}
+// ---- the touch scale (UCGO Arrow): tap or drag sets the arrow, the fill is the actual value ----
+const BY0 = 132, BH = 380;
+function tbar(o) {
+  const {x, w} = o, y1 = BY0 + BH, V = v => y1 - BH * (clamp(v, o.min, o.max) - o.min) / (o.max - o.min), cw = w + 22, cx = x + cw / 2;
+  const snap = v => clamp(Math.round(v / o.snap) * o.snap, o.min, o.max);
+  T(o.label, cx, 92, o.col, 14, "center", "700");
+  btn("▲", x, 100, cw, 26, false, () => o.onSet(snap(o.set + o.step)), COL.or, 12);
+  g.fillStyle = "#0d1715"; g.fillRect(x, BY0, w, BH); g.strokeStyle = COL.fr; g.lineWidth = 1; g.strokeRect(x, BY0, w, BH);
+  for (let k = 0; k <= 10; k++) { const yy = BY0 + BH * k / 10; g.fillStyle = "#2c4a44"; g.fillRect(x, yy, k % 5 ? 6 : 12, 1); }
+  o.ticks.forEach(v => T(o.tf(v), x + 15, V(v) + 4, COL.dim, 10));
+  // the actual value (the fill, from zero), glowing
+  const base = V(o.zero ?? o.min), ya = V(o.act), y0f = Math.min(ya, base), hf = Math.abs(base - ya);
+  if (hf > 0.5) { g.save(); g.shadowColor = o.col; g.shadowBlur = 12; g.fillStyle = o.col; g.globalAlpha = 0.85; g.fillRect(x + 4, y0f, w - 8, hf); g.restore(); }
+  // the arrow: the setpoint
+  const yp = V(o.set);
+  g.strokeStyle = "rgba(232,211,90,0.7)"; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x, yp); g.lineTo(x + w, yp); g.stroke();
+  g.fillStyle = COL.ye; g.beginPath(); g.moveTo(x + w + 1, yp); g.lineTo(x + w + 20, yp - 10); g.lineTo(x + w + 20, yp + 10); g.closePath(); g.fill();
+  if (o.lim) { g.fillStyle = "rgba(255,90,74,0.9)"; g.fillRect(x + 2, BY0 + 2, w - 4, 18); T(o.lim, x + w / 2, BY0 + 15, "#fff", 10, "center", "700"); }
+  btn("▼", x, 518, cw, 26, false, () => o.onSet(snap(o.set - o.step)), COL.or, 12);
+  T(o.f(o.act), cx, 568, o.lim ? COL.rd : COL.wh, 16, "center", "700");
+  T(o.sub ?? "уст. " + o.f(o.set), cx, 588, COL.ye, 11, "center");
+  BARS.push({x, y: BY0 - 6, w: cw, h: BH + 12, val: yy => snap(o.min + (y1 - yy) / BH * (o.max - o.min)), onSet: o.onSet});
+}
+// the hull seen from aft (m -> px)
+function sternView(cx, cy, k, crest = 25) {
+  g.fillStyle = "#16241f"; g.strokeStyle = "#3f6a5f"; g.lineWidth = 2; g.beginPath(); g.ellipse(cx, cy, 13.5 * k, 9 * k, 0, 0, 7); g.fill(); g.stroke();
+  g.strokeStyle = "#2e4d45"; g.lineWidth = 3; g.beginPath(); g.moveTo(cx - 13.5 * k, cy - 1 * k); g.lineTo(cx - crest * k, cy - 1.5 * k); g.moveTo(cx + 13.5 * k, cy - 1 * k); g.lineTo(cx + crest * k, cy - 1.5 * k); g.moveTo(cx, cy - 9 * k); g.lineTo(cx, cy - Math.min(20, crest) * k); g.stroke();
+}
+function chamber(px, py, r, fieldLvl, f, label, col = COL.vi) {
+  g.strokeStyle = "#2a2440"; g.lineWidth = 6; g.beginPath(); g.arc(px, py, r, 0, 7); g.stroke();
+  g.strokeStyle = fieldLvl >= 1 ? col : "#7a68b0"; g.beginPath(); g.arc(px, py, r, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * fieldLvl); g.stroke();
+  if (f > 0.001) { const s = 0.55 + 0.45 * Math.abs(Math.sin(S.t * 47 + px)); const gr = g.createRadialGradient(px, py, 1, px, py, r); gr.addColorStop(0, `rgba(255,255,255,${s * Math.min(1, f + 0.2)})`); gr.addColorStop(0.5, `rgba(190,160,255,${0.6 * s * Math.min(1, f + 0.2)})`); gr.addColorStop(1, "rgba(120,80,255,0)"); g.fillStyle = gr; g.beginPath(); g.arc(px, py, r - 3, 0, 7); g.fill(); }
+  T(label, px, py + 4, COL.wh, 12, "center", "700");
+}
+
+// ================= pages =================
+function header(status, stCol) {
+  g.fillStyle = COL.bg; g.fillRect(0, 0, W, H);
+  g.strokeStyle = COL.fr; g.lineWidth = 2; g.strokeRect(5, 5, W - 10, H - 10);
+  T("ДВИГАТЕЛИ", 22, 38, COL.tx, 22, "left", "700");
+  btn("АНАМЕЗОН", 175, 14, 170, 38, S.page === "anamezon", () => { S.page = "anamezon"; S.trend = []; }, COL.vi);
+  btn("ПЛАНЕТАРНЫЕ", 352, 14, 170, 38, S.page === "planetary", () => { S.page = "planetary"; S.trend = []; }, COL.or);
+  g.fillStyle = stCol; g.beginPath(); g.arc(548, 32, 9, 0, 7); g.fill(); T(status, 564, 38, stCol, 15, "left", "700");
+  if (S.bypass) T("БЛОКИРОВКИ СНЯТЫ", W - 22, 38, COL.rd, 18, "right", "700");
+}
+function pagePlanetary(st) {
+  const {E, rm, cm, cp, podsOk, Fm, Fpod, Fx, Fy, F, a, felt, Mnet, tvc, md, W: Wt} = st;
+  const run = Fm > 0 || Fpod > 0;
+  header(`${run ? "ТЯГА " + fF(F) : "ТЯГИ НЕТ"} · ${E.t} · ${rm === "argon" ? "аргон" : rm === "iron" ? "железо" : "продукты"} · ${fmt(S.mass / 1e6, 2)} кт`, S.limG ? COL.ye : run ? COL.gr : COL.dim);
+  // --- the stern: cups and vectors ---
+  frame(15, 64, 530, 316, "ЧАШИ · ВИД С КОРМЫ");
+  const cx = 280, cy = 228, k = 8.6;
+  sternView(cx, cy, k);
+  for (const [x, y] of [[-4.2, 5.2], [4.2, 5.2], [-4.2, -2], [4.2, -2]]) { g.strokeStyle = "#3b3550"; g.lineWidth = 2; g.beginPath(); g.arc(cx + x * k, cy - y * k, 2.4 * k, 0, 7); g.stroke(); }
+  T("анамезон: диафрагмы закрыты", cx, cy + 108, "#6a6085", 11, "center");
+  const cupRing = (x, y, r, f, col) => { g.strokeStyle = "#2c4a44"; g.lineWidth = 6; g.beginPath(); g.arc(x, y, r, 0, 7); g.stroke(); if (f > 0.001) { g.strokeStyle = col; g.beginPath(); g.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, f)); g.stroke(); const gr = g.createRadialGradient(x, y, 1, x, y, r); gr.addColorStop(0, `rgba(255,240,220,${0.9 * Math.min(1, f)})`); gr.addColorStop(1, "rgba(255,150,60,0)"); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r - 4, 0, 7); g.fill(); } };
+  cupRing(cx, cy - 1.82 * k, 2.2 * k + 6, Fm / cm.Ffield, rm === "argon" ? COL.or : COL.vi);
+  T(fF(Fm), cx, cy - 1.82 * k + 4, COL.wh, 12, "center", "700");
+  if (Fm > 0 && Math.abs(tvc) > 0.05) arrow(cx, cy - 1.82 * k, cx, cy - 1.82 * k - tvc * 6, COL.ye, 3);
+  for (let i = 0; i < 4; i++) { const px = cx + POD_X[i] * k * 1.35, py = cy - (i < 2 ? 3.4 : -0.6) * k - 20; cupRing(px, py, 16, podsOk ? S.thrP : 0, COL.or); T(`Г${i + 1}`, px, py + 4, COL.tx, 11, "center", "700"); }
+  T(`УВТ маршевой ${fmt(tvc, 1)}° из ±${TVC_M}° · сопла гондол ${fmt(S.podAng, 0)}° · ${podsOk ? "створки гондол открыты" : "гондолы в отсеках"}`, 30, 368, COL.dim, 12);
+  // --- the side: thrust lines about the CG ---
+  frame(15, 396, 530, 254, "ВЕКТОРЫ ТЯГИ · СБОКУ");
+  const sx0 = 52, sy0 = 515, sk = 2.55;
+  if (S.env === "ground") { g.strokeStyle = "#5a4f35"; g.lineWidth = 2; g.beginPath(); g.moveTo(25, sy0 + 60); g.lineTo(535, sy0 + 60); g.stroke(); }
+  g.fillStyle = "#3a4650"; g.beginPath(); g.moveTo(sx0, sy0 - 18); g.lineTo(sx0 + 140 * sk, sy0 - 18); g.quadraticCurveTo(sx0 + 178 * sk, sy0 - 10, sx0 + 178 * sk, sy0); g.quadraticCurveTo(sx0 + 178 * sk, sy0 + 8, sx0 + 140 * sk, sy0 + 18); g.lineTo(sx0, sy0 + 18); g.closePath(); g.fill();
+  const cgx = sx0 + S.sCG * sk;
+  g.strokeStyle = COL.rd; g.lineWidth = 2; g.beginPath(); g.arc(cgx, sy0, 7, 0, 7); g.stroke(); T("ЦМ", cgx, sy0 - 12, COL.rd, 11, "center", "700");
+  const sc = 90 / 1.5e9;
+  if (Fm > 0) {
+    const tr = tvc * Math.PI / 180, L = 40 + Fm * sc;
+    const gr = g.createLinearGradient(sx0, sy0, sx0 - 30, sy0); gr.addColorStop(0, "rgba(255,200,120,0.9)"); gr.addColorStop(1, "rgba(255,140,60,0)");
+    g.fillStyle = gr; g.beginPath(); g.moveTo(sx0, sy0 - 5); g.lineTo(sx0 - 30, sy0 - 12); g.lineTo(sx0 - 30, sy0 + 12); g.lineTo(sx0, sy0 + 5); g.fill();
+    arrow(sx0, sy0 + 26, sx0 + L * Math.cos(tr), sy0 + 26 - L * Math.sin(tr) * 3, COL.or, 4); T("маршевая", sx0, sy0 + 48, COL.or, 11);
+  }
+  for (let i = 0; i < 4; i += 2) {
+    const x = sx0 + POD_S[i] * sk, pa = S.podAng * Math.PI / 180, L = Fpod * 2 * sc * 1.4;
+    if (Fpod > 0) arrow(x, sy0 + 20, x + L * Math.cos(pa), sy0 + 20 - L * Math.sin(pa), COL.or, 3);
+    T(`Г${i + 1}-${i + 2}`, x, sy0 + 50, COL.dim, 11, "center");
+  }
+  if (F > 0) arrow(cgx, sy0, cgx + Fx * sc * 0.5, sy0 - Fy * sc * 0.5, COL.wh, 3);
+  const Mtxt = Math.abs(Mnet) < 1e6 ? "момент тангажа ≈ 0 (УВТ держит)" : `момент тангажа ${fmt(Mnet / 1e9, 2)} ГН·м — ${Mnet > 0 ? "нос вверх" : "нос вниз"}`;
+  T(Mtxt, 30, 638, Math.abs(Mnet) < 1e6 ? COL.gr : COL.ye, 12);
+  journal(15, 666, 530, 119);
+  // --- the cups' output ---
+  frame(560, 64, 525, 316, "ВЫХОД ЧАШ");
+  const cols = [575, 668, 758, 828, 918, 1000];
+  ["", "тяга", "% поля", "струя", "расход", "мощн. струи"].forEach((h, i) => T(h, cols[i], 92, COL.dim, 12, "left", "700"));
+  const rowT = (y, name, Fv, cap, v, m, P, col = COL.tx) => { T(name, cols[0], y, col, 13, "left", "600"); T(fF(Fv), cols[1], y, COL.wh, 13); T(fmt(100 * Fv / cap, 0) + " %", cols[2], y, COL.tx, 13); T(Fv > 0 ? fmt(v / 1e3, 0) + " км/с" : "—", cols[3], y, COL.tx, 13); T(fM(m), cols[4], y, COL.tx, 13); T(fW(P), cols[5], y, COL.tx, 13); };
+  rowT(118, "Маршевая", Fm, cm.Ffield, cm.v, cm.mdot * S.thrM, Fm * cm.v / 2);
+  for (let i = 0; i < 4; i++) rowT(144 + i * 24, `Гондола ${i + 1}`, Fpod, 3 * cp.Ffield, cp.v, podsOk ? 3 * cp.mdot * S.thrP : 0, Fpod * cp.v / 2);
+  g.strokeStyle = COL.fr; g.beginPath(); g.moveTo(575, 252); g.lineTo(1070, 252); g.stroke();
+  rowT(274, "ИТОГО", F, cm.Ffield + 12 * cp.Ffield, md > 0 ? F / md : 0, md, Fm * cm.v / 2 + 4 * Fpod * cp.v / 2, COL.ye);
+  T(`маршевая: предел поля ${fF(cm.Ffield)} при ${fmt(PM.B_NOM, 1)} Тл · гондола: 3 чаши по ${fF(cp.Ffield)}`, 575, 306, COL.dim, 12);
+  T(`удельный импульс ${md > 0 ? fmt(F / md / G0, 0) + " с" : "—"} · вперёд ${fF(Math.max(0, Fx))}${Fx < 0 ? " · назад " + fF(-Fx) : ""} · вверх ${fF(Fy)}`, 575, 328, COL.dim, 12);
+  T(S.limG ? `приводы держит предел перегрузки ${fmt(S.gLim, 1)} g` : "", 575, 352, COL.ye, 12, "left", "700");
+  // --- the calculation ---
+  frame(560, 396, 525, 254, "РАСЧЁТ");
+  const tw = E.g > 0 ? F / Wt : 0, hoverNeed = E.g > 0 ? Wt / (4 * 3 * cp.F) : 0;
+  const rows = [
+    ["тяга / вес", E.g > 0 ? fmt(tw, 2) : "—", E.g > 0 && tw < 1 && F > 0 ? COL.ye : COL.tx],
+    ["ускорение · перегрузка", `${fmt(a, 2)} м/с² · ${fmt(felt, 2)} g`, felt > S.gLim ? COL.rd : COL.tx],
+    ["висение лёжа: нужно гондол", E.g > 0 ? fmt(hoverNeed * 100, 0) + " % (сопла вниз)" : "—", hoverNeed > 1 ? COL.rd : COL.tx],
+    ["запас УВТ маршевой", fmt(100 * (1 - Math.abs(tvc) / TVC_M), 0) + " %", Math.abs(tvc) >= TVC_M - 0.1 ? COL.rd : COL.tx],
+    ["аргон / железо", `${fmt(S.argon / 1e6, 2)} / ${fmt(S.iron / 1e6, 2)} кт`, COL.tx],
+    ["хватит на этой тяге", md > 0 ? fT((rm === "argon" ? S.argon : S.iron) / md) : "—", COL.tx],
+    ["Δv на остатке массы", fmt(cm.v * Math.log(S.mass / Math.max(1, S.mass - (rm === "argon" ? S.argon : S.iron))) / 1e3, 1) + " км/с", COL.tx],
+  ];
+  rows.forEach((r, i) => { T(r[0], 575, 428 + i * 30, COL.dim, 13); T(r[1], 1070, 428 + i * 30, r[2], 15, "right", "700"); });
+  trends(560, 666, 525, 119, [{name: "тяга", c: COL.wh, f: p => p.F, max: 2.4e9}, {name: "перегрузка", c: COL.vi, f: p => p.g, max: 6}, {name: "УВТ", c: COL.ye, f: p => Math.abs(p.tvc), max: 10}], "ТРЕНДЫ");
+  // --- the control: five touch scales ---
+  frame(1100, 64, 485, 721, "УПРАВЛЕНИЕ");
+  const pct = v => fmt(v * 100, 0) + " %";
+  tbar({x: 1114, w: 48, label: "МАРШ", col: COL.or, min: 0, max: 1, step: 0.05, snap: 0.01, set: S.set.m, act: S.thrM, f: pct, ticks: [0, 0.5, 1], tf: v => fmt(v * 100, 0),
+        onSet: v => { S.set.m = v; }, lim: S.limG && S.set.m > S.thrM + 0.005 ? "ОГР g" : ""});
+  tbar({x: 1208, w: 48, label: "ГОНД", col: COL.or, min: 0, max: 1, step: 0.05, snap: 0.01, set: S.set.p, act: podsOk ? S.thrP : 0, f: pct, ticks: [0, 0.5, 1], tf: v => fmt(v * 100, 0),
+        onSet: v => { S.set.p = v; }, lim: !podsOk ? "ЗАКР" : S.limG && S.set.p > S.thrP + 0.005 ? "ОГР g" : ""});
+  tbar({x: 1302, w: 48, label: "СОПЛА", col: COL.bl, min: 0, max: 180, step: 5, snap: 1, set: S.set.ang, act: S.podAng, f: v => fmt(v, 0) + "°", ticks: [0, 90, 180], tf: v => ["назад", "вниз", "вперёд"][v / 90] ?? "",
+        onSet: v => { S.set.ang = v; }, sub: S.podAng < 45 ? "тяга вперёд" : S.podAng < 135 ? "тяга вверх" : "торможение"});
+  tbar({x: 1396, w: 48, label: "УВТ", col: COL.ye, min: -TVC_M, max: TVC_M, zero: 0, step: 1, snap: 0.5, set: S.set.tvc, act: S.tvc, f: v => fmt(v, 1) + "°", ticks: [-10, 0, 10], tf: v => (v > 0 ? "+" : "") + v,
+        onSet: v => { S.tvcAuto = false; S.set.tvc = v; }, sub: S.tvcAuto ? "АВТО" : "ручн."});
+  tbar({x: 1490, w: 48, label: "ПРЕД. g", col: COL.vi, min: 0, max: 8, step: 0.5, snap: 0.5, set: S.gLim, act: felt, f: v => fmt(v, 1) + " g", ticks: [0, 4, 8], tf: v => v,
+        onSet: v => { S.gLim = Math.max(1, v); }, sub: S.bypass ? "СНЯТ" : `предел ${fmt(S.gLim, 1)}`});
+  [["АВТО", "auto"], ["АРГОН", "argon"], ["ЖЕЛЕЗО", "iron"]].forEach(([s, kk], i) => btn(s, 1114 + i * 112, 606, 104, 34, S.rm === kk, () => { S.rm = kk; }));
+  btn("УВТ АВТО", 1450, 606, 122, 34, S.tvcAuto, () => { S.tvcAuto = !S.tvcAuto; });
+  btn("ОТСЕЧКА", 1114, 648, 160, 36, false, () => { S.set.m = S.set.p = 0; alarm("Отсечка: стрелки в ноль", "ok"); }, COL.rd);
+  bypassBtn(1282, 648, 160);
+  btn("СБРОС", 1450, 648, 122, 36, false, reset);
+  T("мокап · среда:", 1114, 708, COL.dim, 12);
+  [["ГРУНТ", "ground"], ["ВОЗДУХ", "air"], ["КОСМОС", "space"]].forEach(([s, kk], i) => btn(s, 1114 + i * 154, 718, 146, 34, S.env === kk, () => { S.env = kk; }, COL.bl));
+}
+function pageAnamezon(st) {
+  const {fieldLvl, run, Fs, Fr, Fn, a, mass, md, beta, gam, fuel, rapLeft, inSys, capG, rateS, rateR, pmS, pmR, Pjet} = st;
+  const stTxt = {off: "КАМЕРЫ ВЫКЛЮЧЕНЫ", field: "ПОЛЕ КАМЕР", beam: "ПУЧОК ПОДЖИГА", feed: "ПОДАЧА КАПСУЛ", run: "НА РЕЖИМЕ"}[S.aStage];
+  const blkAny = S.blk && (S.blk.s || S.blk.r);
+  header(stTxt + (run && blkAny ? " · БЛОКИРОВКА" : ""), S.aStage === "run" ? (blkAny ? COL.rd : COL.gr) : S.aStage === "off" ? COL.dim : COL.ye);
+  // --- the chambers: the stern (4) and the nose (2) ---
+  frame(15, 64, 530, 316, "КАМЕРЫ · КОРМА К1–К4 · НОС Н1–Н2");
+  const cx = 150, cy = 214, k = 6.6;
+  sternView(cx, cy, k, 19);
+  [[-4.2, 5.2], [4.2, 5.2], [-4.2, -2], [4.2, -2]].forEach(([x, y], i) => chamber(cx + x * k, cy - y * k, 2.6 * k, fieldLvl, S.feedS, `К${i + 1}`));
+  g.strokeStyle = "#2c4a44"; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy - 1.82 * k, 2.2 * k, 0, 7); g.stroke();
+  T("КОРМА · вид с кормы", cx, 108, COL.tx, 12, "center", "700"); T(S.blk && S.blk.s ? "БЛОК: " + S.blk.s : fF(Fs), cx, cy + 92, S.blk && S.blk.s ? COL.rd : COL.wh, 13, "center", "700");
+  // the nose section at the retro cups (R 2.2 at +-3 m), seen from ahead
+  const nx = 415, ny = 214, nk = 11;
+  g.fillStyle = "#16241f"; g.strokeStyle = "#3f6a5f"; g.lineWidth = 2; g.beginPath(); g.ellipse(nx, ny, 7.5 * nk, 6 * nk, 0, 0, 7); g.fill(); g.stroke();
+  [-3, 3].forEach((x, i) => chamber(nx + x * nk, ny, 2.2 * nk, fieldLvl, S.feedR, `Н${i + 1}`));
+  T("НОС · вид с носа", nx, 108, COL.tx, 12, "center", "700"); T(S.blk && S.blk.r ? "БЛОК: " + S.blk.r : fF(Fr), nx, cy + 92, S.blk && S.blk.r ? COL.rd : COL.wh, 13, "center", "700");
+  T(`поле камер ${fmt(ANA.field * fieldLvl, 0)} Тл · накопитель ${fmt(100 * Math.max(0, 1 - 6 * ANA.fieldE * fieldLvl / ANA.store * 0.4), 0)} % · ретро-чаши: 0,54 тяги камеры, струи вперёд`, 30, 368, COL.dim, 12);
+  // --- the jets and the system ---
+  frame(15, 396, 530, 254, "СТРУИ И СИСТЕМА");
+  const sx = 280, sy = 530;
+  const starX = S.starAt === "stern" ? 60 : 500, starY = 470;
+  if (inSys) { g.strokeStyle = "rgba(255,90,74,0.35)"; g.setLineDash([5, 4]); g.beginPath(); g.arc(starX, starY, 95, 0, 7); g.stroke(); g.setLineDash([]); }
+  g.fillStyle = "#e8c860"; g.beginPath(); g.arc(starX, starY, 8, 0, 7); g.fill();
+  T(`звезда · ${fmt(S.dist, 0)} а.е.${inSys ? " · внутри системы" : ""}`, starX, starY - 16, COL.ye, 11, S.starAt === "stern" ? "left" : "right");
+  g.fillStyle = "#3a4650"; g.fillRect(sx - 60, sy - 8, 110, 16); g.beginPath(); g.moveTo(sx + 50, sy - 8); g.lineTo(sx + 78, sy); g.lineTo(sx + 50, sy + 8); g.fill();
+  const jet = (x0, dir, f, blocked) => {
+    const len = 170 * Math.sqrt(f), half = Math.tan(5 * Math.PI / 180) * len;
+    if (f > 0.001) { const gr = g.createLinearGradient(x0, sy, x0 + dir * len, sy); gr.addColorStop(0, "rgba(230,215,255,0.95)"); gr.addColorStop(1, "rgba(140,100,255,0)"); g.fillStyle = gr; g.beginPath(); g.moveTo(x0, sy - 4); g.lineTo(x0 + dir * len, sy - half - 4); g.lineTo(x0 + dir * len, sy + half + 4); g.lineTo(x0, sy + 4); g.fill(); }
+    if (blocked) { const xx = x0 + dir * 50; g.strokeStyle = COL.rd; g.lineWidth = 3; g.beginPath(); g.moveTo(xx - 10, sy - 10); g.lineTo(xx + 10, sy + 10); g.moveTo(xx + 10, sy - 10); g.lineTo(xx - 10, sy + 10); g.stroke(); }
+  };
+  jet(sx - 60, -1, S.feedS, S.blk && S.blk.s); jet(sx + 78, 1, S.feedR, S.blk && S.blk.r);
+  arrow(sx, sy + 34, sx + clamp(Fn / 1e10, -9, 9) * 12, sy + 34, Fn >= 0 ? COL.wh : COL.or, 3);
+  T(Fn > 1 ? "разгон" : Fn < -1 ? "торможение (реверс)" : "", sx, sy + 58, Fn >= 0 ? COL.wh : COL.or, 12, "center");
+  T(`струи: частицы ${fmt(ANA.vJet / C_L, 2)} c, конус 5° · корма ← · нос →`, 30, 638, COL.dim, 12);
+  journal(15, 666, 530, 119);
+  // --- the output ---
+  frame(560, 64, 525, 316, "ВЫХОД КАМЕР");
+  const cols = [575, 622, 692, 778, 902, 1000];
+  ["", "подача", "капсулы", "капсула", "тяга", "поле"].forEach((h, i) => T(h, cols[i], 92, COL.dim, 12, "left", "700"));
+  const row = (y, n, f, rate, pm, Fv, col) => { T(n, cols[0], y, col, 13, "left", "700"); T(fmt(f * 100, 0) + " %", cols[1], y, COL.tx, 13); T(fmt(rate / 1e3, 1) + " кГц", cols[2], y, COL.tx, 13);
+    T(f > 0.001 ? `${fmt(pm * 1e3, 1)} г · ${fmt(pm * ANA.m2e * C_L * C_L / 4.184e12, 0)} кт` : "—", cols[3], y, COL.tx, 13); T(fF(Fv), cols[4], y, COL.wh, 13); T(fmt(ANA.field * fieldLvl, 0) + " Тл", cols[5], y, COL.vi, 13); };
+  for (let i = 0; i < 4; i++) row(116 + i * 22, `К${i + 1}`, S.feedS, rateS, pmS, ANA.F * S.feedS, COL.tx);
+  for (let i = 0; i < 2; i++) row(212 + i * 22, `Н${i + 1}`, S.feedR, rateR, pmR, ANA.Fr * S.feedR, COL.or);
+  g.strokeStyle = COL.fr; g.beginPath(); g.moveTo(575, 250); g.lineTo(1070, 250); g.stroke();
+  T("корма — вперёд", cols[0], 270, COL.dim, 13); T(fF(Fs), cols[4], 270, COL.wh, 13, "left", "700");
+  T("реверс — назад", cols[0], 290, COL.dim, 13); T(Fr > 0 ? "−" + fF(Fr) : "0", cols[4], 290, COL.or, 13, "left", "700");
+  T("СУММА ПО ОСИ", cols[0], 312, COL.ye, 13, "left", "700"); T((Fn < 0 ? "−" : "") + fF(Math.abs(Fn)), cols[4], 312, COL.ye, 14, "left", "700");
+  T(`истечение: частицы ${fmt(ANA.vJet / C_L, 2)} c · эффективная ${fmt(ANA.vEff / C_L, 3)} c (${fmt(ANA.vEff / 1e3, 0)} км/с)`, 575, 340, COL.tx, 12);
+  T(`мощность струй ${fW(Pjet)} · расход анамезона ${fM(md)} (${fmt(md * 3.6, 1)} т/ч)`, 575, 362, COL.tx, 12);
+  // --- the calculation ---
+  frame(560, 396, 525, 254, "РАСЧЁТ");
+  const along = Math.sign(a) === Math.sign(S.rap) || Math.abs(S.rap) < 1e-9;
+  const stopT = !along && Math.abs(a) > 0 ? Math.abs(S.rap) * C_L / Math.abs(a) : Infinity;
+  const vMaxOne = Math.tanh(Math.abs(S.rap) + rapLeft), vBrake = Math.tanh((Math.abs(S.rap) + rapLeft) / 2);
+  const rows = [
+    ["ускорение по оси", `${a >= 0 ? "+" : "−"}${fmt(Math.abs(a) / G0, 1)} g · ${Math.abs(a) < 1e-6 ? "—" : along ? "разгон" : "торможение"}`, COL.tx],
+    ["компенсатор гасит · ощущается", S.comp ? `${fmt(Math.min(Math.abs(a), capG) / G0, 1)} g · ${fmt(S.resid, 2)} g` : `ВЫКЛ · ${fmt(S.resid, 2)} g`, !S.comp || S.resid > 10 ? COL.rd : S.resid > S.compLim ? COL.ye : COL.gr],
+    ["скорость", `${beta < 0 ? "−" : ""}${fmt(Math.abs(beta), 4)} c · ${fmt(Math.abs(beta) * C_L / 1e3, 0)} км/с`, COL.tx],
+    ["γ · время корабля / Земли", `${fmt(gam, 3)} · ${fmt(1 / gam, 3)}`, COL.tx],
+    ["анамезон в ловушках", `${fmt(fuel / 1e6, 2)} кт · активна ${Math.min(4, S.trapIdx + 1)}`, COL.tx],
+    [along ? "до пустых ловушек" : "до остановки", along ? (md > 0 ? fT(fuel / md) : "—") : fT(stopT), COL.tx],
+    ["предел: разгон / с торможением", `${fmt(vMaxOne, 3)} c / ${fmt(vBrake, 3)} c`, vBrake >= 0.42 ? COL.gr : COL.ye],
+  ];
+  rows.forEach((r, i) => { T(r[0], 575, 428 + i * 30, COL.dim, 13); T(r[1], 1070, 428 + i * 30, r[2], 15, "right", "700"); });
+  trends(560, 666, 525, 119, [{name: "ускорение, g", c: COL.wh, f: p => Math.abs(p.a), max: 220}, {name: "ощущается", c: COL.vi, f: p => p.r, max: 10}, {name: "v/c ×100", c: COL.ye, f: p => Math.abs(p.b) * 100, max: 100}], "ТРЕНДЫ");
+  // --- the control: three touch scales ---
+  frame(1100, 64, 485, 721, "УПРАВЛЕНИЕ");
+  const pct = v => fmt(v * 100, 0) + " %";
+  tbar({x: 1124, w: 64, label: "КОРМА", col: COL.vi, min: 0, max: 1, step: 0.05, snap: 0.01, set: S.set.fs, act: S.feedS, f: pct, ticks: [0, 0.5, 1], tf: v => fmt(v * 100, 0),
+        onSet: v => { S.set.fs = v; }, lim: S.blk && S.blk.s && S.set.fs > 0 ? "БЛОК" : S.limA && S.set.fs > S.feedS + 0.005 ? "ОГР g" : ""});
+  tbar({x: 1278, w: 64, label: "РЕВЕРС", col: COL.or, min: 0, max: 1, step: 0.05, snap: 0.01, set: S.set.fr, act: S.feedR, f: pct, ticks: [0, 0.5, 1], tf: v => fmt(v * 100, 0),
+        onSet: v => { S.set.fr = v; }, lim: S.blk && S.blk.r && S.set.fr > 0 ? "БЛОК" : S.limA && S.set.fr > S.feedR + 0.005 ? "ОГР g" : ""});
+  tbar({x: 1432, w: 64, label: "ОЩУЩ. g", col: COL.gr, min: 0, max: 10, step: 0.5, snap: 0.5, set: S.compLim, act: S.resid, f: v => fmt(v, 2) + " g", ticks: [0, 5, 10], tf: v => v,
+        onSet: v => { S.compLim = Math.max(1, v); }, sub: `предел ${fmt(S.compLim, 1)} g`});
+  btn(S.aStage === "off" ? "ПУСК КАМЕР" : "СТОП КАМЕР", 1114, 606, 172, 36, S.aStage !== "off", () => {
+    if (S.aStage === "off") { S.aStage = "field"; S.aT = 0; alarm("Пуск: поле камер и ретро-чаш 1000 Тл из накопителя", "ok"); } else { S.aStage = "off"; S.aT = 0; S.set.fs = S.set.fr = 0; alarm("Стоп: поле в накопитель (возврат 95 %)", "ok"); }
+  }, S.aStage === "off" ? COL.gr : COL.rd);
+  btn("КОМПЕНСАТОР", 1294, 606, 150, 36, S.comp, () => { S.comp = !S.comp; alarm(S.comp ? "Компенсатор включён" : "Компенсатор выключен", S.comp ? "ok" : "warn"); }, S.comp ? COL.gr : COL.rd);
+  btn("ЛОВУШКА ▶", 1452, 606, 120, 36, false, () => { if (S.trapIdx < 3) { S.trapIdx++; alarm(`Подача из ловушки ${S.trapIdx + 1}`, "ok"); } });
+  btn("ОТСЕЧКА", 1114, 648, 172, 36, false, () => { S.set.fs = S.set.fr = 0; alarm("Отсечка: подача в ноль", "ok"); }, COL.rd);
+  bypassBtn(1294, 648, 150);
+  btn("СБРОС", 1452, 648, 120, 36, false, reset);
+  T("мокап:", 1114, 708, COL.dim, 12);
+  btn("В СИСТЕМЕ 20 а.е.", 1114, 718, 112, 34, S.dist < 50, () => { S.dist = 20; }, COL.bl, 11);
+  btn("ВНЕ 200 а.е.", 1232, 718, 104, 34, S.dist >= 50, () => { S.dist = 200; }, COL.bl, 11);
+  btn("ЗВЕЗДА ЗА КОРМОЙ", 1342, 718, 112, 34, S.starAt === "stern", () => { S.starAt = "stern"; }, COL.bl, 10);
+  btn("ЗВЕЗДА ПО НОСУ", 1460, 718, 112, 34, S.starAt === "nose", () => { S.starAt = "nose"; }, COL.bl, 10);
+}
+function overlay() {
+  if (!S.lostWhy) return;
+  g.fillStyle = "rgba(60,0,0,0.78)"; g.fillRect(0, 60, W, H - 60);
+  T(S.lostWhy, W / 2, 380, "#ffd0c8", 34, "center", "800");
+  T("цена ошибки — корабль и люди. СБРОС — начать заново", W / 2, 430, "#ffb0a0", 18, "center", "600");
+  HIT.length = 0; BARS.length = 0; btn("СБРОС", W / 2 - 70, 470, 140, 40, false, reset, COL.rd);
+}
+function reset() {
+  Object.assign(S, {alarms: [], trend: [], lostWhy: "", bypass: false, set: {m: 0, p: 0, ang: 0, tvc: 0, fs: 0, fr: 0}, thrM: 0, thrP: 0, podAng: 0, tvc: 0, tvcAuto: true, mass: 52.34e6, argon: 6.2e6, iron: 3.8e6, overG: 0, burn: 0,
+    aStage: "off", aT: 0, feedS: 0, feedR: 0, comp: true, trapIdx: 0, traps: [9.37e6, 9.37e6, 9.37e6, 9.37e6], rap: 0, resid: 0, overR: 0, irradiated: false});
+}
+// ---- input: a scale catches the press and the drag; otherwise the buttons ----
+let drag = null;
+const pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+cv.addEventListener("pointerdown", e => {
+  const [x, y] = pos(e);
+  for (const b of BARS) if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { drag = b; b.onSet(b.val(y)); cv.setPointerCapture(e.pointerId); return; }
+  for (let i = HIT.length - 1; i >= 0; i--) { const h = HIT[i]; if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) { h.act(); return; } }
+});
+cv.addEventListener("pointermove", e => { if (drag) drag.onSet(drag.val(pos(e)[1])); });
+const endDrag = () => { drag = null; };
+cv.addEventListener("pointerup", endDrag); cv.addEventListener("pointercancel", endDrag);
+const SPEEDS = [1, 5, 20, 100];
+function spd() { $("spdB").innerHTML = ""; for (const v of SPEEDS) { const b = document.createElement("button"); b.textContent = "×" + v; if (S.speed === v) b.classList.add("on"); b.onclick = () => { S.speed = v; spd(); }; $("spdB").appendChild(b); } }
+spd();
+let last = performance.now();
+setInterval(() => {
+  const now = performance.now(), dtR = Math.min(0.1, (now - last) / 1000); last = now;
+  const dt = dtR * S.speed, n = Math.max(1, Math.ceil(dt / 0.05));
+  let st;
+  for (let i = 0; i < n; i++) { S.t += dt / n; st = S.page === "planetary" ? planetary(dt / n) : anamezon(dt / n); if (S.lostWhy) break; }
+  if (!S.trend.length || S.t - S.trend[S.trend.length - 1].t >= 0.25) {
+    S.trend.push(S.page === "planetary" ? {t: S.t, F: st.F, g: st.felt, tvc: st.tvc} : {t: S.t, a: st.a / G0, r: S.resid, b: st.beta});
+    while (S.trend.length && S.t - S.trend[0].t > 60) S.trend.shift();
+  }
+  HIT.length = 0; BARS.length = 0;
+  if (S.page === "planetary") pagePlanetary(st); else pageAnamezon(st);
+  overlay();
+}, 33);
+</script>
+</body>
+</html>

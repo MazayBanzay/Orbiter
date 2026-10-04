@@ -12,8 +12,10 @@
 
 namespace ocrew
 {
+	struct Suit;
 	struct HudData
 	{
+		Suit* life{};   // the suit itself (power, loads, equipment, servo, economy): read and switched by the display
 		// person
 		std::string name, role;
 		int state{};                     // 0 ok, 1 unconscious, 2 dead
@@ -67,7 +69,8 @@ namespace ocrew
 		bool Ok() const { return tex != nullptr; }
 		// size 0 tiny, 1 small, 2 mid, 3 big; colour = atlas colour 0..6; align 0 left, 1 centre, 2 right;
 		// (x, y) = pen at the baseline in pixels; scale = pixels per display unit
-		bool Draw(oapi::Sketchpad* skp, double x, double y, const std::string& utf8, int size, int colour, int align, double scale) const;
+		// kx, ky: the target surface's pixels per screen pixel (the helmet display's square texture is stretched back on the visor)
+		bool Draw(oapi::Sketchpad* skp, double x, double y, const std::string& utf8, int size, int colour, int align, double scale, double kx = 1, double ky = 1) const;
 		double Width(const std::string& utf8, int size, double scale) const;   // pixels
 	private:
 		struct Glyph { int x{}, y{}, w{}, h{}, ox{}, oy{}; float adv{}; };
@@ -84,9 +87,25 @@ namespace ocrew
 		~SuitHud();
 		// the body it draws on leaves the world: drop what is bound to that body (the IR camera)
 		void Detach();
-		// the whole display over the view, W x H pixels (drawn from the D3D9 client's render callback, any cockpit mode)
+		// the whole display, drawn into a surface of W x H pixels (clbkDrawHUD). The layout is always the viewport's: on the
+		// helmet display the surface is Orbiter's square VC HUD texture, stretched back over the view by the visor plate
 		void Draw(oapi::Sketchpad* skp, double W, double H, const HudData& d, VESSEL* v);
-		void Mouse(double W, double H);        // a fresh left click in Orbiter's window -> Click, in W x H pixels
+		void Mouse(double W, double H);        // a fresh left click in Orbiter's window -> Click, in viewport pixels (W, H unused)
+
+		// ---- the helmet display: the suit's HUD is light projected on the visor - Orbiter's own VC HUD (drawn additively,
+		// no instruments of Orbiter's), on a plate that rides the head and exactly covers the view ----
+		struct HelmetView { VECTOR3 eye; double yaw{}, pitch{}; bool show{}; };   // vessel frame: eye point, gaze yaw/pitch (rad)
+		UINT HelmetMesh(VESSEL* v);            // once, before the VC is loaded (clbkSetClassCaps): adds the plate, returns its mesh index
+		void RegisterVC();                     // in clbkLoadVC: the plate's group is the VC HUD
+		void HelmetFrame(VESSEL* v, VISHANDLE vis, const HelmetView& hv);   // every step, after the head is aimed
+		Suit* life{};                          // the suit of the last frame (the switches act on it)
+		UINT plateIdx{ static_cast<UINT>(-1) }; bool onVisor{}; VISHANDLE plateVis{};
+		// the visor's modulator: the photonic layer in the glass that dims the outside light locally (behind the panels, along
+		// the visor's edges, over the sun, the whole view when the shade is down) - drawn into its own texture each step
+		SURFHANDLE modSrf{}; int modW{}, modH{}; DEVMESHHANDLE modDm{}; bool modLogged{};
+		double lastShade{}; bool lastSunlit{};
+		void Modulator(VESSEL* v);
+		void PlaceVisor(VESSEL* v);            // the plate over the camera's own frame (position, axes, aperture) as it is now
 		void Click(double x, double y);        // a left click in the view, pixels of the HUD surface
 		bool mouseWasDown{};
 		// requests for the crew member: an autopilot button (AP_*) and the target it applies to; -1 = none
@@ -143,7 +162,7 @@ namespace ocrew
 		double lastRR{ -1 };
 
 		// what can be clicked, from the last frame (pixels)
-		enum HitKind { H_LTAB, H_RTAB, H_LFOLD, H_RFOLD, H_TGT, H_AP, H_PAL, H_ZOOM, H_MODE, H_NVG, H_NEXT, H_BRIGHT, H_LOOK, H_ACK };
+		enum HitKind { H_LTAB, H_RTAB, H_LFOLD, H_RFOLD, H_TGT, H_AP, H_PAL, H_ZOOM, H_MODE, H_NVG, H_NEXT, H_BRIGHT, H_LOOK, H_ACK, H_SUIT };
 		struct Hit { double x0, y0, x1, y1; int kind, arg; };
 		std::vector<Hit> hits;
 		int request{ -1 };
@@ -151,7 +170,7 @@ namespace ocrew
 		// screen brightness against the light around: automatic, or by hand (saved); ambient 0 dark .. 1 bright
 		// the display's technology, as it looks: 0 hologram, 1 light-built (a thin coherent line, hatched, no fills), 2 electroluminescent
 		bool mapMono{};   // the local map in one colour (off by default: the user's choice)
-		int look{ 0 };   // holo, orange + cyan by default (the user's choice); the scenario's HUD line overrides
+		int look{ 1 };   // photonics by default (the user's choice); the scenario's HUD line overrides
 		// caution & warning: what is wrong now (and was), acknowledged or not; newest first
 		struct Alert { std::string key, tile, text; int level{}; double t0{}; bool ack{}, active{}, seen{}; };
 		std::vector<Alert> alerts;
@@ -166,7 +185,7 @@ namespace ocrew
 		// data - what an active ranger sees where there is no light at all (the night side of Io)
 		struct Relief { OBJHANDLE body{}; double lat{}, lng{}, t{ -1 }; int nr{}, na{}; std::vector<double> lat_, lng_, rad_; } relief;
 		bool nvg{}, gcTried{}, gcOk{}; SURFHANDLE nvSrf{}; void* nvCam{}; int nvW{}, nvH{}; std::string nvNote;
-		void NightVision(oapi::Sketchpad* skp, VESSEL* v, double W, double H);
+		void NightVision(oapi::Sketchpad* skp, VESSEL* v, double W, double H, double SW, double SH);   // W x H the view, SW x SH the surface
 		HudText glyphs;
 		bool glyphsTried{};
 		std::map<unsigned long long, oapi::Pen*> pens;       // fallback without the D3D9 client

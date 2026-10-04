@@ -9,9 +9,13 @@ namespace {
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kPhaseTime = 20.0;  // s per phase of the erection (2 min in all)
 constexpr double kGearTime = 12.0;   // s to deploy or stow the gear
+constexpr double kLoadTime = 8.0;    // s to pass the weight between the blades and the stern legs (phase 4-5)
+constexpr double kTuckTime = 8.0;    // s to fold (or unfold) the wings and the fin around a carriage move
 
 double Clamp01(double v) { return v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v); }
-double Ease(double t) { t = Clamp01(t); return t * t * (3.0 - 2.0 * t); }
+// minimum-jerk profile of the drives (10t^3 - 15t^4 + 6t^5): speed, acceleration and jerk zero at both ends - a
+// 52 kt hull on 80 m columns must not be started or stopped with a jolt (tantra_leg_dynamics.html)
+double Ease(double t) { t = Clamp01(t); return t * t * t * (10.0 + t * (-15.0 + 6.0 * t)); }
 double Lerp(double a, double b, double t) { return a + (b - a) * t; }
 double StepTo(double v, double target, double maxStep) {
     return v < target ? std::min(target, v + maxStep) : std::max(target, v - maxStep);
@@ -52,7 +56,19 @@ void Carriage::Update(double dt, double sCG) {
     sCG_ = sCG;
     const bool settling = p_ != pT_;  // carriage still moving: the gear waits for it
     if (!(settling && gearT_ < gear_)) gear_ = StepTo(gear_, gearT_, dt / kGearTime);
-    if (gear_ >= 1.0 && (gearT_ >= 1.0 || settling)) p_ = StepTo(p_, pT_, dt / kPhaseTime);
+    // the wings and the fin (the user's rule): folded lying on the ground and around any carriage move (turning, the
+    // blades lie along the flanks through the wing roots); open standing on the stern - the launch stand, where they
+    // are the stabilisers of the nose-first climb and clear the stern legs by 30 deg; in the air as the crew set them.
+    const bool moving = settling || (p_ > 0.0 && p_ < 6.0);
+    const bool standing = p_ >= 6.0 && pT_ >= 6.0;
+    const double tuckT = moving || (grounded_ && !standing) ? 1.0 : 0.0;
+    tuck_ = snapTuck_ ? tuckT : StepTo(tuck_, tuckT, dt / kTuckTime);
+    snapTuck_ = false;
+    // the turn (phase 2-3) is slower: its inertia goes through the bending of the columns into the cup feet
+    // and the weight passing to the stern legs (4-5) is quick: nothing moves but the struts settling (MR valves, ~7 s)
+    auto in = [this](double a) { return (p_ >= a && p_ < a + 1.0) || (pT_ < p_ && p_ > a && p_ <= a + 1.0); };
+    const double phaseTime = in(2.0) ? turnTime_ : in(4.0) ? kLoadTime : kPhaseTime;
+    if (gear_ >= 1.0 && (gearT_ >= 1.0 || settling) && tuck_ >= 1.0) p_ = StepTo(p_, pT_, dt / phaseTime);
     // CG tracking: on the blades alone (kangaroo up, stern legs not yet loaded) the trunnion drives feel the moment of
     // the CG off their axis and the carriages run along the rails until it is gone (to what the sensing resolves).
     // The estimate is kept while the ship stands on the blades; a new stand starts from the computed CG again.
@@ -107,9 +123,9 @@ void Carriage::BuildPose(double sCG) {
     const double restLen = g.restAxisH - g.footH;                                     // blade hip -> ankle, lying
 
     // --- erection: heights and pitch ---
-    // the crests and the fin stay as the crew set them: standing, the wings in line clear the stern legs by 30 deg
-    // and the fin is the stabiliser of the nose-first climb (they fold for sub-light and a stern-first descent only)
-    o.tuck = 0.0;
+    // the crests and the fin: folded on the ground and around a carriage move (Update, tuck_); in the air as the crew
+    // set them - the fin is the stabiliser of the nose-first climb
+    o.tuck = Ease(tuck_);
     o.trunnionH = Lerp(g.restAxisH, hStand, Ease((ph(0) - 0.1) / 0.9));
     if (standingSet) o.trunnionH = hStand;
     o.theta = 0.5 * kPi * Ease(ph(2));
@@ -260,6 +276,7 @@ void Carriage::Load(double p, double pT, double gear, double gearT, int set, int
     gearT_ = gearT > 0.5 ? 1.0 : 0.0;
     set_ = set ? FlightSet::Standing : FlightSet::Level;
     port_ = port != 0;
+    tuck_ = (p_ > 0.0 && p_ < 6.0) || p_ != pT_ ? 1.0 : 0.0;
     BuildPose(sCG_);
 }
 

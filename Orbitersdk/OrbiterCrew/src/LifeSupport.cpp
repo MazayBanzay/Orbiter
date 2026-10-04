@@ -56,25 +56,51 @@ namespace ocrew
 
 	double Suit::Step(double dt, double o2Use, double co2Made, double driveDemandW, double bodyHeatW, double tEnv)
 	{
+		// the equipment cooled down after a shutdown: back on, life first (the task loads follow 30 s later)
+		if (tripped && tEq < EQ_BACK) { tripped = false; restartT = 30; }
+		if (restartT > 0) restartT = (std::max)(0.0, restartT - dt);
 		const bool power = Powered();
+		const double heatMax = econ ? 0.5 * heatMaxW : heatMaxW, coolMax = econ ? 0.5 * coolMaxW : coolMaxW, life = econ ? 0.75 * lifeW : lifeW;
 
-		// heat to move: her own heat plus what leaks in (+) or out (-) through the insulation
+		// heat to move: her own heat, what leaks in (+) or out (-) through the insulation, and the equipment's heat the
+		// cooling loop takes (the loop barely moves it without power)
 		if (pOut > pMaxOutKPa) breached = true;   // the outside pressure crushes the shell: it does not come back
-		const double net = bodyHeatW + Conductance() * (tEnv - 295);
+		const double qEq = (power ? gEq : 0.2 * gEq) * (tEq - tIn);
+		const double net = bodyHeatW + Conductance() * (tEnv - 295) + qEq;
 		double residual = net;
 		thermalW = driveW = heatW = 0;
+		double q = 0;   // heat the control would move, W (+ cooling, - heating)
+		if (power) { q = net > 0 ? (std::min)(net, coolMax) : -(std::min)(-net, heatMax); thermalW = q > 0 ? q / copCool : -q; }
+		// load shedding, decided on what is asked (not on what is left - no flapping): the derating and the restart first
+		shedField = shedLamps = shedDrives = overload = false;
+		if (power && (tEq > EQ_LIMIT || restartT > 0)) { shedField = shedDrives = true; if (restartT > 0) shedLamps = true; }
 		if (power)
 		{
-			if (net > 0) { const double q = (std::min)(net, coolMaxW); thermalW = q / copCool; residual = net - q; heatW = q; }
-			else { const double q = (std::min)(-net, heatMaxW); thermalW = q; residual = net + q; heatW = -q; }
-			if (drivesOn) driveW = driveDemandW;
+			double ask = life + thermalW + (drivesOn && !shedDrives ? driveDemandW : 0) + (shedLamps ? 0 : lampW) + (fieldOn && !shedField ? fieldW : 0);
+			if (ask > supplyW && fieldOn && !shedField) { shedField = overload = true; ask -= fieldW; }
+			if (ask > supplyW && lampW > 0 && !shedLamps) { shedLamps = overload = true; ask -= lampW; }
+			if (ask > supplyW && drivesOn && !shedDrives) { shedDrives = overload = true; ask -= driveDemandW; }
+			if (ask > supplyW && thermalW > 0)   // what is left over the limit comes off the thermal control, not off the O2 and sorbent
+			{
+				overload = true;
+				const double cut = (std::min)(thermalW, ask - supplyW), k = (thermalW - cut) / thermalW;
+				thermalW -= cut; q *= k;
+			}
+			residual = net - q; heatW = q;
+			if (drivesOn && !shedDrives) driveW = driveDemandW;
 		}
 		// inside: held at the set point while the control keeps up; what it cannot move warms or cools the inside
 		if (std::abs(residual) < 5 && power) tIn += (tSet - tIn) * (1 - std::exp(-dt / 90));
 		else tIn += residual * dt / cIn;
 		tIn = std::clamp(tIn, 200.0, 400.0);
-		drawW = power ? lifeW + thermalW + driveW + lampW + (fieldOn ? fieldW : 0) : 0;
+		drawW = power ? life + thermalW + driveW + (shedLamps ? 0 : lampW) + (fieldOn && !shedField ? fieldW : 0) : 0;
 		batt = (std::max)(0.0, batt - drawW * dt);
+		// the equipment: its losses (more near the supply's limit), the drives' heat, the outside through the shell; the
+		// cooling loop takes qEq. Too hot: it shuts down - as a flat battery
+		const double losses = power ? 0.10 * drawW + 0.25 * driveW + 0.5 * (std::max)(0.0, drawW - 0.8 * supplyW) : 0;
+		tEq += (losses - qEq + gEqOut * (tEnv - tEq)) * dt / cEq;
+		tEq = std::clamp(tEq, 150.0, 900.0);
+		if (power && tEq > EQ_TRIP) tripped = true;
 
 		if (breached)   // the shell is open: the gas outside fills the helmet within seconds, the tank bleeds out
 		{

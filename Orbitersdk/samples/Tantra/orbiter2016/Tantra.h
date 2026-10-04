@@ -7,6 +7,7 @@
 #include "XRSound.h"
 #include "TantraCrew.h"
 #include "TantraLift.h"
+#include "../core/Plant.h"
 #include "TantraWalk.h"
 #include "TantraScreen.h"
 #include "TantraInterior.h"
@@ -30,6 +31,13 @@ class Tantra : public VESSEL3 {
 public:
     Tantra(OBJHANDLE hVessel, int flightmodel);
     ~Tantra();
+    // the power plant, for its screen on the bridge
+    const tantra::plant::Plant& PlantState() const { return plant_; }
+    const tantra::plant::Output& PlantOut() const { return plantOut_; }
+    double MarchLevel() const { return march_ ? GetThrusterLevel(march_) : 0.0; }
+    double ArgonMass() const { return GetPropellantMass(argon_); }
+    double IronMass() const { return GetPropellantMass(iron_); }
+    void PlantPress(int k) { PlantKey(k); }
 
     void clbkSetClassCaps(FILEHANDLE cfg) override;
     void clbkPostCreation() override;
@@ -196,7 +204,8 @@ private:
     // Leg systems (core/Legs): MR ankle struts, jamming soles with anchors, fibre sensors, magnetic bearings.
     tantra::legs::Soles solesCar_, solesStern_;
     tantra::legs::Regen regen_;
-    double strut_[7] = {};                     // ankle struts unloaded 0..1 (rod out)
+    double strut_[7] = {};                     // ankle strut rods: travel from the static sag [m] (+ out, - in)
+    double penLeg_[7] = {};                    // each leg's pads under the ground = its strut compression [m]
     double legN_[7] = {}, legR_[7] = {};       // sensed load [N] and its share of the rating, per leg (6 = kangaroo)
     bool legAlarm_[7] = {};
     bool hipCatcher_ = false;                  // hip magnetic bearings over capacity: running on the catchers
@@ -209,7 +218,11 @@ private:
     double balTorque_[2] = {0.0, 0.0};                           // applied [N m]
     double balBias_[2] = {0.0, 0.0};                             // slow zero: the static lean of the hull on its feet [rad]
     bool balHold_ = false;                                       // erection paused: swaying
-    void UpdateWarpFreeze();                                     // high time warp on the ground: freeze (landed status)
+    void UpdateWarpFreeze(double dt);
+    void LiftSound(bool inside);                                  // the carriage heard (UpdateSound)
+    double liftP_ = -1.0, liftGear_ = 0.0, liftH_ = 0.0, liftHip_ = 0.0, liftTh_ = 0.0, liftMast_ = 0.0, liftLevel_ = 0.0;
+    bool liftBusy_ = false, liftContact_ = true;
+    double liftVz_ = 0.0, sinceContactPrev_ = 0.0;                                     // high time warp on the ground: freeze (landed status)
     bool frozen_ = false;
     // ground mechanism: the hull placed over the planted feet while the carriage moves on the ground
     void GroundMechanism(double dt, const VECTOR3* t, const int* legOf, int nt);
@@ -218,6 +231,7 @@ private:
     bool planted_[8] = {};
     double plLng_[8] = {}, plLat_[8] = {}, plRad_[8] = {};
     double mechSway_ = 0.0, mechRate_ = 0.0, mechKick_ = 0.0, mechLog_ = 0.0;
+    double colX_ = 0.0, colVX_ = 0.0, colY_ = 0.0, colVY_ = 0.0, colLastHipRate_ = 0.0;   // column tops' sway [m]
     double mechLastTheta_ = -1.0, mechLastHip_ = 0.0, mechThRate_ = 0.0, mechHipRate_ = 0.0, mechShare_ = 0.0;
     double balCalm_ = 0.0;                                       // s calm so far
     double balRamp_ = 1.0;                                       // soft start of the erection after a pause, 0..1
@@ -295,6 +309,8 @@ private:
     VECTOR3 touch_[tantra::CarriagePose::kMaxTouch] = {};
     int nTouch_ = 0;
     double touchMass_ = 0.0;          // mass the suspension was last tuned for
+    double touchK_[tantra::CarriagePose::kMaxTouch] = {}, touchC_[tantra::CarriagePose::kMaxTouch] = {};   // per pad: the struts' MR valves
+    bool touchTuned_ = false;
     bool touchSettled_ = false;
     // Settling after a scenario start: overdamped suspension, no load/damage checks until the ship
     // has come to rest on its contacts (Orbiter puts a landed vessel down with uncompressed contacts).
@@ -342,6 +358,16 @@ private:
     unsigned seatKeyPrev_ = 0;            // the keys held last step (edges)
     unsigned seatAttSet_ = 0;             // the attitude groups the numpad drives now (bits THGROUP_ATT_*)
     bool seatSurf_ = false;               // the helm holds the control surfaces (released on leaving the seat)
+    tantra::plant::Plant plant_;                  // the planetary power plant: field, limiter, heat, failures
+    tantra::plant::Output plantOut_;
+    unsigned plantKeyPrev_ = 0;
+    void LoadPlantConfig();
+    void UpdatePlant(double simdt, double f);
+    void PlantKey(int k);                          // 0 field-, 1 field+, 2 power-, 3 power+, 4 limiter, 5 reaction mass
+    bool restLock_ = false, firstRest_ = false;   // at rest in Orbiter's landed state (UpdateWarpFreeze)
+    double restTimer_ = 0.0;
+    void LandNow(bool equilibrium);
+    bool tuckSet_ = false;                // the wings' ground fold set at once on the first step
     double liftoffAlt_ = 0.0;             // origin height above the ground at the last contact (stern-first takeoff)
     bool autoGearArmed_ = false;          // the stern legs stow by themselves once 50 m up (after each stand)
     void AutoFlightSet();                 // the stern legs after a tail-first takeoff; crests on a stern-first descent

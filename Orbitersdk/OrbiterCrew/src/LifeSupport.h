@@ -73,13 +73,27 @@ namespace ocrew
 		bool fieldOn{};                               // magnetic shield switched on (works only while powered)
 		double fieldW{ 600 };                        // its draw, W
 		double fieldFactor{ 30 };                    // charged particles divided by this with the field up
-		bool FieldUp() const { return fieldOn && Powered(); }
+		bool FieldUp() const { return fieldOn && Powered() && !shedField; }
 		double tIn{ 295.15 }, tSet{ 295.15 };          // K: the air and the cooling garment inside, and what the control holds
 		double cIn{ 15000 };                          // J/K: garment water loop, air, underwear
-		bool drivesOn{ true };
+		bool drivesOn{ true };   // the servo drives: switched by hand (off: no help carrying the suit, slower, no bounding)
 
-		bool Powered() const { return batt > 0; }
-		bool Drives() const { return drivesOn && Powered(); }
+		// ---- power and the suit's own hardware ----
+		// The supply's continuous limit: above it the loads are shed by the three loops - ЗАДАЧА first (field, lamps,
+		// drives), ВОЗВРАТ next (the pack has its own fuel), ЖИЗНЬ last (the thermal control is cut back before O2/sorbent).
+		double supplyW{ 1000 };
+		bool shedField{}, shedLamps{}, shedDrives{}, overload{};
+		// The equipment as one thermal node: its losses and the outside heat it, the cooling loop takes the heat away.
+		// 60 C caution, 75 C derating (field and drives off), 90 C shutdown - everything off as with a flat battery (no O2
+		// flow, no scrubbing, no heating or cooling); back on below 50 C, life first, the task loads 30 s later.
+		double tEq{ 305 }, cEq{ 8000 }, gEq{ 6 }, gEqOut{ 0.3 };   // K, J/K, W/K to the cooling loop, W/K to the outside
+		bool tripped{}; double restartT{};
+		static constexpr double EQ_WARN = 333.15, EQ_LIMIT = 348.15, EQ_TRIP = 363.15, EQ_BACK = 323.15;
+		bool econ{};   // economy: half the thermal capacity, slower fans - a longer battery, a wider swing inside
+
+		bool Powered() const { return batt > 0 && !tripped; }
+		bool Drives() const { return drivesOn && Powered() && !shedDrives; }
+		bool LampsUp() const { return Powered() && !shedLamps; }
 		bool InSpec(double tEnv) const { return tEnv >= tMin && tEnv <= tMax; }
 		void Seal() { ppO2 = o2 > 0 && Powered() ? pressure : ppO2; ppCO2 = 0.05; }
 		// returns the heat (W) the suit could not handle, going into her body (+ warms, - cools)

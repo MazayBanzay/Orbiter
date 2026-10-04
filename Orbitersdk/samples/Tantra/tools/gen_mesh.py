@@ -723,6 +723,9 @@ LEG_EXT_DELAY = 0.6
 # 30 % taken by the weight: the mesh is built at that static sag, unloaded the rod shows STRUT_EXT more); the umbrella
 # rim is the ground face; catcher rings on the magnetic-bearing drums.
 STRUT_EXT_C, STRUT_EXT_S = 0.45, 0.3
+# the whole stroke (core/Legs): the animation runs from bottomed out (0) through the static sag (mesh pose) to unloaded (1)
+STROKE_C, STROKE_S = 1.5, 1.0
+STRUT_D_C, STRUT_D_S = (STROKE_C - STRUT_EXT_C) / STROKE_C, (STROKE_S - STRUT_EXT_S) / STROKE_S
 
 # Kangaroo leg (T9, the third support while lying and lifting): hip in a belly pocket on the insert just aft of the
 # hangar doors; thigh 11 m (2.2 x 2.2, CNT 80 mm), fork knee with a lateral offset so the folded shin lies beside the
@@ -3105,9 +3108,11 @@ def _crescent_console(G):
         kk = 6 if side < 0 else 7
         g = band(f"bridge_wingkeys{kk - 6}", TOUCH_SLOT_EXT + kk - 4, A, B, uA, [1.0] * (NS + 1), [0.0] * (NS + 1), up_)
         place(kk, A, B, uA, [1.0] * (NS + 1), [0.0] * (NS + 1), 3, TOUCH_SLOT_EXT + kk - 4, g)
-        # the riser screen: two pages side by side
+        # the riser screen: two pages side by side. The right one (the power plant screen | the engine console) runs
+        # on over half of the bare riser toward the front (the user, 2026-10-04: from 51 deg, not 56)
         at2 = lambda a, t: pt2(a, D + RB * t - .006, .72 + (Hw - .72) * t + .002)
-        A = [at2(a, .07) for a in aa]; B = [at2(a, .95) for a in aa]
+        ar = aa if side < 0 else [51.0 + (s1 - 51.0) * i / NS for i in range(NS + 1)]
+        A = [at2(a, .07) for a in ar]; B = [at2(a, .95) for a in ar]
         uA = [(1 - i / NS) if side < 0 else i / NS for i in range(NS + 1)]
         if side < 0: A, B, uA = A[::-1], B[::-1], uA[::-1]
         kr, slot = (4, TOUCH_SLOT_EXT) if side < 0 else (3, TOUCH_SLOT0 + 3)
@@ -4459,7 +4464,7 @@ def rig(legs):
         for i in range(1, BLADE_N):                                                             # stages run out in step
             add(f"blade_ext_{side}", "tr", [f"blade_{side}_{i}"], np.array([0, i * BLADE_EXT, 0]), parent=pi)       # 1 = in
         ank = add(f"blade_ext_{side}", "tr", [], np.array([0, (BLADE_N - 1) * BLADE_EXT, 0]), parent=pi)       # pivot only
-        st = add("strut_carriage", "tr", [f"ankle_{side}"], np.array([0, -STRUT_EXT_C, 0]), parent=ank)  # 1 = unloaded
+        st = add("strut_carriage", "tr", [f"ankle_{side}"], np.array([0, -STROKE_C, 0]), parent=ank, d=STRUT_D_C)  # 0 bottomed .. 1 unloaded
         A = T + np.array([0, -LEG_LMAX, 0])
         cup_rig(add, f"foot_fold_{side}", f"foot_{side}", FootFrame(A, (sgn, 0, 0), (0, 1, 0), "blade"), st)   # 1 = folded past the ankle
     mz = np.array([0, 0, -1.0])
@@ -4468,7 +4473,7 @@ def rig(legs):
         for k in range(1, LEG_SEC_N):
             add(f"leg{i}_ext", "tr", [f"leg{i}_sec{k}"], mz * LEG_STEP * k, parent=sw)
         ex = add(f"leg{i}_ext", "tr", [], mz * LEG_EXT_MAX, parent=sw)                              # pivot only
-        st = add(f"leg{i}_strut", "tr", [f"leg{i}_ankle"], mz * STRUT_EXT_S, parent=ex)           # 1 = unloaded
+        st = add(f"leg{i}_strut", "tr", [f"leg{i}_ankle"], mz * STROKE_S, parent=ex, d=STRUT_D_S)  # 0 bottomed .. 1 unloaded
         fc = L["H"] + mz * LEG_LMIN_S
         # the foot turns to the ground once the ankle is clear of the hull (last quarter of the swing)
         fs = add(f"leg{i}_foot_stand", "rot", [], (fc, L["fs_ax"], L["fs_ang"]), parent=st, s0=0.75)   # pivot only
@@ -4489,7 +4494,7 @@ def rig(legs):
     for k in range(1, KANG_SEC_N):
         add("kang_ext", "tr", [f"kang_shin_{k}"], np.array([0, 0, KANG_STEP * k]), parent=kn)
     ex = add("kang_ext", "tr", [], np.array([0, 0, (KANG_SEC_N - 1) * KANG_STEP]), parent=kn)              # pivot only
-    st = add("kang_strut", "tr", ["kang_ankle"], np.array([0, 0, STRUT_EXT_S]), parent=ex)                 # 1 = unloaded
+    st = add("kang_strut", "tr", ["kang_ankle"], np.array([0, 0, STROKE_S]), parent=ex, d=STRUT_D_S)       # 0 bottomed .. 1 unloaded
     ft = add("kang_foot", "rot", [], (Ak, np.array([1.0, 0, 0]), math.pi), parent=st)                       # foot kept level: state = shin lean / pi (code)
     cup_rig(add, "kang_fold", "kfoot", FootFrame(Ak, (0, -1, 0), (0, 0, -1), "kang"), ft)                    # 1 = swung back beside the shin
     add("bay_doors", "rot", ["bay_door_starboard"], (bay_hinge(1), np.array([0, 0, 1.0]), math.radians(100)))
@@ -4771,7 +4776,8 @@ def write_layout(legs, comps, path):
     L.append(f"constexpr double kFootH = {FOOT_H:.3f}, kFootR = {FOOT_KINDS['blade']['R']:.2f}, kHubR = {HUB_R};  // ankle above ground; cup foot")
     L.append(f"constexpr double kKangFootH = {KANG_FOOT_H:.3f};  // kangaroo ankle above ground")
     L.append(f"constexpr double kLegLMinS = {LEG_LMIN_S:.3f}, kLegExtMax = {LEG_EXT_MAX:.3f}, kLegFootH = {LEG_FOOT_H:.3f}, kLegFootR = {FOOT_KINDS['stern']['R']:.2f};  // stern legs (stowed along -z)")
-    L.append(f"constexpr double kStrutExtC = {STRUT_EXT_C}, kStrutExtS = {STRUT_EXT_S};  // unloaded strut rod")
+    L.append(f"constexpr double kStrutExtC = {STRUT_EXT_C}, kStrutExtS = {STRUT_EXT_S};  // unloaded strut rod (= the static sag)")
+    L.append(f"constexpr double kStrokeC = {STROKE_C}, kStrokeS = {STROKE_S};  // whole strut stroke: animation 0 bottomed, 1 unloaded")
     yb = -FL * wh_at((KANG_S0 + KANG_S1) / 2)[1]
     L.append(f"// Kangaroo leg: hip axis (mesh frame), thigh, shin range, knee offset off the hip-foot line, foot ahead of the hip while lying.")
     L.append(f"constexpr V kKangHip = {v3([KANG_THIGH_X, yb + KANG_DEPTH - KANG_THIGH_W / 2 - 0.1, zs(KANG_HIP_S)])};")
@@ -4786,6 +4792,19 @@ def write_layout(legs, comps, path):
     L.append(f"constexpr double kWingX0 = {WING_X0}, kWingY = {WING_Y:.4f}, kWingB1 = {WING_B1}, kWingB = {WING_B}, kWingFoldDeg = {math.degrees(WING_FOLD):.1f}, kWingRaiseDeg = {math.degrees(WING_RAISE):.1f};")
     L.append(f"constexpr double kWingLe0 = {WING_LE0}, kWingTe0 = {WING_TE0}, kWingLe1 = {WING_LE1}, kWingTe1 = {WING_TE1};")
     L.append(f"constexpr double kFlapY = {FLAP_Y:.4f}, kFlapHalf = {FLAP_HALF}, kFlapS0 = {FLAP_S0}, kFlapS1 = {FLAP_S1};")
+    # Hull contact points (touchdown vertices for the belly, the nose and the stern): rings of the real hull section
+    # every ~8 m from the stern to the nose tip, 10 points round each (u from the bottom centre), and the tip itself.
+    # x, y in the mesh frame, s = station (the module turns it into its frame).
+    hp = []
+    n_ring = int(math.ceil(TIP_S / 8.0))
+    for i in range(n_ring + 1):
+        st = min(TIP_S - 0.5, i * TIP_S / n_ring)
+        for k in range(10):
+            x, y = hull_xy(st, k / 10.0)
+            hp.append((x, y, st))
+    hp.append((0.0, _YTIP, TIP_S))
+    L.append(f"constexpr int kHullPtN = {len(hp)};  // hull contact points (x, y, station)")
+    L.append("constexpr double kHullPts[kHullPtN][3] = {" + ", ".join("{%.3f, %.3f, %.2f}" % q for q in hp) + "};")
     L.append(f"constexpr double kHangarS0 = {HANGAR_S[0]}, kHangarS1 = {HANGAR_S[1]}, kAirlockS = {AIRLOCK_S}, kShipLength = {L_SHIP};")
     L.append(f"constexpr double kLockOut = {LOCK_OUT}, kLockDrop = {LOCK_DROP}, kLockX0 = {LOCK_X0}, kLockX1 = {LOCK_X1}, "
              f"kLockDeckY = {CAB_Y0}, kLockMastTop = {LOCK_MAST_TOP}, kLockMastStub = {LOCK_MAST_STUB}, kLockMastFull = {LOCK_MAST_FULL:.3f};  // crew lift: arm travel, descent, cabin x, floor, mast pivot, stowed and full mast")

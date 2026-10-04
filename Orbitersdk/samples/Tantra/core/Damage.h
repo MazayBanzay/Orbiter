@@ -50,6 +50,8 @@ public:
     // enabled = Orbiter's damage setting: temperatures and loads are always computed, parts break only then.
     void Step(double dt, const Flight& f, const Exposure& x, const Ground& g, bool enabled);
     void Repair();
+    // an outside cause (the power plant burning the stern through): hurt a part like the model's own loads do
+    void Inflict(int part, double amount, bool enabled) { Hurt(part, amount, enabled); }
 
     double Integrity(int part) const { return integrity_[part]; }  // 1 intact .. 0 lost
     bool Lost(int part) const { return integrity_[part] <= 0.0; }

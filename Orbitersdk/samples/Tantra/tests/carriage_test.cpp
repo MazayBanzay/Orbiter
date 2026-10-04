@@ -114,10 +114,10 @@ int RunErect(double sCG) {
             }
         }
     }
-    std::printf("max contact-plane change %.3f m per %.2f s step; kangaroo ext max %.2f; blade max %.1f m (limit %.1f)\n",
+    std::printf("max contact-plane change %.3f m per %.2f s step; kangaroo ext max %.9f; blade max %.1f m (limit %.1f)\n",
                 maxStep, dt, maxExt, maxMast, g.legMax);
     check(maxStep < 0.25, "no jumps (turning moves the nose ~8 m/s; a jump would be metres)");
-    check(maxExt <= 1.0, "kangaroo shin reaches the top of the lift");
+    check(maxExt <= 1.0 + 1e-6, "kangaroo shin reaches the top of the lift");   // sized to the top exactly: float noise only
     check(maxMast <= g.legMax + 1e-6, "blades within their extension");
     check(sawTurn, "turn phase seen");
     check(c.Progress() == 0.0, "back to lying");

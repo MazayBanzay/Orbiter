@@ -107,6 +107,9 @@ public:
     FlightSet Set() const { return set_; }
     bool Port() const { return port_; }
     double CgResidual() const { return (std::max)(geo_.cgSensor, geo_.cgError - cgTrim_); }   // CG off the trunnions now [m]
+    // on the ground (contact): the wings and the fin fold; snap = set at once (a scenario starting on the ground)
+    void SetGrounded(bool g, bool snap = false) { grounded_ = g; snapTuck_ = snap; }
+    void SetTurnTime(double s) { turnTime_ = s; }
     bool Busy() const { return p_ != pT_ || gear_ != gearT_; }
     bool Standing() const { return p_ >= 6.0 || (p_ <= 0.0 && set_ == FlightSet::Standing && gear_ > 0.0); }
     int Phase() const;           // 0 lying, 1..6 in progress / standing (7)
@@ -129,6 +132,9 @@ private:
     CarriageGeometry geo_;
     CarriagePose pose_;
     double p_ = 0.0, pT_ = 0.0;
+    double tuck_ = 0.0;         // wings and fin folded on the ground and around a carriage move: 0..1
+    bool grounded_ = false, snapTuck_ = false;
+    double turnTime_ = 45.0;    // s for the 90 deg turn (phase 2-3)
     double cgTrim_ = 0.0;       // trunnion correction found from the drive moment on the blades (CG tracking) [m]
     double gear_ = 1.0, gearT_ = 1.0;
     FlightSet set_ = FlightSet::Level;

@@ -202,6 +202,7 @@ TantraCrew::EvaResult TantraCrew::Eva(int slot) {
     vs.version = 2;
     vs.rbody = body;
     vs.status = 1;  // landed
+    vs.arot.x = 10.0;   // no attitude given: Orbiter stands the body on its own touchdown points (arot <= 4 = a rotation)
     vs.surf_lng = lng;
     vs.surf_lat = lat;
     vs.surf_hdg = hdg;
@@ -234,6 +235,7 @@ TantraCrew::EvaResult TantraCrew::EvaPerson(int personId) {
     vs.version = 2;
     vs.rbody = body;
     vs.status = 1;  // landed
+    vs.arot.x = 10.0;   // no attitude given: Orbiter stands the body on its own touchdown points (arot <= 4 = a rotation)
     vs.surf_lng = lng;
     vs.surf_lat = lat;
     vs.surf_hdg = hdg;

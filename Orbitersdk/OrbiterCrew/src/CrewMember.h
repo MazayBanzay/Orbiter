@@ -171,6 +171,16 @@ namespace ocrew
 		int orbitCal{};                      // external camera: 0 not yet, 1 probing, 2 known, -1 failed
 		double orbitY0{}, orbitP0{}, orbitKa{ 1 }, orbitKp{ 1 };
 		double mouseTurnBy{};
+		// her head (2026-10-04, variant 3): the person's own look - the neck, the body that follows it, the seat - is ours,
+		// and Orbiter's cockpit camera is only pointed where it is, every step (its own mouse turning is off: range 0)
+		double headYaw{}, headPitch{};       // rad, from her body's facing (yaw + to the right, pitch + up)
+		bool rmbHeld{};
+		POINT rmbAnchor{};
+		double headWantYaw{}, headWantPitch{}, headCheckT{};   // what the camera was asked to show (the check in the log)
+		bool headAsked{}, headStepped{};
+		VECTOR3 camEye{};                    // the camera's point (her eye), vessel frame
+		double HeadStep(double dt, bool canTurn);   // the mouse with the right button: -> the body's turn it asks for
+		void AimHead(double dt);                      // the camera where her head looks
 		double MouseLook(double dt, bool canTurn);   // -> the heading change she makes this step
 		bool CalibrateOrbit();
 		static constexpr bool kSeatClips = false;   // sitting-down / getting-up motion: off for now (the user, 2026-10-03: later, cosmetics)
