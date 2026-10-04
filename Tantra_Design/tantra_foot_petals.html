@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тантра: лепестковая стопа</title>
+<style>
+:root{--bg:#eef1f4;--panel:#fff;--ink:#1d2430;--muted:#5d6878;--line:#d5dbe3;--ok:#1f8a4c;--warn:#b7791f;--bad:#c53030;--acc:#2b6cb0;--svg:#fbfcfd}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#151a21;--panel:#1d242e;--ink:#e3e8ef;--muted:#9aa6b6;--line:#2e3846;--svg:#18202a}}
+:root[data-theme="dark"]{--bg:#151a21;--panel:#1d242e;--ink:#e3e8ef;--muted:#9aa6b6;--line:#2e3846;--svg:#18202a}
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif;padding:12px 16px}
+h1{font-size:16px;margin:0 0 4px}h2{font-size:14px;margin:0 0 6px}
+.row{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:10px;margin-top:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;overflow-x:auto}
+svg{width:100%;height:auto;display:block;background:var(--svg);border:1px solid var(--line);border-radius:6px}
+svg text{paint-order:stroke;stroke:var(--svg);stroke-width:3px}
+svg text.lbl{fill:var(--ink)}
+#top svg{max-width:420px;margin:auto}
+.note{font-size:12px;color:var(--muted)}
+.ctl{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 8px;align-items:center;font-size:13px}
+.ctl input[type=range]{width:100%}
+.modes{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.modes label{border:1px solid var(--line);border-radius:6px;padding:3px 8px;cursor:pointer}
+button{font:inherit;padding:4px 10px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+td,th{padding:2px 5px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+th{color:var(--muted);font-weight:600}td:first-child,th:first-child{text-align:left}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.verdict{font-weight:600;margin:6px 0}
+ul{margin:4px 0 4px 18px;padding:0}li{margin:2px 0}
+@media (max-width:900px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<h1>Стопа лопасти, вариант Б: 12 независимых лепестков</h1>
+<div class="note">Не меняется: голеностоп 5,2 м над грунтом, обод R 12,2 м, юбка 0,9 м, ступица в гильзе ⌀5,2 м, лопасть, колонны, ось корпуса 24 м.
+Каждый лепесток — рычаг: шарнир у ступицы (r 2,6 м), своя МР-стойка над центром давления лепестка (r 8,44 м), стойка упирается в жёсткое ребро звезды над ним.</div>
+
+<div class="row">
+  <div class="card"><h2>Разрез через ось (лепестки 0° и 180°)</h2><div id="sec"></div>
+    <div class="note">Ход стойки ±0,75 м, на ободе это ±1,23 м. Звезда из 12 рёбер и ступица жёсткие, вместе с ней на шарнире R 2,0 м наклоняется вся стопа.</div></div>
+  <div class="card"><h2>Вид сверху: нагрузка лепестков</h2><div id="top"></div>
+    <div class="note">Цвет — нагрузка относительно ровной доли (1/12): зелёный — около доли, синий — недогружен, красный — перегружен; серый — висит. Точки — камни.</div></div>
+</div>
+
+<div class="card" style="margin-top:10px">
+  <div class="modes" id="modes">
+    <label><input type="radio" name="m" value="active" checked> Б: управление усилием каждой стойки</label>
+    <label><input type="radio" name="m" value="groups"> Б при отказе управления: 3 пассивные группы</label>
+    <label><input type="radio" name="m" value="rigid"> Сравнение: жёсткая чаша (сейчас / А)</label>
+  </div>
+  <div class="ctl">
+    <span>Нагрузка</span><select id="load"><option value="192">стоянка гружёным 1 g — 192 МН</option><option value="481">посадка — 481 МН</option><option value="722">расчётная 2,5 g × 1,5 — 722 МН</option></select><span></span>
+    <span>Камни, до</span><input id="rock" type="range" min="0" max="1.2" step="0.05" value="0.6"><span id="rockV"></span>
+    <span>Уклон</span><input id="slope" type="range" min="0" max="12" step="0.5" value="6"><span id="slopeV"></span>
+    <span>Боковая сила на голеностопе</span><input id="side" type="range" min="0" max="40" step="1" value="10"><span id="sideV"></span>
+  </div>
+  <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap"><button id="seed">Другой грунт</button><button id="drop">Поставить стопу</button></div>
+  <div class="verdict" id="verdict"></div>
+  <table id="tab"></table>
+  <div class="note">Боковая сила — то, что приходит от колонны при раскачке и повороте на подъёме. Шарнир момент не передаёт, поэтому равнодействующая
+  реакций грунта смещается от оси на 5,2 м × (боковая / вертикальная), и лепестки должны её принять.</div>
+</div>
+
+<div class="row">
+  <div class="card"><h2>Стойка лепестка — цифры</h2><table>
+    <tr><th></th><th>сила</th><th>давление ⌀1,3 м</th></tr>
+    <tr><td>Стоянка гружёным 1 g (1/12 от 192 МН)</td><td>16 МН</td><td class="ok">12 МПа</td></tr>
+    <tr><td>Посадка (1/12 от 481 МН)</td><td>40 МН</td><td class="ok">30 МПа</td></tr>
+    <tr><td>Расчётная (1/12 от 722 МН)</td><td>60 МН</td><td class="warn">45 МПа — только корпус цилиндра, клапан не работает</td></tr>
+    <tr><td>Ребро звезды: изгиб у корня, расчётный</td><td colspan="2">60 МН × 5,84 м = 350 МН·м — коробчатое УНТ, пояс 1,5 × 0,26 м</td></tr>
+    <tr><td>Давление на грунт под лепестком (37 м²)</td><td colspan="2">0,43 МПа стоянка — плотный грунт держит 0,6+</td></tr>
+    <tr><td>Масса лепестка с ребром, стойкой, шарниром</td><td colspan="2">≈ 35 т; стопа ≈ 0,42 кт</td></tr>
+  </table></div>
+  <div class="card"><h2>Как работает</h2><ul class="note">
+    <li><b>Норма:</b> у каждой стойки свой клапан и датчик давления. Контур держит усилие лепестка равным его доле; второй, медленный контур держит ходы около середины и выравнивает стопу.
+    Лепесток на камне уступает, лепесток над ямой дожимается — каждый сам, без связи с соседями.</li>
+    <li><b>Отказ управления:</b> клапаны падают в пассивное положение — 4 соседние стойки соединяются общей магистралью. Получаются три опоры, система определима, стопа держит без контура.</li>
+    <li><b>Отказ лепестка:</b> его стойка на упоре, нагрузку берут остальные 11 (в пассиве — 3 соседа по группе).</li>
+    <li><b>Складывание:</b> стойки выдвигаются полностью, лепестки ложатся плоско под звезду — стопа уходит в карман как сейчас, карман не меняется.</li>
+  </ul></div>
+</div>
+
+<script>
+"use strict";
+const N = 12, R_IN = 2.6, R_OUT = 12.2, RC = 8.44, STROKE = 0.75, KSOIL = 500;   // m, MN/m per petal
+const AREA = Math.PI * 0.65 * 0.65;   // the strut piston, m^2
+const az = Array.from({length: N}, (_, i) => (i * 30 + 15) * Math.PI / 180);
+const px = az.map(a => RC * Math.cos(a)), py = az.map(a => RC * Math.sin(a));
+let seed = 7, rocks = [];
+function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+function newGround() { rocks = Array.from({length: N}, () => rnd()); }
+newGround();
+const $ = id => document.getElementById(id);
+
+// solves a 3x3 linear system
+function solve3(A, b) {
+  const m = A.map((r, i) => [...r, b[i]]);
+  for (let c = 0; c < 3; c++) {
+    let p = c; for (let r = c + 1; r < 3; r++) if (Math.abs(m[r][c]) > Math.abs(m[p][c])) p = r;
+    [m[c], m[p]] = [m[p], m[c]];
+    if (Math.abs(m[c][c]) < 1e-12) return null;
+    for (let r = 0; r < 3; r++) if (r !== c) { const f = m[r][c] / m[c][c]; for (let k = c; k < 4; k++) m[r][k] -= f * m[c][k]; }
+  }
+  return [m[0][3] / m[0][0], m[1][3] / m[1][1], m[2][3] / m[2][2]];
+}
+// the ground under each petal's centre of pressure: the slope along x and a rock
+function ground(rockMax, slopeDeg) {
+  const s = Math.tan(slopeDeg * Math.PI / 180);
+  return az.map((_, i) => s * px[i] + rocks[i] * rockMax);
+}
+// least-squares plane through the petals' ground, centred on the stroke range
+function fitPlane(g, idx) {
+  let A = [[0,0,0],[0,0,0],[0,0,0]], b = [0,0,0];
+  for (const i of idx) { const v = [1, px[i], py[i]]; for (let r = 0; r < 3; r++) { b[r] += v[r] * g[i]; for (let c = 0; c < 3; c++) A[r][c] += v[r] * v[c]; } }
+  return solve3(A, b);
+}
+// forces F = a + b x + c y over the given petals so that they carry W with its resultant at (ex, 0)
+function share(W, ex, idx) {
+  let A = [[0,0,0],[0,0,0],[0,0,0]];
+  for (const i of idx) { const v = [1, px[i], py[i]]; for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) A[r][c] += v[r] * v[c]; }
+  return solve3(A, [W, W * ex, 0]);
+}
+
+function compute() {
+  const W = +$("load").value, g = ground(+$("rock").value, +$("slope").value);
+  const ex = 5.2 * (+$("side").value / 100);   // the resultant's shift [m]
+  const mode = document.querySelector("input[name=m]:checked").value;
+  const F = new Array(N).fill(0), e = new Array(N).fill(0), state = new Array(N).fill("ok");
+  let plane = fitPlane(g, [...Array(N).keys()]), note = "";
+  if (mode === "active") {
+    // the slow loop: the frame on the fitted plane, centred so the strokes use the range symmetrically
+    let res = g.map((gi, i) => gi - (plane[0] + plane[1] * px[i] + plane[2] * py[i]));
+    const mid = (Math.max(...res) + Math.min(...res)) / 2;
+    plane[0] += mid; res = res.map(r => r - mid);
+    for (let i = 0; i < N; i++) e[i] = -res[i];      // + = the strut extended (the petal goes down into a dip)
+    // the fast loop: each strut holds its share; at a stop it is rigid on the soil; over a hole it hangs
+    let free = [...Array(N).keys()], fixed = 0, fixedM = 0;
+    for (let i = 0; i < N; i++) {
+      if (e[i] < -STROKE) { state[i] = "stop"; F[i] = W / N + KSOIL * (-STROKE - e[i]); e[i] = -STROKE; }
+      else if (e[i] > STROKE) { state[i] = "hang"; F[i] = 0; e[i] = STROKE; }
+    }
+    for (let it = 0; it < 12; it++) {
+      free = [...Array(N).keys()].filter(i => state[i] === "ok");
+      fixed = 0; fixedM = 0;
+      for (let i = 0; i < N; i++) if (state[i] !== "ok") { fixed += F[i]; fixedM += F[i] * px[i]; }
+      const c = share(W - fixed, free.length ? (W * ex - fixedM) / Math.max(1e-9, W - fixed) : 0, free);
+      let changed = false;
+      for (const i of free) { F[i] = c ? c[0] + c[1] * px[i] + c[2] * py[i] : 0; if (F[i] < 0) { F[i] = 0; state[i] = "lift"; changed = true; } }
+      if (!changed) break;
+    }
+  } else if (mode === "groups") {
+    // three groups of 4 neighbours on one manifold each: three supports, the plane through their mean ground
+    const G = [0, 1, 2].map(j => [0, 1, 2, 3].map(k => 4 * j + k));
+    const cx = G.map(gr => gr.reduce((s, i) => s + px[i], 0) / 4), cy = G.map(gr => gr.reduce((s, i) => s + py[i], 0) / 4);
+    const cz = G.map(gr => gr.reduce((s, i) => s + g[i], 0) / 4);
+    plane = solve3([[1, cx[0], cy[0]], [1, cx[1], cy[1]], [1, cx[2], cy[2]]], cz);
+    const Gf = solve3([[1, 1, 1], cx, cy], [W, W * ex, 0]);
+    G.forEach((gr, j) => {
+      const res = gr.map(i => g[i] - (plane[0] + plane[1] * px[i] + plane[2] * py[i]));
+      const m = res.reduce((s, r) => s + r, 0) / 4;
+      gr.forEach((i, k) => {
+        e[i] = -(res[k] - m);
+        F[i] = Gf[j] / 4;
+        if (Math.abs(e[i]) > STROKE) { state[i] = e[i] > 0 ? "hang" : "stop"; e[i] = Math.sign(e[i]) * STROKE; }
+        if (F[i] < 0) { state[i] = "lift"; F[i] = 0; }
+      });
+    });
+    if (Gf.some(x => x < 0)) note = "группа отрывается — стопа на грани опрокидывания";
+  } else {
+    // a rigid cup on the soil: only the highest ground touches; solve the cup's height and tilt (Newton, active set)
+    let h = Math.max(...g), tx = 0, ty = 0;
+    for (let it = 0; it < 80; it++) {
+      let s = [0, 0, 0], J = [[0,0,0],[0,0,0],[0,0,0]];
+      for (let i = 0; i < N; i++) {
+        const pen = g[i] - (h + tx * px[i] + ty * py[i]);
+        if (pen <= 0) continue;
+        const v = [1, px[i], py[i]], f = KSOIL * pen;
+        for (let r = 0; r < 3; r++) { s[r] += f * v[r]; for (let c = 0; c < 3; c++) J[r][c] -= KSOIL * v[r] * v[c]; }
+      }
+      const res = [s[0] - W, s[1] - W * ex, s[2]];
+      if (s[0] === 0) { h -= 0.05; continue; }
+      const d = solve3(J, res.map(x => -x));
+      if (!d) { h -= 0.01; continue; }
+      h += d[0] * 0.8; tx += d[1] * 0.8; ty += d[2] * 0.8;
+    }
+    plane = [h, tx, ty];
+    for (let i = 0; i < N; i++) {
+      const pen = g[i] - (h + tx * px[i] + ty * py[i]);
+      F[i] = pen > 0 ? KSOIL * pen : 0;
+      state[i] = pen > 0 ? "ok" : "hang";
+    }
+  }
+  return {W, g, F, e, state, plane, mode, ex, note};
+}
+
+function color(ratio, st) {
+  if (st === "hang" || st === "lift") return "#a0a8b3";
+  if (ratio > 1.6) return "#c53030"; if (ratio > 1.25) return "#dd8a2a";
+  if (ratio < 0.6) return "#4a7bd0"; return "#2f9e5b";
+}
+function topView(r) {
+  const S = 13, C = 175;
+  let s = `<svg viewBox="0 0 350 350" xmlns="http://www.w3.org/2000/svg">`;
+  for (let i = 0; i < N; i++) {
+    const a0 = az[i] - Math.PI / 12 + 0.012, a1 = az[i] + Math.PI / 12 - 0.012;
+    const p = (rr, a) => `${C + S * rr * Math.cos(a)},${C - S * rr * Math.sin(a)}`;
+    const ratio = r.F[i] / (r.W / N);
+    s += `<path d="M${p(R_IN, a0)} L${p(R_OUT, a0)} A${S * R_OUT},${S * R_OUT} 0 0 0 ${p(R_OUT, a1)} L${p(R_IN, a1)} A${S * R_IN},${S * R_IN} 0 0 1 ${p(R_IN, a0)}Z" fill="${color(ratio, r.state[i])}" opacity=".85" stroke="#1d2430" stroke-width=".6"/>`;
+    const t = p(10.3, az[i]).split(",");
+    s += `<text x="${t[0]}" y="${+t[1] + 4}" font-size="11" text-anchor="middle" fill="#1d2430">${r.F[i].toFixed(0)}</text>`;
+    const k = p(RC, az[i]).split(",");
+    s += `<circle cx="${k[0]}" cy="${k[1]}" r="${2 + 6 * rocks[i] * (+$("rock").value)}" fill="#7a6a55"/>`;
+  }
+  s += `<circle cx="${C}" cy="${C}" r="${S * 2.6}" fill="#7d8796" stroke="#1d2430"/>`;
+  s += `<circle cx="${C + S * r.ex}" cy="${C}" r="4" fill="#c53030"/><text x="${C + S * r.ex + 6}" y="${C - 6}" font-size="10" fill="#c53030">равнодействующая</text>`;
+  s += `<text x="8" y="16" font-size="11" fill="#5d6878">МН на лепесток; корпус →</text></svg>`;
+  return s;
+}
+function section(r, k) {
+  // the petals at 15 deg (right) and 195 deg (left), seen across the hull: world heights, the frame tilted on its plane
+  const S = 15, X0 = 200, Y0 = 250;
+  const X = x => X0 + x * S, Y = y => Y0 - y * S;
+  const tn = Math.tan(+$("slope").value * Math.PI / 180), amp = +$("rock").value;
+  const lift = 2.6 * (1 - k);   // the drop: the foot comes down from 2.6 m
+  const fr = x => r.plane[0] + r.plane[1] * x + lift;   // the frame's datum along the section
+  let s = `<svg viewBox="0 0 400 270" xmlns="http://www.w3.org/2000/svg">`;
+  for (let x = -13; x <= 13; x++) s += `<line x1="${X(x)}" y1="${Y(-1.5)}" x2="${X(x)}" y2="${Y(14)}" stroke="#8882"/>`;
+  for (let y = -1; y <= 14; y++) s += `<line x1="${X(-13)}" y1="${Y(y)}" x2="${X(13)}" y2="${Y(y)}" stroke="#8882"/>`;
+  // the bedrock on the slope, a rock under each petal's centre
+  s += `<polygon points="${X(-13)},${Y(-13 * tn)} ${X(13)},${Y(13 * tn)} ${X(13)},${Y0 + 30} ${X(-13)},${Y0 + 30}" fill="#c9b796"/>`;
+  for (const [i, sg] of [[0, 1], [6, -1]]) {
+    const xc = sg * RC, rock = rocks[i] * amp, gz = tn * px[i] + rock;
+    if (rock > 0.02) s += `<polygon points="${X(xc - 1.4)},${Y(tn * (xc - 1.4))} ${X(xc - 0.5)},${Y(gz)} ${X(xc + 0.5)},${Y(gz)} ${X(xc + 1.4)},${Y(tn * (xc + 1.4))}" fill="#7a6a55"/>`;
+    // the petal: from its hinge at the hub to its centre of pressure (on the rock, or hanging on the full stroke)
+    const hx = sg * R_IN, hz = fr(hx) + 0.4;
+    const fz = fr(xc);
+    const pc = r.mode === "rigid" ? fz : Math.max(fz - STROKE, Math.min(r.g[i], fz + STROKE));
+    let sl = (pc - hz) / (xc - hx);
+    let rz = hz + sl * (sg * R_OUT - hx);
+    if (rz < tn * sg * R_OUT) { rz = tn * sg * R_OUT; sl = (rz - hz) / (sg * R_OUT - hx); }   // the rim on the bedrock first
+    s += `<polygon points="${X(hx)},${Y(hz)} ${X(sg * R_OUT)},${Y(rz)} ${X(sg * R_OUT)},${Y(rz + 0.9)} ${X(hx)},${Y(hz + 0.6)}" fill="#c9d1db" stroke="#4a5260"/>`;
+    // the rib above it and the strut down to the petal
+    const r0 = fr(sg * 2.6) + 5.6, r1 = fr(sg * 9.6) + 4.0;
+    s += `<polygon points="${X(sg * 2.6)},${Y(r0)} ${X(sg * 9.6)},${Y(r1)} ${X(sg * 9.6)},${Y(r1 - 0.6)} ${X(sg * 2.6)},${Y(r0 - 1.8)}" fill="#2c4a7a"/>`;
+    const ribUnder = fr(xc) + 3.6, top = Y(ribUnder), bot = Y(hz + sl * (xc - hx) + 0.8);
+    s += `<rect x="${X(xc) - 0.65 * S}" y="${top}" width="${1.3 * S}" height="${2.0 * S}" fill="#9aa3ad" stroke="#4a5260"/>`;
+    s += `<rect x="${X(xc) - 0.35 * S}" y="${top + 2.0 * S}" width="${0.7 * S}" height="${Math.max(1, bot - top - 2.0 * S)}" fill="#d8dde3" stroke="#4a5260"/>`;
+    s += `<text class="lbl" x="${X(sg * 10.6)}" y="${Y(r1 + 0.6)}" font-size="11" text-anchor="middle">${k < 1 ? "" : r.F[i].toFixed(0) + " МН"}</text>`;
+  }
+  // the hub sleeve tilted with the frame, the ankle hinge on its axis, the blade above
+  const hb = r.plane[0] + lift, ang = -Math.atan(r.plane[1]) * 180 / Math.PI;
+  s += `<g transform="rotate(${ang} ${X(0)} ${Y(hb)})"><rect x="${X(-2.6)}" y="${Y(hb + 6.0)}" width="${5.2 * S}" height="${5.6 * S}" fill="#7d8796" stroke="#4a5260"/></g>`;
+  s += `<circle cx="${X(0)}" cy="${Y(hb + 5.2)}" r="${2.0 * S}" fill="#5a6b8a" stroke="#2d3748"/>`;
+  s += `<rect x="${X(-2.6)}" y="${Y(14)}" width="${5.2 * S}" height="${Math.max(0, (14 - hb - 7.0) * S)}" fill="#2c4a7a" opacity=".9"/>`;
+  s += `<line x1="${X(-13)}" y1="${Y(5.2 + r.plane[0])}" x2="${X(13)}" y2="${Y(5.2 + r.plane[0])}" stroke="#c53030" stroke-dasharray="4 3"/><text x="${X(-12.8)}" y="${Y(5.2 + r.plane[0]) - 3}" font-size="10" fill="#c53030">голеностоп 5,2 м</text>`;
+  return s + "</svg>";
+}
+let anim = 1;
+function render() {
+  $("rockV").textContent = (+$("rock").value).toFixed(2) + " м";
+  $("slopeV").textContent = (+$("slope").value).toFixed(1) + "°";
+  $("sideV").textContent = $("side").value + " %";
+  const r = compute();
+  $("top").innerHTML = topView(r);
+  $("sec").innerHTML = section(r, anim);
+  const maxF = Math.max(...r.F), maxP = maxF / AREA, maxRib = maxF * (RC - R_IN);
+  const hang = r.state.filter(x => x === "hang" || x === "lift").length, stop = r.state.filter(x => x === "stop").length;
+  const share = r.W / N;
+  const cls = v => v > 1.6 ? "bad" : v > 1.25 ? "warn" : "ok";
+  let v = `Самый нагруженный лепесток: ${maxF.toFixed(0)} МН = ${(maxF / share).toFixed(2)} доли; стойка ${maxP.toFixed(0)} МПа; ребро ${maxRib.toFixed(0)} МН·м. `;
+  v += `Без опоры: ${hang}, на упоре: ${stop}. ${r.note}`;
+  $("verdict").innerHTML = `<span class="${cls(maxF / share)}">${v}</span>`;
+  let t = `<tr><th>лепесток</th>${az.map((a, i) => `<th>${(i * 30 + 15)}°</th>`).join("")}</tr>`;
+  t += `<tr><td>грунт, м</td>${r.g.map(x => `<td>${x.toFixed(2)}</td>`).join("")}</tr>`;
+  t += `<tr><td>ход стойки, м</td>${r.e.map((x, i) => `<td class="${r.state[i] === "ok" ? "" : "warn"}">${r.mode === "rigid" ? "—" : (x >= 0 ? "+" : "") + x.toFixed(2)}</td>`).join("")}</tr>`;
+  t += `<tr><td>сила, МН</td>${r.F.map(x => `<td class="${cls(x / share)}">${x.toFixed(1)}</td>`).join("")}</tr>`;
+  t += `<tr><td>давление, МПа</td>${r.F.map(x => `<td class="${x / AREA > 32 ? "bad" : ""}">${r.mode === "rigid" ? "—" : (x / AREA).toFixed(0)}</td>`).join("")}</tr>`;
+  $("tab").innerHTML = t;
+}
+for (const id of ["load", "rock", "slope", "side"]) $(id).addEventListener("input", render);
+document.querySelectorAll("input[name=m]").forEach(x => x.addEventListener("change", render));
+$("seed").onclick = () => { newGround(); render(); };
+$("drop").onclick = () => {
+  const t0 = performance.now();
+  const step = now => { anim = Math.min(1, (now - t0) / 3500); anim = anim * anim * (3 - 2 * anim); render(); if (anim < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+};
+render();
+</script>
+</body>
+</html>

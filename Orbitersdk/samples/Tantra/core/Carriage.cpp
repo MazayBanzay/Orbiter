@@ -40,6 +40,25 @@ bool Carriage::CommandErect(bool up, bool landed) {
     return true;
 }
 
+bool Carriage::CommandTo(double p, bool landed) {
+    if (!landed || gear_ < 1.0 || gearT_ < 1.0) return false;
+    pT_ = std::min(6.0, std::max(0.0, p));
+    return true;
+}
+
+double Carriage::AxisHeightAt(double p) const {   // as BuildPose, phase 0-1
+    const CarriageGeometry& g = geo_;
+    const double hStand = std::min(sCG_ + (port_ ? 7.0 : g.standClear), g.legMax + g.footH - 0.2);
+    return Lerp(g.restAxisH, hStand, Ease((Clamp01(p) - 0.1) / 0.9));
+}
+double Carriage::LiftProgressFor(double axisH) const {
+    if (axisH <= AxisHeightAt(0.1)) return 0.0;
+    if (axisH >= AxisHeightAt(1.0)) return 1.0;
+    double a = 0.1, b = 1.0;
+    for (int i = 0; i < 40; ++i) { const double m = 0.5 * (a + b); (AxisHeightAt(m) < axisH ? a : b) = m; }
+    return 0.5 * (a + b);
+}
+
 bool Carriage::CommandGear(bool down, bool landed) {
     if (!landed && !down && p_ > 0.0 && p_ < 6.0) {
         pT_ = p_ < 3.0 ? 0.0 : 6.0;
@@ -271,7 +290,7 @@ Carriage::Loads Carriage::Statics(double weight, double cgError) const {
 
 void Carriage::Load(double p, double pT, double gear, double gearT, int set, int port) {
     p_ = std::min(6.0, std::max(0.0, p));
-    pT_ = pT >= 3.0 ? 6.0 : 0.0;
+    pT_ = std::min(6.0, std::max(0.0, pT));   // a position between (on the legs at the top, the 75 deg stele) is kept
     gear_ = Clamp01(gear);
     gearT_ = gearT > 0.5 ? 1.0 : 0.0;
     set_ = set ? FlightSet::Standing : FlightSet::Level;

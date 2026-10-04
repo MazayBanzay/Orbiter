@@ -1,11 +1,16 @@
 // OrbiterCrew - a crew member as an Orbiter vessel: walks, runs, jumps, breathes, tires.
-// Ground controls (focus on her, on the surface):
+// Controls (focus on her: on the surface and inside a ship):
 //   W / S       forward / back; S while moving forward is a hard, friction-limited brake
 //   A / D       turn            Q / E   side step
+//   right mouse button held, through her eyes: the mouse turns her head; inside a ship, walking, she turns with it
+//               and A / D step aside. Released: the cursor is free, as in Orbiter. Seated: Orbiter's classic head
+//   left mouse  inside a ship: the ship's buttons and touch screens within her reach
 //   Shift       run; in the suit: servo boost (faster, bounding stride, paid from the battery)
 //   Space       jump
+//   F           the action: what is within reach (an entrance, a seat); in a seat - stand up
+//   V           seated at a helm: the ship from outside; V again - her own view
 //   K           put on / take off the suit (off only in breathable air)
-//   V           helmet sun shade: gold mirror visor against glare and radiation      L   helmet lamps
+//   H           the suit computer's display      Shift+V  the helmet sun shade      L  helmet lamps
 //   B           take / leave the jet pack (suit on, pack within 2.5 m); its own keys: see JetPack.h
 #pragma once
 #include "Autopilot.h"
@@ -45,7 +50,7 @@ namespace ocrew
 		int clbkConsumeBufferedKey(DWORD key, bool down, char* kstate) override;
 		void clbkPreStep(double simt, double simdt, double mjd) override;
 		bool clbkDrawHUD(int mode, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp) override;
-		bool clbkLoadGenericCockpit() override;   // in the suit (carries the suit HUD); without it the empty VC
+		bool clbkLoadGenericCockpit() override;   // none: her eyes are the empty VC, in the suit and out of it
 		void clbkRenderHUD(int mode, const HUDPAINTSPEC* hps, SURFHANDLE hTex) override {}   // no default HUD: the suit computer draws
 		bool clbkLoadVC(int id) override;
 
@@ -134,10 +139,10 @@ namespace ocrew
 		bool wasInHelmet{}; // suit on and the camera in her head last step (the suit computer is brought up on entering)
 		std::string message;
 		double messageTime{};
-		bool mouseWasDown{};
-		// the suit computer's HUD (variant 3, the user and «Архитектор», 2026-10-04): drawn by the graphics core over the
-		// view in any cockpit mode (gcCore RENDERPROC_HUD_2ND), not as Orbiter's HUD; only in the suit, H switches it
-		bool hudOn{ true }, hudProc{};
+		// the suit computer's display (variant 3, the user and «Архитектор», 2026-10-04): the VC HUD on the helmet plate
+		// (SuitHud::HelmetFrame), drawn through clbkDrawHUD; only in the suit, H switches it
+		bool hudOn{ true };
+		bool debugLog{};                     // DebugLog = 1 in her config: test lines in Orbiter.log (clicks, the head camera)
 		void DrawSuitHud(oapi::Sketchpad* skp, DWORD W, DWORD H);
 		// F - the action (user 2026-10-03: F everywhere): what is within reach - a ship's lift or airlock, later
 		// a seat, a terminal, a door inside
@@ -156,32 +161,28 @@ namespace ocrew
 		double seatT{}, seatStill{};
 		VECTOR3 seatFeet{}, seatFrom{};
 		double seatHdg{}, seatHdgFrom{};
-		// the mouse (the user, 2026-10-03, everywhere, both views; not in a seat - there Orbiter's own): right button
-		// held - the mouse turns her and she walks where she looks; released - the mouse looks around (head / camera),
-		// the cursor stays in the middle (the aim: a click presses what is there); Alt frees the cursor. A/D step aside
+		// the mouse (the user, 2026-10-03): right button held, through her eyes - it turns her head; inside a ship,
+		// walking, she turns with it (mouseMode) and A/D step aside. Released - the cursor is free, A/D turn her
 		static constexpr bool kMouseWalk = true;
-		static constexpr bool kMouseFreeLook = false;   // released: mouse look with the cursor held in the middle - off (the user: the cursor stays free)
-		bool mouseMode{}, mouseLocked{}, mouseRmb{};
+		bool mouseMode{}, mouseRmb{};
 		bool seatHelm{};                     // the seat she sits in is a helm (OC_HELM): V works
 		bool shipView{};                     // V: the camera on the ship from outside
 		void ShipView();
 		bool faceSun{}, sunLogged{};          // FACESUN 1: she turns to the Sun at the start
-		double vesselYaw{};                  // inside: her vessel's turn from the ship's axes, in quarter turns
-		double freeYaw{}, freePitch{};
 		int orbitCal{};                      // external camera: 0 not yet, 1 probing, 2 known, -1 failed
 		double orbitY0{}, orbitP0{}, orbitKa{ 1 }, orbitKp{ 1 };
 		double mouseTurnBy{};
-		// her head (2026-10-04, variant 3): the person's own look - the neck, the body that follows it, the seat - is ours,
-		// and Orbiter's cockpit camera is only pointed where it is, every step (its own mouse turning is off: range 0)
+		// her head (2026-10-04, variant 3): the person's own look - the neck, the body that follows it, the seat - is ours.
+		// What Orbiter's camera turned since the last step (the mouse, right button) is the user's look given to her
+		// head; then the camera is set where her head looks, every step (oapiCameraSetCockpitDir)
 		double headYaw{}, headPitch{};       // rad, from her body's facing (yaw + to the right, pitch + up)
-		bool rmbHeld{};
-		POINT rmbAnchor{};
 		double headWantYaw{}, headWantPitch{}, headCheckT{};   // what the camera was asked to show (the check in the log)
 		bool headAsked{}, headStepped{};
 		VECTOR3 camEye{};                    // the camera's point (her eye), vessel frame
 		double HeadStep(double dt, bool canTurn);   // the mouse with the right button: -> the body's turn it asks for
 		void AimHead(double dt);                      // the camera where her head looks
-		double MouseLook(double dt, bool canTurn);   // -> the heading change she makes this step
+		void ClampToShips(VESSELSTATUS2& s);          // outside: her step against the ships' outer solids
+		bool outerLogged{};                           // "stopped by the outer solids" written once
 		bool CalibrateOrbit();
 		static constexpr bool kSeatClips = false;   // sitting-down / getting-up motion: off for now (the user, 2026-10-03: later, cosmetics)
 		static constexpr double seatStartZ = 0.318, seatStandZ = 0.295;   // sit_down starts / stand_up ends standing this far in front of the seat (export_sit.log)
@@ -197,15 +198,11 @@ namespace ocrew
 		void ApplyView();
 		std::string inShipName;              // from the scenario, found again after loading
 		void EnterShip(OBJHANDLE ship, const VECTOR3& feet, const VECTOR3& dir);
+		void HangOn(VESSEL* sv);             // on the ship's interior point (and on no other point of it)
 		void LeaveShip();                    // detached, back in the world (where she is now)
 		void InteriorStep(double dt);
 		void Animate(double dt, double g, bool landed);
 		void LookDir(double& yaw, double& pitch);
-		void SetLook(double yaw, double pitch);
-		bool CalibrateLook();
-		int lookCal{};                       // 0 not yet, 1 probing, 2 known, -1 failed
-		double lookSa{ 1 }, lookSp{ 1 }, lookY0{}, lookP0{};
-		bool lookSwap{};
 		void HudBySuit();                    // the user's rule: no HUD without the suit, the suit computer in the helmet
 	private:
 		bool DoUse();

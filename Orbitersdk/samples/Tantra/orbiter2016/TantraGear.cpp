@@ -108,6 +108,8 @@ void TantraGear::Apply(const tantra::CarriagePose& p, double sCG, const Extras& 
     Set(m::ANIM_KANG_FOOT, p.kangFoot);
     Set(m::ANIM_KANG_FOLD, p.kangFold);
     Set(m::ANIM_KANG_STRUT, ex.strut[6]);
+    for (int l = 0; l < 7; ++l)                                            // the gas cells under the umbrellas
+        for (int c = 0; c < m::kCellN; ++c) Set(m::kCellAnim[l][c], ex.cell[l][c]);
 
     // Anamezon port: doors, trap lifts and empty slots.
     Set(m::ANIM_BAY_DOORS, ex.bayDoors);

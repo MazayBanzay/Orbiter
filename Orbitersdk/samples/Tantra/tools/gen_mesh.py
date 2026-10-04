@@ -355,6 +355,10 @@ MATERIALS = [
     ("in_floor_d", (0.08, 0.08, 0.08), (0.05, 0.05, 0.05, 10), (0.012, 0.012, 0.013)),
     ("in_ceil_d", (0.07, 0.07, 0.075), (0, 0, 0, 1), (0.010, 0.010, 0.011)),
     ("in_metal_d", (0.08, 0.08, 0.085), (0.05, 0.05, 0.05, 10), (0.016, 0.016, 0.018)),
+    ("br_malachite", (0.16, 0.38, 0.31), (0.40, 0.48, 0.45, 35), (0.020, 0.048, 0.040)),                        # the bridge's desks: malachite-green enamelled metal
+    ("br_cur_ball", (0.62, 0.86, 0.95, 0.72), (0.90, 0.90, 0.90, 60), (0.10, 0.26, 0.32)),                      # the cursor unit's ball, dark (glass)
+    ("br_cur_lit", (0.78, 0.95, 1.00), (0, 0, 0, 1), (0.78, 0.95, 1.00)),                                     # the ball lit: the «солнечный зайчик» is on
+    ("br_spot", (0.90, 0.97, 1.00, 0.24), (0, 0, 0, 1), (0.90, 0.97, 1.00)),                                  # the light spot on the glasses (stacked discs)
 ]
 MAT = {m[0]: i + 1 for i, m in enumerate(MATERIALS)}  # .msh material indices are 1-based
 
@@ -666,7 +670,19 @@ LEG_LMAX = BLADE_L + (BLADE_N - 1) * BLADE_EXT + ANKLE_R
 # (Terzaghi, local shear) -> R 12.2 blades, 11.25 stern, 6.35 kangaroo; 12 ribs on a hub R 0.5, two struts per rib
 # (0.5 L and the tip) from a mast on the hub, CNT canopy, rim skirt. Ribs and struts: Tantra_Design/DESIGN_LOCAL.md.
 FOOT_RIBS, FOOT_STRIPS = 12, 3
-FOOT_HUB_R, FOOT_HUB_T, FOOT_MAST_R = 0.5, 0.6, 0.35
+FOOT_HUB_R, FOOT_HUB_T, FOOT_MAST_R = 0.5, 0.6, 0.6
+# Petal feet (2026-10-04, the user's requirement «вариант Б»: real separate petals). Every foot is 12 rigid petals,
+# each on its own hinge at the hub ring and its own MR strut from a collar on the solid post under the ankle to the
+# petal's keel over its centre of pressure. Each petal rocks on its own and lies on its own ground; the struts are the
+# suspension (stroke and static sag as the old ankle struts). Stowing: the petal's three slats fan onto its keel, the
+# petals fold down past the ankle and the collar slides down the post keeping the struts at their length.
+# rp post radius, rh petal hinge radius (the hinge ring under the post), hp hinge height over the ground, col collar height, sd / rd strut barrel / rod diameter, kd keel depth,
+# pt plate thickness.
+PETAL = {"blade": dict(rp=0.8, rh=0.8, hp=1.05, col=4.5, sd=1.3, rd=0.6, kd=0.5, pt=0.25),
+         "stern": dict(rp=0.7, rh=0.7, hp=0.55, col=4.5, sd=1.0, rd=0.5, kd=0.45, pt=0.25),
+         "kang": dict(rp=0.5, rh=0.5, hp=0.4, col=3.0, sd=0.7, rd=0.36, kd=0.35, pt=0.2)}
+PETAL_GAP = 0.012                               # rad between petals (0.15 m at the blade rim)
+CELL_REF = {}                                   # (foot prefix, petal) -> (rig comp of its working rotation, u, ey)
 FOOT_RIM_DROP = 2.0                             # hub centre over the rim: a conical bowl (spudcan), struts steeper
 FOOT_LIP = 0.7                                  # rim hoop standing on the canopy edge
 FOOT_SKIRT = 0.9
@@ -958,15 +974,21 @@ class FootFrame:
 
 
 def foot_groups(pre):
-    """Group names of one foot."""
+    """Group names of one foot: the post with the hub ring, the collar, per petal its keel, three slats, strut, rod."""
     out = [f"{pre}_hub", f"{pre}_mast"]
     for i in range(FOOT_RIBS):
-        out += [f"{pre}_rib_{i}"] + [f"{pre}_strip_{i}_{m}" for m in range(FOOT_STRIPS)] + [f"{pre}_strut_{i}_{k}" for k in range(2)]
+        out += [f"{pre}_petal_{i}"] + [f"{pre}_slat_{i}_{m}" for m in range(FOOT_STRIPS)] + [f"{pre}_strut_{i}", f"{pre}_rod_{i}"]
+        out += [f"{pre}_skirt_{i}_{m}" for m in range(FOOT_STRIPS)]
     return out
 
 
+def petal_groups(pre, i):
+    return [f"{pre}_petal_{i}"] + [f"{pre}_slat_{i}_{m}" for m in range(FOOT_STRIPS)] + [f"{pre}_strut_{i}", f"{pre}_rod_{i}"] + \
+        [f"{pre}_skirt_{i}_{m}" for m in range(FOOT_STRIPS)]
+
+
 def foot_ribs(pre):
-    return [f"{pre}_rib_{i}" for i in range(FOOT_RIBS)]
+    return [f"{pre}_petal_{i}" for i in range(FOOT_RIBS)]
 
 
 def _sheet(g, pts_a, pts_b, nrm):
@@ -980,68 +1002,102 @@ def _sheet(g, pts_a, pts_b, nrm):
         g.quad(ja[k], ja[k + 1], jb[k + 1], jb[k], -nrm)
 
 
+class PetalGeo:
+    """Where the parts of a petal foot are (frame F, open pose): heights over the ground along F.ey, radii from its axis."""
+
+    def __init__(self, F):
+        self.F = F
+        self.k = PETAL[F.kind]
+        self.FH = KANG_FOOT_H if F.kind == "kang" else FOOT_H
+        self.G = F.A - F.ey * self.FH                       # the ground under the axis
+        k = self.k
+        self.rph = k["rh"]                                 # petal hinge radius
+        self.rc = 2.0 / 3.0 * (F.R ** 3 - self.rph ** 3) / (F.R ** 2 - self.rph ** 2)   # centre of pressure of a petal
+        self.rcol = k["rp"] + 0.45                         # strut pins on the collar
+        self.stroke, self.D = (STROKE_C, STRUT_D_C) if F.kind == "blade" else (STROKE_S, STRUT_D_S)
+
+    def p(self, r, a, h):
+        return self.G + self.F.az(a)[0] * r + self.F.ey * h
+
+    def hb(self, r):
+        """Plate underside: on the ground at the rim, 0.2 under the hinge at the hub."""
+        return (self.k["hp"] - 0.2) * (self.F.R - r) / (self.F.R - self.rph)
+
+    def centre(self, i):
+        return 2 * math.pi * i / FOOT_RIBS + FOOT_RIB_PHASE + math.pi / FOOT_RIBS
+
+    def hinge(self, i):
+        return self.p(self.rph, self.centre(i), self.k["hp"])
+
+    def pin(self, i):
+        return self.p(self.rc, self.centre(i), self.hb(self.rc) + self.k["pt"] + 0.5 * self.k["kd"])   # through the keel
+
+    def collar(self, i):
+        return self.p(self.rcol, self.centre(i), self.k["col"])
+
+    def tang(self, i):
+        return self.F.az(self.centre(i))[1]
+
+    def outward(self, i):
+        """Along the petal from its hinge to the rim (open)."""
+        a = self.centre(i)
+        return unit(self.p(self.F.R, a, self.hb(self.F.R)) - self.p(self.rph, a, self.hb(self.rph)))
+
+
 def cup_foot(grp, pre, F, mat_rib="mechanism", mat_fab="canopy"):
-    """The foot, open, in frame F (groups: foot_groups(pre))."""
-    g = grp(f"{pre}_hub", mat_rib)
-    lathe_axis(g, F.H, F.ey, [(-FOOT_HUB_T / 2, 0.0), (-FOOT_HUB_T / 2, FOOT_HUB_R + 0.1), (FOOT_HUB_T / 2, FOOT_HUB_R + 0.1),
-                              (FOOT_HUB_T / 2 + 0.15, 0.6), (F.fork - 0.6, 0.55), (F.fork - 0.25, 0.75), (F.fork + 0.35, 0.0)], seg=24)   # hub, post, ball cup
-    for i in range(FOOT_RIBS):                                          # hinge lugs
-        Q, d, n, t, a = F.rib(i)
-        tube(g, Q - t * 0.32, Q + t * 0.32, 0.18, n=8)
-    g = grp(f"{pre}_mast", mat_rib)                                     # the two strut collars on the post
-    for _, c, D in F.struts:
-        tube(g, F.H + F.ey * (c - 0.25), F.H + F.ey * (c + 0.25), FOOT_MAST_R + 0.4, n=16)
+    """The petal foot, open, in frame F (groups: foot_groups(pre))."""
+    P = PetalGeo(F)
+    k, ey, R = P.k, F.ey, F.R
+    g = grp(f"{pre}_hub", mat_rib)                                       # solid post, hub ring with the hinges, ball cup
+    lathe_axis(g, P.G, ey, [(k["hp"] - 0.45, 0.0), (k["hp"] - 0.45, P.rph + 0.25), (k["hp"] + 0.35, P.rph + 0.25),
+                            (k["hp"] + 0.5, k["rp"]), (P.FH - 0.6, k["rp"]), (P.FH - 0.3, k["rp"] + 0.25), (P.FH + 0.45, 0.0)], seg=24)
+    g = grp(f"{pre}_mast", mat_rib)                                      # the collar carrying the strut pins
+    tube(g, P.G + ey * (k["col"] - 0.35), P.G + ey * (k["col"] + 0.35), P.rcol + 0.3, n=24)
     for i in range(FOOT_RIBS):
-        Q, d, n, t, a = F.rib(i)
-        g = grp(f"{pre}_rib_{i}", mat_rib)                               # box rib 0.5 wide, lower face = canopy line
-        ss = np.linspace(0.15, F.L, 7)
-        lo = [Q + d * s for s in ss]
-        hi = [Q + d * s + n * F.prof(s) for s in ss]
-        rings = []
-        for p0, p1 in zip(lo, hi):
-            rings.append([g.vert(p0 - t * 0.25, -t), g.vert(p0 + t * 0.25, t), g.vert(p1 + t * 0.25, t), g.vert(p1 - t * 0.25, -t)])
-        out = [-n, t, n, -t]
-        for k in range(len(rings) - 1):
-            for e in range(4):
-                e1 = (e + 1) % 4
-                mid = (lo[k] + hi[k]) / 2
-                g.quad(rings[k][e], rings[k][e1], rings[k + 1][e1], rings[k + 1][e], (g.v[rings[k][e]] + g.v[rings[k][e1]]) / 2 - mid)
-        g.quad(*rings[0], -d)
-        g.quad(*rings[-1], d)
-        for k, (af, c, D) in enumerate(F.struts):                       # strut: collar -> slider on the rib top
-            s = af * F.L * 0.999
-            tube(grp(f"{pre}_strut_{i}_{k}", "band"), F.collar(i, k), Q + d * s + n * F.prof(s), D / 2, n=10)
-        # canopy strips of the bay after this rib (three, 10 deg each), with the rim skirt hanging from them
+        C, t = P.collar(i), P.tang(i)
+        tube(g, C - t * 0.4, C + t * 0.4, 0.22, n=8)
+    for i in range(FOOT_RIBS):
+        a0 = 2 * math.pi * i / FOOT_RIBS + FOOT_RIB_PHASE
+        ac, t, o = P.centre(i), P.tang(i), P.outward(i)
+        n = unit(np.cross(o, t)) if float(np.cross(o, t) @ ey) > 0 else unit(np.cross(t, o))
+        # the keel: a box along the petal on its plate, the hinge lug at the hub
+        g = grp(f"{pre}_petal_{i}", mat_rib)
+        r0, r1 = P.rph + 0.2, R - 0.4
+        mid = (P.p(r0, ac, P.hb(r0)) + P.p(r1, ac, P.hb(r1))) / 2 + n * (k["pt"] + k["kd"] / 2)
+        obox(g, mid, o, t, n, (r1 - r0) / 2 / float(o @ F.az(ac)[0]), 0.35 if F.kind != "kang" else 0.25, k["kd"] / 2)
+        tube(g, P.hinge(i) - t * 0.45, P.hinge(i) + t * 0.45, 0.3, n=10)
+        # the three slats: rigid plates, the rim face, the skirt below and the lip above the rim
         step = 2 * math.pi / FOOT_RIBS / FOOT_STRIPS
         for m in range(FOOT_STRIPS):
-            a0, a1 = a + m * step - 0.006, a + (m + 1) * step + 0.006
-            gs = grp(f"{pre}_strip_{i}_{m}", mat_fab)
-            angs = np.linspace(a0, a1, 4)
-            rr = (FOOT_HUB_R + 0.25, F.R)
-
-            def cp(rho, ang):
-                u, _ = F.az(ang)
-                return F.H + u * rho - F.ey * ((rho - FOOT_HUB_R) * math.tan(F.kap) - 0.06)   # on the ribs' lower faces, above the ground
-            inner = [cp(rr[0], x) for x in angs]
-            outer = [cp(rr[1], x) for x in angs]
-            nrm = F.az((a0 + a1) / 2)[0] * math.sin(F.kap) + F.ey * math.cos(F.kap)
-            _sheet(gs, inner, outer, nrm)
-            low = [p - F.ey * FOOT_SKIRT for p in outer]
-            _sheet(gs, outer, low, F.az((a0 + a1) / 2)[0])
-            # rim hoop: a stiff ring on the canopy edge (shares a point load between the ribs), seen above the ground
-            lip_o = [p + F.ey * FOOT_LIP for p in outer]
-            inner_l = [cp(rr[1] - 0.35, x) for x in angs]
-            _sheet(gs, outer, lip_o, F.az((a0 + a1) / 2)[0])
-            _sheet(gs, lip_o, [q + F.ey * FOOT_LIP for q in inner_l], F.ey)
-
-
-def strip_owner(i, m):
-    """Rib a canopy strip folds onto and its fold angle (azimuth to come back)."""
-    step = 2 * math.pi / FOOT_RIBS / FOOT_STRIPS
-    off = (m + 0.5) * step
-    if m < FOOT_STRIPS - 1 or FOOT_STRIPS == 1:
-        return i, off
-    return (i + 1) % FOOT_RIBS, off - 2 * math.pi / FOOT_RIBS
+            b0 = a0 + m * step + (PETAL_GAP if m == 0 else 0.002)
+            b1 = a0 + (m + 1) * step - (PETAL_GAP if m == FOOT_STRIPS - 1 else 0.002)
+            gs = grp(f"{pre}_slat_{i}_{m}", mat_rib)
+            angs = np.linspace(b0, b1, 4)
+            rin = P.rph + 0.35
+            bot_i = [P.p(rin, x, P.hb(rin)) for x in angs]
+            bot_o = [P.p(R, x, P.hb(R)) for x in angs]
+            top_i = [q + ey * k["pt"] for q in bot_i]
+            top_o = [q + ey * k["pt"] for q in bot_o]
+            u_mid = F.az((b0 + b1) / 2)[0]
+            _sheet(gs, top_i, top_o, n)
+            _sheet(gs, bot_i, bot_o, -n)
+            _sheet(gs, bot_o, top_o, u_mid)
+            _sheet(gs, bot_i, top_i, -u_mid)
+            _sheet(grp(f"{pre}_skirt_{i}_{m}", mat_rib), [q - ey * FOOT_SKIRT for q in bot_o], bot_o, u_mid)   # into loose soil
+            lip = [q + ey * FOOT_LIP for q in top_o]
+            _sheet(gs, top_o, lip, u_mid)
+            _sheet(gs, lip, [P.p(R - 0.35, x, P.hb(R - 0.35) + k["pt"] + FOOT_LIP) for x in angs], ey)
+            for b in (b0, b1):                                            # the petal's side faces
+                if (m == 0 and b == b0) or (m == FOOT_STRIPS - 1 and b == b1):
+                    side = [P.p(rr, b, P.hb(rr)) for rr in (rin, R)]
+                    _sheet(gs, side, [q + ey * k["pt"] for q in side], F.az(b)[1])
+        # the strut: barrel from the collar, rod into it from the keel's pin
+        C, Pn = P.collar(i), P.pin(i)
+        d = unit(Pn - C)
+        Ls = float(np.linalg.norm(Pn - C))
+        Lb = 0.55 * Ls
+        tube(grp(f"{pre}_strut_{i}", "band"), C, C + d * Lb, k["sd"] / 2, n=12)
+        tube(grp(f"{pre}_rod_{i}", mat_rib), C + d * (Lb - 0.6), Pn, k["rd"] / 2, n=10)
 
 
 def _chain_rot(add, anim, group, pivot, dirs, ranges, parent, axis_hint):
@@ -1056,15 +1112,18 @@ def _chain_rot(add, anim, group, pivot, dirs, ranges, parent, axis_hint):
         ax = np.cross(a, b)
         ax = unit(ax) if np.linalg.norm(ax) > 1e-9 else axis_hint
         ax_ref = Rcum.T @ ax
-        comp = add(anim, "rot", [group] if p == n - 1 else [], (pivot, ax_ref, ang), parent=comp, s0=ranges[p][0], s1=ranges[p][1])
+        comp = add(anim, "rot", [group] if p == n - 1 and group else [], (pivot, ax_ref, ang), parent=comp, s0=ranges[p][0], s1=ranges[p][1])
         Rcum = rot(ax, ang) @ Rcum
     return comp
 
 
 def cup_rig(add, anim, pre, F, parent):
-    """state 0 open .. 1 stowed: canopy strips onto the ribs (0-0.3), ribs down past the ankle with the struts riding
-    their sliders (0.3-0.8); the kangaroo foot then lowers its mast (0.8-0.88) and swings back beside the shin (0.88-1)."""
-    s0r, s1r = 0.3, 0.8
+    """Fold state 0 open .. 1 stowed: the slats fan onto their keels (0-0.3), the petals fold down past the ankle while
+    the collar slides down the post with the struts at their length (0.3-0.8); the kangaroo foot then swings back beside
+    the shin (0.88-1). Working: each petal turns on its hinge by its own strut's stroke (anim <pre>_petal_<i>, 0 bottomed
+    .. 1 unloaded, the mesh at the static sag) - the strut turns on its collar pin, the rod runs in or out."""
+    P = PetalGeo(F)
+    ey = F.ey
     if F.back:
         piv = F.A + F.ez * FOOT_BACK_OFS
         ax = F.ex
@@ -1075,33 +1134,64 @@ def cup_rig(add, anim, pre, F, parent):
     else:
         root = parent
     add(anim, "tr", [f"{pre}_hub"], np.zeros(3), parent=root)
-    lower = F.retract or 0.0
-    if lower:
-        mast = add(anim, "tr", [f"{pre}_mast"], -F.ey * lower, parent=root, s0=0.8, s1=0.88)
-    else:
-        mast = add(anim, "tr", [f"{pre}_mast"], np.zeros(3), parent=root)
-    al0, al1 = -F.kap, FOOT_FOLD_A
-    ribc = {}
+    s0f, s1f, K = 0.3, 0.8, 8
+    ranges = [(s0f + (s1f - s0f) * q / K, s0f + (s1f - s0f) * (q + 1) / K) for q in range(K)]
+    # the fold of each petal (one angle for all): from its open slope to straight down past the ankle
+    phi = math.pi / 2 - math.atan2(P.k["hp"] - 0.2, F.R - P.rph)
+    fold_ax, pins = {}, {}
     for i in range(FOOT_RIBS):
-        Q, d, n, t, a = F.rib(i)
-        ax = t if float((rot(t, 0.1) @ d) @ F.ey) < float(d @ F.ey) else -t
-        ribc[i] = add(anim, "rot", [f"{pre}_rib_{i}"], (Q, ax, al0 - al1), parent=root, s0=s0r, s1=s1r)
-        pieces = 4
-        for k in range(2):
-            dirs = [F.strut_dir(i, k, al0 + (al1 - al0) * p / pieces)[0] for p in range(pieces + 1)]
-            ranges = [(s0r + (s1r - s0r) * p / pieces, s0r + (s1r - s0r) * (p + 1) / pieces) for p in range(pieces)]
-            if lower:
-                dirs.append(F.strut_dir(i, k, al1, lower)[0])
-                ranges.append((0.8, 0.88))
-            _chain_rot(add, anim, f"{pre}_strut_{i}_{k}", F.collar(i, k), dirs, ranges, mast, ax)
-    for i in range(FOOT_RIBS):                                          # canopy strips fold in their plane onto a rib
+        o, t = P.outward(i), P.tang(i)
+        fold_ax[i] = t if float((rot(t, 0.1) @ o) @ ey) < float(o @ ey) else -t
+        pins[i] = [rot(fold_ax[i], phi * q / K) @ (P.pin(i) - P.hinge(i)) + P.hinge(i) for q in range(K + 1)]
+    # the collar height that keeps every strut at its length at each step (all petals alike: one collar)
+    Ls = float(np.linalg.norm(P.pin(0) - P.collar(0)))
+    hs = []
+    for q in range(K + 1):
+        v = pins[0][q] - (P.G + F.az(P.centre(0))[0] * P.rcol)
+        vy = float(v @ ey)
+        vp = float(np.linalg.norm(v - ey * vy))
+        hs.append(min(P.k["col"], vy + math.sqrt(max(0.0, Ls * Ls - vp * vp))))
+    mast = root
+    for q in range(K):
+        mast = add(anim, "tr", [f"{pre}_mast"] if q == K - 1 else [], -ey * (hs[q] - hs[q + 1]), parent=mast, s0=ranges[q][0], s1=ranges[q][1])
+    for i in range(FOOT_RIBS):
+        t, H = P.tang(i), P.hinge(i)
+        # petal: fold, then its working turn, then the slats fanning onto the keel
+        pf = add(anim, "rot", [], (H, fold_ax[i], phi), parent=root, s0=s0f, s1=s1f)
+        work_ax = fold_ax[i]                                            # the same sense lowers the rim
+        aw = P.stroke / (P.rc - P.rph)
+        pw = add(f"{pre}_petal_{i}", "rot", [f"{pre}_petal_{i}"], (H, work_ax, aw), parent=pf, d=P.D)
+        CELL_REF[(pre, i)] = (pw, F.az(P.centre(i))[0], ey)
+        o = P.outward(i)
+        n = unit(np.cross(o, t)) if float(np.cross(o, t) @ ey) > 0 else unit(np.cross(t, o))
+        step = 2 * math.pi / FOOT_RIBS / FOOT_STRIPS
         for m in range(FOOT_STRIPS):
-            j, off = strip_owner(i, m)
-            Qj, dj, nj, tj, aj = F.rib(j)
-            uc, _ = F.az(aj + off)
-            ua, _ = F.az(aj)
-            ax2 = nj if float((rot(nj, 0.05) @ uc) @ ua) > float(uc @ ua) else -nj
-            add(anim, "rot", [f"{pre}_strip_{i}_{m}"], (Qj, ax2, abs(off)), parent=ribc[j], s0=0.0, s1=0.3)
+            off = (m - (FOOT_STRIPS - 1) / 2) * step                     # slat centre from the keel
+            if abs(off) < 1e-9:
+                sl = add(anim, "tr", [f"{pre}_slat_{i}_{m}"], np.zeros(3), parent=pw)
+            else:
+                uc = F.az(P.centre(i) + off)[0]
+                ua = F.az(P.centre(i))[0]
+                ax2 = n if float((rot(n, 0.05) @ uc) @ ua) > float(uc @ ua) else -n
+                sl = add(anim, "rot", [f"{pre}_slat_{i}_{m}"], (H, ax2, abs(off)), parent=pw, s0=0.0, s1=0.3)
+            add(anim, "tr", [f"{pre}_skirt_{i}_{m}"], np.zeros(3), parent=sl)                   # the skirt rides its slat
+        # strut: turns on its collar pin to follow the folding petal (the collar sliding), then its working turn
+        C0 = P.collar(i)
+        dirs = []
+        for q in range(K + 1):
+            Cq = C0 - ey * (P.k["col"] - hs[q])
+            dirs.append(unit(pins[i][q] - Cq))
+        chain = _chain_rot(add, anim, None, C0, dirs, ranges, mast, t)
+        # working: the pin at bottomed (0) and unloaded (1) -> the strut's turn and the rod's run
+        def pin_at(st):
+            return rot(work_ax, aw * (st - P.D)) @ (P.pin(i) - H) + H
+        d0, d1 = unit(pin_at(0.0) - C0), unit(pin_at(1.0) - C0)
+        axb = np.cross(d0, d1)
+        axb = unit(axb) if np.linalg.norm(axb) > 1e-12 else t
+        ang_b = math.acos(max(-1.0, min(1.0, float(d0 @ d1))))
+        sb = add(f"{pre}_petal_{i}", "rot", [f"{pre}_strut_{i}"], (C0, axb, ang_b), parent=chain, d=P.D)
+        dL = float(np.linalg.norm(pin_at(1.0) - C0) - np.linalg.norm(pin_at(0.0) - C0))
+        add(f"{pre}_petal_{i}", "tr", [f"{pre}_rod_{i}"], unit(P.pin(i) - C0) * dL, parent=sb, d=P.D)
 
 
 def nose_u_range(s, cx, cy, r):
@@ -2925,12 +3015,17 @@ def _screen_zone(g, plan, zc, slot, rows=8, cam=None):
 # shelf in front of it; at his sides the wings (the same section round his eye, 46..112 deg) with a button shelf, a screen
 # on the leaning riser and a curved monitor on the top edge that folds back (развёрнут / свёрнут / сложен).
 BR_CMD = (0.0, 0.75)                                          # the commander's seat axis (x, z offset): his eye ~3.5 m from the screen
-BR_BAY = [(0, .52, 1.16, .18, .16), (-14, .52, 1.16, .18, .16), (-28, .52, 1.16, .17, .16), (-40, .53, 1.15, .16, .16), (-52, .57, .95, .18, .12)]
+BR_BAY = [(0, .52, .74, .18, .16), (-14, .52, .74, .18, .16), (-28, .52, .74, .17, .16), (-40, .53, .74, .16, .16), (-52, .57, .95, .18, .12)]
 #          angle from his front (- port), inner radius, top H, shelf depth D, top width (the port half; mirrored)
 BR_ELL = (3.2, 3.2 / ((1 + math.sqrt(5)) / 2), -0.2)          # the crew's ellipse: half axes (ratio phi), centre z
 BR_WING = (.50, .30, .95, .14, .12)                           # wings: inner radius, shelf D, top H, top width, riser lean
 BR_MON = (.94, .95, .52, 23.0)                                # curved monitors: radius, bottom y, height, half span (deg) round 80 deg
 BR_MON_FOLD = (1.32, 1.62)                                    # свёрнут, сложен (rad, leaning back about the bottom edge)
+# The panels (the user, 2026-10-04, Tantra_Design/tantra_bridge_panels_mockup.html, tantra_bridge_3d_preview.html): at his sides
+# a curved panel 1.16 x 0.96 m in place of the monitor, the riser and the button shelf (three MFDs over a screen); in front
+# one screen 1.50 x 0.65 m over the key shelf, the bays under it lowered to the shelf.
+BR_PANEL = (1.00, .72, .96, 1.16, 72.0, 12.0)                 # side panels: radius from his axis, bottom y, height, width, middle angle, lean back (deg)
+BR_FRONT = (1.25, .74, .65, 1.50, 18.0)                       # the front screen: radius, bottom y, height, width, lean back (deg)
 TOUCH_FACETS = []                                             # flat pieces of the curved touch screens: (c, ex, up, n, w, h, screen, u0, u1, v0, v1)
 TOUCH_SLOT_EXT = 46                                           # 46 left riser, 47 attitude keys, 48 / 49 the wing shelves (37..40: see TOUCH_SLOT0)
 SIDE_FOLD = []                                                # per monitor: pivot (bottom edge middle), axis (fold direction: positive angle)
@@ -3060,14 +3155,22 @@ def _crescent_console(G):
         g = Group(name, MAT["br_display"]); g.tex = slot
         _strip(g, A, B, [toward] * len(A), [(u, v) for u, v in zip(uA, vA)], [(u, v) for u, v in zip(uA, vB)])
         G["out"].append(g); return g
-    # THE COMMANDER: one concave screen over the face (+-42 deg), its top an arch along the face's top edge
-    iL, iR = at(-38), at(38); st = 1 if iR > iL else -1; idx = list(range(iL, iR + st, st)); n = len(idx) - 1
-    ytop = min(attr[i][0] for i in idx) - .015
-    fp = lambda i, y: pt(i, attr[i][1] + .18 * (y - .72) / (attr[i][0] - .72) - .006, y + .002)   # a point of the face at height y
-    A = [fp(i, .745) for i in idx]; B = [fp(i, ytop) for i in idx]
-    uA = [k / n for k in range(n + 1)]; vA = [1.0] * (n + 1); vB = [0.0] * (n + 1)
-    g = band("bridge_centre", TOUCH_SLOT0 + 2, A, B, uA, vA, vB, inw[at(0)] + up_ * .6)
-    place(2, A, B, uA, vA, vB, 3, TOUCH_SLOT0 + 2, g)
+    # THE COMMANDER: one big screen in front (BR_FRONT), a curved band round his axis leaning back, over the lowered bays
+    radv = lambda a: np.array([math.sin(math.radians(a)), 0.0, math.cos(math.radians(a))])
+    Rf, yf, hf, wf, lf = BR_FRONT; hsf = math.degrees(wf / Rf) / 2; nf = 40; tf = hf * math.tan(math.radians(lf))
+    af = [-hsf + 2 * hsf * i / nf for i in range(nf + 1)]
+    A = [W3(P3(a, Rf), yf) for a in af]; B = [W3(P3(a, Rf + tf), yf + hf) for a in af]
+    uA = [i / nf for i in range(nf + 1)]; vA = [1.0] * (nf + 1); vB = [0.0] * (nf + 1)
+    g = band("bridge_centre", TOUCH_SLOT0 + 2, A, B, uA, vA, vB, -radv(0) + up_ * .3)
+    place(2, A, B, uA, vA, vB, 2, TOUCH_SLOT0 + 2, g)
+    fh = Group("bridge_frontdisp", MAT["mechanism"]); G["out"].append(fh)      # its housing: the back shell, the rims
+    Ab = [W3(P3(a, Rf + .03), yf - .015) for a in af]; Bb = [W3(P3(a, Rf + tf + .03), yf + hf + .015) for a in af]
+    _strip(fh, Ab, Bb, [radv(a) for a in af])
+    _strip(fh, [W3(P3(a, Rf - .004), yf - .015) for a in af], Ab, [-up_] * (nf + 1)); _strip(fh, [W3(P3(a, Rf + tf - .004), yf + hf + .015) for a in af], Bb, [up_] * (nf + 1))
+    for a, sg in ((af[0], -1), (af[-1], 1)):
+        tg = np.array([math.cos(math.radians(a)), 0.0, -math.sin(math.radians(a))]) * sg
+        vs = [fh.vert(v, tg) for v in (W3(P3(a, Rf - .004), yf - .015), W3(P3(a, Rf + .03), yf - .015), W3(P3(a, Rf + tf + .03), yf + hf + .015), W3(P3(a, Rf + tf - .004), yf + hf + .015))]
+        fh.quad(*vs, tg)
     # the attitude keys on the shelf in front of it (+-30 deg): the texture's top is the far edge
     iL, iR = at(-30), at(30); st = 1 if iR > iL else -1; idx = list(range(iL, iR + st, st)); n = len(idx) - 1
     A = [pt(i, .02, .723) for i in idx]; B = [pt(i, attr[i][1] - .02, .723) for i in idx]
@@ -3080,10 +3183,10 @@ def _crescent_console(G):
         A0, A1, N2 = side * 46, side * 112, 40
         pt2 = lambda a, d, y: W3(P3(a, r0 + d), y)
         rad = lambda a: np.array([math.sin(math.radians(a)), 0.0, math.cos(math.radians(a))])
-        prof2 = [(0, 0), (0, .70), (D, .72), (D + RB, Hw), (D + RB + Tw, Hw), (D + RB + Tw, 0)]
+        prof2 = [(0, 0), (0, .70), (D, .72), (D, 0)]                            # the shelf only: the panel stands behind it
         angs = [A0 + (A1 - A0) * i / N2 for i in range(N2 + 1)]
-        refs2 = [[-rad(a) for a in angs], [up_] * (N2 + 1), [-rad(a) + up_ * .6 for a in angs], [up_] * (N2 + 1), [rad(a) for a in angs]]
-        for k, g2 in enumerate((tub, cons, face, cons, tub)):
+        refs2 = [[-rad(a) for a in angs], [up_] * (N2 + 1), [rad(a) for a in angs]]
+        for k, g2 in enumerate((tub, cons, tub)):
             _strip(g2, [pt2(a, *prof2[k]) for a in angs], [pt2(a, *prof2[k + 1]) for a in angs], refs2[k])
         for a, sg in ((A0, -1.0), (A1, 1.0)):                                    # end caps
             ring = [pt2(a, *q) for q in prof2]; c = sum(ring) / len(ring)
@@ -3093,46 +3196,26 @@ def _crescent_console(G):
         for i in range(0, N2, 2):
             tube(leds, pt2(angs[i], -.004, .705), pt2(angs[min(i + 2, N2)], -.004, .705), .005, n=5)
         for i in range(0, N2, 5):                                                # collision
-            q = np.array([pt2(angs[ii], d, 0) for ii in (i, min(i + 5, N2)) for d in (0, D + RB + Tw)])
-            _coll("bridge", (q[:, 0].min(), F, q[:, 2].min()), (q[:, 0].max(), F + Hw, q[:, 2].max()))
-        # the button shelf (48..110 deg): u along the arc as seen from the seat (left to right), the texture's top the far edge
-        s0, s1, NS = side * 56, side * 110, 30
-        aa = [s0 + (s1 - s0) * i / NS for i in range(NS + 1)]
-        # a FLAT rectangle (the user: «пропорции!» - a band along the arc fanned the keys out, its inner edge 1.5x shorter
-        # than the outer): tangent at the middle angle, 0.56 x 0.20 m, inside the shelf; u to the right as seen from the seat
-        mid_ = (s0 + s1) / 2; dr_ = rad(mid_); rt_ = np.array([math.cos(math.radians(mid_)), 0.0, -math.sin(math.radians(mid_))])
-        c0_ = pt2(mid_, .015 + .10, .723); wv_, dp_ = .56, .20
-        A = [c0_ - dr_ * dp_ / 2 + rt_ * (-wv_ / 2 + wv_ * i / NS) for i in range(NS + 1)]
-        B = [p + dr_ * dp_ for p in A]
-        uA = [i / NS for i in range(NS + 1)]
-        kk = 6 if side < 0 else 7
-        g = band(f"bridge_wingkeys{kk - 6}", TOUCH_SLOT_EXT + kk - 4, A, B, uA, [1.0] * (NS + 1), [0.0] * (NS + 1), up_)
-        place(kk, A, B, uA, [1.0] * (NS + 1), [0.0] * (NS + 1), 3, TOUCH_SLOT_EXT + kk - 4, g)
-        # the riser screen: two pages side by side. The right one (the power plant screen | the engine console) runs
-        # on over half of the bare riser toward the front (the user, 2026-10-04: from 51 deg, not 56)
-        at2 = lambda a, t: pt2(a, D + RB * t - .006, .72 + (Hw - .72) * t + .002)
-        ar = aa if side < 0 else [51.0 + (s1 - 51.0) * i / NS for i in range(NS + 1)]
-        A = [at2(a, .07) for a in ar]; B = [at2(a, .95) for a in ar]
-        uA = [(1 - i / NS) if side < 0 else i / NS for i in range(NS + 1)]
-        if side < 0: A, B, uA = A[::-1], B[::-1], uA[::-1]
-        kr, slot = (4, TOUCH_SLOT_EXT) if side < 0 else (3, TOUCH_SLOT0 + 3)
-        g = band(f"bridge_riser{0 if side < 0 else 1}", slot, A, B, uA, [1.0] * (NS + 1), [0.0] * (NS + 1), -rad(side * 79) + up_ * .6)
-        place(kr, A, B, uA, [1.0] * (NS + 1), [0.0] * (NS + 1), 3, slot, g)
+            q = np.array([pt2(angs[ii], d, 0) for ii in (i, min(i + 5, N2)) for d in (0, D)])
+            _coll("bridge", (q[:, 0].min(), F, q[:, 2].min()), (q[:, 0].max(), F + .72, q[:, 2].max()))
+        kk = 6 if side < 0 else 7; kr = 4 if side < 0 else 3                   # the shelf keys and the riser are gone (the panels):
+        for k_, sl_ in ((kk, TOUCH_SLOT_EXT + kk - 4), (kr, TOUCH_SLOT_EXT if side < 0 else TOUCH_SLOT0 + 3)):   # places out of reach, numbering kept
+            places[k_] = (np.array([side * 9.0, F - 9.0, zc]), np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), np.array([0, 0, -1.0]), .40, .20, sl_, None)
         # the curved monitor on the top edge: an arc round his eye, the centre at eye height; it folds back about its bottom edge
-        R0, yb, h, hs = BR_MON; mid = side * 80; k = 0 if side < 0 else 1
+        R0, yb, h, wp, mpa, lean = BR_PANEL; hs = math.degrees(wp / R0) / 2; mid = side * mpa; k = 0 if side < 0 else 1; tl = h * math.tan(math.radians(lean))
         ma = [mid - hs + 2 * hs * i / 24 for i in range(25)]                    # left to right as seen (port: back -> front)
-        A = [W3(P3(a, R0), yb) for a in ma]; B = [W3(P3(a, R0), yb + h) for a in ma]
+        A = [W3(P3(a, R0), yb) for a in ma]; B = [W3(P3(a, R0 + tl), yb + h) for a in ma]
         uA = [i / 24 for i in range(25)]
         scr = band(f"bridge_sidescr{k}", TOUCH_SLOT0 + k, A, B, uA, [1.0] * 25, [0.0] * 25, -rad(mid))
         place(k, A, B, uA, [1.0] * 25, [0.0] * 25, 3, TOUCH_SLOT0 + k, scr)
         hous = Group(f"bridge_sidedisp{k}", MAT["mechanism"]); G["out"].append(hous)
-        Ab = [W3(P3(a, R0 + .025), yb - .012) for a in ma]; Bb = [W3(P3(a, R0 + .025), yb + h + .012) for a in ma]
+        Ab = [W3(P3(a, R0 + .025), yb - .012) for a in ma]; Bb = [W3(P3(a, R0 + tl + .025), yb + h + .012) for a in ma]
         _strip(hous, Ab, Bb, [rad(a) for a in ma])                               # the back shell
-        _strip(hous, [W3(P3(a, R0 - .004), yb - .012) for a in ma], Ab, [-up_] * 25); _strip(hous, [W3(P3(a, R0 - .004), yb + h + .012) for a in ma], Bb, [up_] * 25)
+        _strip(hous, [W3(P3(a, R0 - .004), yb - .012) for a in ma], Ab, [-up_] * 25); _strip(hous, [W3(P3(a, R0 + tl - .004), yb + h + .012) for a in ma], Bb, [up_] * 25)
         for a, sg in ((ma[0], -1), (ma[-1], 1)):
-            q0, q1 = W3(P3(a, R0 - .004), yb - .012), W3(P3(a, R0 + .025), yb + h + .012)
+            q0, q1 = W3(P3(a, R0 - .004), yb - .012), W3(P3(a, R0 + tl + .025), yb + h + .012)
             tg = np.array([math.cos(math.radians(a)), 0.0, -math.sin(math.radians(a))]) * sg
-            vs = [hous.vert(v, tg) for v in (q0, W3(P3(a, R0 + .025), yb - .012), q1, W3(P3(a, R0 - .004), yb + h + .012))]
+            vs = [hous.vert(v, tg) for v in (q0, W3(P3(a, R0 + .025), yb - .012), q1, W3(P3(a, R0 + tl - .004), yb + h + .012))]
             hous.quad(*vs, tg)
         piv = W3(P3(mid, R0 + .01), yb)
         ax = np.array([math.cos(math.radians(mid)), 0.0, -math.sin(math.radians(mid))])   # the tangent at the middle
@@ -3154,10 +3237,257 @@ def _crescent_console(G):
     TOUCH_PLACES[:] = [places[k] for k in range(8)]
 
 
+# ---- THE BRIDGE CONSOLE, variant 7 of the bridge mockup (Tantra_Design/tantra_bridge_3d_preview.html, bridge_variants/v7.js).
+# THE COMMANDER: one curved desk round his axis (BR_CMD), its top sunk in three sloped instrument bands, the glasses standing in
+# ONE groove in it: the front glass fixed on a rigid base, the side glasses rising out of the groove (their bays are in the
+# desk). Every glass keeps the old screen's width : height at its mid height (the side panels 1600 x 1228 px, the front 1914),
+# so the MFD band, its buttons, the tabs and the touches stay pixel for pixel. THE CREW: a desk arc round each seat's place
+# at the console, its groove holding a dark glass with the three real MFDs of that place (the same units and modes as before).
+BR_DESK = (.92, 1.42, .72)                 # his edge, the far edge (radius from his axis), the top over the floor
+BR_GROOVE = (1.25, .035, .06)              # the glasses' groove: radius, half width, depth
+BR_GLASS_LEAN = 14.0                       # all the glasses lean back (deg)
+BR_GLASS_F = (.6632, 1.6267 / .6835)       # the front glass: height, width : height at mid height (the old front screen's)
+BR_GLASS_S = (.96, 1.2782 / .9814)         # a side glass: height, width : height (the old side panels')
+BR_GLASS_GAP = 4.0                         # deg between the front glass and a side glass
+BR_GLASS_RC = .035                         # the glasses' top corners: round, clear of the MFDs
+BR_BANDS = (.99, 1.19, .07)                # the sunken instrument bands of the desk's top: from r, to r, depth at his side
+BR_CREW_DESK = (.62, .98, .86, 42.0)       # a crew desk round its seat's place: his edge, far edge, the groove, half span (deg)
+SIDE_RISE = []                             # per side glass: the translation that takes it down into its bay (state 1)
+
+
+def _glass_span(h, aspect):
+    """The arc (deg) in the groove of a glass h high whose width : height at mid height is `aspect`."""
+    tl = h * math.tan(math.radians(BR_GLASS_LEAN)); slant = h / math.cos(math.radians(BR_GLASS_LEAN))
+    return math.degrees(aspect * slant / (BR_GROOVE[0] + tl / 2))
+
+
+def _ear_clip(poly):
+    """Triangles (index triples) of a simple 2D polygon, any winding."""
+    pts = [np.asarray(p, float) for p in poly]; n = len(pts)
+    area = sum(pts[i][0] * pts[(i + 1) % n][1] - pts[(i + 1) % n][0] * pts[i][1] for i in range(n))
+    idx = list(range(n)) if area > 0 else list(range(n))[::-1]
+    cr = lambda a, b, c: (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+    tris = []
+    while len(idx) > 3:
+        for k in range(len(idx)):
+            i0, i1, i2 = idx[k - 1], idx[k], idx[(k + 1) % len(idx)]
+            a, b, c = pts[i0], pts[i1], pts[i2]
+            if cr(a, b, c) <= 1e-12: continue
+            if any(cr(a, b, pts[j]) > 1e-12 and cr(b, c, pts[j]) > 1e-12 and cr(c, a, pts[j]) > 1e-12 for j in idx if j not in (i0, i1, i2)): continue
+            tris.append((i0, i1, i2)); idx.pop(k); break
+        else:                                                                     # no ear: drop a straight (collinear) vertex
+            k = min(range(len(idx)), key=lambda k: abs(cr(pts[idx[k - 1]], pts[idx[k]], pts[idx[(k + 1) % len(idx)]])))
+            idx.pop(k)
+    tris.append(tuple(idx))
+    return tris
+
+
+def _sweep_arc(g_of, segs, a0, a1, n, W):
+    """A body swept round an axis from angle a0 to a1 (deg) by its section: polylines of (r, h), going CLOCKWISE round the solid
+    (his side up, the top outward, the far side down, the bottom back); W(a, r, h) -> the point; g_of(k): polyline k's group.
+    Both ends capped (the section ear-clipped)."""
+    angs = [a0 + (a1 - a0) * i / n for i in range(n + 1)]
+    rad = lambda a: np.array([math.sin(math.radians(a)), 0.0, math.cos(math.radians(a))])
+    for k, seg in enumerate(segs):
+        g = g_of(k)
+        for j in range(len(seg) - 1):
+            (r0, h0), (r1, h1) = seg[j], seg[j + 1]; L = math.hypot(r1 - r0, h1 - h0)
+            if L < 1e-9: continue
+            nr, nh = -(h1 - h0) / L, (r1 - r0) / L                                # outward
+            nrm = [rad(a) * nr + np.array([0.0, nh, 0.0]) for a in angs]
+            va = [g.vert(W(a, r0, h0), nrm[i]) for i, a in enumerate(angs)]; vb = [g.vert(W(a, r1, h1), nrm[i]) for i, a in enumerate(angs)]
+            for i in range(n): g.quad(va[i], va[i + 1], vb[i + 1], vb[i], nrm[i] + nrm[i + 1])
+    ring = [p for seg in segs for p in seg[:-1]]
+    tris = _ear_clip(ring)
+    tg = lambda a: np.array([math.cos(math.radians(a)), 0.0, -math.sin(math.radians(a))])   # the direction of a growing angle
+    g = g_of(0)
+    for a, sg in ((a0, -1.0), (a1, 1.0)):
+        nn = tg(a) * sg; vs = [g.vert(W(a, r, h), nn) for r, h in ring]
+        for t in tris: g.tri(vs[t[0]], vs[t[1]], vs[t[2]], nn)
+
+
+def _desk_section(ri, ro, top, groove, band=None, toe=True):
+    """A desk's section (see _sweep_arc): the toe recess, his rounded edge, the top (a sunken sloped band in it), the groove,
+    the far rounded edge. Returns the polylines and the index of the band's polyline (-1: none)."""
+    gr, ghw, gd = groove; gi, go = gr - ghw, gr + ghw
+    arc = lambda cr_, ch, R, f0, f1: [(cr_ + R * math.cos(math.radians(f0 + (f1 - f0) * i / 6)), ch + R * math.sin(math.radians(f0 + (f1 - f0) * i / 6))) for i in range(7)]
+    S = ([[(ri + .10, 0), (ri + .10, .09)], [(ri + .10, .09), (ri, .24)]] if toe else [[(ri, 0), (ri, .24)]]) + [[(ri, .24), (ri, top - .03)], arc(ri + .03, top - .03, .03, 180, 90)]
+    bi = -1
+    if band:
+        b0, b1, dp = band
+        S += [[(ri + .03, top), (b0, top)], [(b0, top), (b0, top - dp)]]; bi = len(S); S += [[(b0, top - dp), (b1, top)], [(b1, top), (gi, top)]]
+    else:
+        S += [[(ri + .03, top), (gi, top)]]
+    S += [[(gi, top), (gi, top - gd)], [(gi, top - gd), (go, top - gd)], [(go, top - gd), (go, top)], [(go, top), (ro - .03, top)], arc(ro - .03, top - .03, .03, 90, 0),
+          [(ro, top - .03), (ro, 0)], [(ro, 0), (ri + .10 if toe else ri, 0)]]
+    return S, bi
+
+
+def _glass_rows(h, rc, W):
+    """The rows (sy over the glass's bottom) of a glass with round top corners, and each row's span (sx from, to) over W."""
+    rows = [(h - rc) * j / 24 for j in range(25)] + [h - rc + rc * math.sin(j / 12 * math.pi / 2) for j in range(1, 13)]
+    def span(sy):
+        dy = sy - (h - rc)
+        if dy <= 0: return 0.0, W
+        dx = rc - math.sqrt(max(0.0, rc * rc - dy * dy)); return dx, W - dx
+    return rows, span
+
+
+def _bridge_console_v7(G):
+    """The console of the bridge, variant 7 (see BR_DESK). G: the groups (tub, cons, face, mfd_unit, out) as _crescent_console."""
+    zc = zs(BR_S); F = BR_FLOOR_Y; cx, cz = BR_CMD
+    tub, face = G["tub"], G["face"]
+    up_ = np.array([0.0, 1.0, 0.0])
+    rad = lambda a: np.array([math.sin(math.radians(a)), 0.0, math.cos(math.radians(a))])
+    W = lambda a, r, h: np.array([cx + math.sin(math.radians(a)) * r, F + h, zc + cz + math.cos(math.radians(a)) * r])
+    eye = np.array([cx, F + 1.2, zc + cz])
+    del TOUCH_PLACES[:]; del TOUCH_FACETS[:]; del SIDE_DISP[:]; del SIDE_FOLD[:]; del SIDE_RISE[:]
+    places = {}
+
+    def place(k, A, B, uA, vA, vB, step, slot, g):                               # a touch screen: its facets and its middle rectangle
+        n0_ = len(TOUCH_FACETS); _facets(k, A, B, uA, vA, vB, step, eye - A[len(A) // 2])
+        mid = TOUCH_FACETS[n0_ + (len(TOUCH_FACETS) - n0_) // 2]
+        wsum = sum(np.linalg.norm((A[i + 1] + B[i + 1]) / 2 - (A[i] + B[i]) / 2) for i in range(len(A) - 1))
+        hmax = max(np.linalg.norm(B[i] - A[i]) / max(abs(vA[i] - vB[i]), 1e-3) for i in range(len(A)))
+        places[k] = (mid[0], mid[1], mid[2], mid[3], wsum, hmax, slot, g)
+
+    def dummy(k, slot):                                                          # a screen number kept, its place out of reach
+        side = -1 if k in (4, 6) else 1
+        places[k] = (np.array([side * 9.0, F - 9.0, zc]), np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), np.array([0, 0, -1.0]), .40, .20, slot, None)
+
+    gr, ghw, gd = BR_GROOVE; ri, ro, top = BR_DESK; lean = math.radians(BR_GLASS_LEAN); tl_ = math.tan(lean)
+    hf, asf = BR_GLASS_F; hsf = _glass_span(hf, asf) / 2
+    hsS, ass = BR_GLASS_S; hss = _glass_span(hsS, ass) / 2
+    mids = (-(hsf + BR_GLASS_GAP + hss), hsf + BR_GLASS_GAP + hss)
+    a_end = hsf + BR_GLASS_GAP + 2 * hss + BR_GLASS_GAP
+    # THE DESK: three bodies (the left, the front, the right), each with its sunken band; its collision along the arc
+    sec, bi = _desk_section(ri, ro, top, BR_GROOVE, BR_BANDS)
+    for a0, a1 in ((-a_end, -hsf), (-hsf, hsf), (hsf, a_end)):
+        _sweep_arc(lambda k: face if k == bi else tub, sec, a0, a1, max(8, int((a1 - a0) / 1.5)), W)
+    for i in range(int(2 * a_end / 6)):
+        a0 = -a_end + 2 * a_end * i / int(2 * a_end / 6); a1 = -a_end + 2 * a_end * (i + 1) / int(2 * a_end / 6)
+        q = np.array([W(a, r, 0) for a in (a0, a1) for r in (ri, ro)])
+        _coll("bridge", (q[:, 0].min(), F, q[:, 2].min()), (q[:, 0].max(), F + top, q[:, 2].max()))
+
+    def glass(name, slot, mid, hs, h, rc, g_rim, dR_back=.018):                 # a glass standing in the groove (its texture drawn in the game)
+        g = Group(name, MAT["br_display"]); g.tex = slot; G["out"].append(g)
+        Wd = 2 * math.radians(hs) * gr
+        rows, span = _glass_rows(h, rc, Wd)
+        P_ = lambda sx, sy, dR=0.0: W(mid - hs + 2 * hs * sx / Wd, gr + sy * tl_ + dR, top + sy)
+        nf = lambda sx: -rad(mid - hs + 2 * hs * sx / Wd) * math.cos(lean) + up_ * math.sin(lean)   # toward him
+        NU = 48; grid = []
+        for sy in rows:
+            x0, x1 = span(sy)
+            grid.append([g.vert(P_(x0 + (x1 - x0) * i / NU, sy), nf(x0 + (x1 - x0) * i / NU), ((x0 + (x1 - x0) * i / NU) / Wd, 1 - sy / h)) for i in range(NU + 1)])
+        for j in range(len(rows) - 1):
+            for i in range(NU): g.quad(grid[j][i], grid[j][i + 1], grid[j + 1][i + 1], grid[j + 1][i], nf(Wd / 2))
+        # its rim (the glass's thickness) and its back face, in the frame's group
+        out = [(Wd * i / 20, 0.0) for i in range(21)] + [(Wd - span(sy)[0], sy) for sy in rows[1:]][::1]
+        out += [(span(sy)[0], sy) for sy in rows[::-1]]
+        for i in range(len(out) - 1):
+            (sa, ya), (sb, yb) = out[i], out[i + 1]
+            pa, pb = P_(sa, ya), P_(sb, yb); qa, qb = P_(sa, ya, dR_back), P_(sb, yb, dR_back)
+            e = pb - pa; nrm_ = np.cross(e, nf(sa)); c_ = (pa + pb) / 2; cc = P_(Wd / 2, h / 2)
+            if nrm_ @ (c_ - cc) < 0: nrm_ = -nrm_
+            vs = [g_rim.vert(p, nrm_) for p in (pa, pb, qb, qa)]; g_rim.quad(*vs, nrm_)
+        back = [[g_rim.vert(P_(span(sy)[0] + (span(sy)[1] - span(sy)[0]) * i / 16, sy, dR_back), -nf(Wd / 2)) for i in range(17)] for sy in rows]
+        for j in range(len(rows) - 1):
+            for i in range(16): g_rim.quad(back[j][i], back[j][i + 1], back[j + 1][i + 1], back[j + 1][i], -nf(Wd / 2))
+        nc = 40 if h < .8 else 24                                                # the touch: the full rows at the bottom and the top
+        A = [P_(Wd * i / nc, 0.0) for i in range(nc + 1)]; B = [P_(Wd * i / nc, h) for i in range(nc + 1)]
+        return g, A, B, [i / nc for i in range(nc + 1)], P_
+    # THE FRONT GLASS, fixed on its rigid base: a frame tube round it, the bracket in the groove, two struts behind it
+    fh = Group("bridge_frontdisp", MAT["mechanism"])
+    g, A, B, uA, Pf = glass("bridge_centre", TOUCH_SLOT0 + 2, 0.0, hsf, hf, BR_GLASS_RC, fh); G["out"].append(fh)   # (the old group order kept)
+    keys = Group("bridge_keys", MAT["br_display"]); keys.tex = TOUCH_SLOT_EXT + 1; G["out"].append(keys)   # the old keys shelf: gone (empty, the order kept)
+    n_ = len(A) - 1; place(2, A, B, uA, [1.0] * (n_ + 1), [0.0] * (n_ + 1), 2, TOUCH_SLOT0 + 2, g)
+    Wf = 2 * math.radians(hsf) * gr; rowsf, spanf = _glass_rows(hf, BR_GLASS_RC, Wf)
+    ring_ = [Pf(-.012, 0, .03), Pf(-.012, hf - BR_GLASS_RC, .03)] + [Pf(spanf(sy)[0] - .012, sy + .012, .03) for sy in rowsf[25:]] + \
+            [Pf(spanf(sy)[1] + .012, sy + .012, .03) for sy in rowsf[25:][::-1]] + [Pf(Wf + .012, hf - BR_GLASS_RC, .03), Pf(Wf + .012, 0, .03)]
+    for i in range(len(ring_) - 1): tube(fh, ring_[i], ring_[i + 1], .014, n=8)
+    for sx in (Wf * .2, Wf * .8):                                                # the struts: from the desk behind it to its back
+        tube(fh, Pf(sx, -.0, .09) * np.array([1, 0, 1]) + np.array([0, F + top, 0]), Pf(sx, hf * .55, .035), .02, n=10)
+    # THE SIDE GLASSES: they rise out of the groove (state 0 up); their rims ride with them
+    for k, mid in ((0, mids[0]), (1, mids[1])):
+        hous = Group(f"bridge_sidedisp{k}", MAT["br_bezel"])
+        scr, A, B, uA, Ps = glass(f"bridge_sidescr{k}", TOUCH_SLOT0 + k, mid, hss, hsS, BR_GLASS_RC, hous); G["out"].append(hous)
+        n_ = len(A) - 1; place(k, A, B, uA, [1.0] * (n_ + 1), [0.0] * (n_ + 1), 3, TOUCH_SLOT0 + k, scr)
+        Wm = math.radians(hss) * gr; upv = Ps(Wm, hsS) - Ps(Wm, 0); slant = np.linalg.norm(upv)   # along its slant at its middle: the ends stay in the groove (+-2.7 cm)
+        SIDE_DISP.append((scr, hous)); SIDE_RISE.append(-upv / slant * (slant + .03))
+        SIDE_FOLD.append((Ps(Wm, 0), np.array([1.0, 0.0, 0.0])))                    # (no fold any more: kept for the header's shape)
+    # the screens that are gone (the old keys shelf, the risers, the wings' shelves): their numbers kept, out of reach
+    dummy(5, TOUCH_SLOT_EXT + 1); dummy(7, TOUCH_SLOT_EXT + 3)
+    # THE SIDE CONSOLES (variant 7): fixed beside the seat's lane (x 0.46...0.80 from his axis, from 0.45 m behind it to the desk),
+    # their tops 0.79 m over the floor (his forearms lie on them). The right one: the keys of the MFDs and of the computing machine
+    # (screen 3: 4 x 10 glass keys) and the machine's own phosphor screen at its front (screen 6, tilted 34 deg to him); the left
+    # one: the keys of the screens, the throttle quadrant's slots and the pods' key (screen 4). The keys are drawn by the game.
+    CTOP = .79
+    Pp = lambda q, h: np.array([cx + q[0], F + h, zc + cz + q[1]])
+    for sx in (-1.0, 1.0):
+        pts = [(sx * .46, -.45), (sx * .80, -.45)] + [(sx * x, math.sqrt((ri - .005) ** 2 - x * x)) for x in np.linspace(.80, .46, 13)]
+        c2 = np.mean(np.array(pts), axis=0)
+        for i in range(len(pts)):                                                # the walls
+            a_, b_ = pts[i], pts[(i + 1) % len(pts)]
+            nrm = np.array([b_[1] - a_[1], 0.0, -(b_[0] - a_[0])])
+            if nrm @ np.array([(a_[0] + b_[0]) / 2 - c2[0], 0.0, (a_[1] + b_[1]) / 2 - c2[1]]) < 0: nrm = -nrm
+            vs = [tub.vert(Pp(q, h), nrm) for q, h in ((a_, 0), (b_, 0), (b_, CTOP), (a_, CTOP))]; tub.quad(*vs, nrm)
+        vs = [tub.vert(Pp(q, CTOP), up_) for q in pts]                           # the top
+        for t3 in _ear_clip(pts): tub.tri(vs[t3[0]], vs[t3[1]], vs[t3[2]], up_)
+        q = np.array([Pp(p_, 0) for p_ in pts])
+        _coll("bridge", (q[:, 0].min(), F, q[:, 2].min()), (q[:, 0].max(), F + CTOP, q[:, 2].max()))
+
+    def field(name, k, slot, x0, x1, z0, z1):                                    # a key field on a console's top: u to his right, v 0 at the far edge
+        g = Group(name, MAT["br_display"]); g.tex = slot; G["out"].append(g)
+        xs = np.linspace(x0, x1, 9); uA = [i / 8 for i in range(9)]
+        A = [Pp((x, z0), CTOP + .002) for x in xs]; B = [Pp((x, z1), CTOP + .002) for x in xs]
+        _strip(g, A, B, up_, [(u, 1.0) for u in uA], [(u, 0.0) for u in uA])
+        place(k, A, B, uA, [1.0] * 9, [0.0] * 9, 8, slot, g)
+    field("bridge_keys_r", 3, TOUCH_SLOT0 + 3, .462, .714, -.299, .211)          # 4 columns (6.4 cm) x 10 rows (5.2 cm), as the mockup's
+    field("bridge_keys_l", 4, TOUCH_SLOT_EXT, -.75, -.46, -.12, .42)             # 3 x 5 keys, the pods' key, the two levers' slots
+    # the computing machine's screen: a dark slab tilted 34 deg to him on a support (the mockup: centre x 0.585, 0.36 ahead, 6 cm up)
+    tlt = math.radians(34.4); hw, hd = .095, .086
+    nm_ = np.array([0.0, math.cos(tlt), -math.sin(tlt)]); fw_ = np.array([0.0, math.sin(tlt), math.cos(tlt)]); ex_ = np.array([1.0, 0.0, 0.0])
+    c_ = Pp((.585, .36), CTOP + .06)
+    obox(G["metal"], c_, ex_, nm_, fw_, .105, .008, .10)
+    box(tub, Pp((.48, .37), CTOP), Pp((.69, .46), CTOP + .095))
+    mg = Group("bridge_machine", MAT["br_display"]); mg.tex = TOUCH_SLOT_EXT + 2; G["out"].append(mg)
+    s0 = c_ + nm_ * .0095
+    A = [s0 + ex_ * x - fw_ * hd for x in np.linspace(-hw, hw, 5)]; B = [s0 + ex_ * x + fw_ * hd for x in np.linspace(-hw, hw, 5)]
+    _strip(mg, A, B, nm_, [(i / 4, 1.0) for i in range(5)], [(i / 4, 0.0) for i in range(5)])
+    place(6, A, B, [i / 4 for i in range(5)], [1.0] * 5, [0.0] * 5, 4, TOUCH_SLOT_EXT + 2, mg)
+    # THE CREW: a desk arc round each seat's place at the console, a dark glass in its groove with the three MFDs of that place
+    cri, cro, cgr, chs = BR_CREW_DESK
+    csec, _ = _desk_section(cri, cro, top, (cgr, .03, .05), None)
+    for si, modes in ((2, (2, 1, 6)), (1, (9, 1, 3))):                          # port: the engineer; starboard: the navigator (as before)
+        sx_, sz_ = BR_SEAT_AT[si]; fx, fz = BR_SEAT_DIR[si]; phi = math.degrees(math.atan2(fx, fz))
+        Wc = lambda a, r, h, sx_=sx_, sz_=sz_: np.array([sx_ + math.sin(math.radians(a)) * r, F + h, zc + sz_ + math.cos(math.radians(a)) * r])
+        _sweep_arc(lambda k: tub, csec, phi - chs, phi + chs, 40, Wc)
+        for i in range(8):
+            a0 = phi - chs + 2 * chs * i / 8; a1 = a0 + 2 * chs / 8
+            q = np.array([Wc(a, r, 0) for a in (a0, a1) for r in (cri, cro)])
+            _coll("bridge", (q[:, 0].min(), F, q[:, 2].min()), (q[:, 0].max(), F + top, q[:, 2].max()))
+        hb = .46; dk = G["dark"]                                                 # the dark glass behind the MFDs, in the groove
+        for i in range(24):
+            a0 = phi - 41 + 82 * i / 24; a1 = a0 + 82 / 24
+            p = [Wc(a0, cgr, top), Wc(a1, cgr, top), Wc(a1, cgr + hb * tl_, top + hb), Wc(a0, cgr + hb * tl_, top + hb)]
+            nn = -rad((a0 + a1) / 2) * math.cos(lean) + up_ * math.sin(lean)
+            vs = [dk.vert(q_, nn) for q_ in p]; dk.quad(*vs, nn)
+        for o, mode in zip((-28.0, 0.0, 28.0), modes):                          # the MFD units: 0.40 m, 28 deg apart (0.42 m on the groove)
+            a = phi + o; s_ = .40; c = Wc(a, cgr + (.03 + s_ / 2) * tl_, top + .03 + s_ / 2) - rad(a) * .03   # in front of the curved glass's edges
+            upv = np.array([math.sin(math.radians(a)) * math.sin(lean), math.cos(lean), math.cos(math.radians(a)) * math.sin(lean)])
+            nrm = -rad(a) * math.cos(lean) + up_ * math.sin(lean)
+            ex = np.cross(nrm, upv); ex /= np.linalg.norm(ex)
+            if ex @ np.array([math.cos(math.radians(a)), 0, -math.sin(math.radians(a))]) < 0: ex = -ex   # right as seen
+            G["mfd_unit"](c, ex, upv, nrm, mode, s_)
+    TOUCH_PLACES[:] = [places[k] for k in range(8)]
+
+
 BR_NAV_X, BR_NAV_DZ = -2.4, -1.3                             # navigation table (x, z offset from the axis station)
 # An empty seat stands BACK from its console; one sits down in front of it, then it runs BR_SEAT_TRAVEL along its facing to
 # the console; to stand up it runs back first (the user's decision, 2026-10-03). The crew's seats face their bays (crescent).
-BR_SEAT_TRAVEL = (0.6, 0.6, 0.6, 0.6)
+BR_SEAT_TRAVEL = (1.0, 0.6, 0.6, 0.6)                         # the commander's (variant 7): empty 0.40 m further back - room to stand up and step out
+BR_SEAT_ADJ = (-0.10, 0.35)                                   # the commander's own travel at the console (m along the facing; variant 7: nearer the screens)
+BR_SEAT_HGT = (-0.20, 0.05, -0.10)                            # his seat's height: min, max, at start (m; 0 = the pan's top 0.635 over the floor)
 _CS = _cres_crew_seat()
 BR_SEAT_AT = ((BR_CMD[0], BR_CMD[1] - .2), (_CS[0], _CS[1]), (-_CS[0], _CS[1]), (BR_NAV_X, BR_NAV_DZ - 1.5))   # at the console (the commander 0.2 m back from his bay's axis: the user)
 BR_SEAT_DIR = ((0.0, 1.0), (_CS[2], _CS[3]), (-_CS[2], _CS[3]), (0.0, 1.0))                              # facing (x, z)
@@ -3244,6 +3574,61 @@ def _bridge_seat(G, x, z, accent, ctl, yaw=0.0):
         else:
             _fb3(seat, H, (sx * .36, .275, .2), (.035, .01, .06))
     # (no static collision: the seat moves; the module puts BR_SEAT_BOX at the seat's current place)
+
+
+BR_CUR = (-0.36, 0.25, 0.14, 0.17)                            # the cursor unit on the left armrest's front end: x, z from the seat, width, depth
+BR_BALL = (-0.37, 0.781, 0.27, 0.023)                         # its ball: x, y over the floor, z from the seat, radius
+BR_STRIPS = ((0.350, 0.005), (0.393, 0.005), 0.17, 0.03)       # the sensor strips ХОД, ВЫСОТА on the right armrest's top: (x, z) each, length, width
+BR_SEAT_TOP = 0.765                                           # the armrests' top over the floor
+
+
+def _sphere(g, c, r, nu=20, nv=12):
+    """A UV sphere (its own normals)."""
+    c = np.asarray(c, float)
+    rows = [[g.vert(c + r * np.array([math.sin(math.pi * j / nv) * math.cos(2 * math.pi * i / nu), math.cos(math.pi * j / nv),
+                                      math.sin(math.pi * j / nv) * math.sin(2 * math.pi * i / nu)]),
+                    np.array([math.sin(math.pi * j / nv) * math.cos(2 * math.pi * i / nu), math.cos(math.pi * j / nv), math.sin(math.pi * j / nv) * math.sin(2 * math.pi * i / nu)]))
+             for i in range(nu + 1)] for j in range(nv + 1)]
+    for j in range(nv):
+        for i in range(nu):
+            a, b, d, e = rows[j][i], rows[j][i + 1], rows[j + 1][i + 1], rows[j + 1][i]
+            mid = (g.v[a] + g.v[b] + g.v[d] + g.v[e]) / 4 - c
+            if j > 0: g.tri(a, b, d, mid)
+            if j < nv - 1: g.tri(a, d, e, mid)
+
+
+def _bridge_seat_cmd(G, x, z, rail):
+    """The commander's seat of variant 7 (Tantra_Design/bridge_variants/v7.js): the pan's top 0.635 m (malachite shell, dark
+    cushions), the backrest leaning 15 deg with the headrest, the armrests' tops 0.765 m; on the left one's front end the cursor
+    unit (its ball: dark glass, lit while the light spot is on), on the right one's top the two sensor strips (ХОД, ВЫСОТА -
+    drawn with the cursor unit's keys by the game, group bridge_seat_adj). It rides on a sled in a floor rail; its pan goes up
+    and down on a telescopic pedestal (G["base"]: the sled and the outer tube, they do not go up and down)."""
+    zc = zs(BR_S); F = BR_FLOOR_Y
+    O = np.array([x, F, zc + z]); H0 = _Fr(O)
+    seat, cush, met, base = G["seat"], G["cush"], G["met"], G["base"]
+    box(base, O + (-.15, 0, -.17), O + (.15, .04, .23))                                                  # the sled
+    tube(base, O + (0, .04, .03), O + (0, .36, .03), .085, n=18)                                        # the pedestal: its outer tube
+    tube(met, O + (0, .30, .03), O + (0, .57, .03), .065, n=18)                                         # its inner tube (goes with the pan)
+    _fb3(seat, H0, (0, .57, .10), (.26, .03, .24)); _fb3(cush, H0, (0, .6175, .11), (.23, .0175, .22))  # the pan, its cushion (top 0.635)
+    B = H0.child((0, .60, -.12), rx=-.26)                                                                # the backrest, 15 deg back
+    _fb3(seat, B, (0, .40, -.045), (.25, .40, .035)); _fb3(cush, B, (0, .40, .01), (.22, .37, .02)); _fb3(cush, B, (0, .89, -.01), (.15, .075, .04))
+    for sx in (-1, 1):
+        _fb3(met, H0, (sx * .37, .64, -.02), (.02, .075, .02))                                          # the armrest's post
+        _fb3(seat, H0, (sx * .37, .74, .05), (.045, .025, .20))                                         # the armrest: top 0.765, -0.15...+0.25
+    cx, cz, cw, cd = BR_CUR
+    _fb3(seat, H0, (cx, .74, cz), (.08, .025, .09))                                                      # the left one's front end: the cursor unit's body
+    _fb3(cush, H0, (cx, .772, cz), (cw / 2, .007, cd / 2))                                               # its dark housing (the key plate on it: bridge_seat_adj)
+    bx, by, bz, br = BR_BALL
+    _sphere(G["ball"], O + (bx, by, bz), br); _sphere(G["lit"], O + (bx, by, bz), br + .0005)
+    for k in range(24):                                                                                  # the ball's bezel
+        a0, a1 = 2 * math.pi * k / 24, 2 * math.pi * (k + 1) / 24
+        tube(met, O + (bx + .026 * math.cos(a0), by - .001, bz + .026 * math.sin(a0)), O + (bx + .026 * math.cos(a1), by - .001, bz + .026 * math.sin(a1)), .0035, n=6, caps=False)
+    (ax_, az_), (hx_, hz_), sl, sw = BR_STRIPS
+    for px, pz in ((ax_, az_), (hx_, hz_)):                                                              # the strips' frames (5 mm proud)
+        for dx, dz, hw, hd in ((0, sl / 2 + .004, sw / 2 + .006, .003), (0, -sl / 2 - .004, sw / 2 + .006, .003), (sw / 2 + .0035, 0, .003, sl / 2 + .006), (-sw / 2 - .0035, 0, .003, sl / 2 + .006)):
+            _fb3(met, H0, (px + dx, BR_SEAT_TOP + .0035, pz + dz), (hw, .0035, hd))
+    trav = BR_SEAT_TRAVEL[0] + BR_SEAT_ADJ[1]
+    box(rail, O + (-.06, 0, -.30), O + (.06, .012, trav + .30))                                          # the floor rail along the whole travel
 
 
 # The exit of the bridge: an arch at the back of the drum on the centre line, into the upper corridor of the living deck
@@ -3423,7 +3808,9 @@ def _tub_at_x(P, x):
 
 BR_ADJ_SLOT = 51                                              # the commander's seat slider (drawn by TantraInterior)
 BR_ADJ = (0.31, 0.6715, 0.10, 0.28, 0.045)                    # its place on the seat's right side bolster, by the knee (x, y over the floor, z from the seat), length, width
-BR_ADJ_C = []                                                 # its centre at the seat's rest place (filled by _bridge_volume)
+BR_ADJ_C = []                                                 # the strips' and the key plate's centres at the seat's rest place (filled by _bridge_volume)
+BR_SEAT_PANEL = (400, 340, 2000.0)                            # its texture: width, height (px), px per metre (ХОД 0..60, ВЫСОТА 60..120, the plate 120..400)
+BR_SPOT_R = (0.005, 0.009, 0.016, 0.026, 0.038)               # the light spot's discs (m)
 BR_GRATE_SLOT = 50                                            # the bridge's grating texture (the last of the VC list)
 BR_RIB_X = (-3.6, -2.4, -1.2, 0.0, 1.2, 2.4, 3.6)             # the vault's ribs (arches across the drum)
 
@@ -3494,13 +3881,35 @@ def _bridge_volume(out):
     out += [rib, lamp, cove, frame, led, blink]
     # the commander's seat slider (the user): a touch scale on the right armrest top, moves with the seat (in its groups);
     # built at the seat's rest place like the seat itself; u along the facing (back -> front)
+    # variant 7: one texture (BR_SEAT_PANEL, 2000 px/m) for the two sensor strips on the right armrest (ХОД, ВЫСОТА) and the
+    # cursor unit's key plate on the left one; v 0 at the front (along the facing)
     sx_, sz_ = BR_SEATS[0][0], BR_SEATS[0][1]
     adj = Group("bridge_seat_adj", MAT["br_display"]); adj.tex = BR_ADJ_SLOT
-    c = np.array([sx_ + BR_ADJ[0], F + BR_ADJ[1], zc + sz_ + BR_ADJ[2]]); L_, W_ = BR_ADJ[3], BR_ADJ[4]
-    q = [adj.vert(c + np.array([sx * W_ / 2, 0, sz * L_ / 2]), (0, 1, 0), uv) for sx, sz, uv in ((-1, -1, (0, 0)), (-1, 1, (1, 0)), (1, 1, (1, 1)), (1, -1, (0, 1)))]
-    adj.quad(*q, np.array([0, 1.0, 0]))
-    BR_ADJ_C[:] = list(c)
+    PW, PH, PS = BR_SEAT_PANEL
+    def rect(cx, cz, w, d, y, px0):                                                        # a quad over the seat (w across, d along) -> its region
+        c = np.array([sx_ + cx, F + y, zc + sz_ + cz])
+        q = [adj.vert(c + np.array([ex * w / 2, 0, ez * d / 2]), (0, 1, 0), ((px0 + (ex + 1) / 2 * w * PS) / PW, (1 - ez) / 2 * d * PS / PH))
+             for ex, ez in ((-1, -1), (-1, 1), (1, 1), (1, -1))]
+        adj.quad(*q, np.array([0, 1.0, 0]))
+        return c
+    (ax_, az_), (hx_, hz_), sl, sw = BR_STRIPS
+    c0 = rect(ax_, az_, sw, sl, BR_SEAT_TOP + .0008, 0)
+    c1 = rect(hx_, hz_, sw, sl, BR_SEAT_TOP + .0008, sw * PS)
+    cx, cz, cw, cd = BR_CUR
+    c2 = rect(cx, cz, cw, cd, .7795, 2 * sw * PS)
+    BR_ADJ_C[:] = [list(c0), list(c1), list(c2)]
     out.append(adj)
+    # the light spot («солнечный зайчик») on the glasses: stacked discs of a faint light; the game puts their vertices where the
+    # cursor points (TantraInterior), front and back faces (5 discs x 13 vertices, twice)
+    spot = Group("bridge_spot", MAT["br_spot"])
+    for side in (1.0, -1.0):
+        for r in BR_SPOT_R:
+            c = spot.vert((0, F - 1.0, zc), (0, 0, -side))
+            rim = [spot.vert((r * math.cos(2 * math.pi * k / 12), F - 1.0 + r * math.sin(2 * math.pi * k / 12), zc), (0, 0, -side)) for k in range(12)]
+            for k in range(12):
+                a_, b_ = rim[k], rim[(k + 1) % 12]
+                spot.t.append((c, a_, b_) if side > 0 else (c, b_, a_))
+    out.append(spot)
 
 
 # The bridge's light (the user, 2026-10-03: «основной свет — от экрана, тени от него»; the walls and the floor were one flat,
@@ -3740,7 +4149,7 @@ def build_bridge():
         _coll("bridge", (cx - .55, BR_FLOOR_Y, cz_ - .55), (cx + .55, BR_FLOOR_Y + 3.0, cz_ + .55))
     # the console: «Полумесяц φ» (_crescent_console)
     F = BR_FLOOR_Y
-    tub = gm("bridge_tub", "br_tub"); tface = gm("bridge_console_face", "br_panel_face")
+    tub = gm("bridge_tub", "br_malachite"); tface = gm("bridge_console_face", "br_panel_face")   # the desks: the malachite metal (variant 7)
     mfd_off = gm("bridge_mfd_dark", "br_screen")                                           # (empty: kept for the group order)
     holo = gm("bridge_holo", "br_holo")
     panels = gm("bridge_panels", "br_display"); panels.tex = PANEL_SLOT                     # (no 2D panel pieces on this console)
@@ -3760,7 +4169,7 @@ def build_bridge():
 
     cres = []
     n_occ = len(COLL)                                                                       # the console's boxes cast the screen light's shadows
-    _crescent_console({"tub": tub, "cons": cons, "face": tface, "leds": leds, "metal": metal, "mfd_unit": mfd_unit, "out": cres})
+    _bridge_console_v7({"tub": tub, "cons": cons, "face": tface, "leds": leds, "metal": metal, "mfd_unit": mfd_unit, "out": cres, "dark": mfd_off})   # variant 7 (was _crescent_console)
     # the navigator: his own small desk with his MFD unit, in front of his seat (the seat runs to it)
     nsx, nsz = BR_SEAT_AT[3][0], zc + BR_SEAT_AT[3][1]
     box(cons, (nsx - .45, F, nsz + .47), (nsx + .45, F + .7, nsz + .77)); box(nav, (nsx - .47, F + .7, nsz + .44), (nsx + .47, F + .75, nsz + .8))
@@ -3780,8 +4189,11 @@ def build_bridge():
         a = math.pi + (k + .5) / 9 * math.pi; box(leds, (nx + math.cos(a) * .7 - .03, BR_FLOOR_Y + .95, nz + math.sin(a) * .7 - .03), (nx + math.cos(a) * .7 + .03, BR_FLOOR_Y + .99, nz + math.sin(a) * .7 + .03))
     _coll("bridge", (nx - .62, BR_FLOOR_Y, nz - .62), (nx + .62, BR_FLOOR_Y + 1.0, nz + .62))           # the round table: no corners
     BR_OCC[:] = [(np.array(lo), np.array(hi)) for _t, lo, hi in COLL[n_occ:]]
-    for G, (sx, sz, ac, ct), (fx, fz) in zip(GS, BR_SEATS, BR_SEAT_DIR):
-        _bridge_seat(G, sx, sz, ac, ct, math.atan2(fx, fz))
+    GS[0]["seat"].material = MAT["br_malachite"]                                            # the commander's: variant 7
+    GS[0].update({"base": gm("bridge_seat0_base", "mechanism"), "ball": gm("bridge_cur_ball", "br_cur_ball"), "lit": gm("bridge_cur_lit", "br_cur_lit")})
+    for i, (G, (sx, sz, ac, ct), (fx, fz)) in enumerate(zip(GS, BR_SEATS, BR_SEAT_DIR)):
+        if i == 0: _bridge_seat_cmd(G, sx, sz, metal)
+        else: _bridge_seat(G, sx, sz, ac, ct, math.atan2(fx, fz))
     # horn of the receiver, edge up-lights and the long glass strip with a line of light on the port end
     tube(metal, (-2.75, BR_FLOOR_Y + 1.15, zc + 1.3), (-2.9, BR_FLOOR_Y + 1.25, zc + 1.15), .05, n=14, r1=.17)   # on the port deck of the tub
     box(leds, (-BR_HX + .09, BR_FLOOR_Y + .1, zc - 4.3), (BR_HX - .09, BR_FLOOR_Y + .14, zc - 4.22)); box(leds, (-BR_HX + .09, BR_FLOOR_Y + .1, zc + 4.22), (BR_HX - .09, BR_FLOOR_Y + .14, zc + 4.3))
@@ -3789,7 +4201,7 @@ def build_bridge():
     box(nav, (-BR_HX + .02, BR_FLOOR_Y + .38, zc - 1.9), (-BR_HX + .1, BR_FLOOR_Y + .64, zc + 1.1)); box(leds, (-BR_HX + .1, BR_FLOOR_Y + .48, zc - 1.8), (-BR_HX + .13, BR_FLOOR_Y + .53, zc + 1.0))
     _coll("bridge", (-BR_HX - .2, BR_FLOOR_Y, zc - 5), (-BR_HX + .1, BR_FLOOR_Y + 3, zc + 5))
     _coll("bridge", (BR_HX - .1, BR_FLOOR_Y, zc - 5), (BR_HX + .2, BR_FLOOR_Y + 3, zc + 5))
-    return [shell, floor] + scr + [astro] + [cons, leds, green, red, amber, nav, metal, btn_on, btn_off, mfd, door, door_glow, tface, mfd_off, holo, tub, panels] + [m[6] for m in MFD_PLACES] + cres + [G[k] for G in GS for k in ("seat", "cush", "met", "belt", "acc")]
+    return [shell, floor] + scr + [astro] + [cons, leds, green, red, amber, nav, metal, btn_on, btn_off, mfd, door, door_glow, tface, mfd_off, holo, tub, panels] + [m[6] for m in MFD_PLACES] + cres + [G[k] for G in GS for k in ("seat", "cush", "met", "belt", "acc")] + [GS[0][k] for k in ("base", "ball", "lit")]
 
 
 def build_interior():
@@ -4276,8 +4688,8 @@ def build():
                 obox(g, T + np.array([0, yc + BLADE_L / 2 - 0.6, 0]), (1, 0, 0), (0, 1, 0), (0, 0, 1), BLADE_T[i] / 2 + 0.12, 0.6, BLADE_W[i] / 2 + 0.12)
         A = T + np.array([0, -LEG_LMAX, 0])
         g = grp(f"ankle_{side}", "mechanism")                   # ankle: ball on the MR strut rod, locked when standing
-        tube(g, A, A + np.array([0, ANKLE_R + STRUT_EXT_C + 0.8, 0]), 0.45, n=12)
-        lathe_axis(g, A, (0, 1, 0), [(-0.45, 0.0), (-0.45, 0.6), (0.3, 0.75), (0.7, 0.0)], seg=16)
+        tube(g, A, A + np.array([0, ANKLE_R + STRUT_EXT_C + 0.8, 0]), 0.75, n=16)
+        lathe_axis(g, A, (0, 1, 0), [(-0.75, 0.0), (-0.75, 0.9), (0.4, 1.0), (0.95, 0.0)], seg=20)
         cup_foot(grp, f"foot_{side}", FootFrame(A, (sgn, 0, 0), (0, 1, 0), "blade"))
 
     # ---- anamezon port: two belly bays under the trap columns, armoured doors, liner walls
@@ -4347,8 +4759,8 @@ def build():
                 obox(grp(f"leg{i}_sec{k}", "band"), H + mz * 0.6, ax, th, mz, LEG_SEC_W / 2 * f + 0.1, LEG_SEC_T / 2 * f + 0.1, 0.6)
         fc = H + mz * LEG_LMIN_S
         g = grp(f"leg{i}_ankle", "mechanism")
-        tube(g, fc, fc - mz * (ANKLE_R + STRUT_EXT_S + 0.9), 0.4, n=12)        # strut rod into the shin end
-        lathe_axis(g, fc, -mz, [(-0.45, 0.0), (-0.45, 0.5), (0.3, 0.65), (0.7, 0.0)], seg=16)
+        tube(g, fc, fc - mz * (ANKLE_R + STRUT_EXT_S + 0.9), 0.7, n=16)        # solid neck into the shin end
+        lathe_axis(g, fc, -mz, [(-0.7, 0.0), (-0.7, 0.85), (0.35, 0.95), (0.9, 0.0)], seg=20)
         cup_foot(grp, f"sfoot{i}", FootFrame(fc, ax, -mz, "stern"))
     # ---- kangaroo leg (reference: stowed in the belly pocket)
     yb = -FL * wh_at((KANG_S0 + KANG_S1) / 2)[1]
@@ -4376,8 +4788,8 @@ def build():
                  KANG_SEC_W / 2 * f + 0.08, KANG_SEC_W / 2 * f + 0.08, 0.5)
     Ak = Ks + np.array([0, 0, KANG_SHIN_MIN + ANKLE_R])                                           # ankle (ball), stowed
     g = grp("kang_ankle", "mechanism")
-    tube(g, Ak, Ak - np.array([0, 0, ANKLE_R + 0.6]), 0.35, n=12)
-    lathe_axis(g, Ak, (0, 0, -1), [(-0.4, 0.0), (-0.4, 0.5), (0.3, 0.6), (0.6, 0.0)], seg=16)
+    tube(g, Ak, Ak - np.array([0, 0, ANKLE_R + 0.6]), 0.55, n=16)
+    lathe_axis(g, Ak, (0, 0, -1), [(-0.55, 0.0), (-0.55, 0.7), (0.3, 0.8), (0.75, 0.0)], seg=20)
     cup_foot(grp, "kfoot", FootFrame(Ak, (0, -1, 0), (0, 0, -1), "kang"))
 
     missing = [n for n in GROUPS if G[n] is None]
@@ -4690,6 +5102,12 @@ def v3(a):
 # Meshes/Tantra/Debris/*.msh), built from the same groups, centred on its own centroid. The hull breaks into
 # four chunks by station. name, groups (or station range of the hull for a chunk), mass [t]
 _HULL_GROUPS = ("hull", "shoulder", "nose", "spine", "pocket_liner", "airlock", "cups_nose", "iris_nose_0", "iris_nose_1")
+HULL_ZONES = [("hull_stern", (-10.0, 21.0), 900.0), ("hull_traps", (21.0, 88.0), 1200.0), ("hull_hangar", (88.0, 121.0), 500.0),
+              ("hull_living", (121.0, 145.0), 400.0), ("hull_nose", (145.0, 185.0), 400.0)]
+FEET_DEBRIS = [(f"foot_{side}", 420.0) for side in SIDES] + [(f"sfoot{i}", 400.0) for i in range(4)] + [("kfoot", 150.0)]
+LOWER_DEBRIS = ([(f"leg_{side}", [f"blade_{side}_{BLADE_N - 1}", f"ankle_{side}"], f"foot_{side}", 520.0) for side in SIDES]
+                + [(f"sternleg_{i}", [f"leg{i}_sec{LEG_SEC_N - 1}", f"leg{i}_ankle"], f"sfoot{i}", 450.0) for i in range(4)]
+                + [("kangleg", [f"kang_shin_{KANG_SEC_N - 1}", "kang_ankle"], "kfoot", 170.0)])
 DEBRIS_DEFS = (
     [("crest_port", ["crest_port", "wing_outer_port", "elevon_port"], 22.0),
      ("crest_starboard", ["crest_starboard", "wing_outer_starboard", "elevon_starboard"], 22.0),
@@ -4700,8 +5118,13 @@ DEBRIS_DEFS = (
     + [("kangleg", [f"kang_shin_{k}" for k in range(1, KANG_SEC_N)] + ["kang_ankle"] + foot_groups("kfoot"), 150.0)]
     + [(n, [n], 6.0) for n in ("door_top_port", "door_top_starboard", "door_bottom_port", "door_bottom_starboard", "kang_door")]
     + [(n, [n], 10.0) for n in ("bay_door_port", "bay_door_starboard")]
-    + [("hull_aft", (-10.0, 40.0), 900.0), ("hull_mid", (40.0, 99.0), 700.0), ("hull_fore", (99.0, 144.0), 420.0),
-       ("hull_nose", (144.0, 185.0), 300.0)])
+    + [(f"{n}{v}", rng_, m_) + ((v[1:],) if v else ()) for n, rng_, m_ in HULL_ZONES for v in ("", "_flat", "_short")]
+    # a leg breaks at its joints (core/Foot): the foot at the ankle, the last stage with the foot at the lowest joint
+    + [(f"{pre}_whole", foot_groups(pre), mf) for pre, mf in FEET_DEBRIS]
+    + [(f"{leg}_lower", segs + foot_groups(pre), ml) for leg, segs, pre, ml in LOWER_DEBRIS]
+    # one petal torn off (keel, slats, rod, skirts) of each kind
+    + [(f"petal_{kind}", [n for n in petal_groups(pre, 0) if "_strut_" not in n], mp) for kind, pre, mp in
+       (("blade", "foot_port", 35.0), ("stern", "sfoot0", 30.0), ("kang", "kfoot", 12.0))])
 DEBRIS = []  # filled by write_debris: (name, class, centroid (mesh frame), mass)
 
 
@@ -4712,10 +5135,13 @@ def write_debris(groups, root):
     os.makedirs(mdir, exist_ok=True)
     os.makedirs(cdir, exist_ok=True)
     DEBRIS.clear()
-    chunk_extra = {"hull_aft": ["well", "baffle", "cups_anamezon", "well_centre", "march_unit", "iris_march", "body_flap"],
-                   "hull_mid": ["bay_liner"] + [f"trap_{i}" for i in range(4)],
-                   "hull_fore": ["hangar_inner", "shuttle", "rover_platform", "nose_ana", "ana_feed", "ana_buffer", "nose_screen", "nose_screen_core", "nose_mirror"]}
-    for name, spec, mass in DEBRIS_DEFS:
+    chunk_extra = {"hull_stern": ["well", "baffle", "cups_anamezon", "well_centre", "march_unit", "iris_march", "body_flap"],
+                   "hull_traps": ["bay_liner"] + [f"trap_{i}" for i in range(4)],
+                   "hull_hangar": ["hangar_inner", "shuttle", "rover_platform"],
+                   "hull_nose": ["nose_ana", "ana_feed", "ana_buffer", "nose_screen", "nose_screen_core", "nose_mirror"]}
+    for d_ in DEBRIS_DEFS:
+        name, spec, mass = d_[:3]
+        crush = d_[3] if len(d_) > 3 else None     # "flat": a belly blow pressed it to 55 %, "short": an axial one to 50 %
         parts = []
         if isinstance(spec, tuple):  # hull chunk: triangles of the skin groups by station, whole inner groups
             s0, s1 = spec
@@ -4730,7 +5156,7 @@ def write_debris(groups, root):
                         ng.t.append(tuple(idx))
                 if ng.t:
                     parts.append(ng)
-            parts += [G[n] for n in chunk_extra.get(name, [])]
+            parts += [G[n] for n in chunk_extra.get(name.replace("_flat", "").replace("_short", ""), [])]
         else:
             parts = [G[n] for n in spec]
         P = np.vstack([np.array(p.v) for p in parts])
@@ -4742,6 +5168,17 @@ def write_debris(groups, root):
             q.n = list(p.n)
             q.t = list(p.t)
             out.append(q)
+        if crush:
+            lo0 = (P.min(0) - c)
+            for q in out:
+                for k, v in enumerate(q.v):
+                    v = np.array(v, float)
+                    if crush == "flat":
+                        v[1] = lo0[1] + (v[1] - lo0[1]) * 0.55
+                    else:
+                        v[2] *= 0.5
+                    q.v[k] = v
+            P = np.vstack([np.array(q.v) for q in out]) + c
         write_msh(out, os.path.join(mdir, name + ".msh"))
         lo, hi = P.min(0) - c, P.max(0) - c
         ext = hi - lo
@@ -4757,7 +5194,7 @@ def write_debris(groups, root):
             f.write(f"TouchdownPoints = 0 {lo[1]:.2f} {hi[2] * 0.8:.2f}  {lo[0] * 0.8:.2f} {lo[1]:.2f} {lo[2] * 0.8:.2f}  "
                     f"{hi[0] * 0.8:.2f} {lo[1]:.2f} {lo[2] * 0.8:.2f}\n")
             f.write(f"COG_OverGround = {-lo[1]:.2f}\nEnableFocus = TRUE\n")
-        DEBRIS.append((name, f"Tantra\\Debris_{name}", c, mass * 1e3))
+        DEBRIS.append((name, f"Tantra\\Debris_{name}", c, mass * 1e3, -lo[1]))
 
 
 def write_layout(legs, comps, path):
@@ -4778,6 +5215,50 @@ def write_layout(legs, comps, path):
     L.append(f"constexpr double kLegLMinS = {LEG_LMIN_S:.3f}, kLegExtMax = {LEG_EXT_MAX:.3f}, kLegFootH = {LEG_FOOT_H:.3f}, kLegFootR = {FOOT_KINDS['stern']['R']:.2f};  // stern legs (stowed along -z)")
     L.append(f"constexpr double kStrutExtC = {STRUT_EXT_C}, kStrutExtS = {STRUT_EXT_S};  // unloaded strut rod (= the static sag)")
     L.append(f"constexpr double kStrokeC = {STROKE_C}, kStrokeS = {STROKE_S};  // whole strut stroke: animation 0 bottomed, 1 unloaded")
+    # gas cells: ring radius = the centre of pressure of a bay; anims per foot (port, starboard, stern 0..3, kangaroo);
+    # each cell's direction from the foot's centre in the deployed pose (blades and kangaroo lying, stern legs standing)
+    rc = lambda k: 2.0 / 3.0 * (FOOT_KINDS[k]['R'] ** 3 - PETAL[k]['rh'] ** 3) / (FOOT_KINDS[k]['R'] ** 2 - PETAL[k]['rh'] ** 2)
+    L.append(f"constexpr int kCellN = {FOOT_RIBS};   // petals per foot")
+    # the legs' groups for the damage: the stages below the hip (top to bottom), the ankle, the foot (contiguous), the petal
+    # blocks inside it (keel, slats, strut, rod, skirts)
+    prs = [f"foot_{s}" for s in ('port', 'starboard')] + [f"sfoot{i}" for i in range(4)] + ["kfoot"]
+    segs = [[f"blade_{s}_{i}" for i in range(1, BLADE_N)] for s in ('port', 'starboard')] + \
+           [[f"leg{i}_sec{k}" for k in range(1, LEG_SEC_N)] for i in range(4)] + [[f"kang_shin_{k}" for k in range(1, KANG_SEC_N)]]
+    ankles = ["ankle_port", "ankle_starboard"] + [f"leg{i}_ankle" for i in range(4)] + ["kang_ankle"]
+    firsts = []
+    for pre in prs:
+        fg = foot_groups(pre)
+        f0 = GROUPS.index(fg[0])
+        assert [GROUPS.index(n) for n in fg] == list(range(f0, f0 + len(fg))), pre
+        assert foot_groups(pre)[2:2 + 9] == petal_groups(pre, 0), pre
+        firsts.append(f0)
+    L.append("constexpr int kLegSegN[7] = {" + ", ".join(str(len(sg)) for sg in segs) + "};")
+    L.append("constexpr int kLegSeg[7][10] = {" + ", ".join("{" + ", ".join(str(GROUPS.index(n)) for n in sg + [sg[-1]] * (10 - len(sg))) + "}" for sg in segs) + "};   // stages below the hip, top to bottom")
+    L.append("constexpr int kAnkleGrp[7] = {" + ", ".join(str(GROUPS.index(n)) for n in ankles) + "};")
+    L.append("constexpr int kFootFirst[7] = {" + ", ".join(str(f) for f in firsts) + f"}}, kFootGrpN = {len(foot_groups(prs[0]))};")
+    L.append("constexpr int kPetalFirst = 2, kPetalStride = 9, kPetalStrut = 4;   // in a foot: petal i = first + 2 + 9 i .. +9 (its strut at +4 stays on the collar)")
+    L.append("constexpr double kCellRc[3] = {" + ", ".join(f"{rc(k):.3f}" for k in ('blade', 'stern', 'kang')) + "};  // petal centre of pressure: blade, stern, kangaroo")
+    pres = [f"foot_{s}" for s in ('port', 'starboard')] + [f"sfoot{i}" for i in range(4)] + ["kfoot"]
+    poses = preview_poses(legs)
+    Mrest, Mstand = comp_matrices(comps, poses[1][1]), comp_matrices(comps, poses[3][1])
+    an = []
+    for c in comps:
+        if c["anim"] not in an:
+            an.append(c["anim"])
+    rows_a, rows_d = [], []
+    for l, pre in enumerate(pres):
+        M = Mstand if 2 <= l <= 5 else Mrest
+        up_want = np.array([0, 0, 1.0]) if 2 <= l <= 5 else np.array([0, 1.0, 0])
+        ds = []
+        for i in range(FOOT_RIBS):
+            ci, u, ey = CELL_REF[(pre, i)]
+            R = M[ci][:3, :3]
+            assert float((R @ ey) @ up_want) > 0.99, (pre, i, R @ ey)
+            ds.append(R @ u)
+        rows_a.append("{" + ", ".join(str(an.index(f"{pre}_petal_{i}")) for i in range(FOOT_RIBS)) + "}")
+        rows_d.append("{" + ", ".join(v3(d) for d in ds) + "}")
+    L.append("constexpr int kCellAnim[7][12] = {" + ", ".join(rows_a) + "};")
+    L.append("constexpr V kCellDir[7][12] = {\n    " + ",\n    ".join(rows_d) + "};")
     yb = -FL * wh_at((KANG_S0 + KANG_S1) / 2)[1]
     L.append(f"// Kangaroo leg: hip axis (mesh frame), thigh, shin range, knee offset off the hip-foot line, foot ahead of the hip while lying.")
     L.append(f"constexpr V kKangHip = {v3([KANG_THIGH_X, yb + KANG_DEPTH - KANG_THIGH_W / 2 - 0.1, zs(KANG_HIP_S)])};")
@@ -4869,11 +5350,11 @@ def write_layout(legs, comps, path):
     L.append("// Command bridge capsule: drum turning about the cross axis x; counter-rotates with the hull pitch (0 lying, ~72.5 stella, 90 standing).")
     L.append(f"constexpr double kBridgeS = {BR_S}, kBridgeY = {BR_Y}, kBridgeR = {BR_R}, kBridgeHx = {BR_HX}, kBridgeZ = {zs(BR_S):.3f};\n")
     L.append("// Debris vessels (tools/gen_mesh.py write_debris): class, spawn point = centroid in the mesh frame.")
-    L.append("struct DebrisDef { const char* name; const char* cls; V centre; double mass; };")
+    L.append("struct DebrisDef { const char* name; const char* cls; V centre; double mass; double cogH; };   // cogH: COG over the ground lying")
     L.append(f"constexpr int kDebrisCount = {len(DEBRIS)};")
     L.append("constexpr DebrisDef kDebris[kDebrisCount] = {")
-    for name, cls, c, mass in DEBRIS:
-        L.append(f'    {{"{name}", "{cls.replace(chr(92), chr(92) * 2)}", {v3(c)}, {mass:.0f}}},')
+    for name, cls, c, mass, cog in DEBRIS:
+        L.append(f'    {{"{name}", "{cls.replace(chr(92), chr(92) * 2)}", {v3(c)}, {mass:.0f}, {cog:.2f}}},')
     L.append("};\n\n}  // namespace tantra::mesh\n")
     with open(path, "w", newline="\n") as f:
         f.write("\n".join(L))
@@ -5074,6 +5555,8 @@ def write_interior_layout(path, vc_groups=()):
     L.append("constexpr double kSideFoldPivot[2][3] = {%s}, kSideFoldAxis[2][3] = {%s};" % (
         ", ".join("{%.4f, %.4f, %.4f}" % tuple(f[0]) for f in SIDE_FOLD), ", ".join("{%.4f, %.4f, %.4f}" % tuple(f[1]) for f in SIDE_FOLD)))
     L.append("constexpr double kSideFoldAngle = %.4f, kSideFoldHalf = %.4f;" % (BR_MON_FOLD[1], BR_MON_FOLD[0] / BR_MON_FOLD[1]))
+    L.append("// the side glasses (variant 7): the translation that takes each down along its slant into its bay in the desk")
+    L.append("constexpr double kSideRise[2][3] = {%s};" % ", ".join("{%.4f, %.4f, %.4f}" % tuple(r) for r in SIDE_RISE))
     L.append("// the bridge MFDs (touch, square): centre, right, up, normal (interior frame), size (m), texture slot, mode")
     L.append("struct MfdPlace { double c[3], ex[3], up[3], n[3], s; unsigned slot; int mode; };")
     L.append("constexpr int kMfdCount = %d;" % len(MFD_PLACES))
@@ -5132,13 +5615,23 @@ def write_interior_layout(path, vc_groups=()):
     rows = []
     for i in range(len(BR_SEATS)):
         ids = [gi.get(f"bridge_seat{i}{suf}", -1) for suf in ("", "_cushion", "_metal", "_belt", "_accent")]
-        if i == 0: ids += [gi.get("bridge_button_on", -1), gi.get("bridge_button_off", -1), gi.get("bridge_seat_adj", -1)]
-        ids += [-1] * (8 - len(ids))
+        if i == 0: ids += [gi.get("bridge_button_on", -1), gi.get("bridge_button_off", -1), gi.get("bridge_seat_adj", -1),
+                           gi.get("bridge_seat0_base", -1), gi.get("bridge_cur_ball", -1), gi.get("bridge_cur_lit", -1)]
+        ids += [-1] * (12 - len(ids))
         rows.append("{" + ", ".join(str(v) for v in ids) + "}")
-    L.append("constexpr int kSeatGroups[4][8] = {" + ", ".join(rows) + "};   // -1: none")
-    L.append("// the commander's seat slider on his right armrest (centre at the seat's rest place, length along the facing, width); its texture slot")
-    L.append("constexpr double kSeatAdjC[3] = {%.4f, %.4f, %.4f}, kSeatAdjLen = %.3f, kSeatAdjWid = %.3f; constexpr unsigned kSeatAdjSlot = %du;" % (tuple(BR_ADJ_C) + (BR_ADJ[3], BR_ADJ[4], BR_ADJ_SLOT)))
-    L.append("constexpr double kSeatAdjMin = -0.10, kSeatAdjMax = 0.20;   // the seat's own travel at the console (m along the facing)")
+    L.append("constexpr int kSeatGroups[4][12] = {" + ", ".join(rows) + "};   // -1: none")
+    L.append("// the commander's seat (variant 7): its base (the sled, the pedestal's outer tube) does not go up and down; the cursor unit's ball dark / lit")
+    L.append("constexpr int kSeat0Base = %d, kCurBallGrp = %d, kCurLitGrp = %d, kSpotGrp = %d;" % (gi.get("bridge_seat0_base", -1), gi.get("bridge_cur_ball", -1), gi.get("bridge_cur_lit", -1), gi.get("bridge_spot", -1)))
+    L.append("constexpr int kSpotDiscs = %d;   // the light spot: discs of 13 vertices (centre, 12 round), front then back faces" % len(BR_SPOT_R))
+    L.append("constexpr double kSpotR[%d] = {%s};" % (len(BR_SPOT_R), ", ".join("%.4f" % r for r in BR_SPOT_R)))
+    L.append("// the sensor strips ХОД, ВЫСОТА on his right armrest and the cursor unit's key plate on the left one: centres at the seat's rest place")
+    L.append("// (height 0), sizes across / along the facing; one texture (kSeatAdjSlot) for all three, kSeatPanelPx px per metre, v 0 at the front")
+    L.append("constexpr double kSeatAdjC[3] = {%.4f, %.4f, %.4f}, kSeatHgtC[3] = {%.4f, %.4f, %.4f}, kCurPlateC[3] = {%.4f, %.4f, %.4f};" % tuple(BR_ADJ_C[0] + BR_ADJ_C[1] + BR_ADJ_C[2]))
+    L.append("constexpr double kSeatStripLen = %.3f, kSeatStripWid = %.3f, kCurPlateW = %.3f, kCurPlateD = %.3f; constexpr unsigned kSeatAdjSlot = %du;" % (BR_STRIPS[2], BR_STRIPS[3], BR_CUR[2], BR_CUR[3], BR_ADJ_SLOT))
+    L.append("constexpr int kSeatPanelW = %d, kSeatPanelH = %d; constexpr double kSeatPanelPx = %.1f;" % BR_SEAT_PANEL)
+    L.append("constexpr double kCurBall[4] = {%.4f, %.4f, %.4f, %.4f};   // the ball: x, y, z (interior frame, at the rest place), radius" % (BR_SEATS[0][0] + BR_BALL[0], BR_FLOOR_Y + BR_BALL[1], zs(BR_S) + BR_SEATS[0][1] + BR_BALL[2], BR_BALL[3]))
+    L.append("constexpr double kSeatAdjMin = %.2f, kSeatAdjMax = %.2f;   // the seat's own travel at the console (m along the facing)" % BR_SEAT_ADJ)
+    L.append("constexpr double kSeatHgtMin = %.2f, kSeatHgtMax = %.2f, kSeatHgtStart = %.2f;   // the commander's seat's height (m)" % BR_SEAT_HGT)
     for nm, key in (("kGrpScreenC", "bridge_screen_c"), ("kGrpMfd", "bridge_mfd"), ("kGrpBtnOn", "bridge_button_on"), ("kGrpBtnOff", "bridge_button_off")):
         L.append(f"constexpr unsigned {nm} = {gi.get(key, 0)}u;")
     L.append("constexpr double kBtnX = %.3f, kBtnY = %.3f, kBtnZ = %.3f;" % (0.36, BR_FLOOR_Y + 0.78, zs(BR_S) + BR_SEATS[0][1] + 0.16))

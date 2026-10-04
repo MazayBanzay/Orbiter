@@ -4,7 +4,8 @@
 //   - aboard, a person has no body in Orbiter's world; OrbiterCrew keeps him or her whole (organism, suit, pack)
 //   - the ship saves its people in its own scenario block (ocSavePerson) and gives them back on loading (ocLoadPerson)
 //   - going out: ocDisembark creates the body of that very person at the given place
-//   - coming in: ocBoard takes a body out of the world, the person is aboard the ship
+//   - coming in: ocEnterShip - the same body walks inside (a ship with an interior); ocBoard takes a body out of the
+//     world, the person is aboard the ship (a ship without an interior)
 // Plain C functions exported by Modules\OrbiterCrew\CrewMember.dll; OcApi below loads them at run time, so a ship
 // module has no link dependency on OrbiterCrew (and still loads when OrbiterCrew is not installed).
 #pragma once
@@ -34,7 +35,7 @@ struct OcItem {
     int kind;                   // OcItemKind
     VECTOR3 pos, dir;           // where it is; which way one faces to use it
     double radius;              // m: within reach
-    char label[64];             // shown in the hint ("E - сесть: кресло пилота")
+    char label[64];             // shown in the hint ("F - кресло пилота"), in the ship's code page
 };
 struct OcInterior {
     ATTACHMENTHANDLE (*Attach)(void* ctx);      // the ship's parent point (toparent = false); OrbiterCrew moves it each
@@ -46,7 +47,8 @@ struct OcInterior {
     void (*Gravity)(void* ctx, const VECTOR3* p, VECTOR3* g);                    // felt gravity (m/s^2, ship frame); NULL = 9.81 along -y
     int (*Count)(void* ctx);                                                     // items: seats, terminals, doors, lift, airlocks
     int (*Item)(void* ctx, int i, OcItem* out);
-    void (*Use)(void* ctx, int id, int personId);                                // the person pressed E at the item
+    void (*Use)(void* ctx, int id, int personId);                                // F at the item, or a click on an OC_BUTTON
+                                                                                 // (never a seat: she sits herself, see Seated)
     void (*Seat)(void* ctx, int id, VECTOR3* pos, VECTOR3* dir);                 // the seat's pose (hips, facing)
     void (*Viewing)(void* ctx, int on);                                          // the person's camera is inside this ship (show the interior as an
                                                                                  // outside mesh) / has left it
@@ -66,9 +68,10 @@ typedef int (*ocLoadPerson_t)(const char* lines);                // the lines be
 typedef void (*ocRegisterInterior_t)(OBJHANDLE ship, const OcInterior* fns, void* ctx);   // in clbkPostCreation
 typedef void (*ocUnregisterInterior_t)(OBJHANDLE ship);                                 // in the ship's destructor
 typedef OBJHANDLE (*ocEnterInterior_t)(int id, const VECTOR3* posInShip, const VECTOR3* dirInShip);
-    // aboard without a body -> the body stands in the interior at that place; the focus goes to the body. -> the body
+    // aboard without a body -> the body stands in the interior at that place; the focus goes to the body (the person). -> the body
 typedef void (*ocLeaveInterior_t)(int id, int seatId);
-    // the body leaves the world (into the seat 'seatId', or stored with -1); the focus goes to the ship
+    // the body leaves the world, the person is stored aboard (seatId: unused); the focus goes to the ship. For ships
+    // of the old way only: OrbiterCrew's own seats never use it (the user's rule: the focus stays with the person)
 typedef OBJHANDLE (*ocShipOf_t)(int id);                          // the ship he or she is aboard (where 2 or 3), else NULL
 typedef OBJHANDLE (*ocExitTo_t)(int id, const char* vesselName, const VESSELSTATUS2* vs);
     // out of the ship (an airlock): the body stands at vs, detached, in the world -> the body
@@ -87,12 +90,17 @@ struct OcInteriorExt {
     // (Seat() gives the hips and the facing, read every frame: the seat may move and the body goes with it). Empty
     // seats stand moved back from the console; Seated(on = 1) when seated: the ship moves the seat up to the console;
     // on = 0 on F in the seat: the ship moves it back, the person rises when Seat() stops moving. The focus and the
-    // camera stay with the person all the time - the ship never takes them (the user's rule). NULL: the old way.
+    // camera stay with the person all the time - the ship never takes them (the user's rule). NULL: the ship's seats
+    // cannot be sat in (F there says so; the old way - the body leaving into the seat, the ship taking the focus - is gone)
     void (*Seated)(void* ctx, int seatId, int personId, int on);
     // A left click inside the ship (touch screens, as in Arrow): the click's ray from the camera through the cursor,
     // in the interior frame, before any OC_BUTTON is looked for. 1 = the ship took it (a screen was hit), 0 = not.
     // The ship checks the reach itself (the camera may be behind her: ocInteriorPos gives her feet)
     int (*Click)(void* ctx, const VECTOR3* origin, const VECTOR3* dir, int personId);
+    // The ship's OUTER solids for a person walking outside, on the ground near it (legs, pads, the lift cabin...): as
+    // Walls, but in the SHIP frame (not the interior frame). Called every walking step while she is within 3 ship
+    // sizes + 200 m of its centre; from = her feet now, to = where she steps (clip it). NULL: she walks through as before
+    void (*OuterWalls)(void* ctx, const VECTOR3* from, VECTOR3* to, double radius, double height);
 };
 typedef void (*ocSetInteriorExt_t)(OBJHANDLE ship, const OcInteriorExt* ext);
 // a person outside walks in (a lift, an airlock): the SAME body is now inside at pos/dir (interior frame); the focus

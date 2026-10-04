@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "Aero.h"
+#include "Impact.h"
 
 namespace tantra::damage {
 
@@ -37,17 +38,26 @@ const char* kRu[kPartCount] = {"щит носа", "днище", "крыло ле
                                "гондола 1", "гондола 2", "гондола 3", "гондола 4",
                                "лопасть левая", "лопасть правая", "кормовая нога 1", "кормовая нога 2",
                                "кормовая нога 3", "кормовая нога 4", "нога-кенгуру", "створки ангара", "створки отсеков",
-                               "маршевая чаша", "корпус"};
+                               "маршевая чаша", "корпус",
+                               "жилые отсеки", "ангар", "блок ловушек", "корма",
+                               "ВЭУ", "накопитель поля", "планетарная установка", "гироскопы", "баки аргона",
+                               "вездеходы", "шлюз и лифт", "жизнеобеспечение", "гаситель инерции", "пульты мостика"};
 const char* kEn[kPartCount] = {"nose shield", "belly", "port wing", "starboard wing", "fin",
                                "pod 1", "pod 2", "pod 3", "pod 4",
                                "port blade leg", "starboard blade leg", "stern leg 1", "stern leg 2",
-                               "stern leg 3", "stern leg 4", "kangaroo leg", "hangar doors", "bay doors", "marching cup", "hull"};
+                               "stern leg 3", "stern leg 4", "kangaroo leg", "hangar doors", "bay doors", "marching cup", "hull",
+                               "living module", "hangar", "trap block", "stern",
+                               "power plant", "field store", "planetary installation", "gyroscopes", "argon tanks",
+                               "rovers", "airlock and lift", "life support", "inertia absorber", "bridge consoles"};
 }  // namespace
 
 Model::Model() { Repair(); }
 
 void Model::Repair() {
     for (double& i : integrity_) i = 1.0;
+    for (double& c : crushed_) c = 0.0;
+    belly_ = 0.0;
+    impact_ = ImpactReport();
     for (double& t : temp_) t = 250.0;
     nEvents_ = 0;
 }
@@ -124,21 +134,92 @@ void Model::Step(double dt, const Flight& f, const Exposure& x, const Ground& g,
     // --- touchdown impact and leg overloads
     if (g.touchdown) {
         double v = g.vDown;  // what is left for the hull after the legs
-        if (g.gearDown) {
-            if (v > g.vBreak) for (int p = kLegPort; p <= kKangLeg; ++p) Hurt(p, 1.0, enabled);
+        if (g.gearDown && (g.legsInPlay || g.impactMode < 0)) {   // the legs take it only when the ship lands on them
+            if (g.jointModel) {}   // the cells, ribs, ankles and joints take it (core/Foot)
+            else if (v > g.vBreak) for (int p = kLegPort; p <= kKangLeg; ++p) Hurt(p, 1.0, enabled);
             else if (v > g.vSoft) for (int p = kLegPort; p <= kKangLeg; ++p) Hurt(p, (v - g.vSoft) / (g.vBreak - g.vSoft), enabled);
             // the struts absorb the energy of a vBreak touchdown at most (stroke bottomed out); the rest reaches the hull
             v = v > g.vBreak ? std::sqrt(v * v - g.vBreak * g.vBreak) : 0.0;
         }
-        if (v > kTdBellyBreak) Hurt(kHull, 1.0, enabled);
+        if (g.impactMode >= 0) {
+            if (v > kTdBelly) HullImpact(g, v, enabled);      // the hull itself: zones, equipment, people (core/Impact)
+        } else if (v > kTdBellyBreak) Hurt(kHull, 1.0, enabled);
         else if (v > kTdBelly) { Hurt(kBelly, 0.2 * (v - kTdBelly), enabled); Hurt(kHull, 0.1 * (v - kTdBelly), enabled); }
     }
-    if (g.contact && g.gearDown)
+    if (g.contact && g.gearDown && !g.jointModel)
         for (int i = 0; i < 7; ++i) {
             const double r = g.legRatio[i];
             if (r > 1.5) Hurt(kLegPort + i, 1.0, enabled);
             else if (r > 1.0) Hurt(kLegPort + i, (r - 1.0) * 0.5 * dt, enabled);
         }
+}
+
+// The hull hits the ground with what the legs left: the zones crush in turn (or the ship goes into the ground), the
+// equipment meets its g (along the axis what the drive asks, across its mounts), the trap cassettes hold their anamezon
+// or not. Damage accumulates: an earlier crush stays crushed.
+void Model::HullImpact(const Ground& g, double v, bool enabled) {
+    namespace im = tantra::impact;
+    im::Input in;
+    in.mode = static_cast<im::Mode>(g.impactMode);
+    in.mass = g.mass;
+    in.g = g.localG;
+    in.v = v;
+    in.soil = g.soil;
+    for (int z = 0; z < im::kZoneCount; ++z) in.crushed[z] = crushed_[z];
+    in.belly = belly_;
+    const im::Result r = im::Solve(in);
+    const bool axial = in.mode == im::kNoseFirst || in.mode == im::kSternFirst;
+    ImpactReport rep;
+    rep.happened = true;
+    rep.mode = g.impactMode;
+    rep.v = v;
+    rep.peakG = r.peakG;
+    rep.penetration = r.penetration;
+    rep.duration = r.duration;
+    rep.axial = axial;
+    if (enabled) {
+        // the zones: their crushed share is their damage (nose and belly also take heat elsewhere)
+        static const int kZonePart[im::kZoneCount] = {kSternZone, kTrapBlock, kHangar, kLiving, kNose};
+        for (int z = 0; z < im::kZoneCount; ++z) {
+            const double len = im::kZones[z].s1 - im::kZones[z].s0;
+            const double before = std::min(1.0, crushed_[z] / len), after = im::Share(r, z);
+            crushed_[z] = r.crushed[z];
+            Hurt(kZonePart[z], after - before, enabled);
+            if (z == im::kStern) Hurt(kMarchCup, after - before, enabled);
+            if (z == im::kHangar) Hurt(kHangarDoors, after - before, enabled);
+        }
+        const double b0 = std::min(1.0, belly_ / im::kBellyDepth), b1 = std::min(1.0, r.belly / im::kBellyDepth);
+        belly_ = r.belly;
+        Hurt(kBelly, 0.99 * (b1 - b0), enabled);   // pressed in all the way the compartments are open, the ship not gone
+    }
+    for (int z = 0; z < im::kZoneCount; ++z) rep.zoneGrade[z] = im::Grade(im::Share(r, z));
+    rep.bellyGrade = im::Grade(std::min(1.0, r.belly / im::kBellyDepth));
+    // the equipment against its g
+    static const int kEquipPart[im::kEquipCount] = {kTrapBlock, kEqVeu, kEqStore, kEqPlant, kEqGyros, kEqArgon, kEqRovers,
+                                                    kEqAirlock, kEqLife, kEqAbsorber, kEqBridge};
+    static const double kStateIntegrity[4] = {1.0, 0.85, 0.45, 0.0};
+    for (int e = 0; e < im::kEquipCount; ++e) {
+        const int st = im::EquipState(e, r.peakG, axial, im::Share(r, im::kEquip[e].zone));
+        rep.equipState[e] = st;
+        if (e == im::kTrapCassettes) continue;            // the trap block: its own share above, the breach below
+        const int part = kEquipPart[e];
+        if (integrity_[part] > kStateIntegrity[st]) Hurt(part, integrity_[part] - kStateIntegrity[st], enabled);
+    }
+    rep.absorberAlive = rep.equipState[im::kAbsorber] < 3 && integrity_[kEqAbsorber] > 0.0;
+    // the anamezon: over the field's hold, or the cassettes crushed - the end of the ship and everything around it
+    const double hold = axial ? im::kEquip[im::kTrapCassettes].axialG : im::kEquip[im::kTrapCassettes].lateralG;
+    if (g.trapsLoaded && (r.peakG > hold || im::Share(r, im::kTraps) > 0.85)) {
+        rep.trapBreach = true;
+        Hurt(kHull, 1.0, enabled);
+    }
+    impact_ = rep;
+}
+
+bool Model::TakeImpact(ImpactReport* out) {
+    if (!impact_.happened) return false;
+    *out = impact_;
+    impact_.happened = false;
+    return true;
 }
 
 int Model::TakeEvents(Event* out, int max) {
@@ -160,6 +241,18 @@ void Model::Load(const char* s) {
         if (end == s) break;
         integrity_[i] = std::clamp(v, 0.0, 1.0);
         s = end;
+    }
+}
+
+void Model::SaveCrush(char* buf, int size) const {
+    std::snprintf(buf, size, "%.2f %.2f %.2f %.2f %.2f %.2f", crushed_[0], crushed_[1], crushed_[2], crushed_[3], crushed_[4], belly_);
+}
+
+void Model::LoadCrush(const char* s) {
+    double c[6] = {};
+    if (std::sscanf(s, "%lf %lf %lf %lf %lf %lf", &c[0], &c[1], &c[2], &c[3], &c[4], &c[5]) == 6) {
+        for (int i = 0; i < 5; ++i) crushed_[i] = std::max(0.0, c[i]);
+        belly_ = std::max(0.0, c[5]);
     }
 }
 

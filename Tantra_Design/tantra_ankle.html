@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тантра: крепление стопы</title>
+<style>
+:root{--bg:#eef1f4;--panel:#ffffff;--ink:#1d2430;--muted:#5d6878;--line:#d5dbe3;--ok:#1f8a4c;--warn:#b7791f;--bad:#c53030;--acc:#2b6cb0}
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif;padding:12px 14px}
+h1{font-size:16px;margin:0 0 4px}
+h2{font-size:14px;margin:0 0 6px}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;overflow-x:auto}
+svg text{paint-order:stroke;stroke:#fbfcfd;stroke-width:3px}
+svg{width:100%;height:auto;display:block;background:#fbfcfd;border:1px solid var(--line);border-radius:6px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:3px 5px;border-bottom:1px solid #eef1f4;vertical-align:top;text-align:left}
+th{color:var(--muted);font-weight:600}
+td.v{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.note{font-size:12px;color:var(--muted)}
+ul{margin:4px 0 4px 18px;padding:0}li{margin:2px 0}
+@media (max-width:1000px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<h1>Тантра: крепление стопы лопасти — сейчас и два варианта</h1>
+<div class="note">Вид сбоку вдоль корпуса, масштаб 1:1 между рисунками (сетка — 1 м). Не меняется: высота голеностопа над грунтом 5,2 м,
+чаша R 12,2 м с юбкой 0,9 м, нижняя ступень лопасти 5,2 × 1,3 м, длины и ходы колонн, ось корпуса лёжа 24 м — подъём не перебалансируется.
+Нагрузка на лопасть (гружёный 52,3 кт лёжа, ~37,5 % веса): стоянка 1 g — 192 МН; посадка (вес + 1,5 g) — 481 МН; расчётный 2,5 g × 1,5 — 722 МН.</div>
+<div class="grid" style="margin-top:10px">
+  <div class="card"><h2>Сейчас</h2><div id="s0"></div></div>
+  <div class="card"><h2>А. Та же чаша, массивный голеностоп</h2><div id="s1"></div></div>
+  <div class="card"><h2>Б. Независимые лепестки чаши</h2><div id="s2"></div></div>
+</div>
+<div class="card" style="margin-top:10px"><h2>Цифры</h2><table id="tab"></table></div>
+<div class="grid" style="margin-top:10px">
+  <div class="card"><h2>Сейчас</h2><ul class="note">
+    <li>Вся нагрузка — через шток стойки ⌀ 0,9 м и шар R 0,5 м на тонкой стойке-«шее» к ступице R 0,5 м.</li>
+    <li>Не держит: шток 1,1 ГПа в расчётном случае при пределе УНТ 1 ГПа; поршень 0,64 м² при нужных 15 м².</li></ul></div>
+  <div class="card"><h2>А. Та же чаша, другой узел</h2><ul class="note">
+    <li>На торце нижней ступени — «башмак» 5,2 × 4,6 × 4,0 м (вдоль корпуса × поперёк × высота): в нём 4 МР-стойки ⌀ 2,2 м (2 × 2), ход 1,5 м.</li>
+    <li>Под башмаком — цилиндрический шарнир R 2,0 м, ось поперёк корпуса (стопа держится горизонтально при наклоне лопасти); крен ±8° — сферические вкладыши в торцах шарнира.</li>
+    <li>Шарнир — в гильзе ⌀ 5,2 м на ступице чаши (как в проекте); стойка гильзы — труба ⌀ 5,2 м, стенка 0,3 м.</li>
+    <li>Чаша, рёбра, подкосы, юбка — без изменений. Складывание стопы в карман — то же (башмак уходит в карман вместе с ступенью; карман глубже на ~1,7 м поперёк).</li></ul></div>
+  <div class="card"><h2>Б. Каждый лепесток сам по себе</h2><ul class="note">
+    <li>Чаша делится на 12 лепестков; у каждого своя МР-стойка ⌀ 1,3 м (ход 1,5 м) между кольцом ступицы и опорной плитой лепестка у обода.</li>
+    <li>Ступица — кольцо ⌀ 5,2 м на том же цилиндрическом шарнире R 2,0 м, но без центральных стоек: нагрузка сразу расходится на 12 лепестков.</li>
+    <li>Лепестки сами ложатся на неровный грунт (каждый ±0,75 м) — камни, уклон; сломанный лепесток не валит опору (11 из 12 держат 92 %).</li>
+    <li>Сложнее и тяжелее: 12 стоек и клапанов на опору, 12 точек касания вместо 2–3 на ногу (физика контакта — больше точек).</li></ul></div>
+</div>
+
+<script>
+"use strict";
+// side view along the hull: x = along the hull (m), y = up from the ground (m)
+const W = 360, H = 300, SC = 11, X0 = W / 2, Y0 = H - 24;   // px per m
+const px = x => X0 + x * SC, py = y => Y0 - y * SC;
+function frame() {
+  let s = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+  for (let x = -16; x <= 16; x++) s += `<line x1="${px(x)}" y1="${py(0)}" x2="${px(x)}" y2="${py(24)}" stroke="#eef1f4"/>`;
+  for (let y = 0; y <= 24; y++) s += `<line x1="${px(-16)}" y1="${py(y)}" x2="${px(16)}" y2="${py(y)}" stroke="#eef1f4"/>`;
+  s += `<rect x="0" y="${py(0)}" width="${W}" height="${H - py(0)}" fill="#e9dfcf"/>`;
+  s += `<line x1="0" y1="${py(0)}" x2="${W}" y2="${py(0)}" stroke="#b9a98a"/>`;
+  s += `<line x1="${px(-15)}" y1="${py(5.2)}" x2="${px(15)}" y2="${py(5.2)}" stroke="#c53030" stroke-dasharray="4 3"/><text x="${px(-15)}" y="${py(5.2) - 3}" font-size="10" fill="#c53030">голеностоп 5,2 м</text>`;
+  return s;
+}
+// the umbrella cup (unchanged): rim R 12.2 with the 0.9 m skirt, ribs from the hub up to it, struts
+function cup(hubY, hubR, petals) {
+  let s = "";
+  const R = 12.2;
+  s += `<polygon points="${px(-R)},${py(0)} ${px(-R)},${py(0.9)} ${px(-hubR)},${py(hubY)} ${px(hubR)},${py(hubY)} ${px(R)},${py(0.9)} ${px(R)},${py(0)}" fill="#c9d1db" stroke="#4a5260"/>`;
+  if (!petals) {
+    for (const f of [0.5, 1.0]) for (const sg of [-1, 1]) s += `<line x1="${px(sg * hubR)}" y1="${py(hubY + 2.2)}" x2="${px(sg * (hubR + (R - hubR) * f))}" y2="${py(0.9 + (hubY - 0.9) * (1 - f))}" stroke="#2c4a7a" stroke-width="3"/>`;
+  }
+  return s;
+}
+function current() {
+  let s = frame();
+  s += cup(2.0, 0.5, false);
+  s += `<rect x="${px(-0.35)}" y="${py(4.7)}" width="${0.7 * SC}" height="${2.7 * SC}" fill="#8a94a3"/>`;           // post
+  s += `<circle cx="${px(0)}" cy="${py(5.2)}" r="${0.5 * SC}" fill="#5a6b8a"/>`;                                   // ball
+  s += `<rect x="${px(-0.45)}" y="${py(7.0)}" width="${0.9 * SC}" height="${1.8 * SC}" fill="#9aa3ad"/>`;          // rod
+  s += `<rect x="${px(-2.6)}" y="${py(24)}" width="${5.2 * SC}" height="${(24 - 7.0) * SC}" fill="#2c4a7a" opacity=".9"/>`;   // blade 5.2
+  s += `<text x="${px(3)}" y="${py(6.2)}" font-size="11" fill="#c53030">шток ⌀0,9 — мал</text>`;
+  return s + "</svg>";
+}
+function variantA() {
+  let s = frame();
+  s += cup(2.0, 2.6, false);
+  s += `<rect x="${px(-2.6)}" y="${py(5.2)}" width="${5.2 * SC}" height="${(5.2 - 2.0) * SC}" fill="#7d8796" stroke="#4a5260"/>`;   // sleeve post 5.2
+  s += `<circle cx="${px(0)}" cy="${py(5.2)}" r="${2.0 * SC}" fill="#5a6b8a" stroke="#2d3748"/>`;                                    // hinge R2
+  s += `<rect x="${px(-2.6)}" y="${py(11.2)}" width="${5.2 * SC}" height="${4.0 * SC}" fill="#3f5f8f" stroke="#1d2430"/>`;          // boot
+  for (const x of [-1.3, 1.3]) {
+    s += `<rect x="${px(x - 1.1)}" y="${py(10.8)}" width="${2.2 * SC}" height="${3.2 * SC}" fill="#9aa3ad" stroke="#4a5260"/>`;   // strut barrels
+    s += `<rect x="${px(x - 0.5)}" y="${py(7.6)}" width="${1.0 * SC}" height="${0.8 * SC}" fill="#c9d1db"/>`;                      // rods to the hinge
+  }
+  s += `<rect x="${px(-2.6)}" y="${py(24)}" width="${5.2 * SC}" height="${(24 - 11.2) * SC}" fill="#2c4a7a" opacity=".9"/>`;
+  s += `<text x="${px(3.2)}" y="${py(9.6)}" font-size="11" fill="#1f8a4c">4 стойки ⌀2,2</text><text x="${px(3.2)}" y="${py(5.6)}" font-size="11" fill="#1f8a4c">шарнир R2,0</text><text x="${px(3.2)}" y="${py(3.4)}" font-size="11" fill="#1f8a4c">гильза ⌀5,2</text>`;
+  return s + "</svg>";
+}
+function variantB() {
+  let s = frame();
+  const R = 12.2;
+  // petals: separate plates near the rim, each on its own strut from the hub ring
+  for (let k = -5; k <= 5; k++) {
+    if (k === 0) continue;
+    const xr = k / 5.5 * R;
+    s += `<rect x="${px(xr) - 0.9 * SC}" y="${py(0.9)}" width="${1.8 * SC}" height="${0.9 * SC}" fill="#c9d1db" stroke="#4a5260"/>`;   // petal pad
+    s += `<line x1="${px(Math.sign(k) * 2.6)}" y1="${py(4.0)}" x2="${px(xr)}" y2="${py(0.9)}" stroke="#2c4a7a" stroke-width="${Math.abs(k) > 3 ? 3 : 5}"/>`;  // rib
+    s += `<line x1="${px(xr * 0.75)}" y1="${py(3.2)}" x2="${px(xr * 0.75)}" y2="${py(1.6)}" stroke="#9aa3ad" stroke-width="${1.3 * SC * 0.6}"/>`;  // petal strut
+  }
+  s += `<rect x="${px(-2.6)}" y="${py(4.4)}" width="${5.2 * SC}" height="${1.2 * SC}" fill="#7d8796" stroke="#4a5260"/>`;   // hub ring
+  s += `<circle cx="${px(0)}" cy="${py(5.2)}" r="${2.0 * SC}" fill="#5a6b8a" stroke="#2d3748"/>`;                           // hinge
+  s += `<rect x="${px(-2.6)}" y="${py(24)}" width="${5.2 * SC}" height="${(24 - 7.2) * SC}" fill="#2c4a7a" opacity=".9"/>`;
+  s += `<text x="${px(-12)}" y="${py(-1.3)}" font-size="11" fill="#1f8a4c">12 лепестков, у каждого стойка ⌀1,3</text>`;
+  return s + "</svg>";
+}
+document.getElementById("s0").innerHTML = current();
+document.getElementById("s1").innerHTML = variantA();
+document.getElementById("s2").innerHTML = variantB();
+document.getElementById("tab").innerHTML = `
+<tr><th></th><th>Сейчас</th><th>А. Массивный голеностоп</th><th>Б. Независимые лепестки</th></tr>
+<tr><td>Стойки на ногу</td><td class="v">1 × ⌀0,9 м</td><td class="v">4 × ⌀2,2 м</td><td class="v">12 × ⌀1,3 м</td></tr>
+<tr><td>Площадь поршней</td><td class="v bad">0,64 м²</td><td class="v ok">15,2 м²</td><td class="v ok">15,9 м²</td></tr>
+<tr><td>Давление на стоянке / посадке (предел клапана 32 МПа)</td><td class="v bad">300 / 750 МПа</td><td class="v ok">12,6 / 31,6 МПа</td><td class="v ok">12,1 / 30,2 МПа</td></tr>
+<tr><td>Узел к ступице, расчётный 722 МН (УНТ 1 ГПа, запас)</td><td class="v bad">шток 1,1 ГПа — излом</td><td class="v ok">труба ⌀5,2/0,3 м: 157 МПа (×6)</td><td class="v ok">кольцо ⌀5,2 + 12 рёбер: ~150 МПа</td></tr>
+<tr><td>Шарнир (контакт)</td><td class="v bad">шар R0,5</td><td class="v ok">цилиндр R2,0 × 4,6 м</td><td class="v ok">цилиндр R2,0 × 4,6 м</td></tr>
+<tr><td>Неровный грунт под чашей</td><td class="v">юбка 0,9 м</td><td class="v">юбка 0,9 м</td><td class="v ok">каждый лепесток ±0,75 м</td></tr>
+<tr><td>Отказ одного элемента</td><td class="v bad">нога потеряна</td><td class="v">3 из 4 стоек: 75 %</td><td class="v ok">11 из 12: 92 %</td></tr>
+<tr><td>Масса узла на ногу (оценка)</td><td class="v">~40 т</td><td class="v">~170 т</td><td class="v">~210 т</td></tr>
+<tr><td>Точки касания на ногу</td><td class="v">2</td><td class="v">2 (как сейчас)</td><td class="v warn">12 (больше контактов в физике)</td></tr>
+<tr><td>Меняется в игре</td><td class="v">—</td><td class="v">модель узла; масса ног +2 %</td><td class="v warn">модель чаши и узла, 12 точек и стоек на ногу; масса ног +2,5 %</td></tr>`;
+</script>
+</body>
+</html>

@@ -27,7 +27,7 @@ button.on{background:#2c6a54;color:#e8fffa}
   <div id="barBody">
   <div>вариант: <span id="varBtns"></span></div>
   <div id="vInfo" class="note"></div>
-  <div>кресло: <button id="seatIn" class="on">сел — подъехало</button><button id="seatOut">пустое — отъехало</button> регулировка <input id="adj" type="range" min="-0.10" max="0.20" step="0.01" value="0" style="width:90px;vertical-align:middle"> <b id="adjV">+0.00 м</b></div>
+  <div>кресло: <button id="seatIn" class="on">сел — подъехало</button><button id="seatOut">пустое — отъехало</button> регулировка <input id="adj" type="range" min="-0.10" max="0.20" step="0.01" value="0" style="width:90px;vertical-align:middle"> <b id="adjV">+0.00 м</b> высота <input id="seatH" type="range" min="0" max="0" step="0.01" value="0" style="width:80px;vertical-align:middle"> <b id="seatHV">0 см</b></div>
   <div>человек: <button id="manN">нет</button><button id="m95" class="on">95 % муж.</button><button id="f05">5 % жен.</button> <button id="reach">досягаемость</button></div>
   <div class="note">Ввод — у человека: рули и клавиши на подлокотниках и боковых пультах в досягаемости (кресло едет 0,6 м + регулировка). Дальний стол — для слежения: приборы, лампы систем, расчётная машина с люминофорным экраном. Фигура человека и «досягаемость» — проверка зазоров.</div>
   <div><button id="vSeat" class="on">из кресла командира</button><button id="vSide">сбоку</button><button id="vTop">сверху</button><button id="vBack">со спины</button></div>
@@ -347,7 +347,13 @@ const cen = (a0, a1) => { const n = colsIn(a0, a1); return [n, a0 + ((a1 - a0) -
 const AMB = "#ffc46a", RED = "#ff3b30";
 // ---- THE SEAT and HIM: the commander's seat rides 0.6 m to the desk after he sits (kSeatTravel), plus his own adjustment
 // -0.10..+0.20 (kSeatAdjMin/Max); the check figure sits in it (95 % man / 5 % woman) to prove the clearances ----
-const SEAT = {target: 1, cur: 1, adj: 0, offset() { return .6 * this.cur + this.adj; }, place() { return {x: 0, z: 78.95 + this.offset()}; }};
+const SEAT = {target: 1, cur: 1, adj: 0, rest: 0, travel: .6, adjMin: -.10, adjMax: .20, crewRest: 0, crewTravel: .6, hMin: 0, hMax: 0, hT: 0, hc: 0, hBuilt: 0,   // rest: where the empty seat stands (from the game's place), travel to the console, the adjustment
+  offset() { return this.rest + this.travel * this.cur + this.adj; }, place() { return {x: 0, z: 78.95 + this.offset()}; }};
+function setSeatParams(p) {   // a variant's seat: the defaults are the game's (kSeatTravel 0.6, kSeatAdjMin/Max)
+  Object.assign(SEAT, {rest: 0, travel: .6, adjMin: -.10, adjMax: .20, crewRest: 0, crewTravel: .6, hMin: 0, hMax: 0, hT: 0}, p || {});
+  SEAT.hT = Math.max(SEAT.hMin, Math.min(SEAT.hMax, SEAT.hT)); const eh = $("seatH"); if (eh) { eh.min = SEAT.hMin; eh.max = SEAT.hMax; eh.value = SEAT.hT; eh.disabled = SEAT.hMin === SEAT.hMax; eh.oninput && eh.oninput({target: eh}); }
+  SEAT.adj = Math.max(SEAT.adjMin, Math.min(SEAT.adjMax, SEAT.adj)); const el = $("adj"); if (el) { el.min = SEAT.adjMin; el.max = SEAT.adjMax; el.value = SEAT.adj; el.oninput && el.oninput({target: el}); }
+}
 // the figure (m): the hip joint 0.085 over the seat cushion (its top y 1.635, the mesh) at the seat's place (z 78.95 at rest:
 // the backrest's foot is at 78.82-78.87), the segments of a 95 % man / 5 % woman (the seated pose of OrbiterCrew: the knees
 // 0.37-0.40 ahead of the hips, the shoulders 0.45 over them and 0.10 behind, the eye 0.63 over them)
@@ -365,7 +371,7 @@ function buildMan() {
   const z0 = 78.95 + D.hipDZ, recl = 11 * Math.PI / 180, up = 4 * Math.PI / 180;
   for (const sx of [-1, 1]) {
     const hx = sx * D.hipW / 2 * .55, hip = O(hx, D.hipY, z0), knee = O(hx, D.hipY + D.thigh * Math.sin(up), z0 + D.thigh * Math.cos(up));
-    const kY = D.hipY + D.thigh * Math.sin(up), ankY = FLOOR + .08, dy = kY - ankY, dz = dy < D.shank ? Math.sqrt(D.shank * D.shank - dy * dy) : 0;
+    const kY = D.hipY + D.thigh * Math.sin(up), ankY = FLOOR + .08 - SEAT.hc, dy = kY - ankY, dz = dy < D.shank ? Math.sqrt(D.shank * D.shank - dy * dy) : 0;
     const ank = O(hx, Math.max(ankY, kY - D.shank), z0 + D.thigh * Math.cos(up) + dz * .6), toe = O(hx, FLOOR + .04, -ank.z + D.footL * .8);
     limb(hip, knee, D.r * .95); limb(knee, ank, D.r * .7); limb(ank, toe, D.r * .5);
   }
@@ -385,8 +391,9 @@ function buildMan() {
   }
 }
 buildMan();
-setInterval(() => { const d = SEAT.target - SEAT.cur; SEAT.cur += Math.sign(d) * Math.min(Math.abs(d), .03 * .25 / .6); seatGrp.position.z = -SEAT.offset();
-  for (const k in CREW_SEATS) { const c = CREW_SEATS[k]; c.grp.position.set(c.f[0] * .6 * SEAT.cur, 0, -c.f[1] * .6 * SEAT.cur); } }, 30);
+setInterval(() => { const d = SEAT.target - SEAT.cur; SEAT.cur += Math.sign(d) * Math.min(Math.abs(d), .03 * .25 / SEAT.travel); seatGrp.position.z = -SEAT.offset();   // 0.25 m/s
+  { const dh = SEAT.hT - SEAT.hc; SEAT.hc += Math.sign(dh) * Math.min(Math.abs(dh), .03 * .05); seatGrp.position.y = SEAT.hc; if (Math.abs(SEAT.hc - SEAT.hBuilt) > .015) { SEAT.hBuilt = SEAT.hc; buildMan(); } }   // the height: 0.05 m/s
+  for (const k in CREW_SEATS) { const c = CREW_SEATS[k]; const o = SEAT.crewRest + SEAT.crewTravel * SEAT.cur; c.grp.position.set(c.f[0] * o, 0, -c.f[1] * o); } }, 30);
 // ---- THE VARIANTS of the desk. Each builds its own group; the files bridge_variants/v*.js register with VARIANTS.push({id, name,
 // info, build(ctx)}); build returns {onKey(k), step(dt), repaint(), cutMats, cut(x, y, z, part) -> hide that old triangle} ----
 const VARIANTS = [], BUILT = {};
@@ -397,7 +404,7 @@ function variantCtx(group, clicks, seatGroup, crewGroups) {
   return {THREE, P3, V3, AX, FLOOR, YD, RG, hsF0, hsS0, MODES_SP, GLASS_H, DESK, TOP, group, seatGroup, crewGroups, CREW_SEATS, PAL, STYLE, FONT, LOOK, AMB, RED, SEAT, MAN_DIMS,
     arcPts, arcBody, arcBox, arcPlate, canvasTex, deskSection, deskGeom, deskTex, key, setKey, paintKey, keyLabel, flash, block, cen, capGeom, keySide,
     clickable: (mesh, fn) => clicks.push({mesh, fn}), mockup: {click: clickMockup, win: () => $("fp").contentWindow, regions: () => regions},
-    cmdCut: CMD_CUT, setOpq: v => setOpq(v), deg};
+    cmdCut: CMD_CUT, setOpq: v => setOpq(v), setSeatParams, deg};
 }
 function buildVariant(def) {
   const group = new THREE.Group(); grp.B.add(group); const clicks = [], seatGroup = new THREE.Group(), crewGroups = {};
@@ -803,6 +810,7 @@ $("palB").onclick = () => setPal("B"); $("palE").onclick = () => setPal("E");
 $("font").onchange = e => { FONT.fam = e.target.value || null; repaintAll(); };
 $("seatIn").onclick = () => { SEAT.target = 1; tog([["seatIn", 1], ["seatOut", 0]], 1); };
 $("seatOut").onclick = () => { SEAT.target = 0; tog([["seatIn", 1], ["seatOut", 0]], 0); };
+$("seatH").oninput = e => { SEAT.hT = +e.target.value; $("seatHV").textContent = (SEAT.hT > 0 ? "+" : "") + Math.round(SEAT.hT * 100) + " см"; };
 $("adj").oninput = e => { SEAT.adj = +e.target.value; $("adjV").textContent = (SEAT.adj >= 0 ? "+" : "") + SEAT.adj.toFixed(2) + " м"; };
 for (const [id, v] of [["manN", "none"], ["m95", "m95"], ["f05", "f05"]]) $(id).onclick = () => { MAN.show = v; buildMan(); tog([["manN", "none"], ["m95", "m95"], ["f05", "f05"]], v); };
 $("reach").onclick = () => { MAN.reach = !MAN.reach; $("reach").classList.toggle("on", MAN.reach); buildMan(); };

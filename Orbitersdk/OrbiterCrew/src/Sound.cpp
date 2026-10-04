@@ -158,8 +158,9 @@ namespace ocrew
 		else breathClock = 0;
 
 		// ---- suit thermal control: heard only when it works - a low hum for a little heating or cooling, louder the
-		// harder it has to work (strong cold or heat); quiet when nothing is needed (heard inside only) ----
-		const bool fan = in.suited && in.fanOn && in.alive && fanId && in.fanLoad > 0.03;
+		// harder it has to work (strong cold or heat); quiet when nothing is needed (heard inside only). The suit's own:
+		// it runs on the suit's power whatever the state of the person in it (the user's rule) ----
+		const bool fan = in.suited && in.fanOn && fanId && in.fanLoad > 0.03;
 		if (fan)
 		{
 			const double target = 0.15 + 0.65 * std::clamp(in.fanLoad, 0.0, 1.0);
@@ -181,8 +182,9 @@ namespace ocrew
 		}
 		else if (windPlaying) { xr->StopWav(windId); windPlaying = false; windVolume = 0; }
 
-		// ---- alarm: a tone while a caution or a warning waits for acknowledgement ----
-		if (in.alarm > 0 && in.alive)
+		// ---- alarm: a tone while a caution or a warning waits for acknowledgement (the suit computer's: it sounds whatever
+		// the state of the wearer) ----
+		if (in.alarm > 0)
 		{
 			alarmClock -= in.dt;
 			if (alarmClock <= 0)

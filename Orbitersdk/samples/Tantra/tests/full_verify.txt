@@ -1,0 +1,1005 @@
+ok   stowed: nothing proud of the skin (worst door_bottom_starboard +0.019, kang_door +0.019, door_pod_2 +0.012, door_pod_3 +0.012)
+ok   stowed door_pod_0: outer face flush (-0.000 m)
+ok   stowed door_top_port: outer face flush (+0.000 m)
+ok   stowed bay_door_starboard: outer face flush (-0.000 m)
+ok   stowed kang_door: outer face flush (-0.000 m)
+ok   stowed iris_nose_0: outer face flush (+0.000 m)
+ok   stowed blade port: outer face -0.55 m under the skin (ribs over it)
+ok   stowed blade foot port: folded in the pocket, outermost -0.05 m
+ok   stowed blade starboard: outer face -0.55 m under the skin (ribs over it)
+ok   stowed blade foot starboard: folded in the pocket, outermost -0.05 m
+ok   stowed crest_port in the body shadow: |x| 10.32 (<= 13.55), y 1.22..7.29
+ok   stowed crest_starboard in the body shadow: |x| 10.32 (<= 13.55), y 1.22..7.29
+ok   stowed wing_outer_port in the body shadow: |x| 11.22 (<= 13.55), y -3.27..7.21
+ok   stowed wing_outer_starboard in the body shadow: |x| 11.22 (<= 13.55), y -3.27..7.21
+ok   stowed elevon_port in the body shadow: |x| 11.09 (<= 13.55), y -3.26..7.20
+ok   stowed elevon_starboard in the body shadow: |x| 11.09 (<= 13.55), y -3.26..7.20
+ok   stowed leg0_sec0 in the body shadow: |x| 13.24 (<= 13.55), y 7.21..11.08
+ok   stowed leg0_sec1 in the body shadow: |x| 13.12 (<= 13.55), y 7.34..10.95
+ok   stowed leg0_sec2 in the body shadow: |x| 12.90 (<= 13.55), y 7.58..10.72
+ok   stowed leg0_sec3 in the body shadow: |x| 12.70 (<= 13.55), y 7.78..10.52
+ok   stowed leg0_ankle in the body shadow: |x| 12.33 (<= 13.55), y 8.20..10.10
+ok   stowed leg1_sec0 in the body shadow: |x| 13.24 (<= 13.55), y 7.21..11.08
+ok   stowed leg1_sec1 in the body shadow: |x| 13.12 (<= 13.55), y 7.34..10.95
+ok   stowed leg1_sec2 in the body shadow: |x| 12.90 (<= 13.55), y 7.58..10.72
+ok   stowed leg1_sec3 in the body shadow: |x| 12.70 (<= 13.55), y 7.78..10.52
+ok   stowed leg1_ankle in the body shadow: |x| 12.33 (<= 13.55), y 8.20..10.10
+ok   stowed leg2_sec0 in the body shadow: |x| 12.81 (<= 13.55), y -8.46..-4.55
+ok   stowed leg2_sec1 in the body shadow: |x| 12.68 (<= 13.55), y -8.32..-4.69
+ok   stowed leg2_sec2 in the body shadow: |x| 12.45 (<= 13.55), y -8.09..-4.92
+ok   stowed leg2_sec3 in the body shadow: |x| 12.26 (<= 13.55), y -7.89..-5.12
+ok   stowed leg2_ankle in the body shadow: |x| 11.86 (<= 13.55), y -7.45..-5.55
+ok   stowed leg3_sec0 in the body shadow: |x| 12.81 (<= 13.55), y -8.46..-4.55
+ok   stowed leg3_sec1 in the body shadow: |x| 12.68 (<= 13.55), y -8.32..-4.69
+ok   stowed leg3_sec2 in the body shadow: |x| 12.45 (<= 13.55), y -8.09..-4.92
+ok   stowed leg3_sec3 in the body shadow: |x| 12.26 (<= 13.55), y -7.89..-5.12
+ok   stowed leg3_ankle in the body shadow: |x| 11.86 (<= 13.55), y -7.45..-5.55
+ok   stowed sfoot0_hub in the body shadow: |x| 12.33 (<= 13.55), y 8.20..10.10
+ok   stowed sfoot0_mast in the body shadow: |x| 12.83 (<= 13.55), y 7.70..10.60
+ok   stowed sfoot0_petal_0 in the body shadow: |x| 11.88 (<= 13.55), y 7.93..8.77
+ok   stowed sfoot0_slat_0_0 in the body shadow: |x| 12.42 (<= 13.55), y 7.66..8.71
+ok   stowed sfoot0_slat_0_1 in the body shadow: |x| 12.41 (<= 13.55), y 7.65..8.69
+ok   stowed sfoot0_slat_0_2 in the body shadow: |x| 12.28 (<= 13.55), y 7.66..8.69
+ok   stowed sfoot0_strut_0 in the body shadow: |x| 11.94 (<= 13.55), y 7.50..8.59
+ok   stowed sfoot0_rod_0 in the body shadow: |x| 11.68 (<= 13.55), y 7.84..8.41
+ok   stowed sfoot0_skirt_0_0 in the body shadow: |x| 12.37 (<= 13.55), y 8.61..9.60
+ok   stowed sfoot0_skirt_0_1 in the body shadow: |x| 12.36 (<= 13.55), y 8.60..9.59
+ok   stowed sfoot0_skirt_0_2 in the body shadow: |x| 12.24 (<= 13.55), y 8.61..9.59
+ok   stowed sfoot0_petal_1 in the body shadow: |x| 11.60 (<= 13.55), y 7.92..9.00
+ok   stowed sfoot0_slat_1_0 in the body shadow: |x| 12.02 (<= 13.55), y 7.42..9.09
+ok   stowed sfoot0_slat_1_1 in the body shadow: |x| 12.01 (<= 13.55), y 7.42..9.14
+ok   stowed sfoot0_slat_1_2 in the body shadow: |x| 11.90 (<= 13.55), y 7.48..9.15
+ok   stowed sfoot0_strut_1 in the body shadow: |x| 11.39 (<= 13.55), y 7.64..8.70
+ok   stowed sfoot0_rod_1 in the body shadow: |x| 11.17 (<= 13.55), y 7.95..8.53
+ok   stowed sfoot0_skirt_1_0 in the body shadow: |x| 12.42 (<= 13.55), y 8.27..9.89
+ok   stowed sfoot0_skirt_1_1 in the body shadow: |x| 12.42 (<= 13.55), y 8.26..9.94
+ok   stowed sfoot0_skirt_1_2 in the body shadow: |x| 12.32 (<= 13.55), y 8.32..9.95
+ok   stowed sfoot0_petal_2 in the body shadow: |x| 11.29 (<= 13.55), y 8.20..9.31
+ok   stowed sfoot0_slat_2_0 in the body shadow: |x| 11.49 (<= 13.55), y 7.55..9.58
+ok   stowed sfoot0_slat_2_1 in the body shadow: |x| 11.48 (<= 13.55), y 7.56..9.68
+ok   stowed sfoot0_slat_2_2 in the body shadow: |x| 11.42 (<= 13.55), y 7.66..9.69
+ok   stowed sfoot0_strut_2 in the body shadow: |x| 10.98 (<= 13.55), y 8.04..9.06
+ok   stowed sfoot0_rod_2 in the body shadow: |x| 10.80 (<= 13.55), y 8.32..8.87
+ok   stowed sfoot0_skirt_2_0 in the body shadow: |x| 12.25 (<= 13.55), y 8.07..10.07
+ok   stowed sfoot0_skirt_2_1 in the body shadow: |x| 12.24 (<= 13.55), y 8.07..10.17
+ok   stowed sfoot0_skirt_2_2 in the body shadow: |x| 12.18 (<= 13.55), y 8.17..10.18
+ok   stowed sfoot0_petal_3 in the body shadow: |x| 11.00 (<= 13.55), y 8.65..9.58
+ok   stowed sfoot0_slat_3_0 in the body shadow: |x| 10.94 (<= 13.55), y 8.11..9.96
+ok   stowed sfoot0_slat_3_1 in the body shadow: |x| 10.93 (<= 13.55), y 8.12..10.08
+ok   stowed sfoot0_slat_3_2 in the body shadow: |x| 10.92 (<= 13.55), y 8.24..10.09
+ok   stowed sfoot0_strut_3 in the body shadow: |x| 10.83 (<= 13.55), y 8.59..9.60
+ok   stowed sfoot0_rod_3 in the body shadow: |x| 10.66 (<= 13.55), y 8.86..9.34
+ok   stowed sfoot0_skirt_3_0 in the body shadow: |x| 11.84 (<= 13.55), y 8.16..10.01
+ok   stowed sfoot0_skirt_3_1 in the body shadow: |x| 11.83 (<= 13.55), y 8.17..10.12
+ok   stowed sfoot0_skirt_3_2 in the body shadow: |x| 11.82 (<= 13.55), y 8.28..10.13
+ok   stowed sfoot0_petal_4 in the body shadow: |x| 11.23 (<= 13.55), y 8.93..10.01
+ok   stowed sfoot0_slat_4_0 in the body shadow: |x| 11.32 (<= 13.55), y 8.51..10.55
+ok   stowed sfoot0_slat_4_1 in the body shadow: |x| 11.38 (<= 13.55), y 8.52..10.66
+ok   stowed sfoot0_slat_4_2 in the body shadow: |x| 11.39 (<= 13.55), y 8.63..10.67
+ok   stowed sfoot0_strut_4 in the body shadow: |x| 10.93 (<= 13.55), y 9.14..10.16
+ok   stowed sfoot0_rod_4 in the body shadow: |x| 10.76 (<= 13.55), y 9.34..9.88
+ok   stowed sfoot0_skirt_4_0 in the body shadow: |x| 12.12 (<= 13.55), y 8.10..10.12
+ok   stowed sfoot0_skirt_4_1 in the body shadow: |x| 12.18 (<= 13.55), y 8.11..10.23
+ok   stowed sfoot0_skirt_4_2 in the body shadow: |x| 12.19 (<= 13.55), y 8.21..10.23
+ok   stowed sfoot0_petal_5 in the body shadow: |x| 11.54 (<= 13.55), y 9.24..10.35
+ok   stowed sfoot0_slat_5_0 in the body shadow: |x| 11.82 (<= 13.55), y 9.03..10.82
+ok   stowed sfoot0_slat_5_1 in the body shadow: |x| 11.92 (<= 13.55), y 9.05..10.88
+ok   stowed sfoot0_slat_5_2 in the body shadow: |x| 11.93 (<= 13.55), y 9.11..10.88
+ok   stowed sfoot0_strut_5 in the body shadow: |x| 11.30 (<= 13.55), y 9.54..10.60
+ok   stowed sfoot0_rod_5 in the body shadow: |x| 11.09 (<= 13.55), y 9.72..10.29
+ok   stowed sfoot0_skirt_5_0 in the body shadow: |x| 12.31 (<= 13.55), y 8.28..10.02
+ok   stowed sfoot0_skirt_5_1 in the body shadow: |x| 12.40 (<= 13.55), y 8.29..10.08
+ok   stowed sfoot0_skirt_5_2 in the body shadow: |x| 12.41 (<= 13.55), y 8.35..10.08
+ok   stowed sfoot0_petal_6 in the body shadow: |x| 11.81 (<= 13.55), y 9.52..10.36
+ok   stowed sfoot0_slat_6_0 in the body shadow: |x| 12.20 (<= 13.55), y 9.59..10.63
+ok   stowed sfoot0_slat_6_1 in the body shadow: |x| 12.31 (<= 13.55), y 9.60..10.64
+ok   stowed sfoot0_slat_6_2 in the body shadow: |x| 12.32 (<= 13.55), y 9.60..10.63
+ok   stowed sfoot0_strut_6 in the body shadow: |x| 11.83 (<= 13.55), y 9.70..10.79
+ok   stowed sfoot0_rod_6 in the body shadow: |x| 11.58 (<= 13.55), y 9.88..10.45
+ok   stowed sfoot0_skirt_6_0 in the body shadow: |x| 12.24 (<= 13.55), y 8.69..9.69
+ok   stowed sfoot0_skirt_6_1 in the body shadow: |x| 12.36 (<= 13.55), y 8.70..9.69
+ok   stowed sfoot0_skirt_6_2 in the body shadow: |x| 12.36 (<= 13.55), y 8.71..9.68
+ok   stowed sfoot0_petal_7 in the body shadow: |x| 12.24 (<= 13.55), y 9.30..10.37
+ok   stowed sfoot0_slat_7_0 in the body shadow: |x| 12.79 (<= 13.55), y 9.21..10.87
+ok   stowed sfoot0_slat_7_1 in the body shadow: |x| 12.90 (<= 13.55), y 9.15..10.87
+ok   stowed sfoot0_slat_7_2 in the body shadow: |x| 12.90 (<= 13.55), y 9.14..10.82
+ok   stowed sfoot0_strut_7 in the body shadow: |x| 12.40 (<= 13.55), y 9.60..10.66
+ok   stowed sfoot0_rod_7 in the body shadow: |x| 12.11 (<= 13.55), y 9.76..10.35
+ok   stowed sfoot0_skirt_7_0 in the body shadow: |x| 12.36 (<= 13.55), y 8.40..10.02
+ok   stowed sfoot0_skirt_7_1 in the body shadow: |x| 12.46 (<= 13.55), y 8.35..10.03
+ok   stowed sfoot0_skirt_7_2 in the body shadow: |x| 12.46 (<= 13.55), y 8.34..9.97
+ok   stowed sfoot0_petal_8 in the body shadow: |x| 12.58 (<= 13.55), y 8.98..10.09
+ok   stowed sfoot0_slat_8_0 in the body shadow: |x| 13.05 (<= 13.55), y 8.71..10.74
+ok   stowed sfoot0_slat_8_1 in the body shadow: |x| 13.12 (<= 13.55), y 8.61..10.74
+ok   stowed sfoot0_slat_8_2 in the body shadow: |x| 13.12 (<= 13.55), y 8.60..10.63
+ok   stowed sfoot0_strut_8 in the body shadow: |x| 12.83 (<= 13.55), y 9.23..10.25
+ok   stowed sfoot0_rod_8 in the body shadow: |x| 12.52 (<= 13.55), y 9.42..9.97
+ok   stowed sfoot0_skirt_8_0 in the body shadow: |x| 12.25 (<= 13.55), y 8.22..10.22
+ok   stowed sfoot0_skirt_8_1 in the body shadow: |x| 12.32 (<= 13.55), y 8.12..10.22
+ok   stowed sfoot0_skirt_8_2 in the body shadow: |x| 12.32 (<= 13.55), y 8.12..10.12
+ok   stowed sfoot0_petal_9 in the body shadow: |x| 12.60 (<= 13.55), y 8.72..9.64
+ok   stowed sfoot0_slat_9_0 in the body shadow: |x| 12.87 (<= 13.55), y 8.33..10.19
+ok   stowed sfoot0_slat_9_1 in the body shadow: |x| 12.87 (<= 13.55), y 8.21..10.17
+ok   stowed sfoot0_slat_9_2 in the body shadow: |x| 12.86 (<= 13.55), y 8.21..10.05
+ok   stowed sfoot0_strut_9 in the body shadow: |x| 13.03 (<= 13.55), y 8.70..9.70
+ok   stowed sfoot0_rod_9 in the body shadow: |x| 12.70 (<= 13.55), y 8.95..9.44
+ok   stowed sfoot0_skirt_9_0 in the body shadow: |x| 11.92 (<= 13.55), y 8.28..10.13
+ok   stowed sfoot0_skirt_9_1 in the body shadow: |x| 11.93 (<= 13.55), y 8.17..10.13
+ok   stowed sfoot0_skirt_9_2 in the body shadow: |x| 11.92 (<= 13.55), y 8.17..10.01
+ok   stowed sfoot0_petal_10 in the body shadow: |x| 12.61 (<= 13.55), y 8.29..9.36
+ok   stowed sfoot0_slat_10_0 in the body shadow: |x| 13.10 (<= 13.55), y 7.74..9.78
+ok   stowed sfoot0_slat_10_1 in the body shadow: |x| 13.11 (<= 13.55), y 7.63..9.77
+ok   stowed sfoot0_slat_10_2 in the body shadow: |x| 13.05 (<= 13.55), y 7.63..9.66
+ok   stowed sfoot0_strut_10 in the body shadow: |x| 12.89 (<= 13.55), y 8.13..9.15
+ok   stowed sfoot0_rod_10 in the body shadow: |x| 12.58 (<= 13.55), y 8.41..8.95
+ok   stowed sfoot0_skirt_10_0 in the body shadow: |x| 12.26 (<= 13.55), y 8.17..10.19
+ok   stowed sfoot0_skirt_10_1 in the body shadow: |x| 12.26 (<= 13.55), y 8.07..10.18
+ok   stowed sfoot0_skirt_10_2 in the body shadow: |x| 12.21 (<= 13.55), y 8.06..10.08
+ok   stowed sfoot0_petal_11 in the body shadow: |x| 12.33 (<= 13.55), y 7.95..9.05
+ok   stowed sfoot0_slat_11_0 in the body shadow: |x| 12.98 (<= 13.55), y 7.48..9.26
+ok   stowed sfoot0_slat_11_1 in the body shadow: |x| 12.97 (<= 13.55), y 7.41..9.25
+ok   stowed sfoot0_slat_11_2 in the body shadow: |x| 12.87 (<= 13.55), y 7.41..9.18
+ok   stowed sfoot0_strut_11 in the body shadow: |x| 12.49 (<= 13.55), y 7.69..8.75
+ok   stowed sfoot0_rod_11 in the body shadow: |x| 12.20 (<= 13.55), y 8.00..8.58
+ok   stowed sfoot0_skirt_11_0 in the body shadow: |x| 12.46 (<= 13.55), y 8.27..10.01
+ok   stowed sfoot0_skirt_11_1 in the body shadow: |x| 12.46 (<= 13.55), y 8.21..10.00
+ok   stowed sfoot0_skirt_11_2 in the body shadow: |x| 12.36 (<= 13.55), y 8.21..9.94
+ok   stowed sfoot1_hub in the body shadow: |x| 12.33 (<= 13.55), y 8.20..10.10
+ok   stowed sfoot1_mast in the body shadow: |x| 12.83 (<= 13.55), y 7.70..10.60
+ok   stowed sfoot1_petal_0 in the body shadow: |x| 11.23 (<= 13.55), y 8.93..10.01
+ok   stowed sfoot1_slat_0_0 in the body shadow: |x| 11.39 (<= 13.55), y 8.63..10.67
+ok   stowed sfoot1_slat_0_1 in the body shadow: |x| 11.38 (<= 13.55), y 8.52..10.66
+ok   stowed sfoot1_slat_0_2 in the body shadow: |x| 11.32 (<= 13.55), y 8.51..10.55
+ok   stowed sfoot1_strut_0 in the body shadow: |x| 10.93 (<= 13.55), y 9.14..10.16
+ok   stowed sfoot1_rod_0 in the body shadow: |x| 10.76 (<= 13.55), y 9.34..9.88
+ok   stowed sfoot1_skirt_0_0 in the body shadow: |x| 12.19 (<= 13.55), y 8.21..10.23
+ok   stowed sfoot1_skirt_0_1 in the body shadow: |x| 12.18 (<= 13.55), y 8.11..10.23
+ok   stowed sfoot1_skirt_0_2 in the body shadow: |x| 12.12 (<= 13.55), y 8.10..10.12
+ok   stowed sfoot1_petal_1 in the body shadow: |x| 11.00 (<= 13.55), y 8.65..9.58
+ok   stowed sfoot1_slat_1_0 in the body shadow: |x| 10.92 (<= 13.55), y 8.24..10.09
+ok   stowed sfoot1_slat_1_1 in the body shadow: |x| 10.93 (<= 13.55), y 8.12..10.08
+ok   stowed sfoot1_slat_1_2 in the body shadow: |x| 10.94 (<= 13.55), y 8.11..9.96
+ok   stowed sfoot1_strut_1 in the body shadow: |x| 10.83 (<= 13.55), y 8.59..9.60
+ok   stowed sfoot1_rod_1 in the body shadow: |x| 10.66 (<= 13.55), y 8.86..9.34
+ok   stowed sfoot1_skirt_1_0 in the body shadow: |x| 11.82 (<= 13.55), y 8.28..10.13
+ok   stowed sfoot1_skirt_1_1 in the body shadow: |x| 11.83 (<= 13.55), y 8.17..10.12
+ok   stowed sfoot1_skirt_1_2 in the body shadow: |x| 11.84 (<= 13.55), y 8.16..10.01
+ok   stowed sfoot1_petal_2 in the body shadow: |x| 11.29 (<= 13.55), y 8.20..9.31
+ok   stowed sfoot1_slat_2_0 in the body shadow: |x| 11.42 (<= 13.55), y 7.66..9.69
+ok   stowed sfoot1_slat_2_1 in the body shadow: |x| 11.48 (<= 13.55), y 7.56..9.68
+ok   stowed sfoot1_slat_2_2 in the body shadow: |x| 11.49 (<= 13.55), y 7.55..9.58
+ok   stowed sfoot1_strut_2 in the body shadow: |x| 10.98 (<= 13.55), y 8.04..9.06
+ok   stowed sfoot1_rod_2 in the body shadow: |x| 10.80 (<= 13.55), y 8.32..8.87
+ok   stowed sfoot1_skirt_2_0 in the body shadow: |x| 12.18 (<= 13.55), y 8.17..10.18
+ok   stowed sfoot1_skirt_2_1 in the body shadow: |x| 12.24 (<= 13.55), y 8.07..10.17
+ok   stowed sfoot1_skirt_2_2 in the body shadow: |x| 12.25 (<= 13.55), y 8.07..10.07
+ok   stowed sfoot1_petal_3 in the body shadow: |x| 11.60 (<= 13.55), y 7.92..9.00
+ok   stowed sfoot1_slat_3_0 in the body shadow: |x| 11.90 (<= 13.55), y 7.48..9.15
+ok   stowed sfoot1_slat_3_1 in the body shadow: |x| 12.01 (<= 13.55), y 7.42..9.14
+ok   stowed sfoot1_slat_3_2 in the body shadow: |x| 12.02 (<= 13.55), y 7.42..9.09
+ok   stowed sfoot1_strut_3 in the body shadow: |x| 11.39 (<= 13.55), y 7.64..8.70
+ok   stowed sfoot1_rod_3 in the body shadow: |x| 11.17 (<= 13.55), y 7.95..8.53
+ok   stowed sfoot1_skirt_3_0 in the body shadow: |x| 12.32 (<= 13.55), y 8.32..9.95
+ok   stowed sfoot1_skirt_3_1 in the body shadow: |x| 12.42 (<= 13.55), y 8.26..9.94
+ok   stowed sfoot1_skirt_3_2 in the body shadow: |x| 12.42 (<= 13.55), y 8.27..9.89
+ok   stowed sfoot1_petal_4 in the body shadow: |x| 11.88 (<= 13.55), y 7.93..8.77
+ok   stowed sfoot1_slat_4_0 in the body shadow: |x| 12.28 (<= 13.55), y 7.66..8.69
+ok   stowed sfoot1_slat_4_1 in the body shadow: |x| 12.41 (<= 13.55), y 7.65..8.69
+ok   stowed sfoot1_slat_4_2 in the body shadow: |x| 12.42 (<= 13.55), y 7.66..8.71
+ok   stowed sfoot1_strut_4 in the body shadow: |x| 11.94 (<= 13.55), y 7.50..8.59
+ok   stowed sfoot1_rod_4 in the body shadow: |x| 11.68 (<= 13.55), y 7.84..8.41
+ok   stowed sfoot1_skirt_4_0 in the body shadow: |x| 12.24 (<= 13.55), y 8.61..9.59
+ok   stowed sfoot1_skirt_4_1 in the body shadow: |x| 12.36 (<= 13.55), y 8.60..9.59
+ok   stowed sfoot1_skirt_4_2 in the body shadow: |x| 12.37 (<= 13.55), y 8.61..9.60
+ok   stowed sfoot1_petal_5 in the body shadow: |x| 12.33 (<= 13.55), y 7.95..9.05
+ok   stowed sfoot1_slat_5_0 in the body shadow: |x| 12.87 (<= 13.55), y 7.41..9.18
+ok   stowed sfoot1_slat_5_1 in the body shadow: |x| 12.97 (<= 13.55), y 7.41..9.25
+ok   stowed sfoot1_slat_5_2 in the body shadow: |x| 12.98 (<= 13.55), y 7.48..9.26
+ok   stowed sfoot1_strut_5 in the body shadow: |x| 12.49 (<= 13.55), y 7.69..8.75
+ok   stowed sfoot1_rod_5 in the body shadow: |x| 12.20 (<= 13.55), y 8.00..8.58
+ok   stowed sfoot1_skirt_5_0 in the body shadow: |x| 12.36 (<= 13.55), y 8.21..9.94
+ok   stowed sfoot1_skirt_5_1 in the body shadow: |x| 12.46 (<= 13.55), y 8.21..10.00
+ok   stowed sfoot1_skirt_5_2 in the body shadow: |x| 12.46 (<= 13.55), y 8.27..10.01
+ok   stowed sfoot1_petal_6 in the body shadow: |x| 12.61 (<= 13.55), y 8.29..9.36
+ok   stowed sfoot1_slat_6_0 in the body shadow: |x| 13.05 (<= 13.55), y 7.63..9.66
+ok   stowed sfoot1_slat_6_1 in the body shadow: |x| 13.11 (<= 13.55), y 7.63..9.77
+ok   stowed sfoot1_slat_6_2 in the body shadow: |x| 13.10 (<= 13.55), y 7.74..9.78
+ok   stowed sfoot1_strut_6 in the body shadow: |x| 12.89 (<= 13.55), y 8.13..9.15
+ok   stowed sfoot1_rod_6 in the body shadow: |x| 12.58 (<= 13.55), y 8.41..8.95
+ok   stowed sfoot1_skirt_6_0 in the body shadow: |x| 12.21 (<= 13.55), y 8.06..10.08
+ok   stowed sfoot1_skirt_6_1 in the body shadow: |x| 12.26 (<= 13.55), y 8.07..10.18
+ok   stowed sfoot1_skirt_6_2 in the body shadow: |x| 12.26 (<= 13.55), y 8.17..10.19
+ok   stowed sfoot1_petal_7 in the body shadow: |x| 12.60 (<= 13.55), y 8.72..9.64
+ok   stowed sfoot1_slat_7_0 in the body shadow: |x| 12.86 (<= 13.55), y 8.21..10.05
+ok   stowed sfoot1_slat_7_1 in the body shadow: |x| 12.87 (<= 13.55), y 8.21..10.17
+ok   stowed sfoot1_slat_7_2 in the body shadow: |x| 12.87 (<= 13.55), y 8.33..10.19
+ok   stowed sfoot1_strut_7 in the body shadow: |x| 13.03 (<= 13.55), y 8.70..9.70
+ok   stowed sfoot1_rod_7 in the body shadow: |x| 12.70 (<= 13.55), y 8.95..9.44
+ok   stowed sfoot1_skirt_7_0 in the body shadow: |x| 11.92 (<= 13.55), y 8.17..10.01
+ok   stowed sfoot1_skirt_7_1 in the body shadow: |x| 11.93 (<= 13.55), y 8.17..10.13
+ok   stowed sfoot1_skirt_7_2 in the body shadow: |x| 11.92 (<= 13.55), y 8.28..10.13
+ok   stowed sfoot1_petal_8 in the body shadow: |x| 12.58 (<= 13.55), y 8.98..10.09
+ok   stowed sfoot1_slat_8_0 in the body shadow: |x| 13.12 (<= 13.55), y 8.60..10.63
+ok   stowed sfoot1_slat_8_1 in the body shadow: |x| 13.12 (<= 13.55), y 8.61..10.74
+ok   stowed sfoot1_slat_8_2 in the body shadow: |x| 13.05 (<= 13.55), y 8.71..10.74
+ok   stowed sfoot1_strut_8 in the body shadow: |x| 12.83 (<= 13.55), y 9.23..10.25
+ok   stowed sfoot1_rod_8 in the body shadow: |x| 12.52 (<= 13.55), y 9.42..9.97
+ok   stowed sfoot1_skirt_8_0 in the body shadow: |x| 12.32 (<= 13.55), y 8.12..10.12
+ok   stowed sfoot1_skirt_8_1 in the body shadow: |x| 12.32 (<= 13.55), y 8.12..10.22
+ok   stowed sfoot1_skirt_8_2 in the body shadow: |x| 12.25 (<= 13.55), y 8.22..10.22
+ok   stowed sfoot1_petal_9 in the body shadow: |x| 12.24 (<= 13.55), y 9.30..10.37
+ok   stowed sfoot1_slat_9_0 in the body shadow: |x| 12.90 (<= 13.55), y 9.14..10.82
+ok   stowed sfoot1_slat_9_1 in the body shadow: |x| 12.90 (<= 13.55), y 9.15..10.87
+ok   stowed sfoot1_slat_9_2 in the body shadow: |x| 12.79 (<= 13.55), y 9.21..10.87
+ok   stowed sfoot1_strut_9 in the body shadow: |x| 12.40 (<= 13.55), y 9.60..10.66
+ok   stowed sfoot1_rod_9 in the body shadow: |x| 12.11 (<= 13.55), y 9.76..10.35
+ok   stowed sfoot1_skirt_9_0 in the body shadow: |x| 12.46 (<= 13.55), y 8.34..9.97
+ok   stowed sfoot1_skirt_9_1 in the body shadow: |x| 12.46 (<= 13.55), y 8.35..10.03
+ok   stowed sfoot1_skirt_9_2 in the body shadow: |x| 12.36 (<= 13.55), y 8.40..10.02
+ok   stowed sfoot1_petal_10 in the body shadow: |x| 11.81 (<= 13.55), y 9.52..10.36
+ok   stowed sfoot1_slat_10_0 in the body shadow: |x| 12.32 (<= 13.55), y 9.60..10.63
+ok   stowed sfoot1_slat_10_1 in the body shadow: |x| 12.31 (<= 13.55), y 9.60..10.64
+ok   stowed sfoot1_slat_10_2 in the body shadow: |x| 12.20 (<= 13.55), y 9.59..10.63
+ok   stowed sfoot1_strut_10 in the body shadow: |x| 11.83 (<= 13.55), y 9.70..10.79
+ok   stowed sfoot1_rod_10 in the body shadow: |x| 11.58 (<= 13.55), y 9.88..10.45
+ok   stowed sfoot1_skirt_10_0 in the body shadow: |x| 12.36 (<= 13.55), y 8.71..9.68
+ok   stowed sfoot1_skirt_10_1 in the body shadow: |x| 12.36 (<= 13.55), y 8.70..9.69
+ok   stowed sfoot1_skirt_10_2 in the body shadow: |x| 12.24 (<= 13.55), y 8.69..9.69
+ok   stowed sfoot1_petal_11 in the body shadow: |x| 11.54 (<= 13.55), y 9.24..10.35
+ok   stowed sfoot1_slat_11_0 in the body shadow: |x| 11.93 (<= 13.55), y 9.11..10.88
+ok   stowed sfoot1_slat_11_1 in the body shadow: |x| 11.92 (<= 13.55), y 9.05..10.88
+ok   stowed sfoot1_slat_11_2 in the body shadow: |x| 11.82 (<= 13.55), y 9.03..10.82
+ok   stowed sfoot1_strut_11 in the body shadow: |x| 11.30 (<= 13.55), y 9.54..10.60
+ok   stowed sfoot1_rod_11 in the body shadow: |x| 11.09 (<= 13.55), y 9.72..10.29
+ok   stowed sfoot1_skirt_11_0 in the body shadow: |x| 12.41 (<= 13.55), y 8.35..10.08
+ok   stowed sfoot1_skirt_11_1 in the body shadow: |x| 12.40 (<= 13.55), y 8.29..10.08
+ok   stowed sfoot1_skirt_11_2 in the body shadow: |x| 12.31 (<= 13.55), y 8.28..10.02
+ok   stowed sfoot2_hub in the body shadow: |x| 11.86 (<= 13.55), y -7.45..-5.55
+ok   stowed sfoot2_mast in the body shadow: |x| 12.36 (<= 13.55), y -7.95..-5.05
+ok   stowed sfoot2_petal_0 in the body shadow: |x| 11.48 (<= 13.55), y -6.17..-5.27
+ok   stowed sfoot2_slat_0_0 in the body shadow: |x| 12.05 (<= 13.55), y -6.14..-4.96
+ok   stowed sfoot2_slat_0_1 in the body shadow: |x| 12.04 (<= 13.55), y -6.13..-4.95
+ok   stowed sfoot2_slat_0_2 in the body shadow: |x| 11.92 (<= 13.55), y -6.12..-4.95
+ok   stowed sfoot2_strut_0 in the body shadow: |x| 11.55 (<= 13.55), y -5.96..-4.87
+ok   stowed sfoot2_rod_0 in the body shadow: |x| 11.29 (<= 13.55), y -5.78..-5.20
+ok   stowed sfoot2_skirt_0_0 in the body shadow: |x| 11.93 (<= 13.55), y -7.04..-5.90
+ok   stowed sfoot2_skirt_0_1 in the body shadow: |x| 11.92 (<= 13.55), y -7.03..-5.89
+ok   stowed sfoot2_skirt_0_2 in the body shadow: |x| 11.80 (<= 13.55), y -7.01..-5.90
+ok   stowed sfoot2_petal_1 in the body shadow: |x| 11.17 (<= 13.55), y -6.31..-5.26
+ok   stowed sfoot2_slat_1_0 in the body shadow: |x| 11.61 (<= 13.55), y -6.37..-4.80
+ok   stowed sfoot2_slat_1_1 in the body shadow: |x| 11.60 (<= 13.55), y -6.41..-4.80
+ok   stowed sfoot2_slat_1_2 in the body shadow: |x| 11.49 (<= 13.55), y -6.43..-4.85
+ok   stowed sfoot2_strut_1 in the body shadow: |x| 10.98 (<= 13.55), y -6.02..-4.96
+ok   stowed sfoot2_rod_1 in the body shadow: |x| 10.77 (<= 13.55), y -5.86..-5.27
+ok   stowed sfoot2_skirt_1_0 in the body shadow: |x| 11.95 (<= 13.55), y -7.20..-5.68
+ok   stowed sfoot2_skirt_1_1 in the body shadow: |x| 11.94 (<= 13.55), y -7.24..-5.68
+ok   stowed sfoot2_skirt_1_2 in the body shadow: |x| 11.84 (<= 13.55), y -7.25..-5.72
+ok   stowed sfoot2_petal_2 in the body shadow: |x| 10.86 (<= 13.55), y -6.62..-5.50
+ok   stowed sfoot2_slat_2_0 in the body shadow: |x| 11.10 (<= 13.55), y -6.87..-4.86
+ok   stowed sfoot2_slat_2_1 in the body shadow: |x| 11.09 (<= 13.55), y -6.96..-4.86
+ok   stowed sfoot2_slat_2_2 in the body shadow: |x| 11.02 (<= 13.55), y -6.98..-4.96
+ok   stowed sfoot2_strut_2 in the body shadow: |x| 10.55 (<= 13.55), y -6.35..-5.32
+ok   stowed sfoot2_rod_2 in the body shadow: |x| 10.37 (<= 13.55), y -6.16..-5.61
+ok   stowed sfoot2_skirt_2_0 in the body shadow: |x| 11.81 (<= 13.55), y -7.42..-5.44
+ok   stowed sfoot2_skirt_2_1 in the body shadow: |x| 11.81 (<= 13.55), y -7.51..-5.44
+ok   stowed sfoot2_skirt_2_2 in the body shadow: |x| 11.74 (<= 13.55), y -7.52..-5.54
+ok   stowed sfoot2_petal_3 in the body shadow: |x| 10.57 (<= 13.55), y -6.90..-5.93
+ok   stowed sfoot2_slat_3_0 in the body shadow: |x| 10.54 (<= 13.55), y -7.27..-5.36
+ok   stowed sfoot2_slat_3_1 in the body shadow: |x| 10.53 (<= 13.55), y -7.39..-5.37
+ok   stowed sfoot2_slat_3_2 in the body shadow: |x| 10.52 (<= 13.55), y -7.40..-5.49
+ok   stowed sfoot2_strut_3 in the body shadow: |x| 10.36 (<= 13.55), y -6.87..-5.86
+ok   stowed sfoot2_rod_3 in the body shadow: |x| 10.19 (<= 13.55), y -6.62..-6.13
+ok   stowed sfoot2_skirt_3_0 in the body shadow: |x| 11.44 (<= 13.55), y -7.39..-5.49
+ok   stowed sfoot2_skirt_3_1 in the body shadow: |x| 11.43 (<= 13.55), y -7.51..-5.49
+ok   stowed sfoot2_skirt_3_2 in the body shadow: |x| 11.41 (<= 13.55), y -7.51..-5.61
+ok   stowed sfoot2_petal_4 in the body shadow: |x| 10.71 (<= 13.55), y -7.31..-6.24
+ok   stowed sfoot2_slat_4_0 in the body shadow: |x| 10.77 (<= 13.55), y -7.83..-5.80
+ok   stowed sfoot2_slat_4_1 in the body shadow: |x| 10.81 (<= 13.55), y -7.95..-5.81
+ok   stowed sfoot2_slat_4_2 in the body shadow: |x| 10.83 (<= 13.55), y -7.95..-5.92
+ok   stowed sfoot2_strut_4 in the body shadow: |x| 10.42 (<= 13.55), y -7.44..-6.42
+ok   stowed sfoot2_rod_4 in the body shadow: |x| 10.25 (<= 13.55), y -7.16..-6.63
+ok   stowed sfoot2_skirt_4_0 in the body shadow: |x| 11.60 (<= 13.55), y -7.47..-5.46
+ok   stowed sfoot2_skirt_4_1 in the body shadow: |x| 11.64 (<= 13.55), y -7.58..-5.47
+ok   stowed sfoot2_skirt_4_2 in the body shadow: |x| 11.65 (<= 13.55), y -7.58..-5.57
+ok   stowed sfoot2_petal_5 in the body shadow: |x| 11.02 (<= 13.55), y -7.67..-6.55
+ok   stowed sfoot2_slat_5_0 in the body shadow: |x| 11.27 (<= 13.55), y -8.16..-6.31
+ok   stowed sfoot2_slat_5_1 in the body shadow: |x| 11.36 (<= 13.55), y -8.24..-6.32
+ok   stowed sfoot2_slat_5_2 in the body shadow: |x| 11.38 (<= 13.55), y -8.24..-6.39
+ok   stowed sfoot2_strut_5 in the body shadow: |x| 10.76 (<= 13.55), y -7.91..-6.85
+ok   stowed sfoot2_rod_5 in the body shadow: |x| 10.55 (<= 13.55), y -7.60..-7.03
+ok   stowed sfoot2_skirt_5_0 in the body shadow: |x| 11.82 (<= 13.55), y -7.41..-5.60
+ok   stowed sfoot2_skirt_5_1 in the body shadow: |x| 11.91 (<= 13.55), y -7.48..-5.61
+ok   stowed sfoot2_skirt_5_2 in the body shadow: |x| 11.92 (<= 13.55), y -7.48..-5.67
+ok   stowed sfoot2_petal_6 in the body shadow: |x| 11.30 (<= 13.55), y -7.74..-6.84
+ok   stowed sfoot2_slat_6_0 in the body shadow: |x| 11.67 (<= 13.55), y -8.05..-6.87
+ok   stowed sfoot2_slat_6_1 in the body shadow: |x| 11.79 (<= 13.55), y -8.06..-6.88
+ok   stowed sfoot2_slat_6_2 in the body shadow: |x| 11.80 (<= 13.55), y -8.06..-6.89
+ok   stowed sfoot2_strut_6 in the body shadow: |x| 11.27 (<= 13.55), y -8.14..-7.05
+ok   stowed sfoot2_rod_6 in the body shadow: |x| 11.03 (<= 13.55), y -7.81..-7.23
+ok   stowed sfoot2_skirt_6_0 in the body shadow: |x| 11.79 (<= 13.55), y -7.11..-5.97
+ok   stowed sfoot2_skirt_6_1 in the body shadow: |x| 11.91 (<= 13.55), y -7.12..-5.98
+ok   stowed sfoot2_skirt_6_2 in the body shadow: |x| 11.91 (<= 13.55), y -7.11..-6.00
+ok   stowed sfoot2_petal_7 in the body shadow: |x| 11.71 (<= 13.55), y -7.75..-6.70
+ok   stowed sfoot2_slat_7_0 in the body shadow: |x| 12.23 (<= 13.55), y -8.21..-6.64
+ok   stowed sfoot2_slat_7_1 in the body shadow: |x| 12.35 (<= 13.55), y -8.21..-6.60
+ok   stowed sfoot2_slat_7_2 in the body shadow: |x| 12.36 (<= 13.55), y -8.16..-6.58
+ok   stowed sfoot2_strut_7 in the body shadow: |x| 11.83 (<= 13.55), y -8.05..-6.99
+ok   stowed sfoot2_rod_7 in the body shadow: |x| 11.56 (<= 13.55), y -7.74..-7.15
+ok   stowed sfoot2_skirt_7_0 in the body shadow: |x| 11.87 (<= 13.55), y -7.33..-5.81
+ok   stowed sfoot2_skirt_7_1 in the body shadow: |x| 11.98 (<= 13.55), y -7.33..-5.77
+ok   stowed sfoot2_skirt_7_2 in the body shadow: |x| 11.98 (<= 13.55), y -7.29..-5.76
+ok   stowed sfoot2_petal_8 in the body shadow: |x| 12.07 (<= 13.55), y -7.51..-6.39
+ok   stowed sfoot2_slat_8_0 in the body shadow: |x| 12.56 (<= 13.55), y -8.15..-6.14
+ok   stowed sfoot2_slat_8_1 in the body shadow: |x| 12.64 (<= 13.55), y -8.15..-6.05
+ok   stowed sfoot2_slat_8_2 in the body shadow: |x| 12.64 (<= 13.55), y -8.05..-6.03
+ok   stowed sfoot2_strut_8 in the body shadow: |x| 12.30 (<= 13.55), y -7.69..-6.66
+ok   stowed sfoot2_rod_8 in the body shadow: |x| 11.99 (<= 13.55), y -7.40..-6.85
+ok   stowed sfoot2_skirt_8_0 in the body shadow: |x| 11.81 (<= 13.55), y -7.57..-5.59
+ok   stowed sfoot2_skirt_8_1 in the body shadow: |x| 11.88 (<= 13.55), y -7.57..-5.50
+ok   stowed sfoot2_skirt_8_2 in the body shadow: |x| 11.88 (<= 13.55), y -7.47..-5.49
+ok   stowed sfoot2_petal_9 in the body shadow: |x| 12.14 (<= 13.55), y -7.08..-6.11
+ok   stowed sfoot2_slat_9_0 in the body shadow: |x| 12.45 (<= 13.55), y -7.65..-5.74
+ok   stowed sfoot2_slat_9_1 in the body shadow: |x| 12.46 (<= 13.55), y -7.64..-5.62
+ok   stowed sfoot2_slat_9_2 in the body shadow: |x| 12.46 (<= 13.55), y -7.52..-5.61
+ok   stowed sfoot2_strut_9 in the body shadow: |x| 12.54 (<= 13.55), y -7.15..-6.14
+ok   stowed sfoot2_rod_9 in the body shadow: |x| 12.21 (<= 13.55), y -6.88..-6.39
+ok   stowed sfoot2_skirt_9_0 in the body shadow: |x| 11.51 (<= 13.55), y -7.52..-5.62
+ok   stowed sfoot2_skirt_9_1 in the body shadow: |x| 11.52 (<= 13.55), y -7.52..-5.50
+ok   stowed sfoot2_skirt_9_2 in the body shadow: |x| 11.51 (<= 13.55), y -7.40..-5.50
+ok   stowed sfoot2_petal_10 in the body shadow: |x| 12.15 (<= 13.55), y -6.77..-5.70
+ok   stowed sfoot2_slat_10_0 in the body shadow: |x| 12.61 (<= 13.55), y -7.21..-5.18
+ok   stowed sfoot2_slat_10_1 in the body shadow: |x| 12.61 (<= 13.55), y -7.20..-5.06
+ok   stowed sfoot2_slat_10_2 in the body shadow: |x| 12.56 (<= 13.55), y -7.09..-5.06
+ok   stowed sfoot2_strut_10 in the body shadow: |x| 12.46 (<= 13.55), y -6.59..-5.57
+ok   stowed sfoot2_rod_10 in the body shadow: |x| 12.14 (<= 13.55), y -6.38..-5.85
+ok   stowed sfoot2_skirt_10_0 in the body shadow: |x| 11.73 (<= 13.55), y -7.55..-5.54
+ok   stowed sfoot2_skirt_10_1 in the body shadow: |x| 11.73 (<= 13.55), y -7.54..-5.43
+ok   stowed sfoot2_skirt_10_2 in the body shadow: |x| 11.69 (<= 13.55), y -7.44..-5.43
+ok   stowed sfoot2_petal_11 in the body shadow: |x| 11.91 (<= 13.55), y -6.46..-5.34
+ok   stowed sfoot2_slat_11_0 in the body shadow: |x| 12.55 (<= 13.55), y -6.70..-4.85
+ok   stowed sfoot2_slat_11_1 in the body shadow: |x| 12.55 (<= 13.55), y -6.69..-4.77
+ok   stowed sfoot2_slat_11_2 in the body shadow: |x| 12.45 (<= 13.55), y -6.62..-4.77
+ok   stowed sfoot2_strut_11 in the body shadow: |x| 12.09 (<= 13.55), y -6.16..-5.10
+ok   stowed sfoot2_rod_11 in the body shadow: |x| 11.79 (<= 13.55), y -5.98..-5.41
+ok   stowed sfoot2_skirt_11_0 in the body shadow: |x| 11.97 (<= 13.55), y -7.41..-5.60
+ok   stowed sfoot2_skirt_11_1 in the body shadow: |x| 11.97 (<= 13.55), y -7.40..-5.53
+ok   stowed sfoot2_skirt_11_2 in the body shadow: |x| 11.87 (<= 13.55), y -7.34..-5.53
+ok   stowed sfoot3_hub in the body shadow: |x| 11.86 (<= 13.55), y -7.45..-5.55
+ok   stowed sfoot3_mast in the body shadow: |x| 12.36 (<= 13.55), y -7.95..-5.05
+ok   stowed sfoot3_petal_0 in the body shadow: |x| 10.71 (<= 13.55), y -7.31..-6.24
+ok   stowed sfoot3_slat_0_0 in the body shadow: |x| 10.83 (<= 13.55), y -7.95..-5.92
+ok   stowed sfoot3_slat_0_1 in the body shadow: |x| 10.81 (<= 13.55), y -7.95..-5.81
+ok   stowed sfoot3_slat_0_2 in the body shadow: |x| 10.77 (<= 13.55), y -7.83..-5.80
+ok   stowed sfoot3_strut_0 in the body shadow: |x| 10.42 (<= 13.55), y -7.44..-6.42
+ok   stowed sfoot3_rod_0 in the body shadow: |x| 10.25 (<= 13.55), y -7.16..-6.63
+ok   stowed sfoot3_skirt_0_0 in the body shadow: |x| 11.65 (<= 13.55), y -7.58..-5.57
+ok   stowed sfoot3_skirt_0_1 in the body shadow: |x| 11.64 (<= 13.55), y -7.58..-5.47
+ok   stowed sfoot3_skirt_0_2 in the body shadow: |x| 11.60 (<= 13.55), y -7.47..-5.46
+ok   stowed sfoot3_petal_1 in the body shadow: |x| 10.57 (<= 13.55), y -6.90..-5.93
+ok   stowed sfoot3_slat_1_0 in the body shadow: |x| 10.52 (<= 13.55), y -7.40..-5.49
+ok   stowed sfoot3_slat_1_1 in the body shadow: |x| 10.53 (<= 13.55), y -7.39..-5.37
+ok   stowed sfoot3_slat_1_2 in the body shadow: |x| 10.54 (<= 13.55), y -7.27..-5.36
+ok   stowed sfoot3_strut_1 in the body shadow: |x| 10.36 (<= 13.55), y -6.87..-5.86
+ok   stowed sfoot3_rod_1 in the body shadow: |x| 10.19 (<= 13.55), y -6.62..-6.13
+ok   stowed sfoot3_skirt_1_0 in the body shadow: |x| 11.41 (<= 13.55), y -7.51..-5.61
+ok   stowed sfoot3_skirt_1_1 in the body shadow: |x| 11.43 (<= 13.55), y -7.51..-5.49
+ok   stowed sfoot3_skirt_1_2 in the body shadow: |x| 11.44 (<= 13.55), y -7.39..-5.49
+ok   stowed sfoot3_petal_2 in the body shadow: |x| 10.86 (<= 13.55), y -6.62..-5.50
+ok   stowed sfoot3_slat_2_0 in the body shadow: |x| 11.02 (<= 13.55), y -6.98..-4.96
+ok   stowed sfoot3_slat_2_1 in the body shadow: |x| 11.09 (<= 13.55), y -6.96..-4.86
+ok   stowed sfoot3_slat_2_2 in the body shadow: |x| 11.10 (<= 13.55), y -6.87..-4.86
+ok   stowed sfoot3_strut_2 in the body shadow: |x| 10.55 (<= 13.55), y -6.35..-5.32
+ok   stowed sfoot3_rod_2 in the body shadow: |x| 10.37 (<= 13.55), y -6.16..-5.61
+ok   stowed sfoot3_skirt_2_0 in the body shadow: |x| 11.74 (<= 13.55), y -7.52..-5.54
+ok   stowed sfoot3_skirt_2_1 in the body shadow: |x| 11.81 (<= 13.55), y -7.51..-5.44
+ok   stowed sfoot3_skirt_2_2 in the body shadow: |x| 11.81 (<= 13.55), y -7.42..-5.44
+ok   stowed sfoot3_petal_3 in the body shadow: |x| 11.17 (<= 13.55), y -6.31..-5.26
+ok   stowed sfoot3_slat_3_0 in the body shadow: |x| 11.49 (<= 13.55), y -6.43..-4.85
+ok   stowed sfoot3_slat_3_1 in the body shadow: |x| 11.60 (<= 13.55), y -6.41..-4.80
+ok   stowed sfoot3_slat_3_2 in the body shadow: |x| 11.61 (<= 13.55), y -6.37..-4.80
+ok   stowed sfoot3_strut_3 in the body shadow: |x| 10.98 (<= 13.55), y -6.02..-4.96
+ok   stowed sfoot3_rod_3 in the body shadow: |x| 10.77 (<= 13.55), y -5.86..-5.27
+ok   stowed sfoot3_skirt_3_0 in the body shadow: |x| 11.84 (<= 13.55), y -7.25..-5.72
+ok   stowed sfoot3_skirt_3_1 in the body shadow: |x| 11.94 (<= 13.55), y -7.24..-5.68
+ok   stowed sfoot3_skirt_3_2 in the body shadow: |x| 11.95 (<= 13.55), y -7.20..-5.68
+ok   stowed sfoot3_petal_4 in the body shadow: |x| 11.48 (<= 13.55), y -6.17..-5.27
+ok   stowed sfoot3_slat_4_0 in the body shadow: |x| 11.92 (<= 13.55), y -6.12..-4.95
+ok   stowed sfoot3_slat_4_1 in the body shadow: |x| 12.04 (<= 13.55), y -6.13..-4.95
+ok   stowed sfoot3_slat_4_2 in the body shadow: |x| 12.05 (<= 13.55), y -6.14..-4.96
+ok   stowed sfoot3_strut_4 in the body shadow: |x| 11.55 (<= 13.55), y -5.96..-4.87
+ok   stowed sfoot3_rod_4 in the body shadow: |x| 11.29 (<= 13.55), y -5.78..-5.20
+ok   stowed sfoot3_skirt_4_0 in the body shadow: |x| 11.80 (<= 13.55), y -7.01..-5.90
+ok   stowed sfoot3_skirt_4_1 in the body shadow: |x| 11.92 (<= 13.55), y -7.03..-5.89
+ok   stowed sfoot3_skirt_4_2 in the body shadow: |x| 11.93 (<= 13.55), y -7.04..-5.90
+ok   stowed sfoot3_petal_5 in the body shadow: |x| 11.91 (<= 13.55), y -6.46..-5.34
+ok   stowed sfoot3_slat_5_0 in the body shadow: |x| 12.45 (<= 13.55), y -6.62..-4.77
+ok   stowed sfoot3_slat_5_1 in the body shadow: |x| 12.55 (<= 13.55), y -6.69..-4.77
+ok   stowed sfoot3_slat_5_2 in the body shadow: |x| 12.55 (<= 13.55), y -6.70..-4.85
+ok   stowed sfoot3_strut_5 in the body shadow: |x| 12.09 (<= 13.55), y -6.16..-5.10
+ok   stowed sfoot3_rod_5 in the body shadow: |x| 11.79 (<= 13.55), y -5.98..-5.41
+ok   stowed sfoot3_skirt_5_0 in the body shadow: |x| 11.87 (<= 13.55), y -7.34..-5.53
+ok   stowed sfoot3_skirt_5_1 in the body shadow: |x| 11.97 (<= 13.55), y -7.40..-5.53
+ok   stowed sfoot3_skirt_5_2 in the body shadow: |x| 11.97 (<= 13.55), y -7.41..-5.60
+ok   stowed sfoot3_petal_6 in the body shadow: |x| 12.15 (<= 13.55), y -6.77..-5.70
+ok   stowed sfoot3_slat_6_0 in the body shadow: |x| 12.56 (<= 13.55), y -7.09..-5.06
+ok   stowed sfoot3_slat_6_1 in the body shadow: |x| 12.61 (<= 13.55), y -7.20..-5.06
+ok   stowed sfoot3_slat_6_2 in the body shadow: |x| 12.61 (<= 13.55), y -7.21..-5.18
+ok   stowed sfoot3_strut_6 in the body shadow: |x| 12.46 (<= 13.55), y -6.59..-5.57
+ok   stowed sfoot3_rod_6 in the body shadow: |x| 12.14 (<= 13.55), y -6.38..-5.85
+ok   stowed sfoot3_skirt_6_0 in the body shadow: |x| 11.69 (<= 13.55), y -7.44..-5.43
+ok   stowed sfoot3_skirt_6_1 in the body shadow: |x| 11.73 (<= 13.55), y -7.54..-5.43
+ok   stowed sfoot3_skirt_6_2 in the body shadow: |x| 11.73 (<= 13.55), y -7.55..-5.54
+ok   stowed sfoot3_petal_7 in the body shadow: |x| 12.14 (<= 13.55), y -7.08..-6.11
+ok   stowed sfoot3_slat_7_0 in the body shadow: |x| 12.46 (<= 13.55), y -7.52..-5.61
+ok   stowed sfoot3_slat_7_1 in the body shadow: |x| 12.46 (<= 13.55), y -7.64..-5.62
+ok   stowed sfoot3_slat_7_2 in the body shadow: |x| 12.45 (<= 13.55), y -7.65..-5.74
+ok   stowed sfoot3_strut_7 in the body shadow: |x| 12.54 (<= 13.55), y -7.15..-6.14
+ok   stowed sfoot3_rod_7 in the body shadow: |x| 12.21 (<= 13.55), y -6.88..-6.39
+ok   stowed sfoot3_skirt_7_0 in the body shadow: |x| 11.51 (<= 13.55), y -7.40..-5.50
+ok   stowed sfoot3_skirt_7_1 in the body shadow: |x| 11.52 (<= 13.55), y -7.52..-5.50
+ok   stowed sfoot3_skirt_7_2 in the body shadow: |x| 11.51 (<= 13.55), y -7.52..-5.62
+ok   stowed sfoot3_petal_8 in the body shadow: |x| 12.07 (<= 13.55), y -7.51..-6.39
+ok   stowed sfoot3_slat_8_0 in the body shadow: |x| 12.64 (<= 13.55), y -8.05..-6.03
+ok   stowed sfoot3_slat_8_1 in the body shadow: |x| 12.64 (<= 13.55), y -8.15..-6.05
+ok   stowed sfoot3_slat_8_2 in the body shadow: |x| 12.56 (<= 13.55), y -8.15..-6.14
+ok   stowed sfoot3_strut_8 in the body shadow: |x| 12.30 (<= 13.55), y -7.69..-6.66
+ok   stowed sfoot3_rod_8 in the body shadow: |x| 11.99 (<= 13.55), y -7.40..-6.85
+ok   stowed sfoot3_skirt_8_0 in the body shadow: |x| 11.88 (<= 13.55), y -7.47..-5.49
+ok   stowed sfoot3_skirt_8_1 in the body shadow: |x| 11.88 (<= 13.55), y -7.57..-5.50
+ok   stowed sfoot3_skirt_8_2 in the body shadow: |x| 11.81 (<= 13.55), y -7.57..-5.59
+ok   stowed sfoot3_petal_9 in the body shadow: |x| 11.71 (<= 13.55), y -7.75..-6.70
+ok   stowed sfoot3_slat_9_0 in the body shadow: |x| 12.36 (<= 13.55), y -8.16..-6.58
+ok   stowed sfoot3_slat_9_1 in the body shadow: |x| 12.35 (<= 13.55), y -8.21..-6.60
+ok   stowed sfoot3_slat_9_2 in the body shadow: |x| 12.23 (<= 13.55), y -8.21..-6.64
+ok   stowed sfoot3_strut_9 in the body shadow: |x| 11.83 (<= 13.55), y -8.05..-6.99
+ok   stowed sfoot3_rod_9 in the body shadow: |x| 11.56 (<= 13.55), y -7.74..-7.15
+ok   stowed sfoot3_skirt_9_0 in the body shadow: |x| 11.98 (<= 13.55), y -7.29..-5.76
+ok   stowed sfoot3_skirt_9_1 in the body shadow: |x| 11.98 (<= 13.55), y -7.33..-5.77
+ok   stowed sfoot3_skirt_9_2 in the body shadow: |x| 11.87 (<= 13.55), y -7.33..-5.81
+ok   stowed sfoot3_petal_10 in the body shadow: |x| 11.30 (<= 13.55), y -7.74..-6.84
+ok   stowed sfoot3_slat_10_0 in the body shadow: |x| 11.80 (<= 13.55), y -8.06..-6.89
+ok   stowed sfoot3_slat_10_1 in the body shadow: |x| 11.79 (<= 13.55), y -8.06..-6.88
+ok   stowed sfoot3_slat_10_2 in the body shadow: |x| 11.67 (<= 13.55), y -8.05..-6.87
+ok   stowed sfoot3_strut_10 in the body shadow: |x| 11.27 (<= 13.55), y -8.14..-7.05
+ok   stowed sfoot3_rod_10 in the body shadow: |x| 11.03 (<= 13.55), y -7.81..-7.23
+ok   stowed sfoot3_skirt_10_0 in the body shadow: |x| 11.91 (<= 13.55), y -7.11..-6.00
+ok   stowed sfoot3_skirt_10_1 in the body shadow: |x| 11.91 (<= 13.55), y -7.12..-5.98
+ok   stowed sfoot3_skirt_10_2 in the body shadow: |x| 11.79 (<= 13.55), y -7.11..-5.97
+ok   stowed sfoot3_petal_11 in the body shadow: |x| 11.02 (<= 13.55), y -7.67..-6.55
+ok   stowed sfoot3_slat_11_0 in the body shadow: |x| 11.38 (<= 13.55), y -8.24..-6.39
+ok   stowed sfoot3_slat_11_1 in the body shadow: |x| 11.36 (<= 13.55), y -8.24..-6.32
+ok   stowed sfoot3_slat_11_2 in the body shadow: |x| 11.27 (<= 13.55), y -8.16..-6.31
+ok   stowed sfoot3_strut_11 in the body shadow: |x| 10.76 (<= 13.55), y -7.91..-6.85
+ok   stowed sfoot3_rod_11 in the body shadow: |x| 10.55 (<= 13.55), y -7.60..-7.03
+ok   stowed sfoot3_skirt_11_0 in the body shadow: |x| 11.92 (<= 13.55), y -7.48..-5.67
+ok   stowed sfoot3_skirt_11_1 in the body shadow: |x| 11.91 (<= 13.55), y -7.48..-5.61
+ok   stowed sfoot3_skirt_11_2 in the body shadow: |x| 11.82 (<= 13.55), y -7.41..-5.60
+ok   stowed crest_port does not enter the hull (deepest +0.01 m)
+ok   stowed crest_starboard does not enter the hull (deepest +0.01 m)
+ok   stowed wing_outer_port does not enter the hull (deepest +1.17 m)
+ok   stowed wing_outer_starboard does not enter the hull (deepest +1.17 m)
+ok   stowed elevon_port does not enter the hull (deepest +1.30 m)
+ok   stowed elevon_starboard does not enter the hull (deepest +1.30 m)
+ok   stowed leg0_sec0 does not enter the hull (deepest +1.84 m)
+ok   stowed leg0_sec1 does not enter the hull (deepest +1.92 m)
+ok   stowed leg0_sec2 does not enter the hull (deepest +2.07 m)
+ok   stowed leg0_sec3 does not enter the hull (deepest +2.20 m)
+ok   stowed leg0_ankle does not enter the hull (deepest +3.42 m)
+ok   stowed leg1_sec0 does not enter the hull (deepest +1.84 m)
+ok   stowed leg1_sec1 does not enter the hull (deepest +1.92 m)
+ok   stowed leg1_sec2 does not enter the hull (deepest +2.07 m)
+ok   stowed leg1_sec3 does not enter the hull (deepest +2.20 m)
+ok   stowed leg1_ankle does not enter the hull (deepest +3.42 m)
+ok   stowed leg2_sec0 does not enter the hull (deepest +0.47 m)
+ok   stowed leg2_sec1 does not enter the hull (deepest +0.55 m)
+ok   stowed leg2_sec2 does not enter the hull (deepest +0.70 m)
+ok   stowed leg2_sec3 does not enter the hull (deepest +0.83 m)
+ok   stowed leg2_ankle does not enter the hull (deepest +2.23 m)
+ok   stowed leg3_sec0 does not enter the hull (deepest +0.47 m)
+ok   stowed leg3_sec1 does not enter the hull (deepest +0.55 m)
+ok   stowed leg3_sec2 does not enter the hull (deepest +0.70 m)
+ok   stowed leg3_sec3 does not enter the hull (deepest +0.83 m)
+ok   stowed leg3_ankle does not enter the hull (deepest +2.23 m)
+ok   stowed sfoot0_hub does not enter the hull (deepest +2.19 m)
+ok   stowed sfoot0_mast does not enter the hull (deepest +1.79 m)
+ok   stowed sfoot0_petal_0 does not enter the hull (deepest +2.46 m)
+ok   stowed sfoot0_slat_0_0 does not enter the hull (deepest +2.23 m)
+ok   stowed sfoot0_slat_0_1 does not enter the hull (deepest +2.11 m)
+ok   stowed sfoot0_slat_0_2 does not enter the hull (deepest +2.09 m)
+ok   stowed sfoot0_strut_0 does not enter the hull (deepest +2.35 m)
+ok   stowed sfoot0_rod_0 does not enter the hull (deepest +2.60 m)
+ok   stowed sfoot0_skirt_0_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_0_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_0_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_petal_1 does not enter the hull (deepest +2.00 m)
+ok   stowed sfoot0_slat_1_0 does not enter the hull (deepest +2.08 m)
+ok   stowed sfoot0_slat_1_1 does not enter the hull (deepest +2.00 m)
+ok   stowed sfoot0_slat_1_2 does not enter the hull (deepest +1.99 m)
+ok   stowed sfoot0_strut_1 does not enter the hull (deepest +1.82 m)
+ok   stowed sfoot0_rod_1 does not enter the hull (deepest +2.10 m)
+ok   stowed sfoot0_skirt_1_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_1_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_1_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_petal_2 does not enter the hull (deepest +1.86 m)
+ok   stowed sfoot0_slat_2_0 does not enter the hull (deepest +2.25 m)
+ok   stowed sfoot0_slat_2_1 does not enter the hull (deepest +2.24 m)
+ok   stowed sfoot0_slat_2_2 does not enter the hull (deepest +2.24 m)
+ok   stowed sfoot0_strut_2 does not enter the hull (deepest +1.52 m)
+ok   stowed sfoot0_rod_2 does not enter the hull (deepest +1.81 m)
+ok   stowed sfoot0_skirt_2_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_2_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_2_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_petal_3 does not enter the hull (deepest +1.85 m)
+ok   stowed sfoot0_slat_3_0 does not enter the hull (deepest +2.16 m)
+ok   stowed sfoot0_slat_3_1 does not enter the hull (deepest +2.16 m)
+ok   stowed sfoot0_slat_3_2 does not enter the hull (deepest +2.19 m)
+ok   stowed sfoot0_strut_3 does not enter the hull (deepest +1.56 m)
+ok   stowed sfoot0_rod_3 does not enter the hull (deepest +1.85 m)
+ok   stowed sfoot0_skirt_3_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_3_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_3_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_petal_4 does not enter the hull (deepest +2.08 m)
+ok   stowed sfoot0_slat_4_0 does not enter the hull (deepest +1.98 m)
+ok   stowed sfoot0_slat_4_1 does not enter the hull (deepest +2.00 m)
+ok   stowed sfoot0_slat_4_2 does not enter the hull (deepest +2.09 m)
+ok   stowed sfoot0_strut_4 does not enter the hull (deepest +1.93 m)
+ok   stowed sfoot0_rod_4 does not enter the hull (deepest +2.19 m)
+ok   stowed sfoot0_skirt_4_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_4_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_4_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_petal_5 does not enter the hull (deepest +2.55 m)
+ok   stowed sfoot0_slat_5_0 does not enter the hull (deepest +2.16 m)
+ok   stowed sfoot0_slat_5_1 does not enter the hull (deepest +2.18 m)
+ok   stowed sfoot0_slat_5_2 does not enter the hull (deepest +2.30 m)
+ok   stowed sfoot0_strut_5 does not enter the hull (deepest +2.47 m)
+ok   stowed sfoot0_rod_5 does not enter the hull (deepest +2.72 m)
+ok   stowed sfoot0_skirt_5_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_5_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_5_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_petal_6 does not enter the hull (deepest +2.87 m)
+ok   stowed sfoot0_slat_6_0 does not enter the hull (deepest +2.50 m)
+ok   stowed sfoot0_slat_6_1 does not enter the hull (deepest +2.53 m)
+ok   stowed sfoot0_slat_6_2 does not enter the hull (deepest +2.64 m)
+ok   stowed sfoot0_strut_6 does not enter the hull (deepest +3.00 m)
+ok   stowed sfoot0_rod_6 does not enter the hull (deepest +3.22 m)
+ok   stowed sfoot0_skirt_6_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_6_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_6_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_petal_7 does not enter the hull (deepest +3.18 m)
+ok   stowed sfoot0_slat_7_0 does not enter the hull (deepest +2.97 m)
+ok   stowed sfoot0_slat_7_1 does not enter the hull (deepest +2.99 m)
+ok   stowed sfoot0_slat_7_2 does not enter the hull (deepest +3.06 m)
+ok   stowed sfoot0_strut_7 does not enter the hull (deepest +3.43 m)
+ok   stowed sfoot0_rod_7 does not enter the hull (deepest +3.61 m)
+ok   stowed sfoot0_skirt_7_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_7_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_7_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_petal_8 does not enter the hull (deepest +3.47 m)
+ok   stowed sfoot0_slat_8_0 does not enter the hull (deepest +3.47 m)
+ok   stowed sfoot0_slat_8_1 does not enter the hull (deepest +3.48 m)
+ok   stowed sfoot0_slat_8_2 does not enter the hull (deepest +3.49 m)
+ok   stowed sfoot0_strut_8 does not enter the hull (deepest +3.64 m)
+ok   stowed sfoot0_rod_8 does not enter the hull (deepest +3.81 m)
+ok   stowed sfoot0_skirt_8_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_8_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_8_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_petal_9 does not enter the hull (deepest +3.41 m)
+ok   stowed sfoot0_slat_9_0 does not enter the hull (deepest +3.41 m)
+ok   stowed sfoot0_slat_9_1 does not enter the hull (deepest +3.38 m)
+ok   stowed sfoot0_slat_9_2 does not enter the hull (deepest +3.37 m)
+ok   stowed sfoot0_strut_9 does not enter the hull (deepest +3.62 m)
+ok   stowed sfoot0_rod_9 does not enter the hull (deepest +3.80 m)
+ok   stowed sfoot0_skirt_9_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_9_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_9_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_petal_10 does not enter the hull (deepest +3.11 m)
+ok   stowed sfoot0_slat_10_0 does not enter the hull (deepest +2.97 m)
+ok   stowed sfoot0_slat_10_1 does not enter the hull (deepest +2.89 m)
+ok   stowed sfoot0_slat_10_2 does not enter the hull (deepest +2.87 m)
+ok   stowed sfoot0_strut_10 does not enter the hull (deepest +3.35 m)
+ok   stowed sfoot0_rod_10 does not enter the hull (deepest +3.54 m)
+ok   stowed sfoot0_skirt_10_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_10_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_10_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_petal_11 does not enter the hull (deepest +2.81 m)
+ok   stowed sfoot0_slat_11_0 does not enter the hull (deepest +2.56 m)
+ok   stowed sfoot0_slat_11_1 does not enter the hull (deepest +2.44 m)
+ok   stowed sfoot0_slat_11_2 does not enter the hull (deepest +2.42 m)
+ok   stowed sfoot0_strut_11 does not enter the hull (deepest +2.89 m)
+ok   stowed sfoot0_rod_11 does not enter the hull (deepest +3.11 m)
+ok   stowed sfoot0_skirt_11_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_11_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot0_skirt_11_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_hub does not enter the hull (deepest +2.19 m)
+ok   stowed sfoot1_mast does not enter the hull (deepest +1.79 m)
+ok   stowed sfoot1_petal_0 does not enter the hull (deepest +2.08 m)
+ok   stowed sfoot1_slat_0_0 does not enter the hull (deepest +2.09 m)
+ok   stowed sfoot1_slat_0_1 does not enter the hull (deepest +2.00 m)
+ok   stowed sfoot1_slat_0_2 does not enter the hull (deepest +1.98 m)
+ok   stowed sfoot1_strut_0 does not enter the hull (deepest +1.93 m)
+ok   stowed sfoot1_rod_0 does not enter the hull (deepest +2.19 m)
+ok   stowed sfoot1_skirt_0_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_0_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_0_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_petal_1 does not enter the hull (deepest +1.85 m)
+ok   stowed sfoot1_slat_1_0 does not enter the hull (deepest +2.19 m)
+ok   stowed sfoot1_slat_1_1 does not enter the hull (deepest +2.16 m)
+ok   stowed sfoot1_slat_1_2 does not enter the hull (deepest +2.16 m)
+ok   stowed sfoot1_strut_1 does not enter the hull (deepest +1.56 m)
+ok   stowed sfoot1_rod_1 does not enter the hull (deepest +1.85 m)
+ok   stowed sfoot1_skirt_1_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_1_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_1_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_petal_2 does not enter the hull (deepest +1.86 m)
+ok   stowed sfoot1_slat_2_0 does not enter the hull (deepest +2.24 m)
+ok   stowed sfoot1_slat_2_1 does not enter the hull (deepest +2.24 m)
+ok   stowed sfoot1_slat_2_2 does not enter the hull (deepest +2.25 m)
+ok   stowed sfoot1_strut_2 does not enter the hull (deepest +1.52 m)
+ok   stowed sfoot1_rod_2 does not enter the hull (deepest +1.81 m)
+ok   stowed sfoot1_skirt_2_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_2_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_2_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_petal_3 does not enter the hull (deepest +2.00 m)
+ok   stowed sfoot1_slat_3_0 does not enter the hull (deepest +1.99 m)
+ok   stowed sfoot1_slat_3_1 does not enter the hull (deepest +2.00 m)
+ok   stowed sfoot1_slat_3_2 does not enter the hull (deepest +2.08 m)
+ok   stowed sfoot1_strut_3 does not enter the hull (deepest +1.82 m)
+ok   stowed sfoot1_rod_3 does not enter the hull (deepest +2.10 m)
+ok   stowed sfoot1_skirt_3_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_3_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_3_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_petal_4 does not enter the hull (deepest +2.46 m)
+ok   stowed sfoot1_slat_4_0 does not enter the hull (deepest +2.09 m)
+ok   stowed sfoot1_slat_4_1 does not enter the hull (deepest +2.11 m)
+ok   stowed sfoot1_slat_4_2 does not enter the hull (deepest +2.23 m)
+ok   stowed sfoot1_strut_4 does not enter the hull (deepest +2.35 m)
+ok   stowed sfoot1_rod_4 does not enter the hull (deepest +2.60 m)
+ok   stowed sfoot1_skirt_4_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_4_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_4_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_petal_5 does not enter the hull (deepest +2.81 m)
+ok   stowed sfoot1_slat_5_0 does not enter the hull (deepest +2.42 m)
+ok   stowed sfoot1_slat_5_1 does not enter the hull (deepest +2.44 m)
+ok   stowed sfoot1_slat_5_2 does not enter the hull (deepest +2.56 m)
+ok   stowed sfoot1_strut_5 does not enter the hull (deepest +2.89 m)
+ok   stowed sfoot1_rod_5 does not enter the hull (deepest +3.11 m)
+ok   stowed sfoot1_skirt_5_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_5_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_5_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_petal_6 does not enter the hull (deepest +3.11 m)
+ok   stowed sfoot1_slat_6_0 does not enter the hull (deepest +2.87 m)
+ok   stowed sfoot1_slat_6_1 does not enter the hull (deepest +2.89 m)
+ok   stowed sfoot1_slat_6_2 does not enter the hull (deepest +2.97 m)
+ok   stowed sfoot1_strut_6 does not enter the hull (deepest +3.35 m)
+ok   stowed sfoot1_rod_6 does not enter the hull (deepest +3.54 m)
+ok   stowed sfoot1_skirt_6_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_6_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_6_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_petal_7 does not enter the hull (deepest +3.41 m)
+ok   stowed sfoot1_slat_7_0 does not enter the hull (deepest +3.37 m)
+ok   stowed sfoot1_slat_7_1 does not enter the hull (deepest +3.38 m)
+ok   stowed sfoot1_slat_7_2 does not enter the hull (deepest +3.41 m)
+ok   stowed sfoot1_strut_7 does not enter the hull (deepest +3.62 m)
+ok   stowed sfoot1_rod_7 does not enter the hull (deepest +3.80 m)
+ok   stowed sfoot1_skirt_7_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_7_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_7_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_petal_8 does not enter the hull (deepest +3.47 m)
+ok   stowed sfoot1_slat_8_0 does not enter the hull (deepest +3.49 m)
+ok   stowed sfoot1_slat_8_1 does not enter the hull (deepest +3.48 m)
+ok   stowed sfoot1_slat_8_2 does not enter the hull (deepest +3.47 m)
+ok   stowed sfoot1_strut_8 does not enter the hull (deepest +3.64 m)
+ok   stowed sfoot1_rod_8 does not enter the hull (deepest +3.81 m)
+ok   stowed sfoot1_skirt_8_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_8_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_8_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_petal_9 does not enter the hull (deepest +3.18 m)
+ok   stowed sfoot1_slat_9_0 does not enter the hull (deepest +3.06 m)
+ok   stowed sfoot1_slat_9_1 does not enter the hull (deepest +2.99 m)
+ok   stowed sfoot1_slat_9_2 does not enter the hull (deepest +2.97 m)
+ok   stowed sfoot1_strut_9 does not enter the hull (deepest +3.43 m)
+ok   stowed sfoot1_rod_9 does not enter the hull (deepest +3.61 m)
+ok   stowed sfoot1_skirt_9_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_9_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_9_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_petal_10 does not enter the hull (deepest +2.87 m)
+ok   stowed sfoot1_slat_10_0 does not enter the hull (deepest +2.64 m)
+ok   stowed sfoot1_slat_10_1 does not enter the hull (deepest +2.53 m)
+ok   stowed sfoot1_slat_10_2 does not enter the hull (deepest +2.50 m)
+ok   stowed sfoot1_strut_10 does not enter the hull (deepest +3.00 m)
+ok   stowed sfoot1_rod_10 does not enter the hull (deepest +3.22 m)
+ok   stowed sfoot1_skirt_10_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_10_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_10_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_petal_11 does not enter the hull (deepest +2.55 m)
+ok   stowed sfoot1_slat_11_0 does not enter the hull (deepest +2.30 m)
+ok   stowed sfoot1_slat_11_1 does not enter the hull (deepest +2.18 m)
+ok   stowed sfoot1_slat_11_2 does not enter the hull (deepest +2.16 m)
+ok   stowed sfoot1_strut_11 does not enter the hull (deepest +2.47 m)
+ok   stowed sfoot1_rod_11 does not enter the hull (deepest +2.72 m)
+ok   stowed sfoot1_skirt_11_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_11_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot1_skirt_11_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_hub does not enter the hull (deepest +2.15 m)
+ok   stowed sfoot2_mast does not enter the hull (deepest +1.66 m)
+ok   stowed sfoot2_petal_0 does not enter the hull (deepest +2.36 m)
+ok   stowed sfoot2_slat_0_0 does not enter the hull (deepest +2.19 m)
+ok   stowed sfoot2_slat_0_1 does not enter the hull (deepest +2.08 m)
+ok   stowed sfoot2_slat_0_2 does not enter the hull (deepest +2.05 m)
+ok   stowed sfoot2_strut_0 does not enter the hull (deepest +2.25 m)
+ok   stowed sfoot2_rod_0 does not enter the hull (deepest +2.52 m)
+ok   stowed sfoot2_skirt_0_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_0_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_0_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_petal_1 does not enter the hull (deepest +1.95 m)
+ok   stowed sfoot2_slat_1_0 does not enter the hull (deepest +2.09 m)
+ok   stowed sfoot2_slat_1_1 does not enter the hull (deepest +2.02 m)
+ok   stowed sfoot2_slat_1_2 does not enter the hull (deepest +2.01 m)
+ok   stowed sfoot2_strut_1 does not enter the hull (deepest +1.75 m)
+ok   stowed sfoot2_rod_1 does not enter the hull (deepest +2.04 m)
+ok   stowed sfoot2_skirt_1_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_1_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_1_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_petal_2 does not enter the hull (deepest +1.87 m)
+ok   stowed sfoot2_slat_2_0 does not enter the hull (deepest +2.30 m)
+ok   stowed sfoot2_slat_2_1 does not enter the hull (deepest +2.29 m)
+ok   stowed sfoot2_slat_2_2 does not enter the hull (deepest +2.30 m)
+ok   stowed sfoot2_strut_2 does not enter the hull (deepest +1.49 m)
+ok   stowed sfoot2_rod_2 does not enter the hull (deepest +1.80 m)
+ok   stowed sfoot2_skirt_2_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_2_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_2_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_petal_3 does not enter the hull (deepest +1.86 m)
+ok   stowed sfoot2_slat_3_0 does not enter the hull (deepest +2.11 m)
+ok   stowed sfoot2_slat_3_1 does not enter the hull (deepest +2.12 m)
+ok   stowed sfoot2_slat_3_2 does not enter the hull (deepest +2.16 m)
+ok   stowed sfoot2_strut_3 does not enter the hull (deepest +1.57 m)
+ok   stowed sfoot2_rod_3 does not enter the hull (deepest +1.88 m)
+ok   stowed sfoot2_skirt_3_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_3_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_3_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_petal_4 does not enter the hull (deepest +2.14 m)
+ok   stowed sfoot2_slat_4_0 does not enter the hull (deepest +1.99 m)
+ok   stowed sfoot2_slat_4_1 does not enter the hull (deepest +2.00 m)
+ok   stowed sfoot2_slat_4_2 does not enter the hull (deepest +2.10 m)
+ok   stowed sfoot2_strut_4 does not enter the hull (deepest +1.98 m)
+ok   stowed sfoot2_rod_4 does not enter the hull (deepest +2.27 m)
+ok   stowed sfoot2_skirt_4_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_4_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_4_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_petal_5 does not enter the hull (deepest +2.59 m)
+ok   stowed sfoot2_slat_5_0 does not enter the hull (deepest +2.21 m)
+ok   stowed sfoot2_slat_5_1 does not enter the hull (deepest +2.23 m)
+ok   stowed sfoot2_slat_5_2 does not enter the hull (deepest +2.35 m)
+ok   stowed sfoot2_strut_5 does not enter the hull (deepest +2.55 m)
+ok   stowed sfoot2_rod_5 does not enter the hull (deepest +2.80 m)
+ok   stowed sfoot2_skirt_5_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_5_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_5_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_petal_6 does not enter the hull (deepest +2.87 m)
+ok   stowed sfoot2_slat_6_0 does not enter the hull (deepest +2.56 m)
+ok   stowed sfoot2_slat_6_1 does not enter the hull (deepest +2.59 m)
+ok   stowed sfoot2_slat_6_2 does not enter the hull (deepest +2.69 m)
+ok   stowed sfoot2_strut_6 does not enter the hull (deepest +3.09 m)
+ok   stowed sfoot2_rod_6 does not enter the hull (deepest +3.28 m)
+ok   stowed sfoot2_skirt_6_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_6_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_6_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_petal_7 does not enter the hull (deepest +3.18 m)
+ok   stowed sfoot2_slat_7_0 does not enter the hull (deepest +3.05 m)
+ok   stowed sfoot2_slat_7_1 does not enter the hull (deepest +3.07 m)
+ok   stowed sfoot2_slat_7_2 does not enter the hull (deepest +3.13 m)
+ok   stowed sfoot2_strut_7 does not enter the hull (deepest +3.48 m)
+ok   stowed sfoot2_rod_7 does not enter the hull (deepest +3.66 m)
+ok   stowed sfoot2_skirt_7_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_7_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_7_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_petal_8 does not enter the hull (deepest +3.46 m)
+ok   stowed sfoot2_slat_8_0 does not enter the hull (deepest +3.53 m)
+ok   stowed sfoot2_slat_8_1 does not enter the hull (deepest +3.54 m)
+ok   stowed sfoot2_slat_8_2 does not enter the hull (deepest +3.55 m)
+ok   stowed sfoot2_strut_8 does not enter the hull (deepest +3.67 m)
+ok   stowed sfoot2_rod_8 does not enter the hull (deepest +3.83 m)
+ok   stowed sfoot2_skirt_8_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_8_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_8_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_petal_9 does not enter the hull (deepest +3.33 m)
+ok   stowed sfoot2_slat_9_0 does not enter the hull (deepest +3.34 m)
+ok   stowed sfoot2_slat_9_1 does not enter the hull (deepest +3.31 m)
+ok   stowed sfoot2_slat_9_2 does not enter the hull (deepest +3.30 m)
+ok   stowed sfoot2_strut_9 does not enter the hull (deepest +3.59 m)
+ok   stowed sfoot2_rod_9 does not enter the hull (deepest +3.77 m)
+ok   stowed sfoot2_skirt_9_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_9_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_9_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_petal_10 does not enter the hull (deepest +3.02 m)
+ok   stowed sfoot2_slat_10_0 does not enter the hull (deepest +2.90 m)
+ok   stowed sfoot2_slat_10_1 does not enter the hull (deepest +2.82 m)
+ok   stowed sfoot2_slat_10_2 does not enter the hull (deepest +2.79 m)
+ok   stowed sfoot2_strut_10 does not enter the hull (deepest +3.29 m)
+ok   stowed sfoot2_rod_10 does not enter the hull (deepest +3.48 m)
+ok   stowed sfoot2_skirt_10_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_10_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_10_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_petal_11 does not enter the hull (deepest +2.73 m)
+ok   stowed sfoot2_slat_11_0 does not enter the hull (deepest +2.50 m)
+ok   stowed sfoot2_slat_11_1 does not enter the hull (deepest +2.39 m)
+ok   stowed sfoot2_slat_11_2 does not enter the hull (deepest +2.36 m)
+ok   stowed sfoot2_strut_11 does not enter the hull (deepest +2.82 m)
+ok   stowed sfoot2_rod_11 does not enter the hull (deepest +3.04 m)
+ok   stowed sfoot2_skirt_11_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_11_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot2_skirt_11_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_hub does not enter the hull (deepest +2.15 m)
+ok   stowed sfoot3_mast does not enter the hull (deepest +1.66 m)
+ok   stowed sfoot3_petal_0 does not enter the hull (deepest +2.14 m)
+ok   stowed sfoot3_slat_0_0 does not enter the hull (deepest +2.10 m)
+ok   stowed sfoot3_slat_0_1 does not enter the hull (deepest +2.00 m)
+ok   stowed sfoot3_slat_0_2 does not enter the hull (deepest +1.99 m)
+ok   stowed sfoot3_strut_0 does not enter the hull (deepest +1.98 m)
+ok   stowed sfoot3_rod_0 does not enter the hull (deepest +2.27 m)
+ok   stowed sfoot3_skirt_0_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_0_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_0_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_petal_1 does not enter the hull (deepest +1.86 m)
+ok   stowed sfoot3_slat_1_0 does not enter the hull (deepest +2.16 m)
+ok   stowed sfoot3_slat_1_1 does not enter the hull (deepest +2.12 m)
+ok   stowed sfoot3_slat_1_2 does not enter the hull (deepest +2.11 m)
+ok   stowed sfoot3_strut_1 does not enter the hull (deepest +1.57 m)
+ok   stowed sfoot3_rod_1 does not enter the hull (deepest +1.88 m)
+ok   stowed sfoot3_skirt_1_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_1_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_1_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_petal_2 does not enter the hull (deepest +1.87 m)
+ok   stowed sfoot3_slat_2_0 does not enter the hull (deepest +2.30 m)
+ok   stowed sfoot3_slat_2_1 does not enter the hull (deepest +2.29 m)
+ok   stowed sfoot3_slat_2_2 does not enter the hull (deepest +2.30 m)
+ok   stowed sfoot3_strut_2 does not enter the hull (deepest +1.49 m)
+ok   stowed sfoot3_rod_2 does not enter the hull (deepest +1.80 m)
+ok   stowed sfoot3_skirt_2_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_2_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_2_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_petal_3 does not enter the hull (deepest +1.95 m)
+ok   stowed sfoot3_slat_3_0 does not enter the hull (deepest +2.01 m)
+ok   stowed sfoot3_slat_3_1 does not enter the hull (deepest +2.02 m)
+ok   stowed sfoot3_slat_3_2 does not enter the hull (deepest +2.09 m)
+ok   stowed sfoot3_strut_3 does not enter the hull (deepest +1.75 m)
+ok   stowed sfoot3_rod_3 does not enter the hull (deepest +2.04 m)
+ok   stowed sfoot3_skirt_3_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_3_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_3_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_petal_4 does not enter the hull (deepest +2.36 m)
+ok   stowed sfoot3_slat_4_0 does not enter the hull (deepest +2.05 m)
+ok   stowed sfoot3_slat_4_1 does not enter the hull (deepest +2.08 m)
+ok   stowed sfoot3_slat_4_2 does not enter the hull (deepest +2.19 m)
+ok   stowed sfoot3_strut_4 does not enter the hull (deepest +2.25 m)
+ok   stowed sfoot3_rod_4 does not enter the hull (deepest +2.52 m)
+ok   stowed sfoot3_skirt_4_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_4_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_4_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_petal_5 does not enter the hull (deepest +2.73 m)
+ok   stowed sfoot3_slat_5_0 does not enter the hull (deepest +2.36 m)
+ok   stowed sfoot3_slat_5_1 does not enter the hull (deepest +2.39 m)
+ok   stowed sfoot3_slat_5_2 does not enter the hull (deepest +2.50 m)
+ok   stowed sfoot3_strut_5 does not enter the hull (deepest +2.82 m)
+ok   stowed sfoot3_rod_5 does not enter the hull (deepest +3.04 m)
+ok   stowed sfoot3_skirt_5_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_5_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_5_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_petal_6 does not enter the hull (deepest +3.02 m)
+ok   stowed sfoot3_slat_6_0 does not enter the hull (deepest +2.79 m)
+ok   stowed sfoot3_slat_6_1 does not enter the hull (deepest +2.82 m)
+ok   stowed sfoot3_slat_6_2 does not enter the hull (deepest +2.90 m)
+ok   stowed sfoot3_strut_6 does not enter the hull (deepest +3.29 m)
+ok   stowed sfoot3_rod_6 does not enter the hull (deepest +3.48 m)
+ok   stowed sfoot3_skirt_6_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_6_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_6_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_petal_7 does not enter the hull (deepest +3.33 m)
+ok   stowed sfoot3_slat_7_0 does not enter the hull (deepest +3.30 m)
+ok   stowed sfoot3_slat_7_1 does not enter the hull (deepest +3.31 m)
+ok   stowed sfoot3_slat_7_2 does not enter the hull (deepest +3.34 m)
+ok   stowed sfoot3_strut_7 does not enter the hull (deepest +3.59 m)
+ok   stowed sfoot3_rod_7 does not enter the hull (deepest +3.77 m)
+ok   stowed sfoot3_skirt_7_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_7_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_7_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_petal_8 does not enter the hull (deepest +3.46 m)
+ok   stowed sfoot3_slat_8_0 does not enter the hull (deepest +3.55 m)
+ok   stowed sfoot3_slat_8_1 does not enter the hull (deepest +3.54 m)
+ok   stowed sfoot3_slat_8_2 does not enter the hull (deepest +3.53 m)
+ok   stowed sfoot3_strut_8 does not enter the hull (deepest +3.67 m)
+ok   stowed sfoot3_rod_8 does not enter the hull (deepest +3.83 m)
+ok   stowed sfoot3_skirt_8_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_8_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_8_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_petal_9 does not enter the hull (deepest +3.18 m)
+ok   stowed sfoot3_slat_9_0 does not enter the hull (deepest +3.13 m)
+ok   stowed sfoot3_slat_9_1 does not enter the hull (deepest +3.07 m)
+ok   stowed sfoot3_slat_9_2 does not enter the hull (deepest +3.05 m)
+ok   stowed sfoot3_strut_9 does not enter the hull (deepest +3.48 m)
+ok   stowed sfoot3_rod_9 does not enter the hull (deepest +3.66 m)
+ok   stowed sfoot3_skirt_9_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_9_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_9_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_petal_10 does not enter the hull (deepest +2.87 m)
+ok   stowed sfoot3_slat_10_0 does not enter the hull (deepest +2.69 m)
+ok   stowed sfoot3_slat_10_1 does not enter the hull (deepest +2.59 m)
+ok   stowed sfoot3_slat_10_2 does not enter the hull (deepest +2.56 m)
+ok   stowed sfoot3_strut_10 does not enter the hull (deepest +3.09 m)
+ok   stowed sfoot3_rod_10 does not enter the hull (deepest +3.28 m)
+ok   stowed sfoot3_skirt_10_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_10_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_10_2 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_petal_11 does not enter the hull (deepest +2.59 m)
+ok   stowed sfoot3_slat_11_0 does not enter the hull (deepest +2.35 m)
+ok   stowed sfoot3_slat_11_1 does not enter the hull (deepest +2.23 m)
+ok   stowed sfoot3_slat_11_2 does not enter the hull (deepest +2.21 m)
+ok   stowed sfoot3_strut_11 does not enter the hull (deepest +2.55 m)
+ok   stowed sfoot3_rod_11 does not enter the hull (deepest +2.80 m)
+ok   stowed sfoot3_skirt_11_0 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_11_1 does not enter the hull (deepest +inf m)
+ok   stowed sfoot3_skirt_11_2 does not enter the hull (deepest +inf m)
+ok   fin retracted: y -2.7..8.82 (skin 10.81)
+ok   marching cup stowed behind the well iris: lip s -0.30 (iris -0.6)
+ok   nose retro cups inside the nose skin (-0.48 m)
+ok   stowed parts clear of the trap cassettes
+ok   sweep blade port slide out: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep blade port swings down: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep blade port foot opens: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep blade starboard slide out: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep blade starboard swings down: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep blade starboard foot opens: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep stern leg 0 to stand: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep stern leg 1 to stand: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep stern leg 2 to stand: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep stern leg 3 to stand: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep pod 0 arm out: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep pod 1 arm out: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep pod 2 arm out: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep pod 3 arm out: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep pods swivel: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep wings unfold (outer out, then inner down): 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep wings 30 deg: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep fin extends: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep elevons and body flap: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep marching cup runs out: 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   sweep kangaroo leg out (door, knee to vertical, hip + knee, ext, foot): 0 points cross the skin outside the opening, 0 inside a trap cassette
+ok   port blade foot on the ground at rest: rim -24.00, hub -22.93 (ground -24.0)
+ok   starboard blade foot on the ground at rest: rim -24.00, hub -22.93 (ground -24.0)
+ok   kangaroo foot level on the ground at rest: rim -24.00, hub -23.09
+ok   kangaroo foot 11.7 m ahead of the hip (design 12.0)
+ok   lowest non-foot part at rest: leg2_sec0 -8.46 (ground -24.0)
+ok   port strut unloaded: foot 0.45 m lower
+ok   starboard strut unloaded: foot 0.45 m lower
+ok   hangar platform (crew and rovers) on the ground: -23.75 (ground -24.0)
+ok   pods out, cups down: lowest 0.18 m (24.18 above ground)
+ok   pod 0 deployed clear of the skin (max penetration -4.29)
+ok   pod 1 deployed clear of the skin (max penetration -4.29)
+ok   pod 2 deployed clear of the skin (max penetration -4.41)
+ok   pod 3 deployed clear of the skin (max penetration -4.41)
+ok   pods out to x 19.3 (centre 17.5)
+ok   port foot on the ground while turning: -24.000
+ok   starboard foot on the ground while turning: -24.000
+ok   stern leg 0 foot flat on the ground standing: -82.50..-81.54 (ground -82.5)
+ok   stern leg 0 foot on R 38.5 (design 38.5)
+ok   stern leg 1 foot flat on the ground standing: -82.50..-81.54 (ground -82.5)
+ok   stern leg 1 foot on R 38.5 (design 38.5)
+ok   stern leg 2 foot flat on the ground standing: -82.50..-81.54 (ground -82.5)
+ok   stern leg 2 foot on R 38.5 (design 38.5)
+ok   stern leg 3 foot flat on the ground standing: -82.50..-81.54 (ground -82.5)
+ok   stern leg 3 foot on R 38.5 (design 38.5)
+ok   stern clearance standing: iris_ana_0 20.5 m (marching cup lip wants 16)
+ok   marching cup run out: lip 16.0 m above the ground (design 16)
+ok   standing, loaded CG: tip-over angle 14.5 deg (feet polygon inradius 20.8 m)
+ok   standing, landing, no anamezon CG: tip-over angle 13.4 deg (feet polygon inradius 20.8 m)
+ok   standing, empty CG: tip-over angle 13.5 deg (feet polygon inradius 20.8 m)
+ok   stern leg 0: splay needs friction 0.51 (rock, regolith 0.6..0.8)
+ok   stern leg 1: splay needs friction 0.51 (rock, regolith 0.6..0.8)
+ok   stern leg 2: splay needs friction 0.55 (rock, regolith 0.6..0.8)
+ok   stern leg 3: splay needs friction 0.55 (rock, regolith 0.6..0.8)
+ok   stern foot 0 clear of the starboard blade foot by 7.8 m
+ok   stern foot 1 clear of the port blade foot by 7.8 m
+ok   stern foot 2 clear of the port blade foot by 6.0 m
+ok   stern foot 3 clear of the starboard blade foot by 6.0 m
+ALL OK

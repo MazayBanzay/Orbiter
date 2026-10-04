@@ -20,6 +20,12 @@
 #define STRICT
 #include "orbitersdk.h"
 #include "TantraGlyphs.h"
+#include "TantraPlantScreen.h"
+#include "TantraMechScreen.h"
+#include "TantraEngineScreen.h"
+#include "TantraScreenFont.h"
+#include "TantraGost.h"
+#include <string>
 #include <vector>
 
 class Tantra;
@@ -56,12 +62,18 @@ private:
     int AlertLevel() const;
     bool AlertUnacked() const;
     void SetMainLevel(double f);              // thrust set-points from a touch on a scale
+    void FillPlantView(tantra::plantscreen::View& v) const;   // the ship round the plant for its screen
+    void PlantCommand(int cmd, double along);                 // a key of the plant screen
     void SetPodLevel(double f);
 
     Tantra* t_ = nullptr;
     UINT vcMesh_ = 0;
     SURFHANDLE s_[kScreens] = {};
     SURFHANDLE eng_ = nullptr;                 // the engine console, drawn off screen and shown scaled on the right riser
+    double engSc_ = 1.0;                       // its scale (drawn at the riser's own resolution)
+    tantra::plantscreen::Screen plantScr_;     // the power plant's screen (left of the engine console)
+    double tRiser_ = 0.0, riserDt_ = 0.0;      // the right riser redraws at 20 Hz (the plant's flows), the time since its last draw
+    bool dumpRiser_ = false; int riserDraws_ = 0;   // Config\Tantra\dump_screens.flag: the right riser saved to Tantra_Design (checks)
     int mode_[2] = {M_MFD, M_MFD};
     double t_redraw_ = 0.0;
     int hudMode_ = HUD_SURFACE;                // the HUD on the big screen: the ship's own mode (HUD_NONE = off)
@@ -81,4 +93,53 @@ private:
     int calcOp_ = 0;
     bool calcNew_ = true;
     TantraGlyphs glyphs_;
+
+    // ---- the left riser's screen (МЕХАНИЗАЦИЯ | ТЕПЛО) and the left wing's keys: the mockups' screens (TantraDisplaysMech.cpp) ----
+    void DrawLeftScreen(SURFHANDLE s, int x0, int y0, int x1, int y1, double sc);
+    bool TouchLeftScreen(double x, double y);  // the screen's own pixels
+    void DrawShelfL(SURFHANDLE s, double sc, int w, int h);
+    bool TouchShelfL(double x, double y);      // the keys' own pixels
+    void FillMechView(tantra::mechscreen::View& v) const;
+    void MechCommand(int cmd);
+    tantra::ScreenFont font_;                  // Segoe UI of the mockups (one per ship)
+    tantra::mechscreen::Screen mechScr_;
+    int leftTab_ = 0;                          // 0 МЕХАНИЗАЦИЯ, 1 ТЕПЛО
+    bool mechEstop_ = false;                   // the emergency stop of the mechanisation: the carriage held
+    // ---- the engine console (TantraDisplaysEngines.cpp): the mockup's screen in eng_ (800 px high) ----
+    void DrawEngineScreen();
+    bool TouchEngineScreen(double x, double y);   // eng_'s pixels
+    void FillEngineView(tantra::enginescreen::View& v) const;
+    void EngineSetPoint(int bar, double value);
+    void EngineCommand(int cmd);
+    tantra::enginescreen::Screen engScr_;
+    double fsPend_ = -1.0, frPend_ = -1.0;     // anamezon feed / retro set before the chambers feed
+    double bypassArm_ = -99.0;                 // the first press of ОБХОД БЛОК. (system time)
+    // ---- the panels (TantraDisplaysPanels.cpp): the side panels (three MFDs over a screen), the front screen's tabs ----
+    void DrawPanel(int k);
+    bool TouchPanel(int k, double x, double y);   // the panel's pixels
+    void DrawFront();
+    void DrawFrontTabs(SURFHANDLE s);
+    bool TouchFront(double px, double py);        // the front surface's pixels
+    std::vector<tantra::scr::Hit> panelHits_[2], frontHits_;
+    int frontTab_ = 0;                         // the front screen: 0 ПОЛЁТ, 1 ДВИГАТЕЛИ
+    // ---- the side consoles of variant 7 (TantraConsoles.cpp): screen 3 the right one's glass keys (the MFDs, the computing
+    // machine), screen 4 the left one's (the screens' keys, the throttle quadrant's slots, the pods' key), screen 6 the machine's
+    // phosphor screen ----
+    void DrawConsoleR();
+    bool TouchConsoleR(double x, double y);   // the console's pixels
+    void DrawConsoleL();
+    bool TouchConsoleL(double x, double y);
+    void DrawMachine();
+    void MachineKey(const std::wstring& k);
+    double PodLevel() const;                   // the pods' thrust set (their lever's place)
+    std::vector<tantra::scr::Hit> consHits_[2];
+    int selMfd_ = 0;                           // the MFD the right console drives: 0..5 (МФД 1-3 the left glass, 4-6 the right)
+    double keyLit_[2][48] = {};                // a momentary key shines till then (system time)
+    double podCoverT_ = -1e9;                  // the pods' red guard cover: opened then (falls shut after 6 s)
+    struct Machine {                           // the computing machine: the register, the operation, 8 cells, its journal
+        std::wstring disp = L"0"; double acc = 0.0; wchar_t op = 0; bool fresh = true, err = false;
+        std::wstring cells[8]; int recall = -1; bool lastRecall = false;
+        std::vector<std::wstring> log;
+    } mach_;
+    tantra::GostFont gost_;
 };

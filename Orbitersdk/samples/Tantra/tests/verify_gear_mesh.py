@@ -94,7 +94,7 @@ STOW = dict(gm.stowed_states())
 MOVING = [n for n in gm.GROUPS if n.startswith(("fin", "door_", "pod_", "arm_pod", "hip_", "blade_", "ankle_", "foot_", "bay_door",
                                                  "kang_", "kfoot_"))]
 OUTSIDE = [n for n in gm.GROUPS if n.startswith(("crest_", "wing_outer_", "elevon_", "sfoot")) or (n.startswith("leg") and n != "leg_hinges")]
-RIBS = gm.foot_ribs
+RIBS = lambda pre: [n for n in gm.foot_groups(pre) if "_slat_" in n]   # the petals' plates lie on the ground
 
 
 def foot_rim(V, pre):
@@ -125,7 +125,9 @@ for n in OUTSIDE:
     ok = (np.abs(P[:, 0]).max() <= W_MAX + 0.05) and (P[:, 1].max() <= Y_TOP + 0.35) and (P[:, 1].min() >= Y_BOT - 1.7)
     check(ok, f"stowed {n} in the body shadow: |x| {np.abs(P[:, 0]).max():.2f} (<= {W_MAX:.2f}), y {P[:, 1].min():.2f}..{P[:, 1].max():.2f}")
 for n in OUTSIDE:
-    d = np.nanmin(outs(samples(G[n], V[n])))
+    o_ = outs(samples(G[n], V[n]))
+    # a part lying wholly beyond the body's stations (a folded stern foot's skirt aft of the stern) cannot be inside it
+    d = np.nanmin(o_) if np.isfinite(o_).any() else float("inf")
     check(d > -0.03, f"stowed {n} does not enter the hull (deepest {d:+.2f} m)")
 V_fin = np.vstack([V["fin"], V["fin_upper"]])
 check(V_fin[:, 1].max() <= gm.top_y(30) + 0.01 and V_fin[:, 1].min() > -9.0,

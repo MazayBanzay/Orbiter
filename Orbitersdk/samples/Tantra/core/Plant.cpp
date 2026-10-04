@@ -116,12 +116,22 @@ void Plant::Log(const std::string& ru, const std::string& en, int level, bool fa
 bool Plant::FieldStep(double dT) {
     const double want = std::round((Bset_ + dT) * 10.0) / 10.0;
     Bset_ = std::max(1.0, std::min(lim_ ? kBNom : kBRupture, want));
-    return !(lim_ && want > kBNom + 1e-9);
+    if (lim_ && want > kBNom + 1e-9) {
+        heldT_ = now_;
+        Log("Ограничитель держит поле 12,1 Тл — снять: ОГРАНИЧИТЕЛЬ дважды", "The limiter holds 12.1 T - remove it: LIMITER twice", 1);
+        return false;
+    }
+    return true;
 }
 bool Plant::PowerStep(double dPct) {
     const double want = P_ + dPct;
     P_ = std::max(5.0, std::min(lim_ ? 100.0 : 200.0, want));
-    return !(lim_ && want > 100.0 + 1e-9);
+    if (lim_ && want > 100.0 + 1e-9) {
+        heldT_ = now_;
+        Log("Ограничитель держит мощность 100 % — снять: ОГРАНИЧИТЕЛЬ дважды", "The limiter holds 100 % power - remove it: LIMITER twice", 1);
+        return false;
+    }
+    return true;
 }
 void Plant::CycleMass() { massMode_ = massMode_ >= kProducts ? -1 : massMode_ + 1; }
 const char* Plant::LimiterPress(double now, bool russian) {

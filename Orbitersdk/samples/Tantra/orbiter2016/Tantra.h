@@ -15,6 +15,8 @@
 
 #include "../core/Carriage.h"
 #include "../core/Damage.h"
+#include "../core/Impact.h"
+#include "../core/Foot.h"
 #include "../core/Drive.h"
 #include "../core/Ignition.h"
 #include "../core/Legs.h"
@@ -197,6 +199,8 @@ private:
     int debrisCount_ = 0;
     bool shipGone_ = false, shownGone_ = false;
     bool shownLost_[tantra::damage::kPartCount] = {};
+    unsigned long long shownLeg_[7] = {~0ull, ~0ull, ~0ull, ~0ull, ~0ull, ~0ull, ~0ull};   // what each leg showed lost (bits)
+    VECTOR3 padPos_[7][12] = {};               // each petal's pad in the ship frame (where its debris leaves)
     double glowT_[2] = {-1.0, -1.0};
     bool TouchPointLost(int i, const tantra::CarriagePose& p) const;
     int TouchLeg(int i, const tantra::CarriagePose& p) const;  // leg carrying touchdown point i: 0 blade port,
@@ -209,8 +213,24 @@ private:
     double legN_[7] = {}, legR_[7] = {};       // sensed load [N] and its share of the rating, per leg (6 = kangaroo)
     bool legAlarm_[7] = {};
     bool hipCatcher_ = false;                  // hip magnetic bearings over capacity: running on the catchers
-    double touchMu_[tantra::CarriagePose::kMaxTouch] = {0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7};
-    double touchMuLng_[tantra::CarriagePose::kMaxTouch] = {0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7};  // along the hull
+    // the gear's pads: 12 gas cells per foot in the ground set (core/Foot), or the hull points of a belly set
+    static constexpr int kMaxPads = 64;
+    double touchMu_[kMaxPads] = {0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7};
+    double touchMuLng_[kMaxPads] = {0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7};  // along the hull
+    tantra::foot::Feet feet_;                  // cells, ribs, ankles, stage joints
+    double cellPen_[7][12] = {};               // each cell's compression from unloaded (its pad's depth) [m]
+    double cellD_[7][12] = {};                 // its petal strut shown from the mesh pose [m] (+ out, - in)
+    double legPen_[7] = {};                    // each leg's mean pad compression [m]: the ankle strut takes its share
+    double microJ_[7][12] = {};                // the petals' small working motion while the legs carry the moving ship [m]
+    PSTREAM_HANDLE footDust_[7] = {};          // dust thrown up by the feet (touchdown, the legs working)
+    double footDustLv_[7] = {}, footDustPulse_[7] = {};
+    VECTOR3 footDustAt_[7] = {};
+    bool dustContact_ = false;
+    void FootDust(double dt, const VECTOR3& up);
+    int suspFrame_ = 0, forceFrame_ = 0, frame_ = 0;   // which frame last called SetTouchdownPoints / AddForce (rest diagnostics)
+    double restLostLog_ = -1e9;
+    void FootEvents();
+    bool LegJointDebris(int leg);              // a leg lost at a joint: its foot / lowest stage as debris
     double tipWind_ = 0.0;                     // wind that would overturn the ship now [m/s]
     // Balance device: hull angle and rate against the commanded erection angle, the holding moment, the pause.
     void UpdateBalance(double dt);
@@ -219,7 +239,16 @@ private:
     double balBias_[2] = {0.0, 0.0};                             // slow zero: the static lean of the hull on its feet [rad]
     bool balHold_ = false;                                       // erection paused: swaying
     void UpdateWarpFreeze(double dt);
-    void LiftSound(bool inside);                                  // the carriage heard (UpdateSound)
+    void ReportImpact();
+public:
+    // people walking outside bump into the cup feet (OrbiterCrew: OcInteriorExt::OuterWalls), ship frame
+    void OuterWalls(const VECTOR3& from, VECTOR3& to, double radius, double height) const;
+private:
+    VECTOR3 cupC_[7] = {}, cupUp_ = {0, 1, 0};
+    double cupR_[7] = {};
+    bool cupOn_[7] = {};                                         // a hull impact: what the crew learns
+    void LiftSound(bool inside);
+    void CrashSound(int slotExt, double level);                  // breaking: the _EXT slot, its _INT follows (0..1)                                  // the carriage heard (UpdateSound)
     double liftP_ = -1.0, liftGear_ = 0.0, liftH_ = 0.0, liftHip_ = 0.0, liftTh_ = 0.0, liftMast_ = 0.0, liftLevel_ = 0.0;
     bool liftBusy_ = false, liftContact_ = true;
     double liftVz_ = 0.0, sinceContactPrev_ = 0.0;                                     // high time warp on the ground: freeze (landed status)
@@ -306,10 +335,10 @@ private:
     LightEmitter* cabLight_ = nullptr;
     LightEmitter* cabSpot_[2] = {};       // the cabin's two floodlights (down and out), on while the cabin is out of the cell   // the lift cabin's ceiling light (rides with the cabin; on while someone is inside or it is out)   // watch lighting of the way from the bridge to the lift (InteriorLayout.h kWatchLights)
     void WatchLights();                  // positions (they follow the CG shift) and on/off: only while someone looks inside
-    VECTOR3 touch_[tantra::CarriagePose::kMaxTouch] = {};
+    VECTOR3 touch_[kMaxPads] = {};
     int nTouch_ = 0;
     double touchMass_ = 0.0;          // mass the suspension was last tuned for
-    double touchK_[tantra::CarriagePose::kMaxTouch] = {}, touchC_[tantra::CarriagePose::kMaxTouch] = {};   // per pad: the struts' MR valves
+    double touchK_[kMaxPads] = {}, touchC_[kMaxPads] = {};   // per pad: the cell's gas spring and its valve
     bool touchTuned_ = false;
     bool touchSettled_ = false;
     // Settling after a scenario start: overdamped suspension, no load/damage checks until the ship
@@ -361,9 +390,11 @@ private:
     tantra::plant::Plant plant_;                  // the planetary power plant: field, limiter, heat, failures
     tantra::plant::Output plantOut_;
     unsigned plantKeyPrev_ = 0;
+    int plantStage_ = -1;                          // the plant's stage last step (the march lever drops off the run)
     void LoadPlantConfig();
     void UpdatePlant(double simdt, double f);
-    void PlantKey(int k);                          // 0 field-, 1 field+, 2 power-, 3 power+, 4 limiter, 5 reaction mass
+    void PlantKey(int k);                          // 0 field-, 1 field+, 2 power-, 3 power+, 4 limiter, 5 reaction mass,
+                                                   // 6 ПУСК/СТОП, 7..10 mass auto / argon / iron / products
     bool restLock_ = false, firstRest_ = false;   // at rest in Orbiter's landed state (UpdateWarpFreeze)
     double restTimer_ = 0.0;
     void LandNow(bool equilibrium);

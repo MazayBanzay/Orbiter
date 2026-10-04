@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тантра: модель повреждений</title>
+<style>
+:root{--bg:#eef1f4;--panel:#ffffff;--ink:#1d2430;--muted:#5d6878;--line:#d5dbe3;--ok:#1f8a4c;--warn:#b7791f;--bad:#c53030;--acc:#2b6cb0}
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+#wrap{display:grid;grid-template-columns:1fr 430px;min-height:100vh}
+#main{padding:12px 14px;min-width:0}
+#side{background:var(--panel);border-left:1px solid var(--line);padding:12px 14px;overflow:auto;max-height:100vh}
+h1{font-size:16px;margin:0 0 4px}
+h2{font-size:13px;margin:14px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:10px;overflow-x:auto}
+.card h3{font-size:13px;margin:0 0 6px}
+canvas{display:block;width:100%;height:180px}
+#ship{height:150px}
+button{font:inherit;padding:5px 9px;border:1px solid var(--line);border-radius:6px;background:#f7f9fb;color:var(--ink);cursor:pointer}
+button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.btns{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
+.row{display:grid;grid-template-columns:165px 1fr 80px;gap:6px;align-items:center;margin:3px 0;font-size:13px}
+.row input[type=range]{width:100%}
+.row .val{text-align:right;font-variant-numeric:tabular-nums}
+.chk{display:flex;gap:6px;align-items:flex-start;margin:4px 0;font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:3px 5px;border-bottom:1px solid #eef1f4;vertical-align:top;text-align:left}
+th{color:var(--muted);font-weight:600}
+td.v{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.note{font-size:12px;color:var(--muted)}
+.big{font-size:15px;font-weight:600}
+.legend{font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+.sw{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:4px}
+ul{margin:4px 0 4px 18px;padding:0}li{margin:2px 0}
+@media (max-width:900px){#wrap{grid-template-columns:1fr}#side{border-left:0;border-top:1px solid var(--line);max-height:none}}
+</style>
+</head>
+<body>
+<div id="wrap">
+<div id="main">
+  <h1>Тантра: удар о грунт — что сминается, что выдерживает, кто выживает</h1>
+  <div class="note">Корабль — зоны по длине с силой смятия каждой; грунт — своя прочность. Сминается то, что слабее: конструкция или грунт.
+  Энергия удара уходит в смятие зон по очереди, отсюда перегрузка во времени. Повреждения — ступенями, у каждого узла свои последствия.</div>
+  <div class="card"><h3>Корабль после удара</h3><canvas id="ship"></canvas>
+    <div class="legend"><span>серый — цел</span><span style="color:#b7791f">жёлтый — вмятины</span><span style="color:#dd6b20">оранжевый — пробит</span><span style="color:#c53030">красный — разрушен</span><span>штриховка — смятая длина</span></div></div>
+  <div class="card"><h3>Перегрузка во времени</h3><canvas id="cg"></canvas>
+    <div class="legend"><span><i class="sw" style="background:#2d3748"></i>корпус, g</span><span><i class="sw" style="background:#805ad5"></i>люди (после гасителя), g</span><span><i class="sw" style="background:#c53030"></i>предел удержания ловушек</span></div></div>
+  <div class="card"><h3>Узлы и последствия</h3><table id="parts"></table></div>
+  <div class="card"><h3>Оборудование и люди: перегрузка удара против их пределов</h3><table id="equip"></table>
+    <div class="note">Конструкция может выдержать — оборудование нет: каждый агрегат держит ту перегрузку, на которую закреплён.
+    Гаситель инерции — только в жилом модуле: всё остальное и люди вне модуля получают удар целиком.</div></div>
+</div>
+
+<div id="side">
+  <h2>Удар</h2>
+  <div class="btns" id="modeB"></div>
+  <div class="row"><span>Скорость удара</span><input id="v" type="range" min="1" max="1000" step="1" value="60"><span class="val" id="vV"></span></div>
+  <div class="btns" id="massB"></div>
+  <div class="btns" id="soilB"></div>
+  <label class="chk"><input type="checkbox" id="gear" checked><span><b>Шасси выпущено</b> (днищем — лопасти и кенгуру; кормой — 4 кормовые ноги): стойки берут свой ход, потом ломаются</span></label>
+  <label class="chk"><input type="checkbox" id="crests"><span><b>Гребни развёрнуты</b> (боком — первыми бьются гребни)</span></label>
+  <label class="chk"><input type="checkbox" id="comp" checked><span><b>Гаситель инерции</b> (канон: аппарат искусственной тяжести, кресла с гасителем) — <b>только в жилом модуле</b>: снимает до предела с людей там, если есть питание</span></label>
+  <div class="row"><span>Гаситель снимает до</span><input id="compG" type="range" min="0" max="200" step="5" value="30"><span class="val" id="compGV"></span></div>
+
+  <h2>Конструкция (допущения)</h2>
+  <div class="row"><span>Сила смятия: нос-щит</span><input id="fN" type="range" min="0.5" max="20" step="0.5" value="6"><span class="val" id="fNV"></span></div>
+  <div class="row"><span>жилые / мостик</span><input id="fL" type="range" min="0.2" max="10" step="0.1" value="1.5"><span class="val" id="fLV"></span></div>
+  <div class="row"><span>ангар / вставка</span><input id="fH" type="range" min="0.2" max="10" step="0.1" value="1.8"><span class="val" id="fHV"></span></div>
+  <div class="row"><span>кассеты ловушек (4)</span><input id="fT" type="range" min="5" max="120" step="5" value="70"><span class="val" id="fTV"></span></div>
+  <div class="row"><span>корма / установка</span><input id="fS" type="range" min="0.5" max="20" step="0.5" value="7"><span class="val" id="fSV"></span></div>
+  <div class="row"><span>Днище/борт смятие, МПа</span><input id="pB" type="range" min="0.5" max="20" step="0.5" value="4"><span class="val" id="pBV"></span></div>
+  <h2>Итог</h2>
+  <div id="verdict" class="big"></div>
+  <table id="sum"></table>
+  <h2>Модель</h2>
+  <ul class="note">
+    <li><b>Зоны</b> (станции от кормы): корма и установка 0–21 м, колонны ловушек 21–88, ангар и вставка 88–121, жилые и мостик 121–145, нос-щит 145–178. Удар носом сминает их с носа, кормой — с кормы. Сила смятия зоны — её средняя несущая способность при разрушении (ГН); энергия = сила × смятая длина.</li>
+    <li><b>Грунт</b> держит давление p × площадь пятна. Пятно растёт с глубиной: нос — конус, днище и борт — цилиндр R ≈ 12 м по длине ~150 м. Передаётся меньшая из сил: конструкция или грунт. Слабее грунт — корабль уходит в него (кратер), а не сминается.</li>
+    <li><b>Шасси:</b> МР-стойки берут ход 1,5 м (лопасти) / 1,0 м (корма): до 1,5 g сверх веса мягко, до 3 g — на пределе; быстрее — излом, дальше бьёт корпус.</li>
+    <li><b>Кассеты ловушек</b> должны держать инерцию своего анамезона при 190 g (9 370 т × 190 g ≈ 17,5 ГН каждая, ~70 ГН блок): жёсткое ядро — сминается корпус вокруг.</li>
+    <li><b>Ступени узла</b> по доле смятой длины (или глубины днища 3 м): ≤10 % цел, ≤40 % вмятины, ≤70 % пробит, дальше разрушен.</li>
+    <li><b>Люди</b> (сидя, лицом вперёд/спиной к удару): без травм ~15 g, тяжёлые ~40 g, гибель &gt;~80 g за десятые доли секунды; длительные — ниже. Плюс разрушение жилого отсека — гибель независимо от перегрузки.</li>
+    <li><b>Ловушки</b>: поле 30 Тл — удержание вдоль оси ≈ 190 g, поперёк ≈ 2 000 g; смятие колонн ловушек &gt; 40 % — повреждение катушек.</li>
+  </ul>
+</div>
+</div>
+
+<script>
+"use strict";
+const G = 9.81;
+const MODES = [{k:"nose", t:"Носом"}, {k:"stern", t:"Кормой"}, {k:"belly", t:"Днищем"}, {k:"side", t:"Боком"}];
+const MASSES = [{k:"empty", t:"Ловушки пусты 15 кт", m:15.0e6, traps:false}, {k:"full", t:"Ловушки полны 52,3 кт", m:52.34e6, traps:true}];
+const SOILS = [{k:"sand", t:"Песок", p:1.5e6}, {k:"soil", t:"Плотный грунт", p:6e6}, {k:"rock", t:"Скала", p:60e6}, {k:"water", t:"Вода", p:0.4e6}];
+let mode = MODES[0], mass = MASSES[0], soil = SOILS[0];
+const $ = id => document.getElementById(id);
+const L_SHIP = 178;
+const ZONES = [   // from the stern
+  {k:"stern", t:"Корма, планетарная установка", s0:0, s1:21, f:"fS"},
+  {k:"traps", t:"Колонны ловушек", s0:21, s1:88, f:"fT"},
+  {k:"hangar", t:"Ангар и вставка", s0:88, s1:121, f:"fH"},
+  {k:"living", t:"Жилые отсеки и мостик", s0:121, s1:145, f:"fL"},
+  {k:"nose", t:"Нос-щит", s0:145, s1:178, f:"fN"},
+];
+const grade = x => x <= 0.1 ? ["цел", "ok"] : x <= 0.4 ? ["вмятины", "warn"] : x <= 0.7 ? ["пробит", "warn"] : ["разрушен", "bad"];
+const gradeCol = x => x <= 0.1 ? "#9aa3ad" : x <= 0.4 ? "#d69e2e" : x <= 0.7 ? "#dd6b20" : "#c53030";
+
+function simulate(o) {
+  const m = o.mass.m, W = m * G;
+  let v = o.v, x = 0, t = 0;                     // x: total travel after the touch (crush + penetration + strokes)
+  const dt = Math.max(1e-5, Math.min(1e-3, 0.5 / (o.v + 1)));
+  const out = [];
+  const crushed = {}; ZONES.forEach(z => crushed[z.k] = 0);
+  let belly = 0, crestHit = 0, strut = 0, legsBroken = false, pen = 0, maxG = 0, maxCrewG = 0, crewDose = 0, peakDur = 0;
+  // the struts first (gear down): blades lying (belly), stern legs (stern)
+  const strokeCap = o.gear && (o.mode.k === "belly" || o.mode.k === "stern") ? (o.mode.k === "belly" ? 1.5 : 1.0) : 0;
+  // the MR valve: 1.5 g over the weight (soft), up to 3 g over it when the stroke would not stop the ship (core/Legs)
+  const vSoft = Math.sqrt(2 * 1.5 * G * strokeCap), vBreak = Math.sqrt(2 * 3.0 * G * strokeCap);
+  const strutF = W * (o.v <= vSoft ? 2.5 : 4.0);
+  // the order of the zones being crushed
+  const order = o.mode.k === "nose" ? [...ZONES].reverse() : ZONES;
+  let zi = 0;
+  const crestE = o.crests ? 2 * 5e8 * 12 : 0;            // the crests fold/break first (side): 2 x 0.5 GN over 12 m
+  let crestLeft = crestE;
+  while (v > 0 && t < 30) {
+    let F = 0, where = "";
+    if (strut < strokeCap) {                            // the struts' stroke
+      F = strutF; strut += v * dt; where = "стойки";
+      if (strut >= strokeCap && o.v > vBreak) legsBroken = true;
+    } else if ((o.mode.k === "side") && crestLeft > 0) {
+      F = 1e9; crestLeft -= F * v * dt; crestHit = 1 - crestLeft / crestE; where = "гребни";
+    } else if (o.mode.k === "nose" || o.mode.k === "stern") {
+      // the structure of the zone in turn against the ground under the contact patch
+      while (zi < order.length && crushed[order[zi].k] >= (order[zi].s1 - order[zi].s0)) zi++;
+      const z = order[Math.min(zi, order.length - 1)];
+      const Fs = +$(z.f).value * 1e9;
+      const depth = pen;
+      const rPatch = o.mode.k === "nose" ? Math.min(12, 1.5 + (crushed.nose + depth) * 0.35) : 14;   // nose cone widening; stern cluster
+      const Fg = o.soil.p * Math.PI * rPatch * rPatch;
+      if (Fg < Fs) { F = Fg; pen += v * dt; where = "грунт"; }           // the ground gives: a crater
+      else { F = Fs; if (zi < order.length) crushed[z.k] += v * dt; where = z.t; }
+    } else {                                              // belly / side: a long cylinder pressed in
+      const d = belly + pen;
+      const w = 2 * Math.sqrt(2 * 12 * Math.max(0.01, d));
+      const Lc = o.mode.k === "belly" ? 150 : 140;
+      const A = Math.min(w, 24) * Lc;
+      const Fs = +$("pB").value * 1e6 * A, Fg = o.soil.p * A;
+      if (Fg < Fs) { F = Fg; pen += v * dt; where = "грунт"; } else { F = Fs; belly += v * dt; where = "днище/борт"; }
+    }
+    const a = (F - W) / m;                              // the weight too: a falling ship
+    if (a <= 0 && v < 0.05) break;                      // held (or sinking slowly: water)
+    v -= a * dt; x += v * dt; t += dt;
+    const g = F / m / G;                                // felt: the force on the structure
+    const crew = o.comp ? Math.max(0, g - o.compG) : g;
+    maxG = Math.max(maxG, g); maxCrewG = Math.max(maxCrewG, crew);
+    if (crew > 15) peakDur += dt;
+    if (out.length === 0 || t - out[out.length - 1].t > Math.max(dt, 0.002)) out.push({t, g, crew, where});
+  }
+  return {out, crushed, belly, pen, maxG, maxCrewG, peakDur, legsBroken, vBreak, crestHit, tStop: t, strut, strokeCap};
+}
+
+// equipment: where it is, what it holds (its mounts and its own design), what losing it means
+const EQUIP = [
+  {t: "Кассеты ловушек (анамезон)", z: "traps", ax: 190, lat: 2000, lost: "удержание анамезона"},
+  {t: "ВЭУ (реактор p-¹¹B) в люльке на демпферах", z: "stern", ax: 40, lat: 40, lost: "энергия корабля: на накопителях и запасах кассет (плазма гаснет уже при нескольких g — безопасно)"},
+  {t: "Накопитель поля (7·10¹⁴ Дж) в люльке", z: "stern", ax: 40, lat: 40, lost: "аварийный сброс энергии; без сброса — разряд ~170 кт"},
+  {t: "Планетарная установка, маршевая чаша", z: "stern", ax: 20, lat: 15, lost: "маршевая тяга"},
+  {t: "Гироскопы (маховики, обод 650 м/с)", z: "traps", ax: 10, lat: 10, lost: "ориентация без РСУ; разрыв маховика — осколки внутри корпуса"},
+  {t: "Баки аргона, насосы, магистрали", z: "hangar", ax: 20, lat: 20, lost: "рабочая масса, утечка"},
+  {t: "Вездеходы и грузы в ангаре", z: "hangar", ax: 10, lat: 10, lost: "сорваны с креплений — бьют по ангару"},
+  {t: "Шлюз, лифт экипажа", z: "hangar", ax: 20, lat: 20, lost: "выход наружу"},
+  {t: "Жизнеобеспечение", z: "living", ax: 15, lat: 15, lost: "воздух, тепло, вода"},
+  {t: "Гаситель инерции (аппарат тяжести)", z: "living", ax: 25, lat: 25, lost: "защита людей в модуле"},
+  {t: "Мостик: пульты, вычислители, экраны", z: "living", ax: 30, lat: 30, lost: "управление кораблём"},
+];
+function equipRows(r, o) {
+  const axial = o.mode.k === "nose" || o.mode.k === "stern";
+  const g = r.maxG;
+  let html = "<tr><th>Агрегат</th><th>Держит</th><th>Удар</th><th>Состояние</th><th>Потеря значит</th></tr>";
+  for (const e of EQUIP) {
+    const lim = axial ? e.ax : e.lat;
+    const zoneLen = ZONES.find(z => z.k === e.z), crushedF = Math.min(1, r.crushed[e.z] / (zoneLen.s1 - zoneLen.s0));
+    let st, cls;
+    if (crushedF > 0.7) { st = "раздавлен вместе с отсеком"; cls = "bad"; }
+    else if (g <= 0.7 * lim) { st = "цел"; cls = "ok"; }
+    else if (g <= lim) { st = "на пределе — проверка"; cls = "warn"; }
+    else if (g <= 1.5 * lim) { st = "повреждён"; cls = "warn"; }
+    else { st = "сорван / разрушен"; cls = "bad"; }
+    if (e.z === "traps" && e.ax === 190 && !o.mass.traps && cls !== "ok") st += " (пусты)";
+    html += `<tr><td>${e.t}</td><td class="v">${lim} g</td><td class="v">${fmt(g, 0)} g</td><td class="${cls}">${st}</td><td class="note">${cls === "ok" ? "—" : e.lost}</td></tr>`;
+  }
+  // people: in the living module (the absorber, if powered) and elsewhere (none)
+  // the absorber is itself equipment (25 g): torn off its mounts it protects no one
+  const compAlive = r.maxG <= 1.5 * 25;
+  const out = crewOutcome({...r, maxCrewG: r.maxG}, {...o, comp: false});
+  const inMod = o.comp && compAlive ? crewOutcome(r, o) : out;
+  html += `<tr><td><b>Люди в жилом модуле</b></td><td class="v">${!o.comp ? "без гасителя" : compAlive ? "гаситель −" + o.compG + " g" : "гаситель сорван"}</td><td class="v">${fmt(o.comp && compAlive ? r.maxCrewG : r.maxG, 0)} g</td><td class="${inMod[1]}">${inMod[0]}</td><td class="note">кресла, гаситель</td></tr>`;
+  html += `<tr><td><b>Люди вне модуля</b> (ангар, шлюз, машины)</td><td class="v">гасителя нет</td><td class="v">${fmt(r.maxG, 0)} g</td><td class="${out[1]}">${out[0]}</td><td class="note">удар целиком</td></tr>`;
+  return html;
+}
+
+function crewOutcome(r, o) {
+  const living = r.crushed.living / 24;
+  if (living > 0.4) return ["гибель: жилой отсек раздавлен", "bad"];
+  const g = r.maxCrewG, d = r.peakDur;
+  if (g > 80 || (g > 40 && d > 0.3)) return ["гибель", "bad"];
+  if (g > 40 || (g > 15 && d > 1.0)) return ["тяжёлые травмы", "bad"];
+  if (g > 15) return ["травмы", "warn"];
+  if (g > 6) return ["ушибы", "warn"];
+  return ["без травм", "ok"];
+}
+
+function drawShip(r, o) {
+  const c = $("ship"), dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr;
+  const g = c.getContext("2d"); g.scale(dpr, dpr); g.clearRect(0, 0, w, h);
+  const sc = (w - 40) / L_SHIP, x0 = 20, y0 = h / 2 - 10, hh = 34;
+  for (const z of ZONES) {
+    const len = z.s1 - z.s0, f = Math.min(1, r.crushed[z.k] / len);
+    g.fillStyle = gradeCol(f); g.fillRect(x0 + z.s0 * sc, y0 - hh / 2, len * sc, hh);
+    g.strokeStyle = "#4a5260"; g.strokeRect(x0 + z.s0 * sc, y0 - hh / 2, len * sc, hh);
+    // crushed length hatched from the impact end
+    const cl = r.crushed[z.k] * sc;
+    if (cl > 0.5) {
+      const xs = o.mode.k === "nose" ? x0 + z.s1 * sc - cl : x0 + z.s0 * sc;
+      g.save(); g.beginPath(); g.rect(xs, y0 - hh / 2, cl, hh); g.clip();
+      g.strokeStyle = "rgba(0,0,0,.45)"; for (let k = -hh; k < cl + hh; k += 5) { g.beginPath(); g.moveTo(xs + k, y0 + hh / 2); g.lineTo(xs + k + hh, y0 - hh / 2); g.stroke(); }
+      g.restore();
+    }
+    g.fillStyle = "#1d2430"; g.font = "11px system-ui"; g.fillText(z.t.split(",")[0], x0 + z.s0 * sc + 3, y0 + hh / 2 + 13);
+  }
+  // belly / side depth
+  if (o.mode.k === "belly" || o.mode.k === "side") {
+    const f = Math.min(1, r.belly / 3);
+    g.fillStyle = gradeCol(f); g.fillRect(x0 + 14 * sc, y0 + hh / 2 + 18, 150 * sc, 6);
+    g.fillStyle = "#5d6878"; g.fillText((o.mode.k === "belly" ? "днище" : "борт") + ": смято " + r.belly.toFixed(2) + " м из 3", x0 + 14 * sc, y0 + hh / 2 + 36);
+  }
+  g.fillStyle = "#5d6878"; g.fillText("корма", x0, y0 - hh / 2 - 6); g.fillText("нос", x0 + L_SHIP * sc - 22, y0 - hh / 2 - 6);
+  if (r.pen > 0.01) { g.fillStyle = "#8a6d3b"; g.fillText("ушёл в грунт: " + r.pen.toFixed(1) + " м", w / 2 - 50, 14); }
+}
+
+function plotG(r, o, trapLimit) {
+  const c = $("cg"), dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr;
+  const g = c.getContext("2d"); g.scale(dpr, dpr); g.clearRect(0, 0, w, h);
+  const L = 44, R = 8, T = 8, B = 20, pw = w - L - R, ph = h - T - B;
+  const out = r.out; const tEnd = Math.max(r.tStop, 1e-3);
+  let ymax = Math.max(5, r.maxG * 1.1); if (o.mass.traps) ymax = Math.max(ymax, Math.min(trapLimit * 1.1, ymax * 3));
+  const X = t => L + pw * t / tEnd, Y = v => T + ph * (1 - Math.min(ymax, v) / ymax);
+  g.strokeStyle = "#e6eaef"; g.fillStyle = "#5d6878"; g.font = "11px system-ui";
+  for (let i = 0; i <= 4; i++) { const v = ymax * i / 4; g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(L + pw, Y(v)); g.stroke(); g.fillText(v.toFixed(0), 4, Y(v) + 4); }
+  for (let i = 0; i <= 5; i++) { const t = tEnd * i / 5; g.fillText(t < 1 ? (t * 1000).toFixed(0) + " мс" : t.toFixed(1) + " с", X(t) - 12, h - 5); }
+  if (o.mass.traps && trapLimit <= ymax) { g.strokeStyle = "#c53030"; g.setLineDash([4, 3]); g.beginPath(); g.moveTo(L, Y(trapLimit)); g.lineTo(L + pw, Y(trapLimit)); g.stroke(); g.setLineDash([]); }
+  for (const [f, col] of [[p => p.g, "#2d3748"], [p => p.crew, "#805ad5"]]) {
+    g.strokeStyle = col; g.lineWidth = 1.6; g.beginPath(); out.forEach((p, i) => { if (i) g.lineTo(X(p.t), Y(f(p))); else g.moveTo(X(p.t), Y(f(p))); }); g.stroke();
+  }
+}
+
+function buttons(el, list, get, set) {
+  el.innerHTML = "";
+  for (const it of list) { const b = document.createElement("button"); b.textContent = it.t; if (get() === it) b.classList.add("on"); b.onclick = () => { set(it); buttons(el, list, get, set); run(); }; el.appendChild(b); }
+}
+const fmt = (v, d = 1) => v.toLocaleString("ru-RU", {minimumFractionDigits: d, maximumFractionDigits: d});
+
+function run() {
+  const o = {mode, mass, soil, v: +$("v").value, gear: $("gear").checked, crests: $("crests").checked, comp: $("comp").checked, compG: +$("compG").value};
+  $("vV").textContent = o.v + " м/с"; $("compGV").textContent = o.compG + " g";
+  for (const id of ["fN", "fL", "fH", "fT", "fS"]) $(id + "V").textContent = (+$(id).value).toFixed(1) + " ГН";
+  $("pBV").textContent = (+$("pB").value).toFixed(1) + " МПа";
+  const r = simulate(o);
+  const axial = o.mode.k === "nose" || o.mode.k === "stern";
+  const trapFrac = r.crushed.traps / 67;
+  const trapLimit = (axial ? 190 : 2000) * (trapFrac > 0.4 ? Math.max(0, 1 - (trapFrac - 0.4) / 0.6) : 1);
+  drawShip(r, o); plotG(r, o, trapLimit);
+  const crew = o.comp && r.maxG > 1.5 * 25 ? crewOutcome({...r, maxCrewG: r.maxG}, {...o, comp: false}) : crewOutcome(r, o);
+  const trapBreach = o.mass.traps && (r.maxG > trapLimit || trapFrac > 0.85);
+  const kin = 0.5 * o.mass.m * o.v * o.v;
+  $("verdict").innerHTML = trapBreach ? `<span class="bad">РАЗРЫВ ЛОВУШКИ — ${fmt(6.7e23 / 4.184e15 / 1e6, 0)} млн Мт на ловушку</span>`
+    : `<span class="${crew[1]}">Экипаж: ${crew[0]}</span>`;
+  $("sum").innerHTML = `
+    <tr><td>Энергия удара</td><td class="v">${kin >= 1e12 ? fmt(kin / 1e12, 2) + " ТДж" : fmt(kin / 1e9, 1) + " ГДж"} (${fmt(kin / 4.184e9, 0)} т тротила)</td></tr>
+    <tr><td>Корпус: перегрузка, макс.</td><td class="v">${fmt(r.maxG, 0)} g</td></tr>
+    <tr><td>Люди: перегрузка после гасителя</td><td class="v ${r.maxCrewG > 40 ? "bad" : r.maxCrewG > 15 ? "warn" : "ok"}">${fmt(r.maxCrewG, 0)} g${r.peakDur > 0 ? `, выше 15 g ${r.peakDur < 1 ? fmt(r.peakDur * 1000, 0) + " мс" : fmt(r.peakDur, 1) + " с"}` : ""}</td></tr>
+    <tr><td>Удар длился</td><td class="v">${r.tStop < 1 ? fmt(r.tStop * 1000, 0) + " мс" : fmt(r.tStop, 2) + " с"}</td></tr>
+    <tr><td>Ушёл в грунт</td><td class="v">${fmt(r.pen, 1)} м</td></tr>
+    ${r.strokeCap ? `<tr><td>Стойки: ход / излом</td><td class="v ${r.legsBroken ? "bad" : "ok"}">${fmt(Math.min(r.strut, r.strokeCap), 2)} из ${r.strokeCap} м · ${r.legsBroken ? "сломаны (> " + fmt(r.vBreak, 1) + " м/с)" : "целы"}</td></tr>` : ""}
+    <tr><td>Ловушки: удержание / пик</td><td class="v ${!o.mass.traps ? "" : r.maxG > trapLimit * 0.7 ? "bad" : "ok"}">${o.mass.traps ? fmt(trapLimit, 0) + " g / " + fmt(r.maxG, 0) + " g" : "пусты"}</td></tr>`;
+  const conseq = {
+    nose: ["межзвёздный полёт невозможен (пыль на 0,9 c), носовые ретро-чаши", "щит пробит — только планетарные"],
+    living: ["разгерметизация, экипаж, мостик и пульты", "отсеки раздавлены — гибель экипажа"],
+    hangar: ["вездеходы, шлюз, вставка с аргоном (утечка)", "аргон потерян, ангар разрушен"],
+    traps: ["колонны ловушек: катушки, удержание падает", "срыв поля — если ловушки полны, катастрофа"],
+    stern: ["планетарная установка, маршевая чаша, гондолы", "без маршевой — взлёт невозможен"],
+  };
+  let rows = "<tr><th>Узел</th><th>Смято</th><th>Состояние</th><th>Последствия</th></tr>";
+  for (const z of [...ZONES].reverse()) {
+    const len = z.s1 - z.s0, f = Math.min(1, r.crushed[z.k] / len), [gname, gcls] = grade(f);
+    rows += `<tr><td>${z.t}</td><td class="v">${fmt(r.crushed[z.k], 1)} из ${len} м</td><td class="${gcls}">${gname}</td><td class="note">${f > 0.1 ? conseq[z.k][f > 0.7 ? 1 : 0] : "—"}</td></tr>`;
+  }
+  if (o.mode.k === "belly" || o.mode.k === "side") {
+    const f = Math.min(1, r.belly / 3), [gname, gcls] = grade(f);
+    rows += `<tr><td>${o.mode.k === "belly" ? "Днище" : "Борт"}</td><td class="v">${fmt(r.belly, 2)} из 3 м</td><td class="${gcls}">${gname}</td><td class="note">${f > 0.1 ? (f > 0.7 ? "пробиты нижние отсеки: аргон, ловушки снизу" : "обшивка смята, течи") : "—"}</td></tr>`;
+  }
+  if (o.mode.k === "side" && o.crests) rows += `<tr><td>Гребни</td><td class="v">—</td><td class="${r.crestHit > 0.5 ? "bad" : "warn"}">${r.crestHit >= 1 ? "сломаны" : "смяты"}</td><td class="note">рули и радиаторы потеряны</td></tr>`;
+  if (r.strokeCap) rows += `<tr><td>Шасси</td><td class="v">${fmt(Math.min(r.strut, r.strokeCap), 2)} м хода</td><td class="${r.legsBroken ? "bad" : "ok"}">${r.legsBroken ? "сломано" : "цело"}</td><td class="note">${r.legsBroken ? "ноги сломаны — корабль лёг на корпус" : "удар принят стойками"}</td></tr>`;
+  $("parts").innerHTML = rows;
+  $("equip").innerHTML = equipRows(r, o);
+}
+for (const id of ["v", "compG", "fN", "fL", "fH", "fT", "fS", "pB"]) $(id).addEventListener("input", run);
+for (const id of ["gear", "crests", "comp"]) $(id).addEventListener("change", run);
+buttons($("modeB"), MODES, () => mode, v => mode = v);
+buttons($("massB"), MASSES, () => mass, v => mass = v);
+buttons($("soilB"), SOILS, () => soil, v => soil = v);
+window.addEventListener("resize", run);
+run();
+</script>
+</body>
+</html>

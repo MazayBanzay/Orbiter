@@ -30,6 +30,7 @@ public:
         double liftY[2] = {tantra::mesh::kLiftY0, tantra::mesh::kLiftY0};  // fork heads (cassette centre, ship y)
         double strut[7] = {};     // ankle struts unloaded 0..1 (0 blade port, 1 starboard, 2..5 stern legs, 6 kangaroo)
         double bladeLag[2] = {};  // drive lag: that blade is shorter than commanded by this [m] (port, starboard)
+        double cell[7][12] = {};  // petals (core/Foot): their struts 0 bottomed .. 1 unloaded, per leg as strut[]
     };
 
     TantraGear(VESSEL* v, UINT mesh);

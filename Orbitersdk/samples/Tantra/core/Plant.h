@@ -128,6 +128,7 @@ public:
     const std::deque<LogLine>& Journal() const { return journal_; }   // newest first
     const std::deque<TrendPt>& Trend() const { return trend_; }       // the last 60 s, oldest first
     double Clock() const { return now_; }         // s of simulation since the start
+    double HeldAt() const { return heldT_; }      // the clock when the limiter last held a field / power step
 
     // persistence: "Bset P lim mode T coilT coils drivers jacket radiators cryo lost stage fuel"
     std::string Save() const;
@@ -151,7 +152,7 @@ private:
     bool lim_ = true, lost_ = false, refused_ = false, coilsLost_ = false;
     int stage_ = kStRun;                             // a ship comes with its plant on the run
     double stageT_ = 0.0;
-    double armT_ = -1e9, now_ = 0.0;
+    double armT_ = -1e9, now_ = 0.0, heldT_ = -1e9;
     double T_ = 300.0, coilT_ = 20.0, dipT_ = 0.0, fuel_ = kFuelFull;
     double coils_ = 1.0, drivers_ = 1.0, jacket_ = 1.0, radiators_ = 1.0, cryo_ = 1.0;
     bool crossed_[4] = {};

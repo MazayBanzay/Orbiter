@@ -301,7 +301,7 @@ const TB = (() => {
       const m = new T.Mesh(arcBody(sec, -span, span, 40), Mt.desk); m.position.z = 79.75; piv.add(m);   // built round AX, moved to the hip
       const {cv, tex} = canvasTex(950, 550), glass = new T.Mesh(new T.PlaneGeometry(glassW, glassH), new T.MeshBasicMaterial({map: tex, side: T.DoubleSide}));
       glass.position.set(0, ctx.FLOOR + top + glassH / 2, -(gr + glassH / 2 * Math.tan(14 * D2R))); glass.rotation.x = -14 * D2R; piv.add(glass);
-      canv.push({cv, tex, s});
+      canv.push({cv, tex, s, glass, piv, glassH, gr});
     }
     const draw = (P2, t) => { for (const {cv, tex, s} of canv) { const c = cv.getContext("2d"); c.fillStyle = "#03070a"; c.fillRect(0, 0, 950, 550);
       for (let i = 0; i < 2; i++) { const x = 30 + i * 460; c.strokeStyle = P2.dim; c.lineWidth = 2; c.strokeRect(x, 70, 430, 440); txt(c, "МФД " + (i + 1), x + 215, 100, P2.dim, 24);
@@ -315,9 +315,9 @@ const TB = (() => {
       if (["bridge_console", "bridge_console_face", "bridge_tub", "bridge_leds", "bridge_metal"].includes(part) && y > 1.03) for (const s of CREW) if (Math.hypot(x - s.hip[0], z - s.hip[1]) < 1.2) return true;
       return false;
     };
-    return {draw, cut};
+    return {draw, cut, canv};
   }
-  return {HALO, M, BAND, desk, band, drawFront, drawLeft, drawRight, machine, pkey, grid, paintCap, paintLampKey, paintOrient, paintGlass, ruo, rud, pod, behave, crew, txt, look, round, adi, lampTile, std, D2R};
+  return {HALO, M, BAND, desk, band, drawFront, drawLeft, drawRight, machine, pkey, grid, paintCap, paintLampKey, paintOrient, paintGlass, ruo, rud, pod, behave, crew, txt, look, round, adi, bars, lampTile, std, D2R};
 })();
 // the standard assembly of a variant: the desk with its three bands, the machine, the crew places; returns what the page needs
 TB.assemble = function (ctx, Mt, o = {}) {
@@ -328,6 +328,6 @@ TB.assemble = function (ctx, Mt, o = {}) {
   const beh = TB.behave(ctx, o.extra);
   let t = 0, acc = 0;
   const drawAll = () => { const p = P(); (o.drawFront || TB.drawFront)(bF, p, st, t); (o.drawLeft || TB.drawLeft)(bL, p, st, t); (o.drawRight || TB.drawRight)(bR, p, st, t, beh.calc); crew.draw(p, t); };
-  return {beh, bands: {bL, bF, bR}, cutMats, cut: crew.cut, drawAll,
+  return {beh, crew, bands: {bL, bF, bR}, cutMats, cut: crew.cut, drawAll,
     step: dt => { t += dt; acc += dt; if (acc > .25) { acc = 0; drawAll(); } if (o.step) o.step(dt); }};
 };

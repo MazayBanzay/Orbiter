@@ -88,6 +88,16 @@ public:
     // Commands. Erect/lower only on the ground with the gear down; gear only when lying (P = 0)
     // or standing (P = 6).
     bool CommandErect(bool up, bool landed);
+    // go to a carriage progress p (0 lying .. 6 standing) over the same phases and stop there (the position keys of the
+    // mechanisation pult: lying, on the legs at the top, the 75 deg stele, standing); Hold stops where it is now
+    bool CommandTo(double p, bool landed);
+    void Hold() { pT_ = p_; }
+    // the lift on the blades (phase 0-1) and the hull axis height over the ground: «НА ТРЁХ» stands the ship on the two
+    // blades and the kangaroo foot at kTripodAxisH, no turn (the user, 2026-10-04: 30-40 m, not the 85-90 m top of the
+    // lift, which only the turn to the stern needs) - lower: a lower CG, shorter columns, less sway, quicker
+    static constexpr double kTripodAxisH = 32.0;
+    double AxisHeightAt(double p) const;
+    double LiftProgressFor(double axisH) const;
     // T9: the lying height is the loading height - kept for the port code, always "already there".
     bool CommandLoadHeight(bool, bool) { return false; }
     bool AtLoadHeight() const { return p_ <= 0.0 && gear_ >= 1.0; }

@@ -1,5 +1,6 @@
 // TantraInterior: the provider of OcInterior for the Tantra. See TantraInterior.h.
 #include "TantraInterior.h"
+#include "Tantra.h"
 #include "InteriorLayout.h"
 #include "MeshLayout.h"
 #include "TantraCrew.h"
@@ -76,20 +77,21 @@ void TantraInterior::Init(VESSEL* ship, UINT vcMeshIdx, double (*meshDZ)(void*),
     mfds_.Init(v_, vcMesh_);
     for (int k = 0; k < kMfdCount; k++) mfds_.Add(kMfd[k].slot, kMfd[k].mode);
     mfdPlaces_ = kMfdCount;
-    for (int k = 0; k < 2; k++) {                                        // the curved monitors fold back about their bottom edge
+    for (int k = 0; k < 2; k++) {                                        // the side glasses (variant 7) go down along their slant into their bays
         static UINT grp[2][2]; UINT n = 0;
         for (int j = 0; j < 2; j++) if (kSideDispGrp[k][j] >= 0) grp[k][n++] = UINT(kSideDispGrp[k][j]);
         sideAnim_[k] = v_->CreateAnimation(0.0);
-        v_->AddAnimationComponent(sideAnim_[k], 0.0, 1.0, new MGROUP_ROTATE(vcMesh_, grp[k], n, _V(kSideFoldPivot[k][0], kSideFoldPivot[k][1], kSideFoldPivot[k][2]),
-                                                                            _V(kSideFoldAxis[k][0], kSideFoldAxis[k][1], kSideFoldAxis[k][2]), float(kSideFoldAngle)));
+        v_->AddAnimationComponent(sideAnim_[k], 0.0, 1.0, new MGROUP_TRANSLATE(vcMesh_, grp[k], n, _V(kSideRise[k][0], kSideRise[k][1], kSideRise[k][2])));
     }
-    for (int i = 0; i < 4; i++) mfds_.Add(0, i % 2 ? MFD_SURFACE : MFD_ORBIT);   // the 4 MFDs of the curved monitors (drawn into them, no mesh slot)
+    static const int kPanelMfd[6] = {MFD_ORBIT, MFD_SURFACE, MFD_HSI, MFD_DOCKING, MFD_TRANSFER, MFD_MAP};
+    for (int i = 0; i < 6; i++) mfds_.Add(0, kPanelMfd[i]);   // the 6 MFDs of the side panels, three each (drawn into them, no mesh slot)
     att_ = v_->CreateAttachment(false, _V(0, 0, 0), _V(0, 0, 1), _V(0, 1, 0), "OCINT");    // the walking body hangs on it
     fns_.Attach = cAttach; fns_.Ground = cGround; fns_.Walls = cWalls; fns_.Zone = nullptr; fns_.Gravity = nullptr;
     fns_.Count = cCount; fns_.Item = cItem; fns_.Use = cUse; fns_.Seat = cSeat; fns_.Viewing = cViewing;
     ext_.size = sizeof(OcInteriorExt); ext_.Origin = cOrigin; ext_.CanWalk = cCanWalk;
     ext_.Seated = cSeated;
-    ext_.Click = cClick;                                                // every screen of the bridge is touch                                              // the person sits in the seat with the body (OrbiterCrew)
+    ext_.Click = cClick;
+    ext_.OuterWalls = cOuterWalls;                                      // people walking outside bump into the cup feet                                                // every screen of the bridge is touch                                              // the person sits in the seat with the body (OrbiterCrew)
 }
 
 void TantraInterior::Register() {
@@ -619,7 +621,7 @@ int TantraInterior::cClick(void* c, const VECTOR3* o, const VECTOR3* d, int pers
         const VECTOR3 p = *o + *d * tt, q = p - C;
         const double u = dotp(q, EX) / w + .5, v = .5 - dotp(q, UP) / h;
         if (u < 0 || u > 1 || v < 0 || v > 1) return;
-        if (haveHead && length(p - head) > 1.3) return;                  // within arm's reach (seated or standing)
+        if (haveHead && length(p - head) > 1.7) return;                  // within arm's reach (seated or standing, leaning in)
         best = {kind, idx, u, v, tt};
     };
     for (int k = 0; k < kPanelPieceCount; k++) { const PanelPiece& q = kPanelPieces[k]; test(0, k, q.c, q.ex, q.up, q.n, q.w, q.h); }
@@ -840,4 +842,10 @@ void TantraInterior::Step(double dt) {
     const VECTOR3 pos = _V(kSeats[seat].x, kBridgeFloorY, kSeats[seat].z) - dir * 0.95;
     oapiWriteLogV("Tantra interior: person %d stands up from the seat '%s'", p, kSeats[seat].name);
     if (api_.EnterInterior) api_.EnterInterior(p, &pos, &dir);                                   // the body stands there, the focus goes to it
+}
+
+// People walking outside on the ground: the ship's cup feet stop them (Tantra::OuterWalls, ship frame).
+void TantraInterior::cOuterWalls(void* c, const VECTOR3* from, VECTOR3* to, double radius, double height) {
+    if (!from || !to) return;
+    static_cast<const Tantra*>(Self(c)->v_)->OuterWalls(*from, *to, radius, height);
 }

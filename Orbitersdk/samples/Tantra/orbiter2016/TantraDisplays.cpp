@@ -5,6 +5,10 @@
 #include "PanelLayout.h"
 #include "TantraSafety.h"
 #include "SkpCompat.h"   // Sketchpad2/3 on Orbiter 2016 and 2024
+#include "TantraScreenCanvas.h"   // W1251, the screens' Segoe UI (TantraScreenFont)
+#if __has_include("gcCoreAPI.h")
+#include "gcCoreAPI.h"   // GenerateMipmaps (the right riser's texture is big: mipmaps keep it from shimmering)
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -21,9 +25,10 @@ namespace {
 // screen (1024 x 428) and shown scaled on the right riser
 // (all the layouts below are in DESIGN pixels: the surfaces are kSc times bigger, the paint scales everything)
 constexpr int kEngH = 428;
-const int kH[8] = {704, 704, 432, 300, 300, 230, 400, 400};
-int gW[8] = {1024, 1024, 1021, 1059, 1059, 1017, 908, 908};
-const double kSc[8] = {1.0, 1.0, 1.5, 1.6, 1.6, 1.5, 1.5, 1.5};
+// (variant 7: 3 / 4 the side consoles' key fields, 0.51 / 0.54 m deep at ~1900 px/m; 6 the computing machine's screen)
+const int kH[8] = {704, 704, 432, 1000, 1000, 230, 440, 400};
+int gW[8] = {1024, 1024, 1021, 494, 537, 1017, 486, 908};
+double kSc[8] = {1.0, 1.0, 1.5, 1.0, 1.0, 1.5, 1.0, 1.5};
 
 // colours: Sketchpad 0xBBGGRR; atlas colours 0 cyan, 1 orange, 2 white, 3 red, 4 dim blue, 5 brown, 6 grey
 // the suit's theme (the user's reference: the suit HUD): a dark neutral field, thin orange lines, orange text, cyan values
@@ -33,6 +38,8 @@ constexpr DWORD kBarDim = kTrack, kCyanF = 0xC8A040, kAmberF = 0x2890E0, kGreenF
 enum { cCyan = 0, cOrange = 1, cWhite = 2, cRed = 3, cDim = 4, cGrey = 6 };
 
 struct R4 { int x0, y0, x1, y1; bool In(double x, double y) const { return x >= x0 && x <= x1 && y >= y0 && y <= y1; } };
+
+tantra::ScreenFont* gUi = nullptr;   // the ship's Segoe UI for the text of every screen (set at each draw)
 
 // one draw pass: the sketchpad, the atlas and a few brushes / pens made on demand
 class Paint {
@@ -299,25 +306,46 @@ void TantraDisplays::OnVisual(VISHANDLE vis) {
     DEVMESHHANDLE dm = t_->GetDevMesh(vis, vcMesh_);
     const DWORD f = OAPISURFACE_TEXTURE | OAPISURFACE_RENDERTARGET | OAPISURFACE_SKETCHPAD | OAPISURFACE_NOMIPMAPS;
     int bound = 0;
+    bool noMip = false;
+    if (FILE* fl = std::fopen("Config\\Tantra\\dump_screens.flag", "r")) {   // a check: pictures of the right riser (and "nomip")
+        char b[32] = ""; std::fgets(b, sizeof b, fl); std::fclose(fl);
+        dumpRiser_ = true; noMip = std::strstr(b, "nomip") != nullptr;
+    }
     for (int k = 0; k < kScreens && k < kTouchCount; k++) {               // the width from the screen's aspect (InteriorLayout.h)
         if (!s_[k] && kTouch[k].h > 0) {
             const int w = int(kH[k] * kTouch[k].w / kTouch[k].h + 0.5);
-            if (k <= kRight) { if (std::abs(w - gW[k]) > gW[k] / 30) oapiWriteLogV("Tantra displays: monitor %d aspect %.3f differs from the layout (%d px wide, laid out for %d)", k, kTouch[k].w / kTouch[k].h, w, gW[k]); }
-            else gW[k] = (std::max)(w, 480);
+            gW[k] = (std::max)(w, 480);                                             // the panels too (their aspect from the mesh)
         }
-        if (!s_[k]) s_[k] = oapiCreateSurfaceEx(int(gW[k] * kSc[k] + .5), int(kH[k] * kSc[k] + .5), f);
+        if (k <= kRight && !s_[k]) kSc[k] = 1600.0 / gW[k];                            // the side panels: 1600 px wide (TantraDisplaysPanels.cpp)
+        if (k == kCentre && !s_[k]) kSc[k] = 1914.0 / gW[k];                           // the front screen: the engine console 1914 px wide
+#if __has_include("gcCoreAPI.h")
+        const bool big = k <= kCentre;
+        const DWORD fk = big && !noMip && gcGetCoreInterface() ? (f & ~DWORD(OAPISURFACE_NOMIPMAPS)) | OAPISURFACE_MIPMAPS : f;
+#else
+        const DWORD fk = f;
+#endif
+        if (!s_[k]) s_[k] = oapiCreateSurfaceEx(int(gW[k] * kSc[k] + .5), int(kH[k] * kSc[k] + .5), fk);
         if (dm && s_[k] && oapiSetTexture(dm, kTouch[k].slot, s_[k])) bound++;
     }
-    if (!eng_) eng_ = oapiCreateSurfaceEx(1024, kEngH, f);
-    oapiWriteLogV("Tantra displays: %d of %d touch screens bound", bound, int(kScreens));
+    if (!eng_) {                                                          // (the old riser's engine console: not shown on variant 7)
+        engSc_ = 1.0;
+        eng_ = oapiCreateSurfaceEx(1024, kEngH, f);
+    }
+    oapiWriteLogV("Tantra displays: consoles R %d x %d, L %d x %d, machine %d x %d px", gW[kRiserR], kH[kRiserR], gW[kRiserL], kH[kRiserL], gW[kWingL], kH[kWingL]);
+    oapiWriteLogV("Tantra displays: %d of %d touch screens bound%s", bound, int(kScreens), dumpRiser_ ? (noMip ? " (check pictures, no mipmaps)" : " (check pictures)") : "");
     t_redraw_ = 0.0;
 }
 
 void TantraDisplays::Step(double dt) {
+    gUi = &font_;
     Alerts();
+    if (mechEstop_) t_->carriage_.Hold();                                  // the mechanisation's emergency stop holds the carriage
+    riserDt_ += dt;
+    if ((tRiser_ -= dt) <= 0.0 || t_redraw_ - dt <= 0.0) { tRiser_ = 0.05; DrawPanel(kRight); riserDt_ = 0.0; }   // the plant's flows move (the right panel)
     if ((t_redraw_ -= dt) > 0.0) return;
     t_redraw_ = 0.2;
-    DrawSide(kLeft); DrawSide(kRight); DrawCentre(); DrawEngines(); DrawRiser(kRiserR); DrawRiser(kRiserL); DrawKeys(); DrawWing(kWingL); DrawWing(kWingR);
+    DrawPanel(kLeft); DrawFront(); DrawKeys();                            // the panels (the risers and the wing shelves are gone)
+    DrawConsoleR(); DrawConsoleL(); DrawMachine();                        // the side consoles (variant 7)
 }
 
 bool TantraDisplays::Touch(int screen, double u, double v) {
@@ -325,9 +353,11 @@ bool TantraDisplays::Touch(int screen, double u, double v) {
     const double x = u * gW[screen], y = v * kH[screen];
     bool r = false;
     switch (screen) {
-        case kLeft: case kRight: r = TouchSide(screen, x, y); break;
-        case kCentre: r = TouchCentre(x, y); break;
-        case kRiserR: case kRiserL: r = TouchRiser(screen, x, y); break;
+        case kLeft: case kRight: r = TouchPanel(screen, x * kSc[screen], y * kSc[screen]); break;
+        case kCentre: r = TouchFront(x * kSc[kCentre], y * kSc[kCentre]) || (frontTab_ == 0 && TouchCentre(x, y)); break;
+        case kRiserR: r = TouchConsoleR(x * kSc[screen], y * kSc[screen]); break;   // the side consoles (variant 7)
+        case kRiserL: r = TouchConsoleL(x * kSc[screen], y * kSc[screen]); break;
+        case kWingL: r = false; break;                                    // the computing machine's screen: no touch
         case kKeys: r = TouchKeys(x, y); break;
         default: r = TouchWing(screen, x, y); break;
     }
@@ -491,6 +521,55 @@ bool TantraDisplays::TouchCentre(double x, double y) {
 // The thrust set by a touch on a scale: the same set-points as the keys (the main group drives the anamezon cups or the
 // marching cup; the pods follow it unless they hover, then the hover group). The ship applies its caps (g, safety) each step.
 void TantraDisplays::SetMainLevel(double f) { t_->SetThrusterGroupLevel(THGROUP_MAIN, f); }
+// ---- the power plant screen (TantraPlantScreen): what it shows of the ship, what its keys do ----
+void TantraDisplays::FillPlantView(tantra::plantscreen::View& v) const {
+    namespace dmg = tantra::damage;
+    Tantra* t = t_;
+    v.plant = &t->plant_;
+    v.out = t->plantOut_;
+    v.sysNow = oapiGetSysTime();
+    v.thrOwn = !t->AnaIsMain();
+    v.thr = v.thrOwn && t->march_ ? t->GetThrusterLevel(t->march_) : 0.0;
+    const double rho = t->GetAtmDensity(), vAir = t->GetAirspeed();
+    OBJHANDLE ref = t->GetGravityRef();
+    const bool sun = ref && ref == oapiGetGbodyByIndex(0);
+    v.env = rho > 1e-5 ? (vAir > 2000.0 ? 3 : 0) : (sun ? 2 : 1);
+    v.onGround = t->GroundContact() || t->GetAltitude(ALTMODE_GROUND) < 100.0;
+    if (ref && !sun) {
+        VECTOR3 r; t->GetRelativePos(ref, r);
+        const double d = length(r), R = oapiGetSize(ref);
+        if (d < 1.5 * R) v.g = GGRAV * oapiGetMass(ref) / (d * d);
+    }
+    v.mass = t->GetMass(); v.argon = t->GetPropellantMass(t->argon_); v.iron = t->GetPropellantMass(t->iron_);
+    double podF = 0.0, lvl = 0.0;
+    for (THRUSTER_HANDLE h : t->pod_) if (h) { const double L = t->GetThrusterLevel(h); podF += L * t->GetThrusterMax0(h); lvl = (std::max)(lvl, L); }
+    v.podCup = t->prm_.podThrustTotal / tantra::spec::kPodCups;
+    v.podThrust = podF; v.podLevel = lvl;
+    v.pods = t->podOut_ < 0.99 ? 0 : lvl > 0.01 ? 2 : 1;
+    for (int z = 0; z < 7; ++z) { v.skin[z] = t->damage_.Temperature(z); v.skinLim[z] = t->damage_.Limit(z); v.flux[z] = t->damage_.HeatFlux(z); }
+    v.aoa = t->GetAOA(); v.alt = t->GetAltitude(); v.vAir = vAir; v.q = t->GetDynPressure();
+    v.gLoad = std::hypot(t->GetLift(), t->GetDrag()) / (std::max)(1.0, v.mass) / 9.81;
+    v.hullLost = t->damage_.Destroyed() && !t->plant_.Lost();
+}
+void TantraDisplays::PlantCommand(int cmd, double along) {
+    namespace ps = tantra::plantscreen;
+    Tantra* t = t_;
+    switch (cmd) {
+        case ps::kCmdStart: t->PlantKey(6); break;
+        case ps::kCmdMassAuto: case ps::kCmdMassArgon: case ps::kCmdMassIron: case ps::kCmdMassProducts: t->PlantKey(7 + cmd - ps::kCmdMassAuto); break;
+        case ps::kCmdFieldDown: t->PlantKey(0); break;
+        case ps::kCmdFieldUp: t->PlantKey(1); break;
+        case ps::kCmdPowerDown: t->PlantKey(2); break;
+        case ps::kCmdPowerUp: t->PlantKey(3); break;
+        case ps::kCmdLimiter: t->PlantKey(4); break;
+        case ps::kCmdPods:                                               // out with the cups aft (to help the march) / back into the bays
+            if (t->podsWanted_) { t->podsWanted_ = false; t->podTarget_ = 0.0; t->Message("Гондолы: в отсеки", "Pods: into the bays"); }
+            else t->ActPods(false);
+            break;
+        case ps::kCmdThrottle: if (!t->AnaIsMain()) t->SetThrusterGroupLevel(THGROUP_MAIN, along); break;
+        default: break;
+    }
+}
 void TantraDisplays::SetPodLevel(double f) {
     if (t_->GetGroupThrusterCount(THGROUP_HOVER) > 0) t_->SetThrusterGroupLevel(THGROUP_HOVER, f);
     else t_->SetThrusterGroupLevel(THGROUP_MAIN, f);
@@ -588,6 +667,7 @@ void TantraDisplays::Alerts() {
 // The horizon and the pitch bars come from the local horizon frame (HorizonInvRot), so they lie right at any pitch and bank.
 void TantraDisplays::DrawHud(SURFHANDLE s, int w, int h, const VECTOR3& cd, const VECTOR3& cu, double vfovDeg) {
     if (!s) return;
+    gUi = &font_;
     const int mode = hudMode_;
     const double simt = oapiGetSimTime();
     const bool blink = std::fmod(simt, 1.0) < 0.62;
@@ -749,135 +829,6 @@ void TantraDisplays::DrawHud(SURFHANDLE s, int w, int h, const VECTOR3& cd, cons
 // ---- the risers ----------------------------------------------------------------------------------------------
 
 
-// ---- the power plant screen: the left half of the right riser (the ion-trigger installation, core/Plant) ----
-// A mimic as on a power station's board: the feeds to the cup (fuel, trigger, reaction mass, cryo), the windings and
-// the field, the jet; on the right what the computer reckons: the thrust and its limit, the stern's temperature with
-// its zones, the risk of each part, the lasting damage. Below: the limiter (two presses), field, power, reaction mass.
-R4 PlantKeyR(const R4& a, int i) { const int w = (a.x1 - a.x0 - 16 - 5 * 6) / 6; return {a.x0 + 8 + i * (w + 6), a.y1 - 34, a.x0 + 8 + i * (w + 6) + w, a.y1 - 8}; }
-void DrawPlantScreen(Paint& P, Tantra* t, const R4& a) {
-    namespace pl = tantra::plant;
-    const pl::Plant& pp = t->PlantState();
-    const pl::Output& o = t->PlantOut();
-    char b[96];
-    P.Panel(a);
-    const double lvl = t->MarchLevel(), Fnow = o.maxThrust * lvl;
-    const bool run = Fnow > 1.0, lost = pp.Lost(), q = pp.Quenched();
-    P.Text(a.x0 + 10, a.y0 + 6, "СИЛОВАЯ · ИОННО-ТРИГГЕРНАЯ", 11, cOrange);
-    P.Text(a.x1 - 10, a.y0 + 6, lost ? "КОРАБЛЬ ПОТЕРЯН" : q ? "СРЫВ ПОЛЯ" : run ? "НА РЕЖИМЕ" : "ГОТОВА", 11, lost || q ? cRed : run ? cCyan : cGrey, 2);
-    P.Text(a.x1 - 120, a.y0 + 6, pp.Limiter() ? "АВТОМАТ" : "РУЧНОЙ", 11, pp.Limiter() ? cCyan : cRed, 2);
-    // ---- the mimic (left 58 %) ----
-    const int mx1 = a.x0 + int((a.x1 - a.x0) * 0.58), my0 = a.y0 + 24, my1 = a.y1 - 42;
-    const int cx = mx1 - 92, cy = (my0 + my1) / 2;                         // the cup throat
-    const double ph = oapiGetSimTime();
-    struct Node { const char* title; int y; DWORD flow; double f; };
-    static const char* const kMassRu[3] = {"аргон", "железо", "продукты"};
-    const double argon = t->ArgonMass(), iron = t->IronMass();
-    const int bw = 92, bh = (my1 - my0 - 18) / 4;
-    const double fuelRate = o.fusion / 7.0e13, mdot = Fnow / (std::max)(1.0, o.exhaust);
-    const char* vals[4];
-    char v0[32], v1[32], v2[32], v3[32];
-    std::snprintf(v0, sizeof v0, "%.0f г/с", fuelRate * 1000.0);
-    std::snprintf(v1, sizeof v1, "%.1f ГВт", o.fusion / 120.0 / 1e9);
-    if (o.mass == pl::kProducts) std::snprintf(v2, sizeof v2, "не подаётся"); else std::snprintf(v2, sizeof v2, "%s %.2f кт", kMassRu[o.mass], (o.mass == pl::kArgon ? argon : iron) / 1e6);
-    std::snprintf(v3, sizeof v3, "обм. %.1f К", pp.CoilT());
-    vals[0] = v0; vals[1] = v1; vals[2] = v2; vals[3] = v3;
-    const Node nodes[4] = {{"ТОПЛИВО p-11B", 0, 0x40A8C8, lvl}, {"ИОННЫЙ ТРИГГЕР", 1, 0xD070B0, lvl}, {"РАБОЧАЯ МАССА", 2, 0xD8A050, o.mass == pl::kProducts ? 0.0 : lvl}, {"КРИОГЕНИКА", 3, 0xF0D060, pp.Field() > 0.5 ? 0.5 : 0.0}};
-    for (const Node& n : nodes) {
-        const int y = my0 + 4 + n.y * (bh + 6);
-        P.Box(a.x0 + 8, y, a.x0 + 8 + bw, y + bh, kGlass, kOrangeD);
-        P.Text(a.x0 + 12, y + 3, n.title, 8, cGrey);
-        P.Text(a.x0 + 12, y + bh - 15, vals[n.y], 10, n.y == 3 && pp.CoilT() > 24 ? cRed : cCyan);
-        // the feed line to the cup, with dots running at the flow
-        const int x0 = a.x0 + 8 + bw, y0 = y + bh / 2, xs = cx - 30;
-        P.Line(x0, y0, xs, y0, kTrack, 3); P.Line(xs, y0, cx - 6, cy, kTrack, 3);
-        if (n.f > 0.0) {
-            const int L = xs - x0, step = 14, off = int(std::fmod(ph * 40.0 * (0.5 + n.f), double(step)));
-            for (int s = off; s < L; s += step) P.Box(x0 + s - 2, y0 - 2, x0 + s + 2, y0 + 2, n.flow);
-        }
-    }
-    // the windings and the field
-    const double Bq = pp.Field() / pl::Plant::kBNom;
-    const DWORD fieldC = pp.Field() > 16.0 ? kRedF : pp.Field() > pl::Plant::kBNom + 0.05 ? kAmberF : kCyanF;
-    for (int s = -1; s <= 1; s += 2) P.Box(cx - 10, cy + s * 34 - 9, cx + 10, cy + s * 34 + 9, q ? 0x101060 : 0x523A20, fieldC);
-    if (pp.Field() > 0.3)
-        for (int k = 1; k <= 4; k++)
-            for (int s = -1; s <= 1; s += 2) {
-                int px = cx - 18, py = cy + s * (34 - k * 5);
-                for (int j = 1; j <= 6; j++) {
-                    const double u = j / 6.0;
-                    const int nx = cx - 18 + int(u * 100), ny = cy + s * int((34 - k * 5) * (1 - u) + (22 + k * 9) * u);
-                    P.Line(px, py, nx, ny, fieldC, 1); px = nx; py = ny;
-                }
-            }
-    // the cup shell, the burn, the jet
-    P.Line(cx - 2, cy - 26, cx + 14, cy - 8, 0xE8F0F0, 2); P.Line(cx - 2, cy + 26, cx + 14, cy + 8, 0xE8F0F0, 2);
-    if (run && !q) {
-        const double fl = 0.6 + 0.4 * std::fabs(std::sin(ph * 37.0));
-        for (int r = 4; r <= 16; r += 4) P.Circle(cx + 26, cy, int(r * fl), r < 9 ? 0xFFFFFF : 0xF0B0C8, 2);
-        const DWORD jc = o.mass == pl::kArgon ? 0x60B8F0 : o.mass == pl::kIron ? 0xF07890 : 0xE0A0C0;
-        const int jw = o.mass == pl::kArgon ? 14 : o.mass == pl::kIron ? 8 : 3;
-        for (int k = -2; k <= 2; k++) P.Line(cx + 30, cy + k * jw / 4, mx1 - 4, cy + k * jw, jc, 2);
-    }
-    // the sensors at the cup
-    std::snprintf(b, sizeof b, "B %.2f Тл", pp.Field()); P.Text(cx - 40, my0 + 2, b, 10, pp.Field() > pl::Plant::kBNom + 0.05 ? cOrange : cCyan);
-    std::snprintf(b, sizeof b, "напряж. %.0f %%", Bq * Bq * 100.0); P.Text(cx - 40, my0 + 16, b, 9, Bq > 1.0 ? cOrange : cGrey);
-    std::snprintf(b, sizeof b, "струя %.0f км/с", o.exhaust / 1e3); P.Text(cx - 40, my1 - 26, b, 9, cGrey);
-    std::snprintf(b, sizeof b, "расход %s", mdot >= 1000 ? "" : "");
-    if (mdot >= 1000) std::snprintf(b, sizeof b, "расход %.1f т/с", mdot / 1000); else std::snprintf(b, sizeof b, "расход %.0f кг/с", mdot);
-    P.Text(cx - 40, my1 - 13, b, 9, cGrey);
-    P.Line(mx1, my0, mx1, my1, kOrangeD, 1);
-    // ---- the reckoning (right) ----
-    const int rx = mx1 + 10, rw = a.x1 - 10 - rx;
-    P.Text(rx, my0, "ТЯГА", 9, cGrey);
-    if (Fnow >= 1e9) std::snprintf(b, sizeof b, "%.2f ГН", Fnow / 1e9); else std::snprintf(b, sizeof b, "%.0f МН", Fnow / 1e6);
-    P.Text(rx, my0 + 11, b, 18, cWhite);
-    std::snprintf(b, sizeof b, "из %.0f МН · предел: %s", o.maxThrust / 1e6, o.limit); P.Text(rx, my0 + 33, b, 9, cOrange);
-    std::snprintf(b, sizeof b, "поле %.1f Тл · мощн. %.0f %% ном.", pp.FieldSet(), pp.PowerPct()); P.Text(rx, my0 + 46, b, 9, pp.PowerPct() > 100 || pp.FieldSet() > pl::Plant::kBNom ? cOrange : cCyan);
-    // the stern thermometer with its zones
-    const pl::Config& c = pp.Cfg();
-    const double Tmax = c.tLost + 100.0, T = pp.SternT();
-    const R4 th = {rx, my0 + 66, rx + rw, my0 + 74};
-    auto TX = [&](double v) { return th.x0 + int((th.x1 - th.x0) * (std::min)(1.0, (v - 300.0) / (Tmax - 300.0))); };
-    const double zt[6] = {300, c.tSafe, c.tBoil, c.tSoft, c.tBreach, Tmax};
-    const DWORD zc[5] = {0x5A7A2C, 0x2A8A9A, 0x1F69B8, 0x2A32A8, 0x10105A};
-    for (int i = 0; i < 5; i++) P.Box(TX(zt[i]), th.y0, TX(zt[i + 1]), th.y1, zc[i]);
-    P.Box(TX(T) - 2, th.y0 - 4, TX(T) + 2, th.y1 + 4, 0xFFFFFF);
-    std::snprintf(b, sizeof b, "корма %.0f К", T); P.Text(rx, my0 + 78, b, 10, T > c.tBoil ? cRed : T > c.tSafe ? cOrange : cCyan);
-    const double net = o.heatIn - o.cooling;
-    if (net > 1e6) std::snprintf(b, sizeof b, "прогар через %.0f с", (c.tLost - T) * (c.sternStore / 1400.0) / net); else std::snprintf(b, sizeof b, "тепло в балансе");
-    P.Text(rx + rw, my0 + 78, b, 9, net > 1e6 ? cRed : cGrey, 2);
-    // the risk of each part
-    static const char* const kPart[3] = {"обмотка", "мощность", "корма"};
-    for (int i = 0; i < 3; i++) {
-        const int y = my0 + 96 + i * 13;
-        P.Text(rx, y, kPart[i], 9, cGrey);
-        if (o.excess[i] > 0.0) std::snprintf(b, sizeof b, "+%.0f %%", o.excess[i] * 100.0); else std::snprintf(b, sizeof b, "норма");
-        P.Text(rx + rw / 2, y, b, 9, o.excess[i] > 0.0 ? cOrange : cCyan, 2);
-        const double r = (std::min)(1.0, o.riskPerMin[i]);
-        if (r <= 0.0) std::snprintf(b, sizeof b, "0"); else if (r < 0.001) std::snprintf(b, sizeof b, "%.3f %%/мин", r * 100); else std::snprintf(b, sizeof b, "%.1f %%/мин", r * 100);
-        P.Text(rx + rw, y, b, 9, r > 0.05 ? cRed : r > 0.001 ? cOrange : cCyan, 2);
-    }
-    // the lasting damage
-    std::string d;
-    static const char* const kDmg[5] = {"обм.", "трг.", "руб.", "греб.", "крио"};
-    static const int kEff[5] = {pl::kCoils, pl::kDrivers, pl::kJacket, pl::kRadiators, pl::kCryo};
-    for (int i = 0; i < 5; i++) { const double v = pp.Damage(kEff[i]); if (v < 0.999) { char e[24]; std::snprintf(e, sizeof e, "%s %.0f%% ", kDmg[i], v * 100); d += e; } }
-    P.Text(rx, my0 + 138, d.empty() ? "повреждений нет" : ("ПОВРЕЖДЕНО: " + d).c_str(), 9, d.empty() ? cGrey : cRed);
-    // ---- the keys ----
-    const bool armed = pp.LimiterArmed(oapiGetSysTime());
-    static const char* const kMassKey[4] = {"МАССА: АВТО", "МАССА: АРГОН", "МАССА: ЖЕЛЕЗО", "МАССА: ПРОД."};
-    P.Key(PlantKeyR(a, 0), pp.Limiter() ? (armed ? "ПОДТВЕРДИТЬ" : "ОГРАНИЧИТЕЛЬ") : "ОГР. СНЯТ", !pp.Limiter() || armed, !pp.Limiter() || armed);
-    P.Key(PlantKeyR(a, 1), "ПОЛЕ -", false); P.Key(PlantKeyR(a, 2), "ПОЛЕ +", false);
-    P.Key(PlantKeyR(a, 3), "МОЩН -", false); P.Key(PlantKeyR(a, 4), "МОЩН +", false);
-    P.Key(PlantKeyR(a, 5), kMassKey[pp.MassMode() + 1], pp.MassMode() >= 0);
-    if (lost) { P.Box(a.x0 + 30, cy - 18, mx1 - 30, cy + 18, 0x10105A, kRedF); P.Text((a.x0 + mx1) / 2.0, cy - 8, "КОРМА ПРОГОРЕЛА", 14, cWhite, 1); }
-}
-bool TouchPlantScreen(Tantra* t, const R4& a, double x, double y) {
-    static const int kKey[6] = {4, 0, 1, 2, 3, 5};
-    for (int i = 0; i < 6; i++) if (PlantKeyR(a, i).In(x, y)) { t->PlantPress(kKey[i]); return true; }
-    return false;
-}
-
 void TantraDisplays::DrawRiser(int k) {
     SURFHANDLE s = s_[k];
     if (!s) return;
@@ -887,12 +838,33 @@ void TantraDisplays::DrawRiser(int k) {
     R4 rr[3]; const int n = k == kRiserR ? 0 : FitSections(p, h0, rr);
     if (n) RedrawSections(t, Tantra::PanelTex(), p);
     oapiClearSurface(s, 0xFF000000 | kBezel);
+    if (k == kRiserR) {                                                               // the power plant | the engine console
+        if (oapi::Sketchpad* skp = oapiGetSketchpad(s)) {
+            tantra::plantscreen::View v;
+            FillPlantView(v);
+            const R4 a = PlantRect(); const double c = kSc[k];
+            plantScr_.Draw(skp, int(a.x0 * c + .5), int(a.y0 * c + .5), int((a.x1 - a.x0) * c + .5), int((a.y1 - a.y0) * c + .5), v, riserDt_);
+            oapiReleaseSketchpad(skp);
+        }
+        if (eng_) { const R4 e = EngRect(); const double c = kSc[k]; RECT dr = {LONG(e.x0 * c), LONG(e.y0 * c), LONG(e.x1 * c), LONG(e.y1 * c)}, sr = {0, 0, LONG(1024 * engSc_ + .5), LONG(kEngH * engSc_ + .5)}; oapiBlt(s, eng_, &dr, &sr); }
+#if __has_include("gcCoreAPI.h")
+        if (gcCore2* gc = gcGetCoreInterface()) gc->GenerateMipmaps(s);
+#endif
+        if (dumpRiser_ && (++riserDraws_ == 80 || riserDraws_ == 400)) {             // a check picture (the flag file)
+            char fn[64]; std::snprintf(fn, sizeof fn, "Tantra_Design\\ingame_riser_%d", riserDraws_);
+            oapiSaveSurface(fn, s, oapi::IMAGE_PNG);
+            std::snprintf(fn, sizeof fn, "Tantra_Design\\ingame_eng_%d", riserDraws_);
+            if (eng_) oapiSaveSurface(fn, eng_, oapi::IMAGE_PNG);
+            std::snprintf(fn, sizeof fn, "Tantra_Design\\ingame_riserL_%d", riserDraws_);
+            if (s_[kRiserL]) oapiSaveSurface(fn, s_[kRiserL], oapi::IMAGE_PNG);
+        }
+        return;
+    }
     {
         Paint P(s, glyphs_, kSc[k]);
         if (!P.Ok()) return;
-        if (k == kRiserR) { DrawPlantScreen(P, t, PlantRect()); }
-        else { P.Box(h0.x0, 6, h0.x1, h0.y1, kGlass, 0x303830); P.Box(h1.x0, 6, h1.x1, h1.y1, kGlass, 0x303830);
-        P.Text(h0.x0 + 10, 9, "МЕХАНИЗАЦИЯ", 12, cOrange); }
+        P.Box(h0.x0, 6, h0.x1, h0.y1, kGlass, 0x303830); P.Box(h1.x0, 6, h1.x1, h1.y1, kGlass, 0x303830);
+        P.Text(h0.x0 + 10, 9, "МЕХАНИЗАЦИЯ", 12, cOrange);
         if (k == kRiserL) {                                                           // ПОЛОЖЕНИЕ: the attitude and its rates, the RCS
             char b[64];
             P.Text(h1.x0 + 10, 9, "ПОЛОЖЕНИЕ", 12, cOrange);
@@ -917,7 +889,6 @@ void TantraDisplays::DrawRiser(int k) {
         }
     }
     if (n) BlitSections(s, Tantra::PanelTex(), p, rr, n, kSc[k]);
-    if (k == kRiserR && eng_) { const R4 e = EngRect(); const double c = kSc[k]; RECT dr = {LONG(e.x0 * c), LONG(e.y0 * c), LONG(e.x1 * c), LONG(e.y1 * c)}, sr = {0, 0, 1024, kEngH}; oapiBlt(s, eng_, &dr, &sr); }
 }
 
 bool TantraDisplays::TouchRiser(int k, double x, double y) {
@@ -926,7 +897,14 @@ bool TantraDisplays::TouchRiser(int k, double x, double y) {
     R4 rr[3]; const int n = k == kRiserR ? 0 : FitSections(p, h0, rr);
     if (n && ClickSections(t_, p, rr, n, x, y)) return true;
     if (k == kRiserR) {
-        if (InGrown(PlantRect(), x, y, 2)) return TouchPlantScreen(t_, PlantRect(), x, y);
+        if (InGrown(PlantRect(), x, y, 2)) {                                         // the plant screen: its own pixels
+            const R4 a = PlantRect(); double along = 0.0;
+            const int cmd = plantScr_.Hit((x - a.x0) * kSc[k], (y - a.y0) * kSc[k], &along);
+            if (cmd < 0) return false;
+            PlantCommand(cmd, along);
+            tRiser_ = 0.0;
+            return true;
+        }
         const R4 e = EngRect();
         if (InGrown(e, x, y, 4)) return TouchEngines((x - e.x0) / double(e.x1 - e.x0) * 1024, (y - e.y0) / double(e.y1 - e.y0) * kEngH);
         return false;
@@ -1201,7 +1179,7 @@ void TantraDisplays::DrawEngines() {
     if (!s) return;
     Tantra* t = t_;
     oapiClearSurface(s, 0xFF000000 | kBezel);
-    Paint P(s, glyphs_);
+    Paint P(s, glyphs_, engSc_);
     if (!P.Ok()) return;
     P.Box(kEngGlass, kGlass, 0x303830);
     const bool ana = t->engineSet_ == Tantra::EngineSet::Anamezon;

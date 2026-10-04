@@ -9796,7 +9796,7 @@ GEOM 4928 4864 ;bay_door_starboard
 4924 4925 4923
 4924 4926 4925
 4926 4927 4925
-MATERIALS 74
+MATERIALS 75
 hull_lacquer
 nose_iridium
 crest_radiator
@@ -9871,6 +9871,7 @@ in_wall_d
 in_floor_d
 in_ceil_d
 in_metal_d
+br_malachite
 MATERIAL hull_lacquer
 0.620 0.640 0.680 1.00
 0.620 0.640 0.680 1.00
@@ -10241,4 +10242,9 @@ MATERIAL in_metal_d
 0.080 0.080 0.085 1.00
 0.050 0.050 0.050 1 10
 0.016 0.016 0.018 1
+MATERIAL br_malachite
+0.160 0.380 0.310 1.00
+0.160 0.380 0.310 1.00
+0.400 0.480 0.450 1 35
+0.020 0.048 0.040 1
 TEXTURES 0

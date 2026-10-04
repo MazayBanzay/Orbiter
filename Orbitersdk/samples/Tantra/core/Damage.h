@@ -14,6 +14,10 @@ enum Part {
     kPod0, kPod1, kPod2, kPod3,
     kLegPort, kLegStbd, kSternLeg0, kSternLeg1, kSternLeg2, kSternLeg3, kKangLeg,
     kHangarDoors, kBayDoors, kMarchCup, kHull,
+    // the hull hitting the ground (core/Impact): its zones crushed, the equipment against its g (appended: old
+    // scenarios keep their numbers)
+    kLiving, kHangar, kTrapBlock, kSternZone,
+    kEqVeu, kEqStore, kEqPlant, kEqGyros, kEqArgon, kEqRovers, kEqAirlock, kEqLife, kEqAbsorber, kEqBridge,
     kPartCount
 };
 
@@ -40,6 +44,22 @@ struct Ground {
     double vSoft = 3.0, vBreak = 6.0;  // the gear set's ankle struts take these (core/Legs Limits) [m/s]
     bool gearDown = false;
     double legRatio[7] = {}; // load / rating: blade port, stbd, stern legs 0..3, kangaroo
+    // the hull hitting the ground (core/Impact)
+    int impactMode = -1;     // what hits: impact::Mode (nose / stern / belly / side); -1 unknown
+    bool legsInPlay = false; // the gear set takes this touchdown (lying on the blades, standing on the stern legs)
+    double mass = 15.0e6, localG = 9.81, soil = 6.0e6;   // [kg], [m/s^2], the ground's bearing [Pa]
+    bool trapsLoaded = false;
+    bool jointModel = false; // the legs break joint by joint elsewhere (core/Foot): no whole-leg hurts here
+};
+// What the last impact did (for the crew's messages; read once).
+struct ImpactReport {
+    bool happened = false;
+    int mode = 0;
+    double v = 0.0, peakG = 0.0, penetration = 0.0, duration = 0.0;
+    bool axial = false, absorberAlive = true, trapBreach = false;
+    int zoneGrade[5] = {};   // impact::Zone: 0 intact, 1 dented, 2 holed, 3 destroyed
+    int bellyGrade = 0;
+    int equipState[11] = {}; // impact::Equip: 0 intact, 1 at the limit, 2 damaged, 3 torn off
 };
 
 struct Event { int part; bool destroyed; const char* ru; const char* en; };
@@ -64,16 +84,26 @@ public:
     double DynamicPressure() const { return q_; }
 
     int TakeEvents(Event* out, int max);  // part failures since the last call
+    bool TakeImpact(ImpactReport* out);   // the last hull impact (once)
+    double Crushed(int zone) const { return crushed_[zone]; }   // [m] (core/Impact zones)
+    double Belly() const { return belly_; }                       // the belly pressed in [m]
+    const ImpactReport& LastImpact() const { return impact_; }    // the last hull impact (its mode, v, peak g)
     static const char* NameRu(int part);
     static const char* NameEn(int part);
 
     // persistence: integrities as "a b c ..." (kPartCount numbers)
     void Save(char* buf, int size) const;
     void Load(const char* s);
+    // the crushed hull zones and the belly: "z0 z1 z2 z3 z4 belly" [m]
+    void SaveCrush(char* buf, int size) const;
+    void LoadCrush(const char* s);
 
 private:
     void Hurt(int part, double amount, bool enabled);
     double integrity_[kPartCount];
+    double crushed_[5] = {}, belly_ = 0.0;   // crushed lengths of the hull zones, the belly pressed in [m]
+    ImpactReport impact_;
+    void HullImpact(const Ground& g, double v, bool enabled);
     double temp_[kZoneCount];
     double flux_[kZoneCount] = {};
     double crestLoad_[2] = {}, finLoad_ = 0.0, q_ = 0.0;

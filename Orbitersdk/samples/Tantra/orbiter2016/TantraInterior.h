@@ -91,6 +91,7 @@ private:
     static int cCanWalk(void* c, char* reason, int n);
     static void cSeated(void* c, int seatId, int personId, int on);
     static int cClick(void* c, const VECTOR3* origin, const VECTOR3* dir, int personId);   // the touch screens
+    static void cOuterWalls(void* c, const VECTOR3* from, VECTOR3* to, double radius, double height);   // people outside: the cup feet (Tantra::OuterWalls)
 
     LiftPanelHooks panel_{};
     int PanelItem(int k, OcItem* out) const;
