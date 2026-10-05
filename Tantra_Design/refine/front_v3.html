@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Переднее стекло v3</title>
+<style>
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:#1a1f24;color:#d8e2ea;font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+#wrap{padding:10px 12px;margin:0 auto;max-width:2460px}
+h1{font-size:16px;margin:0 0 4px;color:#e8eef3}
+h2{font-size:15px;margin:18px 0 6px;color:#e8eef3}
+h3{font-size:14px;margin:12px 0 4px;color:#c6d3dc}
+.note{font-size:12px;color:#93a3b1;max-width:1400px}
+canvas{display:block;width:100%;border-radius:10px;background:#0a1311;touch-action:none}
+.ctl{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0;align-items:center}
+.grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+button{font:inherit;padding:5px 9px;border:1px solid #3a4652;border-radius:6px;background:#26303a;color:#d8e2ea;cursor:pointer}
+button.on{background:#2b6cb0;border-color:#2b6cb0;color:#fff}
+label{font-size:12px;color:#93a3b1}
+#msg{font-size:12px;color:#93a3b1;min-height:18px;margin-top:4px}
+ol.chg{margin:0;padding-left:22px;font-size:13px;color:#c6d3dc;max-width:1300px}
+ol.chg li{margin:3px 0}
+.shot #wrap{padding:0;max-width:none}.shot #wrap>:not(canvas){display:none}.shot canvas{width:auto;border-radius:0}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Переднее стекло рубки v3 — низкое стекло: 1914 × 611 (верх 1,24 м, высота 0,52 м), доработка, не замена</h1>
+  <div class="note">Стекло стало низкой широкой полосой под большим экраном. Главное в полёте — вдоль верхнего края, у горизонта большого экрана, крупно и немного;
+  клавиши — внизу, к рукам; второстепенное — по бокам. Середина низа (400 px) — за ступицей штурвала: там нет ничего нужного в полёте (контур — пунктиром, в игре не рисуется).
+  Шрифт, кегли, клавиши, цвета, ограничения рисования — refine/SPEC.md. Клавиши на холсте нажимаются, шкалы тянутся.</div>
+  <div class="ctl">
+    <span class="grp"><label>Страница</label><span id="pgB" class="grp"></span></span>
+    <span class="grp"><label>Ширина холста</label><span id="wdB" class="grp"></span></span>
+    <span class="grp"><label>Шрифт</label><span id="fnB" class="grp"></span></span>
+    <span class="grp"><label>Сцена</label><span id="scB" class="grp"></span></span>
+    <span class="grp"><label>Тревога</label><span id="alB" class="grp"></span></span>
+    <span class="grp"><label>Контур ступицы</label><span id="hbB" class="grp"></span></span>
+  </div>
+  <canvas id="scr" width="1914" height="611"></canvas>
+  <div id="msg"></div>
+  <h2>Что куда переехало и почему</h2>
+  <div id="chg"></div>
+</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const cv = $("scr");
+const g = cv.getContext("2d");
+let W = 1914;
+const H = 611;
+// the grid of SPEC.md: 24 px from the edge, 16 between blocks, the title band 36; the upper band (closest to the big screen's
+// horizon) and the lower band (toward the hands); the yoke's hub hides the lower middle 400 px
+const M = 24, GAP = 16, BAND = 36, UY0 = 24, UY1 = 339, LY0 = 355, LY1 = 587;
+const hub = () => ({x0: Math.round(W / 2 - 200), x1: Math.round(W / 2 + 200), y0: LY0, y1: H});
+const RAD = Math.PI / 180, C_L = 299792458, G0 = 9.80665;
+// the palette of SPEC.md (dim text lighter #6fb3a8; the old dim #4f8f86 only for lines); sky / ground of the attitude indicator
+const COL = {bg: "#0a1311", fr: "#1f3a35", tx: "#7fe0d0", dim: "#6fb3a8", line: "#4f8f86", or: "#ee9a3a", ye: "#e8d35a", rd: "#ff5a4a", gr: "#5ad0a0",
+  wh: "#e8fffa", bl: "#7fb8ff", vi: "#b59cff", cy: "#46e2ff", band: "#0f1d1a", track: "#14211e", tape: "#0b1513", sky: "#1b4660", ground: "#4a3519", hub: "#d36cff"};
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const follow = (v, t, r, dt) => v + Math.sign(t - v) * Math.min(Math.abs(t - v), r * dt);
+// numbers: a comma, groups of three from 10 000, a real minus (drawn as a line: the GOST font has none)
+function fmt(v, d = 0) {
+  if (!isFinite(v)) return "—";
+  const s = Math.abs(v).toFixed(d), neg = v < 0 && +s !== 0;
+  const [i, f] = s.split("."), ii = i.length > 4 ? i.replace(/\B(?=(\d{3})+(?!\d))/g, " ") : i;
+  return (neg ? "−" : "") + ii + (f ? "," + f : "");
+}
+const fmtS = (v, d = 0) => (v >= 0 || +Math.abs(v).toFixed(d) === 0 ? "+" : "") + fmt(v, d);
+const rgb = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const mix = (a, b, f) => "#" + rgb(a).map((v, i) => Math.round(v + (rgb(b)[i] - v) * f).toString(16).padStart(2, "0")).join("");
+
+// ================= text: GOST type A (ISOCPEUR on the switch) =================
+// The GOST font has no minus, dashes, arrows, Δ and draws ×, ÷, ² wrong: those are drawn as lines / triangles (the game can too).
+const FAMS = {gost: '"GOST type A", "GOST 2.304 type A", ISOCPEUR, sans-serif', iso: 'ISOCPEUR, "GOST type A", sans-serif'};
+let FAM = FAMS.gost, CAP = {};
+const fnt = (size, w) => `${w >= 600 ? 700 : 400} ${size}px ${FAM}`;
+const SPECIAL = "−–—-×÷²³→←↑↓▶◀▲▼Δ";
+function capH(size, w = 700) { const k = FAM + size + w; if (!(k in CAP)) { g.font = fnt(size, w); CAP[k] = g.measureText("Н").actualBoundingBoxAscent || size * 0.7; } return CAP[k]; }
+function segs(s) { const out = []; let cur = ""; for (const ch of s) { if (SPECIAL.includes(ch)) { if (cur) out.push(cur); cur = ""; out.push({c: ch}); } else cur += ch; } if (cur) out.push(cur); return out; }
+function spW(ch, size, w) {
+  if (ch === "²" || ch === "³") { g.font = fnt(Math.round(size * 0.62), w); return g.measureText("2").width + size * 0.06; }
+  return {"—": 0.8, "–": 0.55, "−": 0.5, "-": 0.42, "×": 0.55, "÷": 0.55, "→": 0.9, "←": 0.9, "↑": 0.5, "↓": 0.5, "▶": 0.62, "◀": 0.62, "▲": 0.7, "▼": 0.7, "Δ": 0.62}[ch] * size;
+}
+function spDraw(ch, x, y, size, w, col) {
+  const c = capH(size, w), lw = Math.max(1.5, size * (w >= 600 ? 0.095 : 0.07)), ww = spW(ch, size, w), m = y - c * 0.5;
+  g.fillStyle = col;
+  if (ch === "²" || ch === "³") { g.font = fnt(Math.round(size * 0.62), w); g.fillText(ch === "²" ? "2" : "3", x + size * 0.03, y - c * 0.45); return; }
+  if ("−–—-".includes(ch)) { const p = ch === "-" ? ww * 0.18 : ww * 0.12; line(x + p, m, x + ww - p, m, col, lw); return; }
+  if (ch === "×") { const r = c * 0.27, cx = x + ww / 2; line(cx - r, m - r, cx + r, m + r, col, lw); line(cx - r, m + r, cx + r, m - r, col, lw); return; }
+  if (ch === "÷") { line(x + ww * 0.15, m, x + ww * 0.85, m, col, lw); disc(x + ww / 2, m - c * 0.3, lw * 0.8, col); disc(x + ww / 2, m + c * 0.3, lw * 0.8, col); return; }
+  if (ch === "→" || ch === "←") { const d = ch === "→" ? 1 : -1, x0 = x + ww * 0.08, x1 = x + ww * 0.92, tip = d > 0 ? x1 : x0, hh = c * 0.32;
+    line(d > 0 ? x0 : x0 + hh, m, d > 0 ? x1 - hh : x1, m, col, lw); poly([[tip, m], [tip - d * hh * 1.5, m - hh], [tip - d * hh * 1.5, m + hh]]); g.fill(); return; }
+  if (ch === "↑" || ch === "↓") { const d = ch === "↑" ? -1 : 1, cx = x + ww / 2, tip = d < 0 ? y - c : y, hh = c * 0.3;
+    line(cx, d < 0 ? y : y - c, cx, tip - d * hh, col, lw); poly([[cx, tip], [cx - hh, tip - d * hh * 1.5], [cx + hh, tip - d * hh * 1.5]]); g.fill(); return; }
+  if (ch === "▶") { poly([[x + ww * 0.15, y - c], [x + ww * 0.9, y - c / 2], [x + ww * 0.15, y]]); g.fill(); return; }
+  if (ch === "◀") { poly([[x + ww * 0.85, y - c], [x + ww * 0.1, y - c / 2], [x + ww * 0.85, y]]); g.fill(); return; }
+  if (ch === "▲") { poly([[x + ww * 0.05, y], [x + ww / 2, y - c], [x + ww * 0.95, y]]); g.fill(); return; }
+  if (ch === "▼") { poly([[x + ww * 0.05, y - c], [x + ww * 0.95, y - c], [x + ww / 2, y]]); g.fill(); return; }
+  if (ch === "Δ") { g.strokeStyle = col; g.lineWidth = lw; poly([[x + ww * 0.08, y], [x + ww / 2, y - c], [x + ww * 0.92, y]]); g.stroke(); }
+}
+function TW(s, size, w = 400) { let tw = 0; for (const p of segs(String(s))) { if (typeof p === "string") { g.font = fnt(size, w); tw += g.measureText(p).width; } else tw += spW(p.c, size, w); } return tw; }
+function T(s, x, y, col, size = 17, al = "left", w = 400) {
+  s = String(s); const tw = TW(s, size, w); let cx = al === "right" ? x - tw : al === "center" ? x - tw / 2 : x;
+  g.textAlign = "left"; g.textBaseline = "alphabetic";
+  for (const p of segs(s)) { if (typeof p === "string") { g.font = fnt(size, w); g.fillStyle = col; g.fillText(p, cx, y); cx += g.measureText(p).width; } else { spDraw(p.c, cx, y, size, w, col); cx += spW(p.c, size, w); } }
+  return tw;
+}
+// letter-spaced capitals (block titles), glyph by glyph
+function TS(s, x, y, col, size = 18, w = 700, sp = 1, al = "left") {
+  const ch = [...s], cw = c => SPECIAL.includes(c) ? spW(c, size, w) : (g.font = fnt(size, w), g.measureText(c).width);
+  let tw = -sp; for (const c of ch) tw += cw(c) + sp;
+  let cx = al === "right" ? x - tw : al === "center" ? x - tw / 2 : x;
+  g.textAlign = "left"; g.textBaseline = "alphabetic";
+  for (const c of ch) { if (SPECIAL.includes(c)) spDraw(c, cx, y, size, w, col); else { g.font = fnt(size, w); g.fillStyle = col; g.fillText(c, cx, y); } cx += cw(c) + sp; }
+  return tw;
+}
+// a run on one baseline: [text, size, weight, colour] pieces and gaps (numbers) - values bold, units smaller
+function RUN(parts, x, y, al = "left") {
+  const tw = RW(parts); let cx = al === "right" ? x - tw : al === "center" ? x - tw / 2 : x;
+  for (const p of parts) { if (typeof p === "number") cx += p; else cx += T(p[0], cx, y, p[3], p[1], "left", p[2]); }
+  return tw;
+}
+function RW(parts) { let tw = 0; for (const p of parts) tw += typeof p === "number" ? p : TW(p[0], p[1], p[2]); return tw; }
+// the largest size (from size down to min) at which s fits; a text cut with ".." when even min does not
+function fitSize(s, mw, size, w = 400, min = 15) { while (size > min && TW(s, size, w) > mw) size--; return size; }
+function fitTxt(s, mw, size, w = 400) { if (TW(s, size, w) <= mw) return s; let t = s; while (t.length > 1 && TW(t + "..", size, w) > mw) t = t.slice(0, -1); return t + ".."; }
+
+// ================= shapes (only what the game's canvas has) =================
+function line(x0, y0, x1, y1, col, lw = 1) { g.strokeStyle = col; g.lineWidth = lw; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); }
+function disc(x, y, r, col) { g.fillStyle = col; g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill(); }
+function ring(x, y, r, col, lw = 2) { g.strokeStyle = col; g.lineWidth = lw; g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.stroke(); }
+function arc(x, y, r, a0, a1, col, lw) { g.strokeStyle = col; g.lineWidth = lw; g.beginPath(); g.arc(x, y, r, a0, a1); g.stroke(); }
+function poly(pts) { g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); }
+function box(x, y, w, h, fill, edge, lw = 1.5) { if (fill) { g.fillStyle = fill; g.fillRect(x, y, w, h); } if (edge) { g.strokeStyle = edge; g.lineWidth = lw; g.strokeRect(x + lw / 2, y + lw / 2, w - lw, h - lw); } }
+function ellipse(x, y, rx, ry, fill, edge, lw = 2) { g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, 2 * Math.PI); if (fill) { g.fillStyle = fill; g.fill(); } if (edge) { g.strokeStyle = edge; g.lineWidth = lw; g.stroke(); } }
+function arrow(x0, y0, x1, y1, col, lw = 3) {
+  const a = Math.atan2(y1 - y0, x1 - x0), L = 9 + lw * 2, len = Math.hypot(x1 - x0, y1 - y0);
+  if (len < 2) return;
+  line(x0, y0, x1 - Math.cos(a) * L * 0.8, y1 - Math.sin(a) * L * 0.8, col, lw);
+  g.fillStyle = col; poly([[x1, y1], [x1 - L * Math.cos(a - 0.42), y1 - L * Math.sin(a - 0.42)], [x1 - L * Math.cos(a + 0.42), y1 - L * Math.sin(a + 0.42)]]); g.fill();
+}
+// a rectangle with 4 px corners as one convex polygon
+function rrect(x, y, w, h, r) {
+  g.beginPath();
+  [[x + w - r, y + r, -Math.PI / 2], [x + w - r, y + h - r, 0], [x + r, y + h - r, Math.PI / 2], [x + r, y + r, Math.PI]].forEach(([cx, cy, a0]) => {
+    for (let j = 0; j <= 3; j++) { const a = a0 + j * Math.PI / 6; g.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a)); }
+  });
+  g.closePath();
+}
+function lamp(x, y, col, r = 9) { disc(x, y, r, col); ring(x, y, r + 3, mix(COL.bg, col, 0.45), 1.5); }
+// half-plane clip of a convex polygon: keep a*x + b*y + c >= 0 (as ClipHalf in TantraDisplays.cpp)
+function clipHalf(pts, a, b, c) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length], dp = a * p[0] + b * p[1] + c, dq = a * q[0] + b * q[1] + c;
+    if (dp >= 0) out.push(p);
+    if ((dp >= 0) !== (dq >= 0)) { const t = dp / (dp - dq); out.push([p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])]); }
+  }
+  return out;
+}
+// a segment clipped to a rectangle (Liang-Barsky); null when outside
+function clipSeg(p, q, x0, y0, x1, y1) {
+  let t0 = 0, t1 = 1; const dx = q[0] - p[0], dy = q[1] - p[1];
+  for (const [pp, qq] of [[-dx, p[0] - x0], [dx, x1 - p[0]], [-dy, p[1] - y0], [dy, y1 - p[1]]]) {
+    if (pp === 0) { if (qq < 0) return null; continue; }
+    const r = qq / pp; if (pp < 0) { if (r > t1) return null; if (r > t0) t0 = r; } else { if (r < t0) return null; if (r < t1) t1 = r; }
+  }
+  return [[p[0] + t0 * dx, p[1] + t0 * dy], [p[0] + t1 * dx, p[1] + t1 * dy]];
+}
+// a segment clipped to a circle; null when outside
+function clipCircle(p, q, cx, cy, r) {
+  const dx = q[0] - p[0], dy = q[1] - p[1], fx = p[0] - cx, fy = p[1] - cy, a = dx * dx + dy * dy, b = 2 * (fx * dx + fy * dy), c = fx * fx + fy * fy - r * r, D = b * b - 4 * a * c;
+  if (D <= 0) return null;
+  const s = Math.sqrt(D), t0 = Math.max(0, (-b - s) / (2 * a)), t1 = Math.min(1, (-b + s) / (2 * a));
+  return t1 <= t0 ? null : [[p[0] + t0 * dx, p[1] + t0 * dy], [p[0] + t1 * dx, p[1] + t1 * dy]];
+}
+
+// ================= the elements of SPEC.md =================
+// the key module: 56 px (48 in dense groups), 4 px corners, the label 18-20 bold centred on the cap height
+let HITS = [];
+const KEY = {off: {f: "#0f1c1a", e: "#2f5a52", t: COL.tx}, on: {f: COL.or, e: COL.or, t: "#0a1311"}, onT: {f: COL.tx, e: COL.tx, t: "#0a1311"},
+  warn: {f: "#0f1c1a", e: COL.rd, t: COL.rd}, warnOn: {f: COL.rd, e: COL.rd, t: "#0a1311"}, na: {f: "#161d1c", e: null, t: "#4d5c59"}};
+function key(x, y, w, h, label, st, act, size = 20) {
+  const k = KEY[st];
+  rrect(x + 0.75, y + 0.75, w - 1.5, h - 1.5, 4); g.fillStyle = k.f; g.fill();
+  if (k.e) { g.strokeStyle = k.e; g.lineWidth = st.startsWith("warn") ? 2 : 1.5; g.stroke(); }
+  if (label) { const s = fitSize(label, w - 14, size, 700, 18); T(label, x + w / 2, y + h / 2 + capH(s) / 2, k.t, s, "center", 700); }
+  if (act && st !== "na") HITS.push({x, y, w, h, act});
+}
+// a block: the frame, the title in its own band on top (capitals 18 px, spacing 1 px)
+const bandBase = (y, size = 18) => y + BAND / 2 + capH(size) / 2;
+function block(x, y, w, h, title) {
+  g.fillStyle = COL.band; g.fillRect(x, y, w, BAND);
+  box(x, y, w, h, null, COL.fr, 1.5);
+  line(x, y + BAND, x + w, y + BAND, COL.fr, 1.5);
+  if (title) TS(title, x + 16, bandBase(y), COL.dim, 18, 700, 1);
+}
+// the page tabs: one row of equal keys in the top right corner of every page
+const PAGES = [["ПОЛЁТ", "flight"], ["ДВИГАТЕЛИ", "eng"], ["ПАРАМЕТРЫ", "params"]];
+const tabsX0 = () => W - M - 470;
+let PAGE = "flight";
+function drawTabs() { PAGES.forEach(([t, p], i) => key(tabsX0() + i * 160, 24, 150, 48, t, PAGE === p ? "on" : "off", () => setPage(p))); }
+
+// ================= the ship (demo data) =================
+let lastTouch = -99, simT = 0;
+// --- the flight: a small model only to make the instruments move ---
+const AP = ["СТОП ВРАЩ.", "ГОРИЗОНТ", "ПРОГРАД", "РЕТРОГРАД", "НОРМАЛЬ +", "НОРМАЛЬ −", "ВЫСОТА"];
+const HUDS = [["ГОРИЗОНТ", "атмосфера и посадка: горизонт, тангаж, вектор скорости, ленты"], ["ОРБИТА", "орбита: прогрейд, нормаль, апоцентр и перицентр"],
+  ["СТЫКОВКА", "сближение: цель, дальность, скорость сближения"], ["ВЫКЛ", "чистый вид без HUD"]];
+const RCS = ["ВРАЩЕНИЕ", "ЛИНЕЙНОЕ", "ВЫКЛ"];
+const ALERTS = {atmo: {1: "ПЕРЕГРУЗКА 3,7 g", 2: "ЗЕМЛЯ ЧЕРЕЗ 9 С · Vy −14 М/С"}, orbit: {1: "ТОПЛИВО 22 %", 2: "РАДИАЦИЯ 1,4 Гр/ч"}};
+const F = {scene: "atmo", alt: 2400, v: 160, vs: 0, hdg: 87, pitch: 4, bank: 0, aoa: 6, slip: 0, fpa: 0, mach: 0.47, g: 1, term: -1, hud: 0, rcs: 0, ap: -1, alert: 0, ack: true};
+function flightStep(dt) {
+  const t = simT;
+  if (F.scene === "atmo") {
+    F.pitch = 4.8 + 3 * Math.sin(0.21 * t); F.bank = 16 * Math.sin(0.13 * t); F.aoa = 6 + Math.sin(0.3 * t); F.slip = 0.6 * Math.sin(0.17 * t);
+    F.fpa = F.pitch - 0.8 * F.aoa;
+    F.v += (110 + 110 * mainAct() - F.v) * Math.min(1, dt / 6);
+    F.vs = F.v * Math.sin(F.fpa * RAD); F.alt = Math.max(60, F.alt + F.vs * dt);
+    F.hdg = (F.hdg + Math.tan(F.bank * RAD) * 9.81 / Math.max(50, F.v) / RAD * dt + 360) % 360;
+    F.mach = F.v / 336; F.g = 1 / Math.cos(F.bank * RAD) + 0.15 * mainAct(); F.ap = -1;
+  } else {
+    F.alt = 412e3 + 1500 * Math.sin(0.004 * t); F.v = 7668 + 3 * Math.sin(0.004 * t); F.vs = 6 * Math.cos(0.004 * t);
+    F.pitch = 12 * Math.sin(0.05 * t); F.bank = 30 * Math.sin(0.035 * t); F.hdg = (87 + 3 * Math.sin(0.02 * t) + 360) % 360;
+    F.aoa = 2 + Math.sin(0.05 * t); F.slip = 0.3 * Math.sin(0.03 * t); F.fpa = Math.atan2(F.vs, F.v) / RAD; F.mach = 0; F.g = E.ana ? E.resid : E.felt; F.ap = 2;
+  }
+}
+// --- the engines (after tantra_engines_screen.html): the planetary drive and the anamezon chambers ---
+const PL = {FM: 886e6, FP: 351e6, vAr: 30e3, vFe: 60e3, tvcMax: 10, podS: [44, 44, 84, 84], podX: [-11.5, 11.5, -11.5, 11.5]};
+const ANA = {F: 2.17e10, Fr: 0.54 * 2.17e10, vJet: 0.98 * C_L, vEff: 0.98 * 0.8 * 0.62 * 0.85 * C_L, rate: 2.0e4, m2e: 0.80, field: 1000, comp: 200 * G0, dry: 4.203e6 + 4 * 164e3};
+const E = {ana: false, set: {m: 0.45, p: 0.3, ang: 20, gl: 5, fs: 0, fr: 0}, thrM: 0.45, thrP: 0.3, ang: 20, tvc: 0, mass: 52.34e6, argon: 3.8e6, iron: 6.2e6, sCG: 58.1,
+  rm: -1, gLimOn: true, bypass: false, byArm: -99, limG: false, felt: 1, Fm: 0, Fpod: 0, Fx: 0, Fy: 0, F: 0, md: 0, Mnet: 0, plantRun: true, rmUse: 0,
+  stageT: 0, stage: 0, fieldL: 0, beamL: 0, feedL: 0, feedS: 0, feedR: 0, compLim: 3, trap: 0, traps: [9.37e6, 9.37e6, 9.37e6, 9.37e6], rap: 0, resid: 0, limA: false,
+  a: 0, Fs: 0, Fr: 0, mdA: 0, starAU: 200, starAhead: false};
+const J = [], TR = [];
+function journal(txt, lvl = 0) { J.unshift({t: simT, txt, lvl}); if (J.length > 30) J.pop(); }
+const mainAct = () => E.ana ? E.feedS : E.thrM;
+const mainSet = () => E.ana ? E.set.fs : E.set.m;
+const setMain = v => { v = clamp(v, 0, 1); if (E.ana) E.set.fs = v; else E.set.m = v; };
+const envAir = () => F.scene === "atmo";
+function planStep(dt) {
+  const air = envAir(), rm = E.rm >= 0 ? E.rm : air ? 0 : 1;
+  const rmUse = !E.bypass && air && rm !== 0 ? 0 : rm;
+  if (rmUse !== E.rmUse) { journal("Рабочая масса: " + (rmUse ? "железо" : "аргон")); E.rmUse = rmUse; }
+  const v = rmUse ? PL.vFe : PL.vAr, podsOk = air || E.bypass;
+  E.thrM = follow(E.thrM, E.ana ? 0 : E.set.m, 0.2, dt); E.thrP = follow(E.thrP, podsOk && !E.ana ? E.set.p : 0, 0.25, dt); E.ang = follow(E.ang, E.set.ang, 15, dt);
+  let Fm = PL.FM * E.thrM, Fpod = PL.FP * E.thrP;
+  const pa = E.ang * RAD; let Mp = 0; for (let i = 0; i < 4; i++) Mp += Fpod * Math.sin(pa) * (PL.podS[i] - E.sCG);
+  E.tvc = follow(E.tvc, Fm > 1 ? clamp(Math.asin(clamp(-Mp / (Fm * E.sCG), -1, 1)) / RAD, -PL.tvcMax, PL.tvcMax) : 0, 5, dt);
+  const tr = E.tvc * RAD;
+  let Fx = Fm * Math.cos(tr) + 4 * Fpod * Math.cos(pa), Fy = Fm * Math.sin(tr) + 4 * Fpod * Math.sin(pa), Mn = Mp + Fm * Math.sin(tr) * E.sCG, Ft = Math.hypot(Fx, Fy), felt = Ft / E.mass / G0;
+  E.limG = false;
+  if (E.gLimOn && !E.bypass && felt > E.set.gl) { const k = E.set.gl / felt; E.thrM *= k; E.thrP *= k; Fm *= k; Fpod *= k; Fx *= k; Fy *= k; Mn *= k; Ft *= k; felt *= k; E.limG = true; }
+  const md = Fm / v + 4 * Fpod / PL.vAr;
+  if (rmUse) E.iron = Math.max(0, E.iron - Fm / v * dt); else E.argon = Math.max(0, E.argon - Fm / v * dt);
+  E.argon = Math.max(0, E.argon - 4 * Fpod / PL.vAr * dt); E.mass -= md * dt;
+  Object.assign(E, {Fm, Fpod, Fx, Fy, F: Ft, felt: Math.max(felt, air ? 1 : 0), md, Mnet: Mn, podsOk, vM: v});
+}
+function anaStep(dt) {
+  E.fieldL = follow(E.fieldL, E.stageT >= 1 ? 1 : 0, 1 / 4, dt);
+  E.beamL = follow(E.beamL, E.stageT >= 2 && E.fieldL >= 1 ? 1 : 0, 1 / 2, dt);
+  E.feedL = follow(E.feedL, E.stageT >= 3 && E.beamL >= 1 ? 1 : 0, 2, dt);
+  const st = E.feedL >= 1 ? 3 : E.beamL >= 1 ? 2 : E.fieldL > 0 ? 1 : 0;
+  if (st !== E.stage) { journal(["Анамезон: камеры выключены", "Анамезон: поле камер", "Анамезон: пучок поджига", "Анамезон: камеры на режиме"][st], st === 3 ? 0 : 1); E.stage = st; }
+  const run = st === 3 && E.ana;
+  E.feedS = run ? follow(E.feedS, E.set.fs, 0.1, dt) : 0; E.feedR = run ? follow(E.feedR, E.set.fr, 0.1, dt) : 0;
+  const mass = ANA.dry + E.traps.reduce((x, y) => x + y, 0);
+  let Fs = 4 * ANA.F * E.feedS, Fr = 2 * ANA.Fr * E.feedR, a = (Fs - Fr) / mass;
+  E.limA = false;
+  if (E.gLimOn && !E.bypass) { const mx = ANA.comp + E.compLim * G0; if (Math.abs(a) > mx) { const k = mx / Math.abs(a); E.feedS *= k; E.feedR *= k; Fs *= k; Fr *= k; a *= k; E.limA = true; } }
+  E.resid = (Math.max(0, Math.abs(a) - ANA.comp) + Math.abs(a) * 0.002) / G0;
+  const md = (Fs + Fr) / ANA.vEff; let need = md * dt;
+  while (need > 0 && E.trap < 4) { const take = Math.min(need, E.traps[E.trap]); E.traps[E.trap] -= take; need -= take; if (E.traps[E.trap] <= 0) { E.trap++; if (E.trap < 4) journal("Подача из ловушки " + (E.trap + 1), 1); } }
+  E.rap += a / C_L * dt;
+  Object.assign(E, {Fs, Fr, a, mdA: md, massA: mass});
+}
+function engStep(dt) {
+  if (simT - lastTouch > 6) {   // a demo: the main thrust breathes when nobody touches the glass
+    if (!E.ana) E.set.m = 0.45 + 0.25 * Math.sin(0.18 * simT);
+    else if (E.stage === 3) E.set.fs = 0.3 + 0.2 * Math.sin(0.18 * simT);
+  }
+  planStep(dt); anaStep(dt);
+  if (E.byArm > 0 && simT - E.byArm > 3) E.byArm = -99;
+  if (!TR.length || simT - TR[TR.length - 1].t >= 0.25) {
+    TR.push(E.ana ? {t: simT, a: Math.abs(E.a) / G0, b: E.resid, c: Math.abs(Math.tanh(E.rap)) * 100} : {t: simT, a: E.F, b: E.felt, c: Math.abs(E.tvc)});
+    while (TR.length && simT - TR[0].t > 60) TR.shift();
+  }
+}
+function setAna(on) { if (E.ana === on) return; E.ana = on; TR.length = 0; journal(on ? "Главная тяга: анамезон" : "Главная тяга: планетарные"); }
+function bypassKey() {
+  if (E.bypass) { E.bypass = false; journal("Блокировки восстановлены"); }
+  else if (E.byArm < 0) { E.byArm = simT; journal("Обход блокировок: подтвердите за 3 с", 1); }
+  else { E.bypass = true; E.byArm = -99; journal("БЛОКИРОВКИ СНЯТЫ КОМАНДИРОМ", 2); }
+}
+// --- the main view's settings ---
+const PAL = [["ОРАНЖ + ЦИАН", "оранж + циан", COL.or, COL.cy], ["ЦИАН + ОРАНЖ", "циан + оранж", COL.cy, COL.or], ["ИЗУМРУД", "изумруд", COL.tx, COL.gr]];
+const LAYERS = ["ТАНГАЖ", "ВЕКТОР", "ЛЕНТЫ", "ТРЕВОГИ"];
+const PS = {pal: 0, hudGain: 1.0, mfdGain: 1.6, mfdGamma: 0.7, autoLum: true, res: 1024, units: 0, layer: [true, true, true, true]};
+
+// ================= page 1: ПОЛЁТ =================
+function pageFlight() {
+  const hb = hub(), cw = 874, cx0 = Math.round(W / 2 - cw / 2), cx1 = cx0 + cw;
+  const Lw = cx0 - GAP - M, Rx = cx1 + GAP, Rw = W - M - Rx;
+  const atmo = F.term < 0 ? F.alt < 100e3 : F.term === 1;
+  drawTabs();
+  // ---- the centre, along the top: the attitude, speed, altitude, vertical speed, heading ----
+  block(cx0, UY0, cw, UY1 - UY0, null);
+  const bb = bandBase(UY0);
+  const apOn = F.ap >= 0;
+  RUN([["автопилот", 15, 400, COL.dim], 10, [apOn ? AP[F.ap] : "РУЧНОЕ", 18, 700, apOn ? COL.or : COL.tx]], cx1 - 16, bb, "right");
+  if (F.alert) {   // an alert takes the title's place: at the top, next to the big screen
+    const c = F.alert === 2 ? COL.rd : COL.ye;
+    lamp(cx0 + 26, UY0 + 18, c, 7);
+    RUN([[F.alert === 2 ? "ОПАСНОСТЬ" : "ВНИМАНИЕ", 18, 700, c], 12, [ALERTS[F.scene][F.alert], 18, 700, COL.wh]], cx0 + 44, bb);
+  } else TS(atmo ? "ПОЛЁТ · АТМОСФЕРА" : "ПОЛЁТ · КОСМОС", cx0 + 16, bb, COL.dim, 18, 700, 1);
+  const ix0 = cx0 + 16, ix1 = cx1 - 16, rowY = 68, iy0 = 116, iy1 = 331;
+  if (atmo) {
+    const spdX = ix0, vsX = ix1 - 64, altX = vsX - 12 - 120, adiX = ix0 + 132, adiW = altX - 12 - adiX;
+    const lab = (cx, t, u) => RUN([[t, 17, 700, COL.dim], 6, [u, 15, 400, COL.dim]], cx, rowY + 20 + capH(17) / 2, "center");
+    lab(spdX + 60, "СКОРОСТЬ", "м/с"); lab(altX + 60, "ВЫСОТА", "м");
+    T("ВЕРТ.", vsX + 32, rowY + 16, COL.dim, 17, "center", 700); T("м/с", vsX + 32, rowY + 36, COL.dim, 15, "center");
+    headingTape(adiX, rowY, adiW, 40);
+    adi(adiX, iy0, adiW, iy1 - iy0);
+    tape(spdX, iy0, 120, iy1 - iy0, F.v, F.v < 600 ? {ppu: 2.15, tick: 10, every: 2} : {ppu: 0.215, tick: 100, every: 2}, "left");
+    tape(altX, iy0, 120, iy1 - iy0, F.alt, F.alt < 3000 ? {ppu: 0.43, tick: 50, every: 2} : F.alt < 30000 ? {ppu: 0.043, tick: 500, every: 2} : {ppu: 0.0043, tick: 5000, every: 2}, "right");
+    vsBar(vsX, iy0, 64, iy1 - iy0, F.vs);
+  } else spaceView(ix0, ix1, rowY, iy0, iy1);
+  // ---- left, top: the secondary angles ----
+  block(M, UY0, Lw, UY1 - UY0, "УГЛЫ · МАХ");
+  const air = F.scene === "atmo";
+  const cells = [["ТАНГАЖ", fmtS(F.pitch, 1) + "°"], ["КРЕН", (F.bank >= 0 ? "П " : "Л ") + fmt(Math.abs(F.bank), 1) + "°"], ["АТАКА", fmt(F.aoa, 1) + "°"],
+    ["СКОЛЬЖЕНИЕ", fmt(F.slip, 1) + "°"], ["ГЛИССАДА", fmtS(F.fpa, 1) + "°"], ["ГОНДОЛЫ", fmt(E.ang, 0) + "°"], ["МАХ", air ? fmt(F.mach, 2) : "—"]];
+  const cols = Lw >= 700 ? 3 : 2, rows = Math.ceil(cells.length / cols), step = rows >= 4 ? 64 : 80, cwid = (Lw - 32) / cols, vs = step >= 80 ? 34 : 26;
+  cells.forEach(([l, v], i) => {
+    const cx = M + 16 + (i % cols) * cwid, cy = UY0 + BAND + 8 + Math.floor(i / cols) * step;
+    T(l, cx, cy + 22, COL.dim, 17, "left", 700); T(v, cx, cy + step - 12, COL.wh, vs, "left", 700);
+  });
+  // ---- left, bottom (the left hand): what the big screen shows, the RCS ----
+  block(M, LY0, Lw, LY1 - LY0, "ГЛАВНЫЙ ЭКРАН");
+  const kw4 = Math.floor((Lw - 32 - 30) / 4 / 10) * 10, kw3 = Math.floor((Lw - 32 - 20) / 3 / 10) * 10, r2 = LY1 - 8 - 56, r1 = r2 - 32 - 56;
+  T("HUD", M + 16, r1 - 8, COL.dim, 17, "left", 700);
+  HUDS.forEach(([n], i) => key(M + 16 + i * (kw4 + 10), r1, kw4, 56, n, F.hud === i ? "on" : "off", () => { F.hud = i; }));
+  T("РСУ", M + 16, r2 - 8, COL.dim, 17, "left", 700);
+  RCS.forEach((n, i) => key(M + 16 + i * (kw3 + 10), r2, kw3, 56, n, F.rcs === i ? "on" : "off", () => { F.rcs = i; }));
+  // ---- centre, bottom, left of the hub: the screen's mode ----
+  const clw = hb.x0 - GAP - cx0;
+  block(cx0, LY0, clw, LY1 - LY0, "РЕЖИМ");
+  T(F.term < 0 ? "выбор: авто, по высоте" : "выбор: вручную", cx0 + 16, LY0 + BAND + 32, COL.tx, 17);
+  key(cx0 + 16, r2 - 66, clw - 32, 56, "КОСМОС", atmo ? "off" : "onT", () => { F.term = 0; });
+  key(cx0 + 16, r2, clw - 32, 56, "АТМОСФЕРА", atmo ? "onT" : "off", () => { F.term = 1; });
+  // ---- centre, bottom, right of the hub: the alerts' acknowledge, under the right hand ----
+  const crx = hb.x1 + GAP, crw = cx1 - crx;
+  block(crx, LY0, crw, LY1 - LY0, "ТРЕВОГИ");
+  if (F.alert) { const c = F.alert === 2 ? COL.rd : COL.ye; lamp(crx + 26, LY0 + BAND + 26, c, 7); T(F.alert === 2 ? "ОПАСНОСТЬ" : "ВНИМАНИЕ", crx + 44, LY0 + BAND + 26 + capH(22) / 2, c, 22, "left", 700); T(F.ack ? "подтверждена" : "не подтверждена", crx + 16, LY0 + BAND + 74, COL.tx, 17); }
+  else T("нет", crx + 16, LY0 + BAND + 32, COL.tx, 17);
+  const blink = (performance.now() / 1000) % 1 < 0.62;
+  key(crx + 16, r2, crw - 32, 56, "ПОДТВЕРДИТЬ", F.alert ? (!F.ack && blink ? "warnOn" : "warn") : "na", () => { F.ack = true; });
+  // ---- right: thrust, fuel, g - three gauges of one height; the thrust bar takes a touch ----
+  block(Rx, 88, Rw, LY1 - 88, "ТЯГА");
+  const stN = ["ВЫКЛ", "ПОЛЕ", "ЛУЧ", "ПОДАЧА"][E.stage];
+  T(E.ana ? "анамезон: " + stN : "планетарные · " + (E.rmUse ? "железо" : "аргон"), Rx + Rw - 16, bandBase(88, 17), E.ana ? COL.or : COL.tx, 17, "right", 700);
+  const gw = (Rw - 32) / 3, gx = i => Rx + 16 + gw * i + gw / 2, by0 = 240, by1 = LY1 - 16;
+  const fuel = (E.argon + E.iron) / 16e6, gLim = E.ana ? E.compLim : E.set.gl, gv = F.g, gmax = Math.max(2, gLim * 1.25), gHot = E.gLimOn && gv > gLim * 0.9;
+  ["ТЯГА", "ТОПЛИВО", "ПЕРЕГРУЗКА"].forEach((l, i) => T(l, gx(i), 160, COL.dim, 17, "center", 700));
+  RUN([[fmt(mainAct() * 100), 34, 700, COL.wh], 4, ["%", 22, 700, COL.dim]], gx(0), 202, "center");
+  RUN([[fmt(fuel * 100), 34, 700, fuel < 0.1 ? COL.rd : COL.wh], 4, ["%", 22, 700, COL.dim]], gx(1), 202, "center");
+  RUN([[fmt(gv, 2), 34, 700, gHot ? COL.rd : COL.wh], 4, ["g", 22, 700, COL.dim]], gx(2), 202, "center");
+  T(E.gLimOn ? "предел " + fmt(gLim, 1) : "предел выкл", gx(2), 226, COL.tx, 15, "center");
+  const tbw = gw >= 200 ? 80 : 64;
+  vbar(gx(0) - tbw / 2, by0, tbw, by1 - by0, mainAct(), COL.cy, true, mainSet());
+  vbar(gx(1) - 20, by0, 40, by1 - by0, fuel, fuel < 0.1 ? COL.rd : COL.gr, false);
+  vbar(gx(2) - 20, by0, 40, by1 - by0, gv / gmax, gHot ? COL.rd : COL.tx, false);
+  if (E.gLimOn) { const yl = by1 - (by1 - by0) * gLim / gmax; line(gx(2) - 26, yl, gx(2) + 26, yl, COL.rd, 3); T(fmt(gLim, 1), gx(2) + 32, yl + capH(15, 400) / 2, COL.rd, 15); }
+  HITS.push({x: gx(0) - tbw / 2 - 10, y: by0 - 6, w: tbw + 20, h: by1 - by0 + 12, drag: yy => setMain((by1 - yy) / (by1 - by0))});
+}
+// a vertical gauge: track, 10 % ticks on the left, the fill from the bottom; a touch bar gets the set-point arrow (yellow)
+function vbar(x, y, w, h, f, col, touch, set) {
+  box(x, y, w, h, "#0d1715", COL.fr, 1.5);
+  for (let k = 1; k < 10; k++) line(x, y + h * k / 10, x + (k === 5 ? 12 : 6), y + h * k / 10, COL.line, 1.5);
+  const fh = h * clamp(f, 0, 1);
+  if (fh > 1) { g.fillStyle = mix(COL.bg, col, 0.35); g.fillRect(x + 2, y + h - fh, w - 4, fh - 2); g.fillStyle = col; g.fillRect(x + 6, y + h - fh, w - 12, fh - 2); }
+  if (touch) { const yp = y + h - h * clamp(set, 0, 1); line(x, yp, x + w, yp, mix(COL.bg, COL.ye, 0.75), 1.5); g.fillStyle = COL.ye; poly([[x + w + 1, yp], [x + w + 18, yp - 9], [x + w + 18, yp + 9]]); g.fill(); }
+}
+function headingTape(x, y, w, h) {
+  box(x, y, w, h, COL.tape, COL.fr);
+  const cx = x + w / 2, ppd = w / 60, hd = F.hdg;
+  for (let d = Math.floor((hd - 32) / 5) * 5; d <= hd + 32; d += 5) {
+    const xx = cx + (d - hd) * ppd; if (xx < x + 4 || xx > x + w - 4) continue;
+    const big = ((d % 10) + 10) % 10 === 0; line(xx, y + h - (big ? 14 : 8), xx, y + h, COL.line, 2);
+    if (big) { const s = String(((d % 360) + 360) % 360).padStart(3, "0"), tw = TW(s, 15); if (Math.abs(xx - cx) < 44 + tw / 2 + 6 || xx - tw / 2 < x + 4 || xx + tw / 2 > x + w - 4) continue; T(s, xx, y + 22, COL.tx, 15, "center"); }
+  }
+  poly([[cx - 44, y + 2], [cx + 44, y + 2], [cx + 44, y + h - 4], [cx, y + h + 6], [cx - 44, y + h - 4]]);
+  g.fillStyle = "#000"; g.fill(); g.strokeStyle = COL.or; g.lineWidth = 2; g.stroke();
+  T(String(Math.round(hd) % 360).padStart(3, "0") + "°", cx, y + h / 2 + capH(26) / 2 - 1, COL.wh, 26, "center", 700);
+}
+// the attitude indicator: wide and low (the glass is); the bank scale fixed, its pointer turns with the sky
+function adi(x, y, w, h) {
+  const cx = x + w / 2, cy = y + h / 2, k = (h / 2) / 22, b = F.bank * RAD, sb = Math.sin(b), cb = Math.cos(b);
+  g.fillStyle = COL.sky; g.fillRect(x, y, w, h);
+  const off = F.pitch * k, P = (u, v) => [cx + u * cb + v * sb, cy - u * sb + v * cb], hp = P(0, off);
+  const gnd = clipHalf([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], sb, cb, -(sb * hp[0] + cb * hp[1]));
+  if (gnd.length >= 3) { poly(gnd); g.fillStyle = COL.ground; g.fill(); }
+  const hz = clipSeg(P(-2 * w, off), P(2 * w, off), x + 1, y + 1, x + w - 1, y + h - 1);
+  if (hz) line(hz[0][0], hz[0][1], hz[1][0], hz[1][1], COL.wh, 2.5);
+  const R = h / 2 - 4, ticks = [-45, -30, -20, -10, 0, 10, 20, 30, 45].map(a => ({a, L: a % 30 === 0 ? 14 : 8}));
+  const tickPts = ticks.map(t => [cx + (R - t.L / 2) * Math.sin(t.a * RAD), cy - (R - t.L / 2) * Math.cos(t.a * RAD)]);
+  for (let d = -90; d <= 90; d += 5) {
+    if (!d) continue;
+    const v = (F.pitch - d) * k; if (Math.abs(v) > h / 2 - 40) continue;
+    const hw = d % 10 ? 28 : 56, s = clipSeg(P(-hw, v), P(hw, v), x + 6, y + 6, x + w - 6, y + h - 6);
+    if (s) line(s[0][0], s[0][1], s[1][0], s[1][1], COL.wh, 2);
+    if (d % 10) continue;
+    for (const sd of [-1, 1]) {
+      const q = P(sd * (hw + 18), v), st = String(Math.abs(d)), tw = TW(st, 15, 700), ch = capH(15, 700);
+      if (q[0] - tw / 2 < x + 6 || q[0] + tw / 2 > x + w - 6 || q[1] - ch / 2 < y + 6 || q[1] + ch / 2 > y + h - 6) continue;
+      if (tickPts.some(p => Math.abs(p[0] - q[0]) < tw / 2 + 10 && Math.abs(p[1] - q[1]) < ch / 2 + 10)) continue;   // never over the bank scale
+      if (Math.abs(q[0] - cx) < 120 + tw / 2 + 6 && Math.abs(q[1] - cy - 7) < ch / 2 + 13) continue;                    // nor over the aircraft symbol
+      T(st, q[0], q[1] + ch / 2, COL.wh, 15, "center", 700);
+    }
+  }
+  for (const t of ticks) { const a = t.a * RAD; line(cx + R * Math.sin(a), cy - R * Math.cos(a), cx + (R - t.L) * Math.sin(a), cy - (R - t.L) * Math.cos(a), COL.wh, 2); }
+  { const a = -b, r1 = R - 18, r2 = R - 32, sp = 0.08; g.fillStyle = COL.ye; poly([[cx + r1 * Math.sin(a), cy - r1 * Math.cos(a)], [cx + r2 * Math.sin(a - sp), cy - r2 * Math.cos(a - sp)], [cx + r2 * Math.sin(a + sp), cy - r2 * Math.cos(a + sp)]]); g.fill(); }
+  const lim = h / 2 - 16, fx = cx + clamp(F.slip * k, -lim, lim), fy = cy + clamp((F.pitch - F.fpa) * k, -lim, lim);
+  ring(fx, fy, 8, COL.gr, 2); line(fx - 20, fy, fx - 8, fy, COL.gr, 2); line(fx + 8, fy, fx + 20, fy, COL.gr, 2); line(fx, fy - 8, fx, fy - 16, COL.gr, 2);
+  g.strokeStyle = COL.or; g.lineWidth = 4; g.beginPath(); g.moveTo(cx - 120, cy); g.lineTo(cx - 44, cy); g.lineTo(cx - 30, cy + 14); g.moveTo(cx + 120, cy); g.lineTo(cx + 44, cy); g.lineTo(cx + 30, cy + 14); g.stroke();
+  g.fillStyle = COL.or; g.fillRect(cx - 4, cy - 4, 8, 8);
+  box(x, y, w, h, null, COL.fr, 1.5);
+}
+// a tape: ticks toward the attitude indicator, labels 15 px clear of the window, the value 34 px in a window pointing at it
+function tape(x, y, w, h, val, sc, side) {
+  box(x, y, w, h, COL.tape, COL.fr);
+  const cy = y + h / 2, win = 26, lo = val - (h / 2) / sc.ppu, hi = val + (h / 2) / sc.ppu, ch = capH(15, 400);
+  for (let v = Math.ceil(lo / sc.tick) * sc.tick; v <= hi; v += sc.tick) {
+    if (v < 0) continue;
+    const yy = cy - (v - val) * sc.ppu; if (yy < y + 4 || yy > y + h - 4) continue;
+    const big = Math.round(v / sc.tick) % sc.every === 0, L = big ? 16 : 8;
+    if (side === "left") line(x + w - L, yy, x + w, yy, COL.line, 2); else line(x, yy, x + L, yy, COL.line, 2);
+    if (!big || Math.abs(yy - cy) < win + ch / 2 + 4 || yy - ch / 2 < y + 4 || yy + ch / 2 > y + h - 4) continue;
+    if (side === "left") T(fmt(v), x + w - 22, yy + ch / 2, COL.tx, 15, "right"); else T(fmt(v), x + 22, yy + ch / 2, COL.tx, 15, "left");
+  }
+  const x0 = x + 3, x1 = x + w - 3;
+  poly(side === "left" ? [[x0, cy - win], [x1, cy - win], [x1 + 9, cy], [x1, cy + win], [x0, cy + win]] : [[x0, cy - win], [x1, cy - win], [x1, cy + win], [x0, cy + win], [x0 - 9, cy]]);
+  g.fillStyle = "#000"; g.fill(); g.strokeStyle = COL.or; g.lineWidth = 2; g.stroke();
+  const s = fmt(val);
+  T(s, (x0 + x1) / 2, cy + capH(34) / 2, COL.wh, fitSize(s, x1 - x0 - 8, 34, 700, 26), "center", 700);
+}
+function vsBar(x, y, w, h, vs) {
+  box(x, y, w, h, COL.tape, COL.fr);
+  const cy = y + h / 2, win = 22, span = h / 2 - win - 6, f = v => Math.min(1, Math.sqrt(Math.abs(v) / 60)) * span;
+  for (const v of [5, 20, 60]) for (const sd of [-1, 1]) { const yy = cy - sd * (win + f(v)); line(x, yy, x + 10, yy, COL.line, 2); }
+  const d = f(vs); if (d > 0.5) { g.fillStyle = vs >= 0 ? COL.gr : COL.or; g.fillRect(x + 16, vs >= 0 ? cy - win - d : cy + win, w - 22, d); }
+  box(x + 3, cy - win, w - 6, 2 * win, "#000", COL.or, 2);
+  const s = Math.abs(vs) >= 10 ? fmtS(vs, 0) : fmtS(vs, 1);
+  T(s, x + w / 2, cy + capH(24) / 2, vs < -5 ? COL.rd : COL.wh, fitSize(s, w - 12, 24, 700, 17), "center", 700);
+}
+// space: the same places - speed left, altitude and vertical right, heading on top, the horizon ball in the middle
+function spaceView(ix0, ix1, rowY, iy0, iy1) {
+  const cx = (ix0 + ix1) / 2, cy = (iy0 + iy1) / 2, r = 100, k = r / 40, b = F.bank * RAD, sb = Math.sin(b), cb = Math.cos(b);
+  RUN([["КУРС", 17, 700, COL.dim], 12, [String(Math.round(F.hdg) % 360).padStart(3, "0") + "°", 26, 700, COL.wh]], cx, rowY + 20 + capH(26) / 2, "center");
+  disc(cx, cy, r, "#0c1a17"); ring(cx, cy, r, "#60c060", 2);
+  const P = (u, v) => [cx + u * cb + v * sb, cy - u * sb + v * cb];
+  for (let d = -30; d <= 30; d += 10) {
+    const v = (F.pitch - d) * k; if (Math.abs(v) > r * 0.9) continue;
+    const hw = d === 0 ? r * 1.2 : r * 0.3, s = clipCircle(P(-hw, v), P(hw, v), cx, cy, r - 4);
+    if (s) line(s[0][0], s[0][1], s[1][0], s[1][1], d === 0 ? "#60e070" : "#3f7a48", d === 0 ? 2.5 : 2);
+  }
+  g.strokeStyle = COL.or; g.lineWidth = 4; g.beginPath(); g.moveTo(cx - 50, cy); g.lineTo(cx - 16, cy); g.moveTo(cx + 16, cy); g.lineTo(cx + 50, cy); g.stroke();
+  g.fillStyle = COL.or; g.fillRect(cx - 3, cy - 3, 6, 6);
+  const lx = cx - r - 40, rx = cx + r + 40;
+  T("СКОРОСТЬ", lx, 150, COL.dim, 17, "right", 700); RUN([[fmt(F.v), 44, 700, COL.wh], 8, ["м/с", 17, 400, COL.dim]], lx, 202, "right");
+  T("ВЫСОТА", rx, 150, COL.dim, 17, "left", 700); RUN([[fmt(F.alt / 1000, 1), 44, 700, COL.wh], 8, ["км", 17, 400, COL.dim]], rx, 202);
+  T("ВЕРТИКАЛЬНАЯ", rx, 250, COL.dim, 17, "left", 700); RUN([[fmtS(F.vs, 1), 34, 700, F.vs < -5 ? COL.rd : COL.wh], 8, ["м/с", 17, 400, COL.dim]], rx, 292);
+}
+
+// ================= page 2: ДВИГАТЕЛИ =================
+const fFu = F => { F = Math.abs(F); return F >= 1e9 ? [fmt(F / 1e9, 2), "ГН"] : F >= 1e6 ? [fmt(F / 1e6, 0), "МН"] : F >= 1e3 ? [fmt(F / 1e3, 0), "кН"] : ["0", "Н"]; };
+const fWu = P => P >= 1e18 ? [fmt(P / 1e18, 1), "ЭВт"] : P >= 1e15 ? [fmt(P / 1e15, 1), "ПВт"] : P >= 1e12 ? [fmt(P / 1e12, 1), "ТВт"] : P >= 1e9 ? [fmt(P / 1e9, 1), "ГВт"] : P >= 1e6 ? [fmt(P / 1e6, 0), "МВт"] : ["0", "Вт"];
+const fMu = m => m >= 1000 ? [fmt(m / 1000, 2), "т/с"] : m >= 1 ? [fmt(m, 1), "кг/с"] : m > 0 ? [fmt(m * 1000, 0), "г/с"] : ["0", "кг/с"];
+const fT = s => !isFinite(s) ? "—" : s >= 86400 ? fmt(s / 86400, 1) + " сут" : s >= 3600 ? fmt(s / 3600, 1) + " ч" : s >= 60 ? fmt(s / 60, 1) + " мин" : fmt(s, 0) + " с";
+const fF = F => fFu(F).join(" ");
+const clock = t => { const s = Math.max(0, Math.floor(t)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+function pageEng() {
+  const hb = hub(), ana = E.ana;
+  drawTabs();
+  // ---- the header: the drive (АНАМЕЗОН / ПЛАНЕТАРНЫЕ), its state in one line ----
+  key(M, 24, 200, 48, "АНАМЕЗОН", ana ? "on" : "off", () => setAna(true));
+  key(M + 210, 24, 200, 48, "ПЛАНЕТАРНЫЕ", ana ? "off" : "on", () => setAna(false));
+  const st = ana ? anaStatus() : planStatus(), sx = M + 466, smw = tabsX0() - 24 - sx;
+  lamp(M + 442, 48, st[1]);
+  T(fitTxt(st[0], smw, 20, 700), sx, 48 + capH(20) / 2, st[1], 20, "left", 700);
+  if (E.bypass) T("БЛОКИРОВКИ СНЯТЫ", tabsX0() - 24, 48 + capH(20) / 2, COL.rd, 20, "right", 700);
+  // ---- the blocks: pictures and output up top, reckoning bottom left, the control right on full height ----
+  const ctl = {x: hb.x1 + GAP, w: W - M - hb.x1 - GAP}, upW = ctl.x - GAP - M, aW = Math.round(upW * 0.565 / 8) * 8, bX = M + aW + GAP, bW = ctl.x - GAP - bX;
+  const lowW = hb.x0 - GAP - M, wide = lowW >= 900, rcW = wide ? lowW - GAP - 400 : lowW;
+  if (ana) { anaPictures(M, 88, aW, UY1 - 88); anaTable(bX, 88, bW, UY1 - 88); anaReckon(M, LY0, rcW, LY1 - LY0); anaControl(ctl.x, 88, ctl.w, LY1 - 88); }
+  else { planPictures(M, 88, aW, UY1 - 88); planTable(bX, 88, bW, UY1 - 88); planReckon(M, LY0, rcW, LY1 - LY0); planControl(ctl.x, 88, ctl.w, LY1 - 88); }
+  // the journal and the trends are history: under the hub (seen with the yoke stowed); on the wide glass the journal has its own place
+  if (wide) { journalBlock(M + rcW + GAP, LY0, 400, LY1 - LY0, 6); trendBlock(hb.x0, LY0, hb.x1 - hb.x0, LY1 - LY0, 0); }
+  else trendBlock(hb.x0, LY0, hb.x1 - hb.x0, LY1 - LY0, 3);
+}
+function planStatus() {
+  const run = E.Fm > 0 || E.Fpod > 0;
+  if (!E.plantRun) return ["УСТАНОВКА НЕ НА РЕЖИМЕ: маршевая без тяги", COL.ye];
+  const s = (run ? "ТЯГА " + fF(E.F) : "ТЯГИ НЕТ") + " · " + (envAir() ? "атмосфера" : "космос") + " · " + (E.rmUse ? "железо" : "аргон") + " · " + fmt(E.mass / 1e6, 2) + " кт";
+  return E.limG ? [s + " · держит предел " + fmt(E.set.gl, 1) + " g", COL.ye] : [s, run ? COL.gr : COL.dim];
+}
+function anaStatus() {
+  const s = ["КАМЕРЫ ВЫКЛЮЧЕНЫ", "ПОЛЕ КАМЕР", "ПУЧОК ПОДЖИГА", "НА РЕЖИМЕ"][E.stage];
+  const trans = E.stageT > E.stage;
+  if (E.stage === 3) return [s + (E.limA ? " · держит предел " + fmt(E.compLim, 1) + " g" : " · тяга по оси " + (E.Fs - E.Fr < 0 ? "−" : "") + fF(E.Fs - E.Fr)), E.limA ? COL.ye : COL.gr];
+  return [s + (trans ? " · пуск идёт" : ""), E.stage === 0 ? COL.dim : COL.ye];
+}
+// a cup seen from aft: its field ring, the fill of its output
+function cupRing(x, y, r, f, col) {
+  ring(x, y, r, "#2c4a44", 5);
+  if (f > 0.001) { arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, f), col, 5); const a = Math.min(1, f); disc(x, y, r - 4, mix(COL.bg, "#ff9640", 0.35 * a)); disc(x, y, (r - 4) * 0.55, mix(COL.bg, "#fff0dc", 0.6 * a)); }
+}
+function chamber(x, y, r, field, f, label) {
+  ring(x, y, r, "#2a2440", 4);
+  if (field > 0.001) arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, field), field >= 1 ? COL.vi : "#7a68b0", 4);
+  if (f > 0.001) { const s = 0.55 + 0.45 * Math.abs(Math.sin(simT * 47 + x)), a = s * Math.min(1, f + 0.2); disc(x, y, r - 3, mix(COL.bg, "#bea0ff", 0.5 * a)); disc(x, y, (r - 3) * 0.5, mix(COL.bg, "#ffffff", a)); }
+  T(label, x, y + capH(15, 700) / 2, COL.wh, 15, "center", 700);
+}
+function sternHull(cx, cy, k, crest, top) {
+  ellipse(cx, cy, 13.5 * k, 9 * k, "#16241f", "#3f6a5f", 2);
+  line(cx - 13.5 * k, cy - k, cx - crest * k, cy - 1.5 * k, "#2e4d45", 3); line(cx + 13.5 * k, cy - k, cx + crest * k, cy - 1.5 * k, "#2e4d45", 3);
+  line(cx, cy - 9 * k, cx, Math.max(top, cy - Math.min(20, crest) * k), "#2e4d45", 3);
+}
+function planPictures(x, y, w, h) {
+  block(x, y, w, h, "ЧАШИ И ВЕКТОРЫ");
+  const c0 = y + BAND, sw = Math.round(w * 0.44), dx = x + sw;
+  line(dx, c0 + 8, dx, y + h - 8, COL.fr, 1.5);
+  T("с кормы", x + 16, c0 + 26, COL.dim, 17, "left", 700); T("сбоку", dx + 16, c0 + 26, COL.dim, 17, "left", 700);
+  // from aft: the hull, the closed anamezon diaphragms, the march cup, the 4 pods
+  const cx = x + sw / 2, cy = c0 + 112, k = Math.min(5.4, (sw - 24) / 50);
+  sternHull(cx, cy, k, 25, c0 + 40);
+  for (const [px, py] of [[-4.2, 5.2], [4.2, 5.2], [-4.2, -2], [4.2, -2]]) ring(cx + px * k, cy - py * k, 2.4 * k, "#3b3550", 2);
+  cupRing(cx, cy - 1.82 * k, 2.2 * k + 6, E.Fm / PL.FM, E.rmUse ? COL.vi : COL.or);
+  if (E.Fm > 0 && Math.abs(E.tvc) > 0.05) arrow(cx, cy - 1.82 * k, cx, cy - 1.82 * k - E.tvc * 5, COL.ye, 3);
+  for (let i = 0; i < 4; i++) { const px = cx + PL.podX[i] * k * 1.35, py = cy + (i < 2 ? -6.2 : 0.6) * k; cupRing(px, py, 15, E.podsOk ? E.thrP : 0, COL.or); T("Г" + (i + 1), px, py + capH(15, 700) / 2, COL.tx, 15, "center", 700); }
+  // side on: the thrust lines about the centre of mass
+  const sx0 = dx + 30, sk = (x + w - 24 - sx0) / 178, sy0 = c0 + 104, sc = 70 / 1.5e9;
+  g.fillStyle = "#3a4650"; poly([[sx0, sy0 - 16], [sx0 + 140 * sk, sy0 - 16], [sx0 + 165 * sk, sy0 - 11], [sx0 + 178 * sk, sy0], [sx0 + 165 * sk, sy0 + 11], [sx0 + 140 * sk, sy0 + 16], [sx0, sy0 + 16]]); g.fill();
+  const cgx = sx0 + E.sCG * sk;
+  ring(cgx, sy0, 7, COL.rd, 2); T("ЦМ", cgx, sy0 - 24, COL.rd, 15, "center", 700);
+  if (E.Fm > 0) { const tr = E.tvc * RAD, L = 30 + E.Fm * sc; g.fillStyle = mix(COL.bg, "#ffc878", 0.7); poly([[sx0, sy0 - 5], [sx0 - 22, sy0 - 11], [sx0 - 22, sy0 + 11], [sx0, sy0 + 5]]); g.fill(); arrow(sx0, sy0 + 28, sx0 + L * Math.cos(tr), sy0 + 28 - L * Math.sin(tr) * 3, COL.or, 4); }
+  for (let i = 0; i < 4; i += 2) {
+    const px = sx0 + PL.podS[i] * sk, pa = E.ang * RAD, L = 16 + 40 * E.Fpod / PL.FP;
+    if (E.Fpod > 0) arrow(px, sy0 + 22, px + L * Math.cos(pa), sy0 + 22 - L * Math.sin(pa), COL.or, 3);
+    T("Г" + (i + 1) + "–" + (i + 2), px, sy0 + 62, COL.dim, 15, "center");
+  }
+  if (E.F > 0) arrow(cgx, sy0, cgx + E.Fx * sc, sy0 - E.Fy * sc, COL.wh, 3);
+  const m0 = Math.abs(E.Mnet) < 1e6;
+  T(m0 ? "момент тангажа 0: УВТ держит" : "момент тангажа " + fmt(E.Mnet / 1e9, 2) + " ГН·м, " + (E.Mnet > 0 ? "нос вверх" : "нос вниз"), dx + 16, y + h - 14, m0 ? COL.gr : COL.ye, 15);
+}
+function anaPictures(x, y, w, h) {
+  block(x, y, w, h, "КАМЕРЫ И СТРУИ");
+  const c0 = y + BAND, w1 = Math.round(w * 0.36), w2 = Math.round(w * 0.27), x1 = x + w1, x2 = x1 + w2;
+  line(x1, c0 + 8, x1, y + h - 8, COL.fr, 1.5); line(x2, c0 + 8, x2, y + h - 8, COL.fr, 1.5);
+  T("корма К1–К4", x + 16, c0 + 26, COL.dim, 17, "left", 700); T("нос Н1–Н2", x1 + 16, c0 + 26, COL.dim, 17, "left", 700); T("струи", x2 + 16, c0 + 26, COL.dim, 17, "left", 700);
+  const cy = c0 + 100, k = Math.min(5.6, (w1 - 24) / 40), cx = x + w1 / 2;
+  sternHull(cx, cy, k, 19, c0 + 40);
+  [[-4.2, 5.2], [4.2, 5.2], [-4.2, -2], [4.2, -2]].forEach(([px, py], i) => chamber(cx + px * k, cy - py * k, 2.7 * k, E.fieldL, E.feedS, "К" + (i + 1)));
+  T(fF(E.Fs), cx, y + h - 14, COL.wh, 17, "center", 700);
+  const nx = x1 + w2 / 2, nk = Math.min(9, (w2 - 24) / 16);
+  ellipse(nx, cy, 7.5 * nk, 6 * nk, "#16241f", "#3f6a5f", 2);
+  [-3, 3].forEach((px, i) => chamber(nx + px * nk, cy, 2.2 * nk, E.fieldL, E.feedR, "Н" + (i + 1)));
+  T(E.Fr > 0 ? "−" + fF(E.Fr) : "0", nx, y + h - 14, COL.or, 17, "center", 700);
+  // the jets and the star: the stern jet goes aft, the retro jets ahead; the star where it is
+  const w3 = x + w - x2, sx = x2 + w3 / 2, sy = cy - 6;
+  g.fillStyle = "#3a4650"; g.fillRect(sx - 34, sy - 7, 54, 14); poly([[sx + 20, sy - 7], [sx + 36, sy], [sx + 20, sy + 7]]); g.fill();
+  const jet = (x0, dir, f) => { if (f <= 0.001) return; const len = (w3 / 2 - 50) * Math.sqrt(f), hf = Math.tan(5 * RAD) * len; g.fillStyle = mix(COL.bg, "#b4a0ff", 0.55); poly([[x0, sy - 4], [x0 + dir * len, sy - hf - 4], [x0 + dir * len, sy + hf + 4], [x0, sy + 4]]); g.fill(); };
+  jet(sx - 34, -1, E.feedS); jet(sx + 36, 1, E.feedR);
+  const starX = E.starAhead ? x + w - 22 : x2 + 22;
+  disc(starX, sy + 44, 7, "#e8c860"); T("звезда " + fmt(E.starAU, 0) + " а.е.", E.starAhead ? starX - 14 : starX + 14, sy + 44 + capH(15, 400) / 2, COL.ye, 15, E.starAhead ? "right" : "left");
+  const Fn = E.Fs - E.Fr;
+  if (Math.abs(Fn) > 1) arrow(sx, sy + 82, sx + clamp(Fn / 1e10, -9, 9) * 9, sy + 82, Fn >= 0 ? COL.wh : COL.or, 3);
+  T(Fn > 1 ? "разгон" : Fn < -1 ? "торможение" : "тяги нет", sx, y + h - 14, Fn >= 0 ? COL.wh : COL.or, 15, "center");
+}
+// a table turned on its side: rows are the quantities, columns the sources; numbers right, units in their own smaller column
+function table(x, y, w, h, title, head, rows) {
+  block(x, y, w, h, title);
+  const lw = Math.max(120, Math.round((w - 32) * 0.28)), cw = (w - 32 - lw) / head.length, top = y + BAND;
+  const colX = i => x + 16 + lw + i * cw;
+  head.forEach((t, i) => T(t, colX(i) + cw - 6, top + 26, COL.dim, 17, "right", 700));
+  line(x + 16, top + 36, x + w - 16, top + 36, COL.fr, 1);
+  line(colX(head.length - 1) - 4, top + 8, colX(head.length - 1) - 4, y + h - 8, COL.fr, 1);
+  rows.forEach((r, j) => {
+    const yb = top + 36 + 26 + j * 32;
+    T(r[0], x + 16, yb, COL.dim, 17);
+    r[1].forEach((c, i) => { if (!c) return; const ux = colX(i) + cw - 6, uw = TW(c[1], 15); T(c[1], ux, yb, COL.dim, 15, "right"); T(c[0], ux - uw - 5, yb, c[2] || COL.wh, 20, "right", 700); });
+  });
+}
+function planTable(x, y, w, h) {
+  const v = E.vM || PL.vAr, vp = PL.vAr, Fp = E.podsOk ? E.Fpod : 0, md = E.md, Ft = E.F;
+  table(x, y, w, h, "ВЫХОД ЧАШ", ["МАРШ.", "ГОНДОЛА", "ИТОГО"], [
+    ["тяга", [fFu(E.Fm), fFu(Fp), [...fFu(Ft), COL.ye]]],
+    ["доля поля", [[fmt(100 * E.Fm / PL.FM), "%"], [fmt(100 * Fp / PL.FP), "%"], [fmt(100 * Ft / (PL.FM + 4 * PL.FP)), "%", COL.ye]]],
+    ["струя", [E.Fm > 0 ? [fmt(v / 1e3), "км/с"] : ["—", ""], Fp > 0 ? [fmt(vp / 1e3), "км/с"] : ["—", ""], md > 0 ? [fmt(Ft / md / 1e3), "км/с", COL.ye] : ["—", ""]]],
+    ["расход", [fMu(E.Fm / v), fMu(Fp / vp), [...fMu(md), COL.ye]]],
+    ["мощность струи", [fWu(E.Fm * v / 2), fWu(Fp * vp / 2), [...fWu(E.Fm * v / 2 + 4 * Fp * vp / 2), COL.ye]]],
+  ]);
+}
+function anaTable(x, y, w, h) {
+  const fs = E.feedS, fr = E.feedR, pmS = fs > 0.001 ? E.Fs / ANA.vEff / 4 / (ANA.rate * fs) : 0, pmR = fr > 0.001 ? E.Fr / ANA.vEff / 2 / (ANA.rate * fr) : 0, Fn = E.Fs - E.Fr;
+  table(x, y, w, h, "ВЫХОД КАМЕР", ["КАМЕРА", "РЕТРО", "ПО ОСИ"], [
+    ["подача", [[fmt(fs * 100), "%"], [fmt(fr * 100), "%"], null]],
+    ["капсулы", [[fmt(ANA.rate * fs / 1e3, 1), "кГц"], [fmt(ANA.rate * fr / 1e3, 1), "кГц"], [fmt(ANA.rate * (4 * fs + 2 * fr) / 1e3, 1), "кГц", COL.ye]]],
+    ["капсула", [fs > 0.001 ? [fmt(pmS * 1e3, 1), "г"] : ["—", ""], fr > 0.001 ? [fmt(pmR * 1e3, 1), "г"] : ["—", ""], null]],
+    ["тяга", [fFu(ANA.F * fs), fFu(ANA.Fr * fr), [(Fn < 0 ? "−" : "") + fFu(Fn)[0], fFu(Fn)[1], COL.ye]]],
+    ["поле", [[fmt(ANA.field * E.fieldL), "Тл", COL.vi], [fmt(ANA.field * E.fieldL), "Тл", COL.vi], null]],
+  ]);
+}
+// the reckoning: label left, value right, in columns; a cell's value shrinks (not below 18) before it would touch its label
+function grid(x, y, w, h, title, items, cols, step) {
+  block(x, y, w, h, title);
+  const rows = Math.ceil(items.length / cols), cw = (w - 32 - (cols - 1) * 32) / cols;
+  for (let c = 1; c < cols; c++) line(x + 16 + c * (cw + 32) - 16, y + BAND + 10, x + 16 + c * (cw + 32) - 16, y + h - 10, COL.fr, 1);
+  items.forEach(([l, v, col], i) => {
+    const c = Math.floor(i / rows), r = i % rows, cx = x + 16 + c * (cw + 32), yb = y + BAND + 8 + step / 2 + capH(17) / 2 + r * step;
+    const m = v.match(/^(.*\S)\s+([^\s\d+−]+)$/), num = m ? m[1] : v, unit = m ? m[2] : "", uw = unit ? TW(unit, 15) + 5 : 0;   // the unit: its own smaller column
+    const lw = TW(l, 17), vs = fitSize(num, cw - lw - 16 - uw, 22, 700, 18);
+    T(l, cx, yb, COL.dim, 17); if (unit) T(unit, cx + cw, yb, COL.dim, 15, "right"); T(num, cx + cw - uw, yb, col || COL.wh, vs, "right", 700);
+  });
+}
+function planReckon(x, y, w, h) {
+  const air = envAir(), gg = air ? 9.81 : 0, Wt = E.mass * gg, tw = gg > 0 ? E.F / Wt : 0, a = E.F / E.mass, res = E.rmUse ? E.iron : E.argon, md = E.md;
+  const hover = gg > 0 ? Wt / (4 * PL.FP) : 0, isp = md > 0 ? E.F / md / G0 : 0, dv = (E.vM || PL.vAr) * Math.log(E.mass / Math.max(1, E.mass - res)) / 1e3;
+  grid(x, y, w, h, "РАСЧЁТ", [
+    ["тяга / вес", gg > 0 ? fmt(tw, 2) : "—", gg > 0 && tw < 1 && E.F > 0 ? COL.ye : null],
+    ["ускорение", fmt(a, 2) + " м/с²"],
+    ["висение (сопла вниз): гондолы", gg > 0 ? fmt(hover * 100) + " %" : "—", hover > 1 ? COL.rd : null],
+    ["запас УВТ маршевой", fmt(100 * (1 - Math.abs(E.tvc) / PL.tvcMax)) + " %", Math.abs(E.tvc) >= PL.tvcMax - 0.1 ? COL.rd : null],
+    ["аргон / железо", fmt(E.argon / 1e6, 2) + " / " + fmt(E.iron / 1e6, 2) + " кт"],
+    ["хватит на этой тяге", md > 0 ? fT(res / md) : "—"],
+    ["запас скорости", fmt(dv, 1) + " км/с"],
+    ["удельный импульс", md > 0 ? fmt(isp) + " с" : "—"],
+  ], 2, 48);
+}
+function anaReckon(x, y, w, h) {
+  const fuel = E.traps.reduce((p, q) => p + q, 0), mass = E.massA || ANA.dry + fuel, a = E.a, beta = Math.tanh(E.rap), gam = Math.cosh(E.rap);
+  const rapLeft = ANA.vEff / C_L * Math.log(mass / Math.max(1, mass - fuel)), along = Math.abs(E.rap) < 1e-9 || Math.sign(a) === Math.sign(E.rap);
+  const stopT = !along && Math.abs(a) > 0 ? Math.abs(E.rap) * C_L / Math.abs(a) : Infinity, vMax = Math.tanh(Math.abs(E.rap) + rapLeft), vBr = Math.tanh((Math.abs(E.rap) + rapLeft) / 2);
+  const Pj = E.mdA * ANA.m2e * C_L * C_L * 0.62 * 0.85;
+  grid(x, y, w, h, "РАСЧЁТ", [
+    ["ускорение по оси", (a < 0 ? "−" : "+") + fmt(Math.abs(a) / G0, 1) + " g" + (Math.abs(a) < 1e-6 ? "" : along ? " разгон" : " торм.")],
+    ["компенсатор гасит", fmt(Math.min(Math.abs(a), ANA.comp) / G0, 1) + " g", COL.gr],
+    ["скорость", fmt(Math.abs(beta), 4) + " c · " + fmt(Math.abs(beta) * C_L / 1e3) + " км/с"],
+    ["фактор Лоренца", fmt(gam, 3)],
+    ["время корабля / Земли", fmt(1 / gam, 3)],
+    ["анамезон в ловушках", fmt(fuel / 1e6, 2) + " кт · Л" + Math.min(4, E.trap + 1), fuel <= 0 ? COL.ye : null],
+    [along ? "до пустых ловушек" : "до остановки", along ? (E.mdA > 0 ? fT(fuel / E.mdA) : "—") : fT(stopT)],
+    ["предел: разгон / с торм.", fmt(vMax, 3) + " / " + fmt(vBr, 3) + " c", vBr >= 0.42 ? COL.gr : COL.ye],
+    ["истечение: частицы / эфф.", fmt(ANA.vJet / C_L, 2) + " / " + fmt(ANA.vEff / C_L, 3) + " c"],
+    ["мощность струй · расход", fWu(Pj).join(" ") + " · " + fMu(E.mdA).join(" ")],
+  ], 2, 32);
+}
+// the touch scale (UCGO Arrow): the fill is the actual value from zero, the yellow arrow the set-point; ▲ ▼ - keys beside it
+function scale(o) {
+  const bw = o.w >= 170 ? 56 : 44, kw = 56, tot = bw + 22 + 6 + kw, x0 = Math.round(o.x + (o.w - tot) / 2), y0 = 212, y1 = 457, h = y1 - y0, mid = o.x + o.w / 2;
+  const V = v => y1 - h * (clamp(v, o.min, o.max) - o.min) / (o.max - o.min), live = o.live !== false;
+  T(o.label, mid, 152, o.col, 17, "center", 700);
+  T(o.valTxt, mid, 180, o.lim ? COL.rd : COL.wh, 24, "center", 700);
+  if (o.sub) T(fitTxt(o.sub, o.w - 6, 15), mid, 202, COL.ye, 15, "center");
+  box(x0, y0, bw, h, "#0d1715", COL.fr, 1.5);
+  for (let k = 1; k < 10; k++) line(x0, y0 + h * k / 10, x0 + (k === 5 ? 12 : 6), y0 + h * k / 10, COL.line, 1.5);
+  const base = V(o.zero ?? o.min), ya = V(o.act), f0 = Math.min(ya, base), fh = Math.abs(base - ya);
+  if (fh > 0.5) { g.fillStyle = mix(COL.bg, o.col, 0.3); g.fillRect(x0 + 2, f0, bw - 4, fh); g.fillStyle = o.col; g.fillRect(x0 + 6, f0, bw - 12, fh); }
+  const yp = V(o.set);
+  line(x0, yp, x0 + bw, yp, mix(COL.bg, COL.ye, 0.7), 1.5);
+  g.fillStyle = live ? COL.ye : COL.line; poly([[x0 + bw + 1, yp], [x0 + bw + 20, yp - 10], [x0 + bw + 20, yp + 10]]); g.fill();
+  if (o.lim) { box(x0 + 2, y0 + 2, bw + 18, 24, COL.rd); T(o.lim, x0 + 2 + (bw + 18) / 2, y0 + 14 + capH(15, 700) / 2, "#ffffff", fitSize(o.lim, bw + 14, 15, 700, 15), "center", 700); }
+  const snap = v => clamp(Math.round(v / o.snap) * o.snap, o.min, o.max);
+  key(x0 + bw + 28, y0, kw, 48, "▲", live ? "off" : "na", () => o.onSet(snap(o.set + o.step)));
+  key(x0 + bw + 28, y1 - 48, kw, 48, "▼", live ? "off" : "na", () => o.onSet(snap(o.set - o.step)));
+  if (live) HITS.push({x: x0, y: y0 - 6, w: bw + 22, h: h + 12, drag: yy => o.onSet(snap(o.min + (y1 - yy) / h * (o.max - o.min)))});
+}
+const pct = v => fmt(v * 100) + " %";
+function keyRow2(x, w) {   // the bottom row, under the hand: ОТСЕЧКА, ОБХОД БЛОК., ПРЕДЕЛ g
+  const kw = Math.floor((w - 20) / 3 / 10) * 10, y = LY1 - 8 - 48, armed = E.byArm > 0, blink = (performance.now() / 1000) % 1 < 0.62;
+  key(x, y, kw, 48, "ОТСЕЧКА", "warn", () => { if (E.ana) E.set.fs = E.set.fr = 0; else E.set.m = E.set.p = 0; lastTouch = simT; journal(E.ana ? "Отсечка: подача в ноль" : "Отсечка: стрелки в ноль"); });
+  key(x + kw + 10, y, kw, 48, E.bypass ? "БЛОК. СНЯТЫ" : armed ? "ПОДТВЕРДИТЬ" : "ОБХОД БЛОК.", E.bypass ? "warnOn" : armed ? (blink ? "warnOn" : "warn") : "off", bypassKey);
+  key(x + 2 * (kw + 10), y, kw, 48, E.gLimOn ? "ПРЕДЕЛ g ВКЛ" : "ПРЕДЕЛ g ВЫКЛ", E.gLimOn ? "on" : "off", () => { E.gLimOn = !E.gLimOn; journal(E.gLimOn ? "Предел перегрузки включён" : "Предел перегрузки выключен", E.gLimOn ? 0 : 1); });
+}
+function planControl(x, y, w, h) {
+  block(x, y, w, h, "УПРАВЛЕНИЕ");
+  const ix = x + 16, iw = w - 32, sw = iw / 5, live = true, t = () => { lastTouch = simT; };
+  scale({x: ix, w: sw, label: "МАРШ", col: COL.or, min: 0, max: 1, step: 0.05, snap: 0.01, set: E.set.m, act: E.thrM, valTxt: pct(E.thrM), sub: "уст. " + pct(E.set.m),
+    lim: !E.plantRun ? "УСТ" : E.limG && E.set.m > E.thrM + 0.005 ? "ОГР g" : "", onSet: v => { E.set.m = v; t(); }});
+  scale({x: ix + sw, w: sw, label: "ГОНДОЛЫ", col: COL.or, min: 0, max: 1, step: 0.05, snap: 0.01, set: E.set.p, act: E.podsOk ? E.thrP : 0, valTxt: pct(E.podsOk ? E.thrP : 0), sub: "уст. " + pct(E.set.p),
+    lim: !E.podsOk ? "ЗАКР" : E.limG && E.set.p > E.thrP + 0.005 ? "ОГР g" : "", onSet: v => { E.set.p = v; t(); }});
+  scale({x: ix + 2 * sw, w: sw, label: "СОПЛА", col: COL.bl, min: 0, max: 180, step: 5, snap: 1, set: E.set.ang, act: E.ang, valTxt: fmt(E.ang) + "°",
+    sub: E.ang < 45 ? "тяга вперёд" : E.ang < 135 ? "тяга вверх" : "торможение", onSet: v => { E.set.ang = v; t(); }});
+  scale({x: ix + 3 * sw, w: sw, label: "УВТ", col: COL.ye, min: -PL.tvcMax, max: PL.tvcMax, zero: 0, step: 1, snap: 0.5, set: E.tvc, act: E.tvc, valTxt: fmtS(E.tvc, 1) + "°",
+    sub: "авто, через ЦМ", live: false, onSet: () => {}});
+  scale({x: ix + 4 * sw, w: sw, label: "ПРЕД. g", col: COL.vi, min: 0, max: 8, step: 0.5, snap: 0.5, set: E.set.gl, act: E.felt, valTxt: fmt(E.felt, 1) + " g",
+    sub: E.bypass || !E.gLimOn ? "СНЯТ" : "предел " + fmt(E.set.gl, 1), onSet: v => { E.set.gl = Math.max(1, v); t(); }});
+  // row 1: the working mass (АВТО - by the medium) and the interlock it lives under
+  const y1 = LY1 - 8 - 48 - 10 - 48, kw = Math.min(160, Math.floor((iw - 96 - 240) / 3 / 10) * 10);
+  T("МАССА", ix, y1 + 24 + capH(17) / 2, COL.dim, 17, "left", 700);
+  [["АВТО", -1], ["АРГОН", 0], ["ЖЕЛЕЗО", 1]].forEach(([n, m], i) => key(ix + 80 + i * (kw + 10), y1, kw, 48, n, E.rm === m ? "on" : "off", () => { E.rm = m; }));
+  const lx = ix + 80 + 3 * (kw + 10) + 14, air = envAir();
+  lamp(lx + 10, y1 + 24, air && !E.bypass ? COL.gr : "#2a3a36", 8);
+  T(fitTxt("в атмосфере только аргон", x + w - 16 - (lx + 28), 17), lx + 28, y1 + 24 + capH(17) / 2, air ? COL.tx : COL.dim, 17);
+  keyRow2(ix, iw);
+}
+function anaControl(x, y, w, h) {
+  block(x, y, w, h, "УПРАВЛЕНИЕ");
+  const ix = x + 16, iw = w - 32, pw = w >= 900 ? 300 : 258, sw = (iw - pw - 16) / 3, t = () => { lastTouch = simT; }, run = E.stage === 3;
+  const lim = E.limA ? "ОГР g" : "";
+  scale({x: ix, w: sw, label: "КОРМА", col: COL.vi, min: 0, max: 1, step: 0.05, snap: 0.01, set: E.set.fs, act: E.feedS, valTxt: pct(E.feedS), sub: "уст. " + pct(E.set.fs),
+    lim: !run && E.set.fs > 0 ? "НЕ ГОТОВ" : E.set.fs > E.feedS + 0.005 ? lim : "", onSet: v => { E.set.fs = v; t(); }});
+  scale({x: ix + sw, w: sw, label: "РЕВЕРС", col: COL.or, min: 0, max: 1, step: 0.05, snap: 0.01, set: E.set.fr, act: E.feedR, valTxt: pct(E.feedR), sub: "уст. " + pct(E.set.fr),
+    lim: !run && E.set.fr > 0 ? "НЕ ГОТОВ" : E.set.fr > E.feedR + 0.005 ? lim : "", onSet: v => { E.set.fr = v; t(); }});
+  scale({x: ix + 2 * sw, w: sw, label: "ОЩУЩ. g", col: COL.gr, min: 0, max: 10, step: 0.5, snap: 0.5, set: E.compLim, act: E.resid, valTxt: fmt(E.resid, 2) + " g",
+    sub: "предел " + fmt(E.compLim, 1), onSet: v => { E.compLim = Math.max(1, v); t(); }});
+  // the start handle by phases: each key sets the handle to its position; the bar under it - the phase's progress
+  const px = ix + 3 * sw + 16;
+  line(px - 8, y + BAND + 10, px - 8, LY1 - 8 - 48 - 10 - 48 - 12, COL.fr, 1);
+  T("ПУСК ПО ФАЗАМ", px, 152, COL.dim, 17, "left", 700);
+  [["ПОЛЕ", E.fieldL], ["ПУЧОК", E.beamL], ["ПОДАЧА", E.feedL]].forEach(([n, l], i) => {
+    const ky = 168 + i * 72;
+    key(px, ky, pw - 72, 48, n, E.stage >= i + 1 ? "on" : "off", () => { E.stageT = i + 1; journal("Ручка пуска: " + n.toLowerCase()); });
+    box(px, ky + 54, pw - 72, 8, COL.track); g.fillStyle = i === 2 ? COL.or : COL.gr; g.fillRect(px, ky + 54, (pw - 72) * l, 8);
+    T(fmt(l * 100) + " %", px + pw, ky + 24 + capH(17) / 2, COL.tx, 17, "right", 700);
+  });
+  T("накопитель поля " + fmt(100 * (1 - 0.08 * E.fieldL)) + " %", px, 412 + capH(17) / 2, COL.tx, 17);
+  // row 1: start / stop, the next trap, the compensator (a lamp: it is not a key)
+  const y1 = LY1 - 8 - 48 - 10 - 48, kw = Math.floor((iw - 20) / 3 / 10) * 10;
+  key(ix, y1, kw, 48, E.stageT === 0 ? "ПУСК КАМЕР" : "СТОП КАМЕР", E.stageT ? "on" : "off", () => { if (E.stageT) { E.stageT = 0; E.set.fs = E.set.fr = 0; journal("Стоп: поле в накопитель"); } else { E.stageT = 3; journal("Пуск: поле камер из накопителя"); } });
+  key(ix + kw + 10, y1, kw, 48, "ЛОВУШКА ▶", "off", () => { if (E.trap < 3) { E.trap++; journal("Подача из ловушки " + (E.trap + 1)); } });
+  const lx = ix + 2 * (kw + 10);
+  lamp(lx + 12, y1 + 24, COL.gr, 8); T("компенсатор вкл", lx + 30, y1 + 24 + capH(17) / 2, COL.tx, 17);
+  keyRow2(ix, iw);
+}
+function journalLines(x, y, w, n, step) {
+  J.slice(0, n).forEach((e, i) => {
+    const yb = y + i * step, c = e.lvl === 2 ? COL.rd : e.lvl === 1 ? COL.ye : COL.tx, tw = T(clock(e.t), x, yb, COL.dim, 15);
+    T(fitTxt(e.txt, w - tw - 10, 15), x + tw + 10, yb, c, 15);
+  });
+}
+function journalBlock(x, y, w, h, n) { block(x, y, w, h, "ЖУРНАЛ"); journalLines(x + 16, y + BAND + 30, w - 32, n, 30); }
+// the trends (60 s); with the journal's last lines on top when the journal has no place of its own
+function trendBlock(x, y, w, h, jn) {
+  block(x, y, w, h, jn ? "ЖУРНАЛ И ТРЕНДЫ" : "ТРЕНДЫ 60 с");
+  const ser = E.ana ? [["g", COL.wh, 220, "a"], ["ощущ.", COL.vi, 10, "b"], ["v/c", COL.ye, 100, "c"]] : [["тяга", COL.wh, 2.4e9, "a"], ["g", COL.vi, 6, "b"], ["УВТ", COL.ye, 10, "c"]];
+  let lx = x + w - 16; for (let i = ser.length - 1; i >= 0; i--) lx -= T(ser[i][0], lx, bandBase(y, 15), ser[i][1], 15, "right", 700) + 12;
+  let top = y + BAND + 8;
+  if (jn) { journalLines(x + 16, top + 18, w - 32, jn, 22); top += jn * 22 + 10; line(x + 16, top - 4, x + w - 16, top - 4, COL.fr, 1); }
+  const px = x + 16, pw = w - 32, py = top + 4, ph = y + h - 10 - py;
+  box(px, py, pw, ph, "#0b1513", COL.fr, 1);
+  for (let k = 1; k < 4; k++) line(px + 1, py + ph * k / 4, px + pw - 1, py + ph * k / 4, "#13241f", 1);
+  const t1 = TR.length ? TR[TR.length - 1].t : 0;
+  for (const [, c, mx, kk] of ser) { g.strokeStyle = c; g.lineWidth = 2; g.beginPath(); TR.forEach((p, i) => { const xx = px + pw - 2 - (t1 - p.t) / 60 * (pw - 4), yy = py + ph - 2 - clamp(p[kk] / mx, 0, 1) * (ph - 4); i ? g.lineTo(xx, yy) : g.moveTo(xx, yy); }); g.stroke(); }
+}
+
+// ================= page 3: ПАРАМЕТРЫ =================
+function pageParams() {
+  const hb = hub(), lw = hb.x0 - GAP - M, rx = hb.x1 + GAP, rw = W - M - rx;
+  drawTabs();
+  const pal = PS.pal, contrast = 1 / PS.mfdGamma;
+  // ---- left, top: the HUD - layers, colour, brightness, by the light ----
+  block(M, UY0, lw, UY1 - UY0, "HUD: СЛОИ, ЦВЕТ, ЯРКОСТЬ");
+  const ix = M + 16, kx = ix + 150, kiw = M + lw - 16 - kx, row = i => UY0 + BAND + 16 + i * 64, lab = (t, i) => T(t, ix, row(i) + 24 + capH(17) / 2, COL.tx, 17, "left", 700);
+  lab("СЛОИ", 0); const k4 = Math.floor((kiw - 30) / 4 / 10) * 10;
+  LAYERS.forEach((n, i) => key(kx + i * (k4 + 10), row(0), k4, 48, n, PS.layer[i] ? "on" : "off", () => { PS.layer[i] = !PS.layer[i]; }));
+  lab("ЦВЕТ", 1); const k3 = Math.floor((kiw - 20) / 3 / 10) * 10;
+  PAL.forEach(([n, , a, b], i) => {
+    const kx3 = kx + i * (k3 + 10), on = pal === i;
+    rrect(kx3 + 0.75, row(1) + 0.75, k3 - 1.5, 46.5, 4); g.fillStyle = on ? COL.or : "#0f1c1a"; g.fill(); g.strokeStyle = on ? COL.or : "#2f5a52"; g.lineWidth = 1.5; g.stroke();
+    T(n, kx3 + k3 / 2, row(1) + 20 + capH(18) / 2, on ? "#0a1311" : COL.tx, fitSize(n, k3 - 14, 18, 700, 18), "center", 700);
+    g.fillStyle = a; g.fillRect(kx3 + 12, row(1) + 36, k3 / 2 - 14, 5); g.fillStyle = b; g.fillRect(kx3 + k3 / 2 + 2, row(1) + 36, k3 / 2 - 14, 5);
+    HITS.push({x: kx3, y: row(1), w: k3, h: 48, act: () => { PS.pal = i; }});
+  });
+  lab("ЯРКОСТЬ", 2); stepper(kx, row(2), fmt(PS.hudGain, 1), () => { PS.hudGain = Math.max(0.4, +(PS.hudGain - 0.1).toFixed(1)); PS.autoLum = false; }, () => { PS.hudGain = Math.min(1.5, +(PS.hudGain + 0.1).toFixed(1)); PS.autoLum = false; });
+  lab("ПО СВЕТУ", 3); key(kx, row(3), 120, 48, PS.autoLum ? "ВКЛ" : "ВЫКЛ", PS.autoLum ? "on" : "off", () => { PS.autoLum = !PS.autoLum; });
+  T(PS.autoLum ? "день · сумерки · ночь" : "вручную", kx + 136, row(3) + 24 + capH(17) / 2, COL.tx, 17);
+  // ---- centre, top: the main view in small, right under the big screen ----
+  block(hb.x0, UY0, hb.x1 - hb.x0, UY1 - UY0, "ГЛАВНЫЙ ВИД");
+  const pvw = hb.x1 - hb.x0 - 32, pvh = Math.round(pvw * 9 / 16);
+  preview(hb.x0 + 16, UY0 + BAND + 12, pvw, pvh);
+  T("так выглядит главный вид", (hb.x0 + hb.x1) / 2, UY0 + BAND + 12 + pvh + 28, COL.dim, 15, "center");
+  // ---- right, top: what the settings act on ----
+  block(rx, 88, rw, UY1 - 88, "ЧТО МЕНЯЕТСЯ");
+  T("сохраняется со сценарием", rx + rw - 16, bandBase(88, 15), COL.dim, 15, "right");
+  [["главный экран", "HUD " + HUDS[F.hud][0] + ", цвет " + PAL[pal][1]], ["MFD 1–6", "яркость " + fmt(PS.mfdGain, 1) + ", контраст " + fmt(contrast, 2) + ", " + PS.res + " px"],
+   ["освещение", PS.autoLum ? "следует за светом у корабля" : "вручную"], ["РСУ", RCS[F.rcs].toLowerCase()], ["единицы", PS.units ? "СИ + узлы, футы" : "СИ"]]
+    .forEach(([l, v], i) => { const yb = 88 + BAND + 8 + 16 + capH(17) / 2 + i * 40; T(l, rx + 16, yb, COL.dim, 17); T(fitTxt(v, rw - 200, 22, 700), rx + rw - 16, yb, COL.wh, 22, "right", 700); });
+  // ---- left, bottom (the hand): the view on the big screen ----
+  block(M, LY0, lw, LY1 - LY0, "ВИД НА ГЛАВНОМ ЭКРАНЕ");
+  const kv = Math.floor((lw - 32 - 30) / 4 / 10) * 10, ky = LY1 - 8 - 56;
+  HUDS.forEach(([, d], i) => { const ls = wrap(d, kv, 15); ls.forEach((l, j) => T(l, ix + i * (kv + 10), ky - 14 - (ls.length - 1 - j) * 22, F.hud === i ? COL.tx : COL.dim, 15)); });
+  HUDS.forEach(([n], i) => key(ix + i * (kv + 10), ky, kv, 56, n, F.hud === i ? "on" : "off", () => { F.hud = i; }));
+  // ---- right, bottom: the MFDs; the RCS and the units ----
+  const mw = Math.round((rw - GAP) / 2), ux = rx + mw + GAP, uw = rw - mw - GAP;
+  block(rx, LY0, mw, LY1 - LY0, "MFD");
+  const mrow = i => LY1 - 8 - 48 - (2 - i) * 58, mlab = (t, i) => T(t, rx + 16, mrow(i) + 24 + capH(17) / 2, COL.tx, 17, "left", 700), mkx = rx + mw - 16 - 204;
+  mlab("ЯРКОСТЬ", 0); stepper(mkx, mrow(0), fmt(PS.mfdGain, 1), () => { PS.mfdGain = Math.max(1, +(PS.mfdGain - 0.2).toFixed(1)); PS.autoLum = false; }, () => { PS.mfdGain = Math.min(3, +(PS.mfdGain + 0.2).toFixed(1)); PS.autoLum = false; });
+  mlab("КОНТРАСТ", 1); stepper(mkx, mrow(1), fmt(contrast, 2), () => { PS.mfdGamma = Math.min(1, +(PS.mfdGamma + 0.05).toFixed(2)); PS.autoLum = false; }, () => { PS.mfdGamma = Math.max(0.4, +(PS.mfdGamma - 0.05).toFixed(2)); PS.autoLum = false; });
+  mlab("РАЗРЕШЕНИЕ", 2); [1024, 2048].forEach((r, i) => key(mkx + i * 107, mrow(2), 97, 48, String(r), PS.res === r ? "on" : "off", () => { PS.res = r; }));
+  block(ux, LY0, uw, LY1 - LY0, "РСУ И ЕДИНИЦЫ");
+  const u2 = LY1 - 8 - 48, u1 = u2 - 32 - 48, kr = Math.floor((uw - 32 - 20) / 3 / 10) * 10, ku = Math.floor((uw - 32 - 10) / 2 / 10) * 10;
+  T("РСУ", ux + 16, u1 - 8, COL.dim, 17, "left", 700);
+  RCS.forEach((n, i) => key(ux + 16 + i * (kr + 10), u1, kr, 48, n, F.rcs === i ? "on" : "off", () => { F.rcs = i; }));
+  T("ЕДИНИЦЫ", ux + 16, u2 - 8, COL.dim, 17, "left", 700);
+  ["СИ", "СИ + УЗЛЫ, ФУТЫ"].forEach((n, i) => key(ux + 16 + i * (ku + 10), u2, ku, 48, n, PS.units === i ? "on" : "off", () => { PS.units = i; }));
+}
+// − / value / + side by side (SPEC: related keys together)
+function stepper(x, y, val, minus, plus) {
+  key(x, y, 56, 48, "", "off", minus); line(x + 19, y + 24, x + 37, y + 24, COL.tx, 3);
+  T(val, x + 56 + 46, y + 24 + capH(22) / 2, COL.wh, 22, "center", 700);
+  key(x + 148, y, 56, 48, "", "off", plus); line(x + 167, y + 24, x + 185, y + 24, COL.tx, 3); line(x + 176, y + 15, x + 176, y + 33, COL.tx, 3);
+}
+// words into lines no wider than w
+function wrap(s, w, size, wt = 400) {
+  const out = []; let cur = "";
+  for (const word of s.split(" ")) { const t = cur ? cur + " " + word : word; if (TW(t, size, wt) <= w || !cur) cur = t; else { out.push(cur); cur = word; } }
+  if (cur) out.push(cur); return out;
+}
+// the main view in small: the sky, the ground, the chosen HUD in the chosen colours at its brightness (colours mixed, no alpha)
+function preview(x, y, w, h) {
+  const hy = y + Math.round(h * 0.55), cx = x + w / 2, sky = "#0f2b2f", gnd = "#0c1714";
+  box(x, y, w, hy - y, sky); box(x, hy, w, y + h - hy, gnd);
+  const a = Math.min(1, 0.4 + 0.5 * PS.hudGain), cP = PAL[PS.pal][2], cA = PAL[PS.pal][3];
+  const over = (c, yy) => mix(yy < hy ? sky : gnd, c, a);
+  const seg = (x0, y0, x1, y1, c) => line(x0, y0, x1, y1, over(c, (y0 + y1) / 2), 2);
+  const ln = (x0, y0, x1, y1, c) => { if ((y0 < hy) !== (y1 < hy)) { const xm = x0 + (x1 - x0) * (hy - y0) / (y1 - y0); seg(x0, y0, xm, hy, c); seg(xm, hy, x1, y1, c); } else seg(x0, y0, x1, y1, c); };
+  const rb = (bx, by, bw, bh, c) => { ln(bx, by, bx + bw, by, c); ln(bx + bw, by, bx + bw, by + bh, c); ln(bx + bw, by + bh, bx, by + bh, c); ln(bx, by + bh, bx, by, c); };
+  const tx = (s, xx, yy, c, size, al) => T(s, xx, yy, over(c, yy), size, al, 700);
+  if (F.hud === 0) {
+    ln(x + 16, hy, x + w - 16, hy, cP);
+    if (PS.layer[0]) for (const p of [-10, 10]) { const yy = hy - p * 3.2; ln(cx - 46, yy, cx + 46, yy, cP); tx(String(Math.abs(p)), cx - 52, yy + 5, cP, 15, "right"); tx(String(Math.abs(p)), cx + 52, yy + 5, cP, 15, "left"); }
+    tx("ТАНГАЖ +4,0°", x + 50, y + 24, cA, 15, "left"); tx("КРЕН П 3,0°", x + w - 50, y + 24, cA, 15, "right");
+    if (PS.layer[1]) ring(cx, hy - 12, 8, over(cA, hy - 12), 2);
+    if (PS.layer[2]) { rb(x + 10, y + 34, 26, h - 54, cP); rb(x + w - 36, y + 34, 26, h - 54, cP); }
+  } else if (F.hud === 1) {
+    arc(cx, hy, 14, Math.PI, 2 * Math.PI, over(cP, hy - 1), 2); arc(cx, hy, 14, 0, Math.PI, over(cP, hy + 1), 2);
+    ln(cx - 26, hy, cx - 14, hy, cP); ln(cx + 14, hy, cx + 26, hy, cP); ln(cx, hy - 26, cx, hy - 14, cP);
+    tx("ПРОГРЕЙД", cx, hy + 38, cA, 15, "center");
+  } else if (F.hud === 2) {
+    rb(cx - 26, hy - 26, 52, 52, cP); ln(cx - 44, hy, cx + 44, hy, cA); ln(cx, hy - 44, cx, hy + 44, cA);
+    tx("ЦЕЛЬ 120 м · −0,4 м/с", cx, hy + 66, cA, 15, "center");
+  }
+  box(x, y, w, h, null, COL.fr, 2);
+}
+
+// ================= the frame =================
+let showHub = true;
+function draw() {
+  HITS = [];
+  g.setLineDash([]);
+  g.fillStyle = COL.bg; g.fillRect(0, 0, W, H);
+  g.strokeStyle = COL.fr; g.lineWidth = 2; g.strokeRect(5, 5, W - 10, H - 10);
+  if (PAGE === "flight") pageFlight(); else if (PAGE === "eng") pageEng(); else pageParams();
+  if (showHub) {   // a mockup aid, not drawn in the game: where the yoke's hub hides the glass
+    const hb = hub();
+    g.setLineDash([10, 8]); g.strokeStyle = COL.hub; g.lineWidth = 2; g.strokeRect(hb.x0 + 1, hb.y0 + 1, hb.x1 - hb.x0 - 2, hb.y1 - hb.y0 - 2); g.setLineDash([]);
+    T("ступица штурвала · в игре не рисуется", (hb.x0 + hb.x1) / 2, H - 14, COL.hub, 15, "center");
+  }
+}
+// ---- input: a scale catches the press and the drag; otherwise the keys ----
+let drag = null;
+const pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+const hitAt = (x, y) => { for (let i = HITS.length - 1; i >= 0; i--) { const h = HITS[i]; if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) return h; } return null; };
+cv.addEventListener("pointerdown", e => {
+  const [x, y] = pos(e), h = hitAt(x, y);
+  if (!h) return;
+  lastTouch = simT;
+  if (h.drag) { drag = h; h.drag(y); cv.setPointerCapture(e.pointerId); } else h.act();
+  draw(); controls();
+});
+cv.addEventListener("pointermove", e => { const [x, y] = pos(e); if (drag) { lastTouch = simT; drag.drag(y); } else cv.style.cursor = hitAt(x, y) ? "pointer" : "default"; });
+const endDrag = () => { drag = null; };
+cv.addEventListener("pointerup", endDrag); cv.addEventListener("pointercancel", endDrag);
+// ---- the mockup's controls (outside the canvas) ----
+function group(id, items, cur, on) {
+  const el = $(id); el.innerHTML = "";
+  for (const [k, t] of items) { const b = document.createElement("button"); b.textContent = t; if (k === cur()) b.classList.add("on"); b.onclick = () => { on(k); controls(); draw(); }; el.appendChild(b); }
+}
+function setPage(p) { PAGE = p; try { localStorage.setItem("frontV3Page", p); } catch (e) {} showChanges(); }
+function setWidth(w) { W = w; cv.width = W; cv.height = H; cv.style.aspectRatio = W + " / " + H; try { localStorage.setItem("frontV3W", String(w)); } catch (e) {} }
+function controls() {
+  group("pgB", PAGES.map(([t, p]) => [p, t]), () => PAGE, setPage);
+  group("wdB", [[1914, "1914 × 611"], [2430, "2430 × 611"]], () => W, setWidth);
+  group("fnB", [["gost", "ГОСТ"], ["iso", "ISOCPEUR"]], () => FAM === FAMS.gost ? "gost" : "iso", k => { FAM = FAMS[k]; CAP = {}; });
+  group("scB", [["atmo", "АТМОСФЕРА 2,4 км"], ["orbit", "ОРБИТА 412 км"]], () => F.scene, k => { F.scene = k; F.term = -1; if (k === "atmo") { F.alt = 2400; F.v = 160; } });
+  group("alB", [[0, "НЕТ"], [1, "ВНИМАНИЕ"], [2, "ОПАСНОСТЬ"]], () => F.alert, k => { F.alert = k; F.ack = !k; });
+  group("hbB", [[true, "ПОКАЗАТЬ"], [false, "СКРЫТЬ"]], () => showHub, k => { showHub = k; });
+}
+// ---- what moved where and why (Russian, short) ----
+const CHANGES = {
+  all: [
+    "Холст 1914 × 611 вместо 1914 × 805 (тот же масштаб, ~1174 px/м): стекло ниже на 14 см, весь большой экран и горизонт видны при обычном кресле. Ничего важного не выброшено — сведено, перенесено, разнесено по ширине.",
+    "Порядок по высоте: главное — вдоль верхнего края (он ближе всего к горизонту большого экрана), клавиши — внизу, к рукам, второстепенное — в боковых зонах. Середина низа (400 px, пунктир) — за ступицей штурвала: там нет ничего нужного в полёте.",
+    "Вкладки ПОЛЁТ | ДВИГАТЕЛИ | ПАРАМЕТРЫ — справа вверху, три одинаковые клавиши 150 × 48 на всех страницах, активная залита янтарём.",
+    "Шрифт ГОСТ тип А (переключатель ISOCPEUR); минус, тире, стрелки, ×, ², ▲ ▼ рисуются линиями и треугольниками — у ГОСТ этих знаков нет или они неверные. Кегли по SPEC: не мельче 15, подписи 17, значения 22–26, крупные показания 34–44; клавиши 56 (48 в плотных рядах).",
+    "Широкий холст 2430: приборы в середине не меняются (тот же размер и место) — лишняя ширина уходит в боковые зоны, они дальше по дуге стекла: шире клавиши и шкалы, больше колонок, журнал двигателей получает своё место вне ступицы.",
+  ],
+  flight: [
+    "Авиагоризонт стал широким и низким (502 × 215) и встал вверху по центру, под горизонтом большого экрана; по бокам ленты скорости и высоты с окнами 34 px, справа столбик вертикальной скорости, над горизонтом лента курса. Шкала крена — неподвижная сверху, указатель ходит с небом.",
+    "КОСМОС раскладан в те же места: скорость слева, высота и вертикальная справа, курс сверху, шар горизонта в середине; показания 44 px вместо 13–14.",
+    "Атака, скольжение, глиссада, гондолы (были строкой 10 px под горизонтом), Мах и атака (были в столбике космоса) и тангаж с креном числами — блок УГЛЫ · МАХ слева вверху, значения 26 px. В космосе Мах — прочерк (нет воздуха).",
+    "Клавиши HUD и РСУ — вниз влево, к левой руке, по 56 px, подписи групп над рядами. ПОВЕРХН. переименована в ГОРИЗОНТ и стоит первой — как на странице ПАРАМЕТРЫ (тот же режим HUD, без сокращения).",
+    "КОСМОС / АТМОСФЕРА — из правого верхнего угла центра вниз, слева от ступицы (выбор режима — рукой); над ними строка «авто, по высоте» / «вручную».",
+    "Тревога — в полосе заголовка центра, вверху, 18 px (была строкой 12 px внизу); автопилот — там же справа. ПОДТВЕРДИТЬ — внизу справа от ступицы, под правую руку, всегда на одном месте: красная рамка при тревоге, мигает до подтверждения, серая без рамки, когда тревог нет.",
+    "Двигатели → блок ТЯГА справа (имя — чтобы не путать с вкладкой ДВИГАТЕЛИ): три столбика одной высоты — тяга (нажимается и тянется, жёлтая стрелка — уставка), топливо, перегрузка с красной чертой предела; значения 34 px над ними, набор двигателей — в полосе заголовка.",
+  ],
+  eng: [
+    "Шапка: АНАМЕЗОН / ПЛАНЕТАРНЫЕ, лампа и одна строка состояния. «Установка не на режиме» и «держит предел g» переехали сюда из сносок таблицы — это главное, оно должно быть вверху.",
+    "Вид с кормы и векторы сбоку — один блок ЧАШИ И ВЕКТОРЫ (у анамезона КАМЕРЫ И СТРУИ: корма, нос, струи и звезда рядом). Строка «УВТ … сопла … гондолы» снята — эти числа на шкалах; подпись «диафрагмы закрыты» снята — кольца видны.",
+    "ВЫХОД ЧАШ / КАМЕР повёрнут: строки — величины, колонки — маршевая, гондола, итого (камера, ретро, по оси). Четыре одинаковые строки гондол и камер сведены в одну («каждая»); тротиловый эквивалент капсулы снят.",
+    "РАСЧЁТ — внизу слева в две колонки по 48 px (анамезон 32 px); сюда же из сносок таблицы — удельный импульс, истечение, мощность струй и расход.",
+    "УПРАВЛЕНИЕ — справа на всю высоту, справа от ступицы: шкалы те же (заливка — факт, жёлтая стрелка — уставка), ▲ ▼ — клавиши 56 × 48 у шкалы; подписи делений 10 px внутри шкал сняты — значение 24 px над шкалой, смысл сопел — строкой под ним.",
+    "Клавиши — два ряда внизу: масса (АВТО / АРГОН / ЖЕЛЕЗО) или пуск камер и ловушка; нижний ряд у руки — ОТСЕЧКА, ОБХОД БЛОК. (два нажатия), ПРЕДЕЛ g.",
+    "УВТ АВТО и КОМПЕНСАТОР выглядели кнопками, но не нажимались — теперь это строка «авто, через ЦМ» под шкалой УВТ и лампа «компенсатор вкл». Лампы «предел g» и «обход» слиты с клавишами ПРЕДЕЛ g и ОБХОД (их состояние); осталась одна лампа — «в атмосфере только аргон».",
+    "Накопитель поля — в группу ПУСК ПО ФАЗАМ (поле, пучок, подача — клавиши, под ними полосы хода, проценты справа от полос).",
+    "ЖУРНАЛ и ТРЕНДЫ — история, в полёте не нужны: под ступицей (видно, когда штурвал отведён). На 2430 журнал — своим блоком рядом с РАСЧЁТОМ, под ступицей только тренды.",
+  ],
+  params: [
+    "Предпросмотр главного вида — в центре вверху, прямо под большим экраном; ЧТО МЕНЯЕТСЯ — справа вверху (строка «вид: …» в шапке снята — повтор первой строки этого блока).",
+    "ВИД НА ГЛАВНОМ ЭКРАНЕ — внизу слева, к руке: четыре клавиши 56 px; описание выбранного вида — строкой 17 px над ними (было внутри клавиш, 12 px).",
+    "HUD — блок слева вверху: слои (короче: ТАНГАЖ, ВЕКТОР, ЛЕНТЫ, ТРЕВОГИ), цвет с образцами цветов на клавишах, яркость, по свету.",
+    "MFD (яркость, контраст, разрешение) и РСУ И ЕДИНИЦЫ — два блока внизу справа; − и + стоят рядом со значением.",
+  ],
+};
+function showChanges() {
+  const li = a => a.map(s => `<li>${s}</li>`).join("");
+  const name = {flight: "ПОЛЁТ", eng: "ДВИГАТЕЛИ", params: "ПАРАМЕТРЫ"};
+  $("chg").innerHTML = `<h3>Все страницы</h3><ol class="chg">${li(CHANGES.all)}</ol>` +
+    ["flight", "eng", "params"].map(p => `<h3>${name[p]}${p === PAGE ? " (на холсте)" : ""}</h3><ol class="chg">${li(CHANGES[p])}</ol>`).join("");
+}
+// ---- start ----
+try { const p = localStorage.getItem("frontV3Page"); if (p && PAGES.some(q => q[1] === p)) PAGE = p; const w = +localStorage.getItem("frontV3W"); if (w === 2430) W = 2430; } catch (e) {}
+journal("Пульт: планетарные"); journal("Установка на режиме: маршевая готова");
+{ // a link can open a given state: ?page=eng&w=2430&scene=orbit&alert=2&ana=1&hub=0&font=iso
+  const Q = new URLSearchParams(location.search);
+  if (PAGES.some(q => q[1] === Q.get("page"))) PAGE = Q.get("page");
+  if (Q.get("w") === "2430" || Q.get("w") === "1914") W = +Q.get("w");
+  if (Q.get("scene") === "orbit") F.scene = "orbit";
+  if (Q.get("alert")) { F.alert = clamp(+Q.get("alert") || 0, 0, 2); F.ack = !F.alert; }
+  if (Q.get("ana") === "1") { setAna(true); E.stageT = 3; E.set.fs = 0.4; E.set.fr = 0.1; }
+  if (Q.get("hub") === "0") showHub = false;
+  if (Q.get("font") === "iso") FAM = FAMS.iso;
+  if (Q.get("shot")) document.body.classList.add("shot");   // the canvas alone at 1:1 (for checking pictures)
+}
+setWidth(W);
+controls(); showChanges();
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { CAP = {}; });
+let last = performance.now();
+setInterval(() => {
+  const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now;
+  simT += dt; flightStep(dt); engStep(dt); draw();
+}, 40);
+</script>
+</body>
+</html>

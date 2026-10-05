@@ -103,6 +103,12 @@ public:
     const char* StartStop(bool russian);          // ПУСК (from off) / СТОП (on the way or on the run)
     void Note(const std::string& ru, const std::string& en, int level) { Log(ru, en, level); }   // a control's message
     void SetProductsExhaust(double v) { productsV_ = v; }
+    // inputs of the energy core (core/TantraCore): an outside cause hurts the plant like its own failures do (the jolt's quench,
+    // the impact's damage, value 0 of the windings: the march lost until a station); the pumps' flow caps argon and iron
+    void Inflict(const Failure& f) { Fail(f); }
+    void SetFlowCap(double kgps) { flowCap_ = kgps; }   // < 0: no cap
+    double FlowCap() const { return flowCap_; }
+    bool Dipping() const { return dipT_ > 0.0; }        // a series of misfires now
 
     // one step: the sequence, the field ramps, the stern heats and cools, the parts may fail (rnd: uniform 0..1 numbers)
     Output Step(double dt, const Env& e, double (*rnd)());
@@ -153,7 +159,7 @@ private:
     int stage_ = kStRun;                             // a ship comes with its plant on the run
     double stageT_ = 0.0;
     double armT_ = -1e9, now_ = 0.0, heldT_ = -1e9;
-    double T_ = 300.0, coilT_ = 20.0, dipT_ = 0.0, fuel_ = kFuelFull;
+    double T_ = 300.0, coilT_ = 20.0, dipT_ = 0.0, fuel_ = kFuelFull, flowCap_ = -1.0;
     double coils_ = 1.0, drivers_ = 1.0, jacket_ = 1.0, radiators_ = 1.0, cryo_ = 1.0;
     bool crossed_[4] = {};
     std::vector<Event> events_;

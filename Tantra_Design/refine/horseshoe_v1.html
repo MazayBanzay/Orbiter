@@ -1,0 +1,889 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Подкова рубки</title>
+<style>
+:root{--bg:#080b0e;--panel:#0d1316;--card:#111a1e;--line:#1e3530;--ink:#d8e2ea;--mute:#8d9fab;--acc:#7fe0d0;--acc2:#2c6a54;--good:#7ee59a;--warn:#ffc46a;--bad:#ff7a6b;--yel:#ffd84a;--cy:#7fdcff;--hor:#ff9a3c;--mag:#e08cff}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.45 system-ui,"Segoe UI",Roboto,sans-serif}
+#app{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,460px);height:100%}
+#viewWrap{position:relative;min-width:0;min-height:0;overflow:hidden;background:#05080a}
+#view{position:absolute;inset:0;touch-action:none}
+#view canvas{display:block}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.l3{position:absolute;left:0;top:0;white-space:nowrap;font-size:11px;line-height:1.25;padding:1px 5px;border-radius:3px;background:rgba(5,10,12,.82);border-left:2px solid var(--acc);color:var(--ink);display:none}
+.l3.y{border-color:var(--yel)} .l3.c{border-color:var(--cy)} .l3.g{border-color:var(--good)} .l3.r{border-color:var(--bad)} .l3.m{border-color:var(--mag)} .l3.t{border-color:#6b7b85;color:var(--mute)}
+#load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#4f8f86;font-size:15px;padding:20px;text-align:center;background:rgba(5,8,10,.6)}
+#load.err{color:var(--bad)}
+#vtag{position:absolute;left:8px;top:8px;font-size:11.5px;color:var(--acc);background:rgba(5,10,12,.8);padding:2px 7px;border-radius:4px;pointer-events:none;max-width:calc(100% - 16px)}
+#panel{overflow:auto;background:var(--panel);border-left:1px solid var(--line);padding:12px 14px 28px}
+h1{font-size:15px;margin:0 0 4px;color:var(--acc)}
+h2{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:16px 0 6px;font-weight:600}
+.note{color:var(--mute);font-size:12px;margin:4px 0}
+.row{display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap}
+.row>.k{width:84px;flex:none;color:var(--mute);font-size:12px}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--acc2);border-radius:7px;overflow:hidden;max-width:100%}
+.seg button{font:inherit;font-size:12px;padding:5px 9px;border:0;border-right:1px solid var(--acc2);background:#0f1a18;color:var(--acc);cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--acc2);color:#effffb}
+.seg button:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
+.seg.big button{font-size:13px;padding:7px 12px;font-weight:600}
+label.ck{display:inline-flex;gap:5px;align-items:center;font-size:12px;color:var(--ink);cursor:pointer}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+th,td{padding:4px 5px;border-bottom:1px solid #1a2a27;text-align:left;vertical-align:top}
+th{color:var(--mute);font-weight:500;font-size:11px;line-height:1.25}
+td.n,th.n{text-align:right;white-space:nowrap}
+td.sel,th.sel{background:#13261f}
+td small,th small{color:var(--mute);font-weight:400}
+.good{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+.star{color:var(--yel)}
+.read{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+.legend{display:grid;grid-template-columns:auto 1fr;gap:3px 8px;align-items:center}
+.legend i{display:inline-block;width:20px;height:3px;border-radius:2px}
+.rec{background:#0f1d18;border:1px solid #2c6a54;border-radius:8px;padding:8px 12px;margin-top:16px}
+.rec h2{margin-top:4px;color:var(--acc)}
+.rec ol,.rec ul{margin:6px 0 4px 18px;padding:0} .rec li{margin:5px 0}
+.par{font:11.5px/1.45 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word;background:#0a1012;border:1px solid var(--line);border-radius:6px;padding:7px 9px;color:#bcd}
+a{color:var(--cy)}
+@media (max-width:820px){
+  html,body{height:auto}
+  #app{display:block;height:auto}
+  #viewWrap{height:60vh;min-height:300px}
+  #panel{border-left:0;border-top:1px solid var(--line);overflow:visible;padding:12px 16px 28px}
+}
+@media (max-width:420px){ th,td{padding:4px 3px} table{font-size:11.5px} .seg button{padding:5px 7px} }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="viewWrap"><div id="view"></div><div id="labels"></div><div id="vtag"></div><div id="load">Загружаю рубку…</div></div>
+  <aside id="panel">
+    <h1>Подкова: стол командира и два оператора</h1>
+    <p class="note">Рубка — меш из игры (Meshes/Tantra/TantraVC.msh, без нынешних крыльев и кресел операторов). Крылья, кресла операторов, их стёкла и МФД построены здесь по параметрам. Высоты — над полом рубки, координаты — от оси командира (x вправо, z вперёд к экрану).</p>
+
+    <h2>Вариант</h2>
+    <div class="row"><div class="seg big" id="var"></div></div>
+    <p class="note" id="varNote"></p>
+
+    <h2>Вид</h2>
+    <div class="row"><div class="seg" id="views">
+      <button data-v="cmd">ГЛАЗ КОМАНДИРА</button><button data-v="opL">ГЛАЗ ОПЕРАТОРА СЛЕВА</button><button data-v="opR">ГЛАЗ ОПЕРАТОРА СПРАВА</button><button data-v="top">СВЕРХУ</button><button data-v="side">СБОКУ</button><button data-v="orbit">3D</button>
+    </div></div>
+    <div class="row" id="lookRow"><span class="k">взгляд</span><div class="seg" id="look"></div></div>
+    <div class="row" id="sideRow"><span class="k">разрез</span><div class="seg" id="sideOp"><button data-v="R">ЧЕРЕЗ АСТРОНАВИГАТОРА</button><button data-v="L">ЧЕРЕЗ БОРТИНЖЕНЕРА</button></div></div>
+    <p class="note" id="viewHint"></p>
+
+    <h2>Люди и состояние</h2>
+    <div class="row"><span class="k">манекен</span><div class="seg" id="man"><button data-v="F">5 % ЖЕНЩИНА</button><button data-v="M">95 % МУЖЧИНА</button></div></div>
+    <div class="row"><span class="k">кресла</span><div class="seg" id="seats"><button data-v="at">У ПУЛЬТА</button><button data-v="rest">ОТЪЕХАЛИ</button></div></div>
+    <div class="row"><span class="k">боковые стёкла</span><div class="seg" id="glass"><button data-v="work">РАБОТА</button><button data-v="tape">ЛЕНТА</button></div></div>
+    <div class="row"><span class="k">их спинка</span><div class="seg" id="back"><button data-v="light">СВЕТЛАЯ (сейчас)</button><button data-v="dark">ТЁМНАЯ</button></div></div>
+    <div class="row"><label class="ck"><input type="checkbox" id="cLines" checked>линии взгляда</label><label class="ck"><input type="checkbox" id="cReach" checked>досягаемость</label><label class="ck"><input type="checkbox" id="cDims" checked>размеры</label><label class="ck"><input type="checkbox" id="cNew">выделить новое</label></div>
+    <div class="legend note">
+      <i style="background:var(--good)"></i><span>линия взгляда свободна</span>
+      <i style="background:var(--bad)"></i><span>линия взгляда закрыта (красное — за преградой)</span>
+      <i style="background:var(--mag)"></i><span>досягаемость 0,65 м от плеча (сфера; в разрезе — дуга)</span>
+      <i style="background:var(--cy)"></i><span>размеры и проходы</span>
+    </div>
+
+    <h2>Цифры по вариантам</h2>
+    <p class="note">Для манекена, выбранного выше (переключите — таблица пересчитается). Операторы симметричны: цифры — для астронавигатора справа. Зелёное — норма, жёлтое — на грани, красное — не годится.</p>
+    <div class="tw"><table id="tab"></table></div>
+
+    <div class="rec" id="rec"></div>
+
+    <h2>Параметры выбранного варианта для gen_mesh</h2>
+    <div class="par" id="par"></div>
+    <p class="note">Принятые размеры людей (сидя, мм): 5 % женщина / 95 % мужчина — глаз над сиденьем 650 / 790, плечо 480 / 610, полуширина плеч 165 / 200, рука (плечо — кончик пальца) 690 / 840, колено над полом 515 / 620, колено и носок вперёд от точки H 420 / 520 и 600 / 740. Командир сидит откинувшись (глаз на 0,10 м позади точки H), операторы — в рабочей посадке.</p>
+  </aside>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="bridge_now.js"></script>
+<script>
+"use strict";
+(() => {
+const $ = id => document.getElementById(id);
+const fail = m => { const l = $("load"); l.textContent = m; l.classList.add("err"); l.style.display = "flex"; };
+if (!window.THREE) { fail("Не загрузился three.js r128 (cdnjs) — нужен интернет."); return; }
+if (typeof BRIDGE_NOW === "undefined" || !BRIDGE_NOW.parts) { fail("Не найден меш рубки bridge_now.js — страница должна лежать рядом с ним в Tantra_Design/refine."); return; }
+
+// ===================== constants (game frame: the commander's axis on the floor = origin; x right, y up, z forward) =====================
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const RI = 0.92, RO = 1.42, TOP = 0.72, RC = (RI + RO) / 2, GR = 1.25, GHW = 0.035, GD = 0.06;
+const BAND = [0.99, 1.19, 0.07], LEAN = 14 * D2R, T14 = Math.tan(LEAN), C14 = Math.cos(LEAN), S14 = Math.sin(LEAN);
+const A_END = BRIDGE_NOW.a_end;                                   // the commander desk's ends (deg from his axis)
+const HSF = BRIDGE_NOW.hsf, HSS = BRIDGE_NOW.hss;                 // the front glass's half span, a side glass's half span
+const SIDE_A = [HSF + 4, HSF + 4 + 2 * HSS];                      // a side glass from / to (deg)
+const SC = {x: 0, y: (1.15 + 4.0) / 2, z: 3.25};                  // the main screen's centre (on the axis, mid height)
+const SIDE_RISE = [[0.2394, -0.9891, -0.0590], [-0.2394, -0.9891, -0.0590]], RIBBON = 0.4448;   // InteriorLayout.h kSideRise, kSideRibbon
+const CMD_AT = -0.2, CMD_REST = -1.2;                             // the commander's seat (z of its axis): at the console, at rest
+const OP_TRAVEL = 0.6, MFD = 0.40, MFD_GAP = 0.42, HB = 0.46;     // operators' seat travel; MFD unit, its pitch; the dark glass's height
+const REC = {ceil: 0.65, kD: 0.28, fD: 0.46, fH: 0.08};           // the knee recess under an operator's part: ceiling, depth there, depth at the floor
+const REACH = 0.65;                                               // comfortable reach from the shoulder
+const MAN = {
+  F: {name: "5 % женщина", pan: 0.435, eyeUp: 0.65, eyeF: 0.06, shUp: 0.48, sw: 0.165, L1: 0.29, L2: 0.40, kneeH: 0.515, kneeF: 0.42, toeF: 0.60, thk: 0.145, abd: 0.18, elbow: 0.18, headR: 0.09, hipW: 0.085, d0: 0.25, col: 0xd9a46a},
+  M: {name: "95 % мужчина", pan: 0.485, eyeUp: 0.79, eyeF: 0.06, shUp: 0.61, sw: 0.20, L1: 0.37, L2: 0.47, kneeH: 0.62, kneeF: 0.52, toeF: 0.74, thk: 0.17, abd: 0.25, elbow: 0.295, headR: 0.105, hipW: 0.10, d0: 0.30, col: 0xc98e5a}
+};
+const CMD_PAN = 0.535;                                            // the commander's seat as exported (height -0.10)
+// The variants (the right wing; the left one mirrors it). Path from the desk's end: a knuckle (radius Rk of the middle line,
+// turning outward to heading thJ), an optional straight, then the operator's cup (his edge radius Re) wrapping from al deg before
+// his facing to be deg after it; his three MFDs centred om deg outboard of his facing; psi = his facing turned in toward the axis.
+const VARS = [
+  {id: "now", tag: "СЕЙЧАС", name: "СЕЙЧАС — в игре", Rk: 0.45, thJ: 90, L1: 1.40, cup: false, d0: {F: 0.62, M: 0.62}, recess: false, armF: 0.25,
+   note: "Как установлено: скруглённый угол и прямой прогон вбок, оператор в 0,62 м за ним лицом прямо вперёд."},
+  {id: "v1", tag: "В1", name: "В1 — ближе вперёд", Rk: 0.35, psi: 40, Re: 0.62, al: 30, be: 90, om: 10, cup: true, recess: true, armF: 0.12,
+   note: "Петля от торца стола, оператор развёрнут к оси на 40°, кромка вокруг него R 0,62. Самый короткий поворот головы к командиру."},
+  {id: "v2", tag: "В2 ★", name: "В2 ★ — петля, R 0,72", Rk: 0.35, psi: 35, Re: 0.72, al: 28, be: 90, om: 12, cup: true, recess: true, armF: 0.12, star: true,
+   note: "Рекомендация: петля от торца стола, оператор развёрнут к оси на 35°, кромка вокруг него R 0,72, МФД смещены на 12° наружу — командир не за МФД."},
+  {id: "v3", tag: "В3", name: "В3 — радиус как у командира", Rk: 0.40, psi: 22, Re: 0.92, al: 24, be: 85, om: 10, cup: true, recess: true, armF: 0.12,
+   note: "Кромка вокруг оператора того же радиуса 0,92, что у командира; оператор развёрнут к оси только на 22°, сидит дальше назад."}
+];
+for (const v of VARS) if (v.cup) { v.thJ = 90 - v.psi - v.al; v.d0 = {F: MAN.F.d0, M: MAN.M.d0}; }
+
+// ===================== helpers =====================
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const lerp = (a, b, t) => a + (b - a) * t;
+const dir = th => ({x: Math.sin(th * D2R), z: Math.cos(th * D2R)});          // heading (deg, from +z toward +x)
+const nAof = th => ({x: Math.cos(th * D2R), z: -Math.sin(th * D2R)});        // the user's side of a strip heading th
+const V3 = (x, y, z) => new THREE.Vector3(x, y, -z);                         // game frame -> three.js (left-handed -> right-handed)
+const G3 = p => V3(p.x, p.y, p.z);
+const fmt = (v, n = 2) => { if (v == null || !isFinite(v)) return "—"; const s = Math.abs(v).toFixed(n).replace(".", ","); return (v < 0 && Math.abs(v) >= 0.5 * Math.pow(10, -n) ? "−" : "") + s; };
+const fs = (v, n = 2) => (v > 0 ? "+" : "") + fmt(v, n);
+const dist3 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+const angPlan = (from, to) => Math.atan2(to.x - from.x, to.z - from.z) * R2D;
+const wrapA = a => { while (a > 180) a -= 360; while (a < -180) a += 360; return a; };
+function b64(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; }
+
+// ===================== the scene =====================
+const view = $("view"), wrap = $("viewWrap");
+const renderer = new THREE.WebGLRenderer({antialias: true});
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.localClippingEnabled = true;
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x06090b);
+scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+scene.add(new THREE.HemisphereLight(0xd8e8f4, 0x303438, 0.9));
+const lamp = new THREE.PointLight(0xffe2bf, 1.3, 16); lamp.position.copy(V3(0, 4.6, -0.6)); scene.add(lamp);
+const fill = new THREE.DirectionalLight(0x9fc8ff, 0.6); fill.position.copy(V3(0, 3, 4)); scene.add(fill);
+
+const CLIP = [new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e4)];          // the side view's section plane (a no-op elsewhere)
+const mats = {};
+function mat(key, color, o = {}) {
+  if (mats[key]) return mats[key];
+  const {clip, ...rest} = o;
+  const m = new THREE.MeshStandardMaterial(Object.assign({color, roughness: 0.75, metalness: 0.15, side: THREE.DoubleSide}, rest));
+  if (clip !== false) m.clippingPlanes = CLIP;
+  return (mats[key] = m);
+}
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.DoubleSide,
+  vertexShader: "varying float vY; void main(){ vec4 wp = modelMatrix * vec4(position,1.0); vY = wp.y; gl_Position = projectionMatrix * viewMatrix * wp; }",
+  fragmentShader: "varying float vY; void main(){ float d = vY - 1.30; vec3 c = d > 0.0 ? mix(vec3(0.50,0.66,0.78), vec3(0.09,0.18,0.30), clamp(d/2.4,0.0,1.0)) : mix(vec3(0.34,0.28,0.20), vec3(0.10,0.085,0.065), clamp(-d/0.9,0.0,1.0)); gl_FragColor = vec4(c,1.0); }"
+});
+const MATS_BY = name => {
+  if (/^bridge_screen_/.test(name)) return skyMat;
+  if (name === "command_bridge") return mat("shell", 0x262d32);
+  if (name === "bridge_floor") return mat("floor", 0x20262a, {roughness: 0.9});
+  if (name === "bridge_ribs") return mat("ribs", 0x252b30);
+  if (name === "bridge_scr_frame") return mat("frame", 0x0c0f11);
+  if (name === "bridge_tub") return mat("tub", 0x3e464c);
+  if (name === "bridge_console_face") return mat("band", 0x253536);
+  if (/^bridge_(centre|sidescr0|sidescr1)$/.test(name)) return mat("disp", 0x0a1a1f, {emissive: 0x06343a, roughness: 0.3});
+  if (/^bridge_sidedisp/.test(name)) return mat("sideback", 0x8d9399);
+  if (name === "bridge_frontdisp") return mat("ftube", 0x3a4146, {metalness: 0.4});
+  if (/^bridge_(keys_r|keys_l|machine|pods_scr|seat_ctl|seat_adj|astro_screen)$/.test(name)) return mat("keys", 0x0e2a28, {emissive: 0x08302a});
+  if (/^bridge_yoke|^bridge_lever|^bridge_pod_cover|^bridge_metal|^bridge_seat_ctl_body/.test(name)) return mat("metal", 0x4b5157, {metalness: 0.5, roughness: 0.5});
+  if (name === "bridge_seat0" ) return mat("seatShell", 0x1e5446);
+  if (name === "bridge_seat0_cushion") return mat("cush", 0x1a1d20, {roughness: 0.95});
+  if (name === "bridge_seat0_metal") return mat("metal", 0x4b5157);
+  if (name === "bridge_seat0_base") return mat("base", 0x2a2e31);
+  if (name === "bridge_cur_ball") return mat("ball", 0x0a1013, {roughness: 0.2});
+  if (/^bridge_(leds|lamps)$/.test(name)) return mat("led", 0x40d0c0, {emissive: 0x30a090});
+  return mat("misc", 0x30363b);
+};
+const PART = {};
+const seatCmd = new THREE.Group(); scene.add(seatCmd);              // the commander's seat rides +1.0 m to the console
+for (const p of BRIDGE_NOW.parts) {
+  const v = new Float32Array(b64(p.v)); for (let i = 2; i < v.length; i += 3) v[i] = -v[i];
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(v, 3));
+  g.setIndex(new THREE.BufferAttribute(new Uint32Array(b64(p.i)), 1));
+  g.computeVertexNormals(); g.computeBoundingSphere();
+  const m = new THREE.Mesh(g, MATS_BY(p.name)); m.name = p.name;
+  (/^bridge_seat0|^bridge_cur_ball$|^bridge_seat_adj$/.test(p.name) ? seatCmd : scene).add(m);
+  PART[p.name] = m;
+}
+const sideGlass = [[PART.bridge_sidescr0, PART.bridge_sidedisp0], [PART.bridge_sidescr1, PART.bridge_sidedisp1]];
+function setSide(sink) { sideGlass.forEach((ms, k) => { const r = SIDE_RISE[k]; ms.forEach(m => { m.position.set(r[0] * sink, r[1] * sink, -r[2] * sink); m.updateMatrixWorld(true); }); }); }
+function setCmdSeat(at) { seatCmd.position.set(0, 0, at ? -1.0 : 0); seatCmd.updateMatrixWorld(true); }
+const BASE_OCC = ["bridge_tub", "bridge_console_face", "bridge_centre", "bridge_frontdisp", "bridge_sidescr0", "bridge_sidedisp0", "bridge_sidescr1", "bridge_sidedisp1",
+  "bridge_yoke_hub", "bridge_yoke_grip", "bridge_seat0", "bridge_seat0_cushion"].map(n => PART[n]).filter(Boolean);
+
+// ===================== the wing: path, section, sweep =====================
+function section(q, b) {                       // the desk's section (r from the commander's axis, h over the floor) - BR_DESK's, a knee recess blended in by q, the band by b
+  const solid = [[RI + .10, 0], [RI + .10, .09], [RI, .24], [RI, .45], [RI, TOP - .03]];
+  const rec = [[RI + REC.fD, 0], [RI + REC.fD, REC.fH], [RI + REC.kD, REC.ceil], [RI + .012, REC.ceil], [RI, TOP - .03]];
+  const S = solid.map((p, i) => [lerp(p[0], rec[i][0], q), lerp(p[1], rec[i][1], q)]);
+  for (let i = 1; i <= 6; i++) { const a = (180 - 90 * i / 6) * D2R; S.push([RI + .03 + .03 * Math.cos(a), TOP - .03 + .03 * Math.sin(a)]); }
+  const [b0, b1, dp] = BAND;
+  S.push([b0, TOP], [b0, TOP - dp * b], [b1, TOP]);
+  S.push([GR - GHW, TOP], [GR - GHW, TOP - GD], [GR + GHW, TOP - GD], [GR + GHW, TOP], [RO - .03, TOP]);
+  for (let i = 1; i <= 6; i++) { const a = (90 - 90 * i / 6) * D2R; S.push([RO - .03 + .03 * Math.cos(a), TOP - .03 + .03 * Math.sin(a)]); }
+  S.push([RO, 0]);
+  return S;
+}
+function buildPath(v) {
+  const th0 = 90 + A_END, segs = [{k: -1 / v.Rk, dth: v.thJ - th0}];
+  if (v.L1 > 0) segs.push({k: 0, len: v.L1});
+  const Rm = v.cup ? v.Re + 0.25 : 0;
+  if (v.cup) segs.push({k: 1 / Rm, dth: v.al + v.be});
+  let x = RC * Math.sin(A_END * D2R), z = RC * Math.cos(A_END * D2R), th = th0, s = 0;
+  const P = [{s, x, z, th}], ends = [];
+  for (const g of segs) {
+    const len = g.k ? Math.abs(g.dth * D2R / g.k) : g.len, n = Math.max(2, Math.ceil(len / 0.015)), ds = len / n;
+    for (let i = 0; i < n; i++) {
+      if (g.k) { const dt = g.k * ds * R2D, d = dir(th + dt / 2), c = 2 / g.k * Math.sin(dt * D2R / 2); x += c * d.x; z += c * d.z; th += dt; }
+      else { const d = dir(th); x += ds * d.x; z += ds * d.z; }
+      s += ds; P.push({s, x, z, th});
+    }
+    ends.push(s);
+  }
+  const sJ = ends[0] + (v.L1 > 0 ? v.L1 : 0);                       // the cup starts here (or the straight ends)
+  const sMid = v.cup ? sJ + v.al * D2R * Rm : ends[0] + v.L1 / 2;  // the operator's facing point
+  for (const p of P) {
+    p.q = v.recess ? sstep(sJ - 0.12, sJ + 0.12, p.s) : 0;
+    p.b = v.cup ? 1 - sstep(0, ends[0], p.s) : 1;
+  }
+  return {P, sJ, sMid, Rm, len: s, kEnd: ends[0]};
+}
+function at(path, s) {                          // the path's frame at arc length s
+  const P = path.P; let i = 1; while (i < P.length - 1 && P[i].s < s) i++;
+  const a = P[i - 1], b = P[i], t = clamp((s - a.s) / ((b.s - a.s) || 1), 0, 1);
+  return {x: lerp(a.x, b.x, t), z: lerp(a.z, b.z, t), th: lerp(a.th, b.th, t), q: lerp(a.q, b.q, t), b: lerp(a.b, b.b, t)};
+}
+const onPath = (f, r, h, mx = 1) => { const n = nAof(f.th), o = RC - r; return {x: mx * (f.x + n.x * o), y: h, z: f.z + n.z * o}; };
+function sweep(path, mx) {                      // the wing's body: one strip per section edge (sharp section corners), smooth along the path
+  const pos = [], idx = []; const P = path.P, rings = P.map(p => section(p.q, p.b)), nR = rings[0].length;
+  for (let j = 0; j < nR; j++) {
+    const j2 = (j + 1) % nR, base = pos.length / 3;
+    for (let i = 0; i < P.length; i++) {
+      for (const jj of [j, j2]) { const q = onPath(P[i], rings[i][jj][0], rings[i][jj][1], mx); pos.push(q.x, q.y, -q.z); }
+    }
+    for (let i = 0; i < P.length - 1; i++) { const a = base + 2 * i; idx.push(a, a + 2, a + 3, a, a + 3, a + 1); }
+  }
+  const last = P[P.length - 1], ring = rings[rings.length - 1].filter((p, i, a) => { const q = a[(i + a.length - 1) % a.length]; return Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6; }), base = pos.length / 3;   // the end cap
+  for (const [r, h] of ring) { const q = onPath(last, r, h, mx); pos.push(q.x, q.y, -q.z); }
+  const tri = THREE.ShapeUtils.triangulateShape(ring.map(([r, h]) => new THREE.Vector2(r, h)), []);
+  for (const t of tri) idx.push(base + t[0], base + t[1], base + t[2]);
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+  g.computeVertexNormals(); g.computeBoundingSphere(); return g;
+}
+function outline(path, mx) {                    // the wing's top outline in plan (for clearances)
+  const A = path.P.map(p => onPath(p, RI, 0, mx)), B = path.P.map(p => onPath(p, RO, 0, mx)).reverse();
+  return A.concat(B).map(p => ({x: p.x, z: p.z}));
+}
+const deskOutline = (() => { const o = []; for (let a = -A_END; a <= A_END + 1e-6; a += 3) o.push({x: RI * Math.sin(a * D2R), z: RI * Math.cos(a * D2R)});
+  for (let a = A_END; a >= -A_END - 1e-6; a -= 3) o.push({x: RO * Math.sin(a * D2R), z: RO * Math.cos(a * D2R)}); return o; })();
+
+// ===================== MFD units, the dark glass, seats, mannequins =====================
+const mfdTex = {};
+function mfdTexture(label) {
+  if (mfdTex[label]) return mfdTex[label];
+  const c = document.createElement("canvas"); c.width = c.height = 256; const x = c.getContext("2d");
+  x.fillStyle = "#15191b"; x.fillRect(0, 0, 256, 256);
+  x.fillStyle = "#2a3134"; for (let i = 0; i < 6; i++) { x.fillRect(6, 40 + i * 30, 18, 18); x.fillRect(232, 40 + i * 30, 18, 18); }
+  for (let i = 0; i < 3; i++) x.fillRect(70 + i * 46, 232, 26, 14);
+  x.fillStyle = "#061612"; x.fillRect(30, 22, 196, 200);
+  x.strokeStyle = "#3fd49a"; x.lineWidth = 2; x.beginPath(); x.arc(128, 128, 62, 0, 7); x.stroke();
+  x.beginPath(); x.moveTo(50, 150); for (let i = 0; i <= 20; i++) x.lineTo(50 + i * 7.8, 150 - 40 * Math.sin(i / 3)); x.stroke();
+  x.fillStyle = "#8ff0c4"; x.font = "bold 17px system-ui, sans-serif"; x.textAlign = "center"; x.fillText(label, 128, 44);
+  const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return (mfdTex[label] = t);
+}
+function mfdUnit(c, right, up, toward, label) {  // c, right, up in the game frame; toward: a point the face must look at
+  const r3 = G3({x: right.x, y: right.y || 0, z: right.z}).normalize(), u3 = G3(up).normalize();
+  let n3 = new THREE.Vector3().crossVectors(r3, u3);
+  if (n3.dot(G3(toward).sub(G3(c))) < 0) { r3.negate(); n3.negate(); }
+  const grp = new THREE.Group();
+  const m = new THREE.Matrix4().makeBasis(r3, u3, n3); m.setPosition(G3(c)); grp.applyMatrix4(m);
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(MFD, MFD), new THREE.MeshStandardMaterial({map: mfdTexture(label), emissive: 0xffffff, emissiveMap: mfdTexture(label), emissiveIntensity: 0.55, roughness: 0.5, clippingPlanes: CLIP}));
+  face.position.z = 0.002; grp.add(face);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(MFD + 0.01, MFD + 0.01, 0.03), mat("mfdBody", 0x111517));
+  body.position.z = -0.015; grp.add(body);
+  return grp;
+}
+function boxL(grp, m, cx, cy, cz, hx, hy, hz) { const b = new THREE.Mesh(new THREE.BoxGeometry(2 * hx, 2 * hy, 2 * hz), m); b.position.set(cx, cy, -cz); grp.add(b); return b; }
+function cylL(grp, m, cx, y0, y1, cz, r) { const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, y1 - y0, 18), m); c.position.set(cx, (y0 + y1) / 2, -cz); grp.add(c); return c; }
+function opSeat(armF) {                          // the commander's seat style (gen_mesh _bridge_seat_cmd), no yoke, no throttle; shorter armrests, a cursor unit
+  const g = new THREE.Group(), up = new THREE.Group(); g.add(up);
+  const sh = mat("seatShell", 0x1e5446), cu = mat("cush", 0x1a1d20), me = mat("metal", 0x4b5157), ba = mat("base", 0x2a2e31);
+  boxL(g, ba, 0, .02, .03, .15, .02, .20); cylL(g, ba, 0, .04, .36, .03, .085);
+  cylL(up, me, 0, .30, .57, .03, .065);
+  boxL(up, sh, 0, .57, .10, .26, .03, .24); boxL(up, cu, 0, .6175, .11, .23, .0175, .22);
+  const B = new THREE.Group(); B.position.set(0, .60, .12); B.rotation.x = 0.26; up.add(B);
+  boxL(B, sh, 0, .40, -.045, .25, .40, .035); boxL(B, cu, 0, .40, .01, .22, .37, .02); boxL(B, cu, 0, .89, -.01, .15, .075, .04);
+  const a0 = -0.15, zc = (a0 + armF) / 2, hz = (armF - a0) / 2;
+  for (const sx of [-1, 1]) { boxL(up, me, sx * .30, .69, -.02, .02, .125, .02); boxL(up, sh, sx * .30, .84, zc, .045, .025, hz); }
+  boxL(up, sh, -.29, .846, armF - .07, .075, .022, .07); boxL(up, cu, -.29, .872, armF - .07, .065, .007, .06);   // the cursor unit
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(.023, 16, 10), mat("ball", 0x0a1013, {roughness: 0.2})); ball.position.set(-.30, .881, -(armF - .07)); up.add(ball);
+  g.userData.up = up; return g;
+}
+function placeSeat(seat, O, th, pan) { seat.position.copy(V3(O.x, 0, O.z)); seat.rotation.set(0, -th * D2R, 0); seat.userData.up.position.y = pan - 0.635; seat.updateMatrixWorld(true); }
+
+const figMat = {};
+function figure(colHex) {
+  const m = figMat[colHex] || (figMat[colHex] = new THREE.MeshStandardMaterial({color: colHex, roughness: 0.8}));
+  const g = new THREE.Group(), parts = {};
+  const limb = k => { const c = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 12), m); g.add(c); parts[k] = c; };
+  const ball = k => { const s = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), m); g.add(s); parts[k] = s; };
+  ["torso", "neck", "uaL", "uaR", "faL", "faR", "thL", "thR", "shL", "shR", "ftL", "ftR", "pelvis"].forEach(limb);
+  ["head", "jSL", "jSR", "jEL", "jER", "jHL", "jHR", "jKL", "jKR", "hL", "hR"].forEach(ball);
+  g.userData.parts = parts; return g;
+}
+const _up = new THREE.Vector3(0, 1, 0);
+function setLimb(c, a, b, r) { const A = G3(a), B = G3(b), d = B.clone().sub(A), L = d.length() || 1e-6; c.position.copy(A).addScaledVector(d, 0.5); c.scale.set(r, L, r); c.quaternion.setFromUnitVectors(_up, d.normalize()); }
+function setBall(s, p, r) { s.position.copy(G3(p)); s.scale.setScalar(r); }
+const add3 = (p, f, a, r, b, y) => ({x: p.x + f.x * a + r.x * b, y: (p.y || 0) + y, z: p.z + f.z * a + r.z * b});
+function ik(S, T, L1, L2, pole) {                // a two-bone arm: shoulder S, target T -> elbow, hand
+  const d = {x: T.x - S.x, y: T.y - S.y, z: T.z - S.z}, D = Math.hypot(d.x, d.y, d.z), Dc = clamp(D, 0.05, L1 + L2 - 1e-4);
+  const u = {x: d.x / D, y: d.y / D, z: d.z / D};
+  const H = {x: S.x + u.x * Dc, y: S.y + u.y * Dc, z: S.z + u.z * Dc};
+  const a = (L1 * L1 - L2 * L2 + Dc * Dc) / (2 * Dc), h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
+  let p = {x: pole.x - u.x * (pole.x * u.x + pole.y * u.y + pole.z * u.z), y: pole.y - u.y * (pole.x * u.x + pole.y * u.y + pole.z * u.z), z: pole.z - u.z * (pole.x * u.x + pole.y * u.y + pole.z * u.z)};
+  const pl = Math.hypot(p.x, p.y, p.z) || 1; p = {x: p.x / pl, y: p.y / pl, z: p.z / pl};
+  return {E: {x: S.x + u.x * a + p.x * h, y: S.y + u.y * a + p.y * h, z: S.z + u.z * a + p.z * h}, H, D};
+}
+function pose(fig, an, O, th, pan, opt) {        // seated: O seat axis on the floor, th facing heading, pan top; opt.reach target (game) or null; opt.recline
+  const P = fig.userData.parts, f = dir(th), r = {x: f.z, z: -f.x}, rec = opt.recline ? 1 : 0;
+  const eyeF = rec ? -0.10 : an.eyeF, eyeUp = an.eyeUp * (rec ? 0.94 : 1), shF = rec ? -0.12 : 0.02, shUp = an.shUp * (rec ? 0.95 : 1);
+  const Hc = add3(O, f, 0.0, r, 0, pan + an.hipW * 0.9), Sc = add3(O, f, shF, r, 0, pan + shUp);
+  const head = add3(O, f, eyeF - 0.05, r, 0, pan + eyeUp + 0.02), neck0 = add3(O, f, shF + 0.01, r, 0, pan + shUp + 0.04);
+  setLimb(P.torso, Hc, add3(Sc, f, 0, r, 0, -0.04), an.sw * 0.62); setLimb(P.neck, neck0, head, an.headR * 0.42); setBall(P.head, head, an.headR);
+  setLimb(P.pelvis, add3(Hc, f, 0, r, -an.hipW, 0), add3(Hc, f, 0, r, an.hipW, 0), an.hipW * 0.95);
+  const eye = add3(O, f, eyeF, r, 0, pan + eyeUp), sh = {};
+  for (const [k, sx] of [["L", -1], ["R", 1]]) {
+    const S = add3(Sc, f, 0, r, sx * an.sw, 0); sh[k] = S; setBall(P["jS" + k], S, an.sw * 0.34);
+    const hip = add3(Hc, f, 0, r, sx * an.hipW, 0); setBall(P["jH" + k], hip, an.hipW * 0.85);
+    const knee = add3(O, f, an.kneeF - 0.06, r, sx * (an.hipW + 0.01), an.kneeH - 0.05), ank = add3(knee, f, 0.04, r, 0, -(an.kneeH - 0.05) + 0.08);
+    const toe = add3(ank, f, an.toeF - an.kneeF - 0.02, r, 0, -0.05);
+    setLimb(P["th" + k], hip, knee, an.thk * 0.5); setBall(P["jK" + k], knee, an.thk * 0.45); setLimb(P["sh" + k], knee, ank, an.thk * 0.33); setLimb(P["ft" + k], ank, toe, an.thk * 0.25);
+  }
+  const reachSide = opt.reach ? (opt.reachSide || "R") : null;
+  for (const [k, sx] of [["L", -1], ["R", 1]]) {
+    let T, pole;
+    if (reachSide === k) { T = opt.reach; pole = {x: r.x * sx * 0.6, y: -1, z: r.z * sx * 0.6}; }
+    else { T = add3(O, f, (opt.restF != null ? opt.restF : 0.14), r, sx * 0.30, opt.restY != null ? opt.restY : pan + 0.26); pole = {x: r.x * sx * 0.3 - f.x * 0.8, y: -1, z: r.z * sx * 0.3 - f.z * 0.8}; }
+    const res = ik(sh[k], T, an.L1, an.L2, pole);
+    setLimb(P["ua" + k], sh[k], res.E, an.sw * 0.28); setBall(P["jE" + k], res.E, an.sw * 0.26); setLimb(P["fa" + k], res.E, res.H, an.sw * 0.22); setBall(P["h" + k], res.H, an.sw * 0.26);
+  }
+  fig.updateMatrixWorld(true);
+  return {eye, sh};
+}
+
+// ===================== build the variants =====================
+const VAR = {};
+const newMat = mat("tubNew", 0x3f6a62);
+function buildVariant(v) {
+  const path = buildPath(v), grp = new THREE.Group(), occ = [], ops = {};
+  for (const [side, mx] of [["R", 1], ["L", -1]]) {
+    const body = new THREE.Mesh(sweep(path, mx), mats.tub); body.userData.wing = true; grp.add(body); occ.push(body);
+    // the operator's place (the man's / the woman's: the woman slides 0.05 nearer - her knees allow it)
+    const fM = at(path, path.sMid), nM = nAof(fM.th), facing = Math.atan2(-nM.x * mx, -nM.z) * R2D;
+    const place = {};
+    for (const k of ["F", "M"]) { const off = (RC - RI) + v.d0[k]; place[k] = {x: mx * (fM.x + nM.x * off), z: fM.z + nM.z * off}; }
+    // the dark glass in the groove and three MFDs (left to right as he sees them)
+    let s0, s1, sC, dS;
+    if (v.cup) { const Rg = v.Re + 0.33 + 0.23 * T14, k = path.Rm / Rg; sC = path.sMid + v.om * D2R * path.Rm; dS = MFD_GAP * k; s0 = sC - dS - (MFD / 2 + 0.035) * k; s1 = sC + dS + (MFD / 2 + 0.035) * k; }
+    else { sC = path.sMid; dS = MFD_GAP; s0 = path.kEnd + 0.06; s1 = path.len - 0.06; }
+    const gp = [], gi = [], NG = 40;
+    for (let i = 0; i <= NG; i++) {
+      const f = at(path, lerp(s0, s1, i / NG)), a = onPath(f, GR, TOP - GD, mx), b = onPath(f, GR + (HB + GD) * T14, TOP + HB, mx);
+      gp.push(a.x, a.y, -a.z, b.x, b.y, -b.z); if (i < NG) { const q = 2 * i; gi.push(q, q + 2, q + 3, q, q + 3, q + 1); }
+    }
+    const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.Float32BufferAttribute(gp, 3)); gg.setIndex(gi); gg.computeVertexNormals(); gg.computeBoundingSphere();
+    const glass = new THREE.Mesh(gg, mat("opGlass", 0x070b0d, {roughness: 0.15, metalness: 0.3, emissive: 0x020608})); grp.add(glass); occ.push(glass);
+    const labels = side === "R" ? ["НАВИГАЦИЯ", "ОРБИТА", "ПЕРЕЛЁТ"] : ["ТЕПЛО", "УСТАНОВКА", "СИСТЕМЫ"];
+    const mfds = [];
+    [-1, 0, 1].forEach((o, i) => {
+      const f = at(path, sC + o * dS), n = nAof(f.th), h = dir(f.th);
+      const base = onPath(f, GR + (0.03 + MFD / 2) * T14, TOP + 0.03 + MFD / 2, mx);
+      const nn = {x: n.x * mx * C14, y: S14, z: n.z * C14};
+      const c = {x: base.x + nn.x * 0.03, y: base.y + nn.y * 0.03, z: base.z + nn.z * 0.03};
+      const upv = {x: -n.x * mx * S14, y: C14, z: -n.z * S14};
+      const right = {x: h.x * mx, y: 0, z: h.z};
+      const lab = labels[side === "R" ? i : 2 - i];
+      const u = mfdUnit(c, right, upv, place.M, lab); grp.add(u); u.traverse(o2 => { if (o2.isMesh) occ.push(o2); });
+      mfds.push({c, n: nn, right, up: upv});
+    });
+    // left to right as the operator sees them: sort by his right
+    const rr = {x: dir(facing).z, z: -dir(facing).x};
+    mfds.sort((a, b) => (a.c.x * rr.x + a.c.z * rr.z) - (b.c.x * rr.x + b.c.z * rr.z));
+    const seat = opSeat(v.armF); grp.add(seat);
+    const fig = figure(0xc8925e); grp.add(fig);
+    ops[side] = {facing, place, mfds, seat, fig, outline: outline(path, mx), glassS: [s0, s1], sC, dS};
+  }
+  scene.add(grp); grp.visible = false;
+  return {v, path, grp, occ, ops};
+}
+for (const v of VARS) VAR[v.id] = buildVariant(v);
+const cmdFig = figure(0xc8925e); scene.add(cmdFig);
+
+// ===================== raycasting =====================
+const rc = new THREE.Raycaster();
+function blocked(a, b, occ) {                    // the first hit between game points a, b (distance from a) or null
+  const A = G3(a), B = G3(b), d = B.clone().sub(A), L = d.length();
+  rc.set(A, d.normalize()); rc.near = 0.02; rc.far = L - 0.03;
+  const h = rc.intersectObjects(occ, false);
+  return h.length ? h[0].distance : null;
+}
+const screenZ = x => 3.25 - 7 + Math.sqrt(49 - x * x);
+
+// ===================== metrics per variant =====================
+function opState(W, side, k, atConsole = true) {  // the operator's seat place, eye, shoulders
+  const o = W.ops[side], an = MAN[k], th = o.facing, f = dir(th);
+  const O0 = o.place[k], O = atConsole ? O0 : {x: O0.x - f.x * OP_TRAVEL, z: O0.z - f.z * OP_TRAVEL};
+  const r = {x: f.z, z: -f.x}, eye = {x: O.x + f.x * an.eyeF, y: an.pan + an.eyeUp, z: O.z + f.z * an.eyeF};
+  const Sc = {x: O.x + f.x * 0.02, y: an.pan + an.shUp, z: O.z + f.z * 0.02};
+  const sh = [-1, 1].map(sx => ({x: Sc.x + r.x * an.sw * sx, y: Sc.y, z: Sc.z + r.z * an.sw * sx}));
+  return {O, th, f, r, eye, sh, an};
+}
+function cmdEye(k) { const an = MAN[k]; return {x: 0, y: CMD_PAN + an.eyeUp * 0.94, z: CMD_AT - 0.10}; }
+function segPoly(px, pz, ax, az, bx, bz) { const dx = bx - ax, dz = bz - az, t = clamp(((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz || 1), 0, 1); return Math.hypot(px - ax - t * dx, pz - az - t * dz); }
+function segSeg(a, b, c, d) {
+  const cr = (o, p, q) => (p.x - o.x) * (q.z - o.z) - (p.z - o.z) * (q.x - o.x);
+  const d1 = cr(c, d, a), d2 = cr(c, d, b), d3 = cr(a, b, c), d4 = cr(a, b, d);
+  if (((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0))) return 0;
+  return Math.min(segPoly(a.x, a.z, c.x, c.z, d.x, d.z), segPoly(b.x, b.z, c.x, c.z, d.x, d.z), segPoly(c.x, c.z, a.x, a.z, b.x, b.z), segPoly(d.x, d.z, a.x, a.z, b.x, b.z));
+}
+function inPoly(p, poly) { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const a = poly[i], b = poly[j]; if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; }
+function polyDist(A, B) {                        // min distance between two closed polygons (0 if they overlap)
+  if (A.some(p => inPoly(p, B)) || B.some(p => inPoly(p, A))) return 0;
+  let m = 1e9; for (let i = 0; i < A.length; i++) for (let j = 0; j < B.length; j++) m = Math.min(m, segSeg(A[i], A[(i + 1) % A.length], B[j], B[(j + 1) % B.length]));
+  return m;
+}
+function rect(O, th, x0, x1, z0, z1) { const f = dir(th), r = {x: f.z, z: -f.x}; return [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].map(([a, b]) => ({x: O.x + r.x * a + f.x * b, z: O.z + r.z * a + f.z * b})); }
+function metrics(W, k) {
+  const v = W.v, an = MAN[k], occ = BASE_OCC.concat(W.occ), m = {};
+  setCmdSeat(true);
+  const S = opState(W, "R", k), o = W.ops.R, ce = cmdEye(k);
+  m.place = S.O; m.facing = S.th; m.len = W.path.len;
+  // reach to the MFDs (the nearer shoulder), the far button corner
+  const rch = [], far = [];
+  for (const u of o.mfds) {
+    const best = p => Math.min(...S.sh.map(s => dist3(s, p)));
+    rch.push(best(u.c));
+    for (const a of [-1, 1]) for (const b of [-1, 1]) far.push(best({x: u.c.x + u.right.x * a * 0.17 + u.up.x * b * 0.17, y: u.c.y + u.up.y * b * 0.17, z: u.c.z + u.right.z * a * 0.17 + u.up.z * b * 0.17}));
+  }
+  m.reach = [Math.min(...rch), Math.max(...rch)]; m.reachFar = Math.max(...far);
+  const mid = o.mfds[1]; m.view = dist3(S.eye, mid.c);
+  const vang = u => { const d = {x: S.eye.x - u.c.x, y: S.eye.y - u.c.y, z: S.eye.z - u.c.z}, L = Math.hypot(d.x, d.y, d.z); return Math.acos(clamp((d.x * u.n.x + d.y * u.n.y + d.z * u.n.z) / L, -1, 1)) * R2D; };
+  m.vang = vang(mid); m.vangMax = Math.max(...o.mfds.map(vang)); m.viewMax = Math.max(...o.mfds.map(u => dist3(S.eye, u.c)));
+  m.headCmd = Math.abs(wrapA(angPlan(S.eye, ce) - S.th));
+  m.cmdSees = Math.abs(wrapA(angPlan(ce, S.eye)));
+  m.scrDir = wrapA(angPlan(S.eye, SC) - S.th);
+  m.dist = Math.hypot(S.eye.x - ce.x, S.eye.z - ce.z);
+  for (const [st, sink] of [["work", 0], ["tape", RIBBON]]) {
+    setSide(sink);
+    m["cmdLine_" + st] = blocked(ce, S.eye, occ) == null;
+    m["scrC_" + st] = blocked(S.eye, SC, occ) == null;
+    let vis = 0, n = 0;
+    for (let i = 0; i <= 8; i++) for (let j = 0; j <= 4; j++) { const x = -3.6 + 7.2 * i / 8, y = 1.3 + 2.5 * j / 4; n++; if (blocked(S.eye, {x, y, z: screenZ(x)}, occ) == null) vis++; }
+    m["scrPct_" + st] = vis / n;
+    // the lowest visible point on the screen's centre line
+    let low = null; for (let y = 1.15; y <= 4.0; y += 0.05) if (blocked(S.eye, {x: 0, y, z: SC.z}, occ) == null) { low = y; break; }
+    m["scrLow_" + st] = low;
+  }
+  // how far the raised side glass must sink to free the screen's centre / the commander's line (if blocked)
+  const need = test => { setSide(0); if (test()) return 0; let a = 0, b = 0.97; setSide(b); if (!test()) return null; for (let i = 0; i < 12; i++) { const c = (a + b) / 2; setSide(c); if (test()) b = c; else a = c; } return b; };
+  m.sinkScr = need(() => blocked(S.eye, SC, occ) == null);
+  m.sinkCmd = need(() => blocked(ce, S.eye, occ) == null);
+  const sideOcc = sideGlass.flat(), grid = [];
+  for (let i = 0; i <= 8; i++) for (let j = 0; j <= 4; j++) { const x = -3.6 + 7.2 * i / 8; grid.push({x, y: 1.3 + 2.5 * j / 4, z: screenZ(x)}); }
+  setSide(0); m.sideCut = grid.filter(p => blocked(S.eye, p, sideOcc) != null).length / grid.length;
+  m.sinkAll = need(() => grid.every(p => blocked(S.eye, p, sideOcc) == null));
+  setSide(0);
+  // knees, thighs, feet
+  if (v.recess) {
+    const dAt = y => REC.kD + (REC.ceil - y) / (REC.ceil - REC.fH) * (REC.fD - REC.kD);
+    m.kneeTop = REC.ceil - an.kneeH; m.kneeDepth = dAt(an.kneeH - 0.03) - (an.kneeF - v.d0[k]);
+    const thighAtEdge = (an.pan + an.thk) + (an.kneeH - (an.pan + an.thk)) * v.d0[k] / an.kneeF; m.thigh = REC.ceil - thighAtEdge;
+    m.toe = REC.fD - (an.toeF - v.d0[k]);
+    m.underside = REC.ceil;
+  } else {
+    m.kneeTop = null; m.kneeDepth = v.d0[k] - an.kneeF; m.thigh = null; m.toe = v.d0[k] + 0.10 - an.toeF; m.underside = 0;
+  }
+  m.elbow = TOP - (an.pan + an.elbow); m.pan = an.pan;
+  // clearances in plan
+  const wings = [W.ops.R.outline, W.ops.L.outline, deskOutline];
+  const cmdRest = rect({x: 0, z: CMD_REST}, 0, -0.38, 0.38, -0.45, 0.34);
+  m.cmdAisle = Math.min(polyDist(cmdRest, W.ops.R.outline), polyDist(cmdRest, W.ops.L.outline));
+  let trav = 1e9;
+  for (let t = 0; t <= OP_TRAVEL + 1e-6; t += 0.05) {
+    const O = {x: o.place.M.x - S.f.x * t, z: o.place.M.z - S.f.z * t};
+    for (const R of [rect(O, S.th, -0.39, -0.255, -0.15, v.armF), rect(O, S.th, 0.255, 0.39, -0.15, v.armF), rect(O, S.th, -0.26, 0.26, -0.42, -0.10)])
+      for (const w of wings) trav = Math.min(trav, polyDist(R, w));
+  }
+  m.travel = trav;
+  m.stand = v.d0.M + OP_TRAVEL - 0.34;
+  const opRest = rect({x: o.place.M.x - S.f.x * OP_TRAVEL, z: o.place.M.z - S.f.z * OP_TRAVEL}, S.th, -0.38, 0.38, -0.45, 0.34);
+  m.betweenRest = polyDist(opRest, cmdRest);
+  return m;
+}
+const MET = {F: {}, M: {}};
+
+// ===================== overlays: lines, labels =====================
+const ovl = new THREE.Group(); scene.add(ovl);
+const lineMats = {};
+function lineMat(col, dashed) { const k = col + (dashed ? "d" : ""); if (!lineMats[k]) lineMats[k] = dashed ? new THREE.LineDashedMaterial({color: col, dashSize: 0.05, gapSize: 0.04, depthTest: false, transparent: true}) : new THREE.LineBasicMaterial({color: col, depthTest: false, transparent: true}); return lineMats[k]; }
+function addLine(pts, col, grp, dashed) { const g = new THREE.BufferGeometry().setFromPoints(pts.map(G3)); const l = new THREE.Line(g, lineMat(col, dashed)); if (dashed) l.computeLineDistances(); l.renderOrder = 10; grp.add(l); return l; }
+const labelsEl = $("labels"), LBL = [];
+function label(p, text, cls, tag) { const e = document.createElement("div"); e.className = "l3 " + (cls || ""); e.textContent = text; labelsEl.appendChild(e); LBL.push({p, e, tag}); }
+function clearOverlays() { while (ovl.children.length) { const c = ovl.children.pop(); if (c.geometry) c.geometry.dispose(); } LBL.splice(0).forEach(l => l.e.remove()); }
+const COL = {good: 0x7ee59a, bad: 0xff7a6b, cy: 0x7fdcff, mag: 0xe08cff, yel: 0xffd84a, mute: 0x6b7b85};
+function sightLine(a, b, occ, grp, tag) {
+  const h = blocked(a, b, occ); const L = dist3(a, b);
+  if (h == null) addLine([a, b], COL.good, grp);
+  else { const t = h / L, m = {x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), z: lerp(a.z, b.z, t)}; addLine([a, m], COL.good, grp); addLine([m, b], COL.bad, grp, true); }
+  return h == null;
+}
+function dimLine(a, b, text, grp, tagSet, col = COL.cy) {
+  addLine([a, b], col, grp);
+  const d = {x: b.x - a.x, z: b.z - a.z}, L = Math.hypot(d.x, d.z) || 1, n = {x: -d.z / L * 0.04, z: d.x / L * 0.04};
+  for (const p of [a, b]) addLine([{x: p.x - n.x, y: p.y, z: p.z - n.z}, {x: p.x + n.x, y: p.y, z: p.z + n.z}], col, grp);
+  if (text) label({x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2}, text, "c", tagSet);
+}
+function nearestOnPoly(p, poly) { let best = null, bd = 1e9; for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length], dx = b.x - a.x, dz = b.z - a.z, t = clamp(((p.x - a.x) * dx + (p.z - a.z) * dz) / (dx * dx + dz * dz || 1), 0, 1), q = {x: a.x + t * dx, z: a.z + t * dz}, d = Math.hypot(q.x - p.x, q.z - p.z); if (d < bd) { bd = d; best = q; } } return best; }
+function rectPolyClosest(R, poly) { let best = null, bd = 1e9; for (const p of R) { const q = nearestOnPoly(p, poly), d = Math.hypot(q.x - p.x, q.z - p.z); if (d < bd) { bd = d; best = [p, q]; } } for (const p of poly) { const q = nearestOnPoly(p, R), d = Math.hypot(q.x - p.x, q.z - p.z); if (d < bd) { bd = d; best = [q, p]; } } return best; }
+
+// ===================== state, UI =====================
+const S = {v: "v2", view: "orbit", man: "M", seats: "at", glass: "work", back: "light", lines: true, reach: true, dims: true, hl: false, sideOp: "R", look: null};
+try { const s = JSON.parse(localStorage.getItem("horseshoe_v1") || "{}"); for (const k of ["v", "view", "man", "seats", "glass", "back", "sideOp"]) if (s[k] != null) S[k] = s[k]; } catch (_) {}
+const save = () => { try { localStorage.setItem("horseshoe_v1", JSON.stringify(S)); } catch (_) {} };
+const varSeg = $("var"); VARS.forEach(v => { const b = document.createElement("button"); b.dataset.v = v.id; b.innerHTML = v.star ? v.tag.replace("★", '<span class="star">★</span>') : v.tag; varSeg.appendChild(b); });
+function seg(id, key, cb) { const el = $(id); el.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; S[key] = b.dataset.v; save(); sync(); cb && cb(); }); }
+function syncSeg(id, val) { $(id).querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === val)); }
+
+// cameras
+const persp = new THREE.PerspectiveCamera(70, 1, 0.02, 60), ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, -50, 50);
+let cam = persp;
+const orb = {az: -0.35, el: 0.75, r: 4.6, t: V3(0, 0.5, -0.1)};
+const topV = {cx: 0, cz: -0.1, h: 2.3};
+const eyeLook = {yaw: 0, pitch: -8};
+function size() { const w = wrap.clientWidth, h = wrap.clientHeight; renderer.setSize(w, h); return {w, h}; }
+function hfovTo(vf, asp) { return 2 * Math.atan(Math.tan(vf * D2R / 2) / asp) * R2D; }
+
+let curEyes = {};                                    // the current eyes (game) for the eye views
+function applyCamera() { applyCamera0(); if (started) draw(); }
+let started = false;
+function applyCamera0() {
+  const {w, h} = size(), asp = w / Math.max(1, h);
+  const vt = $("vtag"), V = S.view;
+  CLIP[0].set(new THREE.Vector3(0, 1, 0), 1e4);
+  PART.command_bridge.visible = PART.bridge_ribs.visible = PART.bridge_lamps.visible = V !== "top";
+  if (V === "orbit") {
+    cam = persp; persp.fov = clamp(hfovTo(80, asp), 40, 75); persp.aspect = asp; persp.updateProjectionMatrix();
+    const p = new THREE.Vector3(Math.sin(orb.az) * Math.cos(orb.el), Math.sin(orb.el), Math.cos(orb.az) * Math.cos(orb.el)).multiplyScalar(orb.r).add(orb.t);
+    persp.position.copy(p); persp.up.set(0, 1, 0); persp.lookAt(orb.t);
+    const inside = Math.hypot(p.y - 1.0, -p.z + 1.0) < 4.2 && Math.abs(p.x) < 4.6;   // the drum (axis along x at y 1, z -1)
+    PART.command_bridge.visible = PART.bridge_ribs.visible = PART.bridge_lamps.visible = inside;
+    vt.textContent = "3D — тянуть: вращать, колесо / два пальца: ближе-дальше";
+  } else if (V === "top") {
+    cam = ortho; const hh = Math.max(topV.h, topV.h * 1.45 / asp), ww = hh * asp;
+    ortho.left = -ww; ortho.right = ww; ortho.top = hh; ortho.bottom = -hh; ortho.updateProjectionMatrix();
+    ortho.position.copy(V3(topV.cx, 20, topV.cz)); ortho.up.set(0, 0, -1); ortho.lookAt(V3(topV.cx, 0, topV.cz));
+    vt.textContent = "СВЕРХУ — экран вверху; тянуть: сдвиг, колесо: масштаб";
+  } else if (V === "side") {
+    cam = ortho; const W = VAR[S.v], st = opState(W, S.sideOp, S.man, S.seats === "at");
+    const c = {x: st.O.x + st.f.x * 0.35, y: 0.82, z: st.O.z + st.f.z * 0.35};
+    const hh = Math.max(0.92, 1.3 / asp), ww = hh * asp;
+    ortho.left = -ww; ortho.right = ww; ortho.top = hh; ortho.bottom = -hh; ortho.updateProjectionMatrix();
+    const side = S.sideOp === "R" ? 1 : -1, r = {x: st.r.x * side, z: st.r.z * side};   // look from the operator's outboard side
+    ortho.position.copy(G3({x: c.x + r.x * 10, y: c.y, z: c.z + r.z * 10})); ortho.up.set(0, 1, 0); ortho.lookAt(G3(c));
+    CLIP[0].setFromNormalAndCoplanarPoint(G3({x: -r.x, y: 0, z: -r.z}).sub(G3({x: 0, y: 0, z: 0})).normalize(), G3({x: st.O.x, y: 0, z: st.O.z}));
+    vt.textContent = "СБОКУ — разрез по оси кресла " + (S.sideOp === "R" ? "астронавигатора" : "бортинженера") + (S.seats === "at" ? "" : " (кресло отъехало)");
+  } else {
+    cam = persp; persp.fov = clamp(hfovTo(100, asp), 45, 100); persp.aspect = asp; persp.updateProjectionMatrix();
+    const e = curEyes[V]; if (!e) return;
+    const yaw = eyeLook.yaw, pitch = eyeLook.pitch, d = {x: Math.sin(yaw * D2R) * Math.cos(pitch * D2R), y: Math.sin(pitch * D2R), z: Math.cos(yaw * D2R) * Math.cos(pitch * D2R)};
+    persp.position.copy(G3(e)); persp.up.set(0, 1, 0); persp.lookAt(G3({x: e.x + d.x, y: e.y + d.y, z: e.z + d.z}));
+    vt.textContent = (V === "cmd" ? "ГЛАЗ КОМАНДИРА" : V === "opL" ? "ГЛАЗ БОРТИНЖЕНЕРА (слева)" : "ГЛАЗ АСТРОНАВИГАТОРА (справа)") + " · " + MAN[S.man].name + " · тянуть: смотреть";
+  }
+}
+const LOOKS = {
+  cmd: [["ВПЕРЁД", () => ({yaw: 0, pitch: -6})], ["НАПРАВО, К АСТРОНАВИГАТОРУ", () => lookAtP(curEyes.cmd, curEyes.opR)], ["НАЛЕВО, К БОРТИНЖЕНЕРУ", () => lookAtP(curEyes.cmd, curEyes.opL)]],
+  opR: [["НА МФД", () => lookAtP(curEyes.opR, VAR[S.v].ops.R.mfds[1].c)], ["НА ЭКРАН", () => lookAtP(curEyes.opR, SC)], ["НА КОМАНДИРА", () => lookAtP(curEyes.opR, curEyes.cmd)]],
+  opL: [["НА МФД", () => lookAtP(curEyes.opL, VAR[S.v].ops.L.mfds[1].c)], ["НА ЭКРАН", () => lookAtP(curEyes.opL, SC)], ["НА КОМАНДИРА", () => lookAtP(curEyes.opL, curEyes.cmd)]]
+};
+function lookAtP(e, p) { if (!e || !p) return {yaw: 0, pitch: 0}; return {yaw: Math.atan2(p.x - e.x, p.z - e.z) * R2D, pitch: Math.atan2(p.y - e.y, Math.hypot(p.x - e.x, p.z - e.z)) * R2D}; }
+function defaultLook() { const L = LOOKS[S.view]; if (!L) return; const k = S.view === "cmd" ? 0 : 1; Object.assign(eyeLook, L[k][1]()); S.look = k; }
+
+// ===================== scene update for the current state =====================
+function update() {
+  const W = VAR[S.v], k = S.man, an = MAN[k], atC = S.seats === "at";
+  for (const id in VAR) VAR[id].grp.visible = id === S.v;
+  setSide(S.glass === "tape" ? RIBBON : 0); setCmdSeat(atC);
+  mats.sideback.color.setHex(S.back === "dark" ? 0x101416 : 0x8d9399);
+  for (const id in VAR) VAR[id].grp.children.forEach(c => { if (c.userData.wing) c.material = S.hl ? newMat : mats.tub; });
+  clearOverlays();
+  const occ = BASE_OCC.concat(W.occ);
+  // the commander
+  const ce = cmdEye(k);
+  cmdFig.visible = atC && S.view !== "cmd";
+  pose(cmdFig, an, {x: 0, z: CMD_AT}, 0, CMD_PAN, {recline: true, restF: 0.20, restY: 0.90});
+  curEyes = {cmd: ce};
+  const lines = new THREE.Group(), reach = new THREE.Group(), dims = new THREE.Group(); ovl.add(lines, reach, dims);
+  lines.visible = S.lines; reach.visible = S.reach; dims.visible = S.dims;
+  for (const side of ["R", "L"]) {
+    const o = W.ops[side], st = opState(W, side, k, atC);
+    placeSeat(o.seat, st.O, st.th, an.pan);
+    o.fig.visible = atC && S.view !== "op" + side;
+    const target = o.mfds[1].c, tgt = {x: target.x + o.mfds[1].n.x * 0.01, y: target.y, z: target.z + o.mfds[1].n.z * 0.01};
+    const near = (dist3(st.sh[0], tgt) < dist3(st.sh[1], tgt)) ? "L" : "R";
+    const ps = pose(o.fig, an, st.O, st.th, an.pan, {reach: tgt, reachSide: near, restF: 0.10, restY: an.pan + 0.25});
+    curEyes["op" + side] = ps.eye;
+    if (atC) {
+      const okC = sightLine(ps.eye, ce, occ, lines);
+      sightLine(ps.eye, SC, occ, lines);
+      if (S.view !== "side") {
+        label({x: (ps.eye.x + ce.x) / 2, y: (ps.eye.y + ce.y) / 2 + 0.05, z: (ps.eye.z + ce.z) / 2}, "к командиру " + Math.round(Math.abs(wrapA(angPlan(ps.eye, ce) - st.th))) + "°" + (okC ? "" : " · закрыто"), okC ? "g" : "r", "lines");
+      }
+      // the reach sphere and its ring at the MFDs' height
+      const S0 = near === "L" ? st.sh[0] : st.sh[1];
+      const sp = new THREE.Mesh(new THREE.SphereGeometry(REACH, 32, 16), new THREE.MeshBasicMaterial({color: COL.mag, transparent: true, opacity: 0.07, depthWrite: false}));
+      sp.position.copy(G3(S0)); reach.add(sp);
+      const dy = target.y - S0.y, rr = Math.sqrt(Math.max(0, REACH * REACH - dy * dy)), ring = [];
+      for (let i = 0; i <= 72; i++) { const a = i / 72 * 2 * Math.PI; ring.push({x: S0.x + rr * Math.sin(a), y: target.y, z: S0.z + rr * Math.cos(a)}); }
+      addLine(ring, COL.mag, reach);
+      const dR = dist3(S0, tgt); addLine([S0, tgt], dR <= REACH ? COL.mag : COL.bad, reach);
+      if (S.view !== "side") label({x: (S0.x + tgt.x) / 2, y: (S0.y + tgt.y) / 2, z: (S0.z + tgt.z) / 2}, "дотяг " + fmt(dR), "m", "reach");
+    }
+    // dimensions (top view mostly): seat travel, the aisle, the operator's place
+    const Orest = {x: o.place.M.x - st.f.x * OP_TRAVEL, z: o.place.M.z - st.f.z * OP_TRAVEL};
+    const ghost = rect(Orest, st.th, -0.38, 0.38, -0.45, 0.34).concat([]); ghost.push(ghost[0]);
+    addLine(ghost.map(p => ({x: p.x, y: 0.02, z: p.z})), COL.mute, dims, true);
+    const cur = rect(o.place.M, st.th, -0.38, 0.38, -0.45, 0.34); cur.push(cur[0]);
+    addLine(cur.map(p => ({x: p.x, y: 0.02, z: p.z})), COL.mute, dims, true);
+    addLine([{x: o.place.M.x, y: 0.03, z: o.place.M.z}, {x: Orest.x, y: 0.03, z: Orest.z}], COL.cy, dims);
+    label({x: o.place.M.x, y: 0.75, z: o.place.M.z}, side === "R" ? "АСТРОНАВИГАТОР" : "БОРТИНЖЕНЕР", "t", "names");
+  }
+  curEyes.cmd = ce;
+  label({x: 0, y: 1.45, z: CMD_AT}, "КОМАНДИР", "t", "names");
+  // the commander's aisle and other plan dimensions (at the floor)
+  const cmdRest = rect({x: 0, z: CMD_REST}, 0, -0.38, 0.38, -0.45, 0.34);
+  const cr = cmdRest.concat([cmdRest[0]]); addLine(cr.map(p => ({x: p.x, y: 0.02, z: p.z})), COL.mute, dims, true);
+  const cAt = rect({x: 0, z: CMD_AT}, 0, -0.38, 0.38, -0.45, 0.34); cAt.push(cAt[0]); addLine(cAt.map(p => ({x: p.x, y: 0.02, z: p.z})), COL.mute, dims, true);
+  const pr = rectPolyClosest(cmdRest, W.ops.R.outline);
+  if (pr) dimLine({x: pr[0].x, y: 0.05, z: pr[0].z}, {x: pr[1].x, y: 0.05, z: pr[1].z}, "проход " + fmt(Math.hypot(pr[1].x - pr[0].x, pr[1].z - pr[0].z)), dims, "dims");
+  const o = W.ops.R, f = dir(o.facing), Orest = {x: o.place.M.x - f.x * OP_TRAVEL, z: o.place.M.z - f.z * OP_TRAVEL};
+  const edge = {x: o.place.M.x + f.x * W.v.d0.M, z: o.place.M.z + f.z * W.v.d0.M};
+  const panF = {x: Orest.x + f.x * 0.34, z: Orest.z + f.z * 0.34};
+  dimLine({x: panF.x, y: 0.06, z: panF.z}, {x: edge.x, y: 0.06, z: edge.z}, "встать: " + fmt(Math.hypot(edge.x - panF.x, edge.z - panF.z)), dims, "dims");
+  const eR = opState(W, "R", k, true).eye; dimLine({x: ce.x, y: 1.0, z: ce.z}, {x: eR.x, y: 1.0, z: eR.z}, "командир — оператор " + fmt(Math.hypot(eR.x - ce.x, eR.z - ce.z)), dims, "top");
+  label({x: 0, y: 2.6, z: 3.1}, "ГЛАВНЫЙ ЭКРАН · центр", "y", "names");
+  if (S.view === "side") sideOverlays(W, k, atC, dims, reach);
+  applyCamera(); renderTable(); renderPar(); hint();
+}
+function sideOverlays(W, k, atC, dims, reach) {
+  const side = S.sideOp, o = W.ops[side], an = MAN[k], st = opState(W, side, k, atC), mx = side === "R" ? 1 : -1, v = W.v;
+  const f0 = at(W.path, W.path.sMid), sec = section(f0.q, f0.b).filter((p, i, a) => { const q = a[(i + a.length - 1) % a.length]; return Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6; });
+  const pts = sec.map(([r, h]) => onPath(f0, r, h, mx)); pts.push(pts[0]);
+  const sg = new THREE.Group(); ovl.add(sg);
+  const shape = new THREE.Shape(sec.map(([r, h]) => new THREE.Vector2(r, h)));
+  const fillM = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({color: 0x3a5550, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.85}));
+  const n = nAof(f0.th), a3 = G3(onPath(f0, 0, 0, mx)), e1 = G3({x: -n.x * mx, y: 0, z: -n.z}).normalize();   // r axis: away from the operator
+  const m = new THREE.Matrix4().makeBasis(e1, new THREE.Vector3(0, 1, 0), new THREE.Vector3().crossVectors(e1, new THREE.Vector3(0, 1, 0))); m.setPosition(G3({x: mx * (f0.x + n.x * RC), y: 0, z: f0.z + n.z * RC}));
+  fillM.applyMatrix4(m); fillM.renderOrder = 5; sg.add(fillM);
+  addLine(pts, 0x9fd8cf, sg);
+  const P = (along, y) => ({x: st.O.x + st.f.x * along, y, z: st.O.z + st.f.z * along});
+  const eAl = (atC ? v.d0[k] : v.d0[k] + OP_TRAVEL);                    // the edge, along his facing from the seat's axis
+  // heights
+  dimLine(P(eAl + 0.62, 0), P(eAl + 0.62, TOP), "стол " + fmt(TOP), dims, "side");
+  if (v.recess) {
+    dimLine(P(eAl + 0.06, 0), P(eAl + 0.06, REC.ceil), "низ " + fmt(REC.ceil), dims, "side");
+    if (atC) { const kx = an.kneeF - 0.03; dimLine(P(kx, an.kneeH), P(kx, REC.ceil), "над коленом " + fmt(REC.ceil - an.kneeH), dims, "side"); }
+    dimLine(P(eAl, 0.03), P(eAl + REC.fD, 0.03), "ниша у пола " + fmt(REC.fD), dims, "side");
+  }
+  dimLine(P(-0.55, 0), P(-0.55, an.pan), "сиденье " + fmt(an.pan), dims, "side");
+  dimLine(P(eAl - OP_TRAVEL * (atC ? 1 : 0) - 0.0, 0.12), P(eAl - (atC ? 0 : 0), 0.12), "", dims, "side", COL.mute);
+  if (atC) {
+    const mid = o.mfds[1], eye = st.eye;
+    addLine([eye, mid.c], COL.yel, dims); label({x: (eye.x + mid.c.x) / 2, y: (eye.y + mid.c.y) / 2 + 0.04, z: (eye.z + mid.c.z) / 2}, "глаз — МФД " + fmt(dist3(eye, mid.c)), "y", "side");
+    const near = (dist3(st.sh[0], mid.c) < dist3(st.sh[1], mid.c)) ? st.sh[0] : st.sh[1];
+    const lat = (near.x - st.O.x) * st.r.x + (near.z - st.O.z) * st.r.z, rr = Math.sqrt(Math.max(0, REACH * REACH - lat * lat));
+    const c0 = {x: st.O.x + st.f.x * 0.02, y: near.y, z: st.O.z + st.f.z * 0.02}, arc = [];
+    for (let i = 0; i <= 48; i++) { const a = (-70 + 140 * i / 48) * D2R; arc.push({x: c0.x + st.f.x * rr * Math.cos(a), y: c0.y + rr * Math.sin(a), z: c0.z + st.f.z * rr * Math.cos(a)}); }
+    addLine(arc, COL.mag, reach); label(arc[34], "досягаемость 0,65 (в плоскости " + fmt(rr) + ")", "m", "side");
+  } else {
+    label(P(eAl - 0.2, 0.2), "кресло отъехало на " + fmt(OP_TRAVEL), "c", "side");
+  }
+}
+function hint() {
+  const V = S.view, t = {
+    cmd: "Командир у стола в кресле (откинувшись). Боковые стёкла — как выбрано выше; кнопки «взгляд» поворачивают голову к операторам.",
+    opL: "Бортинженер (тепло и энергоустановка) в своей петле крыла. Кнопки «взгляд»: МФД, экран, командир.",
+    opR: "Астронавигатор (навигация) в своей петле крыла. Кнопки «взгляд»: МФД, экран, командир.",
+    top: "План: пунктир — кресла у пульта и отъехавшие, голубое — проходы и размеры, сиреневое — досягаемость на высоте МФД.",
+    side: "Разрез вертикальной плоскостью по оси кресла оператора: сечение крыла, ниша для коленей, МФД, дуга досягаемости.",
+    orbit: "Общий вид. Зелёные линии — взгляд свободен, красные — закрыт."
+  }[V];
+  $("viewHint").textContent = t || "";
+  $("lookRow").style.display = LOOKS[V] ? "" : "none"; $("sideRow").style.display = V === "side" ? "" : "none";
+  if (LOOKS[V]) { const L = $("look"); L.innerHTML = ""; LOOKS[V].forEach(([n], i) => { const b = document.createElement("button"); b.textContent = n; b.dataset.i = i; if (S.look === i) b.classList.add("on"); L.appendChild(b); }); }
+  $("varNote").textContent = VAR[S.v].v.note;
+}
+$("look").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; const i = +b.dataset.i; S.look = i; Object.assign(eyeLook, LOOKS[S.view][i][1]()); hint(); applyCamera(); });
+
+// ===================== the table, the recommendation, the parameters =====================
+function cls(v, good, warn, higherBetter = false) { if (v == null || !isFinite(v)) return ""; return higherBetter ? (v >= good ? "good" : v >= warn ? "warn" : "bad") : (v <= good ? "good" : v <= warn ? "warn" : "bad"); }
+const yesno = (ok, yes = "видно", no = "закрыто") => `<span class="${ok ? "good" : "bad"}">${ok ? yes : no}</span>`;
+function renderTable() {
+  const k = S.man, cols = VARS.map(v => ({v, m: MET[k][v.id]}));
+  const head = `<tr><th></th>${cols.map(c => `<th class="n${c.v.id === S.v ? " sel" : ""}">${c.v.star ? c.v.tag.replace("★", '<span class="star">★</span>') : c.v.tag}</th>`).join("")}</tr>`;
+  const row = (name, f, sub) => `<tr><td>${name}${sub ? `<br><small>${sub}</small>` : ""}</td>${cols.map(c => `<td class="n${c.v.id === S.v ? " sel" : ""}">${f(c.m, c.v)}</td>`).join("")}</tr>`;
+  const sec = t => `<tr><th colspan="${cols.length + 1}" style="padding-top:10px;color:var(--acc)">${t}</th></tr>`;
+  const sinkTxt = s => s === 0 ? '<span class="good">не мешает</span>' : s == null ? '<span class="bad">не помогает</span>' : `<span class="${s <= RIBBON + 1e-3 ? "warn" : "bad"}">опустить на ${fmt(s)}</span>`;
+  const h = [head,
+    sec("Место оператора"),
+    row("кресло у пульта, x / z", m => `${fmt(m.place.x)} / ${fmt(m.place.z)}`, "от оси командира, м"),
+    row("разворот к оси", (m, v) => `${fmt(v.cup ? v.psi : 0, 0)}°`),
+    row("крыло от торца стола", m => fmt(m.len), "по средней линии, м"),
+    sec("Руки и глаза (" + MAN[k].name + ")"),
+    row("дотяг до МФД", m => `<span class="${cls(m.reach[1], REACH, 0.72)}">${fmt(m.reach[0])}–${fmt(m.reach[1])}</span>`, "от плеча до центров трёх МФД"),
+    row("до дальней кнопки", m => `<span class="${cls(m.reachFar, 0.70, 0.80)}">${fmt(m.reachFar)}</span>`, "угол МФД, худший"),
+    row("глаз — средний МФД", m => `<span class="${m.view >= 0.55 && m.view <= 0.9 ? "good" : "warn"}">${fmt(m.view)}</span>`, "норма 0,6–0,9"),
+    row("дальний МФД", m => `<span class="${m.viewMax <= 0.9 ? "good" : "warn"}">${fmt(m.viewMax)}</span>`),
+    row("угол взгляда к МФД", m => `<span class="${cls(m.vangMax, 30, 40)}">${fmt(m.vang, 0)}° / ${fmt(m.vangMax, 0)}°</span>`, "к нормали: средний / худший"),
+    sec("Командир и экран"),
+    row("поворот головы к командиру", m => `<span class="${cls(m.headCmd, 60, 70)}">${fmt(m.headCmd, 0)}°</span>`, "норма ≤ 60°"),
+    row("линия оператор ↔ командир", m => `${yesno(m.cmdLine_work, "свободна", "закрыта")} / ${yesno(m.cmdLine_tape, "свободна", "закрыта")}`, "РАБОТА / ЛЕНТА"),
+    row("командир видит оператора под", m => `${fmt(m.cmdSees, 0)}°`, "от взгляда вперёд; голова 60° + глаза"),
+    row("расстояние командир — оператор", m => fmt(m.dist), "глаза, м"),
+    row("экран от взгляда оператора", m => `${fs(m.scrDir, 0)}°`, "+ вправо"),
+    row("центр экрана", m => `${yesno(m.scrC_work)} / ${yesno(m.scrC_tape)}`, "РАБОТА / ЛЕНТА"),
+    row("видно экрана", m => `<span class="${cls(m.scrPct_work, 0.8, 0.5, true)}">${Math.round(m.scrPct_work * 100)} %</span> / <span class="${cls(m.scrPct_tape, 0.8, 0.5, true)}">${Math.round(m.scrPct_tape * 100)} %</span>`, "сетка 9 × 5 по экрану; РАБОТА / ЛЕНТА"),
+    row("экран на оси виден от", m => `${m.scrLow_work == null ? "—" : fmt(m.scrLow_work)} / ${m.scrLow_tape == null ? "—" : fmt(m.scrLow_tape)}`, "высота над полом, м; РАБОТА / ЛЕНТА"),
+    row("поднятое боковое: экран", m => sinkTxt(m.sinkScr), "чтобы открыть центр экрана"),
+    row("поднятое боковое закрывает", m => `<span class="${cls(m.sideCut, 0.05, 0.25)}">${Math.round(m.sideCut * 100)} % экрана</span>`, "только боковые стёкла командира, РАБОТА"),
+    row("чтобы весь экран был виден", m => sinkTxt(m.sinkAll), "опустить поднятое боковое (ЛЕНТА — 0,44)"),
+    row("поднятое боковое: командир", m => sinkTxt(m.sinkCmd), "чтобы открыть линию к командиру"),
+    sec("Посадка (" + MAN[k].name + ")"),
+    row("сиденье / стол − локоть", m => `${fmt(m.pan)} / <span class="${m.elbow >= -0.08 && m.elbow <= 0.08 ? "good" : "warn"}">${fs(m.elbow)}</span>`, "м; локоть над сиденьем сидя"),
+    row("зазор над коленом", (m, v) => v.recess ? `<span class="${cls(m.kneeTop, 0.025, 0, true)}">${fmt(m.kneeTop)}</span>` : '<span class="bad">стол до пола</span>', "низ крыла 0,65"),
+    row("колено под столом", (m, v) => v.recess ? `<span class="${cls(m.kneeDepth, 0.04, 0, true)}">запас ${fmt(m.kneeDepth)}</span>` : `<span class="bad">не входит, до кромки ${fmt(m.kneeDepth)}</span>`),
+    row("бедро под кромкой", (m, v) => v.recess ? `<span class="${cls(m.thigh, 0.01, 0, true)}">${fmt(m.thigh)}</span>` : "—"),
+    row("носки", (m, v) => `<span class="${cls(m.toe, 0.02, 0, true)}">запас ${fmt(m.toe)}</span>`),
+    sec("Проходы (в плане)"),
+    row("кресло командира (отдых) ↔ крыло", m => `<span class="${cls(m.cmdAisle, 0.5, 0.35, true)}">${fmt(m.cmdAisle)}</span>`),
+    row("кресло оператора едет 0,6", m => `<span class="${cls(m.travel, 0.03, 0.0, true)}">${m.travel <= 0 ? "задевает" : "зазор " + fmt(m.travel)}</span>`, "подлокотники и спинка по всему ходу"),
+    row("встать с отъехавшего", m => `<span class="${cls(m.stand, 0.5, 0.4, true)}">${fmt(m.stand)}</span>`, "сиденье — кромка, м"),
+    row("кресла (отдых): командир ↔ оператор", m => `<span class="${cls(m.betweenRest, 0.7, 0.55, true)}">${fmt(m.betweenRest)}</span>`, "проход к оператору")
+  ];
+  $("tab").innerHTML = h.join("");
+}
+function renderPar() {
+  const W = VAR[S.v], v = W.v, o = W.ops.R, f = dir(o.facing), pth = W.path;
+  const kn = pth.P.find(p => Math.abs(p.s - pth.kEnd) < 1e-9) || at(pth, pth.kEnd);
+  const L = [];
+  L.push(`Вариант: ${v.name}. Правое крыло (левое — зеркально x → −x). Координаты от оси командира (x, z); в меше z + 80.0, y + 1.0.`);
+  L.push(`Начало: торец стола командира ±${fmt(A_END, 2)}°, средняя линия R ${fmt(RC, 2)}, курс ${fmt(90 + A_END, 2)}°.`);
+  L.push(`1) Колено: R средней линии ${fmt(v.Rk)} (центр за дальней кромкой: (${fmt((RC + v.Rk) * Math.sin(A_END * D2R), 3)}; ${fmt((RC + v.Rk) * Math.cos(A_END * D2R), 3)})), поворот наружу до курса ${fmt(v.thJ, 1)}° (на ${fmt(90 + A_END - v.thJ, 1)}°); край командира — снаружи.`);
+  if (v.L1 > 0) L.push(`2) Прямой прогон ${fmt(v.L1)}.`);
+  if (v.cup) {
+    const fj = at(pth, pth.sJ), n = nAof(fj.th), C = {x: fj.x + n.x * pth.Rm, z: fj.z + n.z * pth.Rm};
+    L.push(`2) Петля оператора: центр (${fmt(C.x, 3)}; ${fmt(C.z, 3)}), R средней линии ${fmt(pth.Rm)} (его кромка R ${fmt(v.Re)}, дальняя R ${fmt(v.Re + 0.5)}), от ${fmt(-v.psi - v.al, 0)}° до ${fmt(-v.psi + v.be, 0)}° (направления от центра, 0 = вперёд, + вправо). Торец — плоский.`);
+  }
+  L.push(`Длина по средней линии ${fmt(pth.len)}.`);
+  L.push(`Сечение: BR_DESK (.92, 1.42, .72), паз BR_GROOVE; утопленная полоса BR_BANDS гаснет по колену (глубина .07 → 0)${v.recess ? `; ниша для ног со стороны оператора: потолок ${fmt(REC.ceil)} до ${fmt(REC.kD)} от кромки, наклон до ${fmt(REC.fD)} на высоте ${fmt(REC.fH)} (у пола ${fmt(REC.fD)}), дальняя стенка ${fmt(0.5 - REC.fD)}; вплыв ниши ±0,12 м вокруг начала петли` : ""}.`);
+  L.push(`Кресло оператора у пульта: 95 % — (${fmt(o.place.M.x, 3)}; ${fmt(o.place.M.z, 3)}), 5 % — на 0,05 ближе (${fmt(o.place.F.x, 3)}; ${fmt(o.place.F.z, 3)}); курс ${fmt(o.facing, 1)}° (${o.facing < 0 ? "к оси" : ""}); ход назад ${fmt(OP_TRAVEL)} вдоль курса → место отдыха (${fmt(o.place.M.x - f.x * OP_TRAVEL, 3)}; ${fmt(o.place.M.z - f.z * OP_TRAVEL, 3)}). Сиденье 0,635 + высота (−0,20…+0,05): 5 % −0,20, 95 % −0,15. Подлокотники −0,15…+${fmt(v.armF)}, курсорный блок на переднем конце левого.`);
+  if (v.cup) L.push(`Тёмное стекло в пазу петли: высота ${fmt(HB)} над столом, наклон 14° от оператора, от ${fmt(-v.psi + v.om - (o.dS + MFD / 2 + 0.035) / pth.Rm * R2D, 1)}° до ${fmt(-v.psi + v.om + (o.dS + MFD / 2 + 0.035) / pth.Rm * R2D, 1)}° (от центра петли).`);
+  L.push(`МФД 0,40 (как сейчас: низ +0,03 над столом, 0,03 перед стеклом), центры: ${o.mfds.map(u => `(${fmt(u.c.x, 3)}; ${fmt(u.c.y, 3)}; ${fmt(u.c.z, 3)})`).join(", ")}${v.cup ? `; шаг ${fmt(MFD_GAP)} по стеклу, средний на ${fmt(v.om, 0)}° наружу от курса` : ""}.`);
+  $("par").textContent = L.join("\n");
+}
+function renderRec() {
+  const m = MET.F.v2, M = MET.M.v2, n = MET.M.now, nF = MET.F.now;
+  $("rec").innerHTML = `
+  <h2>Что изменено и почему</h2>
+  <ol>
+    <li><b>Крыло не обрезано.</b> Стол командира продолжается из своих торцов (±${fmt(A_END, 1)}°) в том же сечении: плавное колено наружу и петля, которая огибает кресло оператора спереди и сбоку (на 90° за его взгляд). Углов нет; крыло ${fmt(MET.M.v2.len, 1)} м по средней линии против ${fmt(MET.M.now.len, 1)} м сейчас.</li>
+    <li><b>Оператор сидит внутри своей петли</b>, как командир внутри своей дуги, и развёрнут к оси на 35°: командир — в ${fmt(M.headCmd, 0)}° от его взгляда (сейчас ${fmt(n.headCmd, 0)}°), центр экрана — почти прямо (${fs(M.scrDir, 0)}°).</li>
+    <li><b>Командир видит операторов</b> под ${fmt(M.cmdSees, 0)}° — позади заднего края своего поднятого бокового стекла (оно кончается около 91° от его глаза), поэтому видно и в РАБОТЕ, и в ЛЕНТЕ.</li>
+    <li><b>Экран над стёклами командира.</b> Центр экрана виден обоим манекенам и в РАБОТЕ, и в ЛЕНТЕ (сейчас у 5 % женщины в РАБОТЕ он закрыт). Но поднятое ближнее боковое стекло командира закрывает оператору дальнюю треть экрана (x < −1 м для астронавигатора): ${Math.round(m.sideCut * 100)} % экрана у 5 % женщины, ${Math.round(M.sideCut * 100)} % у 95 % мужчины. Это от того, что оператор теперь сбоку, а не позади. Чтобы был виден весь экран, стекло надо опустить на ${fmt(M.sinkAll)} (мужчина) / ${fmt(m.sinkAll)} (женщина); ЛЕНТА опускает на 0,44. Варианты на ваш выбор (переднее стекло не трогаем): а) так и оставить — центр виден, полный экран в ЛЕНТЕ; б) спинка боковых стёкол — тёмное прозрачное стекло: фотонное стекло светит только к командиру, сзади сквозь него виден экран; в) боковое стекло ниже на ~0,4. Только тёмная спинка (без прозрачности) видимость не меняет — она лишь не светит.</li>
+    <li><b>Посадка:</b> под петлёй ниша для коленей и стоп (низ 0,65, у пола 0,44), оператор садится на 0,25–0,30 к кромке. Дотяг до МФД ${fmt(m.reach[0])}–${fmt(m.reach[1])} у 5 % женщины, ${fmt(M.reach[0])}–${fmt(M.reach[1])} у 95 % мужчины (сейчас ${fmt(nF.reach[0])}–${fmt(nF.reach[1])}); глаз — МФД ${fmt(m.view)}–${fmt(M.view)}. МФД стоят по дуге — все три почти на одном расстоянии.</li>
+    <li><b>Кресло оператора</b> — в стиле командирского, без штурвала и РУД, подлокотники короче (до +0,12: иначе они упираются в кромку), курсорный блок на левом. Отъезжает на 0,6 назад по своему курсу, ничего не задевая; встать — ${fmt(M.stand)} до кромки.</li>
+    <li><b>МФД сдвинуты на 12° наружу</b> от взгляда оператора: иначе ближний к командиру МФД закрывает командира для 5 % женщины (её глаз ниже верха МФД).</li>
+  </ol>
+  <h2>Рекомендация ★ В2</h2>
+  <p class="note" style="color:var(--ink)">В1 даёт самый лёгкий поворот головы, но кромка R 0,62 тесна, и МФД сильнее «обступают». В3 повторяет радиус командира, но оператор отодвинут назад, поворот к командиру ${fmt(MET.M.v3.headCmd, 0)}°, экран уходит влево (${fs(MET.M.v3.scrDir, 0)}°). В2 — середина: дотяг, расстояния, поворот головы, колени и проходы в норме для обоих манекенов.</p>
+  <h2>Решаете вы</h2>
+  <ul>
+    <li>Вариант: В1, В2 ★ или В3 (или поправить угол разворота / радиус петли).</li>
+    <li>Утопленная полоса командира на крыле гаснет к петле (над коленями ей нет места) — так годится?</li>
+    <li>Петля огибает кресло на 90° за взгляд — меньше / больше?</li>
+    <li>Дальняя треть экрана за поднятым боковым стеклом: оставить (полный экран — в ЛЕНТЕ), сделать спинку прозрачно-тёмной или опустить боковое стекло на ~0,4.</li>
+    <li>Сиденье 5 % женщины при −0,20 — локти на ${fmt(-MET.F.v2.elbow)} ниже стола: допустимо, иначе нужна подставка для ног.</li>
+  </ul>`;
+}
+
+// ===================== interaction =====================
+function sync() {
+  syncSeg("var", S.v); syncSeg("views", S.view); syncSeg("man", S.man); syncSeg("seats", S.seats); syncSeg("glass", S.glass); syncSeg("back", S.back); syncSeg("sideOp", S.sideOp);
+}
+seg("var", "v", () => { update(); if (LOOKS[S.view]) { defaultLook(); hint(); applyCamera(); } });
+seg("views", "view", () => { if (LOOKS[S.view]) defaultLook(); update(); });
+seg("man", "man", () => { update(); if (LOOKS[S.view]) { defaultLook(); hint(); applyCamera(); } });
+seg("seats", "seats", update); seg("glass", "glass", update); seg("back", "back", update); seg("sideOp", "sideOp", update);
+for (const [id, key] of [["cLines", "lines"], ["cReach", "reach"], ["cDims", "dims"], ["cNew", "hl"]]) $(id).addEventListener("change", e => { S[key] = e.target.checked; update(); });
+
+const cvs = renderer.domElement, ptr = new Map(); let pinch0 = 0, last = null;
+const pdist = () => { const p = [...ptr.values()]; return p.length < 2 ? 0 : Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y); };
+function zoom(k) {
+  if (S.view === "orbit") orb.r = clamp(orb.r * k, 1.2, 14);
+  else if (S.view === "top") topV.h = clamp(topV.h * k, 0.6, 6);
+  else if (S.view in LOOKS) { /* no zoom in the eye views */ }
+  applyCamera();
+}
+cvs.addEventListener("pointerdown", e => { try { cvs.setPointerCapture(e.pointerId); } catch (_) {} ptr.set(e.pointerId, {x: e.clientX, y: e.clientY}); pinch0 = pdist(); last = {x: e.clientX, y: e.clientY}; });
+cvs.addEventListener("pointermove", e => {
+  if (!ptr.has(e.pointerId)) return; const p = ptr.get(e.pointerId), dx = e.clientX - p.x, dy = e.clientY - p.y; ptr.set(e.pointerId, {x: e.clientX, y: e.clientY});
+  if (ptr.size === 2) { const d = pdist(); if (pinch0 > 0 && d > 0) zoom(pinch0 / d); pinch0 = d; return; }
+  const h = wrap.clientHeight || 1;
+  if (S.view === "orbit") { orb.az -= dx * 0.008; orb.el = clamp(orb.el + dy * 0.006, -0.1, 1.5); }
+  else if (S.view === "top") { const k = 2 * topV.h / h; topV.cx -= dx * k; topV.cz += dy * k; }
+  else if (S.view in LOOKS) { const k = persp.fov / h; eyeLook.yaw -= dx * k; eyeLook.pitch = clamp(eyeLook.pitch + dy * k, -80, 80); }
+  applyCamera();
+});
+const up = e => { ptr.delete(e.pointerId); pinch0 = pdist(); };
+cvs.addEventListener("pointerup", up); cvs.addEventListener("pointercancel", up);
+cvs.addEventListener("wheel", e => { e.preventDefault(); zoom(Math.exp(clamp(e.deltaY, -200, 200) * 0.0012)); }, {passive: false});
+window.addEventListener("resize", () => applyCamera());
+
+const _p = new THREE.Vector3();
+function frame() { draw(); requestAnimationFrame(frame); }
+function draw() {
+  renderer.render(scene, cam);
+  const w = wrap.clientWidth, h = wrap.clientHeight, V = S.view;
+  for (const l of LBL) {
+    let show = (l.tag === "names") || (l.tag === "lines" && S.lines) || (l.tag === "reach" && S.reach) || (l.tag === "dims" && S.dims && V !== "side") || (l.tag === "top" && S.dims && (V === "top" || V === "orbit")) || (l.tag === "side" && V === "side" && S.dims);
+    if (V === "side" && (l.tag === "names" || l.tag === "lines" || l.tag === "reach")) show = false;
+    if (show) { _p.copy(G3(l.p)).project(cam); if (_p.z > 1 || _p.z < -1 || Math.abs(_p.x) > 1.05 || Math.abs(_p.y) > 1.05) show = false; }
+    l.e.style.display = show ? "block" : "none";
+    if (show) l.e.style.transform = `translate(${Math.round((_p.x + 1) / 2 * w)}px, ${Math.round((1 - _p.y) / 2 * h)}px) translate(-50%, -50%)`;
+  }
+}
+
+// ===================== start =====================
+setTimeout(() => {
+  try {
+    for (const k of ["F", "M"]) for (const v of VARS) MET[k][v.id] = metrics(VAR[v.id], k);
+    $("cLines").checked = S.lines; $("cReach").checked = S.reach; $("cDims").checked = S.dims; $("cNew").checked = S.hl;
+    sync(); renderRec(); update(); if (LOOKS[S.view]) { defaultLook(); hint(); applyCamera(); }
+    $("load").style.display = "none"; started = true; draw(); frame();
+  } catch (err) { console.error(err); fail("Ошибка: " + err.message); }
+}, 30);
+})();
+</script>
+</body>
+</html>

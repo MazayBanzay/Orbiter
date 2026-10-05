@@ -1,9 +1,9 @@
 // TantraDisplays - the bridge panels (the user, 2026-10-04; Tantra_Design/tantra_bridge_panels_mockup.html):
 //   screens 0 / 1, the side panels 1.16 x 0.96 m: three MFDs over a screen of the mockups (1600 x 800): on the left the
 //   mechanisation (its tabs: ТЕПЛО, АВТОПИЛОТ to come), on the right the power plant, always;
-//   screen 2, the front screen 1.50 x 0.65 m: ПОЛЁТ (the flight terminal: the HUD and RCS keys, the flight, the thrust) or
-//   ДВИГАТЕЛИ (the engine console of the mockup), by two tabs in its top right corner.
-// The panels are drawn in the mockups' own pixels: 1600 wide, the MFD band 428 high, the screen 800 under it.
+//   screen 2, the front glass (the low wide glass under the big screen, refine/front_v3.html): ПОЛЁТ, ДВИГАТЕЛИ or ПАРАМЕТРЫ by
+//   three tabs in its top right corner (TantraFrontScreen, TantraEngineScreen, TantraParamsScreen; laid out in design px).
+// The side panels are drawn in the mockups' own pixels: 1600 wide, the MFD band 428 high, the screen 800 under it.
 #include "TantraDisplays.h"
 #include "Tantra.h"
 #include "SkpCompat.h"
@@ -61,7 +61,12 @@ void TantraDisplays::DrawPanel(int k) {
             }
         }
         // the screen under the MFDs
-        if (k == kLeft) {
+        if (k == kLeft && leftTab_ == 2) {                                 // АВТОПИЛОТ
+            DrawAutopilot(skp, 0, kMfdBand, kPanelW, kZoneH);
+        } else if (k == kLeft && leftTab_ == 1) {                          // ТЕПЛО
+            tantra::thermalscreen::View v; FillThermalView(v);
+            thermScr_.Draw(skp, font_, 0, kMfdBand, kPanelW, kZoneH, v);
+        } else if (k == kLeft) {
             tantra::mechscreen::View v; FillMechView(v);
             mechScr_.DrawTop(skp, font_, 0, kMfdBand, kPanelW, kZoneH, v);
         } else {
@@ -104,6 +109,12 @@ bool TantraDisplays::TouchPanel(int k, double x, double y) {
     // the screen under the MFDs: its own pixels
     if (y >= kMfdBand) {
         const double sy = y - kMfdBand;
+        if (k == kLeft && leftTab_ == 2) return TouchAutopilot(x, sy);     // АВТОПИЛОТ
+        if (k == kLeft && leftTab_ == 1) {                                 // ТЕПЛО: its tabs
+            const int cmd = thermScr_.Hit(x, sy);
+            if (cmd == tantra::thermalscreen::kCmdTabMech) { leftTab_ = 0; return true; }
+            return cmd >= 0;
+        }
         if (k == kLeft) { const int cmd = mechScr_.HitTop(x, sy); if (cmd < 0) return false; MechCommand(cmd); return true; }
         double along = 0.0; const int cmd = plantScr_.Hit(x, sy, &along);
         if (cmd < 0) return false;
@@ -112,44 +123,56 @@ bool TantraDisplays::TouchPanel(int k, double x, double y) {
     const int cmd = HitTest(panelHits_[k], x, y, nullptr, 2.0);
     if (cmd >= kHitMfd && cmd < kHitZone) {                               // its keys press it; any touch chooses it for the right console
         const int c = cmd - kHitMfd; selMfd_ = c / 16;
-        if (c % 16 < 15) t_->interior_.MfdPress(c / 16, c % 16);
+        if (c % 16 < 15) PressMfd(c / 16, c % 16);
         return true;
     }
     return false;
 }
 
-// ---- the front screen: ПОЛЁТ (the flight terminal as it was, bigger) | ДВИГАТЕЛИ (the mockup's engine console) ----
+// ---- the front glass: ПОЛЁТ | ДВИГАТЕЛИ | ПАРАМЕТРЫ (refine/front_v3.html) by the three tabs in its top right corner ----
 void TantraDisplays::DrawFrontTabs(SURFHANDLE s) {
+    frontHits_.clear();
     if (oapi::Sketchpad* skp = oapiGetSketchpad(s)) {
-        int w = 0, h = 0; oapiGetSurfaceSize(s, &w, &h);
-        Canvas g(skp, font_, 0, 0);
-        frontHits_.clear();
-        static const wchar_t* const kTab[2] = {L"ПОЛЁТ", L"ДВИГАТЕЛИ"};
-        for (int i = 0; i < 2; ++i) {
-            const double tw = 170, x = w - 14 - (2 - i) * (tw + 8), y = 8;   (void)h;
-            Btn(g, frontHits_, kTab[i], x, y, tw, 40, frontTab_ == i, i, i ? cVi : cOr);
-        }
+        { tantra::front::Pad p(skp, font_, gost_, frontK_, &frontHits_); tantra::front::Tabs(p, frontW_, frontTab_); }
         oapiReleaseSketchpad(skp);
     }
+}
+
+// the attitude as the glass shows it: the pitch (Orbiter's), the bank from the local horizon frame - + with the right wing down
+// (the ADI's sky turns left, КРЕН П), the full circle when inverted
+void TantraDisplays::FrontAttitude(double* pitchDeg, double* bankDeg) const {
+    Tantra* t = t_;
+    VECTOR3 rt, up; t->HorizonRot(_V(1, 0, 0), rt); t->HorizonRot(_V(0, 1, 0), up);
+    *pitchDeg = t->GetPitch() * DEG;
+    *bankDeg = std::atan2(-rt.y, up.y) * DEG;
 }
 
 void TantraDisplays::DrawFront() {
     SURFHANDLE s = s_[kCentre];
     if (!s) return;
-    if (frontTab_ == 0) DrawCentre();
-    else {
-        Tantra* t = t_;
-        if (t->AnaIsMain()) {
-            if (fsPend_ >= 0) { t->SetThrusterGroupLevel(THGROUP_MAIN, fsPend_); fsPend_ = -1; }
-            if (frPend_ >= 0 && t->GetGroupThrusterCount(THGROUP_RETRO) > 0) { t->SetThrusterGroupLevel(THGROUP_RETRO, frPend_); frPend_ = -1; }
-        }
-        oapiClearSurface(s, 0xFF000000 | 0x0a1311);
-        if (oapi::Sketchpad* skp = oapiGetSketchpad(s)) {
-            tantra::enginescreen::View v; FillEngineView(v);
-            int w = 0, h = 0; oapiGetSurfaceSize(s, &w, &h);
-            engScr_.Draw(skp, font_, 0, 0, w, h, v);
-            oapiReleaseSketchpad(skp);
-        }
+    Tantra* t = t_;
+    if (t->AnaIsMain()) {                                                // set-points stored before the feed go now (ПОЛЁТ's thrust bar or
+        if (fsPend_ >= 0) { t->SetThrusterGroupLevel(THGROUP_MAIN, fsPend_); fsPend_ = -1; }   // ДВИГАТЕЛИ's scales stored them)
+        if (frPend_ >= 0 && t->GetGroupThrusterCount(THGROUP_RETRO) > 0) { t->SetThrusterGroupLevel(THGROUP_RETRO, frPend_); frPend_ = -1; }
+    }
+    // the design px: kDesignH high, the width the glass's; the surface is frontK_ times that
+    int w = 0, h = 0; oapiGetSurfaceSize(s, &w, &h);
+    frontK_ = h > 0 ? h / double(tantra::front::kDesignH) : 1.0;
+    frontW_ = w > 0 ? w / frontK_ : 2430.0;
+    tantra::enginescreen::View ev; FillEngineView(ev);
+    engScr_.Sample(ev);                                                   // the engines' journal and trends follow on any page
+    oapiClearSurface(s, 0xFF000000 | 0x0a1311);
+    if (frontTab_ == 0) DrawCentre();                                     // ПОЛЁТ (TantraDisplays.cpp)
+    else if (oapi::Sketchpad* skp = oapiGetSketchpad(s)) {
+        if (frontTab_ == 2) {                                             // ПАРАМЕТРЫ: the main view's settings
+            tantra::paramsscreen::View v;
+            v.hud = hudMode_; for (int i = 0; i < 4; ++i) v.layer[i] = hudLayer_[i];
+            v.palette = palette_; v.hudGain = HudGain(); v.mfdGain = MfdGain(); v.mfdGamma = MfdGamma(); v.autoLum = autoLum_;
+            v.mfdRes = t->interior_.MfdRes(); v.rcs = t->GetAttitudeMode(); v.units = units_;
+            FrontAttitude(&v.pitch, &v.bank);
+            paramsScr_.Draw(skp, font_, gost_, frontK_, frontW_, v);
+        } else engScr_.Draw(skp, font_, gost_, frontK_, frontW_, ev);   // ДВИГАТЕЛИ
+        oapiReleaseSketchpad(skp);
     }
     DrawFrontTabs(s);
 #if __has_include("gcCoreAPI.h")
@@ -157,9 +180,18 @@ void TantraDisplays::DrawFront() {
 #endif
 }
 
+// px, py: the surface's pixels (Touch) -> the design px of the pages
 bool TantraDisplays::TouchFront(double px, double py) {
-    const int tab = HitTest(frontHits_, px, py, nullptr, 2.0);
-    if (tab >= 0) { frontTab_ = tab; return true; }
-    if (frontTab_ == 0) return false;   // the flight terminal: the caller passes it on
-    return TouchEngineScreen(px, py);
+    const double x = px / frontK_, y = py / frontK_;
+    double val = 0.0;
+    const int tab = tantra::front::FindHit(frontHits_, x, y, &val);
+    if (tab >= 0 && tab <= 2) { frontTab_ = tab; return true; }
+    if (frontTab_ == 0) return false;                                     // ПОЛЁТ: the caller passes it on (TouchCentre, design px)
+    if (frontTab_ == 2) {
+        const int cmd = paramsScr_.Hit(x, y, &val);
+        if (cmd < 0) return false;
+        ParamsCommand(cmd, val);
+        return true;
+    }
+    return TouchEngineScreen(x, y);
 }

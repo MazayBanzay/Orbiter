@@ -23,6 +23,11 @@
 #include "TantraPlantScreen.h"
 #include "TantraMechScreen.h"
 #include "TantraEngineScreen.h"
+#include "TantraParamsScreen.h"
+#include "TantraFrontScreen.h"
+#include "TantraThermalScreen.h"
+#include "TantraAutopilotScreen.h"
+#include "TantraGuidance.h"
 #include "TantraScreenFont.h"
 #include "TantraGost.h"
 #include <string>
@@ -41,6 +46,9 @@ public:
     bool Touch(int screen, double u, double v);// u right, v down, 0..1 over the screen
     void Shutdown();
     void DrawHud(SURFHANDLE s, int w, int h, const VECTOR3& camDir, const VECTOR3& camUp, double vfovDeg);   // over the front picture
+    void PaintSpot(int screen, double u, double v);   // the cursor unit's light spot over a screen's picture (orange)
+    double tSpot_ = 0.0;
+    void DrawDataPage(int zone, SURFHANDLE s, int w, int h);   // the main screen's ДАННЫЕ band: zone 0 the front arc, 1 / 2 the end walls (TantraDataPages.cpp)
     void AckAlerts();                          // the alerts acknowledged: they stop blinking
 
 private:
@@ -63,6 +71,7 @@ private:
     bool AlertUnacked() const;
     void SetMainLevel(double f);              // thrust set-points from a touch on a scale
     void FillPlantView(tantra::plantscreen::View& v) const;   // the ship round the plant for its screen
+    void FillCoreView(tantra::plantscreen::View& v) const;    // the energy core's snapshot for it (TantraDisplaysCore.cpp)
     void PlantCommand(int cmd, double along);                 // a key of the plant screen
     void SetPodLevel(double f);
 
@@ -103,11 +112,30 @@ private:
     void MechCommand(int cmd);
     tantra::ScreenFont font_;                  // Segoe UI of the mockups (one per ship)
     tantra::mechscreen::Screen mechScr_;
-    int leftTab_ = 0;                          // 0 МЕХАНИЗАЦИЯ, 1 ТЕПЛО
+    int leftTab_ = 0;                          // 0 МЕХАНИЗАЦИЯ, 1 ТЕПЛО, 2 АВТОПИЛОТ
+    // ---- ТЕПЛО (TantraThermalScreen, Tantra_Design/tantra_thermal_screen.html): the left glass's second page ----
+    void FillThermalView(tantra::thermalscreen::View& v);
+    void ThermalStep();                        // every frame: the screen's tracking (1 s), the entry forecast (1 s real time)
+    tantra::thermalscreen::Screen thermScr_;
+    double thermTrackT_ = -1e9, thermFcT_ = -1e9, thermAirT_ = -1e9;
+    tantra::thermalscreen::Air thermAir_;      // the planet's density by altitude (refreshed every 10 s)
+    // ---- АВТОПИЛОТ (TantraDisplaysAutopilot.cpp): the left glass's third page ----
+    void FillAscentState(tantra::guidance::AscentState& s, double dt);
+    void FillLandState(tantra::guidance::LandState& s, double dt);
+    void ApStep(double dt);
+    void DrawAutopilot(oapi::Sketchpad* skp, int ox, int oy, int w, int h);
+    bool TouchAutopilot(double x, double y);
+    tantra::apscreen::Screen apScr_;
+    tantra::guidance::Ascent asc_;
+    tantra::guidance::Landing land_;
+    int apPage_ = 0;                           // 0 ВЗЛЁТ НА ОРБИТУ, 1 ПОСАДКА НА КОРМУ
+    double padLat_ = 0.0, padLon_ = 0.0; bool havePad_ = false;   // the landing point (where the ship was when armed)
+    double apThE_ = 0.0, apThN_ = 0.0; bool apThInit_ = false;
     bool mechEstop_ = false;                   // the emergency stop of the mechanisation: the carriage held
-    // ---- the engine console (TantraDisplaysEngines.cpp): the mockup's screen in eng_ (800 px high) ----
+    // ---- the engine page (TantraDisplaysEngines.cpp): the front glass's ДВИГАТЕЛИ (TantraEngineScreen); DrawEngineScreen: the
+    // same page into eng_ (the old riser's console, not shown on variant 7) ----
     void DrawEngineScreen();
-    bool TouchEngineScreen(double x, double y);   // eng_'s pixels
+    bool TouchEngineScreen(double x, double y);   // the front glass's design px
     void FillEngineView(tantra::enginescreen::View& v) const;
     void EngineSetPoint(int bar, double value);
     void EngineCommand(int cmd);
@@ -120,8 +148,22 @@ private:
     void DrawFront();
     void DrawFrontTabs(SURFHANDLE s);
     bool TouchFront(double px, double py);        // the front surface's pixels
-    std::vector<tantra::scr::Hit> panelHits_[2], frontHits_;
-    int frontTab_ = 0;                         // the front screen: 0 ПОЛЁТ, 1 ДВИГАТЕЛИ
+    std::vector<tantra::scr::Hit> panelHits_[2];
+    // the front glass (TantraFrontScreen, refine/front_v3.html): laid out in design px, frontW_ x kDesignH; the surface is frontK_
+    // times that (set at each draw); the tabs' touch areas in design px; the ПОЛЁТ page; the ship's attitude for the pages
+    std::vector<tantra::front::Hit> frontHits_;
+    double frontK_ = 1.0, frontW_ = 2430.0;
+    tantra::front::Flight flightScr_;
+    void FrontAttitude(double* pitchDeg, double* bankDeg) const;   // bank + right wing down
+    int frontTab_ = 0;                         // the front screen: 0 ПОЛЁТ, 1 ДВИГАТЕЛИ, 2 ПАРАМЕТРЫ (the main view's settings)
+    tantra::paramsscreen::Screen paramsScr_;   // ПАРАМЕТРЫ (Tantra_Design/tantra_mainview_params_screen.html)
+    bool hudLayer_[4] = {true, true, true, true};   // the HUD's layers: the pitch ladder, the velocity vector, the tapes, the alerts
+    int units_ = 0;                            // ЕДИНИЦЫ: 0 СИ, 1 СИ + узлы / футы (kept; nothing shows them yet)
+    void ParamsCommand(int cmd, double value);
+    // НЕПРОЗР. − / +: the glasses' opacity (their own material, InteriorLayout.h kGlassMat), 0.3 .. 1
+    DEVMESHHANDLE dm_ = nullptr;
+    double opq_ = 1.0;
+    void ApplyOpacity();
     // ---- the side consoles of variant 7 (TantraConsoles.cpp): screen 3 the right one's glass keys (the MFDs, the computing
     // machine), screen 4 the left one's (the screens' keys, the throttle quadrant's slots, the pods' key), screen 6 the machine's
     // phosphor screen ----
@@ -132,6 +174,19 @@ private:
     void DrawMachine();
     void MachineKey(const std::wstring& k);
     double PodLevel() const;                   // the pods' thrust set (their lever's place)
+    void PressMfd(int i, int b);               // a button of a panel MFD (0..5); its button menu's state kept (МНУ toggles it)
+    void DrawHub();                            // screen 5: the yoke's hub - the orientation keys on its face, its screen on top
+    void DrawPods();                           // screen 7: the pods' display (left console)
+    bool TouchHub(double x, double y);
+    std::vector<tantra::scr::Hit> hubHits_;
+    double hubLit_[10] = {};
+    // РАД. + / РАД. − (Orbiter has no such autopilot): the nose held along the local vertical, out or in, by the RCS
+    // rotation groups; the bank damped. Off by РУЧН., by the same key again or when an Orbiter autopilot is switched on.
+    void RadialStep(double dt);
+    int radMode_ = 0;                          // +1 radial out, -1 in, 0 off
+    bool radWas_ = false, radInit_ = false;
+    double radEp_ = 0.0, radEy_ = 0.0, radBank_ = 0.0, radWp_ = 0.0, radWy_ = 0.0, radWb_ = 0.0;
+    bool mfdMenu_[6] = {};
     std::vector<tantra::scr::Hit> consHits_[2];
     int selMfd_ = 0;                           // the MFD the right console drives: 0..5 (МФД 1-3 the left glass, 4-6 the right)
     double keyLit_[2][48] = {};                // a momentary key shines till then (system time)

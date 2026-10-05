@@ -1,0 +1,163 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Tantra and OrbiterCrew</title><style>body{font-family:'Segoe UI',Arial,sans-serif;font-size:10.5pt;color:#1b1f23;max-width:180mm;margin:auto;line-height:1.4}
+h1{font-size:21pt;border-bottom:2px solid #333;padding-bottom:4px}h2{font-size:14pt;margin-top:16px;border-bottom:1px solid #bbb}
+img{width:100%;max-width:170mm;border-radius:4px;margin:6px 0;page-break-inside:avoid}
+table{border-collapse:collapse;width:100%;font-size:10pt}td,th{border:1px solid #bbb;padding:5px;vertical-align:top}th{background:#eee}
+code{background:#f1f1f1;padding:1px 4px;border-radius:3px}li{margin:2px 0}</style></head><body><h1>Tantra and OrbiterCrew — public beta (Orbiter 2024)</h1>
+<p>The starship <em>Tantra</em> from Ivan Yefremov's <em>Andromeda</em> and OrbiterCrew, a crew system written from scratch: living, mocap-animated people with physiology, a space suit and a jet pack. Early beta: much is still rough.</p>
+<h2>Install</h2>
+<ol>
+<li>Orbiter 2024 (x86) with the bundled D3D9Client and XRSound.</li>
+<li>Unpack the archive into the Orbiter folder (it only adds files).</li>
+<li>Scenarios: <code>Tantra / Beta</code>.</li>
+</ol>
+<h2>Scenarios</h2>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Beta 1 — Mars, jet pack at Tantra</strong></td>
+<td>Fly the jet pack in Valles Marineris, walk into Tantra's feet (collision test), board the lift</td>
+</tr>
+<tr>
+<td><strong>Beta 2 — Mars, commander's seat</strong></td>
+<td>Raise the ship onto the stern, lift off on planetary engines, light the anamezon far out</td>
+</tr>
+<tr>
+<td><strong>Beta 3 — Io, suit field</strong></td>
+<td>Stand in Jupiter's radiation belts, switch the suit's magnetic field off and on</td>
+</tr>
+</tbody>
+</table>
+<p>The full controls are in each scenario's description in the Launchpad.</p>
+<h2>OrbiterCrew</h2>
+<p><img alt="walking" src="img/walk.jpg" /></p>
+<ul>
+<li><strong>People.</strong> Skeletal mocap animation (walk, run, jump, sit, stand up); two sets — without and with the suit.</li>
+<li><strong>Physiology.</strong> O₂ and CO₂, stamina, body temperature, water, food, injuries by body part, radiation dose. Death from hypoxia, CO₂, heat or cold, radiation sickness, injuries.</li>
+</ul>
+<p><img alt="suit" src="img/suit.jpg" /></p>
+<ul>
+<li><strong>Suit.</strong> Life support, thermal control, 6 kWh battery, radiation shield: 2 g/cm² shell plus a 600 W magnetic field (charged-particle dose ÷30). The suit computer (H, mouse only) shows consumables, warnings, targets, maps.</li>
+</ul>
+<p><img alt="jet pack" src="img/pack.jpg" /></p>
+<ul>
+<li><strong>Jet pack.</strong> 12 kg metallic hydrogen, 2 × 500 N, ~950 m/s:</li>
+<li>manual mode, or the assistant (safe thrust, upright hold);</li>
+<li>STOP, landing, cruise;</li>
+<li>transfer to bases and ships with landing on a pad;</li>
+<li>rendezvous and docking in space.</li>
+<li><strong>Ships.</strong> People board Tantra, walk inside and come back out.</li>
+</ul>
+<h2>Tantra</h2>
+<ul>
+<li>
+<p><strong>Planetary engines.</strong> Fusion in magnetic cups; thrust limited by field pressure (main cup 12.1 T, 886 MN; 4 pods × 3 cups, 350 MN each). Reaction mass: argon in air (~30 km/s), iron above 30 km (~300 km/s).</p>
+</li>
+<li>
+<p><strong>Anamezon drive.</strong></p>
+</li>
+<li>4 magnetic reflector cups (~1000 T), 8.8 g pellets at up to 20 kHz.</li>
+<li>Start-up: field → kaon seed beam → feed.</li>
+<li>Products: charged mesons (62 %, 0.98 c) and γ (38 %). Effective exhaust ≈ 0.41 c, thrust 4 × 2.17·10¹⁰ N, reaction power 5·10¹⁹ W.</li>
+<li>
+<p>Interlocks: hot start below ~50 km in an atmosphere; radiation near oxygen worlds and crews. g-compensator up to 200 g.</p>
+</li>
+<li>
+<p><strong>Exhaust</strong> from decay lengths and kinematics:</p>
+</li>
+<li>constrictions K⁰S ~0.13 m → K± ~18 m → K⁰L/π ~70–76 m → μ 6–8 km;</li>
+<li>Doppler beaming;</li>
+<li>
+<p>in air, a muon-heated plasma channel with a shock wave.</p>
+</li>
+<li>
+<p><strong>Bridge.</strong> Rotating capsule, 3-seat console, curved screen fed by external cameras, six Orbiter MFDs, engine / mechanism / power-plant screens — all by mouse from the seat.</p>
+</li>
+</ul>
+<h2>How to operate</h2>
+<p><strong>On foot</strong>
+- W/S walk (S brakes), A/D turn, Q/E side step, Shift run, Space jump.
+- F1 eyes / outside view; right mouse held looks around.
+- K suit on/off (off only in breathable air), L lamps, Shift+V sun shade.
+- F = the action shown on screen (lift, airlock, door, seat).</p>
+<p><strong>Jet pack</strong> (B takes / drops it near the pack)
+- Starts in MANUAL, with no compensation:
+  - Space thrust up, left Ctrl down; numpad 0 / . throttle;
+  - Shift+Space full thrust, Shift+Ctrl thrust off, while held;
+  - in the air: W/S pod vector, A/D turn, Q/E strafe, Shift full vector;
+  - J height hold, C landing autopilot, G booms, Caps Lock steering limiter.
+- After touchdown the pods stay locked until the thrust keys are released and pressed again.</p>
+<p><strong>Suit computer</strong> (H, eyes view, mouse only)
+- Left page: map, orbit, power and heat, options.
+- Right page: targets, flight (cruise height and speed), transfer, landing, body.
+- Top-right toggles: ASSIST, FIELD, LIGHT, SHADE, IR.
+- Bottom buttons: HEIGHT HOLD, TRANSFER (target within 15 km), LANDING, STOP; in space: APPROACH, SYNC, HOLD, DOCK.</p>
+<p><strong>Inside Tantra</strong>
+- W/S/A/D/Q/E, Shift (max 3 m/s); right mouse held turns the body with the look.
+- F sits down at a seat or stands up. Not in the suit — take it off with K.
+- Left click: screens and buttons within reach.
+- In the commander's seat, V shows the ship from outside.
+- Lift: from outside, F at its foot boards the lift, then click UP. To go out, click DOWN, then OUT.</p>
+<p><strong>Bridge</strong> (commander's seat; the person keeps the focus)
+- Front screen: FLIGHT / ENGINES / PARAMETERS.
+- Left screen: MECHANISMS (+ thermal). Right screen: POWER PLANT.
+- Side glasses: six Orbiter MFDs, chosen on the right console.
+- Numpad +/− throttle, Ctrl+ full, Ctrl− zero, * cut.
+- Attitude 2/8, 4/6, 1/3; / rotation/linear; 5 kill rotation; Ins/Del trim.
+- Power plant: Shift + [ ] ; ' L M (field, power, limiter, reaction mass).</p>
+<p><strong>Flight sequence</strong>
+1. MECHANISMS → LAUNCH: the ship stands up on the stern.
+2. POWER PLANT running; throttle up the planetary engines. Pods: GONDOLY lever and nozzle angle on ENGINES (0° aft, 90° down).
+3. Far from planets: ENGINES → IGNITION (field → beam → feed), feed bar.
+   - Below ~50 km in an atmosphere the anamezon is locked (hot start).
+   - Near oxygen worlds and crews it is locked by radiation.
+   - The bypass needs two presses within 3 s.
+   - g-limiter on ENGINES.</p>
+<p>From Tantra's own focus (F3), the keys are K planetary/anamezon, J next ignition stage, Shift+J stop, Ctrl+J interlock bypass, U stand up/lie down, B pods, N gear, C wings, O hangar, G g-limiter.</p>
+<p><strong>Suit field</strong> (FIELD on the suit computer)
+- 600 W from the battery; it divides the charged-particle dose by 30.
+- At Io: suit without the field ~0.38 Sv/h, with it ~0.02 Sv/h.
+- With the field the battery lasts ~8–9 h.
+- The field is the first load shed on overload or overheating.</p>
+<h2>Legs and supports</h2>
+<ul>
+<li><strong>Lying:</strong> two swivelling blade legs (6 telescopic stages, 15.75 m, stroke 14.25 m) and a telescopic nose leg (9 sections), the third support.</li>
+<li><strong>Standing on the stern:</strong> four telescopic stern legs.</li>
+<li><strong>Feet:</strong> radial-rib footpads, R 12.2 m (blade legs), 11.25 m (stern legs), 6.35 m (nose leg):</li>
+<li>12 ribs on hinges, two struts per rib;</li>
+<li>a nanotube-fabric dome and a skirt;</li>
+<li>sized for loose sand (Terzaghi, local shear), margin 1.5.</li>
+<li><strong>Design case:</strong> 52.3 kt launch mass on a 2.5 g planet, factor 1.5. Telescopes are checked as stepped columns (buckling and strength of the thinnest stage).</li>
+<li><strong>Raising:</strong> the ship is driven as a mechanism, not bounced on springs:</li>
+<li>the standing feet are fixed to the terrain;</li>
+<li>trunnions travel on rails above the feet;</li>
+<li>sway ≤ 0.55°;</li>
+<li>about 2 min to stand.</li>
+<li><strong>Positions (MECHANISMS screen):</strong> LEVEL → ON THREE → ON THE LEGS → 75° → LAUNCH, plus STOP and EMERGENCY STOP. Needs ground contact, gear fully down, the airlock lift stowed and the hangar closed.</li>
+<li><strong>Damage:</strong></li>
+<li>each foot has 12 petals; struts, petals, the ankle and the collar can break;</li>
+<li>five hull zones crush on belly or side impacts;</li>
+<li>equipment has its own g-limits.</li>
+</ul>
+<p>A hard landing leaves broken parts behind as debris.
+- <strong>Rules:</strong> the gear deploys only in the air (the blades have no room to open on the belly). Wings stay folded lying on the ground and while the carriage moves, open when standing on the stern.</p>
+<h2>Language and fonts</h2>
+<ul>
+<li>The suit computer and the ship's screens are <strong>in Russian</strong> in this beta. The scenario descriptions are in English.</li>
+<li>The suit computer uses its own built-in font (works on any Windows).</li>
+<li>The bridge screens use <strong>Segoe UI</strong> (part of Windows).</li>
+<li>The bridge <strong>key lettering uses the TrueType font "GOST type A"</strong>, which is not part of Windows and not included. Without it, Windows substitutes another font: the text stays readable, but some labels may not fit their keys. Install any "GOST type A" font yourself for the intended look.</li>
+<li>Some ship labels use "Arial Cyr" (a standard Windows Cyrillic alias).</li>
+</ul>
+<h2>Known issues</h2>
+<ul>
+<li>Footstep sounds play in vacuum.</li>
+<li>Only the feet are solid for a person outside (on foot, ship on the ground); the hull, upper legs and anything in flight are not.</li>
+<li>Jupiter's shadow on Io is not modelled.</li>
+<li>Time acceleration is limited to 10x while a person is outside a safe zone.</li>
+</ul></body></html>

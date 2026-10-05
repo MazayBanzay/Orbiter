@@ -25,10 +25,11 @@ namespace {
 // screen (1024 x 428) and shown scaled on the right riser
 // (all the layouts below are in DESIGN pixels: the surfaces are kSc times bigger, the paint scales everything)
 constexpr int kEngH = 428;
-// (variant 7: 3 / 4 the side consoles' key fields, 0.51 / 0.54 m deep at ~1900 px/m; 6 the computing machine's screen)
-const int kH[8] = {704, 704, 432, 1000, 1000, 230, 440, 400};
-int gW[8] = {1024, 1024, 1021, 494, 537, 1017, 486, 908};
-double kSc[8] = {1.0, 1.0, 1.5, 1.0, 1.0, 1.5, 1.0, 1.5};
+// (variant 7: 3 / 4 the side consoles' key fields, 0.51 / 0.54 m deep at ~1900 px/m; 5 the yoke's hub; 6 the computing machine's
+// screen; 7 the pods' display)
+const int kH[8] = {704, 704, tantra::front::kDesignH, 1000, 1000, 276, 440, 400};   // 2: the front glass, 611 (refine/front_v3.html)
+int gW[8] = {1024, 1024, 2430, 494, 537, 520, 486, 613};
+double kSc[8] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};                          // 2: design px = surface px (~2365 x 611)
 
 // colours: Sketchpad 0xBBGGRR; atlas colours 0 cyan, 1 orange, 2 white, 3 red, 4 dim blue, 5 brown, 6 grey
 // the suit's theme (the user's reference: the suit HUD): a dark neutral field, thin orange lines, orange text, cyan values
@@ -227,32 +228,9 @@ bool ClickSections(Tantra* t, const PageDef& p, const R4* rr, int n, double x, d
     return false;
 }
 
-// ---- the concave centre screen: ГЛАВНЫЙ ЭКРАН | ПОЛЁТ | ДВИГАТЕЛИ (its top an arch: the side zones keep their content low) ----
-const int kHud[4] = {HUD_ORBIT, HUD_SURFACE, HUD_DOCKING, HUD_NONE};
-const char* const kHudName[4] = {"ОРБИТА", "ПОВЕРХН.", "СТЫКОВКА", "ВЫКЛ"};
+// ---- the front glass's ПОЛЁТ page: TantraFrontScreen (tantra::front::Flight) draws it; the RCS modes are the left riser's too ----
 const int kRcs[3] = {RCS_ROT, RCS_LIN, RCS_NONE};
 const char* const kRcsName[3] = {"ВРАЩЕНИЕ", "ЛИНЕЙНОЕ", "ВЫКЛ"};
-R4 CZoneL() { return {0, 0, int(gW[2] * .245), kH[2]}; }
-R4 CZoneC() { return {int(gW[2] * .25), 0, int(gW[2] * .755), kH[2]}; }
-R4 CZoneR() { return {int(gW[2] * .76), 0, gW[2], kH[2]}; }
-R4 CHud(int i) { const R4 z = CZoneL(); const int w = (z.x1 - z.x0 - 30) / 2; return {z.x0 + 10 + (i % 2) * (w + 10), 168 + (i / 2) * 50, z.x0 + 10 + (i % 2) * (w + 10) + w, 168 + (i / 2) * 50 + 42}; }
-R4 CRcs(int i) { const R4 z = CZoneL(); const int w = (z.x1 - z.x0 - 30) / 2; return {z.x0 + 10 + (i % 2) * (w + 10), 316 + (i / 2) * 50, z.x0 + 10 + (i % 2) * (w + 10) + w, 316 + (i / 2) * 50 + 42}; }
-R4 CGlass() { const R4 z = CZoneC(); return {z.x0 + 6, 8, z.x1 - 6, kH[2] - 8}; }
-R4 CAck() { const R4 g = CGlass(); return {g.x1 - 170, kH[2] - 66, g.x1 - 14, kH[2] - 20}; }   // ПОДТВЕРДИТЬ (the alerts)
-R4 CTab(int i) { const R4 g = CGlass(); return {g.x1 - 236 + i * 118, 12, g.x1 - 124 + i * 118, 40}; }   // КОСМОС, АТМОСФЕРА
-R4 CThrust() { const R4 z = CZoneR(); return {z.x0 + 28, 182, z.x0 + 84, 398}; }                   // the thrust bar (touch: set)
-R4 CFuel() { const R4 z = CZoneR(); return {z.x0 + 108, 182, z.x0 + 132, 398}; }
-// a half-plane clip of a polygon: keep the points with a*x + b*y + c >= 0
-int ClipHalf(const double* in, int n, double a, double b, double c, double* out) {
-    int m = 0;
-    for (int i = 0; i < n; i++) {
-        const double* p = in + 2 * i; const double* q = in + 2 * ((i + 1) % n);
-        const double dp = a * p[0] + b * p[1] + c, dq = a * q[0] + b * q[1] + c;
-        if (dp >= 0) { out[2 * m] = p[0]; out[2 * m + 1] = p[1]; m++; }
-        if ((dp >= 0) != (dq >= 0)) { const double t = dp / (dp - dq); out[2 * m] = p[0] + t * (q[0] - p[0]); out[2 * m + 1] = p[1] + t * (q[1] - p[1]); m++; }
-    }
-    return m;
-}
 
 // ---- the attitude keys (the shelf in front of him; the texture's top is the far edge) ----
 struct AutoKey { const char* name; int mode; };
@@ -304,6 +282,7 @@ double TantraDisplays::HudGain() const { return autoLum_ ? 0.75 + 0.45 * DayLigh
 
 void TantraDisplays::OnVisual(VISHANDLE vis) {
     DEVMESHHANDLE dm = t_->GetDevMesh(vis, vcMesh_);
+    dm_ = dm; ApplyOpacity();                                            // НЕПРОЗР.: the glasses' opacity kept
     const DWORD f = OAPISURFACE_TEXTURE | OAPISURFACE_RENDERTARGET | OAPISURFACE_SKETCHPAD | OAPISURFACE_NOMIPMAPS;
     int bound = 0;
     bool noMip = false;
@@ -317,7 +296,6 @@ void TantraDisplays::OnVisual(VISHANDLE vis) {
             gW[k] = (std::max)(w, 480);                                             // the panels too (their aspect from the mesh)
         }
         if (k <= kRight && !s_[k]) kSc[k] = 1600.0 / gW[k];                            // the side panels: 1600 px wide (TantraDisplaysPanels.cpp)
-        if (k == kCentre && !s_[k]) kSc[k] = 1914.0 / gW[k];                           // the front screen: the engine console 1914 px wide
 #if __has_include("gcCoreAPI.h")
         const bool big = k <= kCentre;
         const DWORD fk = big && !noMip && gcGetCoreInterface() ? (f & ~DWORD(OAPISURFACE_NOMIPMAPS)) | OAPISURFACE_MIPMAPS : f;
@@ -339,16 +317,64 @@ void TantraDisplays::OnVisual(VISHANDLE vis) {
 void TantraDisplays::Step(double dt) {
     gUi = &font_;
     Alerts();
+    RadialStep(dt);                                                       // РАД. + / − (ours)
+    ThermalStep();                                                        // ТЕПЛО: its tracking and the entry forecast
+    ApStep(dt);                                                           // АВТОПИЛОТ: the guidance follows the ship
+    t_->interior_.SetQuadrant(t_->GetThrusterGroupLevel(THGROUP_MAIN), PodLevel(), t_->podTarget_, oapiGetSysTime() - podCoverT_ < 6.0);   // the levers, the cover
     if (mechEstop_) t_->carriage_.Hold();                                  // the mechanisation's emergency stop holds the carriage
     riserDt_ += dt;
-    if ((tRiser_ -= dt) <= 0.0 || t_redraw_ - dt <= 0.0) { tRiser_ = 0.05; DrawPanel(kRight); riserDt_ = 0.0; }   // the plant's flows move (the right panel)
-    if ((t_redraw_ -= dt) > 0.0) return;
+    const double rdt = oapiGetSysStep() / (oapiGetTimeAcceleration() > 10.0 ? 4.0 : 1.0);   // the redraw timers on real time (at x100+ a frame is
+                                                                          // seconds); over x10 the screens 4 times rarer (the user)
+    if ((tRiser_ -= rdt) <= 0.0 || t_redraw_ - rdt <= 0.0) {                // the plant's flows move (the right panel); the spot over it
+        tRiser_ = 0.05; DrawPanel(kRight); riserDt_ = 0.0;
+        int ss = -1; double su = 0.0, sv = 0.0;
+        if (t_->interior_.SpotScreen(ss, su, sv) && ss == kRight) PaintSpot(ss, su, sv);
+    }
+    int ss = -1; double su = 0.0, sv = 0.0;                                // the cursor unit's light spot: painted into its screen
+    const bool spot = t_->interior_.SpotScreen(ss, su, sv);
+    if (spot && (tSpot_ -= rdt) <= 0.0 && t_redraw_ - rdt > 0.0) {          // its screen 20 times a second (the others as usual)
+        tSpot_ = 0.05;
+        switch (ss) {
+            case kLeft: DrawPanel(kLeft); break; case kRight: break; case kCentre: DrawFront(); break; case kKeys: DrawKeys(); break;
+            case kRiserR: DrawConsoleR(); break; case kRiserL: DrawConsoleL(); break; case kWingL: DrawMachine(); break; case kWingR: DrawPods(); break;
+            default: break;
+        }
+        PaintSpot(ss, su, sv);
+    }
+    if ((t_redraw_ -= rdt) > 0.0) return;
     t_redraw_ = 0.2;
     DrawPanel(kLeft); DrawFront(); DrawKeys();                            // the panels (the risers and the wing shelves are gone)
-    DrawConsoleR(); DrawConsoleL(); DrawMachine();                        // the side consoles (variant 7)
+    DrawConsoleR(); DrawConsoleL(); DrawMachine(); DrawPods();            // the side consoles, the pods' display (variant 7)
+    if (spot) PaintSpot(ss, su, sv);
+}
+
+// The light spot («солнечный зайчик») over a screen's picture: an orange disc with a bright core and a ring (the user: orange).
+void TantraDisplays::PaintSpot(int screen, double u, double v) {
+    if (screen < 0 || screen >= kScreens || !s_[screen]) return;
+    int W = 0, H = 0; oapiGetSurfaceSize(s_[screen], &W, &H);
+    oapi::Sketchpad* skp = oapiGetSketchpad(s_[screen]);
+    if (!skp) return;
+    const int x = int(u * W), y = int(v * H), r = (std::max)(10, int(H * 0.022));
+    oapi::Brush* b1 = oapiCreateBrush(0x1C78FF); oapi::Brush* b2 = oapiCreateBrush(0x8CD8FF); oapi::Pen* pn = oapiCreatePen(1, (std::max)(2, r / 5), 0x30A0FF);
+    skp->SetPen(nullptr); skp->SetBrush(b1); skp->Ellipse(x - r, y - r, x + r, y + r);
+    skp->SetBrush(b2); skp->Ellipse(x - r / 3, y - r / 3, x + r / 3, y + r / 3);
+    skp->SetBrush(nullptr); skp->SetPen(pn); skp->Ellipse(x - r * 2, y - r * 2, x + r * 2, y + r * 2);
+    skp->SetPen(nullptr); skp->SetBrush(nullptr);
+    oapiReleaseBrush(b1); oapiReleaseBrush(b2); oapiReleasePen(pn);
+    oapiReleaseSketchpad(skp);
 }
 
 bool TantraDisplays::Touch(int screen, double u, double v) {
+    if (screen == 8) {                                                    // the cursor unit's keys (TantraSeatCmd.cpp): u 0 МЕНЮ, 1 ОТМ.
+        if (u < 0.5) PressMfd(selMfd_, 14);
+        else if (u < 1.5) { for (int i = 0; i < 6; ++i) if (mfdMenu_[i]) PressMfd(i, 14); }   // the menus opened from here shut
+        else if (u > 2.5) {                                               // 3: the cups' wheel on the pods' lever: 0 -> 90 -> 180 -> 0
+            if (t_->podOut_ < 0.99) t_->Message("Гондолы в отсеках: колёсико чаш заперто", "The pods are in their bays: the cups' wheel is locked");
+            else t_->ActPodsTo(t_->podTarget_ < 45.0 ? 90.0 : t_->podTarget_ < 135.0 ? 180.0 : 0.0);
+        }
+        t_redraw_ = 0.0;
+        return true;
+    }
     if (screen < 0 || screen >= kScreens) return false;
     const double x = u * gW[screen], y = v * kH[screen];
     bool r = false;
@@ -359,6 +385,7 @@ bool TantraDisplays::Touch(int screen, double u, double v) {
         case kRiserL: r = TouchConsoleL(x * kSc[screen], y * kSc[screen]); break;
         case kWingL: r = false; break;                                    // the computing machine's screen: no touch
         case kKeys: r = TouchKeys(x, y); break;
+        case kWingR: r = false; break;                                    // the pods' display: no touch
         default: r = TouchWing(screen, x, y); break;
     }
     t_redraw_ = 0.0;                                                      // show the result at once
@@ -370,152 +397,66 @@ void TantraDisplays::Shutdown() {
     if (eng_) { oapiDestroySurface(eng_); eng_ = nullptr; }
 }
 
-// ---- the concave centre screen -----------------------------------------------------------------------------
+// ---- the front glass's ПОЛЁТ page (refine/front_v3.html; tantra::front::Flight draws it) --------------------------------------
 
+// the ship for the page: Orbiter's flight data, the engines (FillEngineView - the same numbers as ДВИГАТЕЛИ), the alerts, the
+// autopilot, the HUD and RCS modes, the view (КОСМОС / АТМОСФЕРА: by itself below 100 km in air, or by its keys)
 void TantraDisplays::DrawCentre() {
     SURFHANDLE s = s_[kCentre];
     if (!s) return;
     Tantra* t = t_;
     const bool autoAtmo = t->GetAltitude() < 100e3 && t->GetAtmPressure() > 0.0;
     if (autoAtmo != lastAutoAtmo_) { lastAutoAtmo_ = autoAtmo; termMode_ = -1; }
-    const bool atmo = termMode_ < 0 ? autoAtmo : termMode_ == 1;
-    oapiClearSurface(s, 0xFF000000 | kGlass);
-    Paint P(s, glyphs_, kSc[kCentre]);
-    if (!P.Ok()) return;
-    char b[128];
-    // ГЛАВНЫЙ ЭКРАН: what the big screen shows over the view (the HUD) and the RCS mode
-    const R4 zl = CZoneL(), zr = CZoneR(), G = CGlass();
-    P.Line(zl.x1 + 2, 30, zl.x1 + 2, kH[2] - 8, 0x48381D, 3); P.Line(zr.x0 - 3, 30, zr.x0 - 3, kH[2] - 8, 0x48381D, 3);
-    P.Text((zl.x0 + zl.x1) / 2.0, 112, "ГЛАВНЫЙ ЭКРАН", 16, cWhite, 1);
-    P.Text(zl.x0 + 12, 146, "HUD", 12, cGrey);
-    const int hud = hudMode_, rcs = t->GetAttitudeMode();
-    for (int i = 0; i < 4; i++) P.Key(CHud(i), kHudName[i], hud == kHud[i]);
-    P.Text(zl.x0 + 12, 294, "РСУ", 12, cGrey);
-    for (int i = 0; i < 3; i++) P.Key(CRcs(i), kRcsName[i], rcs == kRcs[i]);
-    // ДВИГАТЕЛИ: the thrust (touch the bar), the fuel, the g limit
-    const bool ana = t->engineSet_ == Tantra::EngineSet::Anamezon;
-    const double thr = t->GetThrusterGroupLevel(THGROUP_MAIN), mx = t->GetMaxFuelMass(), fuel = mx > 0 ? t->GetFuelMass() / mx : 0.0;
-    P.Text((zr.x0 + zr.x1) / 2.0, 100, "ДВИГАТЕЛИ", 16, cWhite, 1);
-    static const char* const kStage[4] = {"ВЫКЛ", "ПОЛЕ", "ЛУЧ", "ПОДАЧА"};
-    if (ana) std::snprintf(b, sizeof b, "анамезон: %s", kStage[int(t->ignition_.Stage()) & 3]);
-    else std::snprintf(b, sizeof b, "планетарные (%s)", t->marchHigh_ ? "железо" : "аргон");
-    P.Text((zr.x0 + zr.x1) / 2.0, 128, b, 11, ana ? cOrange : cCyan, 1);
-    P.Bar(CThrust(), thr, kCyanF, true); P.Bar(CFuel(), fuel, fuel < .1 ? kRedF : kGreenF, true);
-    std::snprintf(b, sizeof b, "%.0f%%", thr * 100); P.Text((CThrust().x0 + CThrust().x1) / 2.0, 404, b, 13, cWhite, 1);
-    P.Text((CThrust().x0 + CThrust().x1) / 2.0, 162, "тяга", 11, cGrey, 1);
-    P.Text((CFuel().x0 + CFuel().x1) / 2.0, 162, "топл.", 11, cGrey, 1);
-    std::snprintf(b, sizeof b, "g %.2f", t->accelG_); P.Text(zr.x0 + 146, 200, b, 13, t->gLimitOn_ && t->accelG_ > t->gLimit_ * .9 ? cRed : cCyan);
-    std::snprintf(b, sizeof b, "пред. %s", t->gLimitOn_ ? "" : "выкл"); if (t->gLimitOn_) std::snprintf(b, sizeof b, "пред. %.1f", t->gLimit_);
-    P.Text(zr.x0 + 146, 226, b, 11, cGrey);
-    // ПОЛЁТ
-    P.Box(G, 0x0D1606, 0x303830);
-    P.Key(CTab(0), "КОСМОС", !atmo); P.Key(CTab(1), "АТМОСФЕРА", atmo);
-    int ap = -1; for (int i = 0; i < kNav; i++) if (t->GetNavmodeState(kAuto[i].mode)) { ap = i; break; }
-    std::snprintf(b, sizeof b, "автопилот: %s", ap >= 0 ? kAuto[ap].name : "ручное");
-    P.Box(G.x0 + 8, kH[2] - 70, G.x1 - 8, kH[2] - 16, 0x1A1008, 0x404840);
-    if (const int lv = AlertLevel()) {                                    // an alert: the newest active one and ПОДТВЕРДИТЬ
-        const Alert* a = nullptr; for (const Alert& x : alerts_) if (x.active) { a = &x; break; }
-        P.Box(G.x0 + 8, kH[2] - 70, G.x0 + 14, kH[2] - 16, lv == 2 ? 0x4646FF : 0xFFE246);
-        P.Text(G.x0 + 26, kH[2] - 64, lv == 2 ? "ОПАСНОСТЬ" : "ВНИМАНИЕ", 12, lv == 2 ? cRed : cCyan);
-        if (a) P.Text(G.x0 + 26, kH[2] - 42, a->text, 12, cWhite);
-        P.Key(CAck(), "ПОДТВЕРДИТЬ", AlertUnacked() && std::fmod(oapiGetSimTime(), 1.0) < .62, true);
-    } else {
-    P.Box(G.x0 + 8, kH[2] - 70, G.x0 + 14, kH[2] - 16, ap >= 0 ? 0x2890E0 : 0x605850);
-    P.Text(G.x0 + 26, kH[2] - 60, b, 14, ap >= 0 ? cOrange : cGrey);
-    std::snprintf(b, sizeof b, "РСУ: %s", rcs == RCS_ROT ? "вращение" : rcs == RCS_LIN ? "линейное" : "выкл"); P.Text(G.x1 - 22, kH[2] - 60, b, 12, cGrey, 2);
-    }
-    const double pitch = t->GetPitch(), bank = t->GetBank();
-    const double ca = std::cos(bank), sa = std::sin(bank);
+    tantra::front::FlightView F;
+    F.atmo = termMode_ < 0 ? autoAtmo : termMode_ == 1;
+    F.termAuto = termMode_ < 0;
+    F.air = autoAtmo;
+    // the autopilot: ours (РАДИАЛ +/−) or an Orbiter one
+    if (radMode_) F.ap = radMode_ > 0 ? L"РАДИАЛ +" : L"РАДИАЛ \u2212";
+    else for (int i = 0; i < kNav; i++)
+        if (t->GetNavmodeState(kAuto[i].mode)) { F.ap = tantra::scr::W1251(kAuto[i].name); for (wchar_t& c : F.ap) if (c == L'-') c = L'\u2212'; break; }
+    // the alerts: the level, the newest active one's text (its hyphens are minus signs), acknowledged or not
+    F.alert = AlertLevel();
+    for (const Alert& a : alerts_) if (a.active) { F.alertText = tantra::scr::W1251(a.text); for (wchar_t& c : F.alertText) if (c == L'-') c = L'\u2212'; break; }
+    F.alertAcked = !AlertUnacked();
+    F.blink = std::fmod(oapiGetSimTime(), 1.0) < 0.62;
+    // the flight (as the big screen's HUD reads it)
     VECTOR3 hv; t->GetHorizonAirspeedVector(hv);
     double hdg = 0.0; oapiGetHeading(t->GetHandle(), &hdg);
-    const double alt = t->GetAltitude(), tas = t->GetAirspeed();
-    if (!atmo) {                                                          // SPACE: a horizon, the readouts
-        P.Text(G.x0 + 16, 18, "ПОЛЁТ · КОСМОС", 16, cWhite);
-        const int cx = (G.x0 + G.x1) / 2, cy = 196, r = 92;
-        P.Circle(cx, cy, r, 0x60C060);
-        const double k = r / 0.7;                                         // 0.7 rad from the centre to the rim
-        for (int deg = -30; deg <= 30; deg += 10) {
-            const double off = (pitch - deg * RAD) * k;
-            if (std::fabs(off) > r * 0.9) continue;
-            const double hw = deg == 0 ? r * 0.95 : r * 0.3, px = -sa * off, py = ca * off;
-            P.Line(int(cx + px - ca * hw), int(cy + py - sa * hw), int(cx + px + ca * hw), int(cy + py + sa * hw), deg == 0 ? 0x60E070 : 0x407040, deg == 0 ? 2 : 1);
-        }
-        P.Line(cx - 46, cy, cx - 14, cy, 0x3CA0FF, 3); P.Line(cx + 14, cy, cx + 46, cy, 0x3CA0FF, 3);
-        const int lx = G.x0 + 16, rx = G.x1 - 150;
-        std::snprintf(b, sizeof b, "V   %.0f м/с", tas); P.Text(lx, 70, b, 14, cCyan);
-        std::snprintf(b, sizeof b, "M   %.2f", t->GetMachNumber()); P.Text(lx, 100, b, 13, cCyan);
-        std::snprintf(b, sizeof b, "АТАКИ %.0f°", t->GetAOA() * DEG); P.Text(lx, 130, b, 13, cCyan);
-        std::snprintf(b, sizeof b, alt > 10000 ? "H   %.1f км" : "H   %.0f м", alt > 10000 ? alt / 1000 : alt); P.Text(rx, 70, b, 14, cCyan);
-        std::snprintf(b, sizeof b, "Vy  %+.1f м/с", hv.y); P.Text(rx, 100, b, 13, hv.y < -5 ? cRed : cCyan);
-        std::snprintf(b, sizeof b, "КУРС %03.0f°", hdg * DEG); P.Text(rx, 130, b, 13, cCyan);
-        return;
+    F.v = t->GetAirspeed(); F.alt = t->GetAltitude(); F.vs = hv.y;
+    F.hdg = std::fmod(hdg * DEG + 360.0, 360.0);
+    FrontAttitude(&F.pitch, &F.bank);
+    F.aoa = t->GetAOA() * DEG; F.slip = t->GetSlipAngle() * DEG;
+    F.fpa = std::atan2(hv.y, (std::max)(std::hypot(hv.x, hv.z), 1.0)) * DEG;
+    F.mach = t->GetMachNumber(); F.pods = t->podAngle_;
+    F.hud = hudMode_; F.rcs = t->GetAttitudeMode();
+    // the thrust: the main drive's set-point and what it gives, the fuel, the felt g and its limit
+    tantra::enginescreen::View ev; FillEngineView(ev);
+    F.ana = ev.ana; F.stage = ev.stage; F.mass = ev.mass;
+    F.thrAct = ev.ana ? ev.fsAct : ev.mAct; F.thrSet = ev.ana ? ev.fsSet : ev.mSet;
+    const double mx = t->GetMaxFuelMass();
+    F.fuel = mx > 0 ? t->GetFuelMass() / mx : 0.0;
+    F.g = t->accelG_; F.gLim = t->gLimit_; F.gLimOn = t->gLimitOn_;
+    if (oapi::Sketchpad* skp = oapiGetSketchpad(s)) {
+        flightScr_.Draw(skp, font_, gost_, frontK_, frontW_, F);
+        oapiReleaseSketchpad(skp);
     }
-    // ATMOSPHERE: a big attitude indicator, speed tape left, altitude tape right, heading tape on top
-    P.Text(G.x0 + 16, 18, "ПОЛЁТ · АТМОСФЕРА", 16, cWhite);
-    const int cx = (G.x0 + G.x1) / 2, top = 96, bot = 336, cy = (top + bot) / 2, half = (bot - top) / 2;
-    const int ax0 = cx - half, ax1 = cx + half;
-    const double k = half / (25.0 * RAD);                                 // 25 deg from the centre to the edge
-    P.Box(ax0, top, ax1, bot, 0x7A4A20, 0x606860);
-    {
-        const double sq[8] = {double(ax0), double(top), double(ax1), double(top), double(ax1), double(bot), double(ax0), double(bot)};
-        double out[16];
-        const double hx = cx - sa * pitch * k, hy = cy + ca * pitch * k;  // a point on the horizon line
-        const int m = ClipHalf(sq, 4, -sa, ca, -(-sa * hx + ca * hy), out);   // ground side: n = (-sin, cos), y down
-        if (m >= 3) {
-            IVECTOR2 pt[8]; for (int i = 0; i < m; i++) { pt[i].x = P.S(out[2 * i]); pt[i].y = P.S(out[2 * i + 1]); }
-            oapi::Brush* br = oapiCreateBrush(0x1C3A5A);
-            P.Skp()->SetBrush(br); P.Skp()->SetPen(nullptr); P.Skp()->Polygon(pt, m); P.Skp()->SetBrush(nullptr);
-            oapiReleaseBrush(br);
-        }
-    }
-    for (int deg = -20; deg <= 20; deg += 5) {                           // the pitch ladder
-        const double off = (pitch - deg * RAD) * k;
-        if (std::fabs(off) > half * 0.92) continue;
-        const double hw = deg == 0 ? half * 1.0 : (deg % 10) ? half * 0.16 : half * 0.32, px = -sa * off, py = ca * off;
-        P.Line(int(cx + px - ca * hw), int(cy + py - sa * hw), int(cx + px + ca * hw), int(cy + py + sa * hw), 0xF0F0F0, deg == 0 ? 2 : 1);
-    }
-    const double gs = std::hypot(hv.x, hv.z), fpa = std::atan2(hv.y, (std::max)(gs, 1.0)), slip = t->GetSlipAngle();
-    const double lim = half * .9;
-    const int fx = int(cx + (std::max)(-lim, (std::min)(lim, slip * k))), fy = int(cy - (std::max)(-lim, (std::min)(lim, (fpa - pitch) * k)));
-    P.Circle(fx, fy, 8, 0x60E070); P.Line(fx - 18, fy, fx - 8, fy, 0x60E070); P.Line(fx + 8, fy, fx + 18, fy, 0x60E070); P.Line(fx, fy - 8, fx, fy - 15, 0x60E070);
-    P.Line(cx - 60, cy, cx - 20, cy, 0x3CA0FF, 4); P.Line(cx + 20, cy, cx + 60, cy, 0x3CA0FF, 4); P.Line(cx - 3, cy, cx + 3, cy, 0x3CA0FF, 4);
-    {
-        const int y0 = 56, y1 = 84, w = ax1 - ax0; const double hd = hdg * DEG, ppd = w / 60.0;     // the heading tape, 60 deg across
-        P.Box(ax0, y0, ax1, y1, 0x101410, 0x404840);
-        for (int d = int(std::floor((hd - 30) / 5)) * 5; d <= hd + 30; d += 5) {
-            const int x = int(cx + (d - hd) * ppd); if (x < ax0 + 2 || x > ax1 - 2) continue;
-            P.Line(x, y1 - (d % 10 ? 6 : 12), x, y1, 0xD0D0D0, 1);
-            if (d % 10 == 0) { char h[8]; std::snprintf(h, sizeof h, "%03d", ((d % 360) + 360) % 360); P.Text(x, y0 + 3, h, 11, cWhite, 1); }
-        }
-        P.Line(cx, y0, cx, y1, 0x3CA0FF, 2);
-    }
-    auto tape = [&](int x0, int x1, double val, double ppu, double tick, int every, bool right) {
-        P.Box(x0, top, x1, bot, 0x101410, 0x404840);
-        const double lo = val - (cy - top) / ppu, hi = val + (bot - cy) / ppu;
-        for (double v = std::floor(lo / tick) * tick; v <= hi; v += tick) {
-            const int y = int(cy - (v - val) * ppu); if (y < top + 2 || y > bot - 2) continue;
-            const bool big = std::fmod(std::fabs(std::round(v / tick)), double(every)) < 0.5;
-            P.Line(right ? x0 : x1 - (big ? 12 : 6), y, right ? x0 + (big ? 12 : 6) : x1, y, 0xD0D0D0, 1);
-            if (big) { char l[16]; std::snprintf(l, sizeof l, "%.0f", v); P.Text(right ? x0 + 16 : x1 - 16, y - 6, l, 10, cWhite, right ? 0 : 2); }
-        }
-        char c[16]; std::snprintf(c, sizeof c, "%.0f", val);
-        P.Box(x0 + 2, cy - 13, x1 - 2, cy + 13, 0x000000, 0x3CA0FF); P.Text((x0 + x1) / 2.0, cy - 8, c, 13, cWhite, 1);
-    };
-    const bool fast = tas > 600, low = alt < 3000;
-    tape(G.x0 + 10, ax0 - 12, tas, fast ? 0.2 : 2.0, fast ? 50 : 5, 2, false);
-    tape(ax1 + 12, G.x1 - 10, alt, low ? 0.25 : 0.01, low ? 50 : 1000, 5, true);
-    std::snprintf(b, sizeof b, "АТАКИ %.1f°  СКОЛЬЖ. %.1f°  ГОНДОЛЫ %.0f°  ГЛИССАДА %+.1f°", t->GetAOA() * DEG, slip * DEG, t->podAngle_, fpa * DEG);
-    P.Text(cx, 342, b, 10, cCyan, 1);
 }
 
+// a touch on the page (design px): the HUD and RCS modes, КОСМОС / АТМОСФЕРА, ПОДТВЕРДИТЬ, the thrust bar - the main drive's
+// set-point as the engine page sets it (the march, or the anamezon feed: stored until the chambers feed)
 bool TantraDisplays::TouchCentre(double x, double y) {
-    Tantra* t = t_;
-    for (int i = 0; i < 2; i++) if (CTab(i).In(x, y)) { termMode_ = i; return true; }
-    if (AlertLevel() && CAck().In(x, y)) { AckAlerts(); return true; }
-    for (int i = 0; i < 4; i++) if (CHud(i).In(x, y)) { hudMode_ = kHud[i]; return true; }   // the ship's own HUD (Orbiter's follows the focus, the person)
-    for (int i = 0; i < 3; i++) if (CRcs(i).In(x, y)) { t->SetAttitudeMode(kRcs[i]); return true; }
-    if (InGrown(CThrust(), x, y)) { SetMainLevel(AlongUp(CThrust(), y)); return true; }
-    return false;
+    namespace fr = tantra::front;
+    namespace es = tantra::enginescreen;
+    double val = 0.0;
+    switch (flightScr_.Hit(x, y, &val)) {
+        case fr::kFlHud: hudMode_ = int(val); return true;               // the ship's own HUD (Orbiter's follows the focus, the person)
+        case fr::kFlRcs: t_->SetAttitudeMode(int(val)); return true;
+        case fr::kFlTerm: termMode_ = int(val); return true;
+        case fr::kFlAck: AckAlerts(); return true;
+        case fr::kFlThrust: EngineSetPoint(t_->engineSet_ == Tantra::EngineSet::Anamezon ? es::kBarFeed : es::kBarMarch, val); return true;
+        default: return false;
+    }
 }
 
 // The thrust set by a touch on a scale: the same set-points as the keys (the main group drives the anamezon cups or the
@@ -550,6 +491,7 @@ void TantraDisplays::FillPlantView(tantra::plantscreen::View& v) const {
     v.aoa = t->GetAOA(); v.alt = t->GetAltitude(); v.vAir = vAir; v.q = t->GetDynPressure();
     v.gLoad = std::hypot(t->GetLift(), t->GetDrag()) / (std::max)(1.0, v.mass) / 9.81;
     v.hullLost = t->damage_.Destroyed() && !t->plant_.Lost();
+    FillCoreView(v);                                                  // the energy core's nodes (TantraDisplaysCore.cpp)
 }
 void TantraDisplays::PlantCommand(int cmd, double along) {
     namespace ps = tantra::plantscreen;
@@ -570,10 +512,7 @@ void TantraDisplays::PlantCommand(int cmd, double along) {
         default: break;
     }
 }
-void TantraDisplays::SetPodLevel(double f) {
-    if (t_->GetGroupThrusterCount(THGROUP_HOVER) > 0) t_->SetThrusterGroupLevel(THGROUP_HOVER, f);
-    else t_->SetThrusterGroupLevel(THGROUP_MAIN, f);
-}
+void TantraDisplays::SetPodLevel(double f) { t_->podCmd_ = t_->podOut_ >= 1.0 ? (std::max)(0.0, (std::min)(1.0, f)) : 0.0; }   // the pods' lever (TantraVectoring.cpp)
 
 // ---- the HUD on the big screen's picture ----------------------------------------------------------------------
 // The suit computer's way (Архитектор - скафандр, 2026-10-03): a logical grid 1280 x 720 scaled by k = H / 720 and centred on the
@@ -711,7 +650,7 @@ void TantraDisplays::DrawHud(SURFHANDLE s, int w, int h, const VECTOR3& cd, cons
     double cx0 = 0.5 * w, cy0 = 0.5 * h; const bool axis = proj(_V(0, 0, 1), cx0, cy0);
     if (mode != HUD_NONE) {
         const double pdeg = F * RAD;                                      // px per degree at the centre
-        for (int deg = -30; deg <= 60; deg += 10) {                       // the horizon and the pitch bars every 10 deg (dashed below)
+        for (int deg = -30; deg <= 60 && hudLayer_[0]; deg += 10) {      // the horizon and the pitch bars every 10 deg (dashed below)
             const double el = deg * RAD;
             if (deg == 0) {
                 for (int sd = -1; sd <= 1; sd += 2)
@@ -735,12 +674,12 @@ void TantraDisplays::DrawHud(SURFHANDLE s, int w, int h, const VECTOR3& cd, cons
         }
         VECTOR3 v; t->GetAirspeedVector(FRAME_LOCAL, v);                  // the velocity vector
         double vx, vy;
-        if (length(v) > 1.0 && proj(v / length(v), vx, vy)) {
+        if (hudLayer_[1] && length(v) > 1.0 && proj(v / length(v), vx, vy)) {
             const double r = 11 * k;
             for (int i = 0; i < 24; i++) { const double a0 = i * PI / 12, a1 = (i + 1) * PI / 12; L(vx + r * std::cos(a0), vy + r * std::sin(a0), vx + r * std::cos(a1), vy + r * std::sin(a1), C.P, 1.4); }
             L(vx - 3 * r, vy, vx - r, vy, C.P, 1.4); L(vx + r, vy, vx + 3 * r, vy, C.P, 1.4); L(vx, vy - r, vx, vy - 2 * r, C.P, 1.4);
         }
-        {                                                                 // the heading tape along the top
+        if (hudLayer_[2]) {                                               // the heading tape along the top
             const double hd = hdg * DEG, y1 = Y(52), cxh = axis ? cx0 : 0.5 * w;
             for (int d = int(std::floor((hd - 30) / 5)) * 5; d <= hd + 30; d += 5) {
                 const double xx = cxh + (d - hd) * pdeg; if (xx < X(200) || xx > X(1080)) continue;
@@ -751,7 +690,7 @@ void TantraDisplays::DrawHud(SURFHANDLE s, int w, int h, const VECTOR3& cd, cons
         }
         // the readouts: label over value (the suit's pair), speed left, altitude right
         const double spd = t->GetAirspeed(), alt = t->GetAltitude();
-        auto pair = [&](double gx, double gy, const char* lab, const char* val, int al, int vc) { Tx(X(gx), gy, lab, 9.5, C.tD, al); P.Text(X(gx), Y(gy + 17), val, 15 * k, vc, al); };
+        auto pair = [&](double gx, double gy, const char* lab, const char* val, int al, int vc) { if (!hudLayer_[2]) return; Tx(X(gx), gy, lab, 9.5, C.tD, al); P.Text(X(gx), Y(gy + 17), val, 15 * k, vc, al); };
         if (spd > 2000) Num(b, sizeof b, "%.2f км/с", spd / 1000); else Num(b, sizeof b, "%.0f м/с", spd);
         pair(300, 190, "СКОРОСТЬ", b, 2, C.tP);
         { VECTOR3 hv; t->GetHorizonAirspeedVector(hv); Num(b, sizeof b, "%+.1f м/с", hv.y); }
@@ -789,7 +728,9 @@ void TantraDisplays::DrawHud(SURFHANDLE s, int w, int h, const VECTOR3& cd, cons
             }
         }
     }
-    // the alerts: the main stripes at the edges of the view, the lamps of the systems, the word, the ribbon, the message
+    // the alerts: the main stripes at the edges of the view, the lamps of the systems, the word, the ribbon, the message (the
+    // layer ТРЕВОГИ off: only an active alert and a message are still shown)
+    if (!hudLayer_[3] && !lvl) { if (simt - sayT_ < 6.0 && say_[0]) Tx(X(640), 148, say_, 12.5, sayLevel_ == 2 ? cRed : sayLevel_ == 1 ? C.tA : cWhite, 1); return; }
     const DWORD mc = lvl == 2 ? C.R : C.A;
     const bool unacked = AlertUnacked();
     for (int sd = 0; sd < 2; sd++) {
@@ -916,32 +857,8 @@ bool TantraDisplays::TouchRiser(int k, double x, double y) {
 
 // ---- the attitude keys -----------------------------------------------------------------------------------------
 
-void TantraDisplays::DrawKeys() {
-    SURFHANDLE s = s_[kKeys];
-    if (!s) return;
-    oapiClearSurface(s, 0xFF000000 | 0x1C1816);
-    Paint P(s, glyphs_, kSc[kKeys]);
-    if (!P.Ok()) return;
-    P.Text(gW[5] / 2.0, 14, "ОРИЕНТАЦИЯ · АВТОПИЛОТЫ", 15, cCyan, 1);
-    bool any = false;
-    for (int i = 0; i < kNav; i++) if (t_->GetNavmodeState(kAuto[i].mode)) any = true;
-    for (int i = 0; i < kAutoN; i++) {
-        const int m = kAuto[i].mode;
-        P.Key(AutoKeyR(i), kAuto[i].name, m > 0 ? t_->GetNavmodeState(m) : !any, i == 0);
-    }
-}
-
-bool TantraDisplays::TouchKeys(double x, double y) {
-    for (int i = 0; i < kAutoN; i++)
-        if (AutoKeyR(i).In(x, y)) {
-            const int m = kAuto[i].mode;
-            if (m > 0) t_->ToggleNav(m);                                 // the autopilots are switched on from here only
-            else { for (int j = 0; j < kNav; j++) if (t_->GetNavmodeState(kAuto[j].mode)) t_->ToggleNav(kAuto[j].mode); }   // РУЧН.: all off
-            return true;
-        }
-    return false;
-}
-
+void TantraDisplays::DrawKeys() { DrawHub(); }   // variant 7: the yoke's hub (TantraConsoles.cpp)
+bool TantraDisplays::TouchKeys(double x, double y) { return TouchHub(x, y); }
 // ---- the wings' shelves ----------------------------------------------------------------------------------------
 
 void TantraDisplays::DrawWing(int k) {

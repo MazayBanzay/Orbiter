@@ -72,3 +72,8 @@ __pycache__/
 *.log
 *.bak
 *.bak_*
+
+# --- beta README with images ---
+!/Doc/
+/Doc/*
+!/Doc/TantraCrew/

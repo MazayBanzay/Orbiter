@@ -195,6 +195,7 @@ namespace ocrew
 		// ---- coverall: the suit's motion (same clips), lighter - she carries no suit: arms half as far out,
 		//      a narrower stance, a softer knee at each footfall. Fades out in the suit, which has its own layer ----
 		const double u = 1 - suitW;
+		float runFist = 0;                       // the running fist (both hands), set with the seated grips below
 		if (u > 1e-3)
 		{
 			// walking: arms by the body, an ordinary stance (the clean-up is in the walk clip); running: the suit's
@@ -206,7 +207,7 @@ namespace ocrew
 			if (in.grounded && std::floor(before * 2) != std::floor(phase * 2) && !settling)
 				crouchV += u * (0.06 + wRun * (0.08 + 0.06 * (std::min)(speed, 6.0)));                          // the step lands: knees give
 			// fingers: the mesh carries a relaxed hand (fingers together, softly curled); running closes it into a fist
-			skin.SetMorph("fist", F(u * wRun));
+			runFist = F(u * wRun);
 			// hair on springs: driven by the body's own acceleration (speed changes, turns) and gravity
 			skin.SetHairDrive(dt, _V(in.fwd * in.turn, 0, in.accel), in.g);
 			skin.Reattach(pOut, pWalk, bLHand, bLFingerBase, F(u)); skin.Reattach(pOut, pWalk, bLHand, bLThumb, F(u));
@@ -340,6 +341,29 @@ namespace ocrew
 		}
 
 		if (in.heading != 0) skin.TurnAll(pOut, _V(0, 0, 0), AX_UP, F(in.heading));
+		// seated: the hands on the ship's controls, after every other layer (SeatArms); each hand closes on its own
+		if (in.seat) arms.Update(dt, in.hand, in.heading, clips, skin, pOut); else arms.Reset();
+		if (skin.HasFingers())   // finger bones (finger_rig.py): each finger closes to its contact; the hand shapes are off
+		{
+			for (int s = 0; s < 2; ++s)
+			{
+				skin.ClearCurl(s);
+				skin.Fist(pOut, s, runFist);
+				if (!in.seat) continue;
+				Skin::Shape to, from; float wTo = 0, wFrom = 0;
+				arms.Hold(s, to, wTo, from, wFrom);
+				skin.Wrap(pOut, s, from, wFrom);
+				skin.Wrap(pOut, s, to, wTo);
+			}
+			skin.SetMorph("fist", 0); skin.SetMorph("grip", 0); skin.SetMorph("cup", 0);
+		}
+		else if (skin.HasMorph("grip"))   // the grips' own shapes (grip_shapes.py): round a handle, over a ball
+		{
+			skin.SetMorphSide("fist", runFist, runFist);
+			skin.SetMorphSide("grip", arms.Handle(0), arms.Handle(1));
+			skin.SetMorphSide("cup", arms.Cup(0), arms.Cup(1));
+		}
+		else skin.SetMorphSide("fist", (std::max)(runFist, arms.Grip(0)), (std::max)(runFist, arms.Grip(1)));
 		skin.Apply(pOut);
 	}
 }

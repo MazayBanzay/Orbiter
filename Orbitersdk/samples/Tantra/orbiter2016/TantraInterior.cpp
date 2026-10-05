@@ -30,8 +30,8 @@ void TantraInterior::Init(VESSEL* ship, UINT vcMeshIdx, double (*meshDZ)(void*),
     vcMesh_ = vcMeshIdx; dz_ = meshDZ; dzCtx_ = dzCtx;
     if (crew_) crew_->SetArrival(_V(kArrivalX, kArrivalY, kArrivalZ), _V(1, 0, 0));   // up the lift: in the airlock cell, facing inboard
     for (int i = 0; i < kSeatN; i++) {                                   // the seat runs kSeatTravel along its facing to its console
-        static UINT grp[4][8]; UINT n = 0;
-        for (int k = 0; k < 8; k++) if (kSeatGroups[i][k] >= 0) grp[i][n++] = UINT(kSeatGroups[i][k]);
+        static UINT grp[4][12]; UINT n = 0;
+        for (int k = 0; k < 12; k++) if (kSeatGroups[i][k] >= 0) grp[i][n++] = UINT(kSeatGroups[i][k]);
         anim_[i] = v_->CreateAnimation(0.0);
         v_->AddAnimationComponent(anim_[i], 0.0, 1.0, new MGROUP_TRANSLATE(vcMesh_, grp[i], n, _V(kSeats[i].fx * kSeatTravel[i], 0, kSeats[i].fz * kSeatTravel[i])));
         if (i == 0) {                                                    // the commander's own travel at the console (his slider):
@@ -39,6 +39,12 @@ void TantraInterior::Init(VESSEL* ship, UINT vcMeshIdx, double (*meshDZ)(void*),
             adjAnim_ = v_->CreateAnimation(-kSeatAdjMin / span);
             v_->AddAnimationComponent(adjAnim_, 0.0, 1.0, new MGROUP_TRANSLATE(vcMesh_, grp[0], n, _V(kSeats[0].fx * span, 0, kSeats[0].fz * span)));
             adjPos_ = adjTarget_ = -kSeatAdjMin / span;
+            static UINT up[12]; UINT nu = 0;                             // its height: all but the base (the sled, the pedestal's outer tube)
+            for (UINT k = 0; k < n; k++) if (int(grp[0][k]) != kSeat0Base) up[nu++] = grp[0][k];
+            const double hs = kSeatHgtMax - kSeatHgtMin;
+            hgtAnim_ = v_->CreateAnimation(-kSeatHgtMin / hs);               // the mesh is built at height 0
+            v_->AddAnimationComponent(hgtAnim_, 0.0, 1.0, new MGROUP_TRANSLATE(vcMesh_, up, nu, _V(0, hs, 0)));
+            hgtPos_ = hgtTarget_ = (kSeatHgtStart - kSeatHgtMin) / hs;
         }
     }
     {   // the cabin's panel rides with the cabin (arm out along -x, down along -y); door B's two leaves slide to the middle
@@ -82,6 +88,8 @@ void TantraInterior::Init(VESSEL* ship, UINT vcMeshIdx, double (*meshDZ)(void*),
         for (int j = 0; j < 2; j++) if (kSideDispGrp[k][j] >= 0) grp[k][n++] = UINT(kSideDispGrp[k][j]);
         sideAnim_[k] = v_->CreateAnimation(0.0);
         v_->AddAnimationComponent(sideAnim_[k], 0.0, 1.0, new MGROUP_TRANSLATE(vcMesh_, grp[k], n, _V(kSideRise[k][0], kSideRise[k][1], kSideRise[k][2])));
+        sidePos_[k] = sideTarget_[k] = 0.0;                             // they start up, in РАБОТА (the user, 2026-10-05: «базовый режим - вот такой»)
+        v_->SetAnimation(sideAnim_[k], sidePos_[k]);
     }
     static const int kPanelMfd[6] = {MFD_ORBIT, MFD_SURFACE, MFD_HSI, MFD_DOCKING, MFD_TRANSFER, MFD_MAP};
     for (int i = 0; i < 6; i++) mfds_.Add(0, kPanelMfd[i]);   // the 6 MFDs of the side panels, three each (drawn into them, no mesh slot)
@@ -91,6 +99,7 @@ void TantraInterior::Init(VESSEL* ship, UINT vcMeshIdx, double (*meshDZ)(void*),
     ext_.size = sizeof(OcInteriorExt); ext_.Origin = cOrigin; ext_.CanWalk = cCanWalk;
     ext_.Seated = cSeated;
     ext_.Click = cClick;
+    ext_.SeatHands = cSeatHands;                                        // the seated person's hands on the ball, the armrest, the yoke
     ext_.OuterWalls = cOuterWalls;                                      // people walking outside bump into the cup feet                                                // every screen of the bridge is touch                                              // the person sits in the seat with the body (OrbiterCrew)
 }
 
@@ -268,15 +277,13 @@ void TantraInterior::cUse(void* c, int id, int personId) {
         return;
     }
     if (t->crew_ && t->crew_->CrewUse(id, personId)) return;
-    if (id < 0 || id >= kSeatN || t->seat_ >= 0) return;
-    t->seat_ = id; t->person_ = personId;
-    oapiWriteLogV("Tantra interior: person %d sits down in the seat '%s'", personId, kSeats[id].name);
-    if (t->api_.LeaveInterior) t->api_.LeaveInterior(personId, id);                                 // the body leaves, the focus goes to the ship
+    // (the seats: OrbiterCrew seats the person itself - OcInteriorExt::Seated; the old way, the body leaving into the seat and
+    // the ship taking the focus, is gone: the user's rule)
 }
 
 void TantraInterior::cSeat(void* c, int id, VECTOR3* pos, VECTOR3* dir) {
     if (id < 0 || id >= kSeatN) return;
-    if (pos) *pos = _V(Self(c)->SeatX(id), kBridgeFloorY + kHips, Self(c)->SeatZ(id));   // where the seat is now (it moves)
+    if (pos) *pos = _V(Self(c)->SeatX(id), kBridgeFloorY + kHips + (id == 0 ? Self(c)->CmdSeatHeight() : 0.0), Self(c)->SeatZ(id));   // where the seat is now (it moves)
     if (dir) *dir = _V(kSeats[id].fx, 0, kSeats[id].fz);
 }
 
@@ -294,6 +301,14 @@ OBJHANDLE TantraInterior::ViewerBody() const {
     return (id && api_.ShipOf && api_.ShipOf(id) == v_->GetHandle()) ? f : nullptr;
 }
 
+bool TantraInterior::ViewerInBridge() const {
+    if (!v_ || !oapiCameraInternal()) return false;
+    VECTOR3 g, p;
+    oapiCameraGlobalPos(&g);
+    v_->Global2Local(g, p);
+    return InCapsule(p.x, p.y, p.z - DZ());   // the drum turns about its axis: the test does not depend on its turn
+}
+
 void TantraInterior::cOrigin(void* c, VECTOR3* o) { *o = _V(0, 0, Self(c)->DZ()); }
 
 void TantraInterior::cSeated(void* c, int seatId, int personId, int on) {
@@ -303,9 +318,42 @@ void TantraInterior::cSeated(void* c, int seatId, int personId, int on) {
     if (on) { t->seat_ = seatId; t->person_ = personId; t->seatTarget_[seatId] = 1.0; }
     else {
         t->seatTarget_[seatId] = 0.0; if (t->person_ == personId) { t->seat_ = -1; t->person_ = 0; }
-        t->riseId_ = personId; t->riseSeat_ = seatId; t->riseT_ = 4.0; t->riseOn_ = 0.0;   // she gets up BEHIND the seat (the user)
+        // (she gets up behind the seat: OrbiterCrew puts her there itself, against the walls - the user: «За кресло должен встать экипаж»)
     }
     oapiWriteLogV("Tantra interior: person %d %s the seat %d", personId, on ? "sits in" : "leaves", seatId);
+}
+
+// The commander's hands (OrbiterCrew reaches them with the arm and holds them, OcInteriorExt::SeatHands): the left palm on the
+// cursor ball, the fingers forward; the right on its armrest's front end, ahead of the ХОД / ВЫСОТА strips; with the yoke out
+// both on its horns, the thumbs up, the fingers across the horn along the arm (OrbiterCrew turns the hand round the horn to
+// her forearm). The ball and the rest go with the seat (its travel, adjustment, height); the horns with the hub (TantraYoke).
+void TantraInterior::cSeatHands(void* c, int seatId, int, OcHand* left, OcHand* right) {
+    TantraInterior* t = Self(c);
+    if (seatId != 0 || !left || !right || left->size < int(sizeof(OcHand)) || right->size < int(sizeof(OcHand))) return;
+    const VECTOR3 f = _V(kSeats[0].fx, 0, kSeats[0].fz), rt = _V(kSeats[0].fz, 0, -kSeats[0].fx), up = _V(0, 1, 0);
+    const VECTOR3 mv = f * t->CmdSeatOffset() + up * t->CmdSeatHeight();
+    const double elbowMin = kHandRest[1] + mv.y + 0.05;               // the elbows over the armrests' tops (+ the forearm)
+    auto put = [elbowMin](OcHand* h, int what, const VECTOR3& pos, const VECTOR3& palm, const VECTOR3& fwd, int grip, double r) {
+        h->on = 1; h->what = what; h->pos = pos; h->palm = palm; h->fwd = fwd; h->grip = grip; h->radius = r; h->elbowMinY = elbowMin;
+    };
+    if (t->yokeE_ >= 0.999) {                                           // the yoke out: on its horns
+        const VECTOR3 hips = _V(t->SeatX(0), kBridgeFloorY + kHips + t->CmdSeatHeight(), t->SeatZ(0));
+        for (int s = 0; s < 2; ++s) {
+            const double sx = s == 0 ? -1 : 1, r = 0.020;
+            const VECTOR3 gt = t->hubH_ + t->hubX_ * (sx * 0.243) + t->hubY_ * -0.058, gb = t->hubH_ + t->hubX_ * (sx * 0.268) + t->hubY_ * -0.168;
+            const VECTOR3 a = unit(gb - gt), gm = gt + (gb - gt) * 0.35;   // high on the grip: the thumb at the buttons by the bend
+            // the user's own grip (his video, 2026-10-05): the handle through the fist, the palm forward and in toward the
+            // hub, the back of the hand to him, the fingers round the front, the thumb on top
+            VECTOR3 n = t->hubZ_ * -0.95 + t->hubX_ * (-sx * 0.3);
+            n = unit(n - a * dotp(n, a));
+            const VECTOR3 fw = s == 0 ? crossp(a, n) : crossp(n, a);
+            (void)hips;
+            put(s == 0 ? left : right, 10 + s, gm - n * r, n, fw, OC_GRIP_HANDLE, r);
+        }
+        return;
+    }
+    put(left, 1, _V(kCurBall[0], kCurBall[1] + kCurBall[3], kCurBall[2]) + mv, -up, f, OC_GRIP_BALL, 0.0);
+    put(right, 2, _V(kHandRest[0], kHandRest[1], kHandRest[2]) + mv, -up, f, OC_GRIP_FLAT, 0.0);
 }
 
 int TantraInterior::cCanWalk(void* c, char* reason, int n) {
@@ -323,25 +371,11 @@ double TantraInterior::SeatX(int i) const { return kSeats[i].x + kSeats[i].fx * 
 double TantraInterior::SeatZ(int i) const { return kSeats[i].z + kSeats[i].fz * (kSeatTravel[i] * seatPos_[i] + (i == 0 ? AdjOffset() : 0.0)); }
 double TantraInterior::AdjOffset() const { return kSeatAdjMin + (kSeatAdjMax - kSeatAdjMin) * adjPos_; }
 
-// The commander's seat slider: a trough with the turquoise fill up to the seat's place, a mark at the nominal place.
-void TantraInterior::DrawAdj() {
-    if (!adjSurf_) return;
-    adjShown_ = adjPos_;
-    oapiClearSurface(adjSurf_, 0xFF1C2622);
-    oapi::Sketchpad* skp = oapiGetSketchpad(adjSurf_);
-    if (!skp) return;
-    oapi::Brush* trough = oapiCreateBrush(0x141A17); oapi::Brush* fill = oapiCreateBrush(0xC8C040); oapi::Pen* edge = oapiCreatePen(1, 2, 0x7A9A88);
-    oapi::Pen* none = oapiCreatePen(0, 1, 0);
-    skp->SetPen(edge); skp->SetBrush(trough); skp->Rectangle(6, 14, 250, 50);
-    const int x1 = 9 + int(238 * adjPos_);
-    skp->SetPen(none); skp->SetBrush(fill); skp->Rectangle(9, 17, (std::max)(x1, 10), 47);
-    const int xn = 9 + int(238 * (-kSeatAdjMin / (kSeatAdjMax - kSeatAdjMin)));
-    skp->SetPen(edge); skp->Line(xn, 6, xn, 58);
-    for (int k = 1; k < 8; k++) { const int x = 9 + 238 * k / 8; skp->Line(x, 50, x, 56); }
-    oapiReleaseSketchpad(skp);
-    oapiReleaseBrush(trough); oapiReleaseBrush(fill); oapiReleasePen(edge); oapiReleasePen(none);
+// (DrawAdj, the seat's panel: TantraSeatCmd.cpp)
+void TantraInterior::SideFold(int k, int state) { if (k >= 0 && k < 2) sideTarget_[k] = state <= 0 ? 0.0 : state == 1 ? kSideRibbon : 1.0; }
+bool TantraInterior::SideDisplayUsable(int k) const {
+    return k >= 0 && k < 2 && sidePos_[k] == sideTarget_[k] && sideTarget_[k] < 1.0;
 }
-void TantraInterior::SideFold(int k, int state) { if (k >= 0 && k < 2) sideTarget_[k] = state <= 0 ? 0.0 : state == 1 ? kSideFoldHalf : 1.0; }
 int TantraInterior::SideFoldState(int k) const { return k < 0 || k > 1 ? 0 : sideTarget_[k] <= 0.0 ? 0 : sideTarget_[k] < 1.0 ? 1 : 2; }
 
 void TantraInterior::CabinPose(double& sx, double& sy, bool& stowed, bool& atGround) const {
@@ -478,9 +512,9 @@ void TantraInterior::OnVisual(VISHANDLE vis) {
         const bool ok = oapiSetTexture(mesh_, kCabScreenSlot, cabScr_);
         oapiWriteLogV("Tantra interior: lift cabin screen %s", ok ? "bound" : "NOT bound");
     }
-    if (!adjSurf_) adjSurf_ = oapiCreateSurfaceEx(256, 64, OAPISURFACE_TEXTURE | OAPISURFACE_RENDERTARGET | OAPISURFACE_SKETCHPAD | OAPISURFACE_NOMIPMAPS);
+    if (!adjSurf_) adjSurf_ = oapiCreateSurfaceEx(kSeatPanelW, kSeatPanelH, OAPISURFACE_TEXTURE | OAPISURFACE_RENDERTARGET | OAPISURFACE_SKETCHPAD | OAPISURFACE_NOMIPMAPS);
     if (mesh_ && adjSurf_) oapiSetTexture(mesh_, kSeatAdjSlot, adjSurf_);
-    adjShown_ = -1.0;
+    adjShown_ = -1.0; panelKey_ = -1.0; spotShown_ = ballShown_ = uvtShown_ = -1; yokeKey_[0] = -1e9; quadKey_[0] = -1e9;
     statusT_ = 0.0; cabScrT_ = 0.0;
 }
 
@@ -611,50 +645,140 @@ int TantraInterior::cClick(void* c, const VECTOR3* o, const VECTOR3* d, int pers
     TantraInterior* t = Self(c);
     VECTOR3 head = *o; bool haveHead = false;
     if (t->api_.InteriorPos) { VECTOR3 ft; double hdg; if (t->api_.InteriorPos(personId, &ft, &hdg)) { head = ft + _V(0, 1.45, 0); haveHead = true; } }
-    struct Hit { int kind, idx; double u, v, t; } best = {-1, -1, 0, 0, 1e9};
+    // with the light spot on the seated commander reaches every screen (the spot shows where): no reach limit then
+    const bool anyDist = t->spotOn_ && t->seat_ == 0 && personId == t->person_;
+    Pick best;
+    t->PickScreens(*o, *d, haveHead && !anyDist ? &head : nullptr, best);
+    // the seat's own controls ride with it: the strips (5 ХОД, 6 ВЫСОТА), the cursor unit's key plate (7) and its ball (8)
+    const VECTOR3 f = _V(kSeats[0].fx, 0, kSeats[0].fz), rt = _V(kSeats[0].fz, 0, -kSeats[0].fx);
+    const VECTOR3 mv = f * t->CmdSeatOffset() + _V(0, t->CmdSeatHeight(), 0);
+    int sk = -1; double su = 0, sv = 0, st = best.kind >= 0 ? best.t : 1e9;
+    auto flat = [&](int kind, const double* c0, double w, double dd) {   // a plate on the seat: u across, v from the front
+        const VECTOR3 C = _V(c0[0], c0[1], c0[2]) + mv, N = _V(0, 1, 0);
+        const double den = dotp(*d, N);
+        if (den > -1e-6) return;
+        const double tt = dotp(C - *o, N) / den;
+        if (tt <= 0 || tt >= st) return;
+        const VECTOR3 q = *o + *d * tt - C;
+        const double u = dotp(q, rt) / w + .5, v = .5 - dotp(q, f) / dd;           // true places on the plate / the strip
+        const double mu = 0.008 / w, mv_ = 0.008 / dd;                                 // taken 8 mm round them, clamped to the edge
+        if (u < -mu || u > 1 + mu || v < -mv_ || v > 1 + mv_) return;
+        sk = kind; su = Clamp(u, 0.0, 1.0); sv = Clamp(v, 0.0, 1.0); st = tt;
+    };
+    flat(5, kSeatAdjC, kSeatStripWid, kSeatStripLen);
+    flat(6, kSeatHgtC, kSeatStripWid, kSeatStripLen);
+    flat(7, kCurPlateC, kCurPlateW, kCurPlateD);
+    if (t->yokeE_ > 0.9) {                                              // the yoke's hub (it moves): its keys' face (9), its screen (10)
+        auto hub = [&](int kind, const double* r5) {
+            const VECTOR3 C = t->hubH_ + t->hubX_ * r5[0] + t->hubY_ * r5[1] + t->hubZ_ * r5[2], N = t->hubZ_;
+            const double den = dotp(*d, N);
+            if (den > -1e-6) return;
+            const double tt = dotp(C - *o, N) / den;
+            if (tt <= 0 || tt >= st) return;
+            const VECTOR3 q = *o + *d * tt - C;
+            const double u = dotp(q, t->hubX_) / r5[3] + .5, v = .5 - dotp(q, t->hubY_) / r5[4];
+            if (u < 0 || u > 1 || v < 0 || v > 1) return;
+            sk = kind; su = u; sv = v; st = tt;
+        };
+        hub(9, kHubKeys); hub(10, kHubScr);
+        const VECTOR3 Bt = t->hubH_ + t->hubX_ * kHubUvt[0] + t->hubY_ * kHubUvt[1] + t->hubZ_ * kHubUvt[2], oc = *o - Bt;   // УВТ (11)
+        const double r = kHubUvt[3] * 1.8, bb = dotp(oc, *d), disc = bb * bb - (dotp(oc, oc) - r * r);
+        if (disc >= 0) { const double tt = -bb - std::sqrt(disc); if (tt > 0 && tt < st) { sk = 11; st = tt; } }
+    }
+    for (int k = 0; k < 2; ++k) {                                        // the levers' grips (14, 15): held, they follow the cursor
+        const VECTOR3 oc = *o - t->LeverGrip(k);
+        const double r = 0.04, bb = dotp(oc, *d), disc = bb * bb - (dotp(oc, oc) - r * r);
+        if (disc >= 0) { const double tt = -bb - std::sqrt(disc); if (tt > 0 && tt < st) { sk = 14 + k; st = tt; } }
+    }
+    if (t->qCover_ < 0.5) {                                              // the pods' key's cover, shut (16): a touch on it = on its key
+        const VECTOR3 Cc = _V(kCoverHinge[0], kCoverHinge[1] + 0.014, kCoverHinge[2] + 0.025), oc = *o - Cc;
+        const double r = 0.034, bb = dotp(oc, *d), disc = bb * bb - (dotp(oc, oc) - r * r);
+        if (disc >= 0) { const double tt = -bb - std::sqrt(disc); if (tt > 0 && tt < st) { sk = 16; st = tt; } }
+    }
+    {                                                                    // the cups' wheel on the pods' lever (12)
+        const VECTOR3 oc = *o - t->wheelC_;
+        const double r = 0.03, bb = dotp(oc, *d), disc = bb * bb - (dotp(oc, oc) - r * r);
+        if (disc >= 0) { const double tt = -bb - std::sqrt(disc); if (tt > 0 && tt < st) { sk = 12; st = tt; } }
+    }
+    {                                                                    // the ball stands out of the plate (taken a little bigger)
+        const VECTOR3 B = _V(kCurBall[0], kCurBall[1], kCurBall[2]) + mv, oc = *o - B;
+        const double r = kCurBall[3] * 1.8, bb = dotp(oc, *d), disc = bb * bb - (dotp(oc, oc) - r * r);   // (under the palm: taken bigger)
+        if (disc >= 0) { const double tt = -bb - std::sqrt(disc); if (tt > 0 && tt < st + 0.05) { sk = 8; st = tt; } }
+    }
+    if (sk >= 0) {
+        const double py = sv * kSeatPanelH, frac = Clamp((kSeatPanelH - 28.0 - py) / (kSeatPanelH - 51.0), 0.0, 1.0);   // the strips' scales (TantraSeatCmd.cpp)
+        if (sk == 5) t->adjTarget_ = frac;                                // a touch on a strip = the place / the height
+        else if (sk == 6) t->hgtTarget_ = frac;
+        else if (sk == 7) t->SeatPlate(2 * kSeatStripWid * kSeatPanelPx + su * kCurPlateW * kSeatPanelPx, py);
+        else if (sk == 9 || sk == 10) {                                  // the hub's texture (screen 5): the face on top, the screen under it
+            const double px0 = sk == 9 ? 0.0 : (kHubTexW - kHubScr[3] * kHubTexPx) / 2, py0 = sk == 9 ? 0.0 : kHubKeys[4] * kHubTexPx;
+            const double* r5 = sk == 9 ? kHubKeys : kHubScr;
+            if (t->touch_.Touch) t->touch_.Touch(t->touch_.ctx, 5, (px0 + su * r5[3] * kHubTexPx) / kHubTexW, (py0 + sv * r5[4] * kHubTexPx) / kHubTexH);
+        }
+        else if (sk == 11) t->uvtOn_ = !t->uvtOn_;
+        else if (sk == 12) { if (t->touch_.Touch) t->touch_.Touch(t->touch_.ctx, 8, 3.0, 0.0); }   // the cups: the next angle
+        else if (sk == 14 || sk == 15) { t->leverDrag_ = sk - 14; t->leverSent_ = -1.0; t->LeverDrag(); }   // a lever taken by its grip
+        else if (sk == 16) { if (t->touch_.Touch) t->touch_.Touch(t->touch_.ctx, 4, 0.040 / 0.29, 0.118 / 0.54); }   // the cover: as a touch on its key (lifts it)
+        else { t->spotOn_ = !t->spotOn_; t->panelKey_ = -1.0; }          // the ball: the light spot on / off
+        oapiWriteLogV("Tantra interior: seat control %d at %.2f %.2f", sk, su, sv);
+        return 1;
+    }
+    if (best.kind < 0) return 0;
+    t->PressAt(best);
+    oapiWriteLogV("Tantra interior: touch screen %d/%d at %.2f %.2f%s", best.kind, best.idx, best.u, best.v, anyDist ? " (light spot)" : "");
+    return 1;
+}
+
+// The screens under a ray (interior frame): the 2D panel pieces (kind 0), the MFD places (1), the touch screens' flat pieces
+// (2); the nearest one, within reach of the head if a head is given. Its point, its axes and its normal (toward the ray) too.
+bool TantraInterior::PickScreens(const VECTOR3& o, const VECTOR3& d, const VECTOR3* head, Pick& best) const {
+    best = Pick();
     auto test = [&](int kind, int idx, const double* cc, const double* ex, const double* up, const double* nn, double w, double h) {
         const VECTOR3 C = _V(cc[0], cc[1], cc[2]), EX = _V(ex[0], ex[1], ex[2]), UP = _V(up[0], up[1], up[2]), N = _V(nn[0], nn[1], nn[2]);
-        const double den = dotp(*d, N);
+        const double den = dotp(d, N);
         if (den > -1e-6) return;                                         // from behind or edge-on
-        const double tt = dotp(C - *o, N) / den;
+        const double tt = dotp(C - o, N) / den;
         if (tt <= 0 || tt >= best.t) return;
-        const VECTOR3 p = *o + *d * tt, q = p - C;
+        const VECTOR3 p = o + d * tt, q = p - C;
         const double u = dotp(q, EX) / w + .5, v = .5 - dotp(q, UP) / h;
         if (u < 0 || u > 1 || v < 0 || v > 1) return;
-        if (haveHead && length(p - head) > 1.7) return;                  // within arm's reach (seated or standing, leaning in)
-        best = {kind, idx, u, v, tt};
+        if (head && length(p - *head) > 1.7) return;                     // within arm's reach (seated or standing, leaning in)
+        best.kind = kind; best.idx = idx; best.u = u; best.v = v; best.t = tt; best.p = p; best.ex = EX; best.up = UP; best.n = N;
     };
     for (int k = 0; k < kPanelPieceCount; k++) { const PanelPiece& q = kPanelPieces[k]; test(0, k, q.c, q.ex, q.up, q.n, q.w, q.h); }
     for (int k = 0; k < kMfdCount; k++) { const MfdPlace& q = kMfd[k]; test(1, k, q.c, q.ex, q.up, q.n, q.s, q.s); }
     for (int k = 0; k < kTouchFacetCount; k++) {                         // the touch screens in flat pieces (the curved ones too)
         const TouchFacet& q = kTouchFacets[k];
-        if (q.screen < 2 && !t->SideDisplayUp(q.screen)) continue;       // a folded (or moving) monitor takes no touch
+        if (q.screen < 2) {                                              // a side glass: still in РАБОТА / ЛЕНТА, moved with it, over the desk
+            if (!SideDisplayUsable(q.screen)) continue;
+            const double* r = kSideRise[q.screen]; const double s = sidePos_[q.screen];
+            const double c[3] = {q.c[0] + r[0] * s, q.c[1] + r[1] * s, q.c[2] + r[2] * s};
+            const Pick keep = best;
+            test(2, k, c, q.ex, q.up, q.n, q.w, q.h);
+            if (best.t != keep.t && best.p.y < kDeskTopY + 0.005) best = keep;   // (its part in the desk)
+            continue;
+        }
         test(2, k, q.c, q.ex, q.up, q.n, q.w, q.h);
     }
-    {                                                                    // the commander's seat slider (it rides with the seat)
-        const double off = kSeatTravel[0] * t->seatPos_[0] + t->AdjOffset();
-        const double c[3] = {kSeatAdjC[0] + kSeats[0].fx * off, kSeatAdjC[1] + .002, kSeatAdjC[2] + kSeats[0].fz * off};
-        const double ex[3] = {kSeats[0].fx, 0, kSeats[0].fz}, side[3] = {-kSeats[0].fz, 0, kSeats[0].fx}, n[3] = {0, 1, 0};
-        test(5, 0, c, ex, side, n, kSeatAdjLen, kSeatAdjWid + .02);
-    }
-    if (best.kind < 0) return 0;
-    switch (best.kind) {
-        case 5: t->adjTarget_ = (std::max)(0.0, (std::min)(1.0, (best.u * kSeatAdjLen - .009) / (kSeatAdjLen - .018))); break;   // touch = the place
+    return best.kind >= 0;
+}
+
+void TantraInterior::PressAt(const Pick& b) {
+    switch (b.kind) {
         case 0: {                                                        // a section of the 2D panels: the point on panel.dds
-            const PanelPiece& q = kPanelPieces[best.idx];
-            t->ClickPanel(q.tx0 + best.u * (q.tx1 - q.tx0), q.ty0 + best.v * (q.ty1 - q.ty0));
-            t->panelT_ = 0.0;
+            const PanelPiece& q = kPanelPieces[b.idx];
+            ClickPanel(q.tx0 + b.u * (q.tx1 - q.tx0), q.ty0 + b.v * (q.ty1 - q.ty0));
+            panelT_ = 0.0;
             break;
         }
-        case 1: t->mfds_.Touch(best.idx, best.u, best.v); break;
-        default: {                                                       // a piece of a screen: the point on the whole screen
-            const TouchFacet& q = kTouchFacets[best.idx];
-            if (t->touch_.Touch) t->touch_.Touch(t->touch_.ctx, q.screen, q.u0 + best.u * (q.u1 - q.u0), q.v0 + best.v * (q.v1 - q.v0));
+        case 1: mfds_.Touch(b.idx, b.u, b.v); break;
+        case 2: {                                                        // a piece of a screen: the point on the whole screen
+            const TouchFacet& q = kTouchFacets[b.idx];
+            if (touch_.Touch) touch_.Touch(touch_.ctx, q.screen, q.u0 + b.u * (q.u1 - q.u0), q.v0 + b.v * (q.v1 - q.v0));
             break;
         }
+        default: break;
     }
-    oapiWriteLogV("Tantra interior: touch screen %d/%d at %.2f %.2f", best.kind, best.idx, best.u, best.v);
-    return 1;
 }
 
 // A click at a point of panel.dds (texture px): the panel area under it, as the 2D panels register them.
@@ -774,6 +898,7 @@ void TantraInterior::ILiftStep(double dt) {
 }
 
 void TantraInterior::Step(double dt) {
+    const double rdt = oapiGetSysStep() / (oapiGetTimeAcceleration() > 10.0 ? 4.0 : 1.0);   // the screens' timers: real time, rarer over x10
     ILiftStep(dt);
     PanelLights();
     mfds_.Step();
@@ -785,12 +910,12 @@ void TantraInterior::Step(double dt) {
         sidePos_[k] += d > 0 ? st : -st;
         v_->SetAnimation(sideAnim_[k], sidePos_[k]);
     }
-    if (console_.Redraw && mesh_ && (panelT_ -= dt) <= 0.0) {             // the console's panels, ~10 times a second
+    if (console_.Redraw && mesh_ && (panelT_ -= rdt) <= 0.0) {             // the console's panels, ~10 times a second
         panelT_ = 0.1;
         for (int a : pareas_) console_.Redraw(console_.ctx, a);
     }
-    if ((statusT_ -= dt) <= 0.0) { statusT_ = 0.25; DrawStatus(); }
-    if ((cabScrT_ -= dt) <= 0.0) { cabScrT_ = 0.25; DrawCabStatus(); }
+    if ((statusT_ -= rdt) <= 0.0) { statusT_ = 0.25; DrawStatus(); }   // (real time: the screens as at x1 whatever the warp)
+    if ((cabScrT_ -= rdt) <= 0.0) { cabScrT_ = 0.25; DrawCabStatus(); }
     if (panel_.Cabin) {                                                  // the cabin's panel where the cabin is; door B's leaves
         double out = 0.0, down = 0.0; int ag = 0; panel_.Cabin(panel_.ctx, &out, &down, &ag);
         v_->SetAnimation(cabOutAnim_, out);
@@ -803,14 +928,22 @@ void TantraInterior::Step(double dt) {
         double sx, sy; bool st, ag; CabinPose(sx, sy, st, ag);
         crew_->SetArrival(_V(kArrivalX + sx, kCabFloor + sy, kArrivalZ), _V(1, 0, 0));
     }
-    {                                                                    // the commander's slider: 0.25 m/s
+    {                                                                    // the commander's place: 0.25 m/s, the height 0.05 m/s
         const double d = adjTarget_ - adjPos_;
         if (d != 0.0) {
             const double st = (std::min)(std::fabs(d), (std::min)(dt, 0.1) * 0.25 / (kSeatAdjMax - kSeatAdjMin));
             adjPos_ += d > 0 ? st : -st;
             v_->SetAnimation(adjAnim_, adjPos_);
         }
-        if (std::fabs(adjShown_ - adjPos_) > 0.004) DrawAdj();
+        const double dh = hgtTarget_ - hgtPos_;
+        if (dh != 0.0) {
+            const double st = (std::min)(std::fabs(dh), (std::min)(dt, 0.1) * 0.05 / (kSeatHgtMax - kSeatHgtMin));
+            hgtPos_ += dh > 0 ? st : -st;
+            v_->SetAnimation(hgtAnim_, hgtPos_);
+        }
+        SpotStep();                                                      // the light spot, the ball, the seat's panel
+        YokeStep(dt);                                                    // the yoke (TantraYoke.cpp)
+        QuadStep(dt);                                                    // the throttle quadrant, the pods' guard cover
     }
     for (int i = 0; i < kSeatN; i++) {                                   // 0.7 s from the back to the console
         const double d = seatTarget_[i] - seatPos_[i];
@@ -818,13 +951,6 @@ void TantraInterior::Step(double dt) {
         const double st = (std::min)(std::fabs(d), (std::min)(dt, 0.1) / 0.7);   // the whole run in 0.7 s (the user's limit)
         seatPos_[i] += d > 0 ? st : -st;
         v_->SetAnimation(anim_[i], seatPos_[i]);
-    }
-    if (riseId_ && seatPos_[riseSeat_] <= 0.0) {                         // the seat is back: the risen person goes behind it
-        const VECTOR3 dir = _V(kSeats[riseSeat_].fx, 0, kSeats[riseSeat_].fz);
-        const VECTOR3 pos = _V(kSeats[riseSeat_].x, kBridgeFloorY, kSeats[riseSeat_].z) - dir * 0.95;
-        if (api_.Carry && api_.Carry(riseId_, v_->GetHandle(), &pos, &dir)) riseOn_ += dt;   // (0 while she is still seated)
-        riseT_ -= dt;
-        if (riseOn_ > 0.4 || riseT_ <= 0.0) riseId_ = 0;
     }
     if (standSeat_ < 0) return;
     const int seat = standSeat_;

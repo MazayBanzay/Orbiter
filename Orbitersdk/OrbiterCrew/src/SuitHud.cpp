@@ -45,6 +45,19 @@ namespace ocrew
 
 		using V2 = std::pair<double, double>;
 
+		// The machine she drives from its post (МПУ, Modules\MPU.dll): its state through the module's own export, looked up
+		// each frame (the module loads with the first platform and goes with the session) - no link to it, no header.
+		// The layout must match MPU.dll's MpuState exactly.
+		struct MpuState { double speed, speedMax; int full; double steer, deck, deckMin, deckMax; int brake; double charge; };
+		bool MpuOf(OBJHANDLE person, MpuState& st)
+		{
+			HMODULE m = GetModuleHandleA("MPU.dll");
+			if (!m || !person) return false;
+			using Fn = bool(*)(OBJHANDLE, MpuState*);
+			const Fn f = reinterpret_cast<Fn>(GetProcAddress(m, "mpuDriverState"));
+			return f && f(person, &st);
+		}
+
 		// the D3D9 client's core (Orbiter 2024: gcCore replaces gcAPI; the Sketchpad2/3 calls are on oapi::Sketchpad itself)
 		gcCore2* Core()
 		{
@@ -1968,9 +1981,14 @@ namespace ocrew
 		{
 			const double f = (H / 2) / std::tan((std::max)(0.1, oapiCameraAperture())) / k;   // units per radian
 			const double cx = 640, cy = 360;
-			if (surface && mode != SYS && d.suit)
+			if (surface && mode != SYS && d.suit && hBody)
 			{
-				const double off = std::clamp(std::tan(pitch) * f, -250.0, 250.0), ca = std::cos(bank), sa = std::sin(bank);
+				// the gaze's own pitch and roll against the local horizon (the camera, not the body: the head turns)
+				VECTOR3 cpos, bpos; oapiCameraGlobalPos(&cpos); oapiGetGlobalPos(hBody, &bpos);
+				MATRIX3 Rc; oapiCameraRotationMatrix(&Rc);
+				const VECTOR3 upL = Unit(cpos - bpos), cr = _V(Rc.m11, Rc.m21, Rc.m31), cu = _V(Rc.m12, Rc.m22, Rc.m32), cf = _V(Rc.m13, Rc.m23, Rc.m33);
+				const double camPitch = std::asin(std::clamp(dotp(cf, upL), -1.0, 1.0)), camBank = std::atan2(dotp(cr, upL), dotp(cu, upL));
+				const double off = std::clamp(std::tan(camPitch) * f, -250.0, 250.0), ca = std::cos(camBank), sa = std::sin(camBank);
 				auto seg = [&](double a, double b, double dy, bool dash)
 				{
 					const double y = cy + off + dy;
@@ -2118,7 +2136,18 @@ namespace ocrew
 			if (!ann.empty()) { const double w = g.TW(ann, 12.5) + 24; g.Rect(640 - w / 2, 618, w, 22, CA, 1.2, 1, CA, 0.12); g.T(640, 634, ann, CA, 12.5, 1); }
 			std::vector<std::tuple<std::string, std::string, int>> cells;
 			const Target* s = Selected();
-			if (mode == FLIGHT && d.jet)
+			MpuState ms{};
+			if (v && MpuOf(v->GetHandle(), ms))   // at the post of a platform: the machine's numbers instead of her own
+			{
+				const double kmh = std::abs(ms.speed) * 3.6;
+				cells = { { "СКОРОСТЬ", (ms.speed < -0.1 ? "назад " : "") + Num(kmh, 0) + " км/ч", CW },
+				          { "ХОД", (ms.full ? std::string("ПОЛНЫЙ · ") : std::string("")) + Num(ms.speedMax * 3.6, 0) + " км/ч", ms.full ? CA : CW },
+				          { "РУЛЬ", std::abs(ms.steer) < 0.05 ? std::string("прямо") : std::string(ms.steer > 0 ? "вправо " : "влево ") + Num(100 * std::abs(ms.steer), 0) + " %", CW },
+				          { "ПЛАТФОРМА", Num(ms.deck, 2) + " м", CW },
+				          { "ТОРМОЗ", ms.brake ? "стояночный" : "снят", ms.brake ? CA : CW },
+				          { "ЗАРЯД", ms.charge < 0 ? std::string("—") : Num(100 * ms.charge, 0) + " %", ms.charge >= 0 && ms.charge < 0.15 ? CA : CW } };
+			}
+			else if (mode == FLIGHT && d.jet)
 				cells = { { "ВЫСОТА", Num(d.alt, 1) + " м", CW }, { "ВЕРТ", Num(d.vs, 1, true) + " м/с", d.vs < -3 ? CA : CW }, { "ГОРИЗ", Num(d.gs, 1) + " м/с", CW },
 				          { "ТЯГА", Num(100 * d.jetThrottle, 0) + " %", CW }, { "ЗАПАС Δv", Num(d.jetDv, 0) + " м/с", d.jetDv < 30 ? CA : CW } };
 			else if (mode == RDV && s)
@@ -2131,7 +2160,8 @@ namespace ocrew
 				cells = { { "СКОРОСТЬ", Num(surface ? d.speed : std::hypot(gsH.x, gsH.z), 1) + " м/с", CW }, { "ПОХОДКА", d.servo ? "серво" : d.speed > 2.2 ? "бег" : d.speed > 0.1 ? "шаг" : "стоит", d.servo ? CA : CW },
 				          { "ЩИТОК", d.shadeDown ? "опущен" : "поднят", CW }, { "ФОНАРИ", d.lampsOn ? "вкл" : "выкл", CW },
 				          { d.hasGround ? "ГРУНТ" : "СРЕДА", Num(d.hasGround ? d.groundC : d.envC, 0, true) + " °C", d.hasGround && d.groundC > 80 ? CA : CW } };
-			for (size_t i = 0; i < cells.size(); ++i) g.Cell(470 + i * 85.0, 664, std::get<0>(cells[i]), std::get<1>(cells[i]), std::get<2>(cells[i]), 1);
+			const double x0 = 640 - (cells.size() - 1) * 85.0 / 2;   // centred: five cells as before, six for the machine
+			for (size_t i = 0; i < cells.size(); ++i) g.Cell(x0 + i * 85.0, 664, std::get<0>(cells[i]), std::get<1>(cells[i]), std::get<2>(cells[i]), 1);
 			// the pods, seen from her left side
 			if (fly && surface)
 				for (int i = 0; i < 2; ++i)
@@ -2336,6 +2366,7 @@ namespace ocrew
 			if (ok) modDm = dm;
 			if (!modLogged || ok) { char b[96]; snprintf(b, sizeof b, "OrbiterCrew: visor modulator %dx%d, texture bound: %s", w, h, ok ? "yes" : "NO"); oapiWriteLog(b); modLogged = true; }
 		}
+		oapiClearSurface(modSrf, 0);   // transparent: last step's shapes must not stay (they smeared across the visor)
 		oapi::Sketchpad* skp = oapiGetSketchpad(modSrf);
 		if (!skp) return;
 		if (!Ext(skp)) { oapiReleaseSketchpad(skp); return; }
@@ -2346,12 +2377,13 @@ namespace ocrew
 		auto with = [&](double a) { return 1 - (1 - std::clamp(a, 0.0, 1.0)) * (1 - shade); };
 		auto box = [&](double x0, double y0, double x1, double y1, double a)
 		{
+			if (with(a) < 1.0 / 255) return;   // nothing to dim (and a zero colour would mean "no brush")
 			skp->QuickBrush(static_cast<DWORD>(std::lround(with(a) * 255)) << 24);
 			skp->Rectangle(static_cast<int>(std::floor(x0 * sx)), static_cast<int>(std::floor(y0 * sy)), static_cast<int>(std::ceil(x1 * sx)), static_cast<int>(std::ceil(y1 * sy)));
 		};
 		skp->SetBlendState(oapi::Sketchpad::COPY);
 		skp->QuickPen(0);
-		box(0, 0, vw, vh, 0);
+		box(0, 0, vw, vh, 0);   // the shade's tone over the whole view (skipped when there is none)
 		// soft bands along the visor's upper and lower edge (as the old backing): thin strips, cosine fall-off
 		const double k = vh / 720.0, topH = 140 * k, botH = 115 * k;
 		const int N = 32;
@@ -2378,10 +2410,13 @@ namespace ocrew
 			if (q.z > 0)
 			{
 				const double fpx = (vh / 2.0) / std::tan((std::max)(0.1, oapiCameraAperture()));
-				const double cx = vw / 2.0 + q.x / q.z * fpx, cy = vh / 2.0 - q.y / q.z * fpx, r = fpx * std::tan(0.07);   // ~4 deg
-				for (int i = 6; i >= 0; --i)
+				const double cx = vw / 2.0 + q.x / q.z * fpx, cy = vh / 2.0 - q.y / q.z * fpx, r = fpx * std::tan(0.035);   // ~2 deg core
+				const int NR = 16;
+				for (int i = NR - 1; i >= 0; --i)   // faint rim first, dense core last; a smooth fall-off over twice the core
 				{
-					const double rr = r * (1 + i * 0.35), a = 0.9 * (std::min)(1.0, 0.4 + boost) * (1 - i / 7.0);
+					const double t = static_cast<double>(i) / (NR - 1), fall = 1 - t * t * (3 - 2 * t);
+					const double rr = r * (1 + 1.5 * t), a = 0.9 * (std::min)(1.0, 0.4 + boost) * fall;
+					if (with(a) < 1.0 / 255) continue;
 					skp->QuickBrush(static_cast<DWORD>(std::lround(with(a) * 255)) << 24);
 					skp->Ellipse(static_cast<int>((cx - rr) * sx), static_cast<int>((cy - rr) * sy), static_cast<int>((cx + rr) * sx), static_cast<int>((cy + rr) * sy));
 				}

@@ -82,6 +82,8 @@ typedef OBJHANDLE (*ocExitTo_t)(int id, const char* vesselName, const VESSELSTAT
 // saves the person's place in the interior frame and moves the attachment in the ship frame.
 // Inside, Orbiter's physics does not act on the person (no ship inertia; the ship gives the felt gravity). Whether one
 // may walk is the ship's: CanWalk = 0 (with a reason) holds her where she stands (takeoff, landing, anamezon drive...).
+struct OcCabin;   // below: the air, the dose and the supplies of a cabin
+struct OcHand;    // below: where a seated person's hand rests or holds
 struct OcInteriorExt {
     int size;                                                    // sizeof(OcInteriorExt): fields may be added at the end
     void (*Origin)(void* ctx, VECTOR3* o);                       // NULL: (0,0,0) - the interior frame is the ship frame
@@ -101,13 +103,61 @@ struct OcInteriorExt {
     // Walls, but in the SHIP frame (not the interior frame). Called every walking step while she is within 3 ship
     // sizes + 200 m of its centre; from = her feet now, to = where she steps (clip it). NULL: she walks through as before
     void (*OuterWalls)(void* ctx, const VECTOR3* from, VECTOR3* to, double radius, double height);
+    // The air, the radiation and the supplies where a person walking inside stands (interior frame), filled into an
+    // OcCabin whose size is set: 1 = given. NULL: a sealed cabin at 101.3 kPa, 21 C, no dose, water and food at hand
+    int (*Cabin)(void* ctx, const VECTOR3* pos, OcCabin* out);
+    // The hands of a person seated in seatId, every frame: where each hand rests or what it holds (OcHand, interior
+    // frame). OrbiterCrew fills size and on = 0 first; the ship fills what it has. A hand whose target changes (another
+    // 'what') reaches there over ~0.3-0.8 s - lifts off, travels, opens and closes round it; with the same 'what' it
+    // follows the target rigidly (a wheel turning, a lever moving, the structure shaking). NULL / on = 0: her own pose
+    void (*SeatHands)(void* ctx, int seatId, int personId, OcHand* left, OcHand* right);
+};
+// A hand target, interior frame. pos: the point where the middle of the palm touches the thing (on the top of a ball, on
+// the surface of a handle facing the palm); palm: unit normal out of the palm, into the thing; fwd: unit direction of
+// the straight fingers (for a handle: across it, the way the fingers wrap); grip: how the fingers close
+enum OcGrip { OC_GRIP_FLAT = 0, OC_GRIP_BALL = 1, OC_GRIP_HANDLE = 2 };
+struct OcHand {
+    int size;                   // sizeof(OcHand) as OrbiterCrew knows it: the ship writes no field beyond it
+    int on;                     // 1: this target; 0: her own seated pose
+    int what;                   // the ship's id of the thing (a change = the hand moves to the new thing)
+    VECTOR3 pos, palm, fwd;
+    int grip;                   // OcGrip
+    double radius;              // OC_GRIP_HANDLE: the handle's radius (pos on its surface). OrbiterCrew turns the hand round
+                                // the handle's axis (palm x fwd) to her forearm; the thumb stays on the side the ship gave
+    double elbowMinY;           // interior y the elbow keeps above (an armrest's top + the forearm); 0: no limit
 };
 typedef void (*ocSetInteriorExt_t)(OBJHANDLE ship, const OcInteriorExt* ext);
+
+// ---- the people aboard without a body: they live on (newer CrewMember.dll; optional) ----
+// The ship keeps them: each step it calls ocStepAboard with its cabin, and OrbiterCrew runs the organism of every person
+// aboard that ship without a body - rest, water and food, the dose behind the hull; in the medical bay, care (the book's
+// medicine: injuries heal in a time that follows their severity). A ship that never calls it keeps them as they are.
+struct OcCabin {
+    int size;                   // sizeof(OcCabin): fields may be added at the end
+    double p, T, ppO2, ppCO2;   // the air: kPa, K, kPa, kPa
+    double doseSvh;             // Sv/h inside, behind the ship's shielding
+    int supplied;               // 1: water and food at hand
+    double medHoursPerUnit;     // the medical bay: hours to heal an injury of 1.0 (a useless limb); 0 = the ship has none
+    double medSvPerDay;         // the acute radiation dose it repairs per day
+    double medMaxSv;            // the highest acute dose it can cure (above it the sickness goes on)
+};
+enum OcPlace { OC_PLACE_STORED = 0, OC_PLACE_CABIN = 1, OC_PLACE_MEDBAY = 2 };   // where a person aboard without a body is
+typedef void (*ocStepAboard_t)(OBJHANDLE ship, double dt, const OcCabin* cabin);   // every step, dt = simdt
+typedef int (*ocSetPlace_t)(int id, int place);     // a person aboard without a body: OcPlace. -> 1 if aboard
+typedef int (*ocPlaceOf_t)(int id);                 // -> OcPlace, -1 if not aboard without a body
 // a person outside walks in (a lift, an airlock): the SAME body is now inside at pos/dir (interior frame); the focus
 // and the camera stay with the person (the user's rule: never the ship's panel on going in or out). -> person id, 0
 typedef int (*ocEnterShip_t)(OBJHANDLE body, OBJHANDLE ship, const VECTOR3* pos, const VECTOR3* dir);
 // the seated person stands up (F in the seat, from the ship): the body gets up and takes the focus and the view
 typedef int (*ocStand_t)(int id);
+// a person aboard without a body gets one already sitting in seatId (Seat() gives the pose, Seated(on = 1) as with F);
+// the focus and the camera go to the person. For a ship's default roster (the commander at the helm). -> 1 if seated
+typedef int (*ocSitAt_t)(int id, OBJHANDLE ship, int seatId);
+// a heavier body (a machine) runs into a person's body: vStrike = its speed at the contact relative to her (global, m/s),
+// normal = from it to her. She is thrown along the ground, falls, is hurt through what she wears. -> 1 if taken
+// a person inside a machine is thrown off it where she is, at vGlobal (global velocity); she falls where she lands. -> 1
+typedef int (*ocEject_t)(int id, const VECTOR3* vGlobal);
+typedef int (*ocImpact_t)(OBJHANDLE body, const VECTOR3* vStrike, double strikerMass, const VECTOR3* point, const VECTOR3* normal);
 // the ship carries a person standing inside (a lift cabin, a moving platform): call every frame while it moves;
 // she stands at pos/dir (interior frame, the floor under her feet) and does not walk; she walks again ~0.3 s after
 // the last call. -> 1 if she is inside this ship
@@ -136,9 +186,13 @@ struct OcApi {
     ocSetInteriorExt_t SetInteriorExt = nullptr;
     ocEnterShip_t EnterShip = nullptr;
     ocStand_t Stand = nullptr;
+    ocSitAt_t SitAt = nullptr;
     ocCarry_t Carry = nullptr;
     ocInteriorPos_t InteriorPos = nullptr;
     ocSuitWorn_t SuitWorn = nullptr;
+    ocStepAboard_t StepAboard = nullptr;
+    ocSetPlace_t SetPlace = nullptr;
+    ocPlaceOf_t PlaceOf = nullptr;
 
     bool Load() {
         if (dll) return true;
@@ -161,9 +215,13 @@ struct OcApi {
         SetInteriorExt = (ocSetInteriorExt_t)GetProcAddress(dll, "ocSetInteriorExt");
         EnterShip = (ocEnterShip_t)GetProcAddress(dll, "ocEnterShip");
         Stand = (ocStand_t)GetProcAddress(dll, "ocStand");
+        SitAt = (ocSitAt_t)GetProcAddress(dll, "ocSitAt");
         Carry = (ocCarry_t)GetProcAddress(dll, "ocCarry");
         InteriorPos = (ocInteriorPos_t)GetProcAddress(dll, "ocInteriorPos");
         SuitWorn = (ocSuitWorn_t)GetProcAddress(dll, "ocSuitWorn");
+        StepAboard = (ocStepAboard_t)GetProcAddress(dll, "ocStepAboard");
+        SetPlace = (ocSetPlace_t)GetProcAddress(dll, "ocSetPlace");
+        PlaceOf = (ocPlaceOf_t)GetProcAddress(dll, "ocPlaceOf");
         if (!(CreatePerson && SetAboard && Board && Disembark && PersonOfBody && Info && SavePerson && LoadPerson)) { Unload(); return false; }
         return true;
     }

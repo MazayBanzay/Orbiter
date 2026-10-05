@@ -28,6 +28,7 @@ public:
         skp->SetTextColor(gdi ? DWORD(((rgb & 0xFFu) << 16) | (rgb & 0xFF00u) | ((rgb >> 16) & 0xFFu)) : DWORD(rgb & 0xFFFFFFu));
         skp->SetBackgroundMode(oapi::Sketchpad::BK_TRANSPARENT);
         if (!gdi && align) { x -= int(std::lround(Width(s, em) * (align == 1 ? 0.5 : 1.0))); align = 0; }   // the D3D9 pad ignores the alignment
+        if (!gdi) y -= int(std::lround(em * 0.830));                     // and the baseline: it draws from the cell's top (GOST's ascent 1700 / 2048 em)
         skp->SetTextAlign(align == 1 ? oapi::Sketchpad::CENTER : align == 2 ? oapi::Sketchpad::RIGHT : oapi::Sketchpad::LEFT, oapi::Sketchpad::BASELINE);
         std::wstring b = s;
         skp->TextW(x, y, &b[0], int(b.size()));

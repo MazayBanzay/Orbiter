@@ -632,7 +632,7 @@ bool Tantra::RedrawLower(int id, SURFHANDLE s) {
     char key[256], buf[128];
     const int* r = AreaRect(id);
     const tantra::CarriagePose& cp = carriage_.Pose();
-    static const char* kPh[] = {"лежит на лопастях и кенгуру", "подъём на лопастях", "цапфы под ЦМ, кенгуру в карман",
+    static const char* kPh[] = {"лежит на лопастях и передней опоре", "подъём на лопастях", "цапфы под ЦМ, передняя опора в карман",
                                 "поворот вокруг цапф", "кормовые ноги выходят", "нагрузка на корму",
                                 "лопасти убираются", "стоит на корме"};
     switch (id) {
@@ -719,7 +719,7 @@ bool Tantra::RedrawLower(int id, SURFHANDLE s) {
             const int dy = 21, y0 = r[1] + 4;
             std::snprintf(buf, sizeof buf, "вес        %8.1f МН", W / 1e6);
             PanelText(s, r[0] + 8, y0, buf, FONT_WHITE);
-            std::snprintf(buf, sizeof buf, "лопасть x2 %7.1f МН  кенгуру %5.1f", ld.columnEach / 1e6, ld.kangaroo / 1e6);
+            std::snprintf(buf, sizeof buf, "лопасть x2 %7.1f МН  пер. опора %5.1f", ld.columnEach / 1e6, ld.kangaroo / 1e6);
             PanelText(s, r[0] + 8, y0 + dy, buf, FONT_AMBER);
             std::snprintf(buf, sizeof buf, "%s %8.1f МН", carriage_.Port() ? "стол      " : "корм.ноги ", ld.legs / 1e6);
             PanelText(s, r[0] + 8, y0 + 2 * dy, buf, FONT_AMBER);

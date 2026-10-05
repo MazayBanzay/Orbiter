@@ -20,8 +20,8 @@ set LFLAGS=/LIBPATH:"%SDK%\lib" orbiter.lib Orbitersdk.lib "%SDK%\XRSound\XRSoun
 
 set A=%ROOT%orbiter2016
 cl %CFLAGS% /Fo"%OUT%\\" /Fe"%OUT%\Tantra.dll" ^
- "%ROOT%core\Ignition.cpp" "%ROOT%core\Drive.cpp" "%ROOT%core\ExhaustModel.cpp" "%ROOT%core\Carriage.cpp" "%ROOT%core\Legs.cpp" "%ROOT%core\Aero.cpp" "%ROOT%core\Damage.cpp" "%ROOT%core\Impact.cpp" "%ROOT%core\Foot.cpp" "%ROOT%core\Radiation.cpp" "%ROOT%core\Plant.cpp" ^
- "%A%\Tantra.cpp" "%A%\TantraPanel.cpp" "%A%\TantraExhaust.cpp" "%A%\TantraSafety.cpp" "%A%\TantraGear.cpp" "%A%\TantraPort.cpp" "%A%\TantraCrew.cpp" "%A%\TantraLift.cpp" "%A%\TantraOuter.cpp" "%A%\TantraWalk.cpp" "%A%\TantraScreen.cpp" "%A%\TantraInterior.cpp" "%A%\TantraDisplays.cpp" "%A%\TantraPlantScreen.cpp" "%A%\TantraMechScreen.cpp" "%A%\TantraDisplaysMech.cpp" "%A%\TantraEngineScreen.cpp" "%A%\TantraDisplaysEngines.cpp" "%A%\TantraDisplaysPanels.cpp" "%A%\TantraConsoles.cpp" "%SDK%\samples\ShipView\ViewScreen.cpp" "%SDK%\samples\ShipView\ShipMfd.cpp" ^
+ "%ROOT%core\Ignition.cpp" "%ROOT%core\Drive.cpp" "%ROOT%core\ExhaustModel.cpp" "%ROOT%core\Carriage.cpp" "%ROOT%core\Legs.cpp" "%ROOT%core\Aero.cpp" "%ROOT%core\Damage.cpp" "%ROOT%core\Impact.cpp" "%ROOT%core\Foot.cpp" "%ROOT%core\Radiation.cpp" "%ROOT%core\Plant.cpp" "%ROOT%core\TantraCore.cpp" ^
+ "%A%\Tantra.cpp" "%A%\TantraPanel.cpp" "%A%\TantraExhaust.cpp" "%A%\TantraSafety.cpp" "%A%\TantraGear.cpp" "%A%\TantraPort.cpp" "%A%\TantraCrew.cpp" "%A%\TantraLift.cpp" "%A%\TantraOuter.cpp" "%A%\TantraWalk.cpp" "%A%\TantraScreen.cpp" "%A%\TantraInterior.cpp" "%A%\TantraDisplays.cpp" "%A%\TantraPlantScreen.cpp" "%A%\TantraMechScreen.cpp" "%A%\TantraDisplaysMech.cpp" "%A%\TantraEngineScreen.cpp" "%A%\TantraDisplaysEngines.cpp" "%A%\TantraDisplaysPanels.cpp" "%A%\TantraConsoles.cpp" "%A%\TantraSeatCmd.cpp" "%A%\TantraYoke.cpp" "%A%\TantraParamsScreen.cpp" "%A%\TantraVectoring.cpp" "%A%\TantraThermalScreen.cpp" "%A%\TantraGuidance.cpp" "%A%\TantraAutopilotScreen.cpp" "%A%\TantraDisplaysAutopilot.cpp" "%A%\TantraCoreStep.cpp" "%A%\TantraDisplaysCore.cpp" "%A%\TantraDataPages.cpp" "%A%\TantraFrontScreen.cpp" "%SDK%\samples\ShipView\ViewScreen.cpp" "%SDK%\samples\ShipView\ShipMfd.cpp" ^
  /link %LFLAGS%
 if errorlevel 1 (echo BUILD FAILED & exit /b 1)
 
@@ -30,7 +30,13 @@ cl /nologo /O2 /MD /EHsc /std:c++17 /W3 /LD /D_CRT_SECURE_NO_WARNINGS /Zc:strict
  "%A%\TantraTrap.cpp" /link /LIBPATH:"%SDK%\lib" orbiter.lib Orbitersdk.lib kernel32.lib user32.lib
 if errorlevel 1 (echo BUILD FAILED: TantraTrap & exit /b 1)
 
+rem Debris pieces as rigid bodies on the ground (TantraDebris.dll).
+cl /nologo /O2 /MD /EHsc /std:c++17 /W3 /LD /D_CRT_SECURE_NO_WARNINGS /Zc:strictStrings- /I"%SDK%\include" /Fo"%OUT%\\" /Fe"%OUT%\TantraDebris.dll" ^
+ "%A%\TantraDebris.cpp" /link /LIBPATH:"%SDK%\lib" orbiter.lib Orbitersdk.lib kernel32.lib user32.lib
+if errorlevel 1 (echo BUILD FAILED: TantraDebris & exit /b 1)
+
 if /i "%1"=="noinstall" (echo Built to build\ only - not installed & endlocal & exit /b 0)
+copy /y "%OUT%\TantraDebris.dll" "%ORB%\Modules\TantraDebris.dll" >nul
 copy /y "%OUT%\TantraTrap.dll" "%ORB%\Modules\TantraTrap.dll" >nul
 copy /y "%OUT%\Tantra.dll" "%ORB%\Modules\Tantra.dll" >nul
 if errorlevel 1 (echo INSTALL FAILED: Modules\Tantra.dll is in use - close Orbiter and run build.bat again & exit /b 1)

@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Экран Данные v1</title>
+<style>
+:root{--bg:#080b0e;--panel:#0d1316;--card:#111a1e;--line:#1e3530;--ink:#d8e2ea;--mute:#8d9fab;--acc:#7fe0d0;--acc2:#2c6a54;--good:#7ee59a;--warn:#ffc46a;--bad:#ff7a6b}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.45 system-ui,"Segoe UI",Roboto,sans-serif;overflow-x:hidden}
+#app{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,440px);height:100%}
+#viewWrap{position:relative;min-width:0;min-height:0;overflow:hidden;background:#05080a}
+#view{position:absolute;inset:0;touch-action:none}
+#view canvas{display:block}
+#flat{position:absolute;inset:0;overflow:auto;padding:10px 12px 20px;display:none;background:#070a0c}
+#flat h3{font-size:12px;font-weight:600;color:var(--mute);margin:10px 0 4px;letter-spacing:.04em}
+#flat canvas{display:block;width:100%;height:auto;border:1px solid #1e3530;background:#061014;image-rendering:auto}
+#flat .walls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#hover{position:sticky;top:0;z-index:2;background:rgba(7,10,12,.92);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:12px;color:var(--ink);min-height:24px;font-variant-numeric:tabular-nums}
+#load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#4f8f86;font-size:15px;padding:20px;text-align:center}
+#load.err{color:var(--bad)}
+#panel{overflow:auto;background:var(--panel);border-left:1px solid var(--line);padding:12px 14px 28px}
+h1{font-size:15px;margin:0 0 4px;color:var(--acc)}
+h2{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:16px 0 6px;font-weight:600}
+.note{color:var(--mute);font-size:12px;margin:4px 0}
+.row{display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap}
+.row>.k{width:92px;flex:none;color:var(--mute);font-size:12px}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--acc2);border-radius:7px;overflow:hidden}
+.seg button{font:inherit;font-size:12px;padding:5px 9px;border:0;border-right:1px solid var(--acc2);background:#0f1a18;color:var(--acc);cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--acc2);color:#effffb}
+.seg button:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
+.seg.big button{font-size:13px;padding:7px 12px;font-weight:600}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+th,td{padding:4px 5px;border-bottom:1px solid #1a2a27;text-align:left;vertical-align:top}
+th{color:var(--mute);font-weight:500;font-size:11px}
+td.n,th.n{text-align:right;white-space:nowrap}
+.legend{display:grid;grid-template-columns:auto 1fr;gap:3px 8px;align-items:center;font-size:12px;color:var(--mute)}
+.legend i{display:inline-block;width:22px;height:12px;border-radius:2px}
+.rec{background:#0f1d18;border:1px solid #2c6a54;border-radius:8px;padding:8px 12px;margin-top:14px}
+.rec h2{margin-top:4px;color:var(--acc)}
+ol.chg{margin:6px 0 4px 18px;padding:0} ol.chg li{margin:5px 0}
+.warn{color:var(--warn)} .bad{color:var(--bad)} .good{color:var(--good)}
+@media (max-width:820px){
+  html,body{height:auto}
+  #app{display:block;height:auto}
+  #viewWrap{height:62vh;min-height:300px}
+  #panel{border-left:0;border-top:1px solid var(--line);overflow:visible;padding:12px 16px 28px}
+  #flat .walls{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="viewWrap">
+    <div id="view"></div>
+    <div id="flat">
+      <div id="hover">Наведите на текстуру — азимут, возвышение, расстояние и угловой размер пикселя из глаза командира.</div>
+      <h3>ЗОНА 0 — ПЕРЕДНЯЯ ДУГА, 1621 × 485</h3>
+      <div id="slot0"></div>
+      <div class="walls">
+        <div><h3>ЗОНА 1 — ЛЕВАЯ СТЕНА (бортинженер), 501 × 360 · вперёд → вправо</h3><div id="slot1"></div></div>
+        <div><h3>ЗОНА 2 — ПРАВАЯ СТЕНА (астронавигатор), 501 × 360 · вперёд ← влево</h3><div id="slot2"></div></div>
+      </div>
+    </div>
+    <div id="load">Загружаю экран…</div>
+  </div>
+  <aside id="panel">
+    <h1>Экран ДАННЫЕ — мокап на настоящей геометрии экрана</h1>
+    <p class="note">Три зоны большого экрана из установленного TantraVC.msh с их UV (проекция из точки проектирования). Страницы нарисованы на холстах размера игры и натянуты на меш. Глаз — командира в кресле у стола.</p>
+
+    <h2>Раскладка</h2>
+    <div class="row"><div class="seg big" id="lay"><button data-v="now">СЕЙЧАС (игра)</button><button data-v="A">А ★ РЕКОМЕНДАЦИЯ</button><button data-v="B">Б ТОЛЬКО ЦИФРЫ</button></div></div>
+    <p class="note" id="layNote"></p>
+
+    <h2>Вид</h2>
+    <div class="row"><div class="seg" id="views"><button data-v="eye">ИЗ ГЛАЗА КОМАНДИРА</button><button data-v="top">СВЕРХУ</button><button data-v="flat">ТЕКСТУРЫ</button></div></div>
+    <div class="row" id="lookRow"><span class="k">смотреть</span><div class="seg" id="look"><button data-v="-80">ЛЕВАЯ СТЕНА</button><button data-v="0">ВПЕРЁД</button><button data-v="80">ПРАВАЯ СТЕНА</button></div></div>
+    <p class="note" id="viewHint"></p>
+    <div class="row"><span class="k">зоны видимости</span><div class="seg" id="ovl"><button data-v="0">СКРЫТЬ</button><button data-v="1">ПОКАЗАТЬ</button></div></div>
+    <div class="legend">
+      <i style="outline:2px solid #3fe08a;outline-offset:-2px"></i><span>удобно: возвышение 0…16°, азимут ±30° (стены — до 16°)</span>
+      <i style="background:rgba(255,220,80,.30)"></i><span>можно: до 25° вверх, на дуге ±30…40° (буквы сжаты до 0,6)</span>
+      <i style="background:rgba(255,120,60,.55)"></i><span>плохо: выше 25° (свод над головой), на дуге дальше ±40° (сжато в 2–3 раза)</span>
+      <i style="background:rgba(255,40,40,.85)"></i><span>закрыто стеклом стола, рамкой, креслом экипажа</span>
+      <i style="background:repeating-linear-gradient(45deg,#2a3236 0 3px,#11171a 3px 6px)"></i><span>не на меше — этой части текстуры на экране нет</span>
+    </div>
+
+    <h2>Кресла и полёт</h2>
+    <div class="row"><span class="k">кресло командира</span><div class="seg" id="seat"><button data-v="m20">−0,20 (низко)</button><button data-v="m10">−0,10 (обычно)</button><button data-v="p05">+0,05</button></div></div>
+    <div class="row"><span class="k">кресла экипажа</span><div class="seg" id="crew"><button data-v="rest">ПУСТЫ (отъехали)</button><button data-v="cons">У ПУЛЬТОВ</button></div></div>
+    <div class="row"><span class="k">полёт</span><div class="seg" id="mode"><button data-v="atmo">АТМОСФЕРА</button><button data-v="orbit">ОРБИТА</button></div></div>
+    <div class="row"><span class="k">тревога</span><div class="seg" id="alert"><button data-v="0">НЕТ</button><button data-v="1">ЕСТЬ</button></div></div>
+    <div class="row"><span class="k">шрифт</span><span id="fontState" class="note"></span></div>
+
+    <h2>Что видно из кресла (по меш-у, шаг 10 px)</h2>
+    <div class="tw"><table id="tVis"></table></div>
+    <p class="note" id="nVis"></p>
+
+    <div class="rec">
+      <h2>Что изменилось против игры и почему</h2>
+      <ol class="chg">
+        <li><b>Найдено:</b> из глаза командира текстура дуги — почти та же перспектива, что из точки проектирования (глаз всего на 0,45 м впереди). Поэтому край текстуры виден <b>сжатым</b>: на ±40° буквы в 0,6 ширины, на ±55° — в 0,35 и под углом. Правый блок игры (x 1190–1596) лежал на 36…58° — отсюда «на углу под крутым углом».</li>
+        <li><b>Найдено:</b> верхние ⅔ дуги (строки выше ~205) — свод над головой, 25…43° вверх; блоки игры сверху (70–190) были там. Низ ниже ~420 закрывает переднее стекло при низком кресле; полосы у верха по центру и низ 30 px — вне меша.</li>
+        <li><b>Горизонт</b> — окно 340 × 210 по центру (±19,5°), низ на 416 (выше кромки стекла при любом кресле), 7 px/° как в игре. Курс — полосой в верху окна, а не над ним (там было бы 25–30° вверх).</li>
+        <li><b>Скорость и высота</b> — по три блока у окна, выровнены к нему (цифры у окна, где меньше сжатие), главная величина — на линии центра горизонта, крупно 50 px; второстепенные 34 px; подписи 20–22 px. Ничего дальше ±40° и выше 25°.</li>
+        <li><b>Тревога</b> — полосой над окном (заметна краем глаза); под окном места нет — стекло.</li>
+        <li><b>Стены:</b> верхние углы и края ~30 px — вне меша (значения у правого края игры обрезались именно так), низ 15 px — вне меша; задние ~100 px закрывает кресло экипажа у пульта. Всё сдвинуто к переднему краю стены и в строки 60–315; значения не у краёв; ядро — 2 × 7 строк шагом 32 px; навигация — 2 × 3 блока «подпись над значением».</li>
+        <li><b>Знаки:</b> минус, тире, стрелки рисуются линиями (в шрифте ГОСТ их нет); «°» в шрифте есть. «—» для «нет данных» — тоже линией.</li>
+      </ol>
+      <p class="note">Б отличается только передней дугой: без горизонта, в три колонки цифр (курс, тангаж, крен в середине) — буквально «только данные». Стены в А и Б одинаковые.</p>
+    </div>
+    <p class="note">Источник геометрии: <span id="src"></span>. Если меш изменится (стол переносят на 0,25 м вперёд) — перезапустить экспортёр, страница пересчитает зоны сама.</p>
+  </aside>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="uscreen.js"></script>
+<script>
+"use strict";
+(() => {
+const $ = id => document.getElementById(id);
+const fail = m => { const l = $("load"); l.textContent = m; l.classList.add("err"); l.style.display = "flex"; };
+if (!window.THREE) { fail("Не загрузился three.js r128 (cdnjs) — нужен интернет."); return; }
+if (typeof USCREEN === "undefined") { fail("Не найден uscreen.js рядом со страницей."); return; }
+const U = USCREEN;
+$("src").textContent = U.source;
+const D2R = Math.PI / 180;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function b64buf(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; }
+const f32 = s => new Float32Array(b64buf(s)), u16 = s => new Uint16Array(b64buf(s)), i16 = s => new Int16Array(b64buf(s)), i8 = s => new Int8Array(b64buf(s));
+
+// ================= the zones' texel grids (what the seated commander sees) =================
+const Z = U.zones.map(z => {
+  const o = {W: z.tex[0], H: z.tex[1], step: z.step, nu: z.nu, nv: z.nv, on: Uint8Array.from(z.on, c => c === "1" ? 1 : 0), occ: {}};
+  for (const k of ["az", "el", "dist", "vang", "amu", "amv", "y"]) { const a = i16(z[k]), s = z.scale[k]; o[k] = Float32Array.from(a, v => v === -32768 ? NaN : v / s); }
+  for (const k in z.occ) o.occ[k] = i8(z.occ[k]);
+  return o;
+});
+const OCCL = U.meta.occl, isCrew = gi => gi >= 0 && /^bridge_seat[12]/.test(OCCL[gi]);
+function hiddenAt(z, i, st) {
+  const a = z.occ[st.seat + "_rest"][i];
+  if (a >= 0) return OCCL[a];
+  if (st.crew === "cons") { const c = z.occ["m10_cons"][i]; if (isCrew(c)) return OCCL[c]; }
+  return null;
+}
+// class: 0 off-mesh, 1 hidden, 2 poor, 3 fair, 4 good
+function cellClass(zi, i, st) {
+  const z = Z[zi];
+  if (!z.on[i]) return 0;
+  if (hiddenAt(z, i, st)) return 1;
+  const el = z.el[i], az = Math.abs(z.az[i]);
+  if (el > 25 || (zi === 0 && az > 40)) return 2;
+  if (el > 16 || (zi === 0 && az > 30)) return 3;
+  return 4;
+}
+
+// ================= text: GOST type A (as refine/front_v3.html) =================
+let g = null;                                     // the current 2D context
+const FAM = '"GOST type A", "GOST 2.304 type A", ISOCPEUR, "Arial Narrow", sans-serif';
+const fnt = (size, w) => `${w >= 600 ? 700 : 400} ${size}px ${FAM}`;
+const SPECIAL = "−–—×÷²³→←↑↓▶◀▲▼Δ";
+const CAP = {};
+function capH(size, w = 700) { const k = size + "/" + w; if (!(k in CAP)) { g.font = fnt(size, w); CAP[k] = g.measureText("Н").actualBoundingBoxAscent || size * 0.7; } return CAP[k]; }
+function segs(s) { const out = []; let cur = ""; for (const ch of s) { if (SPECIAL.includes(ch)) { if (cur) out.push(cur); cur = ""; out.push({c: ch}); } else cur += ch; } if (cur) out.push(cur); return out; }
+function spW(ch, size, w) {
+  if (ch === "²" || ch === "³") { g.font = fnt(Math.round(size * 0.62), w); return g.measureText("2").width + size * 0.06; }
+  return {"—": 0.8, "–": 0.55, "−": 0.5, "×": 0.55, "÷": 0.55, "→": 0.9, "←": 0.9, "↑": 0.5, "↓": 0.5, "▶": 0.62, "◀": 0.62, "▲": 0.7, "▼": 0.7, "Δ": 0.62}[ch] * size;
+}
+function line(x0, y0, x1, y1, col, lw = 1) { g.strokeStyle = col; g.lineWidth = lw; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); }
+function poly(pts) { g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); }
+function disc(x, y, r, col) { g.fillStyle = col; g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill(); }
+function ring(x, y, r, col, lw) { g.strokeStyle = col; g.lineWidth = lw; g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.stroke(); }
+function fill(x, y, w, h, col) { g.fillStyle = col; g.fillRect(x, y, w, h); }
+function stroke(x, y, w, h, col, lw) { g.strokeStyle = col; g.lineWidth = lw; g.strokeRect(x + lw / 2, y + lw / 2, w - lw, h - lw); }
+function spDraw(ch, x, y, size, w, col) {
+  const c = capH(size, w), lw = Math.max(1.5, size * (w >= 600 ? 0.095 : 0.07)), ww = spW(ch, size, w), m = y - c * 0.5;
+  g.fillStyle = col;
+  if (ch === "²" || ch === "³") { g.font = fnt(Math.round(size * 0.62), w); g.fillText(ch === "²" ? "2" : "3", x + size * 0.03, y - c * 0.45); return; }
+  if ("−–—".includes(ch)) { line(x + ww * 0.12, m, x + ww * 0.88, m, col, lw); return; }
+  if (ch === "×") { const r = c * 0.27, cx = x + ww / 2; line(cx - r, m - r, cx + r, m + r, col, lw); line(cx - r, m + r, cx + r, m - r, col, lw); return; }
+  if (ch === "÷") { line(x + ww * 0.15, m, x + ww * 0.85, m, col, lw); disc(x + ww / 2, m - c * 0.3, lw * 0.8, col); disc(x + ww / 2, m + c * 0.3, lw * 0.8, col); return; }
+  if (ch === "→" || ch === "←") { const d = ch === "→" ? 1 : -1, x0 = x + ww * 0.08, x1 = x + ww * 0.92, tip = d > 0 ? x1 : x0, hh = c * 0.32;
+    line(d > 0 ? x0 : x0 + hh, m, d > 0 ? x1 - hh : x1, m, col, lw); poly([[tip, m], [tip - d * hh * 1.5, m - hh], [tip - d * hh * 1.5, m + hh]]); g.fill(); return; }
+  if (ch === "↑" || ch === "↓") { const d = ch === "↑" ? -1 : 1, cx = x + ww / 2, tip = d < 0 ? y - c : y, hh = c * 0.3;
+    line(cx, d < 0 ? y : y - c, cx, tip - d * hh, col, lw); poly([[cx, tip], [cx - hh, tip - d * hh * 1.5], [cx + hh, tip - d * hh * 1.5]]); g.fill(); return; }
+  if (ch === "▲") { poly([[x + ww * 0.05, y], [x + ww / 2, y - c], [x + ww * 0.95, y]]); g.fill(); return; }
+  if (ch === "▼") { poly([[x + ww * 0.05, y - c], [x + ww * 0.95, y - c], [x + ww / 2, y]]); g.fill(); return; }
+  if (ch === "▶") { poly([[x + ww * 0.15, y - c], [x + ww * 0.9, y - c / 2], [x + ww * 0.15, y]]); g.fill(); return; }
+  if (ch === "◀") { poly([[x + ww * 0.85, y - c], [x + ww * 0.1, y - c / 2], [x + ww * 0.85, y]]); g.fill(); return; }
+  if (ch === "Δ") { g.strokeStyle = col; g.lineWidth = lw; poly([[x + ww * 0.08, y], [x + ww / 2, y - c], [x + ww * 0.92, y]]); g.stroke(); }
+}
+function TW(s, size, w = 400) { let tw = 0; for (const p of segs(String(s))) { if (typeof p === "string") { g.font = fnt(size, w); tw += g.measureText(p).width; } else tw += spW(p.c, size, w); } return tw; }
+function T(s, x, y, col, size = 20, al = "left", w = 400) {
+  s = String(s); const tw = TW(s, size, w); let cx = al === "right" ? x - tw : al === "center" ? x - tw / 2 : x;
+  g.textAlign = "left"; g.textBaseline = "alphabetic";
+  for (const p of segs(s)) { if (typeof p === "string") { g.font = fnt(size, w); g.fillStyle = col; g.fillText(p, cx, y); cx += g.measureText(p).width; } else { spDraw(p.c, cx, y, size, w, col); cx += spW(p.c, size, w); } }
+  return tw;
+}
+function fitSize(s, mw, size, w = 400, min = 17) { while (size > min && TW(s, size, w) > mw) size--; return size; }
+// value + unit on one baseline; al: "left" from x, "right" ending at x, "center"
+function VU(val, unit, x, y, col, vs, us, al, ucol) {
+  const gap = unit && unit !== "°" ? Math.round(us * 0.3) : 0, wv = TW(val, vs, 700), wu = unit ? TW(unit, us, 400) : 0, tw = wv + gap + wu;
+  const x0 = al === "right" ? x - tw : al === "center" ? x - tw / 2 : x;
+  T(val, x0, y, col, vs, "left", 700); if (unit) T(unit, x0 + wv + gap, y, ucol, us, "left", 400);
+  return tw;
+}
+// numbers: comma, groups of three from 10 000, a real minus
+function fmt(v, d = 0) {
+  if (v == null || !isFinite(v)) return "—";
+  const s = Math.abs(v).toFixed(d), neg = v < 0 && +s !== 0;
+  const [i, f] = s.split("."), ii = i.length > 4 ? i.replace(/\B(?=(\d{3})+(?!\d))/g, " ") : i;
+  return (neg ? "−" : "") + ii + (f ? "," + f : "");
+}
+const fmtS = (v, d = 0) => (v > 0 && +v.toFixed(d) !== 0 ? "+" : "") + fmt(v, d);
+
+// ================= the game's palette (TantraDataPages.cpp) =================
+const C = {bg: "#061014", main: "#b8ecff", dim: "#6f9fb8", acc: "#ffc46a", red: "#ff3b30", white: "#e6f6ff", green: "#4dd88a", sky: "#123a5c", ground: "#4a3320", line: "#2a4a5c",
+  redBg: "#3a0a08", accBg: "#3a2a08"};
+const stCol = st => st === 2 ? C.green : st === 1 ? C.main : st === 3 ? C.acc : st >= 4 ? C.red : C.dim;
+
+// ================= demo flight values =================
+const DEMO = {
+  atmo: {atmo: true, pitch: 4.5, bank: -12, hdg: 274, aoa: 3.2, slip: 0.8, air: true, tas: 312, mach: 0.94, q: 18.4, alt: 4230, vs: -12.4, g: 1.12,
+         body: "Земля", lat: 51.2340, lng: -0.1231, gs: 318, pe: -6012.3, ap: 4.4, inc: 51.64, vrel: 0.312, T: NaN},
+  orbit: {atmo: false, pitch: -2.0, bank: 0.0, hdg: 87, aoa: 0, slip: 0, air: false, vrel: 7.662, inc: 51.64, T: 92.7, alt: 410e3, pe: 398.2, ap: 421.6, g: 0.00,
+          body: "Земля", lat: -23.4512, lng: 112.0874, gs: 7254, vs: 0.4}
+};
+const CORE = {thrust: 412e6, nodes: [
+  ["ВЭУ", 2, "1,84 ГВт"], ["НАКОПИТЕЛЬ", 2, "86 %"], ["ТОПЛИВО", 2, "3,42 кт"], ["ПОДАЧА", 2, "120 Гц"], ["ТРИГГЕР", 1, "1,20 ТВт"], ["ОБМОТКА", 2, "12,4 Тл"],
+  ["КРИОГЕНИКА", 3, "21,7 К"], ["РАБ. МАССА", 2, "2,4 т/с"], ["НАСОСЫ", 2, "98 %"], ["РУБАШКА", 2, "612 К"], ["ЧАША", 2, "100 %"], ["КОРМА", 1, "344 К"], ["РАДИАТОРЫ", 2, "640 МВт"]]};
+const ALERT = {level: 2, text: "ПЕРЕГРЕВ ОБМОТКИ — СНИЗИТЬ ТЯГУ"};
+
+// ================= the synthetic horizon (as TantraDataPages.cpp, clipped to its window) =================
+function adi(x0, y0, x1, y1, cx, cy, ppd, f, opt) {
+  const k = opt.k || 1;
+  const sb = -Math.sin(f.bank * D2R), cb = Math.cos(f.bank * D2R);
+  const ox = cx + sb * f.pitch * ppd, oy = cy + cb * f.pitch * ppd;
+  g.save(); g.beginPath(); g.rect(x0, y0, x1 - x0, y1 - y0); g.clip();
+  fill(x0, y0, x1 - x0, y1 - y0, C.sky);
+  const L = 4 * (x1 - x0);   // the ground: a big quad under the horizon line
+  g.fillStyle = C.ground; poly([[ox - cb * L, oy + sb * L], [ox + cb * L, oy - sb * L], [ox + cb * L + sb * L, oy - sb * L + cb * L], [ox - cb * L + sb * L, oy + sb * L + cb * L]]); g.fill();
+  for (let p = -80; p <= 80; p += opt.step || 10) {
+    if (p === 0) continue;
+    const d = (f.pitch - p) * ppd, rx = cx + sb * d, ry = cy + cb * d, half = (p % 20 ? opt.half[0] : opt.half[1]) * k;
+    if (rx < x0 || rx > x1 || ry < y0 + 4 || ry > y1 - 4) continue;
+    const ax = rx - cb * half, ay = ry + sb * half, bx = rx + cb * half, by = ry - sb * half;
+    if (p > 0) line(ax, ay, bx, by, C.white, 3 * k);
+    else { g.setLineDash([16 * k, 10 * k]); line(ax, ay, bx, by, C.white, 3 * k); g.setLineDash([]); }
+    if (p % 10 === 0) T(String(Math.abs(p)), bx + cb * opt.lab * 0.55, by - sb * opt.lab * 0.55 + opt.lab * 0.38, C.white, opt.lab, "left", 400);
+  }
+  line(ox - cb * L, oy + sb * L, ox + cb * L, oy - sb * L, C.white, 4 * k);
+  if (f.air) {   // the flight path marker
+    const fx = cx + clamp(f.slip * ppd, -200, 200), fy = cy + clamp(f.aoa * ppd, -200, 200), r = 14 * opt.fpm;
+    ring(fx, fy, r, C.green, 3 * k); line(fx - 2.4 * r, fy, fx - r, fy, C.green, 3 * k); line(fx + r, fy, fx + 2.4 * r, fy, C.green, 3 * k); line(fx, fy - r, fx, fy - 2 * r, C.green, 3 * k);
+  }
+  const s = opt.w;   // the ship: a fixed W
+  g.lineCap = "round"; g.lineJoin = "round"; g.strokeStyle = C.acc; g.lineWidth = 6 * k * (opt.wl || 1); g.beginPath();
+  g.moveTo(cx - 90 * s, cy); g.lineTo(cx - 34 * s, cy); g.lineTo(cx - 17 * s, cy + 17 * s); g.lineTo(cx, cy); g.lineTo(cx + 17 * s, cy + 17 * s); g.lineTo(cx + 34 * s, cy); g.lineTo(cx + 90 * s, cy); g.stroke();
+  g.lineCap = "butt"; g.lineJoin = "miter";
+  g.restore();
+  stroke(x0, y0, x1 - x0, y1 - y0, C.line, 3 * k);
+}
+// the heading tape: ticks every 5 deg, numbers every 10; the current heading in a box
+function hdgTape(x0, x1, yb, ytop, cx, hdg, ppdH, num, box) {
+  g.save(); g.beginPath(); g.rect(x0, ytop, x1 - x0, yb - ytop + 2); g.clip();
+  for (let d = Math.floor(hdg - 40); d <= Math.ceil(hdg + 40); d++) {
+    if (d % 5) continue;
+    const x = cx + (d - hdg) * ppdH;
+    if (x < x0 + 2 || x > x1 - 2) continue;
+    line(x, yb, x, yb - (d % 10 ? 8 : 14), C.dim, 2);
+    if (d % 10 === 0 && Math.abs(x - cx) > box.w / 2 + TW("000", num, 400) / 2 + 6) T(String(((d % 360) + 360) % 360).padStart(3, "0"), x, yb - 18, C.dim, num, "center");
+  }
+  g.restore();
+  fill(cx - box.w / 2, box.y, box.w, box.h, C.bg); stroke(cx - box.w / 2, box.y, box.w, box.h, C.acc, 3);
+  T(String((Math.round(hdg) % 360 + 360) % 360).padStart(3, "0"), cx, box.y + box.h / 2 + capH(box.s, 400) / 2, C.acc, box.s, "center");
+}
+
+// ================= ЗОНА 0 =================
+function frontData(f) {   // the game's choice of the six values (atmosphere / space)
+  const alt = f.alt;
+  const L = f.atmo ? [["ВОЗДУШНАЯ СКОРОСТЬ", fmt(f.tas, 0), "м/с", C.main], ["ЧИСЛО МАХА", fmt(f.mach, 2), "", C.main], ["СКОРОСТНОЙ НАПОР", fmt(f.q, 1), "кПа", f.q > 15 ? C.acc : C.main]]
+                   : [["СКОРОСТЬ ОТНОС. ТЕЛА", fmt(f.vrel, 3), "км/с", C.main], ["НАКЛОНЕНИЕ", fmt(f.inc, 2), "°", C.main], ["ПЕРИОД", fmt(f.T, 1), "мин", C.main]];
+  const gcol = f.g > 3 ? C.red : f.g > 2 ? C.acc : C.main;
+  const R = (f.atmo || alt < 100e3) ? [["ВЫСОТА НАД ГРУНТОМ", alt < 10e3 ? fmt(alt, 0) : fmt(alt / 1e3, 2), alt < 10e3 ? "м" : "км", alt < 300 ? C.acc : C.main], ["ВЕРТИКАЛЬНАЯ СКОРОСТЬ", fmt(f.vs, 1), "м/с", C.main], ["ПЕРЕГРУЗКА", fmt(f.g, 2), "g", gcol]]
+                   : [["ПЕРИЦЕНТР", fmt(f.pe, 1), "км", f.pe < 100 ? C.acc : C.main], ["АПОЦЕНТР", fmt(f.ap, 1), "км", C.main], ["ПЕРЕГРУЗКА", fmt(f.g, 2), "g", gcol]];
+  return {L, R};
+}
+function front_now(W, H, f, al) {   // the in-game page, as it is (k = 1)
+  const k = H / 485, hx0 = W * 0.28, hx1 = W * 0.72, hy0 = 64 * k, hy1 = H - 70 * k, cx = (hx0 + hx1) / 2, cy = (hy0 + hy1) / 2, ppd = (hy1 - hy0) / 50;
+  adi(hx0, hy0, hx1, hy1, cx, cy, ppd, f, {k, half: [70, 110], lab: 26, fpm: k, w: k});
+  fill(hx0, 4 * k, hx1 - hx0, hy0 - 12 * k, C.bg);
+  hdgTape(hx0, hx1, hy0 - 8 * k, 4, cx, f.hdg, (hx1 - hx0) / 60, 22, {w: 112, h: 44, y: 6, s: 34});
+  const d = frontData(f);
+  const block = (x, y, wd, b) => { T(b[0], x + wd - 10, y, C.dim, 24, "right"); T(b[1], x + wd - 80, y + 64, b[3], 60, "right"); if (b[2]) T(b[2], x + wd - 10, y + 64, C.dim, 24, "right"); };
+  const lw = W * 0.28 - 48;
+  d.L.forEach((b, i) => block(24, (70 + 120 * i) * k, lw, b));
+  d.R.forEach((b, i) => block(W * 0.72 + 24, (70 + 120 * i) * k, lw, b));
+  if (al) { fill(hx0, hy1 + 10, hx1 - hx0, 50, C.redBg); T(ALERT.text, cx, hy1 + 46, C.red, 30, "center"); }
+}
+// А and Б: everything inside el <= 25 deg, |az| <= 40 deg, the bottom at 416 (over the front glass's edge at any seat height)
+const FA = {adi: [640, 206, 980, 416], tape: 40, cx: 810, cy: 331, ppd: 7, lR: 624, lL: 405, rL: 996, rR: 1215, rows: [206, 274, 358], alert: [525, 160, 1095, 198]};
+function flank(side, y0, prim, b, xIn, xOut) {   // label over value, aligned to the inner edge (toward the centre)
+  const al = side < 0 ? "right" : "left", mw = Math.abs(xIn - xOut);
+  const ls = fitSize(b[0], mw, prim ? 22 : 20, 400, 17);
+  T(b[0], xIn, y0 + (prim ? 20 : 16), C.dim, ls, al);
+  let vs = prim ? 50 : 34; const us = prim ? 22 : 20;
+  while (vs > 24 && TW(b[1], vs, 700) + us * 0.3 + (b[2] ? TW(b[2], us) : 0) > mw) vs--;
+  VU(b[1], b[2], xIn, y0 + (prim ? 68 : 54), b[3], vs, us, al, C.dim);
+}
+function alertBar(al) {
+  if (!al) return;
+  const [x0, y0, x1, y1] = FA.alert;
+  fill(x0, y0, x1 - x0, y1 - y0, C.redBg); stroke(x0, y0, x1 - x0, y1 - y0, C.red, 2);
+  const s = fitSize(ALERT.text, x1 - x0 - 24, 26, 700, 18);
+  T(ALERT.text, (x0 + x1) / 2, (y0 + y1) / 2 + capH(s) / 2, C.red, s, "center", 700);
+}
+function front_A(W, H, f, al) {
+  const [x0, y0, x1, y1] = FA.adi;
+  adi(x0, y0 + FA.tape, x1, y1, FA.cx, FA.cy, FA.ppd, f, {k: 1, half: [34, 54], lab: 20, step: 5, fpm: 0.9, w: 0.62, wl: 0.8});
+  fill(x0, y0, x1 - x0, FA.tape, C.bg); stroke(x0, y0, x1 - x0, y1 - y0, C.line, 3); line(x0, y0 + FA.tape, x1, y0 + FA.tape, C.line, 2);
+  hdgTape(x0 + 3, x1 - 3, y0 + FA.tape - 3, y0 + 3, FA.cx, f.hdg, (x1 - x0) / 50, 20, {w: 84, h: 34, y: y0 + 3, s: 28});
+  const d = frontData(f), order = [1, 0, 2];   // top: secondary, middle: the main value on the horizon's centre line, bottom: secondary
+  order.forEach((bi, r) => { flank(-1, FA.rows[r], r === 1, d.L[bi], FA.lR, FA.lL); flank(1, FA.rows[r], r === 1, d.R[bi], FA.rL, FA.rR); });
+  alertBar(al);
+}
+function front_B(W, H, f, al) {
+  const d = frontData(f), order = [1, 0, 2];
+  order.forEach((bi, r) => { flank(-1, FA.rows[r], r === 1, d.L[bi], 690, 470); flank(1, FA.rows[r], r === 1, d.R[bi], 930, 1150); });
+  const mid = [["ТАНГАЖ", fmtS(f.pitch, 1), "°", C.main], ["КУРС", String((Math.round(f.hdg) % 360 + 360) % 360).padStart(3, "0"), "°", C.acc], ["КРЕН", fmtS(f.bank, 0), "°", Math.abs(f.bank) > 45 ? C.acc : C.main]];
+  mid.forEach((b, r) => { const y0 = FA.rows[r], prim = r === 1;
+    T(b[0], 810, y0 + (prim ? 20 : 16), C.dim, prim ? 22 : 20, "center"); VU(b[1], b[2], 810, y0 + (prim ? 68 : 54), b[3], prim ? 50 : 34, prim ? 26 : 22, "center", b[3]); });
+  line(706, 214, 706, 410, C.line, 2); line(914, 214, 914, 410, C.line, 2);
+  alertBar(al);
+}
+// ================= ЗОНЫ 1, 2 =================
+function core_now(W, H) {
+  const kk = H / 360;
+  T("ЭНЕРГОЯДРО", 16 * kk, 36 * kk, C.acc, 28 * kk); T("тяга " + fmt(CORE.thrust / 1e6, 0) + " МН", W - 16 * kk, 36 * kk, C.main, 24 * kk, "right");
+  const n = CORE.nodes.length, rows = Math.ceil(n / 2), rh = (H - 60 * kk) / rows, colW = W / 2;
+  CORE.nodes.forEach((nd, i) => { const x = Math.floor(i / rows) * colW + 14 * kk, y = 56 * kk + (i % rows) * rh, col = stCol(nd[1]);
+    disc(x + 9 * kk, y + rh * 0.42, 8 * kk, col); T(nd[0], x + 26 * kk, y + rh * 0.42 + 8 * kk, C.main, 20 * kk); T(nd[2], x + colW - 26 * kk, y + rh * 0.42 + 8 * kk, col, 20 * kk, "right"); });
+}
+function nav_now(W, H, f) {
+  const kk = H / 360;
+  T("НАВИГАЦИЯ", 16 * kk, 36 * kk, C.acc, 28 * kk); T(f.body, W - 16 * kk, 36 * kk, C.main, 24 * kk, "right");
+  const rows = navRows(f), rh = (H - 60 * kk) / rows.length;
+  rows.forEach((r, i) => { const y = 56 * kk + i * rh + rh * 0.62;
+    T(r[0].toLowerCase(), 18 * kk, y, C.dim, 22 * kk); T(r[1] + (r[2] === "°" ? "°" : r[2] ? " " + r[2] : ""), W - 18 * kk, y, C.main, 26 * kk, "right");
+    line(14 * kk, 56 * kk + (i + 1) * rh - 2, W - 14 * kk, 56 * kk + (i + 1) * rh - 2, C.line, 1.5); });
+}
+function navRows(f) {
+  return [["ШИРОТА", fmt(f.lat, 3), "°"], ["ДОЛГОТА", fmt(f.lng, 3), "°"], ["ПУТЕВАЯ СКОРОСТЬ", fmt(f.gs, 0), "м/с"],
+          ["ПЕРИЦЕНТР", fmt(f.pe, 1), "км"], ["АПОЦЕНТР", fmt(f.ap, 1), "км"], ["НАКЛОНЕНИЕ", fmt(f.inc, 2), "°"]];
+}
+// the port wall: the front is on the RIGHT (u -> the bow); safe x 110..465 (the back ~100 px: the crew seat at its console), rows 60..315
+function core_A(W, H) {
+  const xL = 112, xR = 462, cw = (xR - xL - 14) / 2;
+  T("ЭНЕРГОЯДРО", xL, 84, C.acc, 22, "left", 700);
+  VU(fmt(CORE.thrust / 1e6, 0), "МН", xR, 84, C.main, 26, 18, "right", C.dim); T("ТЯГА", xR - TW(fmt(CORE.thrust / 1e6, 0), 26, 700) - 18 * 0.3 - TW("МН", 18) - 10, 84, C.dim, 18, "right");
+  line(xL, 96, xR, 96, C.line, 1.5);
+  const n = CORE.nodes.length, rows = 7;
+  CORE.nodes.forEach((nd, i) => {   // the first column nearer the bow (right)
+    const col = Math.floor(i / rows), x0 = col === 0 ? xR - cw : xL, x1 = x0 + cw, yb = 122 + (i % rows) * 28, c = stCol(nd[1]);
+    disc(x0 + 8, yb - 7, 7, c);
+    const vw = TW(nd[2], 20, 700), ns = fitSize(nd[0], cw - 22 - vw - 8, 20, 400, 16);
+    T(nd[0], x0 + 22, yb, C.main, ns); T(nd[2], x1, yb, c, 20, "right", 700);
+  });
+}
+// the starboard wall: the front is on the LEFT; safe x 20..390, rows 60..315
+function nav_A(W, H, f) {
+  const xL = 40, xR = 390, cw = (xR - xL - 14) / 2;
+  T("НАВИГАЦИЯ", xL, 84, C.acc, 22, "left", 700); T(f.body.toUpperCase(), xR, 84, C.main, 22, "right", 400);
+  line(xL, 96, xR, 96, C.line, 1.5);
+  const r = navRows(f), cols = [[r[3], r[4], r[5]], [r[0], r[1], r[2]]];   // the orbit nearer the bow (left), the position next
+  cols.forEach((c, ci) => c.forEach((b, ri) => {
+    const x = ci === 0 ? xL : xL + cw + 14, y0 = 104 + ri * 72;
+    T(b[0], x, y0 + 18, C.dim, fitSize(b[0], cw, 20, 400, 16));
+    let vs = 34; while (vs > 24 && TW(b[1], vs, 700) + 6 + TW(b[2], 18) > cw) vs--;
+    VU(b[1], b[2], x, y0 + 58, C.main, vs, 18, "left", b[2] === "°" ? C.main : C.dim);
+  }));
+}
+
+// ================= the canvases (the game's sizes), the overlay of the visible zones =================
+const CV = Z.map((z, i) => { const c = document.createElement("canvas"); c.width = z.W; c.height = z.H; $("slot" + i).appendChild(c); return c; });
+const ST = {lay: "A", view: "eye", ovl: "1", seat: "m10", crew: "rest", mode: "atmo", alert: "0", look: "0"};
+function overlay(zi, ctx) {
+  const z = Z[zi], s = z.step;
+  ctx.save();
+  for (let r = 0; r < z.nv; r++) for (let c = 0; c < z.nu; c++) {
+    const i = r * z.nu + c, k = cellClass(zi, i, ST), x = c * s, y = r * s;
+    if (k === 0) { ctx.fillStyle = (r + c) % 2 ? "rgba(40,50,54,0.85)" : "rgba(22,28,31,0.85)"; ctx.fillRect(x, y, s, s); }
+    else if (k === 1) { ctx.fillStyle = "rgba(255,40,40,0.55)"; ctx.fillRect(x, y, s, s); }
+    else if (k === 2) { ctx.fillStyle = "rgba(255,120,60,0.30)"; ctx.fillRect(x, y, s, s); }
+    else if (k === 3) { ctx.fillStyle = "rgba(255,220,80,0.12)"; ctx.fillRect(x, y, s, s); }
+  }
+  // the outline of the comfortable zone
+  ctx.strokeStyle = "#3fe08a"; ctx.lineWidth = 2; ctx.beginPath();
+  const good = (r, c) => r >= 0 && c >= 0 && r < z.nv && c < z.nu && cellClass(zi, r * z.nu + c, ST) === 4;
+  for (let r = 0; r < z.nv; r++) for (let c = 0; c < z.nu; c++) {
+    if (!good(r, c)) continue; const x = c * s, y = r * s;
+    if (!good(r - 1, c)) { ctx.moveTo(x, y); ctx.lineTo(x + s, y); }
+    if (!good(r + 1, c)) { ctx.moveTo(x, y + s); ctx.lineTo(x + s, y + s); }
+    if (!good(r, c - 1)) { ctx.moveTo(x, y); ctx.lineTo(x, y + s); }
+    if (!good(r, c + 1)) { ctx.moveTo(x + s, y); ctx.lineTo(x + s, y + s); }
+  }
+  ctx.stroke(); ctx.restore();
+}
+function drawPages() {
+  const f = DEMO[ST.mode], al = ST.alert === "1";
+  CV.forEach((c, zi) => {
+    g = c.getContext("2d"); g.setTransform(1, 0, 0, 1, 0, 0); fill(0, 0, c.width, c.height, C.bg);
+    if (zi === 0) (ST.lay === "now" ? front_now : ST.lay === "B" ? front_B : front_A)(c.width, c.height, f, al);
+    else if (zi === 1) (ST.lay === "now" ? core_now : core_A)(c.width, c.height, f);
+    else (ST.lay === "now" ? nav_now : nav_A)(c.width, c.height, f);
+    if (ST.ovl === "1") overlay(zi, g);
+    if (TEX[zi]) TEX[zi].needsUpdate = true;
+  });
+}
+
+// ================= the scene =================
+const view = $("view"), wrap = $("viewWrap");
+const renderer = new THREE.WebGLRenderer({antialias: true});
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x05080a);
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+scene.add(new THREE.HemisphereLight(0xbfd8e8, 0x202428, 0.5));
+const lamp = new THREE.PointLight(0xffe2bf, 0.6, 12); lamp.position.set(0, 5.2, -79); scene.add(lamp);
+const V3 = (x, y, z) => new THREE.Vector3(x, y, -z);
+function geom(p, uv) {
+  const v = f32(p.pos); for (let i = 2; i < v.length; i += 3) v[i] = -v[i];
+  const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.BufferAttribute(v, 3));
+  gg.setIndex(new THREE.BufferAttribute(u16(p.idx), 1));
+  if (uv) gg.setAttribute("uv", new THREE.BufferAttribute(f32(p.uv), 2));
+  gg.computeVertexNormals(); return gg;
+}
+const TEX = CV.map(c => { const t = new THREE.CanvasTexture(c); t.flipY = false; t.generateMipmaps = false; t.minFilter = THREE.LinearFilter; t.magFilter = THREE.LinearFilter;
+  t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy()); return t; });
+U.screens.forEach((p, i) => scene.add(new THREE.Mesh(geom(p, true), new THREE.MeshBasicMaterial({map: TEX[i], side: THREE.DoubleSide}))));
+const MOVERS = [];
+for (const p of U.ctx) {
+  const glass = /bridge_(centre|sidescr)/.test(p.name);
+  const col = glass ? new THREE.Color(0x0e2a33) : new THREE.Color(...p.color).multiplyScalar(1.15);
+  const mat = /frame|mfd\d|mfd_dark/.test(p.name) && !/scr_frame/.test(p.name) ? new THREE.MeshBasicMaterial({color: 0x0c1513, side: THREE.DoubleSide})
+            : glass ? new THREE.MeshBasicMaterial({color: col, side: THREE.DoubleSide}) : new THREE.MeshLambertMaterial({color: col, side: THREE.DoubleSide});
+  const m = new THREE.Mesh(geom(p, false), mat); m.name = p.name; scene.add(m);
+  if (p.move) MOVERS.push({m, move: p.move});
+  if (/^bridge_seat0/.test(p.name) || /^bridge_yoke/.test(p.name)) MOVERS.push({m, move: ["cmd"]});
+}
+const eyeDot = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 10), new THREE.MeshBasicMaterial({color: 0xfff2b0})); scene.add(eyeDot);
+function applyMoves() {
+  const H = {m20: -0.20, m10: -0.10, p05: 0.05}[ST.seat];
+  for (const {m, move} of MOVERS) {
+    if (move[0] === "side") { const r = U.meta.sideRise[move[1]], k = U.meta.sideRibbon; m.position.set(r[0] * k, r[1] * k, -r[2] * k); }
+    else if (move[0] === "crew") { const fc = U.meta.crewFacing[move[1]], t = ST.crew === "cons" ? U.meta.crewTravel : 0; m.position.set(fc[0] * t, 0, -fc[1] * t); }
+    else if (move[0] === "cmd" && /^bridge_seat0/.test(m.name)) m.position.set(0, H, -1.0);   // the seat at the console (kSeatTravel 1,0)
+  }
+}
+
+// ================= the cameras =================
+const camEye = new THREE.PerspectiveCamera(75, 1, 0.03, 200), camTop = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
+const LOOK = {yaw: 0, pitch: 9, fov: 75}, TOP = {t: V3(0, 0, 80.6), half: 3.6};
+let vw = 1, vh = 1;
+function eyePos() { const e = U.meta.eye[ST.seat]; return V3(e[0], e[1], e[2]); }
+const cvs = renderer.domElement, ptr = new Map(); let pinch0 = 0;
+const pdist = () => { const a = [...ptr.values()]; return a.length < 2 ? 0 : Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); };
+function drag(dx, dy) {
+  if (ST.view === "eye") { const k = LOOK.fov / 75 * 0.22; LOOK.yaw = clamp(LOOK.yaw + dx * k, -150, 150); LOOK.pitch = clamp(LOOK.pitch + dy * k, -60, 80); }
+  else { const wpp = 2 * TOP.half / vh; TOP.t.x -= dx * wpp; TOP.t.z -= dy * wpp; }
+}
+function zoom(f) { if (ST.view === "eye") LOOK.fov = clamp(LOOK.fov * f, 20, 120); else TOP.half = clamp(TOP.half * f, 0.5, 12); }
+cvs.addEventListener("pointerdown", e => { try { cvs.setPointerCapture(e.pointerId); } catch (_) {} ptr.set(e.pointerId, {x: e.clientX, y: e.clientY}); pinch0 = pdist(); });
+cvs.addEventListener("pointermove", e => { const p = ptr.get(e.pointerId); if (!p) return; const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+  if (ptr.size === 1) drag(dx, dy); else if (ptr.size === 2) { const d = pdist(); if (pinch0 > 0 && d > 0) zoom(pinch0 / d); pinch0 = d; } });
+const pup = e => { ptr.delete(e.pointerId); pinch0 = pdist(); };
+cvs.addEventListener("pointerup", pup); cvs.addEventListener("pointercancel", pup);
+cvs.addEventListener("wheel", e => { e.preventDefault(); zoom(Math.exp(clamp(e.deltaY, -200, 200) * 0.0012)); }, {passive: false});
+cvs.addEventListener("dblclick", () => { if (ST.view === "eye") Object.assign(LOOK, {yaw: +ST.look, pitch: 9, fov: 75}); else Object.assign(TOP, {t: V3(0, 0, 80.6), half: 3.6}); });
+function resize() { const r = wrap.getBoundingClientRect(); vw = Math.max(1, Math.round(r.width)); vh = Math.max(1, Math.round(r.height)); renderer.setSize(vw, vh); }
+new ResizeObserver(resize).observe(wrap); resize();
+
+// ================= the hover readout on the flat textures =================
+CV.forEach((c, zi) => c.addEventListener("pointermove", e => {
+  const r = c.getBoundingClientRect(), px = (e.clientX - r.left) / r.width * c.width, py = (e.clientY - r.top) / r.height * c.height, z = Z[zi];
+  const cc = clamp(Math.floor(px / z.step), 0, z.nu - 1), rr = clamp(Math.floor(py / z.step), 0, z.nv - 1), i = rr * z.nu + cc;
+  if (!z.on[i]) { $("hover").textContent = `зона ${zi}, x ${Math.round(px)}, y ${Math.round(py)}: этой части текстуры на экране нет`; return; }
+  const h = hiddenAt(z, i, ST);
+  $("hover").textContent = `зона ${zi}, x ${Math.round(px)}, y ${Math.round(py)}: азимут ${fmt(z.az[i], 1)}°, возвышение ${fmt(z.el[i], 1)}°, до глаза ${fmt(z.dist[i], 2)} м, `
+    + `высота ${fmt(z.y[i] - 1, 2)} м над полом, к нормали ${fmt(z.vang[i], 0)}°, пиксель ${fmt(z.amu[i], 1)}′ × ${fmt(z.amv[i], 1)}′` + (h ? ` — ЗАКРЫТО: ${h}` : "");
+}));
+
+// ================= the panel =================
+const LAYNOTE = {now: "Как в игре сейчас (TantraDataPages.cpp, переписано один в один).", A: "Рекомендация: горизонт и цифры в полосе 0…25° вверх, ±40° — то, что командир видит сидя.", B: "Альтернатива: без горизонта, три колонки цифр в той же полосе."};
+const HINT = {eye: "Тяните — осмотреться, колесо — поле зрения, двойной щелчок — обратно. Переднее и боковые стёкла стола (ЛЕНТА) — в положении игры.", top: "Сверху: тяните — сдвиг, колесо — масштаб.", flat: "Плоские текстуры размера игры. Наведите — что видно из глаза в этой точке."};
+function syncButtons() {
+  for (const [id, key] of [["lay", "lay"], ["views", "view"], ["ovl", "ovl"], ["seat", "seat"], ["crew", "crew"], ["mode", "mode"], ["alert", "alert"], ["look", "look"]])
+    for (const b of $(id).querySelectorAll("button")) b.classList.toggle("on", b.dataset.v === ST[key]);
+  $("layNote").textContent = LAYNOTE[ST.lay]; $("viewHint").textContent = HINT[ST.view];
+  $("lookRow").style.display = ST.view === "eye" ? "" : "none";
+  $("flat").style.display = ST.view === "flat" ? "block" : "none"; view.style.display = ST.view === "flat" ? "none" : "block";
+}
+function visTable() {
+  const rows = [];
+  for (let zi = 0; zi < 3; zi++) {
+    const z = Z[zi], n = z.nu * z.nv, cnt = [0, 0, 0, 0, 0]; let r0 = 1e9, r1 = -1, c0 = 1e9, c1 = -1;
+    for (let i = 0; i < n; i++) { const k = cellClass(zi, i, ST); cnt[k]++; if (k === 4) { const r = Math.floor(i / z.nu), c = i % z.nu; r0 = Math.min(r0, r); r1 = Math.max(r1, r); c0 = Math.min(c0, c); c1 = Math.max(c1, c); } }
+    const pc = k => Math.round(cnt[k] / n * 100) + " %";
+    rows.push(`<tr><td>${["0 дуга", "1 левая", "2 правая"][zi]}</td><td class="n">${pc(0)}</td><td class="n">${pc(1)}</td><td class="n">${pc(2)}</td><td class="n">${pc(3)}</td><td class="n">${pc(4)}</td>`
+      + `<td class="n">${c1 >= 0 ? `x ${c0 * 10}–${(c1 + 1) * 10}<br>y ${r0 * 10}–${(r1 + 1) * 10}` : "—"}</td></tr>`);
+  }
+  $("tVis").innerHTML = `<tr><th>Зона</th><th class="n">вне меша</th><th class="n">закрыто</th><th class="n">плохо</th><th class="n">можно</th><th class="n">удобно</th><th class="n">удобная рамка, px</th></tr>` + rows.join("");
+  const e = U.meta.eye[ST.seat];
+  $("nVis").innerHTML = `Глаз ${fmt(e[1] - 1, 3)} м над полом, z ${fmt(e[2], 2)} (кресло ${ {m20: "−0,20", m10: "−0,10", p05: "+0,05"}[ST.seat]}), стол — у пульта; боковые стёкла — ЛЕНТА. `
+    + `Пиксель дуги в середине ≈ 6,9′ (5,4 мм на 3,8 м): 20 px ГОСТ — прописная ≈ 14 px ≈ 1,6°. На стенах ≈ 6,2′. Головы сидящего экипажа не учтены — только кресла.`;
+}
+function update() { applyMoves(); drawPages(); visTable(); syncButtons(); }
+function bindSeg(id, fn) { $(id).addEventListener("click", e => { const b = e.target.closest("button"); if (b && b.dataset.v != null) { fn(b.dataset.v); update(); } }); }
+bindSeg("lay", v => ST.lay = v); bindSeg("ovl", v => ST.ovl = v); bindSeg("seat", v => ST.seat = v); bindSeg("crew", v => ST.crew = v);
+bindSeg("mode", v => ST.mode = v); bindSeg("alert", v => ST.alert = v);
+bindSeg("views", v => ST.view = v);
+bindSeg("look", v => { ST.look = v; Object.assign(LOOK, {yaw: +v, pitch: 9}); });
+
+// ================= the loop =================
+function frame() {
+  requestAnimationFrame(frame);
+  if (ST.view === "flat") return;
+  const asp = vw / vh, E = eyePos();
+  eyeDot.position.copy(E); eyeDot.visible = ST.view === "top";
+  let cam;
+  if (ST.view === "eye") {
+    cam = camEye; cam.aspect = asp; cam.fov = asp >= 1 ? LOOK.fov : Math.min(130, 2 * Math.atan(Math.tan(LOOK.fov / 2 * D2R) / asp) / D2R); cam.updateProjectionMatrix();
+    cam.position.copy(E); const y = LOOK.yaw * D2R, p = LOOK.pitch * D2R;
+    cam.lookAt(E.x + Math.sin(y) * Math.cos(p), E.y + Math.sin(p), E.z - Math.cos(y) * Math.cos(p));
+  } else {
+    cam = camTop; const o = TOP;
+    cam.left = -o.half * asp; cam.right = o.half * asp; cam.top = o.half; cam.bottom = -o.half; cam.updateProjectionMatrix();
+    cam.up.set(0, 0, -1); cam.position.set(o.t.x, 30, o.t.z); cam.lookAt(o.t.x, 0, o.t.z);
+  }
+  renderer.render(scene, cam);
+}
+function fontCheck() {
+  const ok = document.fonts && document.fonts.check('20px "GOST type A"');
+  $("fontState").innerHTML = ok ? '<span class="good">ГОСТ тип А (установлен в Windows)</span>' : '<span class="warn">ГОСТ тип А не найден — подставлен запасной шрифт</span>';
+}
+update(); frame();
+$("load").style.display = "none";
+const ready = document.fonts && document.fonts.load ? Promise.all([document.fonts.load('20px "GOST type A"'), document.fonts.load('700 20px "GOST type A"')]).catch(() => {}) : Promise.resolve();
+ready.then(() => { for (const k in CAP) delete CAP[k]; fontCheck(); drawPages(); });
+})();
+</script>
+</body>
+</html>

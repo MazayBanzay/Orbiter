@@ -1,0 +1,64 @@
+BEGIN_DESC
+TANTRA BETA 2 - Mars, Valles Marineris: in the commander's seat. Lift-off on planetary engines, anamezon far out.
+Niza Krit sits in the commander's seat of the bridge capsule. The person keeps the focus: everything is done from the seat with the mouse and the numpad.
+INSIDE: F stand up / sit down at a seat (not in the suit); W/S/A/D/Q/E walk, Shift run, right mouse held turns the body with the look. Left click: screens and buttons within reach. V (in the commander's seat): outside view of the ship, V again back.
+BRIDGE: front screen tabs FLIGHT / ENGINES / PARAMETERS; side screens carry six Orbiter MFDs; left screen MECHANISMS (+ thermal), right screen POWER PLANT.
+1. Stand up: MECHANISMS - LAUNCH position (raises the ship onto the stern legs, ~2 min; the pods help). STOP / EMERGENCY STOP available.
+2. Planetary engines (fusion in magnetic cups, thrust limited by field pressure; reaction mass argon in air, iron above 30 km): numpad + / - main throttle, Ctrl + full, Ctrl - zero, * cut. Pods: GONDOLY lever and nozzle angle on ENGINES. Attitude numpad 2/8 4/6 1/3, / rotation/linear, 5 kill rotation. G-limiter on ENGINES.
+3. Anamezon (interstellar drive): ENGINES - IGNITION (field - kaon beam - feed). Locked below ~50 km in an atmosphere (hot-start interlock) and near oxygen worlds and crews (radiation); the bypass needs two presses within 3 s. Use it only far from planets. G-compensator up to 200 g.
+Damage: feet (12 petals each), legs and hull zones break on hard landings.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52001.9470
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Niza_Krit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Niza_Krit
+  MODE Cockpit
+  FOV 50.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Tantra:Tantra
+  STATUS Landed Mars
+  POS -65.6048600 -13.6834700
+  HEADING 295.00
+  PRPLEVEL 0:1.000 1:1.000 2:1.000 3:1.000 4:1.000 5:1.000
+  ENGSET 0
+  IGNITION 0
+  GLIMIT 1 5.00
+  CARRIAGE 0.0000 0.0 1.000 1 0 0
+  CREW 1 44 62 82 Capt - Erg Noor
+  CREW 2 23 62 58 Spe Niza_Krit Niza Krit
+  CREW 1 36 62 74 Spe - Pel Lin
+  CREW 1 52 62 80 APhy - Pur Hiss
+  CREW 1 31 62 60 APhy - Ingrid Ditra
+  CREW 1 38 62 76 Bio - Eon Tal
+  CREW 1 35 62 57 Doc - Luma Lasvi
+  CREW 1 33 62 75 Eng - Kay Ber
+  CREW 1 34 62 62 Geo - Bina Led
+  AIRLOCK 0
+END
+Niza_Krit:OrbiterCrew\Astronavigator
+  STATUS Landed Mars
+  POS -65.6048600 -13.6834700
+  HEADING 295.00
+  AFCMODE 7
+  NAME Niza Krit
+  ROLE Spe
+  SEX female
+  SUIT 0
+  INTERIOR 0.000 1.000 78.550 0.0000 Tantra
+  SEAT 0
+END
+END_SHIPS

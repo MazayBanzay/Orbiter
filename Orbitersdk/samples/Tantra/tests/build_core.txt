@@ -1,0 +1,10 @@
+core_test.cpp
+TantraCore.cpp
+..\core\TantraCore.cpp(385): warning C4996: 'sscanf': This function or variable may be unsafe. Consider using sscanf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+Plant.cpp
+..\core\Plant.cpp(317): warning C4996: 'sscanf': This function or variable may be unsafe. Consider using sscanf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+Damage.cpp
+..\core\Damage.cpp(254): warning C4996: 'sscanf': This function or variable may be unsafe. Consider using sscanf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+Impact.cpp
+Aero.cpp
+Создание кода...

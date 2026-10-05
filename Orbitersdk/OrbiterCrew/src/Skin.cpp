@@ -159,6 +159,7 @@ namespace ocrew
 		for (int i = 0; i < static_cast<int>(bones.size()); ++i)
 			for (int p = i; p >= 0; p = bones[p].parent) bones[p].subtree.push_back(i);
 		headBone = Bone("Head");
+		SetupFingers();
 		const int neck = Bone("Neck1");
 		for (auto& g : groups)
 		{
@@ -173,10 +174,10 @@ namespace ocrew
 		return true;
 	}
 
-	void Skin::SetMorph(const char* name, float weight)
+	void Skin::SetMorphSide(const char* name, float left, float right)
 	{
 		for (auto& m : morphs)
-			if (m.name == name && std::abs(m.weight - weight) > 0.01f) { m.weight = weight; ApplyMorphs(m.group); }
+			if (m.name == name && (std::abs(m.wl - left) > 0.01f || std::abs(m.wr - right) > 0.01f)) { m.wl = left; m.wr = right; ApplyMorphs(m.group); }
 	}
 
 	void Skin::ApplyMorphs(int gi)
@@ -187,13 +188,15 @@ namespace ocrew
 		g.base = g.bind;
 		for (const auto& m : morphs)
 		{
-			if (m.group != gi || m.weight <= 0) continue;
+			if (m.group != gi || (m.wl <= 0 && m.wr <= 0)) continue;
 			for (size_t k = 0; k < m.idx.size(); ++k)
 			{
 				const int v = m.idx[k]; if (v < 0 || v >= static_cast<int>(g.base.size())) continue;
+				const float w = k < m.left.size() && m.left[k] ? m.wl : m.wr;
+				if (w <= 0) continue;
 				const float* d = &m.d[k * 6]; NTVERTEX& o = g.base[v];
-				o.x += m.weight * d[0]; o.y += m.weight * d[1]; o.z += m.weight * d[2];
-				o.nx += m.weight * d[3]; o.ny += m.weight * d[4]; o.nz += m.weight * d[5];
+				o.x += w * d[0]; o.y += w * d[1]; o.z += w * d[2];
+				o.nx += w * d[3]; o.ny += w * d[4]; o.nz += w * d[5];
 			}
 		}
 	}
@@ -216,16 +219,114 @@ namespace ocrew
 			auto& g = groups[gi];
 			if (!mg || mg->nVtx * 4 != g.b.size()) { oapiWriteLogV("OrbiterCrew: %s group %d does not match the skin", meshName.c_str(), static_cast<int>(gi)); dev = nullptr; return; }
 			g.bind.assign(mg->Vtx, mg->Vtx + mg->nVtx); g.base = g.bind; g.work = g.base;
+			for (auto& m : morphs)   // which side of the body each of its vertices is on (one hand can close alone)
+				if (m.group == static_cast<int>(gi))
+				{
+					m.left.assign(m.idx.size(), 0);
+					for (size_t k = 0; k < m.idx.size(); ++k) m.left[k] = m.idx[k] >= 0 && m.idx[k] < static_cast<int>(g.bind.size()) && g.bind[m.idx[k]].x < 0;
+				}
 			ApplyMorphs(static_cast<int>(gi));
 		}
 		SetupHair();
+		FindHands();
+		MeasureFingers();
+	}
+
+	// the hands at rest, for the arms that reach the ship's controls (SeatArms): the palm's normal is where the fingers
+	// close to (the "fist" shape moves the finger vertices toward the palm), its middle is on the palm's surface over the
+	// hand bone's own vertices, the fingers run from the wrist to the knuckles
+	void Skin::FindHands()
+	{
+		static const char* HB[2] = { "LeftHand", "RightHand" }, *KB[2] = { "LeftHandFinger1", "RightHandFinger1" }, *TB[2] = { "LThumb", "RThumb" };
+		for (int s = 0; s < 2; ++s)
+		{
+			HandRest& h = hands[s]; h = HandRest{};
+			const int hb = Bone(HB[s]), kb = Bone(KB[s]), tb = Bone(TB[s]);
+			if (hb < 0 || kb < 0) continue;
+			const VECTOR3 wrist = _V(bones[hb].T0[0], bones[hb].T0[1], bones[hb].T0[2]);
+			VECTOR3 f = _V(bones[kb].T0[0], bones[kb].T0[1], bones[kb].T0[2]) - wrist;
+			if (length(f) < 1e-4) continue;
+			f = f / length(f);
+			std::vector<char> finger(bones.size(), 0);
+			for (int i : bones[kb].subtree) finger[i] = 1;
+			auto onSide = [&](const NTVERTEX& v) { return s == 0 ? v.x < 0 : v.x >= 0; };
+			VECTOR3 curlN = _V(0, 0, 0); bool curlOk = false;
+			auto dominant = [&](const Group& g, size_t v) { int b = g.b[v * 4]; float w = g.w[v * 4]; for (int k = 1; k < 4; ++k) if (g.w[v * 4 + k] > w) { w = g.w[v * 4 + k]; b = g.b[v * 4 + k]; } return b; };
+			// the palm's normal: the side the (relaxed, baked) fingers curl to - from the knuckles' part of the fingers to their
+			// tips, across the proximal line (2026-10-05: the fist's mean move is mostly the fingers drawn together, sideways)
+			{
+				std::vector<std::pair<double, VECTOR3>> fv;
+				for (const auto& g : groups)
+					for (size_t v = 0; v < g.bind.size() && v * 4 + 3 < g.w.size(); ++v)
+					{
+						if (!onSide(g.bind[v])) continue;
+						float wf = 0; for (int k = 0; k < 4; ++k) if (finger[g.b[v * 4 + k]]) wf += g.w[v * 4 + k];   // the phalanges too
+						if (wf < 0.5f) continue;
+						const VECTOR3 p = _V(g.bind[v].x, g.bind[v].y, g.bind[v].z);
+						fv.push_back({ length(p - wrist), p });
+					}
+				if (fv.size() > 40)
+				{
+					std::sort(fv.begin(), fv.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+					auto mean = [&](double q0, double q1) { VECTOR3 c = _V(0, 0, 0); size_t a = size_t(q0 * fv.size()), b = size_t(q1 * fv.size()); for (size_t i = a; i < b; ++i) c = c + fv[i].second; return c / double(b - a); };
+					const VECTOR3 Kp = mean(0.0, 0.15), mid = mean(0.40, 0.55), tip = mean(0.90, 1.0);
+					const VECTOR3 prox = (mid - Kp) / length(mid - Kp);
+					VECTOR3 cu = tip - mid; cu = cu - prox * dotp(cu, prox);
+					if (length(cu) > 1e-5) { curlN = cu / length(cu); curlOk = true; }
+				}
+			}
+			VECTOR3 m = _V(0, 0, 0);
+			for (const auto& mo : morphs)
+			{
+				if (mo.name != "fist" || mo.group < 0 || mo.group >= static_cast<int>(groups.size())) continue;
+				const Group& g = groups[mo.group];
+				for (size_t k = 0; k < mo.idx.size(); ++k)
+				{
+					const int v = mo.idx[k];
+					if (v < 0 || v >= static_cast<int>(g.bind.size()) || !onSide(g.bind[v]) || !finger[dominant(g, v)]) continue;
+					m = m + _V(mo.d[k * 6], mo.d[k * 6 + 1], mo.d[k * 6 + 2]);
+				}
+			}
+			VECTOR3 n = curlOk ? curlN - f * dotp(curlN, f) : m - f * dotp(m, f);
+			if (length(n) < 1e-6 && tb >= 0)   // no fist shape: the thumb is on the palm's side of the hand's plane
+			{
+				VECTOR3 t = _V(bones[tb].T0[0], bones[tb].T0[1], bones[tb].T0[2]) - wrist;
+				t = t - f * dotp(t, f);
+				n = s == 1 ? crossp(f, t) : crossp(t, f);
+			}
+			if (length(n) < 1e-6) continue;
+			n = n / length(n);
+			// the middle of the palm: over the hand bone's own vertices (not the fingers), on the palm's side
+			std::vector<VECTOR3> P;
+			for (const auto& g : groups)
+				for (size_t v = 0; v < g.bind.size() && v * 4 + 3 < g.w.size(); ++v)
+				{
+					if (!onSide(g.bind[v])) continue;
+					float w = 0;
+					for (int k = 0; k < 4; ++k) if (g.b[v * 4 + k] == hb) w += g.w[v * 4 + k];
+					if (w >= 0.6f) P.push_back(_V(g.bind[v].x, g.bind[v].y, g.bind[v].z));
+				}
+			if (P.size() < 8) continue;
+			VECTOR3 c = _V(0, 0, 0);
+			for (const VECTOR3& p : P) c = c + p;
+			c = c / static_cast<double>(P.size());
+			std::vector<double> o; o.reserve(P.size());
+			for (const VECTOR3& p : P) o.push_back(dotp(p - c, n));
+			std::sort(o.begin(), o.end());
+			h.palm = c + n * o[static_cast<size_t>(0.85 * (o.size() - 1))];
+			h.normal = n; h.fingers = f; h.ok = true;
+			oapiWriteLogV("OrbiterCrew: %s hand at rest: palm (%.3f %.3f %.3f) normal (%.2f %.2f %.2f) fingers (%.2f %.2f %.2f), %d vertices",
+				s == 0 ? "left" : "right", h.palm.x, h.palm.y, h.palm.z, n.x, n.y, n.z, f.x, f.y, f.z, static_cast<int>(P.size()));
+		}
 	}
 
 	void Skin::Apply(const Pose& pose)
 	{
-		const size_t nb = bones.size();
+		last = pose;
+		const size_t nb = bones.size(), np = (std::min)(nb, pose.q.size() / 4);
 		S.assign(nb * 12, 0.0f);   // per bone: 3x3 rotation + translation of (pose * rest^-1)
-		for (size_t i = 0; i < nb; ++i)
+		if (curl.size() != nb) curl.assign(nb, 0.0f);
+		for (size_t i = 0; i < np; ++i)
 		{
 			float R[9]; QuatToMat(&pose.q[i * 4], R);
 			const float* R0 = bones[i].R0; const float* T0 = bones[i].T0; float* s = &S[i * 12];
@@ -234,6 +335,22 @@ namespace ocrew
 					s[r * 3 + c] = R[r * 3 + 0] * R0[c * 3 + 0] + R[r * 3 + 1] * R0[c * 3 + 1] + R[r * 3 + 2] * R0[c * 3 + 2];   // R * R0^T
 			for (int r = 0; r < 3; ++r)
 				s[9 + r] = pose.t[i * 3 + r] - (s[r * 3] * T0[0] + s[r * 3 + 1] * T0[1] + s[r * 3 + 2] * T0[2]);
+			if (i + 1 == np)   // the clip bones are done: now the ones that hang on them (in file order, parents first)
+				for (size_t k = np; k < nb; ++k)
+				{
+					const int p = bones[k].parent; float* sk = &S[k * 12];
+					if (p < 0 || p >= static_cast<int>(k)) { sk[0] = sk[4] = sk[8] = 1; continue; }
+					const float* sp = &S[p * 12]; const float* R0 = bones[k].R0; const float* T0k = bones[k].T0;
+					const float h = 0.5f * curl[k], sh = std::sin(h);
+					const float r[4] = { std::cos(h), R0[0] * sh, R0[3] * sh, R0[6] * sh };
+					float M[9]; QuatToMat(r, M);
+					const float mt[3] = { T0k[0] - (M[0] * T0k[0] + M[1] * T0k[1] + M[2] * T0k[2]), T0k[1] - (M[3] * T0k[0] + M[4] * T0k[1] + M[5] * T0k[2]), T0k[2] - (M[6] * T0k[0] + M[7] * T0k[1] + M[8] * T0k[2]) };
+					for (int a = 0; a < 3; ++a)
+					{
+						for (int c = 0; c < 3; ++c) sk[a * 3 + c] = sp[a * 3] * M[c] + sp[a * 3 + 1] * M[3 + c] + sp[a * 3 + 2] * M[6 + c];
+						sk[9 + a] = sp[a * 3] * mt[0] + sp[a * 3 + 1] * mt[1] + sp[a * 3 + 2] * mt[2] + sp[9 + a];
+					}
+				}
 		}
 		if (!dev) return;
 		if (hair.driven && headBone >= 0) StepHair(&S[headBone * 12]);
@@ -439,8 +556,9 @@ namespace ocrew
 			t[2] = pz + R[6] * x + R[7] * y + R[8] * z;
 			PreRotate(&pose.q[i * 4], r);
 		};
-		if (set) for (int i : *set) rot(i);
-		else for (int i = 0; i < static_cast<int>(bones.size()); ++i) rot(i);
+		const int np = static_cast<int>((std::min)(bones.size(), pose.q.size() / 4));   // the fingers' phalanges are not in poses
+		if (set) { for (int i : *set) if (i < np) rot(i); }
+		else for (int i = 0; i < np; ++i) rot(i);
 	}
 
 	void Skin::Reattach(Pose& pose, const Pose& ref, int parent, int bone, float weight) const
@@ -455,8 +573,10 @@ namespace ocrew
 		  D[2] = w * rc[2] - x * rc[3] + y * rc[0] + z * rc[1]; D[3] = w * rc[3] + x * rc[2] - y * rc[1] + z * rc[0]; }
 		float M[9]; QuatToMat(D, M);
 		const float* pa = &pose.t[parent * 3]; const float* pr = &ref.t[parent * 3];
+		const int np = static_cast<int>((std::min)(pose.q.size(), ref.q.size()) / 4);
 		for (int i : bones[bone].subtree)
 		{
+			if (i >= np) continue;
 			float q[4] = { ref.q[i * 4], ref.q[i * 4 + 1], ref.q[i * 4 + 2], ref.q[i * 4 + 3] };
 			PreRotate(q, D);
 			const float dx = ref.t[i * 3] - pr[0], dy = ref.t[i * 3 + 1] - pr[1], dz = ref.t[i * 3 + 2] - pr[2];
@@ -481,9 +601,214 @@ namespace ocrew
 		Turn(pose, bone, m / l, angle);
 	}
 
+	// ---- the fingers (skins with phalanx bones, finger_rig.py) ----
+	namespace
+	{
+		struct Xf { double R[9]{ 1, 0, 0, 0, 1, 0, 0, 0, 1 }, T[3]{}; };
+		Xf Compose(const Xf& a, const Xf& b)
+		{
+			Xf r;
+			for (int i = 0; i < 3; ++i)
+			{
+				for (int j = 0; j < 3; ++j) r.R[i * 3 + j] = a.R[i * 3] * b.R[j] + a.R[i * 3 + 1] * b.R[3 + j] + a.R[i * 3 + 2] * b.R[6 + j];
+				r.T[i] = a.R[i * 3] * b.T[0] + a.R[i * 3 + 1] * b.T[1] + a.R[i * 3 + 2] * b.T[2] + a.T[i];
+			}
+			return r;
+		}
+		VECTOR3 XP(const Xf& a, const VECTOR3& p) { return _V(a.R[0] * p.x + a.R[1] * p.y + a.R[2] * p.z + a.T[0], a.R[3] * p.x + a.R[4] * p.y + a.R[5] * p.z + a.T[1], a.R[6] * p.x + a.R[7] * p.y + a.R[8] * p.z + a.T[2]); }
+		VECTOR3 XD(const Xf& a, const VECTOR3& v) { return _V(a.R[0] * v.x + a.R[1] * v.y + a.R[2] * v.z, a.R[3] * v.x + a.R[4] * v.y + a.R[5] * v.z, a.R[6] * v.x + a.R[7] * v.y + a.R[8] * v.z); }
+		Xf TurnAbout(const VECTOR3& ax, const VECTOR3& p, double th)   // about the line (p, ax), ax unit
+		{
+			Xf r; const double c = std::cos(th), s = std::sin(th), k = 1 - c, x = ax.x, y = ax.y, z = ax.z;
+			const double R[9] = { c + x * x * k, x * y * k - z * s, x * z * k + y * s, y * x * k + z * s, c + y * y * k, y * z * k - x * s, z * x * k - y * s, z * y * k + x * s, c + z * z * k };
+			for (int i = 0; i < 9; ++i) r.R[i] = R[i];
+			r.T[0] = p.x - (R[0] * p.x + R[1] * p.y + R[2] * p.z); r.T[1] = p.y - (R[3] * p.x + R[4] * p.y + R[5] * p.z); r.T[2] = p.z - (R[6] * p.x + R[7] * p.y + R[8] * p.z);
+			return r;
+		}
+		VECTOR3 Col(const float* R0, int c) { return _V(R0[c], R0[3 + c], R0[6 + c]); }
+		VECTOR3 V3(const float* t) { return _V(t[0], t[1], t[2]); }
+		// how far a point is outside the shape (< 0: inside)
+		double Outside(const Skin::Shape& sh, const VECTOR3& p)
+		{
+			const VECTOR3 v = p - sh.c;
+			switch (sh.type)
+			{
+			case Skin::SHAPE_CYLINDER: return length(v - sh.axis * dotp(v, sh.axis)) - sh.r;
+			case Skin::SHAPE_SPHERE: return length(v) - sh.r;
+			case Skin::SHAPE_PLANE: return dotp(v, sh.axis);
+			}
+			return 1e9;
+		}
+		const double kD = PI / 180;
+		// each joint's range about the bound (relaxed) hand: opened .. closed (the bind hand is curled ~22/38/22 deg)
+		const double kLo[3] = { -22 * kD, -30 * kD, -18 * kD }, kHi[3] = { 70 * kD, 70 * kD, 55 * kD };
+		const double kTLo[2] = { -15 * kD, -15 * kD }, kTHi[2] = { 55 * kD, 70 * kD };
+	}
+
+	void Skin::SetupFingers()
+	{
+		static const char* SD[2] = { "L", "R" };
+		static const char* KB[2] = { "LeftHandFinger1", "RightHandFinger1" }, *TB[2] = { "LThumb", "RThumb" };
+		bool all = true;
+		for (int s = 0; s < 2; ++s)
+		{
+			for (auto& c : chains[s]) c = Chain{};
+			Chain& t = chains[s][0];
+			t.parent = Bone(TB[s]); t.n = 2;
+			t.bone[0] = Bone((std::string(SD[s]) + "T_2").c_str()); t.bone[1] = Bone((std::string(SD[s]) + "T_3").c_str());
+			all = all && t.parent >= 0 && t.bone[0] >= 0 && t.bone[1] >= 0;
+			for (int k = 1; k < 5; ++k)
+			{
+				Chain& c = chains[s][k]; c.parent = Bone(KB[s]); c.n = 3;
+				for (int j = 0; j < 3; ++j) { const std::string nm = std::string(SD[s]) + "F" + std::to_string(k + 1) + "_" + std::to_string(j + 1); c.bone[j] = Bone(nm.c_str()); all = all && c.bone[j] >= 0; }
+				all = all && c.parent >= 0;
+			}
+		}
+		hasFingers = all;
+		curl.assign(bones.size(), 0.0f);
+	}
+
+	// each phalanx: its length (to the next joint; the last one's from its vertices) and its pad, how far the palm side's
+	// surface is from the bone (the 85th percentile of the vertices' offset along the bone's z)
+	void Skin::MeasureFingers()
+	{
+		if (!hasFingers) return;
+		for (auto& side : chains)
+			for (Chain& c : side)
+				for (int j = 0; j < c.n; ++j)
+				{
+					const int b = c.bone[j]; const float* R0 = bones[b].R0; const VECTOR3 T0 = V3(bones[b].T0), y = Col(R0, 1), z = Col(R0, 2);
+					std::vector<double> along, pad;
+					for (const auto& g : groups)
+						for (size_t v = 0; v < g.bind.size() && v * 4 + 3 < g.w.size(); ++v)
+						{
+							float w = 0; for (int k = 0; k < 4; ++k) if (g.b[v * 4 + k] == b) w += g.w[v * 4 + k];
+							if (w < 0.5f) continue;
+							const VECTOR3 d = _V(g.bind[v].x, g.bind[v].y, g.bind[v].z) - T0;
+							along.push_back(dotp(d, y)); pad.push_back(dotp(d, z));
+						}
+					if (j + 1 < c.n) c.len[j] = static_cast<float>(length(V3(bones[c.bone[j + 1]].T0) - T0));
+					else c.len[j] = along.empty() ? 0.02f : static_cast<float>(*std::max_element(along.begin(), along.end()));
+					if (pad.size() > 4) { std::sort(pad.begin(), pad.end()); c.pad[j] = static_cast<float>(std::clamp(pad[pad.size() * 85 / 100], 0.003, 0.012)); }
+					else c.pad[j] = 0.007f;
+				}
+	}
+
+	void Skin::Posed(const Pose& pose, int b, double M[12]) const
+	{
+		float R[9]; QuatToMat(&pose.q[b * 4], R);
+		const float* R0 = bones[b].R0; const float* T0 = bones[b].T0;
+		for (int r = 0; r < 3; ++r)
+			for (int c = 0; c < 3; ++c) M[r * 3 + c] = R[r * 3] * R0[c * 3] + R[r * 3 + 1] * R0[c * 3 + 1] + R[r * 3 + 2] * R0[c * 3 + 2];
+		for (int r = 0; r < 3; ++r) M[9 + r] = pose.t[b * 3 + r] - (M[r * 3] * T0[0] + M[r * 3 + 1] * T0[1] + M[r * 3 + 2] * T0[2]);
+	}
+
+	void Skin::ClearCurl(int side)
+	{
+		if (!hasFingers) return;
+		if (curl.size() != bones.size()) curl.assign(bones.size(), 0.0f);
+		for (const Chain& c : chains[side & 1]) for (int j = 0; j < c.n; ++j) curl[c.bone[j]] = 0;
+	}
+
+	void Skin::Fist(Pose& pose, int side, float amount)
+	{
+		if (!hasFingers || amount <= 0) return;
+		static const float F[3] = { 70 * float(kD), 70 * float(kD), 50 * float(kD) }, T[2] = { 35 * float(kD), 40 * float(kD) };
+		if (curl.size() != bones.size()) curl.assign(bones.size(), 0.0f);
+		(void)pose;
+		for (int k = 1; k < 5; ++k) for (int j = 0; j < 3; ++j) curl[chains[side & 1][k].bone[j]] += amount * F[j];
+		for (int j = 0; j < 2; ++j) curl[chains[side & 1][0].bone[j]] += amount * T[j];
+	}
+
+	void Skin::Wrap(Pose& pose, int side, const Shape& sh, float weight)
+	{
+		if (!hasFingers) return;
+		if (curl.size() != bones.size()) curl.assign(bones.size(), 0.0f);
+		if (weight <= 1e-3f || sh.type == SHAPE_NONE) return;
+		side &= 1;
+		if (static_cast<int>(pose.q.size() / 4) <= (std::max)(chains[side][0].parent, chains[side][1].parent)) return;
+		auto xfOf = [&](int b) { double M[12]; Posed(pose, b, M); Xf x; for (int i = 0; i < 9; ++i) x.R[i] = M[i]; for (int i = 0; i < 3; ++i) x.T[i] = M[9 + i]; return x; };
+		// the lowest point of the chain's phalanges j.. under the angles th (the palm side of each, half way and at its end)
+		auto reach = [&](const Chain& c, const Xf& base, const double* th, int from)
+		{
+			Xf x = base; double best = 1e9;
+			for (int j = 0; j < c.n; ++j)
+			{
+				const int b = c.bone[j]; const float* R0 = bones[b].R0; const VECTOR3 T0 = V3(bones[b].T0);
+				x = Compose(x, TurnAbout(Col(R0, 0), T0, th[j]));
+				if (j < from) continue;
+				const VECTOR3 J = XP(x, T0), y = XD(x, Col(R0, 1)), z = XD(x, Col(R0, 2));
+				for (double f : { 0.5, 1.0 })
+					best = (std::min)(best, Outside(sh, J + y * (c.len[j] * f) + z * (c.pad[j] * (f < 1 ? 1.0 : 0.7))));
+			}
+			return best;
+		};
+		// close joint j from 'lo' until its phalanx (or one after it) touches; none: 'miss'
+		auto close = [&](const Chain& c, const Xf& base, double* th, int j, double lo, double hi, double miss)
+		{
+			const double step = 3 * kD, tol = 0.0015;
+			th[j] = lo;
+			if (reach(c, base, th, j) <= tol) return;   // touching opened already
+			for (double a = lo + step; a <= hi + 1e-9; a += step)
+			{
+				th[j] = a;
+				if (reach(c, base, th, j) <= tol)
+				{
+					double l = a - step, h = a;
+					for (int it = 0; it < 5; ++it) { th[j] = 0.5 * (l + h); (reach(c, base, th, j) <= tol ? h : l) = th[j]; }
+					th[j] = l; return;
+				}
+			}
+			th[j] = miss;
+		};
+		const bool flat = sh.type == SHAPE_PLANE;
+		// the four fingers, knuckle first; a finger that misses the shape closes as far as it goes (round a handle) or
+		// stays as it was (over a flat rest)
+		for (int k = 1; k < 5; ++k)
+		{
+			const Chain& c = chains[side][k]; const Xf base = xfOf(c.parent);
+			double th[3] = { kLo[0], kLo[1], kLo[2] };
+			for (int j = 0; j < 3; ++j) close(c, base, th, j, kLo[j], kHi[j], flat ? 0.0 : sh.type == SHAPE_SPHERE ? 0.6 * kHi[j] : kHi[j]);
+			for (int j = 0; j < 3; ++j) curl[c.bone[j]] += weight * static_cast<float>(th[j]);
+		}
+		// the thumb: round a handle or a ball it first comes across from the palm's other side (a turn of the whole thumb
+		// about the hand's length, toward the palm), then its two joints close
+		const Chain& t = chains[side][0];
+		const int hb = Bone(side == 0 ? "LeftHand" : "RightHand");
+		if (!flat && hb >= 0 && hands[side].ok)
+		{
+			const Xf H = xfOf(hb);
+			const VECTOR3 f = XD(H, hands[side].fingers), n = XD(H, hands[side].normal), J = V3(&pose.t[t.parent * 3]);
+			const Xf T0x = xfOf(t.parent);
+			const int last = t.bone[t.n - 1];
+			const VECTOR3 tip = XP(T0x, V3(bones[last].T0) + Col(bones[last].R0, 1) * t.len[t.n - 1]);
+			const double sg = dotp(crossp(f, tip - J), n) >= 0 ? 1.0 : -1.0;
+			double th[2] = { 0, 0 }, phi = 0;
+			for (double a = 0; a <= 60 * kD + 1e-9; a += 3 * kD)
+			{
+				const Xf b = Compose(TurnAbout(f, J, sg * a), T0x);
+				phi = a;
+				if (reach(t, b, th, 0) <= 0.004) break;
+			}
+			const float turn = static_cast<float>(sg * phi * weight);
+			Turn(pose, t.parent, f, turn);
+			const Xf base = Compose(TurnAbout(f, J, sg * phi), T0x);
+			th[0] = kTLo[0]; th[1] = kTLo[1];
+			for (int j = 0; j < 2; ++j) close(t, base, th, j, kTLo[j], kTHi[j], 0.5 * kTHi[j]);
+			for (int j = 0; j < 2; ++j) curl[t.bone[j]] += weight * static_cast<float>(th[j]);
+		}
+		else if (flat)
+		{
+			const Xf base = xfOf(t.parent);
+			double th[2] = { kTLo[0], kTLo[1] };
+			for (int j = 0; j < 2; ++j) close(t, base, th, j, kTLo[j], kTHi[j], 0.0);
+			for (int j = 0; j < 2; ++j) curl[t.bone[j]] += weight * static_cast<float>(th[j]);
+		}
+	}
+
 	void Skin::Shift(Pose& pose, const VECTOR3& d) const
 	{
-		for (size_t i = 0; i < bones.size(); ++i)
+		for (size_t i = 0; i < bones.size() && i * 3 + 2 < pose.t.size(); ++i)
 		{
 			pose.t[i * 3] += static_cast<float>(d.x); pose.t[i * 3 + 1] += static_cast<float>(d.y); pose.t[i * 3 + 2] += static_cast<float>(d.z);
 		}

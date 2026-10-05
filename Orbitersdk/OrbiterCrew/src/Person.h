@@ -30,6 +30,10 @@ namespace ocrew
 		// the person - through the eyes, or from outside at the same distance; never the ship's panel)
 		bool viewOutside{};
 		double viewDist{};
+		// aboard without a body (ABOARD): where in the ship - a seat or stored, the cabin, the medical bay (the ship sets
+		// it: its crew monitor, the lift's "to the ship"; ocSetPlace). In the medical bay the organism is treated
+		enum Place { STORED, CABIN, MEDBAY };
+		Place place{ STORED };
 		std::string bodyClass{ "OrbiterCrew\\Astronavigator" };   // the vessel class of his or her body in the world
 
 		bool Alive() const { return body.state != Body::DEAD; }

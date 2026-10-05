@@ -1,0 +1,70 @@
+BEGIN_DESC
+TANTRA BETA 1 - Mars, Valles Marineris: astronaut with the jet pack next to Tantra.
+Coprates Chasma floor, 4.3 km below datum; canyon walls 5-8 km high. Niza Krit in the suit with the jet pack on (12 kg metallic hydrogen, 2 x 500 N, ~950 m/s). Tantra lies 60 m away, main airlock lift down.
+
+ON FOOT: W/S walk (S brakes), A/D turn, Q/E side step, Shift run. F1 eyes / outside view. Right mouse held (eyes view): look around. H suit computer, L lamps, Shift+V sun shade. F = action (shown on screen).
+JET PACK: starts in MANUAL (no compensation). Space thrust up, left Ctrl down; Shift+Space full thrust, Shift+Ctrl thrust off (while held). Numpad 0 / . throttle. In the air: W/S pod vector (forward / brake), A/D turn, Q/E strafe, Shift full vector. J height hold, C landing autopilot, G booms, Caps Lock steering limiter.
+SUIT COMPUTER (eyes view, mouse): toggle ASSIST (top right) for safe thrust, upright hold and ground braking; buttons at the bottom of the right page: height hold, TRANSFER (pick a target on TARGETS), LANDING, STOP (kill all speeds, hold height). FLIGHT page: cruise height and speed. Screens are in Russian in this beta.
+TEST - SUPPORTS: walk into Tantra's cup feet (discs R 6-12 m): she must stop at the rim. Only the feet are solid in this beta (on foot, ship on the ground); hull, upper legs and anything in flight are not.
+BOARDING: walk to the lift foot under the main airlock, F - board the lift, click UP inside the cabin.
+Known: footsteps are heard in vacuum.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52001.9470
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Niza_Krit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Niza_Krit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 50.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Tantra:Tantra
+  STATUS Landed Mars
+  POS -65.6048600 -13.6834700
+  HEADING 295.00
+  PRPLEVEL 0:1.000 1:1.000 2:1.000 3:1.000 4:1.000 5:1.000
+  ENGSET 0
+  IGNITION 0
+  GLIMIT 1 5.00
+  CARRIAGE 0.0000 0.0 1.000 1 0 0
+  CREW 1 44 62 82 Capt - Erg Noor
+  CREW 0 23 62 58 Spe Niza_Krit Niza Krit
+  CREW 1 36 62 74 Spe - Pel Lin
+  CREW 1 52 62 80 APhy - Pur Hiss
+  CREW 1 31 62 60 APhy - Ingrid Ditra
+  CREW 1 38 62 76 Bio - Eon Tal
+  CREW 1 35 62 57 Doc - Luma Lasvi
+  CREW 1 33 62 75 Eng - Kay Ber
+  CREW 1 34 62 62 Geo - Bina Led
+  LIFT 1.0000 1.0000 1.0000 1.0000 1
+  AIRLOCK 1
+END
+Niza_Krit:OrbiterCrew\Astronavigator
+  STATUS Landed Mars
+  POS -65.6053012 -13.6843892
+  HEADING 25.00
+  ALT 0.930
+  AFCMODE 7
+  NAME Niza Krit
+  ROLE Spe
+  SEX female
+  SUIT 1
+  FIELD 0
+  JETPACK 1
+  JET_FUEL 12.0
+END
+END_SHIPS

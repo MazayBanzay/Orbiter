@@ -266,6 +266,16 @@ TantraCrew::Event TantraCrew::Process(double dt) {
     if (scanTimer_ > 0.0) return Event::None;
     scanTimer_ = 0.5;
     for (Member& m : members_) Link(m);   // older scenarios, outside members found again after loading
+    // a ship without a crew in its scenario (made in the scenario editor): its astronavigator stands in the cabin behind
+    // the seats from the start - her body there, the focus and the camera hers (OrbiterCrew ocEnterInterior)
+    if (!loadedFromScenario_ && hasDefPlace_ && placeTries_ < 10 && api_.EnterInterior && !members_.empty() && members_[0].aboard &&
+        members_[0].person) {
+        ++placeTries_;
+        if (api_.EnterInterior(members_[0].person, &defPos_, &defDir_)) {
+            placeTries_ = 10;
+            oapiWriteLogV("Tantra crew: %s stands in the cabin (a ship without a crew in its scenario)", members_[0].name.c_str());
+        }
+    }
     if (returned_) { returned_ = false; return Event::Returned; }   // boarded by F at the lift
     if (registered_) return Event::None;                           // entering is the person's own action (F)
     if (!airlockOpen_ || !api_.Ok()) return Event::None;

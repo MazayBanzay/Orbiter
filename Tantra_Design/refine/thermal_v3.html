@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тантра: тепловой экран v3</title>
+<style>
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:#1a1f24;color:#d8e2ea;font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+#wrap{padding:10px 12px;max-width:1700px;margin:0 auto}
+h1{font-size:16px;margin:0 0 4px;color:#e8eef3}
+h2{font-size:15px;margin:18px 0 6px;color:#e8eef3}
+.note{font-size:12px;color:#93a3b1}
+canvas{display:block;width:100%;border-radius:10px;background:#0a1311;aspect-ratio:1600/800}
+.ctl{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0;align-items:center}
+.grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+button{font:inherit;padding:5px 9px;border:1px solid #3a4652;border-radius:6px;background:#26303a;color:#d8e2ea;cursor:pointer}
+button.on{background:#2b6cb0;border-color:#2b6cb0;color:#fff}
+input[type=range]{width:150px}
+label{font-size:12px;color:#93a3b1}
+#tabMsg{font-size:12px;color:#93a3b1;min-height:18px;margin-top:4px}
+ol.chg{margin:0;padding-left:22px;font-size:13px;color:#c6d3dc;max-width:1200px}
+ol.chg li{margin:3px 0}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Тепловой экран v3 — доработка (не замена): шрифт ГОСТ, кегли, сетка, без наложений</h1>
+  <div class="note">Обшивка — модель core/Damage.cpp: нагрев Саттона—Грейвса по зонам, радиационное равновесие (ε 0,85), тепловая инерция зон.
+  Прогноз — тот же расчёт, прогнанный вперёд до конца входа. Двигатели — модель силовой установки (корма, рубашка, обмотка). Правила — refine/SPEC.md.</div>
+  <div class="ctl">
+    <span class="grp"><label>Шрифт</label><span id="fnB" class="grp"></span></span>
+    <span class="grp"><label>Сценарий</label><span id="scB" class="grp"></span></span>
+    <span class="grp"><label>Крылья</label><span id="wgB" class="grp"></span></span>
+    <span class="grp"><label>Масса <b id="mV"></b></label><input id="mass" type="range" min="15" max="52.34" step="0.5" value="52.34"></span>
+    <span class="grp"><label>Атака <b id="aV"></b></label><input id="aoa" type="range" min="15" max="60" step="1" value="40"></span>
+    <span class="grp"><label>Угол входа <b id="gV"></b></label><input id="gam" type="range" min="0.5" max="8" step="0.1" value="1.2"></span>
+    <span class="grp"><label>Крен <b id="bV"></b></label><input id="bank" type="range" min="0" max="180" step="5" value="0"></span>
+    <span class="grp"><label>Маршевый <b id="tV"></b></label><input id="thr" type="range" min="0" max="100" step="1" value="0"></span>
+    <span class="grp"><label>Ускорение</label><span id="spB" class="grp"></span></span>
+  </div>
+  <canvas id="scr" width="1600" height="800"></canvas>
+  <div id="tabMsg"></div>
+  <h2>Что изменено и почему</h2>
+  <ol class="chg" id="chg"></ol>
+</div>
+<script src="../tantra_plant_model.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+// the palette of SPEC.md: the dim text lighter (#6fb3a8); the old dim #4f8f86 only for lines
+const COL = {bg: "#0a1311", fr: "#1f3a35", tx: "#7fe0d0", dim: "#6fb3a8", line: "#4f8f86", or: "#ee9a3a", ye: "#e8d35a", rd: "#ff5a4a", gr: "#5ad0a0", wh: "#e8fffa", bl: "#7fb8ff",
+  band: "#0f1d1a", grid: "#16302a", track: "#14211e", spark: "#0f1a18", edge: "#6a8090"};
+const fmt = (v, d = 1) => isFinite(v) ? v.toLocaleString("ru-RU", {minimumFractionDigits: d, maximumFractionDigits: d}) : "—";
+const clock = t => { const s = Math.max(0, Math.floor(t)); return s < 3600 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
+const RE = 6371e3, H_SCALE = 8500, RHO0 = 1.225, K_SG = 1.7415e-4, EPS = 0.85, G0 = 9.81, G_LIM = 4;
+// skin zones = core/Damage.cpp: effective nose radius Rn [m], material limit [K], thermal lag [s]
+const ZONES = [{k: "nose", t: "нос (иридий)", s: "нос", rn: 3.0, lim: 2400, tau: 25}, {k: "belly", t: "днище", s: "днище", rn: 12.0, lim: 2200, tau: 40},
+  {k: "edge", t: "кромки крыльев", s: "кромки", rn: 0.45, lim: 2100, tau: 15}, {k: "fin", t: "перо · гребни", s: "перо", rn: 3.0, lim: 2000, tau: 20},
+  {k: "stern", t: "корма", s: "корма", rn: 10.9, lim: 2000, tau: 40}, {k: "gear", t: "ноги (створки)", s: "ноги", rn: 1.0, lim: 1300, tau: 10}, {k: "pods", t: "гондолы", s: "гондолы", rn: 1.0, lim: 1300, tau: 10}];
+// the wings: planform area, lift share, how much of the edges meets the flow (folded: they lie along the hull)
+const WINGS = [{t: "90°", A: 5200, cl: 1.0, edge: 0.71}, {t: "30°", A: 5000, cl: 0.95, edge: 0.6}, {t: "сложены", A: 4300, cl: 0.75, edge: 0.06}];
+const SCEN = {
+  orbit: {t: "ВХОД С ОРБИТЫ 7,8", v: 7800, gam: 1.2, bank: 0},
+  return: {t: "ВХОД С ПЕРЕЛЁТА 11,2", v: 11200, gam: 6.0, bank: 120},
+  start: {t: "СТАРТ С ЗЕМЛИ", v: 0},
+  space: {t: "КОСМОС", v: 0},
+};
+const T_SAFE = 800, T_BOIL = 1100, T_LOST = 2300, C_STERN = PM.STERN_STORE / 1400, CHI = 1e-5;
+const S = {sc: "orbit", bank: 0, wings: 1, mass: 52.34e6, aoa: 40, gam: 1.2, thr: 0, speed: 1, t: 0, alarms: [], hist: [], histT: 0, predT: -99, pred: null, lost: ""};
+function alarm(txt, lvl = "warn") { S.alarms.unshift({t: S.t, txt, lvl}); if (S.alarms.length > 6) S.alarms.pop(); }
+const rhoAt = h => h > 200e3 ? 0 : RHO0 * Math.exp(-h / H_SCALE);
+function reset() {
+  const sc = SCEN[S.sc];
+  S.t = 0; S.alarms = []; S.hist = []; S.histT = 0; S.lost = ""; S.crossed = {}; S.predT = -99;
+  S.f = {h: sc.v ? 120e3 : 0, v: sc.v, gam: -(S.gam) * Math.PI / 180, done: !sc.v, Q: 0, q: 0, n: 0, x: 0};
+  S.skin = ZONES.map(() => S.sc === "space" ? 200 : 260); S.dT = ZONES.map(() => 0); S.over = ZONES.map(() => 0); S.flux = ZONES.map(() => 0);
+  S.eng = {T: 290, coil: 20, cup: 290, jOut: 87, pods: 290, ana: [290, 290, 290, 290], retro: [290, 290], rad: 290, F: 0, mdot: 0, qIn: 0};
+  S.track = [];
+  alarm(sc.v ? `Вход: 120 км, ${fmt(sc.v, 0)} м/с, угол ${fmt(S.gam, 1)}°` : sc.t, "ok");
+}
+// one step of the entry flight (point mass, lift up) and the skin; shared by the live run and the predictor
+function aero(aoaDeg, w) {
+  const a = aoaDeg * Math.PI / 180, Wg = WINGS[w];
+  return {A: Wg.A * Math.sin(a) + 650 * Math.cos(a), Cd: 1.6 * Math.sin(a) ** 2 + 0.3, CL: 0.45 * Math.sin(2 * a) * Wg.cl, ca: Math.cos(a), sa: Math.sin(a), cb: Math.cos(S.bank * Math.PI / 180)};
+}
+function expoOf(ae, w) { return {nose: Math.max(0.05, ae.ca), belly: Math.max(0.05, ae.sa), edge: WINGS[w].edge, fin: 0.05, stern: 0.05, gear: 0.02, pods: 0.02}; }
+function flightStep(f, m, ae, dt) {
+  if (f.done) return;
+  const gg = G0 * (RE / (RE + f.h)) ** 2, rho = rhoAt(f.h), q = 0.5 * rho * f.v * f.v, D = q * ae.Cd * ae.A, L = q * ae.CL * ae.A;
+  f.v += (-D / m - gg * Math.sin(f.gam)) * dt;
+  f.gam += (L * ae.cb / (m * Math.max(50, f.v)) - (gg / Math.max(50, f.v) - f.v / (RE + f.h)) * Math.cos(f.gam)) * dt;
+  f.h += f.v * Math.sin(f.gam) * dt; f.x += f.v * Math.cos(f.gam) * dt;
+  f.q = q; f.n = Math.hypot(D, L) / m / G0;
+  if (f.v < 600 || f.h < 12e3) f.done = true;
+  if (f.h > 125e3 && f.gam > 0) { f.done = true; f.skip = true; }
+}
+function skinStep(skin, flux, f, ae, w, dt, Tamb, sternHot) {
+  const rho = f.done && S.sc !== "start" ? 0 : rhoAt(f.h), v = f.done && S.sc !== "start" ? 0 : f.v;
+  const base = K_SG * Math.sqrt(rho) * v * v * v, ex = expoOf(ae, w);
+  ZONES.forEach((z, i) => {
+    flux[i] = base / Math.sqrt(z.rn) * ex[z.k];
+    const tEq = Math.pow(flux[i] / (EPS * PM.SIG) + Tamb ** 4, 0.25);
+    skin[i] += (Math.max(tEq, z.k === "stern" ? sternHot : 0) - skin[i]) * Math.min(1, dt / z.tau);
+  });
+}
+// the predictor: the same model run forward to the end of the entry
+function predict() {
+  const f = {...S.f}, skin = S.skin.slice(), flux = S.flux.slice(), ae = aero(S.aoa, S.wings), dt = 0.5;
+  const peak = ZONES.map((z, i) => ({T: skin[i], t: 0})), track = []; let nMax = {n: f.n, t: 0}, qMax = {q: flux[0], t: 0}, t = 0, Q = f.Q;
+  for (let k = 0; k < 4000 && !f.done; k++) {
+    flightStep(f, S.mass, ae, dt); skinStep(skin, flux, f, ae, S.wings, dt, 250, 0); t += dt; Q += flux[0] * dt;
+    skin.forEach((Tk, i) => { if (Tk > peak[i].T) peak[i] = {T: Tk, t}; });
+    if (f.n > nMax.n) nMax = {n: f.n, t}; if (flux[0] > qMax.q) qMax = {q: flux[0], t};
+    if (k % 8 === 0) track.push([f.v, f.h]);
+  }
+  return {peak, nMax, qMax, track, end: {h: f.h, v: f.v, t, skip: f.skip}, Q};
+}
+// the power plant's heat on the climb (as on the plant screen): the stern, the jacket, the windings, the pods
+function plantStep(dt) {
+  const E = S.eng, f = S.f, thr = S.sc === "start" ? S.thr / 100 : 0;
+  if (thr > 0) {
+    const mass = f.h < 30e3 ? "argon" : "iron";
+    const c = PM.cup({B: PM.B_NOM, PfMax: PM.PF_MARCH, mass, chi: CHI, d: 15, deployed: true});
+    const F = c.F * thr, mdot = c.mdot * thr, Pjet = F * c.v / 2, Pf = c.Pf * thr;
+    const qIn = CHI * Pf * PM.sternFraction(15) + PM.groundHeat(Pjet, 22.5 + f.h, mass) + PM.airHeat(Pjet, rhoAt(f.h), mass);
+    const regen = mdot * PM.H_COOL[mass], rad = 0.9 * PM.SIG * Math.pow(Math.min(E.T, 1800), 4) * PM.RAD_AREA;
+    E.T = Math.max(290, E.T + (qIn - regen - rad) * dt / C_STERN);
+    E.F = F + (f.h < 30e3 ? 4 * 0.6 * F * 0.25 : 0); E.mdot = mdot; E.qIn = qIn; E.mass = mass;
+    E.jOut = (mass === "argon" ? 87 : 300) + Math.min(2600, qIn / Math.max(1, mdot * (mass === "argon" ? 520 : 450)));
+    // the climb (vertical, the field-held thrust of the march cup plus the pods below 30 km)
+    if (!f.started) { f.started = true; f.done = false; f.gam = Math.PI / 2; alarm("Старт: маршевый на аргоне, гондолы", "ok"); }
+    const D = 0.5 * rhoAt(f.h) * f.v * f.v * 0.3 * 650;
+    const a = (E.F - D) / S.mass - G0 * (RE / (RE + f.h)) ** 2;
+    if (f.h > 0 || a > 0) { f.v = Math.max(0, f.v + a * dt); f.h = Math.max(0, f.h + f.v * dt); }
+    f.q = 0.5 * rhoAt(f.h) * f.v * f.v; f.n = Math.max(0, E.F / S.mass / G0);
+  } else { E.F = 0; E.mdot = 0; E.qIn = 0; E.jOut = 87; E.T = Math.max(290, E.T - 0.9 * PM.SIG * Math.pow(Math.min(E.T, 1800), 4) * PM.RAD_AREA * dt / C_STERN); if (S.sc === "start") { f.n = 0; } }
+  E.cup = E.T + 250 * thr;
+  E.coil += (20 + Math.max(0, E.T - T_SAFE) / 60 - E.coil) * Math.min(1, dt / 8);
+  E.pods += ((thr > 0 && f.h < 30e3 ? 600 + 500 * thr : Math.max(290, S.skin[6])) - E.pods) * Math.min(1, dt / 20);
+  // the anamezon chambers soak the stern skin, the nose retro cups soak the nose
+  E.ana = E.ana.map(Tk => Tk + (Math.max(290, S.skin[4] * 0.9) - Tk) * Math.min(1, dt / 120));
+  E.retro = E.retro.map((Tk, i) => Tk + (290 + Math.max(0, S.skin[0] - 290) * (0.35 + 0.03 * i) - Tk) * Math.min(1, dt / 90));
+  E.rad += (Math.max(E.T * 0.55, S.skin[3]) - E.rad) * Math.min(1, dt / 30);
+}
+function step(dt) {
+  if (S.lost) return;
+  S.t += dt;
+  const ae = aero(S.aoa, S.wings), prev = S.skin.slice();
+  if (S.sc === "orbit" || S.sc === "return") { const wasDone = S.f.done; flightStep(S.f, S.mass, ae, dt); if (!wasDone && S.f.done) alarm(S.f.skip ? "Отскок: корабль ушёл обратно в космос" : `Вход завершён: ${fmt(S.f.h / 1e3, 0)} км, ${fmt(S.f.v, 0)} м/с`, S.f.skip ? "bad" : "ok"); }
+  plantStep(dt);
+  const ae2 = S.sc === "start" ? {...aero(0, S.wings), ca: 1, sa: 0} : ae;
+  skinStep(S.skin, S.flux, S.f, ae2, S.wings, dt, S.sc === "space" ? 4 : 250, Math.min(S.eng.T, 3000));
+  S.f.Q += S.flux[0] * dt;
+  S.skin.forEach((Tk, i) => { S.dT[i] += ((Tk - prev[i]) / dt - S.dT[i]) * Math.min(1, dt / 2); });
+  ZONES.forEach((z, i) => {
+    const over = (S.skin[i] - z.lim) / z.lim;
+    if (over > 0) {
+      S.over[i] += dt * over / 0.1;
+      if (!S.crossed["z" + i]) { S.crossed["z" + i] = true; alarm(`${z.t}: выше предела ${z.lim} К`, "bad"); }
+      if (S.over[i] > 20 && (z.k === "nose" || z.k === "belly")) { S.lost = `${z.t}: ${fmt(S.skin[i], 0)} К при пределе ${z.lim} К`; alarm("ОБШИВКА ПРОГОРЕЛА — КОРАБЛЬ ПОТЕРЯН", "bad"); }
+      if (S.over[i] > 20 && z.k === "edge" && !S.crossed.edgeDmg) { S.crossed.edgeDmg = true; alarm("Кромки крыльев оплавлены — повреждение", "bad"); }
+    } else if (S.skin[i] < z.lim - 100) S.crossed["z" + i] = false;
+  });
+  if (S.eng.T > T_LOST) { S.lost = "корма прогорела (2300 К)"; alarm("КОРМА ПРОГОРЕЛА — КОРАБЛЬ ПОТЕРЯН", "bad"); }
+  S.histT += dt;
+  if (S.histT >= 2) { S.histT = 0; S.hist.push(S.skin.slice()); if (S.hist.length > 150) S.hist.shift(); if (!S.f.done || S.sc === "start") S.track.push([S.f.v, S.f.h]); }
+  if (S.t - S.predT > 1 && (S.sc === "orbit" || S.sc === "return")) { S.predT = S.t; S.pred = predict(); }
+  if (S.sc === "start" || S.sc === "space") S.pred = null;
+}
+// what the screen recommends from the prediction
+function advice() {
+  if (S.lost) return ["корабль потерян", COL.rd];
+  if (!S.pred) return [S.sc === "start" ? "обшивка: нагрев на подъёме мал, следить за кормой и рубашкой" : "обшивка остывает излучением", COL.dim];
+  const p = S.pred, over = ZONES.map((z, i) => ({z, i, r: p.peak[i].T / z.lim})).filter(o => o.r > 1);
+  if (S.f.v > 8500 && over.some(o => o.z.k === "nose" || o.z.k === "belly")) return [`ПРОГНОЗ: нос ${fmt(p.peak[0].T, 0)} К — с ${fmt(S.f.v / 1e3, 1)} км/с не входить: двигателями до орбитальной`, COL.rd];
+  if (p.end.skip) return ["ПРОГНОЗ: ОТСКОК — круче вход или крен: подъёмную силу вниз", COL.rd];
+  if (over.some(o => o.z.k === "edge") && S.wings !== 2) return [`ПРОГНОЗ: кромки ${fmt(p.peak[2].T, 0)} К > ${ZONES[2].lim} — СЛОЖИТЬ КРЫЛЬЯ`, COL.rd];
+  if (over.some(o => o.z.k === "nose" || o.z.k === "belly")) return [`ПРОГНОЗ: ${over[0].z.t} ${fmt(p.peak[over[0].i].T, 0)} К > ${over[0].z.lim} — положе вход или больше атака`, COL.rd];
+  if (p.nMax.n > G_LIM) return [`ПРОГНОЗ: перегрузка ${fmt(p.nMax.n, 1)} g > ${G_LIM} — положе вход`, COL.ye];
+  if (over.length) return [`ПРОГНОЗ: ${over[0].z.t} выше предела`, COL.ye];
+  return ["ПРОГНОЗ: вход в пределах по всем зонам", COL.gr];
+}
+
+// ================= drawing: the refined screen (refine/SPEC.md) =================
+// Only what the game's canvas has: rectangles, lines, polylines, convex polygons, circles, text; no transparency (every
+// "faded" colour is mixed with the background beforehand), gradients as bands.
+let g;
+const FAMS = {gost: '"GOST type A", "GOST 2.304 type A", ISOCPEUR, sans-serif', iso: 'ISOCPEUR, "GOST type A", sans-serif'};
+let FAM = FAMS.gost, CAP = {};
+const fnt = (size, w, fam = FAM) => `${w >= 600 ? 700 : 400} ${size}px ${fam}`;
+// "GOST type A" draws a wrong glyph for "²" (it comes out as "l": "кВт/мl"); that one glyph is taken from
+// "GOST 2.304 type A" (the same letters, installed beside it), else the text is drawn whole
+const SUP = '"GOST 2.304 type A", "GOST type A", sans-serif';
+const pieces = s => FAM === FAMS.gost && s.includes("²") ? s.split(/(²)/).filter(Boolean).map(t => [t, t === "²" ? SUP : FAM]) : [[s, FAM]];
+function W(s, size, w = 400) { let tw = 0; for (const [t, f] of pieces(s)) { g.font = fnt(size, w, f); tw += g.measureText(t).width; } return tw; }
+function T(s, x, y, col, size = 17, al = "left", w = 400) {
+  const tw = W(s, size, w); let cx = al === "right" ? x - tw : al === "center" ? x - tw / 2 : x;
+  g.fillStyle = col; g.textAlign = "left"; g.textBaseline = "alphabetic";
+  for (const [t, f] of pieces(s)) { g.font = fnt(size, w, f); g.fillText(t, cx, y); cx += g.measureText(t).width; }
+  return tw;
+}
+function capH(size, w = 700) { const k = FAM + size + w; if (!(k in CAP)) { g.font = fnt(size, w); CAP[k] = g.measureText("Н").actualBoundingBoxAscent; } return CAP[k]; }
+// letter-spaced capitals (block titles), glyph by glyph - the game can do the same
+function TS(s, x, y, col, size, w = 700, sp = 1, al = "left") {
+  g.font = fnt(size, w); let tw = -sp; for (const ch of s) tw += g.measureText(ch).width + sp;
+  let cx = al === "right" ? x - tw : al === "center" ? x - tw / 2 : x;
+  g.fillStyle = col; g.textAlign = "left"; g.textBaseline = "alphabetic";
+  for (const ch of s) { g.fillText(ch, cx, y); cx += g.measureText(ch).width + sp; }
+  return tw;
+}
+// a run on one baseline: [text, size, weight, colour] pieces and numbers (gaps in px) - numbers bold, units smaller
+function R(parts, x, y, al = "left") {
+  let tw = 0; parts.forEach(p => tw += typeof p === "number" ? p : W(p[0], p[1], p[2]));
+  let cx = al === "right" ? x - tw : al === "center" ? x - tw / 2 : x;
+  parts.forEach(p => { if (typeof p === "number") cx += p; else cx += T(p[0], cx, y, p[3], p[1], "left", p[2]); });
+  return tw;
+}
+function RW(parts) { let tw = 0; parts.forEach(p => tw += typeof p === "number" ? p : W(p[0], p[1], p[2])); return tw; }
+function fit(s, w, size, wt = 400) { if (W(s, size, wt) <= w) return s; let t = s; while (t && W(t + "…", size, wt) > w) t = t.slice(0, -1); return t + "…"; }
+const rgb = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const css = c => "#" + c.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("");
+const mixA = (a, b, f) => a.map((v, i) => v + (b[i] - v) * f);
+const mix = (a, b, f) => css(mixA(typeof a === "string" ? rgb(a) : a, typeof b === "string" ? rgb(b) : b, f));
+function line(x0, y0, x1, y1, col, lw = 1) { g.strokeStyle = col; g.lineWidth = lw; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); }
+function disc(x, y, r, col) { g.fillStyle = col; g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill(); }
+function poly(pts) { g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); }
+function bar(x, y, w, h, f, col) { g.fillStyle = COL.track; g.fillRect(x, y, w, h); g.fillStyle = col; g.fillRect(x, y, w * Math.max(0, Math.min(1, f)), h); }
+const zc = (Tk, lim) => Tk >= lim ? COL.rd : Tk >= 0.9 * lim ? COL.or : Tk >= 0.75 * lim ? COL.ye : COL.gr;
+// the glow colour of hot metal
+const HEAT = [[250, [24, 50, 58]], [700, [44, 70, 76]], [950, [110, 30, 20]], [1250, [185, 50, 26]], [1600, [232, 112, 30]], [2000, [245, 192, 64]], [2400, [255, 242, 192]], [3000, [255, 255, 255]]];
+function heatRGB(Tk) {
+  let i = 1; while (i < HEAT.length - 1 && Tk > HEAT[i][0]) i++;
+  const [t0, c0] = HEAT[i - 1], [t1, c1] = HEAT[i], f = Math.max(0, Math.min(1, (Tk - t0) / (t1 - t0)));
+  return c0.map((c, k) => c + (c1[k] - c) * f);
+}
+const heatCol = Tk => css(heatRGB(Tk));
+
+// ---- the key module of SPEC.md: 48/56 px, 4 px corners (a convex polygon), label 20 px bold centred on the ink and the cap height
+let HITS = [];
+const KEY = {off: {f: "#0f1c1a", e: "#2f5a52", t: COL.tx}, on: {f: COL.or, e: COL.or, t: "#0a1311"}, warn: {f: "#0f1c1a", e: COL.rd, t: COL.rd}, na: {f: "#161d1c", e: null, t: "#4d5c59"}};
+function rrect(x, y, w, h, r) {
+  g.beginPath();
+  [[x + w - r, y + r, -Math.PI / 2], [x + w - r, y + h - r, 0], [x + r, y + h - r, Math.PI / 2], [x + r, y + r, Math.PI]].forEach(([cx, cy, a0]) => {
+    for (let j = 0; j <= 3; j++) { const a = a0 + j * Math.PI / 6; g.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a)); }
+  });
+  g.closePath();
+}
+function key(x, y, w, h, label, st, cmd) {
+  const k = KEY[st];
+  rrect(x + 0.75, y + 0.75, w - 1.5, h - 1.5, 4); g.fillStyle = k.f; g.fill();
+  if (k.e) { g.strokeStyle = k.e; g.lineWidth = st === "warn" ? 2 : 1.5; g.stroke(); }
+  g.font = fnt(20, 700); const m = g.measureText(label);
+  g.fillStyle = k.t; g.textAlign = "left"; g.textBaseline = "alphabetic";
+  g.fillText(label, x + w / 2 - (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2, y + h / 2 + capH(20) / 2);
+  if (cmd) HITS.push({x, y, w, h, cmd});
+}
+// a block: the frame, the title in its own band on top (capitals 18 px, spacing 1 px), the content 8 px below the band
+const BAND = 36;
+function block(x, y, w, h, title) {
+  g.fillStyle = COL.band; g.fillRect(x, y, w, BAND);
+  g.strokeStyle = COL.fr; g.lineWidth = 1.5; g.strokeRect(x, y, w, h);
+  line(x, y + BAND, x + w, y + BAND, COL.fr, 1.5);
+  TS(title, x + 16, y + 25, COL.dim, 18, 700, 1);
+}
+function lamp(x, y, col) { disc(x, y, 10, col); g.strokeStyle = mix(COL.bg, col, 0.45); g.lineWidth = 1.5; g.beginPath(); g.arc(x, y, 13, 0, 2 * Math.PI); g.stroke(); }
+
+// ---- the title bar: the page tabs as one row of equal keys, the state lamp, where the ship is
+const TABS = [["МЕХАНИЗАЦИЯ", "mech"], ["ТЕПЛО", "therm"], ["АВТОПИЛОТ", "ap"]];
+function drawTitle() {
+  TABS.forEach(([t, c], i) => key(24 + i * 210, 24, 200, 48, t, c === "therm" ? "on" : "off", c));
+  const worst = Math.max(...ZONES.map((z, i) => S.skin[i] / z.lim), S.eng.T / T_LOST * 1.2);
+  const st = S.lost ? ["ПОТЕРЯН", COL.rd] : worst >= 1 ? ["ПЕРЕГРЕВ", COL.rd] : worst >= 0.9 ? ["У ПРЕДЕЛА", COL.or] : worst >= 0.75 ? ["ВНИМАНИЕ", COL.ye] : ["НОРМА", COL.gr];
+  lamp(682, 48, st[1]); T(st[0], 706, 48 + capH(22) / 2, st[1], 22, "left", 700);
+  const sep = [" · ", 17, 400, COL.dim];
+  R([[SCEN[S.sc].t, 17, 700, COL.tx], sep, [fmt(S.mass / 1e6, 1), 17, 700, COL.tx], 4, ["кт", 15, 400, COL.dim], sep,
+     ["крылья", 15, 400, COL.dim], 5, [WINGS[S.wings].t, 17, 700, COL.tx], sep, [clock(S.t), 17, 700, COL.tx]], 1576, 48 + capH(17) / 2, "right");
+}
+
+// ---- the skin's thermal map: the hull side on, nose right, belly down; callouts in two rows above and below, the stern's
+// on the left; the colour scale in the lower row; the free stream ahead of the nose
+const MAP = {x: 24, y: 88, w: 768, h: 328, k: 2.9, ox: 120, oy: 286};
+// the zone's point on the hull (s along, z up [m]), its label's left edge, its row
+const CALL = {nose: {p: [178, 0], lx: 670, row: "top"}, fin: {p: [25, 25], lx: 226, row: "top"}, pods: {p: [60, -4], lx: 346, row: "top"},
+  stern: {p: [0, 0], lx: 40, row: "mid"}, edge: {p: [18, -6], lx: 136, row: "bot"}, gear: {p: [70, -11], lx: 286, row: "bot"}, belly: {p: [95, -11], lx: 436, row: "bot"}};
+const ROWY = {top: [152, 176], mid: [282, 306], bot: [382, 406]};   // the name's and the value's baselines
+function drawShip() {
+  block(MAP.x, MAP.y, MAP.w, MAP.h, "ОБШИВКА · ТЕРМОКАРТА");
+  const k = MAP.k, ox = MAP.ox, oy = MAP.oy, P = (s, z) => [ox + s * k, oy - z * k], f = k / 3.3;
+  const entry = (S.sc === "orbit" || S.sc === "return") && !S.f.done;
+  // the free stream at the angle of attack, ahead of the nose (the ship drawn level, the flow from ahead and below):
+  // dashed lines kept inside their own box, so they never reach a label
+  if (entry || S.sc === "start") {
+    const a = S.sc === "start" ? 0 : S.aoa * Math.PI / 180, d = [-Math.cos(a), -Math.sin(a)], nr = [-d[1], d[0]];
+    const X0 = 656, Y0 = 198, X1 = 760, Y1 = 352;
+    const cs = [[X0, Y0], [X1, Y0], [X0, Y1], [X1, Y1]].map(p => p[0] * nr[0] + p[1] * nr[1]), c0 = Math.min(...cs), c1 = Math.max(...cs), N = 6;
+    g.strokeStyle = mix(COL.bg, COL.bl, 0.45); g.lineWidth = 1.2; g.setLineDash([16, 10]);
+    for (let i = 0; i < N; i++) {
+      const c = c0 + (c1 - c0) * (i + 0.5) / N, p0 = [nr[0] * c, nr[1] * c];
+      let t0 = -1e9, t1 = 1e9;
+      for (const [ax, lo, hi] of [[0, X0, X1], [1, Y0, Y1]]) {
+        if (Math.abs(d[ax]) < 1e-9) { if (p0[ax] < lo || p0[ax] > hi) { t0 = 1; t1 = 0; } continue; }
+        let ta = (lo - p0[ax]) / d[ax], tb = (hi - p0[ax]) / d[ax]; if (ta > tb) [ta, tb] = [tb, ta];
+        t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
+      }
+      if (t1 - t0 < 16) continue;
+      const te = Math.min(t1, t0 + 104);
+      g.lineDashOffset = -((S.t * 60 + i * 37) % 26);
+      g.beginPath(); g.moveTo(p0[0] + d[0] * t0, p0[1] + d[1] * t0); g.lineTo(p0[0] + d[0] * te, p0[1] + d[1] * te); g.stroke();
+    }
+    g.setLineDash([]); g.lineDashOffset = 0;
+    T(S.sc === "start" ? "поток вдоль оси" : `поток · атака ${S.aoa}°`, 646, ROWY.top[0], COL.bl, 15, "right");
+  }
+  // the plasma sheath on the windward belly, thickest at the nose, and the bow shock (opacity mixed into the colour)
+  const fn = S.flux[0];
+  if (entry && fn > 2e4) {
+    const al = Math.min(0.5, fn / 2e6), p0 = P(0, -11), p1 = P(140, -11), p2 = P(178, 0), bg = rgb(COL.bg);
+    g.fillStyle = css(mixA(bg, [255, 150, 70], al)); g.beginPath();
+    g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); g.lineTo(p2[0], p2[1]); g.lineTo(p2[0] + 10 * f, p2[1] + 8 * f);
+    g.quadraticCurveTo(p1[0] + 20 * f, p1[1] + 26 * f, p0[0], p0[1] + 14 * f); g.closePath(); g.fill();
+    g.strokeStyle = css(mixA(bg, [255, 200, 140], al)); g.lineWidth = 1.5; g.beginPath();
+    g.moveTo(p2[0] + 6 * f, p2[1] - 40 * f); g.quadraticCurveTo(p2[0] + 34 * f, p2[1] + 22 * f, p0[0] + 40 * f, p0[1] + 46 * f); g.stroke();
+  }
+  // the hull in cells (the game's bands): along it the stern, the belly, the nose; across it the leeward top darkened
+  const Tn = S.skin[0], Tb = S.skin[1], Ts = S.skin[4], cS = heatRGB(Ts), cB = heatRGB(Tb), cN = heatRGB(Tn), bgA = rgb(COL.bg);
+  const along = u => u < 0.08 ? mixA(cS, cB, u / 0.08) : u <= 0.75 ? cB : mixA(cB, cN, (u - 0.75) / 0.25);
+  const lee = w => w < 0.6 ? 0.65 - 0.55 * w / 0.6 : 0.1 * (1 - (w - 0.6) / 0.4);
+  const hull = [[0, 10], [120, 10], [178, 0], [140, -11], [0, -11]].map(q => P(q[0], q[1]));
+  const xa = P(0, 0)[0], xb = P(178, 0)[0], ya = P(0, 10)[1], yb = P(0, -11)[1];
+  const KU = [0, 0.02, 0.04, 0.06, 0.08, 0.75, 0.78, 0.81, 0.84, 0.875, 0.91, 0.94, 0.97, 1.0], KW = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0];
+  g.save(); poly(hull); g.clip();
+  for (let i = 0; i < KU.length - 1; i++) for (let j = 0; j < KW.length - 1; j++) {
+    g.fillStyle = css(mixA(along((KU[i] + KU[i + 1]) / 2), bgA, lee((KW[j] + KW[j + 1]) / 2)));
+    const x0 = xa + (xb - xa) * KU[i], y0 = ya + (yb - ya) * KW[j];
+    g.fillRect(x0, y0, (xb - xa) * (KU[i + 1] - KU[i]) + 0.7, (yb - ya) * (KW[j + 1] - KW[j]) + 0.7);
+  }
+  g.restore();
+  poly(hull); g.strokeStyle = COL.edge; g.lineWidth = 1.2; g.stroke();
+  // the fin (the crests), the wing at its setting, the stern face
+  poly([[4, 10], [48, 10], [37, 33], [6, 33]].map(q => P(q[0], q[1]))); g.fillStyle = heatCol(S.skin[3]); g.fill(); g.stroke();
+  const wz = [[-8, -6], [-9, -2], [-4, -1]][S.wings];
+  poly([[0, wz[0]], [26, wz[0] + 1.5], [16, wz[1] - 1], [0, wz[1] - 1]].map(q => P(q[0], q[1]))); g.fillStyle = heatCol(S.skin[2]); g.fill(); g.stroke();
+  const sf = P(0, 10), sb = P(-1.5, -11); g.fillStyle = heatCol(Ts); g.fillRect(sb[0], sf[1], 4.5, sb[1] - sf[1]);
+  // the callouts: the leader stops 6 px short of the label; the label: the zone's name, its temperature
+  const leader = mix(COL.bg, COL.tx, 0.42);
+  ZONES.forEach((z, i) => {
+    const C = CALL[z.k], p = P(C.p[0], C.p[1]), c = zc(S.skin[i], z.lim), [yn, yv] = ROWY[C.row];
+    const val = [[fmt(S.skin[i], 0), 22, 700, c], 3, ["К", 15, 400, c]];
+    const bw = Math.max(W(z.s, 15), RW(val)), bx0 = C.lx, bx1 = C.lx + bw, by0 = yn - capH(15, 400), by1 = yv;
+    const ex = Math.max(bx0 - 6, Math.min(bx1 + 6, p[0])), ey = Math.max(by0 - 6, Math.min(by1 + 6, p[1]));
+    if (Math.hypot(ex - p[0], ey - p[1]) > 8) line(p[0], p[1], ex, ey, leader, 1);
+    disc(p[0], p[1], 4, c);
+    T(z.s, C.lx, yn, COL.dim, 15);
+    R(val, C.lx, yv);
+  });
+  // the colour scale of hot metal, in the lower row: 2 px bands, the ticks every 500 K, the numbers under it
+  const bx = 540, by = 372, bw = 212;
+  for (let i = 0; i < bw; i += 2) { g.fillStyle = heatCol(250 + 2750 * (i + 1) / bw); g.fillRect(bx + i, by, Math.min(3, bw - i), 10); }
+  g.fillStyle = COL.line;
+  [500, 1000, 1500, 2000, 2500].forEach(t0 => { const x = bx + (t0 - 250) / 2750 * bw; g.fillRect(x - 0.5, by + 10, 1, 4); T(String(t0), x, ROWY.bot[1] - 4, COL.dim, 15, "center"); g.fillStyle = COL.line; });
+  T("К", bx + bw, ROWY.bot[1] - 4, COL.dim, 15, "right");
+}
+
+// ---- the zones' table: units in the heads, numbers right-aligned, the bar under the name (never through it),
+// the closest zone in the band, the advice on a plate under the table
+// the columns: right edges of the numbers, spaced so that the heads keep 12 px apart in either font
+const ZT = {x: 808, y: 88, w: 768, h: 328, lamp: 832, name: 846, bar: 132, cT: 1036, cLim: 1100, cM: 1170, cQ: 1246, cD: 1324, sp: 1340, spW: 90, cP: 1500, cAt: 1560, row0: 152, pitch: 32};
+function spark(x, y, w, h, i, lim) {
+  g.fillStyle = COL.spark; g.fillRect(x, y, w, h);
+  const top = Math.max(lim * 1.1, 600), ly = y + h - h * lim / top;
+  g.strokeStyle = mix(COL.spark, COL.rd, 0.55); g.lineWidth = 1; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x, ly); g.lineTo(x + w, ly); g.stroke(); g.setLineDash([]);
+  if (S.hist.length < 2) return;
+  g.strokeStyle = COL.tx; g.lineWidth = 1.4; g.beginPath();
+  S.hist.forEach((r, k) => { const X = x + w * k / 149, Y = y + h - h * Math.min(1, r[i] / top); k ? g.lineTo(X, Y) : g.moveTo(X, Y); }); g.stroke();
+}
+function drawZones() {
+  const Z = ZT;
+  block(Z.x, Z.y, Z.w, Z.h, "ЗОНЫ ОБШИВКИ");
+  const worst = ZONES.map((z, i) => ({z, i, r: S.skin[i] / z.lim})).sort((a, b) => b.r - a.r)[0], wc = zc(S.skin[worst.i], worst.z.lim);
+  R([["ближе всех к пределу:", 17, 400, COL.dim], 7, [worst.z.t, 17, 700, wc], 7, ["—", 17, 400, COL.dim], 7, [fmt(worst.r * 100, 0), 17, 700, wc], 4, ["% предела", 15, 400, COL.dim]],
+    Z.x + Z.w - 16, Z.y + 25, "right");
+  const hy = Z.y + BAND + 8 + capH(15, 400) + 1;
+  T("зона", Z.name, hy, COL.dim, 15);
+  [["T, К", Z.cT], ["предел", Z.cLim], ["запас, %", Z.cM], ["q, кВт/м²", Z.cQ], ["dT/dt, К/с", Z.cD], ["прогноз, К", Z.cP], ["через, с", Z.cAt]].forEach(([h, x]) => T(h, x, hy, COL.dim, 15, "right"));
+  T("5 мин", Z.sp, hy, COL.dim, 15);
+  ZONES.forEach((z, i) => {
+    const top = Z.row0 + i * Z.pitch, yb = top + 20, Tk = S.skin[i], c = zc(Tk, z.lim), m = (z.lim - Tk) / z.lim;
+    disc(Z.lamp, top + 15, 6, c);
+    T(z.t, Z.name, yb, COL.tx, 17);
+    bar(Z.name, top + 27, Z.bar, 4, Tk / z.lim, c);
+    T(fmt(Tk, 0), Z.cT, yb, c, 22, "right", 700);
+    T(String(z.lim), Z.cLim, yb, COL.dim, 17, "right");
+    T(fmt(m * 100, 0), Z.cM, yb, c, 17, "right", 700);
+    T(S.flux[i] >= 1e3 ? fmt(S.flux[i] / 1e3, 0) : S.flux[i] > 1 ? "<1" : "0", Z.cQ, yb, COL.tx, 17, "right");
+    T((S.dT[i] >= 0 ? "+" : "−") + fmt(Math.abs(S.dT[i]), 1), Z.cD, yb, Math.abs(S.dT[i]) < 0.05 ? COL.dim : S.dT[i] > 0 ? COL.or : COL.bl, 17, "right");
+    spark(Z.sp, top + 3, Z.spW, 24, i, z.lim);
+    if (S.pred) {
+      const p = S.pred.peak[i];
+      if (p.T > Tk + 1) { T(fmt(p.T, 0), Z.cP, yb, zc(p.T, z.lim), 17, "right", 700); T(fmt(p.t, 0), Z.cAt, yb, COL.tx, 17, "right"); }
+      else T("пройден", Z.cAt, yb, COL.dim, 17, "right");
+    } else { T("—", Z.cP, yb, COL.dim, 17, "right"); T("—", Z.cAt, yb, COL.dim, 17, "right"); }
+  });
+  // the advice: a plate (an indicator, not a key): no frame, a colour stripe on the left
+  const adv = advice(), py = Z.row0 + 7 * Z.pitch + 6, ph = 28;
+  g.fillStyle = COL.band; g.fillRect(Z.x + 16, py, Z.w - 32, ph); g.fillStyle = adv[1]; g.fillRect(Z.x + 16, py, 4, ph);
+  T(fit(adv[0], Z.w - 64, 17, 700), Z.x + 32, py + ph / 2 + capH(17) / 2, adv[1], 17, "left", 700);
+}
+
+// ---- the entry corridor: altitude over speed; the curves' names and the g limit in the right margin (never on a curve)
+const CR = {x: 24, y: 432, w: 456, h: 344, x0: 72, x1: 410, y0: 722, y1: 502};
+function drawCorridor() {
+  const C = CR;
+  block(C.x, C.y, C.w, C.h, "КОРИДОР ВХОДА · ВЫСОТА / СКОРОСТЬ");
+  const x0 = C.x0, x1 = C.x1, y0 = C.y0, y1 = C.y1, VMAX = 12000, HMAX = 125e3;
+  const X = v => x0 + (x1 - x0) * v / VMAX, Y = h => y0 - (y0 - y1) * Math.min(1, Math.max(0, h) / HMAX);
+  const ch = capH(15, 400);
+  for (let v = 0; v <= VMAX; v += 2000) { line(X(v), y0, X(v), y1, COL.grid, 1); T(fmt(v / 1000, 0), X(v), y0 + 8 + ch, COL.dim, 15, "center"); }
+  for (let h = 0; h <= 120e3; h += 20e3) { line(x0, Y(h), x1, Y(h), COL.grid, 1); T(fmt(h / 1000, 0), x0 - 8, Y(h) + ch / 2, COL.dim, 15, "right"); }
+  line(x0, y0, x1, y0, COL.line, 1); line(x0, y0, x0, y1, COL.line, 1);
+  T("км", x0 - 8, y1 - 12, COL.dim, 15, "right");
+  T("км/с", x1 + 12, y0 + 8 + ch, COL.dim, 15, "left");
+  // the limits at the current attitude: below each line the zone's equilibrium temperature passes its limit
+  const ae = aero(S.aoa, S.wings), ex = expoOf(ae, S.wings), labs = [];
+  [[0, COL.rd, "нос"], [1, COL.or, "днище"], [2, COL.ye, "кромки"]].forEach(([i, c, name]) => {
+    const z = ZONES[i], qLim = EPS * PM.SIG * (z.lim ** 4 - 250 ** 4); let end = null;
+    g.strokeStyle = c; g.lineWidth = 2; g.beginPath();
+    for (let v = 2500; v <= VMAX; v += 100) {
+      const rho = z.rn * (qLim / (K_SG * v ** 3 * Math.max(1e-3, ex[z.k]))) ** 2, h = -H_SCALE * Math.log(rho / RHO0);
+      if (h < 0 || h > HMAX) continue; end ? g.lineTo(X(v), Y(h)) : g.moveTo(X(v), Y(h)); end = [X(v), Y(h)];
+    }
+    g.stroke(); if (end) labs.push({t: name, c, e: end});
+  });
+  // the g limit
+  const qG = G_LIM * S.mass * G0 / (ae.A * Math.hypot(ae.Cd, ae.CL)); let gEnd = null;
+  g.strokeStyle = COL.bl; g.lineWidth = 1.6; g.setLineDash([6, 4]); g.beginPath();
+  for (let v = 1500; v <= VMAX; v += 100) { const h = -H_SCALE * Math.log(2 * qG / (v * v) / RHO0); if (h < 0 || h > HMAX) continue; gEnd ? g.lineTo(X(v), Y(h)) : g.moveTo(X(v), Y(h)); gEnd = [X(v), Y(h)]; }
+  g.stroke(); g.setLineDash([]); if (gEnd) labs.push({t: `${G_LIM} g`, c: COL.bl, e: gEnd});
+  // the names in the right margin at their curves' ends, spread 20 px apart; a thin lead when moved off the end
+  labs.forEach(l => l.y = Math.max(y1 + ch, Math.min(y0, l.e[1] + ch / 2)));
+  labs.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < labs.length; i++) labs[i].y = Math.max(labs[i].y, labs[i - 1].y + 20);
+  for (let i = labs.length - 1; i >= 0; i--) { if (labs[i].y > y0) labs[i].y = y0; if (i < labs.length - 1 && labs[i].y > labs[i + 1].y - 20) labs[i].y = labs[i + 1].y - 20; }
+  labs.forEach(l => {
+    const ly = l.y - ch / 2;
+    if (Math.abs(ly - l.e[1]) > 2 || l.e[0] < x1 - 2) line(l.e[0] + 2, l.e[1], x1 + 6, ly, mix(COL.bg, l.c, 0.6), 1);
+    T(l.t, x1 + 12, l.y, l.c, 15, "left", 700);
+  });
+  // the prediction and the flown track
+  if (S.pred) { g.strokeStyle = mix(COL.bg, COL.ye, 0.7); g.setLineDash([4, 4]); g.lineWidth = 1.6; g.beginPath(); g.moveTo(X(S.f.v), Y(S.f.h)); S.pred.track.forEach(p => g.lineTo(X(p[0]), Y(p[1]))); g.stroke(); g.setLineDash([]); }
+  g.strokeStyle = COL.tx; g.lineWidth = 2.2; g.beginPath(); S.track.forEach((p, k) => k ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))); g.stroke();
+  disc(X(S.f.v), Y(S.f.h), 5, COL.wh);
+  // the key to the plot, under it
+  const ny = C.y + C.h - 12;
+  let nx = C.x + 16 + T("ниже линии зона перегревается в равновесии", C.x + 16, ny, COL.dim, 15) + 14;
+  g.strokeStyle = mix(COL.bg, COL.ye, 0.7); g.lineWidth = 1.6; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(nx, ny - 5); g.lineTo(nx + 24, ny - 5); g.stroke(); g.setLineDash([]);
+  T("прогноз", nx + 30, ny, COL.dim, 15);
+}
+
+// ---- the flight (labels and values close, units in their own column), the forecast to the end of the entry, the events
+const FL = {x: 496, y: 432, w: 616, h: 344};
+function drawFlight() {
+  const B = FL, L = B.x + 16;
+  block(B.x, B.y, B.w, B.h, "ПОЛЁТ · ПРОГНОЗ");
+  const f = S.f, a = 300, top0 = B.y + BAND + 8;
+  // degrees stay on the number (a sign, not a unit column)
+  const rows = [["высота", fmt(f.h / 1e3, 1), "км"], ["скорость", fmt(f.v, 0), "м/с"], ["траектория", fmt(f.gam * 180 / Math.PI, 1) + "°", ""], ["Мах", fmt(f.v / a, 1), ""],
+    ["напор", fmt((f.q || 0) / 1e3, 1), "кПа"], ["перегрузка", fmt(f.n || 0, 2), "g"], ["атака", (S.sc === "start" ? "0" : String(S.aoa)) + "°", ""], ["крен", S.sc === "start" ? "—" : S.bank + "°", ""],
+    ["поток нос", fmt(S.flux[0] / 1e3, 0), "кВт/м²"], ["нагрузка", fmt(f.Q / 1e6, 0), "МДж/м²"]];
+  rows.forEach((r, i) => {
+    const cx = L + (i % 2) * 300, yb = top0 + Math.floor(i / 2) * 32 + 22;
+    T(r[0], cx, yb, COL.dim, 17); T(r[1], cx + 158, yb, COL.tx, 22, "right", 700); if (r[2]) T(r[2], cx + 164, yb, COL.dim, 15);
+  });
+  // the forecast: what, how much, in how long
+  const sy = top0 + 5 * 32 + 8 + capH(15) + 4, r0 = sy + 29, FX = L, FR = L + 290;
+  TS("ПРОГНОЗ ДО КОНЦА ВХОДА", FX, sy, COL.dim, 15, 700, 1);
+  if (S.pred) {
+    const p = S.pred, u = s => [s, 15, 400, COL.dim];
+    T("через", FR, sy, COL.dim, 15, "right");
+    [["пик потока нос", [[fmt(p.qMax.q / 1e3, 0), 17, 700, COL.tx], 4, u("кВт/м²")], p.qMax.t],
+     ["пик перегрузки", [[fmt(p.nMax.n, 1), 17, 700, p.nMax.n > G_LIM ? COL.ye : COL.tx], 4, u("g")], p.nMax.t],
+     ["конец входа", p.end.skip ? [["ОТСКОК", 17, 700, COL.rd]] : [[fmt(p.end.h / 1e3, 0), 17, 700, COL.tx], 4, u("км"), u("  ·  "), [fmt(p.end.v, 0), 17, 700, COL.tx], 4, u("м/с")], p.end.t]]
+      .forEach((r, i) => { const yb = r0 + i * 32; T(r[0], FX, yb, COL.dim, 17); R(r[1], FX + 230, yb, "right"); R([[fmt(r[2], 0), 17, 400, COL.tx], 4, u("с")], FR, yb, "right"); });
+  } else T(S.sc === "start" ? "вход не идёт — подъём" : "вход не идёт", FX, r0, COL.dim, 17);
+  // the events: time, text (the latest on top)
+  const EX = L + 304, ER = B.x + B.w - 16;
+  TS("СОБЫТИЯ", EX, sy, COL.dim, 15, 700, 1);
+  S.alarms.slice(0, 3).forEach((al, i) => {
+    const yb = r0 + i * 32, c = al.lvl === "bad" ? COL.rd : al.lvl === "ok" ? COL.gr : COL.ye;
+    T(clock(al.t), EX + 36, yb, COL.dim, 15, "right");
+    T(fit(al.txt, ER - EX - 44, 15), EX + 44, yb, c, 15);
+  });
+}
+
+// ---- the engines: name over its note on the left, the bar after them, the value right of the bar, the limit last;
+// the anamezon chambers and the nose retro cups as cells
+const EN = {x: 1128, y: 432, w: 448, h: 344};
+function drawEngines() {
+  const B = EN, L = B.x + 16, RR = B.x + B.w - 16;
+  block(B.x, B.y, B.w, B.h, "ДВИГАТЕЛИ · ТЕМПЕРАТУРЫ");
+  const E = S.eng, run = E.F > 0;
+  const rows = [["корма (конструкция)", E.T, T_SAFE, "безопасно до 800, прогар 2300"], ["чаша маршевая, стенка", E.cup, 2000, run ? "в работе" : "холодная"],
+    ["рубашка, выход", run ? E.jOut : 0, 1100, run ? (E.mass === "argon" ? "аргон 87 К на входе" : "железо 300 К на входе") : "нет протока"], ["обмотка поля", E.coil, 26, "REBCO, 20 К номинал"],
+    ["гондолы 1–4", E.pods, 1300, run && S.f.h < 30e3 ? "в работе" : "выключены"], ["радиаторы: гребни, перо", E.rad, 1500, "излучают"]];
+  let nameW = 0; rows.forEach(r => nameW = Math.max(nameW, W(r[0], 17), W(r[3], 15)));
+  const valR = RR - 86, barX = L + nameW + 14, barR = valR - W("2 000", 22, 700) - 12, top0 = B.y + BAND + 8;
+  rows.forEach((r, i) => {
+    const top = top0 + i * 40, ok = r[1] > 0, c = ok ? zc(r[1], r[2]) : COL.dim, vb = top + 18 + capH(22) / 2;
+    T(r[0], L, top + 15, COL.tx, 17); T(r[3], L, top + 33, COL.dim, 15);
+    if (ok) { bar(barX, top + 14, barR - barX, 8, r[1] / r[2], c); T(fmt(r[1], r[2] < 100 ? 1 : 0), valR, vb, c, 22, "right", 700); T("К", valR + 4, vb, c, 15); }
+    else { g.fillStyle = COL.track; g.fillRect(barX, top + 14, barR - barX, 8); T("—", valR, vb, COL.dim, 22, "right", 700); }
+    T(`/ ${r[2]}`, RR, vb, COL.dim, 15, "right");
+  });
+  // the cells: the group's name over its cells, the limit and the state in the line of the names
+  const cy = top0 + 6 * 40 + 4, cb = cy + capH(15, 400) + 1, ky = cb + 6, kh = B.y + B.h - 8 - ky, gap = 6, ggap = 14;
+  const cw = (RR - L - 4 * gap - ggap) / 6;
+  const cells = [...E.ana.map((t0, i) => [`К${i + 1}`, t0, L + i * (cw + gap)]), ...E.retro.map((t0, i) => [`Н${i + 1}`, t0, L + 4 * (cw + gap) - gap + ggap + i * (cw + gap)])];
+  // the second group's name over its cells from the right edge: the first group's name (with the cells' limit) gets the room
+  const c2 = W("ретро-чаши носа", 15), room = RR - c2 - 12 - L;
+  const cap1 = [["камеры анамезона (корма)", 15, 400, COL.tx], [" · предел 2000 К", 15, 400, COL.dim]];
+  if (RW(cap1) > room) cap1[0][0] = "камеры анамезона";
+  R(cap1, L, cb);
+  T("ретро-чаши носа", RR, cb, COL.tx, 15, "right");
+  cells.forEach(([n, t0, x]) => {
+    const c = zc(t0, 2000);
+    g.fillStyle = COL.track; g.fillRect(x, ky, cw, kh); g.strokeStyle = c; g.lineWidth = 1.5; g.strokeRect(x + 0.75, ky + 0.75, cw - 1.5, kh - 1.5);
+    const yb = ky + kh / 2 + capH(17) / 2;
+    T(n, x + 7, yb, COL.dim, 15); T(fmt(t0, 0), x + cw - 7, yb, c, 17, "right", 700);
+  });
+}
+
+function draw() {
+  g = $("scr").getContext("2d");
+  HITS = [];
+  g.fillStyle = COL.bg; g.fillRect(0, 0, 1600, 800); g.strokeStyle = COL.fr; g.lineWidth = 2; g.strokeRect(5, 5, 1590, 790);
+  drawTitle(); drawShip(); drawZones(); drawCorridor(); drawFlight(); drawEngines();
+  if (S.lost) {
+    g.fillStyle = mix(COL.bg, "#3c0000", 0.75); g.fillRect(300, 300, 1000, 200); g.strokeStyle = COL.rd; g.lineWidth = 3; g.strokeRect(300, 300, 1000, 200);
+    T("КОРАБЛЬ ПОТЕРЯН", 800, 386, "#ffd0c8", 44, "center", 700); T(S.lost, 800, 440, "#ffd0c8", 22, "center", 400);
+  }
+}
+// ---- the mockup's controls ----
+function group(id, items, cur, on) { $(id).innerHTML = ""; for (const [k, t] of items) { const b = document.createElement("button"); b.textContent = t; if (k === cur()) b.classList.add("on"); b.onclick = () => { on(k); group(id, items, cur, on); }; $(id).appendChild(b); } }
+function controls() {
+  group("fnB", [["gost", "ГОСТ"], ["iso", "ISOCPEUR"]], () => FAM === FAMS.gost ? "gost" : "iso", k => { FAM = FAMS[k]; CAP = {}; });
+  group("scB", Object.entries(SCEN).map(([k, v]) => [k, v.t]), () => S.sc, k => { S.sc = k; if (SCEN[k].gam) { S.gam = SCEN[k].gam; $("gam").value = S.gam; S.bank = SCEN[k].bank; $("bank").value = S.bank; } reset(); labels(); });
+  group("wgB", WINGS.map((w, i) => [i, w.t]), () => S.wings, k => { S.wings = k; S.predT = -99; alarm(`Крылья: ${WINGS[k].t}`, "ok"); });
+  group("spB", [[1, "×1"], [5, "×5"], [20, "×20"]], () => S.speed, k => { S.speed = k; });
+}
+function labels() { $("mV").textContent = fmt(S.mass / 1e6, 1) + " кт"; $("aV").textContent = S.aoa + "°"; $("gV").textContent = "−" + fmt(S.gam, 1) + "°"; $("tV").textContent = S.thr + " %"; $("bV").textContent = S.bank + "°"; }
+$("mass").oninput = e => { S.mass = +e.target.value * 1e6; S.predT = -99; labels(); };
+$("aoa").oninput = e => { S.aoa = +e.target.value; S.predT = -99; labels(); };
+$("gam").oninput = e => { S.gam = +e.target.value; labels(); };
+$("gam").onchange = () => { if (SCEN[S.sc].v) reset(); };
+$("bank").oninput = e => { S.bank = +e.target.value; S.predT = -99; labels(); };
+$("thr").oninput = e => { S.thr = +e.target.value; labels(); };
+// the tabs on the canvas are keys: a click on one names the page it opens (the other pages are other mockups)
+function canvasXY(e) { const r = $("scr").getBoundingClientRect(); return [(e.clientX - r.left) * 1600 / r.width, (e.clientY - r.top) * 800 / r.height]; }
+const hitAt = (x, y) => HITS.find(h => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h);
+$("scr").addEventListener("click", e => { const h = hitAt(...canvasXY(e)); if (!h) return; const t = TABS.find(q => q[1] === h.cmd)[0]; $("tabMsg").textContent = h.cmd === "therm" ? "Вкладка ТЕПЛО — эта страница." : `Вкладка ${t}: в игре переключает страницу стойки (в этом мокапе — только тепловой экран).`; });
+$("scr").addEventListener("mousemove", e => { $("scr").style.cursor = hitAt(...canvasXY(e)) ? "pointer" : "default"; });
+const CHANGES = [
+  "Шрифт — ГОСТ 2.304 тип А на всём экране (вместо Segoe), переключатель ГОСТ / ISOCPEUR в панели мокапа — по SPEC.",
+  "Ни одной надписи мельче 15 px: подписи 17, значения 22 жирно, заголовки блоков 18 прописными с разрядкой 1 px — читается с 1–1,3 м.",
+  "Сетка: отступ от края 24 px, между блоками 16, строки таблиц 32 px (двигатели 40) — ровные колонки вместо подгонки «на глаз».",
+  "Заголовки блоков — в своей полосе сверху (не врезаны в рамку), рамка цела.",
+  "Вкладки МЕХАНИЗАЦИЯ | ТЕПЛО | АВТОПИЛОТ — три одинаковые клавиши 200×48 с подписью по центру; активная залита янтарём, подпись тёмная.",
+  "Состояние (НОРМА / ВНИМАНИЕ…) — лампа с надписью, не похожа на клавишу; сценарий, масса, крылья, время — справа в шапке.",
+  "ДВИГАТЕЛИ: полоса кончается за 12 px до значения — «300 К» больше не перечёркнуто; значение справа от полосы, «/ предел» — своя колонка.",
+  "ДВИГАТЕЛИ: пояснения («безопасно до 800, прогар 2300», «холодная», «нет протока») — 15 px отдельной строкой под названием, полоса начинается после самого длинного из них.",
+  "ДВИГАТЕЛИ: ячейки камер анамезона и ретро-чаш — в один ряд, подписи групп 15 px над ячейками, «предел 2000 К» — в подписи группы; постоянная надпись «холодные» (не зависела от температуры) снята — состояние показывает цвет рамки ячейки.",
+  "ЗОНЫ ОБШИВКИ: полоса запаса — под названием зоны с зазором 3 px, название не пересекает.",
+  "ЗОНЫ ОБШИВКИ: заголовки колонок 15 px с единицами («T, К», «запас, %», «q, кВт/м²», «dT/dt, К/с»), числа выровнены вправо; прогноз пика разнесён на две колонки — «прогноз, К» и «через, с».",
+  "ЗОНЫ ОБШИВКИ: «ближе всех к пределу» — в полосе заголовка справа; совет по прогнозу — на плашке под таблицей (индикатор: без рамки, цветная метка слева).",
+  "КОРИДОР: имена кривых (нос, днище, кромки) и «4 g» — на правом поле у концов кривых, разведены по 20 px; на кривых и друг на друге больше нет.",
+  "КОРИДОР: подписи осей 15 px, единицы «км» и «км/с» вынесены за поле графика; пояснение и образец штриха «прогноз» — строкой под графиком.",
+  "ПОЛЁТ · ПРОГНОЗ: подписи 17 px полными словами (траектория, перегрузка), значения 22 жирно сразу за ними, единицы — колонкой 15 px.",
+  "ПОЛЁТ · ПРОГНОЗ: прогноз — таблица «что / сколько / через»: время конца входа стало колонкой «через» строки «конец входа» (было отдельной строкой); события — рядом, со временем м:сс как в игре.",
+  "ТЕРМОКАРТА: выноски кончаются за 6 px до подписи; подписи — два ряда (над и под корпусом) и корма слева, ничто не лежит на корпусе или линиях.",
+  "ТЕРМОКАРТА: поток — штрихи в своём поле перед носом, в подписи не заходят; цветовая шкала — в нижнем ряду, цифры 15 px.",
+  "Без прозрачности: плазма, ударная волна, тень подветренной стороны, выноски, штрихи потока — цвета заранее смешаны с фоном, градиенты корпуса — полосами (как рисует игра).",
+];
+$("chg").innerHTML = CHANGES.map(s => `<li>${s}</li>`).join("");
+controls(); labels(); reset();
+let last = performance.now();
+setInterval(() => { const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000) * S.speed; last = now; const n = Math.max(1, Math.ceil(dt / 0.1)); for (let i = 0; i < n; i++) step(dt / n); draw(); }, 50);
+</script>
+</body>
+</html>

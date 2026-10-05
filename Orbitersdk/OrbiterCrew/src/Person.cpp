@@ -47,6 +47,8 @@ namespace ocrew
 		fmt("HURT", "%.3f %.3f %.3f %.3f", body.hurt[0], body.hurt[1], body.hurt[2], body.hurt[3]);
 		fmt("RESERVE", "%.6f", body.reserve);
 		fmt("CORE", "%.3f", body.coreT);
+		fmt("INJURY", "%.6f", body.injury);
+		if (where == ABOARD && place != STORED) oapiWriteScenario_int(scn, const_cast<char*>("PLACE"), static_cast<int>(place));
 		oapiWriteScenario_int(scn, const_cast<char*>("BODY"), static_cast<int>(body.state));
 		fmt("VIEW", "%d %.2f", viewOutside ? 1 : 0, viewDist);
 		worn.Save(scn);                    // the suit, its computer and the pack: their own lines
@@ -67,6 +69,8 @@ namespace ocrew
 		else if (key == "HURT") for (double& h : body.hurt) ss >> h;
 		else if (key == "RESERVE") ss >> body.reserve;
 		else if (key == "CORE") ss >> body.coreT;
+		else if (key == "INJURY") ss >> body.injury;
+		else if (key == "PLACE") { int pl = 0; ss >> pl; place = static_cast<Place>(std::clamp(pl, 0, 2)); }
 		else if (key == "VIEW") { int o = 0; ss >> o >> viewDist; viewOutside = o != 0; }
 		else if (key == "BODY") { int st = 0; ss >> st; body.state = static_cast<Body::State>(std::clamp(st, 0, 2)); }
 		else return false;

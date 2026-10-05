@@ -51,7 +51,7 @@ namespace ocrew
 	};
 	std::vector<ShipInterior>& interiors() { static std::vector<ShipInterior> v; return v; }
 	ShipInterior* InteriorOf(OBJHANDLE ship) { for (ShipInterior& s : interiors()) if (s.ship == ship) return &s; return nullptr; }
-	struct PendingPlace { OBJHANDLE ship{}; VECTOR3 feet{}; double hdg{}; };
+	struct PendingPlace { OBJHANDLE ship{}; VECTOR3 feet{}; double hdg{}; int seat{ -1 }; };   // seat >= 0: the body is made in it (ocSitAt)
 	PendingPlace& PendingInterior() { static PendingPlace p; return p; }
 	// the ship's label (its own code page, windows-1251) to UTF-8 for our HUD
 	std::string Utf8(const char* ansi)
@@ -109,7 +109,8 @@ namespace ocrew
 	{
 		everyone.push_back(this);
 		reborn = Crew::ClaimedExisting();
-		if (reborn && PendingInterior().ship) { inShip = PendingInterior().ship; inFeet = PendingInterior().feet; inHdg = PendingInterior().hdg; attachWait = 3; }
+		if (reborn && PendingInterior().ship) { inShip = PendingInterior().ship; inFeet = PendingInterior().feet; inHdg = PendingInterior().hdg; attachWait = 3;
+			if (PendingInterior().seat >= 0) { seat = 2; seatId = PendingInterior().seat; seatT = 1; } }   // made seated: EnterShip puts her in it, the ship is told
 		PendingInterior() = {};
 		if (reborn) { suitFromScenario = true; jetFromScenario = true; }   // what is worn keeps its state
 		who.where = inShip ? Person::INTERIOR : Person::IN_WORLD; who.vessel = hVessel; if (inShip) who.ship = inShip;
@@ -151,7 +152,7 @@ namespace ocrew
 		oapiReadItem_float(cfg, const_cast<char*>("WalkSpeed"), walkSpeed);
 		oapiReadItem_float(cfg, const_cast<char*>("RunSpeed"), runSpeed);
 		oapiReadItem_vec(cfg, const_cast<char*>("EyePos"), eye);
-		oapiReadItem_bool(cfg, const_cast<char*>("DebugLog"), debugLog);   // test lines in Orbiter.log (clicks, the head camera)
+		{ int dl = 0; if (oapiReadItem_int(cfg, const_cast<char*>("DebugLog"), dl)) debugLog = dl != 0; }   // test lines in Orbiter.log (clicks, the head camera)
 		if (!reborn) {   // the suit's supplies as issued (a person out of a ship has what is left)
 		if (oapiReadItem_float(cfg, const_cast<char*>("SuitO2"), v)) suit.o2 = suit.o2Cap = v;
 		if (oapiReadItem_float(cfg, const_cast<char*>("SuitSorbent"), v)) suit.sorbCap = v;
@@ -278,8 +279,8 @@ namespace ocrew
 	void CrewMember::ShowFigure()
 	{
 		Figure& on = Active();
-		if (bodyFig.ok) SetMeshVisibilityMode(bodyFig.mesh, &on == &bodyFig ? MESHVIS_ALWAYS | MESHVIS_VC : MESHVIS_NEVER);
-		if (suitFig.ok) SetMeshVisibilityMode(suitFig.mesh, &on == &suitFig ? MESHVIS_ALWAYS | MESHVIS_VC : MESHVIS_NEVER);
+		if (bodyFig.ok) SetMeshVisibilityMode(bodyFig.mesh, &on == &bodyFig ? MESHVIS_ALWAYS | MESHVIS_VC | MESHVIS_EXTPASS : MESHVIS_NEVER);   // one depth with the ship around her
+		if (suitFig.ok) SetMeshVisibilityMode(suitFig.mesh, &on == &suitFig ? MESHVIS_ALWAYS | MESHVIS_VC | MESHVIS_EXTPASS : MESHVIS_NEVER);
 	}
 
 	// her eyes: an empty virtual cockpit (no mesh) - nothing of a ship's instruments over them, the VC's own near plane.
@@ -375,6 +376,9 @@ namespace ocrew
 	{
 		if (KEYMOD_CONTROL(kstate) || KEYMOD_ALT(kstate)) return 0;
 		if (key == OAPI_KEY_F) { if (down) DoUse(); return 1; }   // the action
+		// held at a machine's post (ocCarry, e.g. the MPU's driver): its keys drive the machine (it reads them itself) -
+		// no jump, no pack, no B here; F still lets her step off
+		if (inShip && carried > 0 && (key == OAPI_KEY_SPACE || key == OAPI_KEY_B || key == OAPI_KEY_K)) return 1;
 		// walking keys are hers: Orbiter must not take them as its own (A - its autopilot, etc.)
 		if ((inShip || (GetFlightStatus() & 1) || airborne) && !jet.Worn()) for (DWORD k : MOVE_KEYS) if (key == k) return 1;
 		if (key == OAPI_KEY_K) { if (down) SetSuit(!suitOn); return 1; }
@@ -553,6 +557,53 @@ namespace ocrew
 		Say(bio.state == Body::DEAD ? "Смертельный удар" : why, 2);
 	}
 
+	bool CrewMember::Struck(const VECTOR3& vStrike, double strikerMass, const VECTOR3& nIn)
+	{
+		if (inShip || length(nIn) < 1e-6) return false;
+		const VECTOR3 n = nIn / length(nIn);
+		const double vn = dotp(vStrike, n);
+		if (vn < 0.3) return false;
+		const double m = GetMass(), kick = vn * 1.2 * strikerMass / (strikerMass + m);   // the light side takes the heavy one's speed
+		VESSELSTATUS2 s = Status(this);
+		if (s.status == 1 && s.rbody)   // on the ground: thrown along the ground, sliding to a stop (friction 0.6), at most 3 m
+		{
+			VECTOR3 me, pc; GetGlobalPos(me); oapiGetGlobalPos(s.rbody, &pc);
+			const VECTOR3 up = unit(me - pc);
+			VECTOR3 h = n - up * dotp(n, up);
+			if (length(h) > 1e-6)
+			{
+				const double slide = (std::min)(3.0, kick * kick / (2 * 0.6 * (std::max)(0.5, Gravity())));
+				double lng, lat, rad; oapiGlobalToEqu(s.rbody, me + unit(h) * slide, &lng, &lat, &rad);
+				s.surf_lng = lng; s.surf_lat = lat; DefSetStateEx(&s);
+			}
+		}
+		Fall(kick, kick > 3 ? "Сбита машиной" : "Сбита с ног", Body::ON_BACK);
+		oapiWriteLogV("OrbiterCrew: %s struck at %.2f m/s by %.0f kg, thrown at %.2f m/s", name.c_str(), vn, strikerMass, kick);
+		return true;
+	}
+
+	bool CrewMember::Eject(const VECTOR3& vGlobal)
+	{
+		if (!inShip) return false;
+		if (seat && seatId >= 0) if (ShipInterior* si = InteriorOf(inShip)) if (si->ext.Seated) si->ext.Seated(si->ctx, seatId, who.id, 0);
+		seat = 0; seatId = -1; carried = 0; fwd = lat = turn = accel = 0;
+		LeaveShip();
+		OBJHANDLE ref = GetSurfaceRef();
+		if (!ref) return true;
+		VECTOR3 rpos, rv; GetRelativePos(ref, rpos); oapiGetGlobalVel(ref, &rv);
+		MATRIX3 R; GetRotationMatrix(R);
+		double hdg = 0; oapiGetHeading(GetHandle(), &hdg); jumpHeading = hdg;
+		VESSELSTATUS2 s; memset(&s, 0, sizeof s); s.version = 2;
+		s.rbody = ref; s.status = 0;
+		s.rpos = rpos + unit(rpos) * 0.05;
+		s.rvel = vGlobal - rv;
+		s.arot = surface::Euler(R);
+		DefSetStateEx(&s);
+		airborne = true; thrown = true; lying = false;
+		oapiWriteLogV("OrbiterCrew: %s thrown off at %.1f m/s", name.c_str(), length(s.rvel));
+		return true;
+	}
+
 	void CrewMember::Touchdown()
 	{
 		VESSELSTATUS2 s = Status(this);
@@ -671,6 +722,13 @@ namespace ocrew
 
 	void CrewMember::Land()
 	{
+		if (thrown)   // thrown off a machine: down at the speed she comes in with, on her back
+		{
+			thrown = false; airborne = false;
+			VECTOR3 gv; GetGroundspeedVector(FRAME_HORIZON, gv);
+			Fall(length(gv), "Выброшена с машины", Body::ON_BACK);
+			return;
+		}
 		VESSELSTATUS2 s = Status(this);
 		double lng, lat_, rad;
 		s.rbody = GetEquPos(lng, lat_, rad);
@@ -1040,7 +1098,33 @@ namespace ocrew
 			UpdateHelmet(dt, fig);
 			if (&fig == &suitFig) jet.Pose(fig.skin);
 			in.jet = jet.Worn();
+			// seated in a ship: where her hands rest or what they hold, as the ship gives it (OcInteriorExt::SeatHands), moved
+			// into her vessel's frame (the ship's axes, its origin at her feet + the stand height). Getting up: her own arms
+			if (inShip && seat == 2 && seatId >= 0)
+			{
+				ShipInterior* si = InteriorOf(inShip);
+				if (si && si->ext.SeatHands)
+				{
+					OcHand h[2]{};
+					h[0].size = h[1].size = sizeof(OcHand);
+					si->ext.SeatHands(si->ctx, seatId, who.id, &h[0], &h[1]);
+					const VECTOR3 o = inFeet + _V(0, height, 0);
+					for (int i = 0; i < 2; ++i)
+						if (h[i].on) { HandTarget& t = in.hand[i]; t.on = true; t.what = h[i].what; t.pos = h[i].pos - o; t.palm = h[i].palm; t.fwd = h[i].fwd; t.grip = h[i].grip; t.radius = h[i].radius; t.floor = h[i].elbowMinY != 0; t.elbowMinY = h[i].elbowMinY - o.y; }
+				}
+			}
 			motion.Update(in, fig.clips, fig.skin);
+			if (debugLog && seat == 2 && (handLogT -= dt) <= 0)   // the seated hands: what the ship gives, how the arm reaches it
+			{
+				handLogT = 2;
+				for (int i = 0; i < 2; ++i)
+				{
+					const SeatArms::Diag& d = motion.Arms().Last(i); const HandTarget& t = in.hand[i];
+					oapiWriteLogV("OrbiterCrew: %s hand: target %s what %d (%.3f %.3f %.3f) grip %d r %.3f floor %.3f; arm %s short %.3f off %.3f elbow %.0f wrist %.0f",
+						i ? "right" : "left", t.on ? "on" : "off", t.what, t.pos.x, t.pos.y, t.pos.z, t.grip, t.radius, t.elbowMinY,
+						d.active ? "IK" : "own", d.shortM, d.offM, d.elbowDeg, d.wristDeg);
+				}
+			}
 			footfalls = motion.Footfalls();
 			if (firstPerson) {   // the camera rides the head; aboard a ship the head rides the ship's accelerations
 				const VECTOR3 e = fig.skin.Point(fig.skin.Bone("Head"), eye);
@@ -1490,18 +1574,25 @@ namespace ocrew
 		if (!inParent && attachWait > 0) { --attachWait; return; }
 		if (!inParent) { const OBJHANDLE s = inShip; const VECTOR3 f0 = inFeet; const double h0 = inHdg; inShip = nullptr;
 			EnterShip(s, f0, _V(std::sin(h0), 0, std::cos(h0))); if (!inShip) { who.where = Person::IN_WORLD; return; } }
+		// the ship's air, dose and supplies where she stands (OcInteriorExt::Cabin); without it a sealed cabin
 		air = Air{}; air.body = "ship"; air.p = 101.3; air.T = 294; air.ppO2 = 21.2; air.ppCO2 = 0.04;
+		double cabinDose = 0; bool supplied = true;
+		if (si->ext.Cabin)
+		{
+			OcCabin c{}; c.size = sizeof c;
+			if (si->ext.Cabin(si->ctx, &inFeet, &c)) { air.p = c.p; air.T = c.T; air.ppO2 = c.ppO2; air.ppCO2 = c.ppCO2; cabinDose = c.doseSvh; supplied = c.supplied != 0; }
+		}
 		double g = 9.81;
 		if (si->fns.Gravity) { VECTOR3 gv{}; si->fns.Gravity(si->ctx, &inFeet, &gv); g = length(gv); }
 		// the organism: walking costs, the ship's air, shielded (the ship's own radiation model belongs to the ship)
 		const double v = std::hypot(fwd, lat);
 		humanW = LocomotionPower(suitOn ? Mass() : bio.mass, v, g);
 		double heat = 0;
-		suit.vent = true; suit.ventPpO2 = air.ppO2; suit.ventPpCO2 = air.ppCO2; suit.pOut = air.p;
+		suit.vent = air.Breathable(); suit.ventPpO2 = air.ppO2; suit.ventPpCO2 = air.ppCO2; suit.pOut = air.p;   // a cabin without air: the suit's own
 		if (suitOn) heat = suitResidual = suit.Step(dt, bio.O2Use(), bio.CO2Made(), 0, bio.Heat(), air.T);
 		bio.Step(dt, humanW + (turn ? 25 : 0), suitOn ? suit.ppO2 : air.ppO2, suitOn ? suit.ppCO2 : air.ppCO2, air.p, suitOn, heat);
-		bio.Irradiate(dt, 0);
-		bio.Sustain(dt, true, suitOn ? &suit.water : nullptr, air.T, suitOn);
+		bio.Irradiate(dt, cabinDose);
+		bio.Sustain(dt, supplied, suitOn ? &suit.water : nullptr, air.T, suitOn);
 
 		// walking: the keys as outside, in the ship's frame
 		Keys k = keysFresh ? keys : Keys{};
@@ -1788,7 +1879,7 @@ extern "C" __declspec(dllexport) int ocBoard(OBJHANDLE body, OBJHANDLE ship)
 	if (!c) return 0;
 	ocrew::Person& p = c->Who();
 	c->KeepWorn();                     // the suit's cold gas as the body holds it now
-	p.where = ocrew::Person::ABOARD; p.vessel = ship;
+	p.where = ocrew::Person::ABOARD; p.vessel = ship; p.place = ocrew::Person::STORED;
 	if (oapiGetFocusObject() == body) oapiSetFocusObject(ship);
 	oapiDeleteVessel(body);            // the destructor lets the worn items go and keeps ABOARD
 	return p.id;
@@ -1893,6 +1984,46 @@ extern "C" __declspec(dllexport) OBJHANDLE ocEnterInterior(int id, const VECTOR3
 	if (ocrew::CrewMember* c = BodyOf(h)) c->takeView = true;
 	return h;
 }
+// a person aboard without a body is given one sitting in the ship's seat 'seatId' (the ship's default roster: the commander
+// at the helm), as if she had sat down there: the ship is told (Seated on), the focus and the camera go to the person
+extern "C" __declspec(dllexport) int ocSitAt(int id, OBJHANDLE ship, int seatId)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p || p->where != ocrew::Person::ABOARD || p->vessel != ship || !oapiIsVessel(ship)) return 0;
+	ocrew::ShipInterior* si = ocrew::InteriorOf(ship);
+	if (!si || !si->fns.Seat || !si->ext.Seated) return 0;
+	VECTOR3 hips{}, dir{ 0, 0, 1 };
+	si->fns.Seat(si->ctx, seatId, &hips, &dir);
+	VESSEL* sv = oapiGetVesselInterface(ship);
+	VESSELSTATUS2 vs; std::memset(&vs, 0, sizeof vs); vs.version = 2;
+	sv->GetStatusEx(&vs);
+	vs.flag = 0; vs.fuel = nullptr; vs.thruster = nullptr; vs.dockinfo = nullptr; vs.nfuel = vs.nthruster = vs.ndockinfo = 0;
+	auto& pi = ocrew::PendingInterior(); pi.ship = ship; pi.feet = hips - _V(0, 0.5, 0); pi.hdg = std::atan2(dir.x, dir.z); pi.seat = seatId;
+	p->ship = ship;
+	ocrew::Crew::ExpectBody(id);
+	OBJHANDLE h = oapiCreateVesselEx(FreeName(p->name).c_str(), p->bodyClass.c_str(), &vs);
+	ocrew::Crew::ExpectBody(0); pi = {};
+	if (!h) return 0;
+	if (ocrew::CrewMember* c = BodyOf(h)) c->takeView = true;
+	return 1;
+}
+// a heavier body (a machine) runs into a person's body: vStrike its speed at the contact relative to her (global),
+// normal from it to her. She is thrown, falls, is hurt through what she wears; -> 1 if taken (0: not a body, inside, slow)
+// a person inside a machine (ocShipOf == it) is thrown off it where she is, at vGlobal (the machine's velocity before it
+// struck): off its post, free, she falls where she lands. -> 1 if thrown
+extern "C" __declspec(dllexport) int ocEject(int id, const VECTOR3* vGlobal)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p || !vGlobal || p->where != ocrew::Person::INTERIOR) return 0;
+	ocrew::CrewMember* c = BodyOf(p->vessel);
+	return c && c->Eject(*vGlobal) ? 1 : 0;
+}
+extern "C" __declspec(dllexport) int ocImpact(OBJHANDLE body, const VECTOR3* vStrike, double strikerMass, const VECTOR3* point, const VECTOR3* normal)
+{
+	(void)point;
+	ocrew::CrewMember* c = BodyOf(body);
+	return c && vStrike && normal && c->Struck(*vStrike, strikerMass > 0 ? strikerMass : 1e4, *normal) ? 1 : 0;
+}
 // the person's body walks into the ship (through a lift or an airlock): the same body, now inside at that place
 // (interior frame); the focus and the camera stay as they are
 extern "C" __declspec(dllexport) int ocEnterShip(OBJHANDLE body, OBJHANDLE ship, const VECTOR3* pos, const VECTOR3* dir)
@@ -1949,7 +2080,7 @@ extern "C" __declspec(dllexport) void ocLeaveInterior(int id, int seatId)
 	ocrew::CrewMember* c = BodyOf(p->vessel);
 	OBJHANDLE ship = p->ship;
 	if (c) { c->KeepWorn(); c->LeaveShip(); }
-	p->where = ocrew::Person::ABOARD; p->vessel = ship;
+	p->where = ocrew::Person::ABOARD; p->vessel = ship; p->place = ocrew::Person::STORED;
 	if (c) { if (oapiGetFocusObject() == c->GetHandle() && ship) oapiSetFocusObject(ship); oapiDeleteVessel(c->GetHandle()); }
 	(void)seatId;
 }
@@ -1969,5 +2100,34 @@ extern "C" __declspec(dllexport) OBJHANDLE ocExitTo(int id, const char* vesselNa
 	}
 	if (p->where == ocrew::Person::ABOARD) return ocDisembark(id, vesselName, vs);
 	return nullptr;
+}
+// the people aboard that ship without a body live on: the ship's cabin (and its medical bay) every step
+extern "C" __declspec(dllexport) void ocStepAboard(OBJHANDLE ship, double dt, const OcCabin* cabin)
+{
+	if (dt <= 0 || !ship) return;
+	OcCabin c{}; c.size = sizeof c; c.p = 101.3; c.T = 294; c.ppO2 = 21.2; c.ppCO2 = 0.04; c.supplied = 1;
+	if (cabin && cabin->size > 0) std::memcpy(&c, cabin, (std::min)(static_cast<size_t>(cabin->size), sizeof c));
+	for (const auto& up : ocrew::Crew::All())
+	{
+		ocrew::Person& p = *up;
+		if (p.where != ocrew::Person::ABOARD || p.vessel != ship) continue;
+		ocrew::Body& b = p.body;
+		b.Step(dt, 0, c.ppO2, c.ppCO2, c.p, false, 0);   // at rest, the helmet open: the cabin's air
+		if (p.place == ocrew::Person::MEDBAY && c.medHoursPerUnit > 0) b.Treat(dt, { c.medHoursPerUnit, c.medSvPerDay, c.medMaxSv });
+		b.Irradiate(dt, c.doseSvh);
+		b.Sustain(dt, c.supplied != 0, nullptr, c.T, false);
+	}
+}
+extern "C" __declspec(dllexport) int ocSetPlace(int id, int place)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p || p->where != ocrew::Person::ABOARD) return 0;
+	p->place = static_cast<ocrew::Person::Place>(std::clamp(place, 0, 2));
+	return 1;
+}
+extern "C" __declspec(dllexport) int ocPlaceOf(int id)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	return p && p->where == ocrew::Person::ABOARD ? static_cast<int>(p->place) : -1;
 }
 DLLCLBK void ExitModule(HINSTANCE) { ocrew::Crew::Clear(); ocrew::interiors().clear(); }   // the simulation ends: nobody is left

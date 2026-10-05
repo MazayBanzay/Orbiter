@@ -1,14 +1,16 @@
 // TantraInterior: the Tantra's interior as given to OrbiterCrew (OcInterior, OrbiterCrewApi.h).
 // A person walks inside with his or her own body (OrbiterCrew moves it); the ship only answers where the floors and the walls
 // are (the collision boxes of tools/gen_mesh.py in InteriorLayout.h) and what can be used (the bridge seats).
-// Sitting down hands the person to the ship's virtual cockpit (the body leaves, the focus goes to the ship);
-// standing up gives the body back behind the seat.
+// A person sits in a seat with the body (OrbiterCrew: OcInteriorExt::Seated), the seat then runs to its console; standing up,
+// OrbiterCrew puts her behind the seat. The focus and the camera stay the person's all the time (the user's rule).
 #pragma once
 #define STRICT
 #include "orbitersdk.h"
 #include "../../../OrbiterCrew/include/OrbiterCrewApi.h"
 #include "ShipMfd.h"
 #include "TantraGlyphs.h"
+#include "TantraScreenFont.h"
+#include "TantraGost.h"
 #include <vector>
 #include <cmath>
 
@@ -44,9 +46,10 @@ public:
     // the ship's display module; here only the touch (u right, v down, 0..1) and the redraw step are passed on.
     struct TouchHooks { void* ctx = nullptr; void (*Step)(void* ctx, double dt) = nullptr; bool (*Touch)(void* ctx, int screen, double u, double v) = nullptr; };
     void SetTouch(const TouchHooks& hk) { touch_ = hk; }
-    void SideFold(int k, int state);           // a curved monitor: 0 развёрнут, 1 свёрнут (leaning back, still seen), 2 сложен
+    void SideFold(int k, int state);           // a side glass: 0 РАБОТА (up), 1 ЛЕНТА (sunk to the front glass's top), 2 ВНИЗ (in its bay)
     int SideFoldState(int k) const;
     bool SideDisplayUp(int k) const { return k >= 0 && k < 2 && sidePos_[k] < 0.02; }
+    bool SideDisplayUsable(int k) const;       // standing still in РАБОТА or ЛЕНТА: its part over the desk takes touches
     SURFHANDLE MfdDisplay(int i) const { return mfds_.Display(mfdPlaces_ + i); }   // the 4 MFDs of the curved monitors (0..3), after the mesh's
     const char* MfdLabel(int i, int b) const { return mfds_.Label(mfdPlaces_ + i, b); }
     void MfdPress(int i, int b) { mfds_.Press(mfdPlaces_ + i, b); }
@@ -69,6 +72,7 @@ public:
     // with his or her body; false = nobody to stand up (no OrbiterCrew interior, no member aboard for that seat)
     bool StandUp(int seat);
     OBJHANDLE ViewerBody() const;
+    bool ViewerInBridge() const;              // the camera is inside the bridge capsule (internal view: the person's eyes or the VC)
     void SetLiftPanel(const LiftPanelHooks& hk) { panel_ = hk; }
     // the lift: the people standing in the cabin now (ids), whether a person wears the suit (1 / 0 / -1 unknown), a person's name
     int CabinPeople(int* ids, int maxN) const;
@@ -76,7 +80,18 @@ public:
     bool PersonName(int id, char* out, int n) const;
     void Step(double dt);                     // clbkPreStep: the moving seats, the deferred stand-up, the lift cabin, the panel lights
     void OnVisual(VISHANDLE vis);              // the panel caps and the status screen (its render surface goes into slot kLiftStatusSlot)
-    void OnVisualGone() { mesh_ = nullptr; }
+    void OnVisualGone() { mesh_ = nullptr; spotShown_ = ballShown_ = uvtShown_ = -1; yokeKey_[0] = -1e9; quadKey_[0] = -1e9; }
+    // ---- the commander's place (variant 7; TantraSeatCmd.cpp) ----
+    double CmdSeatOffset() const;              // his seat along its facing from its empty place (travel + his adjustment), m
+    double CmdSeatHeight() const;              // its pan's height from the nominal (m)
+    bool CmdAtDesk() const;                    // he sits and the seat has arrived at the desk (the yoke comes out)
+    bool SpotOn() const { return spotOn_; }    // the cursor unit's light spot is on
+    bool SpotScreen(int& screen, double& u, double& v) const;   // the spot on a touch screen now: which, where (0..1 of its picture)
+    bool UvtOn() const { return uvtOn_; }      // УВТ (the button on the yoke's right horn): the yoke drives the pods too
+    double YokeOut() const { return yokeE_; }  // the yoke: 0 stowed .. 1 out
+    // the throttle quadrant (TantraYoke.cpp), every frame from the displays: the levels set (0..1), the cups' angle set (deg),
+    // the pods' guard cover open
+    void SetQuadrant(double mainSet, double podSet, double cupsDeg, bool coverOpen) { qMainT_ = mainSet; qPodT_ = podSet; qWheelT_ = cupsDeg; qCoverT_ = coverOpen ? 1.0 : 0.0; }
 
 private:
     static ATTACHMENTHANDLE cAttach(void* c);
@@ -90,6 +105,7 @@ private:
     static void cOrigin(void* c, VECTOR3* o);
     static int cCanWalk(void* c, char* reason, int n);
     static void cSeated(void* c, int seatId, int personId, int on);
+    static void cSeatHands(void* c, int seatId, int personId, OcHand* left, OcHand* right);   // where his hands rest / hold
     static int cClick(void* c, const VECTOR3* origin, const VECTOR3* dir, int personId);   // the touch screens
     static void cOuterWalls(void* c, const VECTOR3* from, VECTOR3* to, double radius, double height);   // people outside: the cup feet (Tantra::OuterWalls)
 
@@ -161,15 +177,50 @@ private:
     bool reg_ = false;
     int seat_ = -1, person_ = 0;
     int standSeat_ = -1;                     // queued stand-up
-    int riseId_ = 0, riseSeat_ = -1;         // a person getting up from a seat: carried behind it once she stands
-    double riseT_ = 0.0, riseOn_ = 0.0;
     UINT anim_[4] = {0, 0, 0, 0};            // the seats run to the console (0 back, 1 at the console)
     double seatPos_[4] = {0, 0, 0, 0}, seatTarget_[4] = {0, 0, 0, 0};
     // the commander's own travel at the console, set by the touch slider on his right armrest (kSeatAdjMin..Max, state 0..1)
     UINT adjAnim_ = 0; double adjPos_ = 0.333, adjTarget_ = 0.333, adjShown_ = -1.0;
     SURFHANDLE adjSurf_ = nullptr;
     double AdjOffset() const;
-    void DrawAdj();
+    void DrawAdj();                          // the seat's panel texture: the strips ХОД, ВЫСОТА and the cursor unit's key plate
+    // the seat's height (variant 7): the pan on its telescopic pedestal, kSeatHgtMin..Max (state 0..1)
+    UINT hgtAnim_ = 0; double hgtPos_ = 0.4, hgtTarget_ = 0.4;
+    // the cursor unit and its light spot («солнечный зайчик»): the ball toggles it; while it is on the spot follows the mouse over
+    // the screens (a light on the glass where the cursor points) and the screens take a click at any distance
+    struct Pick { int kind = -1, idx = -1; double u = 0, v = 0, t = 1e9; VECTOR3 p{}, ex{}, up{}, n{}; };
+    bool PickScreens(const VECTOR3& o, const VECTOR3& d, const VECTOR3* head, Pick& best) const;   // kind 0 panel piece, 1 MFD, 2 screen facet
+    void PressAt(const Pick& b);
+    bool HoverRay(VECTOR3& o, VECTOR3& d) const;   // the ray from the camera through the mouse cursor (interior frame); false: not over the view
+    void SpotStep();
+    void SeatPlate(double px, double py);    // a touch on the cursor unit's plate (its texture px)
+    void WarpToGlass(int dir);               // ◄ ►: the cursor to the middle of the glass to the left / right
+    bool spotOn_ = false;
+    Pick spotHit_;
+    int spotShown_ = -1, ballShown_ = -1;
+    double curLit_[5] = {};                  // the cursor unit's keys: lit till then (system time)
+    double panelKey_ = -1.0;                 // what the seat's panel shows (redrawn when it changes)
+    tantra::ScreenFont pfont_;               // the panel's brushes and pens
+    tantra::GostFont gost_;                  // its lettering
+    // the yoke (TantraYoke.cpp): out of the desk when he sits at it; it only shows what the keyboard / the joystick does (or the
+    // ship's own turning), and it shakes with the structure; its rigid parts move by their vertices (the mesh's own at the start)
+    void YokeStep(double dt);
+    struct YokeGrp { int grp; std::vector<NTVERTEX> v; };
+    std::vector<YokeGrp> yokeRef_;
+    double yokeE_ = 0.0, ykRoll_ = 0.0, ykPitch_ = 0.0;
+    double vibE_[3] = {}, vibB_[3] = {}; unsigned vibSeed_ = 0x2545F491u;
+    double attPitch_ = 0.0, attBank_ = 0.0; bool attInit_ = false;
+    VECTOR3 hubH_ = {0, 0, 0}, hubX_ = {1, 0, 0}, hubY_ = {0, 1, 0}, hubZ_ = {0, 0, -1};
+    double yokeKey_[8] = {};                 // what the vertices show (rewritten when it changes)
+    bool uvtOn_ = false; int uvtShown_ = -1;
+    void QuadStep(double dt);
+    std::vector<YokeGrp> quadRef_;
+    double qMainT_ = 0.0, qPodT_ = 0.0, qWheelT_ = 0.0, qCoverT_ = 0.0, qMain_ = 0.5, qPod_ = 0.5, qWheel_ = 0.0, qCover_ = 0.0;
+    int leverDrag_ = -1; double leverSent_ = -1.0;   // a lever held by its grip (the mouse button down): 0 МАРШ, 1 ГОНДОЛЫ
+    VECTOR3 LeverGrip(int k) const;                  // its grip's centre now (interior frame)
+    void LeverDrag();                                // while held: the cursor's ray sets its lean = the thrust
+    double quadKey_[4] = {-1e9, 0, 0, 0};
+    VECTOR3 wheelC_ = {0, 0, 0};             // the cups' wheel now (touch: the next angle 0 / 90 / 180)
     double SeatX(int i) const;               // the seat's current place (interior frame)
     double SeatZ(int i) const;
     int mfdPlaces_ = 0;                      // the MFD places of the mesh (kMfdCount): the monitors' MFDs come after them

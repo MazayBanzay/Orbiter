@@ -9,6 +9,7 @@ copy /y "build\mesh_t9\MeshLayout.h" "orbiter2016\MeshLayout.h" >nul
 call "%~dp0build.bat" noinstall || (echo BUILD FAILED & exit /b 1)
 copy /y "build\Tantra.dll" "..\..\..\Modules\Tantra.dll" >nul 2>nul || (echo NOT INSTALLED: Orbiter is running - close it and run install_all.bat again & exit /b 1)
 copy /y "build\TantraTrap.dll" "..\..\..\Modules\TantraTrap.dll" >nul
+copy /y "build\TantraDebris.dll" "..\..\..\Modules\TantraDebris.dll" >nul
 python tools\gen_mesh.py --install >nul || (echo MESH INSTALL FAILED & exit /b 1)
 python tools\make_lift_textures.py >nul
 echo Installed: Tantra.dll + meshes + lift textures

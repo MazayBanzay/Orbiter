@@ -18,16 +18,23 @@ rng = np.random.default_rng(2026)
 
 
 def screech(t, t0, dur, f0, f1, gain):
-    """Steel tearing: a narrow noise band gliding down with a rough stick-slip flutter."""
+    """Steel tearing and scraping - no tone at all (a gliding tone is a laser, not metal): dense crackle of the fibres
+    parting (thousands of tiny clicks), the grinding band of plate over plate falling slowly in pitch, all of it
+    stuttering with stick-slip."""
     tt = np.clip(t - t0, 0, None)
     on = (t >= t0) & (t <= t0 + dur)
-    f = f0 * (f1 / f0) ** np.clip(tt / dur, 0, 1)
-    ph = 2 * np.pi * np.cumsum(f * on) / SR
-    flutter = 0.6 + 0.4 * np.sign(np.sin(2 * np.pi * rng.uniform(18, 35) * tt))
-    tone = np.sin(ph) + 0.5 * np.sin(2.01 * ph) + 0.3 * np.sin(3.03 * ph)
-    env = np.sin(np.pi * np.clip(tt / dur, 0, 1)) ** 0.5 * on
-    grit = bp(rng.standard_normal(len(t)), 400, 3000) * 0.4
-    return gain * env * flutter * (tone + grit)
+    env = np.sin(np.pi * np.clip(tt / dur, 0, 1)) ** 0.6 * on
+    clicks = (rng.random(len(t)) < 900.0 / SR) * rng.standard_normal(len(t))           # the fibres: sparse impulses
+    crackle = bp(clicks, 600, 5000) * 3.0
+    fc = f0 * (f1 / f0) ** np.clip(tt / dur, 0, 1)
+    grind = np.zeros_like(t)
+    n = rng.standard_normal(len(t))
+    for lo_f, hi_f in ((0.6, 1.4), (1.6, 2.6)):                                         # two broad bands, noise only
+        band = bp(n, max(60.0, f0 * lo_f * 0.5), f0 * hi_f, 2)
+        grind += band
+    grind = lp(grind, float(np.mean(fc)) * 2.5)
+    slip = 0.55 + 0.45 * (bp(rng.standard_normal(len(t)), 8, 40, 1) > 0)             # stick-slip: irregular, not a buzz
+    return gain * env * slip * (0.7 * grind + crackle)
 
 
 def rattle(t, t0, dur, n, size, gain):

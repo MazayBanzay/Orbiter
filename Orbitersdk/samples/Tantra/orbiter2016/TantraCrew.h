@@ -24,6 +24,8 @@ public:
     // taken aboard without a body as before
     void SetArrival(const VECTOR3& pos, const VECTOR3& dir) { arrival_ = pos; arrivalDir_ = dir; hasArrival_ = true; }
     void AddMember(const char* name, int age, int pulse, int weight, const char* role);
+    // where the default roster's member stands at the start (interior frame) - a ship without a crew in its scenario
+    void SetDefaultPlace(const VECTOR3& pos, const VECTOR3& dir) { defPos_ = pos; defDir_ = dir; hasDefPlace_ = true; }
 
     void Save(FILEHANDLE scn) const;
     bool LoadLine(const char* line);   // true if the line was a crew line
@@ -68,6 +70,8 @@ private:
     int seats_ = 20;
     mutable std::vector<Member> members_;
     bool loadedFromScenario_ = false;
+    int placeTries_ = 0;               // the default member stood in the cabin (ocEnterInterior): attempts made
+    VECTOR3 defPos_ = {0, 0, 0}, defDir_ = {0, 0, 1}; bool hasDefPlace_ = false;
     bool airlockOpen_ = false;
     double scanTimer_ = 0.0;
     std::string last_;

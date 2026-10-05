@@ -35,6 +35,11 @@ namespace ocrew
 	public:
 		const std::string& DisplayName() const { return name; }
 		Person& Who() { return who; }
+		// struck by a heavier body (a machine running into her, ocImpact): thrown along n, down, hurt; false if not taken
+		bool Struck(const VECTOR3& vStrikeGlobal, double strikerMass, const VECTOR3& nGlobal);
+		// thrown off the machine she is on (ocEject): free, at that global velocity; she falls where she lands
+		bool Eject(const VECTOR3& vGlobal);
+		bool thrown{};
 		void KeepWorn() { if (n2) who.worn.suit.n2Kg = GetPropellantMass(n2); }   // before the body leaves the world
 		~CrewMember();
 	public:
@@ -142,6 +147,7 @@ namespace ocrew
 		// the suit computer's display (variant 3, the user and «Архитектор», 2026-10-04): the VC HUD on the helmet plate
 		// (SuitHud::HelmetFrame), drawn through clbkDrawHUD; only in the suit, H switches it
 		bool hudOn{ true };
+		double handLogT{};                   // the seated hands' test line (DebugLog)
 		bool debugLog{};                     // DebugLog = 1 in her config: test lines in Orbiter.log (clicks, the head camera)
 		void DrawSuitHud(oapi::Sketchpad* skp, DWORD W, DWORD H);
 		// F - the action (user 2026-10-03: F everywhere): what is within reach - a ship's lift or airlock, later

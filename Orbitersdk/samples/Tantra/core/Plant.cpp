@@ -233,6 +233,7 @@ Output Plant::Step(double dt, const Env& e, double (*rnd)()) {
     o.powerThrust = 2.0 * kEtaN * kFusionMax * drivers_ * Pset / 100.0 * (1.0 - cfg_.chi) / v;
     o.beta = beta;
     F *= coils_;
+    if (flowCap_ >= 0.0 && mass != kProducts) F = std::min(F, flowCap_ * v);   // the pumps (core/TantraCore)
     if (lim_ && T_ > cfg_.tSafe) { const double k = std::max(0.0, 1.0 - (T_ - cfg_.tSafe) / cfg_.limiterHot); F *= k; Pf *= k; o.limit = "тепло"; }
     if (dipT_ > 0.0) F *= 0.4;
     o.cupThrust = F;

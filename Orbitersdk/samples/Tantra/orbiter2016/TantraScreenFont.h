@@ -58,6 +58,8 @@ public:
             const double w = Width(s, sp) * (sp_px > 0 ? double(px) / sp_px : 1.0);
             x -= int(std::lround(align == 1 ? w / 2 : w)); align = 0;
         }
+        if (!gdi) y -= int(std::lround(px * 1.079));                     // and the baseline: it draws from the cell's top (Segoe UI's
+                                                                         // ascent 2210 / 2048 em; the game's screens, 2026-10-04)
         skp->SetTextAlign(align == 1 ? oapi::Sketchpad::CENTER : align == 2 ? oapi::Sketchpad::RIGHT : oapi::Sketchpad::LEFT, oapi::Sketchpad::BASELINE);
         std::wstring b = s;
         skp->TextW(x, y, &b[0], int(b.size()));

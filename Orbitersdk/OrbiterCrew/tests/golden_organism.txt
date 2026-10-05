@@ -36,13 +36,13 @@ heat       t=    1200 st=0 res=1 core=311.81 wbal=1 met=90 pulse=62 br=13 wdef=0
 heat       t=    1800 st=0 res=1 core=312.64 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9982 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
 heat       t=    2400 st=0 res=1 core=313.469 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9977 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=OVERHEATING
 heat       t=    3000 st=0 res=0.932604 core=314.299 wbal=1 met=90 pulse=64.0219 br=13 wdef=0 gly=8e+06 fat=11.9971 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=OVERHEATING
-heat       t=    3600 st=2 res=0 core=314.975 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9966 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
-heat       t=    4200 st=2 res=0 core=314.975 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9966 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
-heat       t=    4800 st=2 res=0 core=314.975 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9966 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
-heat       t=    5400 st=2 res=0 core=314.975 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9966 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
-heat       t=    6000 st=2 res=0 core=314.975 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9966 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
-heat       t=    6600 st=2 res=0 core=314.975 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9966 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
-heat       t=    7200 st=2 res=0 core=314.975 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9966 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+heat       t=    3600 st=1 res=0 core=315.128 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9965 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=OVERHEATING
+heat       t=    4200 st=1 res=0 core=315.958 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9959 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=OVERHEATING
+heat       t=    4800 st=2 res=0 core=316.566 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9955 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+heat       t=    5400 st=2 res=0 core=316.566 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9955 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+heat       t=    6000 st=2 res=0 core=316.566 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9955 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+heat       t=    6600 st=2 res=0 core=316.566 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9955 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+heat       t=    7200 st=2 res=0 core=316.566 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9955 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
 cold       t=       0 st=0 res=1 core=310.149 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=12 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
 cold       t=     600 st=0 res=1 core=309.319 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9994 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
 cold       t=    1200 st=0 res=1 core=308.49 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9988 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
@@ -51,11 +51,11 @@ cold       t=    2400 st=0 res=1 core=306.831 wbal=1 met=90 pulse=62 br=13 wdef=
 cold       t=    3000 st=0 res=1 core=306.001 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9971 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOTHERMIA
 cold       t=    3600 st=0 res=1 core=305.172 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9965 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOTHERMIA
 cold       t=    4200 st=0 res=0.0148906 core=304.342 wbal=1 met=90 pulse=91.5533 br=13 wdef=0 gly=8e+06 fat=11.9959 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOTHERMIA
-cold       t=    4800 st=2 res=0 core=304.086 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9957 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
-cold       t=    5400 st=2 res=0 core=304.086 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9957 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
-cold       t=    6000 st=2 res=0 core=304.086 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9957 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
-cold       t=    6600 st=2 res=0 core=304.086 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9957 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
-cold       t=    7200 st=2 res=0 core=304.086 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9957 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+cold       t=    4800 st=1 res=0 core=303.513 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9953 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOTHERMIA
+cold       t=    5400 st=1 res=0 core=302.683 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9947 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOTHERMIA
+cold       t=    6000 st=1 res=0 core=301.854 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9942 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOTHERMIA
+cold       t=    6600 st=1 res=0 core=301.024 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9936 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOTHERMIA
+cold       t=    7200 st=1 res=0 core=300.195 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.993 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOTHERMIA
 impact9    t=       0 st=0 res=0.955556 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=12 fast=0 hurt=0,0,0,0.4 inj=0.222222 dose=0 aer=996.96 run=3.6 lift=60 warn=-
 impact12   t=       0 st=0 res=0.844444 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=12 fast=0 hurt=0,0.1667,0,1 inj=0.777778 dose=0 aer=913.88 run=1.5 lift=58 warn=-
 impact     t=       0 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=12 fast=0 hurt=0,0.1667,0,1 inj=0.777778 dose=0 aer=913.882 run=1.50001 lift=58 warn=INJURED
@@ -96,22 +96,22 @@ rad        t=   18000 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0
 rad        t=   21600 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.979 fast=0 hurt=0,0,0,0 inj=0 dose=3.00014 aer=797.554 run=5 lift=60 warn=RADIATION - TAKE COVER
 rad        t=   25200 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9755 fast=0 hurt=0,0,0,0 inj=0 dose=3.50014 aer=747.706 run=5 lift=60 warn=RADIATION - TAKE COVER
 rad        t=   28800 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.972 fast=0 hurt=0,0,0,0 inj=0 dose=4.00014 aer=697.858 run=5 lift=60 warn=RADIATION - TAKE COVER
-rad        t=   32400 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9685 fast=0 hurt=0,0,0,0 inj=1.83715e-09 dose=4.50014 aer=648.01 run=5 lift=60 warn=RADIATION - TAKE COVER
-rad        t=   36000 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.965 fast=0 hurt=0,0,0,0 inj=0.0119147 dose=5.00014 aer=598.162 run=5 lift=60 warn=RADIATION - TAKE COVER
-rad        t=   39600 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9615 fast=0 hurt=0,0,0,0 inj=0.0476389 dose=5.50014 aer=548.314 run=5 lift=60 warn=RADIATION - TAKE COVER
-rad        t=   43200 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.958 fast=0 hurt=0,0,0,0 inj=0.107173 dose=6.00014 aer=498.48 run=5 lift=60 warn=INJURED
-rad        t=   46800 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9545 fast=0 hurt=0,0,0,0 inj=0.190516 dose=6.50014 aer=498.48 run=5 lift=60 warn=INJURED
-rad        t=   50400 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.951 fast=0 hurt=0,0,0,0 inj=0.297669 dose=7.00014 aer=498.48 run=5 lift=60 warn=INJURED
-rad        t=   54000 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9475 fast=0 hurt=0,0,0,0 inj=0.428631 dose=7.50014 aer=498.48 run=5 lift=60 warn=INJURED
-rad        t=   57600 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.944 fast=0 hurt=0,0,0,0 inj=0.583403 dose=8.00014 aer=498.48 run=5 lift=60 warn=INJURED
-rad        t=   61200 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9405 fast=0 hurt=0,0,0,0 inj=0.761984 dose=8.50014 aer=498.48 run=5 lift=60 warn=INJURED
-rad        t=   64800 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.937 fast=0 hurt=0,0,0,0 inj=0.964375 dose=9.00014 aer=498.48 run=5 lift=60 warn=INJURED
-rad        t=   68400 st=2 res=1 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9364 fast=0 hurt=0,0,0,0 inj=1.00006 dose=9.08264 aer=498.48 run=5 lift=60 warn=-
-rad        t=   72000 st=2 res=1 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9364 fast=0 hurt=0,0,0,0 inj=1.00006 dose=9.08264 aer=498.48 run=5 lift=60 warn=-
-rad        t=   75600 st=2 res=1 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9364 fast=0 hurt=0,0,0,0 inj=1.00006 dose=9.08264 aer=498.48 run=5 lift=60 warn=-
-rad        t=   79200 st=2 res=1 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9364 fast=0 hurt=0,0,0,0 inj=1.00006 dose=9.08264 aer=498.48 run=5 lift=60 warn=-
-rad        t=   82800 st=2 res=1 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9364 fast=0 hurt=0,0,0,0 inj=1.00006 dose=9.08264 aer=498.48 run=5 lift=60 warn=-
-rad        t=   86400 st=2 res=1 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9364 fast=0 hurt=0,0,0,0 inj=1.00006 dose=9.08264 aer=498.48 run=5 lift=60 warn=-
+rad        t=   32400 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9685 fast=0 hurt=0,0,0,0 inj=1.92916e-07 dose=4.50014 aer=648.01 run=5 lift=60 warn=RADIATION - TAKE COVER
+rad        t=   36000 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.965 fast=0 hurt=0,0,0,0 inj=0.000792584 dose=5.00014 aer=598.162 run=5 lift=60 warn=RADIATION - TAKE COVER
+rad        t=   39600 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9615 fast=0 hurt=0,0,0,0 inj=0.00180077 dose=5.50014 aer=548.314 run=5 lift=60 warn=RADIATION - TAKE COVER
+rad        t=   43200 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.958 fast=0 hurt=0,0,0,0 inj=0.00305574 dose=6.00014 aer=498.48 run=5 lift=60 warn=RADIATION - TAKE COVER
+rad        t=   46800 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9545 fast=0 hurt=0,0,0,0 inj=0.00453221 dose=6.50014 aer=498.48 run=5 lift=60 warn=RADIATION - TAKE COVER
+rad        t=   50400 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.951 fast=0 hurt=0,0,0,0 inj=0.00618828 dose=7.00014 aer=498.48 run=5 lift=60 warn=RADIATION - TAKE COVER
+rad        t=   54000 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9475 fast=0 hurt=0,0,0,0 inj=0.00803062 dose=7.50014 aer=498.48 run=5 lift=60 warn=RADIATION - TAKE COVER
+rad        t=   57600 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.944 fast=0 hurt=0,0,0,0 inj=0.0100657 dose=8.00014 aer=498.48 run=5 lift=60 warn=RADIATION - TAKE COVER
+rad        t=   61200 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9405 fast=0 hurt=0,0,0,0 inj=0.0122996 dose=8.50014 aer=498.48 run=5 lift=60 warn=RADIATION - TAKE COVER
+rad        t=   64800 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.937 fast=0 hurt=0,0,0,0 inj=0.0147386 dose=9.00014 aer=498.48 run=5 lift=60 warn=RADIATION - TAKE COVER
+rad        t=   68400 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9334 fast=0 hurt=0,0,0,0 inj=0.0173883 dose=9.50014 aer=498.48 run=5 lift=60 warn=RADIATION - TAKE COVER
+rad        t=   72000 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9299 fast=0 hurt=0,0,0,0 inj=0.0202545 dose=10.0001 aer=498.48 run=5 lift=60 warn=RADIATION - TAKE COVER
+rad        t=   75600 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9264 fast=0 hurt=0,0,0,0 inj=0.0233051 dose=10.5001 aer=498.48 run=5 lift=60 warn=RADIATION - TAKE COVER
+rad        t=   79200 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9229 fast=0 hurt=0,0,0,0 inj=0.0265046 dose=11.0001 aer=498.48 run=5 lift=60 warn=RADIATION - TAKE COVER
+rad        t=   82800 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9194 fast=0 hurt=0,0,0,0 inj=0.0298529 dose=11.5001 aer=498.48 run=5 lift=60 warn=RADIATION - TAKE COVER
+rad        t=   86400 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9159 fast=0 hurt=0,0,0,0 inj=0.0333499 dose=12.0001 aer=498.48 run=5 lift=60 warn=RADIATION - TAKE COVER
 hypoxia    t=       0 st=0 res=0.998667 core=310.15 wbal=1 met=90 pulse=62.04 br=13 wdef=0 gly=8e+06 fat=12 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
 hypoxia    t=      30 st=0 res=0.598667 core=310.15 wbal=1 met=90 pulse=74.04 br=13 wdef=0 gly=8e+06 fat=12 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
 hypoxia    t=      60 st=0 res=0.198667 core=310.15 wbal=1 met=90 pulse=86.04 br=13 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
@@ -121,14 +121,117 @@ hypoxia    t=     150 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 
 hypoxia    t=     180 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
 hypoxia    t=     210 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
 hypoxia    t=     240 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
-hypoxia    t=     270 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+hypoxia    t=     270 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9997 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
 co2        t=       0 st=0 res=0.998667 core=310.15 wbal=1 met=90 pulse=62.04 br=45 wdef=0 gly=8e+06 fat=12 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=CO2 NARCOSIS
 co2        t=      60 st=0 res=0.198667 core=310.15 wbal=1 met=90 pulse=86.04 br=45 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=CO2 NARCOSIS
 co2        t=     120 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=CO2 NARCOSIS
 co2        t=     180 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=CO2 NARCOSIS
 co2        t=     240 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=CO2 NARCOSIS
-co2        t=     300 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
-co2        t=     360 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
-co2        t=     420 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
-co2        t=     480 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
-co2        t=     540 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+co2        t=     300 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9997 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=CO2 NARCOSIS
+co2        t=     360 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9996 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=CO2 NARCOSIS
+co2        t=     420 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9996 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=CO2 NARCOSIS
+co2        t=     480 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9995 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=CO2 NARCOSIS
+co2        t=     540 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9995 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=CO2 NARCOSIS
+suffoc     t=       0 st=0 res=0.993333 core=310.15 wbal=1 met=90 pulse=62.2 br=13 wdef=0 gly=8e+06 fat=12 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
+suffoc     t=      30 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=12 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
+suffoc     t=      60 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
+suffoc     t=      90 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
+suffoc     t=     120 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
+suffoc     t=     150 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
+suffoc     t=     180 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
+suffoc     t=     210 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+suffoc     t=     240 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+suffoc     t=     270 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+suffoc     t=     300 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+suffoc     t=     330 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+suffoc     t=     360 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+suffoc     t=     390 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+hypoxia8   t=       0 st=0 res=0.998667 core=310.15 wbal=1 met=90 pulse=62.04 br=13 wdef=0 gly=8e+06 fat=12 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
+hypoxia8   t=     120 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
+hypoxia8   t=     240 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
+hypoxia8   t=     360 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9996 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
+hypoxia8   t=     480 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9995 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
+hypoxia8   t=     600 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9994 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOXIA
+hypoxia8   t=     720 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9994 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+hypoxia8   t=     840 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9994 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+hypoxia8   t=     960 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9994 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+hypoxia8   t=    1080 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9994 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+co2hi      t=       0 st=0 res=0.988 core=310.15 wbal=1 met=90 pulse=62.36 br=109 wdef=0 gly=8e+06 fat=12 fast=0 hurt=0,0,0,0 inj=0.000111111 dose=0 aer=996.96 run=5 lift=60 warn=CO2 NARCOSIS
+co2hi      t=     180 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9998 fast=0 hurt=0,0,0,0 inj=0.200222 dose=0 aer=996.96 run=5 lift=60 warn=INJURED
+co2hi      t=     360 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9996 fast=0 hurt=0,0,0,0 inj=0.400111 dose=0 aer=996.96 run=5 lift=60 warn=INJURED
+co2hi      t=     540 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9995 fast=0 hurt=0,0,0,0 inj=0.600111 dose=0 aer=996.96 run=5 lift=60 warn=INJURED
+co2hi      t=     720 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9993 fast=0 hurt=0,0,0,0 inj=0.800111 dose=0 aer=996.96 run=5 lift=60 warn=INJURED
+co2hi      t=     900 st=2 res=0 core=310.15 wbal=1 met=90 pulse=92 br=109 wdef=0 gly=8e+06 fat=11.9991 fast=0 hurt=0,0,0,0 inj=1.00011 dose=0 aer=996.96 run=5 lift=60 warn=INJURED
+co2hi      t=    1080 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9991 fast=0 hurt=0,0,0,0 inj=1.00011 dose=0 aer=996.96 run=5 lift=60 warn=-
+co2hi      t=    1260 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9991 fast=0 hurt=0,0,0,0 inj=1.00011 dose=0 aer=996.96 run=5 lift=60 warn=-
+co2hi      t=    1440 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9991 fast=0 hurt=0,0,0,0 inj=1.00011 dose=0 aer=996.96 run=5 lift=60 warn=-
+co2hi      t=    1620 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9991 fast=0 hurt=0,0,0,0 inj=1.00011 dose=0 aer=996.96 run=5 lift=60 warn=-
+heatlong   t=       0 st=0 res=1 core=310.151 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=12 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+heatlong   t=    1800 st=0 res=1 core=312.64 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9982 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+heatlong   t=    3600 st=1 res=0 core=315.128 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9965 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=OVERHEATING
+heatlong   t=    5400 st=2 res=0 core=316.566 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9955 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+heatlong   t=    7200 st=2 res=0 core=316.566 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9955 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+heatlong   t=    9000 st=2 res=0 core=316.566 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9955 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+heatlong   t=   10800 st=2 res=0 core=316.566 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9955 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+heatlong   t=   12600 st=2 res=0 core=316.566 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9955 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+heatlong   t=   14400 st=2 res=0 core=316.566 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9955 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+coldlong   t=       0 st=0 res=1 core=310.149 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=12 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+coldlong   t=    1800 st=0 res=1 core=307.66 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9982 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOTHERMIA
+coldlong   t=    3600 st=0 res=1 core=305.172 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9965 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOTHERMIA
+coldlong   t=    5400 st=1 res=0 core=302.683 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9947 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOTHERMIA
+coldlong   t=    7200 st=1 res=0 core=300.195 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.993 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=HYPOTHERMIA
+coldlong   t=    9000 st=2 res=0 core=298.735 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.992 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+coldlong   t=   10800 st=2 res=0 core=298.735 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.992 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+coldlong   t=   12600 st=2 res=0 core=298.735 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.992 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+coldlong   t=   14400 st=2 res=0 core=298.735 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.992 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+coldlong   t=   16200 st=2 res=0 core=298.735 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.992 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+coldlong   t=   18000 st=2 res=0 core=298.735 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.992 fast=0 hurt=0,0,0,0 inj=1.00333 dose=0 aer=996.96 run=5 lift=60 warn=-
+ars     3 Sv: alive after 90 days, 90.00 days
+ars     5 Sv: dead after 46.55 days
+ars     8 Sv: dead after 19.53 days
+ars    15 Sv: dead after 9.33 days
+ars    50 Sv: dead after 3.06 days
+ars   120 Sv: dead after 1.47 days
+beam       t=       0 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=12 fast=0 hurt=0,0,0,0 inj=2.22492e-06 dose=27.7778 aer=498.48 run=5 lift=60 warn=RADIATION - TAKE COVER
+beam       t=      30 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=12 fast=0 hurt=0,0,0,0 inj=0.200328 dose=861.111 aer=498.48 run=5 lift=60 warn=INJURED
+beam       t=      60 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=0.450675 dose=1694.44 aer=498.48 run=5 lift=60 warn=INJURED
+beam       t=      90 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=0.701022 dose=2527.78 aer=498.48 run=5 lift=60 warn=INJURED
+beam       t=     120 st=1 res=0 core=310.15 wbal=1 met=90 pulse=92 br=8 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=0.951369 dose=3361.11 aer=498.48 run=5 lift=60 warn=INJURED
+beam       t=     150 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+beam       t=     180 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+beam       t=     210 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+beam       t=     240 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+beam       t=     270 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+beam       t=     300 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+beam       t=     330 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+beam       t=     360 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+beam       t=     390 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+beam       t=     420 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+beam       t=     450 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+beam       t=     480 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+beam       t=     510 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+beam       t=     540 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+beam       t=     570 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+beam       t=     600 st=2 res=0 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=1.00144 dose=3527.78 aer=498.48 run=5 lift=60 warn=-
+medbay     t=       0 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0.1663,0,0.9996 inj=0.555208 dose=7.99861 aer=457.032 run=1.50129 lift=58.0044 warn=INJURED
+medbay     t=   43200 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9579 fast=0 hurt=0,0,0,0.7346 inj=0.305208 dose=6.99861 aer=498.48 run=2.42879 lift=60 warn=INJURED
+medbay     t=   86400 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9159 fast=0 hurt=0,0,0,0.4696 inj=0.0552083 dose=5.99861 aer=498.618 run=3.35629 lift=60 warn=INJURED
+medbay     t=  129600 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.8738 fast=0 hurt=0,0,0,0.2046 inj=0 dose=4.99861 aer=598.314 run=4.28379 lift=60 warn=RADIATION SICKNESS
+medbay     t=  172800 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.8318 fast=0 hurt=0,0,0,0 inj=0 dose=3.99861 aer=698.01 run=5 lift=60 warn=RADIATION SICKNESS
+medbay     t=  216000 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.7898 fast=0 hurt=0,0,0,0 inj=0 dose=2.99861 aer=797.706 run=5 lift=60 warn=RADIATION SICKNESS
+medbay     t=  259200 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.7477 fast=0 hurt=0,0,0,0 inj=0 dose=1.99861 aer=897.402 run=5 lift=60 warn=RADIATION SICKNESS
+medbay     t=  302400 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.7057 fast=0 hurt=0,0,0,0 inj=0 dose=0.998611 aer=996.96 run=5 lift=60 warn=-
+medbay     t=  345600 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.6637 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+medbay     t=  388800 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.6216 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+medbay     t=  432000 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.5796 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+medbay     t=  475200 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.5376 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+medbay     t=  518400 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.4956 fast=0 hurt=0,0,0,0 inj=0 dose=0 aer=996.96 run=5 lift=60 warn=-
+medbay30   t=       0 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9999 fast=0 hurt=0,0,0,0 inj=0.00014311 dose=30 aer=498.48 run=5 lift=60 warn=RADIATION SICKNESS
+medbay30   t=   86400 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.9159 fast=0 hurt=0,0,0,0 inj=0.206221 dose=30 aer=498.48 run=5 lift=60 warn=INJURED
+medbay30   t=  172800 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.8318 fast=0 hurt=0,0,0,0 inj=0.412299 dose=30 aer=498.48 run=5 lift=60 warn=INJURED
+medbay30   t=  259200 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.7477 fast=0 hurt=0,0,0,0 inj=0.618377 dose=30 aer=498.48 run=5 lift=60 warn=INJURED
+medbay30   t=  345600 st=0 res=1 core=310.15 wbal=1 met=90 pulse=62 br=13 wdef=0 gly=8e+06 fat=11.6637 fast=0 hurt=0,0,0,0 inj=0.824455 dose=30 aer=498.48 run=5 lift=60 warn=INJURED
+medbay30   t=  432000 st=2 res=1 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.5921 fast=0 hurt=0,0,0,0 inj=1.00005 dose=30 aer=498.48 run=5 lift=60 warn=-
+medbay30   t=  518400 st=2 res=1 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.5921 fast=0 hurt=0,0,0,0 inj=1.00005 dose=30 aer=498.48 run=5 lift=60 warn=-
+medbay30   t=  604800 st=2 res=1 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.5921 fast=0 hurt=0,0,0,0 inj=1.00005 dose=30 aer=498.48 run=5 lift=60 warn=-
+medbay30   t=  691200 st=2 res=1 core=310.15 wbal=1 met=0 pulse=0 br=0 wdef=0 gly=8e+06 fat=11.5921 fast=0 hurt=0,0,0,0 inj=1.00005 dose=30 aer=498.48 run=5 lift=60 warn=-

@@ -8,6 +8,7 @@
 #include "TantraCrew.h"
 #include "TantraLift.h"
 #include "../core/Plant.h"
+#include "../core/TantraCore.h"
 #include "TantraWalk.h"
 #include "TantraScreen.h"
 #include "TantraInterior.h"
@@ -17,6 +18,7 @@
 #include "../core/Damage.h"
 #include "../core/Impact.h"
 #include "../core/Foot.h"
+#include "TantraSolids.h"
 #include "../core/Drive.h"
 #include "../core/Ignition.h"
 #include "../core/Legs.h"
@@ -36,6 +38,7 @@ public:
     // the power plant, for its screen on the bridge
     const tantra::plant::Plant& PlantState() const { return plant_; }
     const tantra::plant::Output& PlantOut() const { return plantOut_; }
+    const tantra::tcore::Snapshot& CoreState() const { return core_.S(); }   // the energy core's nodes (core/TantraCore)
     double MarchLevel() const { return march_ ? GetThrusterLevel(march_) : 0.0; }
     double ArgonMass() const { return GetPropellantMass(argon_); }
     double IronMass() const { return GetPropellantMass(iron_); }
@@ -230,6 +233,8 @@ private:
     int suspFrame_ = 0, forceFrame_ = 0, frame_ = 0;   // which frame last called SetTouchdownPoints / AddForce (rest diagnostics)
     double restLostLog_ = -1e9;
     void FootEvents();
+    VESSELSTATUS2 frozenVs_ = {};           // the landed state the ship is held in under time warp
+    OBJHANDLE lastTrapsChunk_ = nullptr;      // the trap-block piece of a break-up (the camera follows it)
     bool LegJointDebris(int leg);              // a leg lost at a joint: its foot / lowest stage as debris
     double tipWind_ = 0.0;                     // wind that would overturn the ship now [m/s]
     // Balance device: hull angle and rate against the commanded erection angle, the holding moment, the pause.
@@ -243,6 +248,7 @@ private:
 public:
     // people walking outside bump into the cup feet (OrbiterCrew: OcInteriorExt::OuterWalls), ship frame
     void OuterWalls(const VECTOR3& from, VECTOR3& to, double radius, double height) const;
+    int OuterSolids(TantraSolid* out, int max) const;   // the supports at the ground for other vessels (TantraSolids.h)
 private:
     VECTOR3 cupC_[7] = {}, cupUp_ = {0, 1, 0};
     double cupR_[7] = {};
@@ -298,6 +304,11 @@ private:
     double elevon_[2] = {0.0, 0.0}, bodyFlap_ = 0.5;  // mesh states (port, starboard; flap 0..1 = 0..25 deg)
     EngineSet engineSet_ = EngineSet::Planetary;
     double podAngle_ = 0.0, podTarget_ = 0.0;  // deg: 0 thrust forward, 90 thrust up
+    // the pods' own thrust set by their lever (the bridge's ГОНДОЛЫ) and УВТ: the yoke drives them differentially
+    // (TantraVectoring.cpp; the bridge session, agreed with the fork 2026-10-04)
+    void PodVectoring(double simdt);
+    double podCmd_ = 0.0;                      // the lever: 0..1 (locked at 0 until the pods are fully out)
+    double podLv_[tantra::spec::kPodCups] = {};   // each cup's level as driven (it follows at 3 /s)
     int planGroup_ = -1;                       // main throttle: 0 anamezon, 1 marching planetary cup
     tantra::Ignition ignition_;
     tantra::Drive drive_;
@@ -389,6 +400,8 @@ private:
     bool seatSurf_ = false;               // the helm holds the control surfaces (released on leaving the seat)
     tantra::plant::Plant plant_;                  // the planetary power plant: field, limiter, heat, failures
     tantra::plant::Output plantOut_;
+    tantra::tcore::Core core_;                    // the energy core around the plant: nodes, power, the shocks' consequences
+    void CoreStep(double simdt);                  // after UpdateDamage (TantraCoreStep.cpp)
     unsigned plantKeyPrev_ = 0;
     int plantStage_ = -1;                          // the plant's stage last step (the march lever drops off the run)
     void LoadPlantConfig();

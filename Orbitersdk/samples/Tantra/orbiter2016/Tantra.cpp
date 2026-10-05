@@ -1,5 +1,6 @@
 // Tantra: Orbiter 2016 vessel adapter.
 #include "Tantra.h"
+#include "TantraPerf.h"
 
 #include <cmath>
 #include <cstdarg>
@@ -176,6 +177,7 @@ void Tantra::clbkSetClassCaps(FILEHANDLE cfg) {
     }
     screen_.Init(this, vcMeshIdx_);
     screen_.SetHud([](void* c, SURFHANDLE s, int w, int h, const VECTOR3& d, const VECTOR3& u, double f) { static_cast<TantraDisplays*>(c)->DrawHud(s, w, h, d, u, f); }, &disp_);
+    screen_.SetPages([](void* c, int z, SURFHANDLE s, int w, int h) { static_cast<TantraDisplays*>(c)->DrawDataPage(z, s, w, h); }, &disp_);   // the data band
     DefineGear();
     DefinePort();
 }
@@ -437,7 +439,15 @@ void Tantra::UpdateControlSurfaces() {
 
 void Tantra::DefineCrew() {
     crew_.Init(this, kEvaPos, sp::kCrewSeats);
-    for (const CrewSeed& c : kCrew) crew_.AddMember(c.name, c.age, c.pulse, c.weight, c.role);
+    // a ship without a crew in its scenario (made in the scenario editor) has its astronavigator aboard, standing in the
+    // cabin behind the seats (the user); a scenario's CREW lines replace this roster
+    const CrewSeed& c = kCrew[1];
+    crew_.AddMember(c.name, c.age, c.pulse, c.weight, c.role);
+    {
+        namespace ti = tantra::interior;
+        const VECTOR3 dir = _V(ti::kSeats[0].fx, 0, ti::kSeats[0].fz);
+        crew_.SetDefaultPlace(_V(ti::kSeats[0].x + 0.9, ti::kBridgeFloorY, ti::kSeats[0].z) - dir * 1.6, dir);
+    }
 }
 
 void Tantra::clbkPostCreation() {
@@ -508,6 +518,8 @@ void Tantra::clbkSaveState(FILEHANDLE scn) {
         oapiWriteScenario_string(scn, const_cast<char*>("FEET"), dmg);
     }
     oapiWriteScenario_string(scn, const_cast<char*>("PLANT"), const_cast<char*>(plant_.Save().c_str()));
+    oapiWriteScenario_int(scn, const_cast<char*>("SCREENBAND"), screen_.Band());
+    oapiWriteScenario_string(scn, const_cast<char*>("CORE"), const_cast<char*>(core_.Save().c_str()));
     std::snprintf(buf, sizeof buf, "%.1f %.1f %.3f %d", podAngle_, podTarget_, podOut_, podsWanted_ ? 1 : 0);
     oapiWriteScenario_string(scn, const_cast<char*>("PODS"), buf);
     if (!lift_.Stowed() || lift_.Lowering()) lift_.Save(scn);   // LIFT door out mast down lowering
@@ -560,8 +572,12 @@ void Tantra::clbkLoadStateEx(FILEHANDLE scn, void* status) {
             }
         } else if (!_strnicmp(line, "LIFT", 4) && (line[4] == ' ' || line[4] == '\t')) {
             lift_.Load(line + 4);
+        } else if (!_strnicmp(line, "SCREENBAND", 10)) {
+            screen_.SetBand(std::atoi(line + 10));
         } else if (!_strnicmp(line, "PLANT", 5) && (line[5] == ' ' || line[5] == '\t')) {
             plant_.Load(line + 5);
+        } else if (!_strnicmp(line, "CORE", 4) && (line[4] == ' ' || line[4] == '	')) {
+            core_.Load(line + 4);
         } else if (!_strnicmp(line, "FEET", 4)) {
             feet_.Load(line + 4);
         } else if (!_strnicmp(line, "CRUSH", 5)) {
@@ -826,7 +842,7 @@ void Tantra::UpdateLegLoads(const VECTOR3& fh) {
     const double kangL = g.kangThigh + g.kangShinMin + p.kangExt * (g.kangShinMax - g.kangShinMin);
     const double capK = (std::min)(sp::kCntSigma * sp::kKangShinA, pcr(sp::kKangShinI, (std::max)(20.0, kangL))) / sp::kSafety;
     static const char* kNameRu[7] = {"лопасть левая", "лопасть правая", "кормовая нога 1", "кормовая нога 2",
-                                     "кормовая нога 3", "кормовая нога 4", "нога-кенгуру"};
+                                     "кормовая нога 3", "кормовая нога 4", "передняя опора"};
     static const char* kNameEn[7] = {"port blade", "starboard blade", "stern leg 1", "stern leg 2",
                                      "stern leg 3", "stern leg 4", "kangaroo leg"};
     int worstLeg = 0;
@@ -1298,27 +1314,38 @@ void Tantra::SeatKeys() {
 }
 
 void Tantra::clbkPreStep(double, double simdt, double) {
+    tantra::perf::P().Begin();
     interior_.Step(simdt);                        // the moving bridge seats, the deferred stand-up (OrbiterCrew)
+    TANTRA_PERF("interior");
     SeatKeys();
+    TANTRA_PERF("seatkeys");
     PersonLights();
+    TANTRA_PERF("lights");
     if (sound_ && sound_->IsPresent()) {                                // the seats' micro-lift while one moves
         const bool mv = interior_.SeatMoving();
         if (mv && !sound_->IsWavPlaying(SND_SEAT)) sound_->PlayWav(SND_SEAT, true, 0.35f);
         else if (!mv && sound_->IsWavPlaying(SND_SEAT)) sound_->StopWav(SND_SEAT);
     }
     AutoFlightSet();
+    TANTRA_PERF("autoflight");
     screen_.SetViewer(interior_.ViewerBody());   // the bridge screen follows the viewer (gcAPI renders for the focus only)
+    screen_.SetViewerPresent(interior_.ViewerInBridge());   // no camera at all while nobody sees the screen
     WatchLights();
+    TANTRA_PERF("watchlights");
     WatchTerrain();   // first: a refined terrain tile must not bury the pads for even one step
+    TANTRA_PERF("terrain");
     UpdateCG(false);
+    TANTRA_PERF("cg");
     AimThroughCG();
     UpdateWind(simdt);
+    TANTRA_PERF("wind");
     {
         namespace dm = tantra::damage;
         const bool crestsOk = !damage_.Lost(dm::kCrestPort) || !damage_.Lost(dm::kCrestStbd);
         DefineControlSurfaces(wingOut_ < 0.5 && carriage_.Pose().tuck < 0.5 && crestsOk && !damage_.Destroyed());
     }
     UpdateControlSurfaces();
+    TANTRA_PERF("surfaces");
     VECTOR3 v;
     GetRelativeVel(GetGravityRef(), v);
     beta_ = length(v) / C_LIGHT;
@@ -1329,10 +1356,12 @@ void Tantra::clbkPreStep(double, double simdt, double) {
         SetThrusterIsp(th, prm_.AnaExhaust() * f);
     }
     UpdateReactionMass();
+    TANTRA_PERF("reaction");
     const double isp = (marchHigh_ ? prm_.ironExhaust : prm_.argonExhaust) * f;
     // the marching cup: its thrust and exhaust speed from the power plant (field, power, limiter, damage); it thrusts
     // only run out past the anamezon rims (interlock: never with the anamezon irises open)
     UpdatePlant(simdt, f);
+    TANTRA_PERF("plant");
     for (THRUSTER_HANDLE th : retro_) {  // nose retro cups: anamezon, only while the drive feeds
         SetThrusterMax0(th, AnaIsMain() && irisNose_ >= 0.99 ? prm_.anaThrust * sp::kRetroAreaFrac * f : 0.0);
         SetThrusterIsp(th, prm_.AnaExhaust() * f);
@@ -1346,6 +1375,9 @@ void Tantra::clbkPreStep(double, double simdt, double) {
         podMax += mx;
     }
     PodAssistLevels(simdt, podMax);
+    TANTRA_PERF("podassist");
+    PodVectoring(simdt);                          // the pods' lever and УВТ (TantraVectoring.cpp)
+    TANTRA_PERF("podvector");
     ScaleAttitudeThrust();
     {   // damage: lost pods and cups give nothing; a destroyed ship has no engines at all
         namespace dm = tantra::damage;
@@ -1363,8 +1395,11 @@ void Tantra::clbkPreStep(double, double simdt, double) {
         }
     }
     UpdateGear(simdt);
+    TANTRA_PERF("gear");
     UpdatePort(simdt);
+    TANTRA_PERF("port");
     UpdatePods(simdt);
+    TANTRA_PERF("pods");
 
     const IgnStage prev = ignition_.Stage();
     // The chamber field is fed from the field store; an empty store cannot hold it up.
@@ -1374,6 +1409,7 @@ void Tantra::clbkPreStep(double, double simdt, double) {
     if (!fieldPowerOk && prev != IgnStage::Off)
         Message("Накопитель поля пуст: аварийный останов камер", "Field store empty: chamber emergency stop");
     SelectActiveTrap();
+    TANTRA_PERF("traps");
     if (safety_) {
         // Radiation of the running drive: ecosystems and crews around (docs/DESIGN.md).
         const double lv = AnaIsMain() ? GetThrusterGroupLevel(THGROUP_MAIN) : 0.0;
@@ -1390,6 +1426,7 @@ void Tantra::clbkPreStep(double, double simdt, double) {
         }
     }
     ApplyThrottleLimits();
+    TANTRA_PERF("throttle");
 
     const bool anaFeeding = AnaIsMain();
     const double feed = anaFeeding ? GetThrusterGroupLevel(THGROUP_MAIN) : 0.0;
@@ -1404,9 +1441,11 @@ void Tantra::clbkPreStep(double, double simdt, double) {
                          length(drag), GetAirspeed(), sound);
     }
     UpdateSound(prev);
+    TANTRA_PERF("sound");
 }
 
 void Tantra::clbkPostStep(double, double simdt, double) {
+    tantra::perf::P().Begin();
     properTime_ += simdt * ProperTimeRate(beta_);
 
     // Settling after a start on the ground: count the time at rest on the contacts.
@@ -1438,9 +1477,15 @@ void Tantra::clbkPostStep(double, double simdt, double) {
         Message("%s вернулся на борт", "%s is back aboard", crew_.LastName());
 
     UpdateLegLoads(windFh_);
+    TANTRA_PERF("legloads");
     UpdateDamage(simdt);
+    TANTRA_PERF("damage");
+    CoreStep(simdt);
+    TANTRA_PERF("core");
     UpdateDamageVisual(false);
+    TANTRA_PERF("dmgvisual");
     GuardAgainstLaunch(simdt);
+    TANTRA_PERF("guard");
     if (compOff_ > 0.0) compOff_ -= simdt;
     // Check the torque convention against Orbiter while the pods make a clear moment of their own.
     if (length(podTorquePred_) > 5e6) {
@@ -1456,6 +1501,8 @@ void Tantra::clbkPostStep(double, double simdt, double) {
         }
     }
     if (messageTimer_ > 0.0) messageTimer_ -= simdt;
+    TANTRA_PERF("post-rest");
+    tantra::perf::P().Frame();
 }
 
 // Orbiter first puts a landed ship on coarse terrain, then loads finer elevation tiles: the ground under
@@ -1582,7 +1629,7 @@ void Tantra::UpdateDamage(double dt) {
         std::memset(&st, 0, sizeof st);
         st.version = 2;
         GetStatusEx(&st);
-        if (st.status != 1) LandNow(false);
+        if (st.status != 1) { LandNow(false); restLock_ = true; }   // held: no balance forces, no new contacts
     }
     if (damage_.Destroyed() && !destroyedWarned_) {
         Message("Корабль разрушен: двигатели и системы мертвы (Ctrl+Shift+D - ремонт для отладки)",
@@ -1623,10 +1670,11 @@ void Tantra::SpawnDebris(const char* name, const VECTOR3* posLocal, const VECTOR
         return ((windRng_ >> 8) / 16777216.0) * 2.0 - 1.0;
     };
     vs.vrot = w + _V(rnd(), rnd(), rnd()) * tumble;
-    // on the ground (or just over it) the part falls where it broke and lies there: a free body spawned at the ground
-    // was thrown off by its own contact springs - into space
+    // the piece flies on with the ship's velocity and its push; on the ground its own module (TantraDebris.dll) lifts it
+    // out of the soil, lets it tumble and scrape to a stop and lays it down. Only without that module: laid at once
     OBJHANDLE sref = GetSurfaceRef();
-    if (sref && (GroundContact() || GetAltitude(ALTMODE_GROUND) < 60.0)) {
+    static const bool debrisModule = GetFileAttributesA("Modules\\TantraDebris.dll") != INVALID_FILE_ATTRIBUTES;
+    if (sref && !debrisModule && (GroundContact() || GetAltitude(ALTMODE_GROUND) < 60.0)) {
         double lng, lat, rad;
         oapiGlobalToEqu(sref, g, &lng, &lat, &rad);
         double hdg = 0.0;
@@ -1642,7 +1690,8 @@ void Tantra::SpawnDebris(const char* name, const VECTOR3* posLocal, const VECTOR
     }
     char vname[64];
     std::snprintf(vname, sizeof vname, "%s_debris_%02d", GetName(), ++debrisCount_);
-    oapiCreateVesselEx(vname, d->cls, &vs);
+    const OBJHANDLE made = oapiCreateVesselEx(vname, d->cls, &vs);
+    if (!std::strncmp(name, "hull_traps", 10)) lastTrapsChunk_ = made;   // the biggest piece: the camera follows it
     oapiWriteLogV("Tantra: debris %s (%s) %s, the ship %.1f m over the ground, %.1f m/s", vname, name,
                   vs.status == 1 ? "laid on the ground" : "free", GetAltitude(ALTMODE_GROUND), GetGroundspeed());
 }
@@ -1838,6 +1887,8 @@ void Tantra::BreakUp() {
         }
         oapiWriteLogV("Tantra: break-up - %d pieces, cut at%s (impact %d, %.0f g, belly %.1f m)", pieces, cuts[0] ? cuts : " nothing",
                       ir.mode, ir.peakG, damage_.Belly());
+        // the camera that watched the ship goes with its biggest piece (the ship's own frame stays behind, invisible)
+        if (lastTrapsChunk_ && oapiCameraTarget() == GetHandle()) oapiCameraAttach(lastTrapsChunk_, oapiCameraInternal() ? 0 : 1);
     }
     for (int part = 0; part < dm::kPartCount; ++part)
         if (!damage_.Lost(part) && part != dm::kHull && part != dm::kNose && part != dm::kBelly && part != dm::kMarchCup) {
@@ -1875,6 +1926,7 @@ void Tantra::UpdateDamageVisual(bool force) {
         for (DWORD gi = 0; gi < m::GRP_COUNT; ++gi) oapiEditMeshGroup(mesh, gi, &all);
         shownGone_ = shipGone_;
         force = true;
+        screen_.RefreshWindow();                     // every group shown again: the open window hides its occluders anew
     }
     // --- lost parts
     auto groups = [](int part, int* g) {
@@ -2029,8 +2081,12 @@ void Tantra::GuardAgainstLaunch(double dt) {
     GetAngularVel(w);
     HorizonInvRot(_V(0, 1, 0), up);
     if (shipGone_) { bounceDamp_ = 0.0; return; }        // a dead frame is held where the ship died (clbkPreStep), no pushing
-    const bool engines = thrustAccel_ > 0.8 * LocalG();
-    if (carriage_.Gear() >= 0.5 && relandCool_ <= 0.0 && !engines) {
+    // engines able to lift it: only the thrust's upward part counts (pushed along the ground at full thrust, the ship
+    // sliding on its hull bounced off its contact springs to 1.7 km at 1.5 km/s - not a flight)
+    VECTOR3 thr;
+    GetThrustVector(thr);
+    const bool engines = dotp(thr, up) / (std::max)(1.0, GetMass()) > 0.8 * LocalG();
+    if (relandCool_ <= 0.0 && !engines) {
         const bool thrown = !contact && sinceContact_ < 5.0 && v.y > 3.0;
         const bool spinning = contact && !carriage_.Busy() && length(w) > 0.35;
         if (thrown || spinning) {
@@ -2577,7 +2633,14 @@ void Tantra::UpdateGear(double simdt) {
     // everywhere - lighter worlds turn slower (sqrt). On the Moon the ship lifts off lying on the pods anyway.
     if (simdt > 0.0) carriage_.SetTurnTime((std::min)(150.0, 45.0 * std::sqrt((std::max)(1.0, G0 / (std::max)(0.1, LocalG())))));
     if (simdt > 0.0) tuckSet_ = true;
-    carriage_.Update(balHold_ || frozen_ ? 0.0 : balRamp_ * (hipCatcher_ ? 0.6 * dt : dt), frameS_);  // paused while swaying or frozen; slower on the catchers
+    {   // paused while swaying or frozen; slower on the catchers. Time warp hurries the machine: the ground mechanism places
+        // the hull from the pose every frame (no springs), so up to 3 s of it per frame in 0.05 s steps
+        const double warp = oapiGetTimeAcceleration();
+        const bool hurry = warp > 1.5 && carriage_.Busy() && simdt > 0.0;
+        const double cdt = hurry ? (std::min)(simdt, 3.0) : dt;
+        const double rate = balHold_ || frozen_ ? 0.0 : (hurry ? 1.0 : balRamp_) * (hipCatcher_ ? 0.6 : 1.0);
+        for (double left = cdt; left > 1e-9; left -= 0.05) carriage_.Update(rate * (std::min)(0.05, left), frameS_);
+    }
     auto step = [dt](double v, double t, double rate) {
         return v < t ? (std::min)(t, v + rate * dt) : (std::max)(t, v - rate * dt);
     };
@@ -2851,16 +2914,56 @@ void Tantra::UpdateGear(double simdt) {
         const double m = GetMass(), W = m * LocalG(), per = W / nt, mEff = m / nt;
         // each cell's static load: its leg's share of the weight (lying: the kangaroo its share, the blades the rest;
         // otherwise the legs of the set alike) over the leg's pads - the gas pressure is set per leg
+        // each leg's static load from the statics of the feet as they stand: the forces sum to the weight and have no
+        // moment about the CG (the frame origin) in the ground plane - three legs exactly, four with the least forces
+        // (the minimum-norm solution), two as near as they can. Not from the carriage's shares (at a scenario load the
+        // CG station is not yet known there: the kangaroo got no share, its petals were wool and the ship fell over).
         int padsOf[7] = {};
-        bool kangIn = false;
-        for (int i = 0; i < nt; ++i) if (legOf[i] >= 0) { ++padsOf[legOf[i]]; kangIn = kangIn || legOf[i] == 6; }
-        int legsIn = 0;
-        for (int l = 0; l < 7; ++l) legsIn += padsOf[l] > 0;
-        const double kangW = kangIn ? carriage_.Statics(W, 0.0).kangaroo : 0.0;
-        auto legW = [&](int l) {
-            if (kangIn) return l == 6 ? kangW : (W - kangW) / (std::max)(1, legsIn - 1);
-            return W / (std::max)(1, legsIn);
-        };
+        VECTOR3 legC[7];
+        for (int l = 0; l < 7; ++l) legC[l] = _V(0, 0, 0);
+        for (int i = 0; i < nt; ++i) if (legOf[i] >= 0) { ++padsOf[legOf[i]]; legC[legOf[i]] += t[i]; }
+        double legLoad[7] = {};
+        {
+            VECTOR3 e1 = fabs(upL.z) < 0.9 ? _V(0, 0, 1) : _V(1, 0, 0);
+            e1 = e1 - upL * dotp(e1, upL);
+            e1 = e1 / length(e1);
+            const VECTOR3 e2 = crossp(upL, e1);
+            int idx[7], n = 0;
+            double a[7], b[7];
+            for (int l = 0; l < 7; ++l) {
+                if (!padsOf[l]) continue;
+                const VECTOR3 c = legC[l] / padsOf[l];
+                idx[n] = l; a[n] = dotp(c, e1); b[n] = dotp(c, e2); ++n;
+            }
+            // F = A^T (A A^T)^-1 (W, 0, 0), A = rows (1 ...), (a ...), (b ...)
+            double M[3][3] = {};
+            for (int k = 0; k < n; ++k) {
+                const double r[3] = {1.0, a[k], b[k]};
+                for (int p = 0; p < 3; ++p) for (int q = 0; q < 3; ++q) M[p][q] += r[p] * r[q];
+            }
+            const double det = M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) +
+                               M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
+            if (n >= 3 && std::fabs(det) > 1e-9) {
+                // first column of M^-1 times W
+                const double y0 = (M[1][1] * M[2][2] - M[1][2] * M[2][1]) / det * W;
+                const double y1 = -(M[1][0] * M[2][2] - M[1][2] * M[2][0]) / det * W;
+                const double y2 = (M[1][0] * M[2][1] - M[1][1] * M[2][0]) / det * W;
+                double sum = 0.0;
+                for (int k = 0; k < n; ++k) { legLoad[idx[k]] = (std::max)(0.03 * W, y0 + y1 * a[k] + y2 * b[k]); sum += legLoad[idx[k]]; }
+                for (int k = 0; k < n; ++k) legLoad[idx[k]] *= W / sum;
+            } else
+                for (int k = 0; k < n; ++k) legLoad[idx[k]] = W / n;
+        }
+        auto legW = [&](int l) { return legLoad[l]; };
+        {   // the shares to the log whenever the ground set changes
+            static int loggedN = -1;
+            if (nt != loggedN) {
+                loggedN = nt;
+                oapiWriteLogV("Tantra: pads %d - leg loads %% of the weight: blades %.0f/%.0f, stern %.0f/%.0f/%.0f/%.0f, kangaroo %.0f",
+                              nt, 100 * legLoad[0] / W, 100 * legLoad[1] / W, 100 * legLoad[2] / W, 100 * legLoad[3] / W,
+                              100 * legLoad[4] / W, 100 * legLoad[5] / W, 100 * legLoad[6] / W);
+            }
+        }
         bool retune = false;
         for (int i = 0; i < nt; ++i) {
             const int l = legOf[i];
@@ -3097,9 +3200,21 @@ void Tantra::UpdateWarpFreeze(double dt) {
         if (landed && quiet) { LandNow(true); restLock_ = true; restTimer_ = 0.0; }
     }
     if (!restLock_ && !landed && quiet && restTimer_ > 2.0) { LandNow(false); restLock_ = true; restTimer_ = 0.0; }
-    const bool want = contact && warp > sp::kWarpFreeze && thrustAccel_ < 0.3 * LocalG();
+    // not while the carriage moves the ship: frozen in a pose half way up, Orbiter's landed state threw it 3 km into the
+    // ground and out at 5 km/s; the ground mechanism holds it then (kinematic) and the warp hurries it
+    // from x100 on the ground the contact physics is off whatever the ship does (thrust, sliding): it is held where it is
+    // and let go at the same point when the warp drops (the user)
+    const bool cond = !carriage_.Busy() && (warp >= 100.0 || (warp > sp::kWarpFreeze && thrustAccel_ < 0.3 * LocalG()));
+    const bool want = frozen_ ? cond : contact && cond;     // once held, held while the warp lasts (thrust lets go of contact)
+    if (frozen_ && want && !landed) {                       // the engines let it go: back on the very same point
+        VESSELSTATUS2 vs = frozenVs_;
+        DefSetStateEx(&vs);
+    }
     if (want && !frozen_) {
         if (!landed && !restLock_) LandNow(false);
+        std::memset(&frozenVs_, 0, sizeof frozenVs_);
+        frozenVs_.version = 2;
+        GetStatusEx(&frozenVs_);                            // the point it is held at (landed state)
         frozen_ = true;
         Message("Ускорение времени x%.0f: корабль зафиксирован на грунте, подъём на паузе", "Time warp x%.0f: ship frozen on the ground, erection paused", warp);
     } else if (!want && frozen_) {
@@ -3469,7 +3584,7 @@ void Tantra::ActErect() {
     }
     if (up && wingMode_ == 1) { wingMode_ = 0; crestsFolded_ = false; }   // raised wings would meet the stern legs
     if (up) Message("Подъём во взлётное положение (2 мин): лопасти, цапфы под ЦМ, поворот, кормовые ноги", "Standing up on the stern (2 min): blades, trunnions under the CG, turn, stern legs");
-    else Message("Укладка: лопасти, поворот, нога-кенгуру, лёжа", "Laying the ship down: blades, turn, kangaroo leg, lying");
+    else Message("Укладка: лопасти, поворот, передняя опора, лёжа", "Laying the ship down: blades, turn, kangaroo leg, lying");
 }
 
 void Tantra::ActGear() {
@@ -3489,7 +3604,7 @@ void Tantra::ActGear() {
         return;
     }
     const bool standing = carriage_.Set() == tantra::Carriage::FlightSet::Standing;
-    if (down) Message(standing ? "Шасси: кормовые ноги (посадка на корму)" : "Шасси: лопасти и нога-кенгуру (посадка лёжа)",
+    if (down) Message(standing ? "Шасси: кормовые ноги (посадка на корму)" : "Шасси: лопасти и передняя опора (посадка лёжа)",
                       standing ? "Gear down: stern legs (tail-first landing)" : "Gear down: blades and the kangaroo leg (lying landing)");
     else Message("Шасси убрано в броню", "Gear stowed");
 }
@@ -3591,6 +3706,7 @@ int Tantra::clbkConsumeBufferedKey(DWORD key, bool down, char* kstate) {
     if (key == OAPI_KEY_D && shift && ctrl) {
         damage_.Repair();
         feet_.Repair();
+        core_.Repair();
         shipGone_ = false;
         if (!foil_[0]) DefineAerodynamics();
         UpdateDamageVisual(true);
@@ -3816,7 +3932,7 @@ bool Tantra::clbkDrawHUD(int mode, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp
              legName_, legLoad_ / 1e6, 100.0 * legRatio_, tipWind_);
     if (GroundContact() && carriage_.Gear() > 0.0) {
         const double sj = (std::max)(solesCar_.Jam(), solesStern_.Jam()), sa = (std::max)(solesCar_.Anchors(), solesStern_.Anchors());
-        line(L("Опоры (датчики): лопасти %.0f/%.0f%%  кенгуру %.0f%%  корма %.0f/%.0f/%.0f/%.0f%%  грунт %s  цапфы %s",
+        line(L("Опоры (датчики): лопасти %.0f/%.0f%%  пер. опора %.0f%%  корма %.0f/%.0f/%.0f/%.0f%%  грунт %s  цапфы %s",
                "Legs (sensors): blades %.0f/%.0f%%  kangaroo %.0f%%  stern %.0f/%.0f/%.0f/%.0f%%  ground %s  trunnions %s"),
              100.0 * legR_[0], 100.0 * legR_[1], 100.0 * legR_[6], 100.0 * legR_[2], 100.0 * legR_[3], 100.0 * legR_[4], 100.0 * legR_[5],
              sa > 0.99 ? L("спечён", "sintered") : sj > 0.99 ? L("осел", "settled") : L("оседает", "settling"),
@@ -3832,7 +3948,7 @@ bool Tantra::clbkDrawHUD(int mode, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp
                "Leg drives (superconducting): spent %.1f GJ, returned while lowering %.1f GJ"),
              regen_.Spent() / 1e9, regen_.Returned() / 1e9);
     {
-        static const char* kPhRu[] = {"лежит (треножник)", "подъём на лопастях", "цапфы под ЦМ, кенгуру в карман", "поворот",
+        static const char* kPhRu[] = {"лежит (треножник)", "подъём на лопастях", "цапфы под ЦМ, передняя опора в карман", "поворот",
                                       "кормовые ноги выходят", "нагрузка на корму", "лопасти убираются", "стоит на корме"};
         static const char* kPhEn[] = {"lying (tripod)", "lifting on the blades", "trunnions to the CG, kangaroo in", "turning",
                                       "stern legs out", "load to the stern", "blades stowing", "standing"};

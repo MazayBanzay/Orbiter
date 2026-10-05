@@ -1,5 +1,5 @@
-// TantraDisplays - the engine console of the right riser: the mockup screen (TantraEngineScreen) fed with the ship's engines,
-// its scales and keys turned into the ship's set-points and actions (the same as the keyboard). Drawn into eng_ at 800 px high.
+// TantraDisplays - the engine page of the front glass (ДВИГАТЕЛИ, TantraEngineScreen) fed with the ship's engines, its scales
+// and keys turned into the ship's set-points and actions (the same as the keyboard).
 #include "TantraDisplays.h"
 #include "Tantra.h"
 
@@ -15,14 +15,18 @@ void TantraDisplays::FillEngineView(es::View& v) const {
     v.ana = t->engineSet_ == Tantra::EngineSet::Anamezon;
     v.bypass = t->hotStartOverride_;
     v.bypassArmed = oapiGetSysTime() - bypassArm_ < 3.0;
+    v.blink = std::fmod(oapiGetSysTime(), 1.0) < 0.62;
     v.gLimOn = t->gLimitOn_; v.gLim = t->gLimit_; v.feltG = t->accelG_;
     v.massKg = t->GetMass(); v.g = t->LocalG();
     v.sCG = t->frameS_;
+    v.nAna = sp::kAnaCount; v.nRetro = sp::kRetroCount; v.nPods = sp::kPodCount;
     // ---- planetary ----
     const bool ground = t->GroundContact() || t->GetAltitude(ALTMODE_GROUND) < 100.0;
     v.envKind = ground ? 0 : t->GetAtmDensity() > 1e-5 ? 1 : 2;
     const tantra::plant::Output& o = t->plantOut_;
     v.mass = o.mass; v.massMode = t->plant_.MassMode(); v.plantRun = t->plant_.Running();
+    // the plant's limiter keeps argon in the air (as Tantra::UpdatePlant tells the plant it is in the air)
+    v.argonLock = t->plant_.Limiter() && t->GetAtmDensity() > 1e-5 && t->GetAltitude(ALTMODE_GROUND) < sp::kMarchArgonAlt;
     const bool anaMain = t->AnaIsMain();
     v.mSet = !anaMain ? t->GetThrusterGroupLevel(THGROUP_MAIN) : 0.0;
     v.mAct = t->march_ ? t->GetThrusterLevel(t->march_) : 0.0;
@@ -30,7 +34,7 @@ void TantraDisplays::FillEngineView(es::View& v) const {
     double lvl = 0.0, F = 0.0; int n = 0;
     for (THRUSTER_HANDLE h : t->pod_) if (h) { const double L = t->GetThrusterLevel(h); lvl += L; F += L * t->GetThrusterMax0(h); ++n; }
     v.pAct = n ? lvl / n : 0.0;
-    v.pSet = t->GetGroupThrusterCount(THGROUP_HOVER) > 0 ? t->GetThrusterGroupLevel(THGROUP_HOVER) : v.pAct;
+    v.pSet = t->podCmd_;                                                // the pods' lever (Tantra::PodVectoring drives the cups)
     v.podsOk = t->podOut_ > 0.99;
     v.podF = F / sp::kPodCount; v.podFCap = t->prm_.podThrustTotal / sp::kPodCount;
     v.vP = t->pod_[0] ? t->GetThrusterIsp0(t->pod_[0]) : 3e4;
@@ -42,7 +46,7 @@ void TantraDisplays::FillEngineView(es::View& v) const {
     v.argon = t->argon_ ? t->GetPropellantMass(t->argon_) : 0.0; v.iron = t->iron_ ? t->GetPropellantMass(t->iron_) : 0.0;
     v.hoverPods = v.g > 0 && t->prm_.podThrustTotal > 0 ? v.massKg * v.g / t->prm_.podThrustTotal : 0.0;
     // ---- anamezon ----
-    v.stage = int(t->ignition_.Stage()); v.trans = t->ignition_.Transitioning();
+    v.stage = int(t->ignition_.Stage()); v.ignTarget = int(t->ignition_.Target()); v.trans = t->ignition_.Transitioning();
     v.fieldL = t->ignition_.FieldLevel(); v.beamL = t->ignition_.BeamLevel(); v.feedL = t->ignition_.FeedLevel();
     double fa = 0; n = 0; for (THRUSTER_HANDLE h : t->ana_) if (h) { fa += t->GetThrusterLevel(h); ++n; }
     v.fsAct = n ? fa / n : 0.0;
@@ -109,7 +113,7 @@ void TantraDisplays::EngineCommand(int cmd) {
         case es::kCmdCut:
             t->SetThrusterGroupLevel(THGROUP_MAIN, 0.0);
             if (t->GetGroupThrusterCount(THGROUP_RETRO) > 0) t->SetThrusterGroupLevel(THGROUP_RETRO, 0.0);
-            if (t->GetGroupThrusterCount(THGROUP_HOVER) > 0) t->SetThrusterGroupLevel(THGROUP_HOVER, 0.0);
+            t->podCmd_ = 0.0;                                           // the pods' lever (the cups follow at 3 /s)
             fsPend_ = frPend_ = -1.0;
             t->Message("Отсечка: тяга в ноль", "Cut-off: thrust to zero");
             break;
@@ -126,6 +130,8 @@ void TantraDisplays::EngineCommand(int cmd) {
     }
 }
 
+// (not called on variant 7: eng_ is not shown) the front glass's engine page scaled into eng_ - at the front glass's own design
+// width, so the page's touch areas stay those of the glass
 void TantraDisplays::DrawEngineScreen() {
     if (!eng_) return;
     Tantra* t = t_;
@@ -137,18 +143,20 @@ void TantraDisplays::DrawEngineScreen() {
     if (oapi::Sketchpad* skp = oapiGetSketchpad(eng_)) {
         es::View v;
         FillEngineView(v);
+        engScr_.Sample(v);
         int w = 0, h = 0; oapiGetSurfaceSize(eng_, &w, &h);
-        engScr_.Draw(skp, font_, 0, 0, int(w), int(h), v);
+        const double k = (std::min)(h / double(tantra::front::kDesignH), w / (std::max)(1.0, frontW_));
+        engScr_.Draw(skp, font_, gost_, k > 0 ? k : 1.0, frontW_, v);
         oapiReleaseSketchpad(skp);
     }
 }
 
+// a touch on the engine page (design px): a scale or its ▲ ▼ -> the set-point (Hit gives the new value), a key -> its command
 bool TantraDisplays::TouchEngineScreen(double x, double y) {
-    double along = 0.0;
-    const int cmd = engScr_.Hit(x, y, &along);
+    double value = 0.0;
+    const int cmd = engScr_.Hit(x, y, &value);
     if (cmd < 0) return false;
-    int bar = -1; double value = 0.0;
-    if (engScr_.BarValue(cmd, along, &bar, &value)) EngineSetPoint(bar, value);
+    if (cmd >= es::kCmdBar && cmd < es::kCmdBar + es::kBarCount) EngineSetPoint(cmd - es::kCmdBar, value);
     else EngineCommand(cmd);
     tRiser_ = 0.0;
     return true;

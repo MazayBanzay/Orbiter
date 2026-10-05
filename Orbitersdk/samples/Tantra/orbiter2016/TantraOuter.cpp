@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 void Tantra::OuterWalls(const VECTOR3& from, VECTOR3& to, double radius, double height) const {
     const VECTOR3 up = cupUp_;
@@ -41,4 +42,50 @@ void Tantra::OuterWalls(const VECTOR3& from, VECTOR3& to, double radius, double 
             oapiWriteLogV("Tantra: outer solids - a person stopped at the rim of cup %d (%.1f m from its axis)", l, rf);
         }
     }
+}
+
+// The supports at the ground as solids for other vessels (TantraSolids.h): every leg standing on the ground as a capsule
+// from its foot to its upper anchor (blade: the trunnion; stern leg: its hinge; kangaroo: its hip), every foot as a short
+// vertical capsule of its cup's radius, the lift cabin as a box while it is down. Ship frame.
+int Tantra::OuterSolids(TantraSolid* out, int max) const {
+    namespace m = tantra::mesh;
+    int n = 0;
+    auto cap = [&](const VECTOR3& a, const VECTOR3& b, double r) {
+        if (n >= max) return;
+        TantraSolid& s = out[n++];
+        std::memset(&s, 0, sizeof s);
+        s.kind = 1; s.a = a; s.b = b; s.r = r;
+    };
+    const VECTOR3 up = cupUp_;
+    const tantra::CarriagePose& p = carriage_.Pose();
+    for (int l = 0; l < 7; ++l) {
+        if (!cupOn_[l]) continue;
+        const VECTOR3 sole = cupC_[l];
+        cap(sole, sole + up * 0.9, cupR_[l]);                                        // the cup on the ground
+        const double footH = l == 6 ? m::kKangFootH : m::kFootH;
+        const VECTOR3 ankle = sole + up * footH;
+        VECTOR3 top;
+        double r;
+        if (l < 2) { top = _V((l == 0 ? -1.0 : 1.0) * m::kHipXOut, 0.0, p.hipS - frameS_); r = 3.4; }   // blade 6.7 x 2.8
+        else if (l < 6) { const m::LegRig& L = m::kLegs[l - 2]; top = _V(L.hinge.x, L.hinge.y, L.hinge.z + MeshDZ()); r = 1.6; }
+        else { top = _V(m::kKangHip.x, m::kKangHip.y, m::kKangHip.z + MeshDZ()); r = 1.2; }
+        cap(ankle, top, r);
+    }
+    if (lift_.AtGround() && n < max) {                                                // the lift cabin standing on the ground
+        TantraSolid& s = out[n++];
+        std::memset(&s, 0, sizeof s);
+        s.kind = 2;
+        const VECTOR3 f = lift_.Foot();
+        s.c = _V(f.x, f.y, Zf(m::kAirlockS)) + up * 1.3;
+        s.half = _V(1.6, 1.3, 1.6);
+        s.R = _M(1, 0, 0, 0, 1, 0, 0, 0, 1);
+    }
+    return n;
+}
+
+extern "C" __declspec(dllexport) int tantraOuterSolids(OBJHANDLE ship, TantraSolid* out, int max) {
+    if (!ship || !out || max <= 0 || !oapiIsVessel(ship)) return 0;
+    VESSEL* v = oapiGetVesselInterface(ship);
+    if (!v || !v->GetClassNameA() || _stricmp(v->GetClassNameA(), "Tantra")) return 0;
+    return static_cast<const Tantra*>(v)->OuterSolids(out, max);
 }

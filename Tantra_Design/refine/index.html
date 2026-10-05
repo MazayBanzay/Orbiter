@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Доработка экранов</title>
+<style>
+:root{--bg:#10161a;--panel:#18222a;--tx:#d8e2ea;--dim:#93a3b1;--acc:#ee9a3a;--line:#2a3742}
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+#wrap{padding:12px 16px;max-width:1720px;margin:0 auto}
+h1{font-size:19px;margin:0 0 4px}
+.note{font-size:13px;color:var(--dim)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
+.tabs button{font:inherit;padding:7px 14px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--tx);cursor:pointer}
+.tabs button.on{background:var(--acc);border-color:var(--acc);color:#10161a;font-weight:600}
+.pane{display:none}.pane.on{display:block}
+.cmp{display:grid;grid-template-columns:1fr;gap:12px}
+.cmp section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px}
+.cmp h2{font-size:15px;margin:2px 4px 8px;color:var(--dim);font-weight:600;letter-spacing:.5px}
+.cmp h2 b{color:var(--acc)}
+iframe{width:100%;height:1150px;border:0;border-radius:6px;background:#1a1f24}
+.th{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 18px;max-width:1100px}
+.th h3{margin:16px 0 6px;font-size:16px}
+.th li{margin:3px 0}
+.missing{color:var(--dim);font-size:14px;padding:30px;text-align:center}
+@media (max-width:700px){iframe{height:700px}}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Доработка экранов рубки: было / стало</h1>
+  <div class="note">Не замена, а доработка ваших экранов: один шрифт (ГОСТ 2.304 тип А, переключатель на ISOCPEUR — в «стало»),
+  крупнее там, где есть место, один модуль кнопок, сетка без наложений; механизация — ноги шасси, углы крыльев, перо и гребни как
+  радиаторы; энергоядро — рабочая мнемосхема. Правила: refine/SPEC.md. Под каждым «стало» — список изменений.</div>
+  <div class="tabs" id="tabs"></div>
+  <div id="panes"></div>
+</div>
+
+<template id="theses"><div class="th">
+<h3>Что не так сейчас</h3>
+<ol>
+<li><b>Отрисовка.</b> D3D9 игнорирует выравнивание текста — по горизонтали (исправлено в 19:01) и по базовой линии (найдено по вашим скриншотам, исправлено сейчас). Всё перенесённое стояло на строку ниже: полосы перечёркивали названия зон и цифры, подписи на клавишах сидели у нижнего края.</li>
+<li><b>Шрифт.</b> Экраны переносились с Segoe UI мокапов; в игре он тонкий и мутный. Один шрифт на всё — ГОСТ 2.304 тип А (им уже подписаны клавиши), запасной ISOCPEUR.</li>
+<li><b>Размеры.</b> Мокапы делались под монитор; на стекле в 1–1,3 м надписи 10–13 px не читаются. Минимум 15 px, подписи 17–18, значения 22–26.</li>
+<li><b>Кнопки.</b> У каждого экрана свой стиль, кучи. Один модуль кнопки, группы по функции, индикаторы — лампами.</li>
+<li><b>Механизация — часть данных выдумана экраном:</b> «цапфы: захват» и «грунт: осадка в норме» — постоянные строки; «до положения N с» — по зашитым в экран длительностям; предупреждения и журнал собирает экран; запреты (лифт, ангар, аварийный стоп) — в кнопках экрана, клавиатура и панели их обходят. Нет ног шасси, углов крыльев, пера и гребней как радиаторов.</li>
+<li><b>Энергоядро — модель настоящая</b> (стадии, поле, мощность, ограничитель, рабочая масса, температуры, повреждения, журнал), <b>мнемосхема частично бутафория:</b> «накопитель поля» — формула от поля, частота пресса считается в экране, узлы не нажимаются и не имеют состояний, тепловая карта дублирует экран ТЕПЛО.</li>
+<li><b>Тепло.</b> Зоны обшивки настоящие; прогноз входа — в коде экрана, а нужен ещё автопилоту и тревогам.</li>
+</ol>
+<h3>Как сделать системы настоящими, а не скриптами МФД</h3>
+<ol>
+<li><b>Система = модуль</b> (core/) без Orbiter и без экрана: состояние, команды, блокировки, датчики, отказы, события. Корабль связывает с Orbiter, экран читает снимок и шлёт команды.</li>
+<li><b>Один путь команд:</b> клавиатура, 2D-панели, экраны, автопилот зовут одну команду системы; запрет проверяет система и отвечает причиной.</li>
+<li><b>Механизация как система:</b> лафет, 4 кормовые ноги, лопасти, «кенгуру», крылья и перо, гондолы, ангар, порт, шлюз — последовательности, блокировки, аварийный стоп, время по приводам, датчики из модели опор и стоп.</li>
+<li><b>Энергоядро:</b> узлы мнемосхемы — узлы модели (топливо, пресс капсул, инжектор, накопитель поля, триггер, насосы, рубашка, криогеника, радиаторы — гребни и перо): состояние, предел, отказ, своя команда. Мнемосхема становится рабочим органом.</li>
+<li><b>Одна шина событий:</b> журналы экранов, тревоги HUD и центральный экран — из одного журнала корабля.</li>
+<li><b>Вычислители корабля:</b> тепловой прогноз и расчёт автопилота — в корабле; экраны показывают.</li>
+<li><b>Проверка вне игры</b> для каждого модуля (как Damage/Plant): подъём на корму, вход в атмосферу, пуск ядра.</li>
+</ol>
+<h3>Порядок</h3>
+<ol>
+<li>Шрифт и общий набор элементов (кнопка, рамка, шкала, таблица) — один раз для всех экранов.</li>
+<li>Этот мокап → ваш выбор по каждому экрану.</li>
+<li>Механизация: модуль системы → экран по мокапу.</li>
+<li>Энергоядро: узлы в модели → рабочая мнемосхема → экран.</li>
+<li>Тепловой прогноз и расчёт автопилота — в корабль.</li>
+</ol>
+<p class="note">core/ и Tantra.cpp — общая зона с форком (физика): модули систем согласую с ним. Экраны — мои.</p>
+</div></template>
+<script>
+"use strict";
+const SCREENS = [
+  {id: "mech", t: "МЕХАНИЗАЦИЯ", was: "../tantra_mech_screen.html", now: "mech_v3.html"},
+  {id: "plant", t: "ЭНЕРГОЯДРО", was: "../tantra_plant_screen.html", now: "plant_v3.html"},
+  {id: "thermal", t: "ТЕПЛО", was: "../tantra_thermal_screen.html", now: "thermal_v3.html"},
+  {id: "glasses", t: "СТЁКЛА", now: "glasses.html"},
+  {id: "front", t: "ПЕРЕДНЕЕ СТЕКЛО", now: "front_v3.html"},
+];
+const tabs = document.getElementById("tabs"), panes = document.getElementById("panes");
+function show(id) {
+  for (const b of tabs.children) b.classList.toggle("on", b.dataset.id === id);
+  for (const p of panes.children) p.classList.toggle("on", p.dataset.id === id);
+  for (const f of document.querySelectorAll(`.pane[data-id="${id}"] iframe[data-src]`)) { f.src = f.dataset.src; f.removeAttribute("data-src"); }
+  try { localStorage.setItem("refineTab", id); } catch (e) {}
+}
+for (const s of SCREENS) {
+  const b = document.createElement("button"); b.textContent = s.t; b.dataset.id = s.id; b.onclick = () => show(s.id); tabs.appendChild(b);
+  const p = document.createElement("div"); p.className = "pane"; p.dataset.id = s.id;
+  p.innerHTML = `<div class="cmp"><section><h2><b>${s.was ? "СТАЛО" : "ПРЕДЛОЖЕНИЕ"}</b> · ${s.now}</h2><iframe data-src="${s.now}" title="${s.t}"></iframe></section>` +
+    (s.was ? `<section><h2>БЫЛО · ${s.was.replace("../", "")}</h2><iframe data-src="${s.was}" title="${s.t}: было"></iframe></section>` : "") + `</div>`;
+  panes.appendChild(p);
+}
+{
+  const b = document.createElement("button"); b.textContent = "ТЕЗИСЫ"; b.dataset.id = "th"; b.onclick = () => show("th"); tabs.appendChild(b);
+  const p = document.createElement("div"); p.className = "pane"; p.dataset.id = "th";
+  p.innerHTML = document.getElementById("theses").innerHTML; panes.appendChild(p);
+}
+let start = "mech"; try { start = localStorage.getItem("refineTab") || "mech"; } catch (e) {}
+show(start);
+</script>
+</body>
+</html>

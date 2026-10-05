@@ -88,6 +88,7 @@ public:
     double Crushed(int zone) const { return crushed_[zone]; }   // [m] (core/Impact zones)
     double Belly() const { return belly_; }                       // the belly pressed in [m]
     const ImpactReport& LastImpact() const { return impact_; }    // the last hull impact (its mode, v, peak g)
+    int ImpactSerial() const { return impactSerial_; }            // +1 at every hull impact (a reader sees each one once)
     static const char* NameRu(int part);
     static const char* NameEn(int part);
 
@@ -103,6 +104,7 @@ private:
     double integrity_[kPartCount];
     double crushed_[5] = {}, belly_ = 0.0;   // crushed lengths of the hull zones, the belly pressed in [m]
     ImpactReport impact_;
+    int impactSerial_ = 0;
     void HullImpact(const Ground& g, double v, bool enabled);
     double temp_[kZoneCount];
     double flux_[kZoneCount] = {};

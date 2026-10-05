@@ -136,6 +136,7 @@ namespace ocrew
 		double wbal{ 1 };          // anaerobic reserve 0..1 (stamina)
 		double reserve{ 1 };       // consciousness reserve 0..1 (brain oxygenation)
 		double anoxia{}, injury{};
+		bool inCare{}; double careMaxSv{};   // in a medical bay this step (Treat) and the dose it can cure
 		double coreT{ 310.15 };    // K
 		double doseSv{}, careerSv{}, doseRate{};   // acute dose of this mission, lifetime dose, current rate (Sv/h)
 		// --- water and food (drunk and eaten automatically when available: a convention, not a survival game) ---
@@ -163,8 +164,17 @@ namespace ocrew
 		void Hurt(Part p, double amount);
 		// radiation sickness takes the edge off: about -10 % aerobic power per Sv above 1, down to half
 		double RadFitness() const { return std::clamp(1.0 - 0.1 * (doseSv - 1.0), 0.5, 1.0); }
-		// absorb radiation at 'rateSvh' for dt seconds (call after Step)
+		// absorb radiation at 'rateSvh' for dt seconds (call after Step, and after Treat)
 		void Irradiate(double dt, double rateSvh);
+		// a medical bay - the ship's, with the medicine of the book (Eastern and wave, not surgery): how fast it heals and
+		// the highest acute radiation dose it can cure
+		struct Care { double hoursPerUnit{ 48 }; double svPerDay{ 2 }; double maxSv{ 20 }; };
+		// in a medical bay for dt seconds (the user, 2026-10-04): injuries heal in a time that follows their severity
+		// (hoursPerUnit for an injury of 1.0), the acute dose is repaired while the bay can cure it (above, the sickness
+		// goes on). Call after Step, before Irradiate
+		void Treat(double dt, const Care& care);
+		// days the acute radiation sickness of the present dose takes to kill without care (0: it does not kill)
+		double ArsDays() const;
 		// activityW: metabolic cost of what she does beyond standing; heatW: heat reaching the body from outside control
 		void Step(double dt, double activityW, double ppO2, double ppCO2, double ambientP, bool suited, double heatW);
 		void Spend(double joules) { wbal = (std::max)(0.0, wbal - joules / WCAP); }

@@ -5,9 +5,13 @@
 // than the mockup (1600 x ~1030): the blocks keep their sizes, their rows spread.
 // In the game: the environment lamps light by themselves (no buttons); no СБРОС (repairs at a station); the thrust bar sets
 // the march lever.
+// The mimic reads the energy core (core/TantraCore, 2026-10-05): every node its lamp (выкл / готов / работа / предел / отказ /
+// потерян), its readings and its reason straight from the core's snapshot - the screen invents no number of its own (what
+// neither the core nor the plant models shows «—»). The ВЭУ and the field store are nodes of their own.
 #pragma once
 #include "orbitersdk.h"
 #include "../core/Plant.h"
+#include "../core/TantraCore.h"
 
 #include <vector>
 
@@ -35,6 +39,7 @@ struct View {
     double skin[7] = {}, skinLim[7] = {}, flux[7] = {};   // core/Damage zones: nose, belly, wing edges, fin, stern, gear, pods
     double aoa = 0.0, alt = 0.0, vAir = 0.0, q = 0.0, gLoad = 0.0;
     bool hullLost = false;
+    tantra::tcore::Snapshot core;     // the energy core's nodes and readings (TantraDisplays::FillCoreView)
 };
 
 class Screen {
@@ -52,7 +57,7 @@ public:
 private:
     tantra::ScreenFont* font_ = nullptr;   // the Segoe UI atlas (one per ship: its texture lives with the session)
     std::vector<Area> hits_;
-    double flow_ = 0.0, pellet_ = 0.0;
+    double flow_ = 0.0, pellet_ = 0.0;   // the pipes' dots, the burn's flashes (the capsules fed)
 };
 
 }  // namespace tantra::plantscreen

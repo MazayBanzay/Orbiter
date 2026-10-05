@@ -155,10 +155,16 @@ namespace ocrew
 		if (c > 41) drain += (c - 41) / 2 / 60;          // heat stroke
 		if (c < 32) drain += (32 - c) / 4 / 60;          // deep hypothermia
 		if (c > 43 || c < 26) injury += dt / 300;
+		// radiation, the cerebral form (80 Sv and more): out within ten minutes; under the beam (200 Sv): within seconds
+		if (doseSv >= 200) drain += 1.0 / 20; else if (doseSv >= 80) drain += 1.0 / 600;
+		if (ppCO2 > 15) injury += dt * (ppCO2 - 15) / 15 / 600;   // CO2 poisoning: from ~15 kPa, minutes at 30 kPa
 		reserve = drain > 0 ? reserve - drain * dt : reserve + dt / 20;
 		reserve = std::clamp(reserve, 0.0, 1.0);
 
-		if (reserve <= 0) { state = UNCONSCIOUS; anoxia += dt; }
+		// the brain dies of a lack of oxygen only (the user, 2026-10-04: three minutes without it); out cold from CO2, heat
+		// or cold she lives on to their own limits (CO2 narcosis passes with fresh air; heat and cold: 'injury' above)
+		const double o2Lack = exposed ? 1.0 : std::clamp((10 - ppO2) / 6, 0.0, 1.0);   // 1 at 4 kPa and below: 3 minutes
+		if (reserve <= 0) { state = UNCONSCIOUS; anoxia += dt * o2Lack; }
 		else { anoxia = (std::max)(0.0, anoxia - 0.2 * dt); if (state == UNCONSCIOUS && reserve > 0.4) state = OK; }
 		if (anoxia > 180 || injury >= 1) state = DEAD;
 
@@ -184,16 +190,41 @@ namespace ocrew
 		doseRate = rate;
 		if (state == DEAD) return;
 		doseSv += rate * dt / 3600; careerSv += rate * dt / 3600;
-		// acute radiation syndrome, in game time: above ~4.5 Sv the injury builds over hours (LD50 without care),
-		// above ~8 Sv faster; above ~20 Sv the central nervous system fails within the hour
-		if (doseSv > 4.5) injury += dt * (doseSv - 4.5) / (3.5 * 6 * 3600);
-		if (doseSv > 20) reserve -= dt / 1800;
+		// acute radiation sickness by the level of the dose (the user, 2026-10-04): it kills in ArsDays() unless a medical
+		// bay can cure that dose (her consciousness under a cerebral dose: Step). From 200 Sv - "смерть под лучом", death
+		// during the exposure itself, in minutes
+		const bool cured = inCare && doseSv < careMaxSv;
+		inCare = false;
+		if (const double days = ArsDays(); days > 0 && !cured) injury += dt / (days * 86400);
+		if (doseSv >= 200) injury += dt / 120;
 		if (injury >= 1) state = DEAD;
 		if (warning.empty())
 		{
 			if (rate > 0.05) warning = "RADIATION - TAKE COVER";
 			else if (doseSv > 1) warning = "RADIATION SICKNESS";
 		}
+	}
+
+	// the clinical forms of acute radiation sickness, without care: bone marrow from ~4.5 Sv (LD50) - weeks; intestinal
+	// 10-20 Sv - one to two weeks; toxaemic 20-80 Sv - 4-7 days; cerebral 80-200 Sv - 1-3 days. Log-linear between
+	double Body::ArsDays() const
+	{
+		static const double D[] = { 4.5, 6, 10, 20, 80, 200 }, Days[] = { 60, 30, 14, 7, 2, 1 };
+		if (doseSv < D[0]) return 0;
+		for (int i = 1; i < 6; ++i)
+			if (doseSv < D[i]) return Days[i - 1] * std::pow(Days[i] / Days[i - 1], std::log(doseSv / D[i - 1]) / std::log(D[i] / D[i - 1]));
+		return Days[5];
+	}
+
+	void Body::Treat(double dt, const Care& care)
+	{
+		if (state == DEAD) return;
+		inCare = true; careMaxSv = care.maxSv;
+		const double k = dt / ((std::max)(1.0, care.hoursPerUnit) * 3600);   // severity healed per step: time follows severity
+		for (double& h : hurt) h = (std::max)(0.0, h - k);
+		if (doseSv >= care.maxSv) return;                                      // a dose beyond the bay: the sickness goes on
+		injury = (std::max)(0.0, injury - k);
+		doseSv = (std::max)(0.0, doseSv - care.svPerDay * dt / 86400);         // the acute dose repaired (the career dose stays)
 	}
 
 	double Body::Condition() const

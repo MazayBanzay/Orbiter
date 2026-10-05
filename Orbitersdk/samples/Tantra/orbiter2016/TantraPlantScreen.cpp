@@ -1,5 +1,8 @@
 // TantraPlantScreen: see TantraPlantScreen.h. Draw() follows draw() of Tantra_Design/tantra_plant_screen.html block by block;
 // the coordinates are the mockup's, the rows below the title stretched to the riser's height (Y1 the upper blocks, Y2 the lower).
+// The mimic's nodes are the energy core's (View::core, core/TantraCore): their lamps, reasons and readings from its snapshot; the
+// mockup's own numbers (the capsules' 2000 Hz, the coil's 200 turns, the store's and the margin's formulas, the jacket's guessed
+// heat capacities, the engines' guessed temperatures) are gone.
 #include "TantraPlantScreen.h"
 #include "SkpCompat.h"   // the extended Sketchpad (QuickPen/QuickBrush, StretchRect, SetBrightness)
 #include "TantraScreenFont.h"
@@ -18,12 +21,12 @@ namespace tantra::plantscreen {
 
 using tantra::ScreenFont;
 namespace pl = tantra::plant;
+namespace tc = tantra::tcore;
 using pl::Plant;
 
 namespace {
 
 constexpr double kPi = 3.14159265358979323846, kMu0 = 4e-7 * kPi;
-constexpr double kPelletHz = 2000.0, kGainQ = 120.0, kCoilTurns = 200.0, kRMarch = 2.2;   // as the mockup
 constexpr double kInf = 1e300;
 
 // the mockup's palette (CSS 0xRRGGBB)
@@ -70,6 +73,10 @@ std::wstring fW(double W) {
 }
 std::wstring fM(double m) { return m >= 1000 ? Fmt(m / 1000, 2) + L" т/с" : m >= 1 ? Fmt(m, 1) + L" кг/с" : Fmt(m * 1000, 0) + L" г/с"; }
 std::wstring fP(double p) { return p >= 0.1 ? Fmt(p * 100, 0) + L" %" : p >= 0.001 ? Fmt(p * 100, 2) + L" %" : p > 0 ? Fmt(p * 100, 4) + L" %" : L"0"; }
+std::wstring Pct(double f) { return Fmt(f * 100, 0) + L" %"; }
+std::wstring fJ(double E) {   // energy: the store's terajoules down to the field's megajoules
+    return E >= 1e13 ? Fmt(E / 1e12, 0) + L" ТДж" : E >= 1e12 ? Fmt(E / 1e12, 1) + L" ТДж" : E >= 1e9 ? Fmt(E / 1e9, 1) + L" ГДж" : Fmt(E / 1e6, 0) + L" МДж";
+}
 std::wstring Clock(double t) {   // the journal's time: m:ss, h:mm:ss
     const long s = long((std::max)(0.0, t));
     wchar_t b[32];
@@ -95,10 +102,6 @@ void Bar(Canvas& g, double x, double y, double w, double h, double f, unsigned c
     g.Fill(x, y, w, h, 0x14211e);
     g.Fill(x, y, w * (std::max)(0.0, (std::min)(1.0, f)), h, col);
     g.Stroke(x, y, w, h, cFr, 1);
-}
-void Gauge(Canvas& g, double x, double y, const std::wstring& label, const std::wstring& val, unsigned col = cTx) {
-    g.T(label, x, y, cDim, 11);
-    g.T(val, x, y + 17, col, 15, 0, 700);
 }
 void Node(Canvas& g, double x, double y, double w, double h, const std::wstring& title, unsigned col = cFr) {
     g.Fill(x, y, w, h, 0x0f1c19);
@@ -135,6 +138,83 @@ std::vector<Pt> Quad(Pt a, Pt b, Pt c, int n = 14) {
     return r;
 }
 unsigned Zc(double Tk, double lim) { return Tk >= lim ? cRd : Tk >= 0.85 * lim ? cOr : Tk >= 0.6 * lim ? cYe : cGr; }
+
+// ---- the energy core's nodes (core/TantraCore): lamps, readings, reasons ----
+constexpr unsigned cNode = 0x0f1c19;   // a node's ground
+constexpr double kBoxH = 96.0;         // a node: the title, then four lines of 15 px (readings, then the reason)
+
+unsigned LampCol(int st) {
+    switch (st) { case tc::kReady: return cYe; case tc::kRun: return cGr; case tc::kLimit: return cOr; case tc::kFault: case tc::kLost: return cRd; default: return cDim; }
+}
+unsigned WhyCol(int st) { return st == tc::kFault || st == tc::kLost ? cRd : st == tc::kLimit ? cOr : st == tc::kOff ? cDim : cTx; }
+unsigned ValCol(const tc::Node& n) { return n.state == tc::kFault || n.state == tc::kLost ? cRd : n.state == tc::kLimit ? cOr : cTx; }
+// the lamp: выкл a dark glass, потерян a dark red one crossed, the others lit with a halo (as plant_v3)
+void Lamp(Canvas& g, double x, double y, double r, int st, unsigned ground) {
+    if (st == tc::kOff) { g.Disc(x, y, r, 0x14221f); g.Circle(x, y, r, cDim, 1.5); return; }
+    if (st == tc::kLost) {
+        const double d = r * 0.6;
+        g.Disc(x, y, r + 1, 0x3a0c08); g.Circle(x, y, r + 1, cRd, 1.5);
+        g.Line(x - d, y - d, x + d, y + d, cRd, 1.5); g.Line(x - d, y + d, x + d, y - d, cRd, 1.5);
+        return;
+    }
+    g.Disc(x, y, r + 3, Mix(LampCol(st), ground, 0.22));
+    g.Disc(x, y, r, LampCol(st));
+}
+// 15 px regular text: the metrics file has 15 px only bold - its width taken as the 16 px regular's (Segoe UI's hinted 15 px
+// advances come to ~0.98 of the 16 px ones: never too narrow)
+double WR(Canvas& g, const std::wstring& s) { return g.Width(s, 16, 500); }
+std::wstring FitR(Canvas& g, const std::wstring& s, double w) {
+    if (WR(g, s) <= w) return s;
+    std::wstring t = s;
+    while (!t.empty() && WR(g, t + L"…") > w) t.pop_back();
+    return t + L"…";
+}
+// the reason in at most n lines of width w (15 px regular), broken at spaces (not before a unit: «800 К», «10 %»)
+std::vector<std::wstring> Wrap(Canvas& g, const std::wstring& s, double w, int n) {
+    std::vector<std::wstring> out;
+    std::wstring rest = s;
+    while (!rest.empty() && int(out.size()) < n) {
+        if (WR(g, rest) <= w) { out.push_back(rest); break; }
+        size_t cut = std::wstring::npos;
+        if (int(out.size()) < n - 1)
+            for (size_t i = rest.find(L' '); i != std::wstring::npos; i = rest.find(L' ', i + 1)) {
+                if (WR(g, rest.substr(0, i)) > w) break;
+                size_t e = rest.find(L' ', i + 1);
+                if (e == std::wstring::npos) e = rest.size();
+                if (e - i - 1 > 2) cut = i;
+            }
+        if (cut == std::wstring::npos) { out.push_back(FitR(g, rest, w)); break; }
+        out.push_back(rest.substr(0, cut));
+        rest = rest.substr(cut + 1);
+    }
+    return out;
+}
+struct Cell { std::wstring label, value; unsigned col = cTx; };
+// a node: its lamp and title, its readings (label left, value right; in one or two columns), its reason below them
+void Box(Canvas& g, double x, double y, double w, const std::wstring& title, const tc::Node& n, const std::vector<Cell>& cells, int cols) {
+    const bool bad = n.state == tc::kFault || n.state == tc::kLost, lim = n.state == tc::kLimit;
+    g.Fill(x, y, w, kBoxH, cNode);
+    g.Stroke(x, y, w, kBoxH, bad ? cRd : lim ? cOr : cFr, bad || lim ? 2 : 1.5);
+    Lamp(g, x + 13, y + 13, 5, n.state, cNode);
+    g.T(g.Fit(title, w - 34, 12, 700), x + 26, y + 18, cTx, 12, 0, 700);
+    const double gap = 16, cw = (w - 20 - (cols - 1) * gap) / cols;
+    const int rows = (int(cells.size()) + cols - 1) / cols;
+    for (size_t i = 0; i < cells.size(); ++i) {
+        const Cell& c = cells[i];
+        if (c.value.empty() && c.label.empty()) continue;
+        const double cx = x + 10 + (int(i) % cols) * (cw + gap), by = y + 37 + (int(i) / cols) * 18;
+        const double vw = c.value.empty() ? 0.0 : g.T(c.value, cx + cw, by, c.col, 15, 2, 700);
+        if (!c.label.empty()) g.T(FitR(g, c.label, cw - vw - 6), cx, by, cDim, 15, 0, 500);
+    }
+    const std::vector<std::wstring> why = Wrap(g, W1251(n.why ? n.why : ""), w - 20, 4 - rows);
+    for (size_t i = 0; i < why.size(); ++i) g.T(why[i], x + 10, y + 37 + (rows + int(i)) * 18, WhyCol(n.state), 15, 0, 500);
+}
+// a label and its value on a line (15 px): returns the x after the value
+double Pair(Canvas& g, double x, double y, const std::wstring& label, const std::wstring& value, unsigned col = cTx) {
+    g.T(label, x, y, cDim, 15, 0, 500);
+    x += WR(g, label) + 5;
+    return x + g.T(value, x, y, col, 15, 0, 700);
+}
 
 }  // namespace
 
@@ -177,14 +257,15 @@ void Screen::Draw(oapi::Sketchpad* skp, int ox, int oy, int w, int h, const View
     const int stage = p.StageNow();
     const bool run = stage == pl::kStRun;
     const double thr = run ? v.thr : 0.0;
-    const double B = p.Field(), T = p.SternT(), coilT = p.CoilT();
+    const tc::Snapshot& c = v.core;                                      // the energy core: the nodes' states, reasons and readings
+    const double B = p.Field(), T = p.SternT();
     const int mass = o.mass;
-    const double F = o.thrust, mdot = o.mdot, Pf = o.fusion, cv = o.exhaust, cF = o.cupThrust;
+    const double F = o.thrust, mdot = o.mdot, cv = o.exhaust, cF = o.cupThrust;
     const double TSAFE = cfg.tSafe, TBOIL = cfg.tBoil, TSOFT = cfg.tSoft, TBREACH = cfg.tBreach, TLOST = cfg.tLost;
     const double Cst = cfg.sternStore / 1400.0;
     const bool lost = stage == pl::kStGone || v.hullLost;
     flow_ += dt;
-    pellet_ += dt * (run ? kPelletHz * Pf / Plant::kFusionMax : 0.0);
+    pellet_ += dt * c.capsHz;                                            // the burn flashes at the capsules' rate
     double skin[7];
     for (int i = 0; i < 7; ++i) skin[i] = v.skin[i];
     skin[4] = (std::max)(skin[4], T);                                    // the stern's skin is the plant's stern
@@ -208,56 +289,85 @@ void Screen::Draw(oapi::Sketchpad* skp, int ox, int oy, int w, int h, const View
     if (W - 22 - g.Width(envLine, 13, 500) < stEnd + 20) envLine = std::wstring(L"рабочая масса: ") + kMassT[mass];
     g.T(envLine, W - 22, 36, cDim, 13, 2);
 
-    // ---- left: the mimic diagram ----
+    // ---- left: the mimic diagram: the energy core's nodes (core/TantraCore), each its lamp, readings and reason ----
     const double mH = Y1(532) - 62;
     Frame(g, 15, 62, 995, mH, L"МНЕМОСХЕМА · КОРМА");
+    {   // the lamps' legend, cut into the frame's top edge (right)
+        static const wchar_t* const kWord[6] = {L"выкл", L"готов", L"работа", L"предел", L"отказ", L"потерян"};   // tc::State
+        double lw = 0;
+        for (const wchar_t* s : kWord) lw += 16 + WR(g, s) + 14;
+        double lx = 1000 - lw;
+        g.Fill(lx - 8, 62 - 10, lw + 4, 20, cBg);
+        for (int i = 0; i < 6; ++i) {
+            Lamp(g, lx + 5, 62, 5, i, cBg);
+            g.T(kWord[i], lx + 16, 67, cDim, 15, 0, 500);
+            lx += 16 + WR(g, kWord[i]) + 14;
+        }
+    }
     const double ax = 640, ay = Y1(300);                                   // the cup throat on the diagram
-    const double rF = Y1(90), rT = Y1(200), rR = Y1(330), rC = Y1(440);    // the rows: fuel, trigger, reaction mass, cryo
-    // fuel: p-11B store -> pellet press -> injector -> throat
-    Node(g, 30, rF, 150, 70, L"ТОПЛИВО p-¹¹B"); Gauge(g, 42, rF + 38, L"запас", Fmt(p.Fuel() / 1e6, 2) + L" кт");
-    Node(g, 220, rF, 150, 70, L"ПРЕСС КАПСУЛ");
-    const double pHz = run ? kPelletHz * p.PowerPct() / 100.0 * thr : 0.0;
-    Gauge(g, 232, rF + 38, L"частота", Fmt(pHz, 0) + L" Гц");
-    Node(g, 410, rF, 150, 70, L"ИНЖЕКТОР");
-    const double pE = pHz > 0 ? Pf / pHz : 0.0, pm = pE / Plant::kEFus;
-    Gauge(g, 422, rF + 38, L"капсула", pHz > 0 ? (pm >= 1e-3 ? Fmt(pm * 1000, 1) + L" г" : Fmt(pm * 1e6, 0) + L" мг") + L" · " + Fmt(pE / 1e9, 1) + L" ГДж" : L"—");
-    const double yF = rF + 35;
-    Pipe(g, {{180, yF}, {220, yF}}, cPipeF, run ? thr : 0, 6, flow_);
-    Pipe(g, {{370, yF}, {410, yF}}, cPipeF, run ? thr : 0, 6, flow_);
-    Pipe(g, {{560, yF}, {ax - 30, yF}, {ax - 30, ay - 40}, {ax - 6, ay - 6}}, cPipeF, run ? thr : 0, 6, flow_);
-    // trigger: field store -> ion trigger -> throat
-    Node(g, 30, rT, 150, 70, L"НАКОПИТЕЛЬ ПОЛЯ"); Gauge(g, 42, rT + 38, L"запас", Fmt((std::min)(1.0, 0.3 + B / 12.1 * 0.7) * 100, 0) + L" %");
-    Node(g, 220, rT, 150, 70, L"ИОННЫЙ ТРИГГЕР"); Gauge(g, 232, rT + 38, L"мощность", fW(Pf / kGainQ));
-    const double yT = rT + 35;
-    Pipe(g, {{180, yT}, {220, yT}}, cPipeC, stage == pl::kStTrigger || run ? 1 : 0, 4, flow_);
-    Pipe(g, {{370, yT}, {ax - 60, yT}, {ax - 8, ay - 4}}, cTrig, run ? thr : 0, 4, flow_);
-    g.T(L"усиление каскада Q 120 · импульс " + (pHz > 0 ? Fmt(pE / kGainQ / 1e6, 0) + L" МДж" : std::wstring(L"—")), 232, rT + 90, cDim, 11);
-    // reaction mass: tanks -> pumps -> jacket (cooling) -> curtain into the burn
-    const std::wstring rmName = mass == pl::kArgon ? L"АРГОН (жидк., 87 К)" : mass == pl::kIron ? L"ЖЕЛЕЗО (заряды)" : L"—";
-    Node(g, 30, rR, 150, 70, L"РАБОЧАЯ МАССА");
-    Gauge(g, 42, rR + 38, mass == pl::kProducts ? L"не подаётся" : rmName,
-          mass == pl::kArgon ? Fmt(v.argon / 1e6, 2) + L" кт" : mass == pl::kIron ? Fmt(v.iron / 1e6, 2) + L" кт" : L"—");
-    Node(g, 220, rR, 150, 70, L"НАСОСЫ"); Gauge(g, 232, rR + 38, L"расход", mass == pl::kProducts ? L"—" : fM(mdot));
-    Node(g, 410, rR, 150, 70, L"РУБАШКА ЧАШИ");
-    const double jIn = mass == pl::kArgon ? 87 : 300;
-    const double jOut = run && mdot > 0 ? jIn + (std::min)(2600.0, o.heatIn / (std::max)(1.0, mdot * (mass == pl::kArgon ? 520 : 450))) : jIn;
-    Gauge(g, 422, rR + 38, L"вход → выход", mass == pl::kProducts ? L"—" : Fmt(jIn, 0) + L" → " + Fmt(jOut, 0) + L" К");
-    const double rmFlow = run && mass != pl::kProducts ? thr : 0, yR = rR + 35;
-    Pipe(g, {{180, yR}, {220, yR}}, cPipeR, rmFlow, 7, flow_);
-    Pipe(g, {{370, yR}, {410, yR}}, cPipeR, rmFlow, 7, flow_);
-    Pipe(g, {{560, yR}, {ax - 30, yR}, {ax - 30, ay + 40}, {ax - 6, ay + 6}}, cPipeR, rmFlow, 7, flow_);
-    // cryo for the windings
-    Node(g, 30, rC, 150, 70, L"КРИОГЕНИКА");
-    const double margin0 = (std::max)(0.0, 1 - std::pow(B / 18.5, 1.3) - (coilT - 20) / 40);
-    Gauge(g, 42, rC + 38, L"обмотка · запас по току", Fmt(coilT, 1) + L" К · " + fP(margin0),
-          coilT > 26 || margin0 < 0.15 ? cRd : coilT > 22 || margin0 < 0.3 ? cYe : cTx);
-    const double yC = rC + 35;
-    Pipe(g, {{180, yC}, {ax - 70, yC}, {ax - 70, ay + 75}}, cPipeC, B > 0.5 ? 0.6 : 0.1, 4, flow_);
+    const double rF = Y1(72), rT = Y1(192), rR = Y1(312), rC = Y1(432);    // the rows: fuel, store + trigger, reaction mass, ВЭУ + cryo
+    const double yF = rF + kBoxH / 2, yT = rT + kBoxH / 2, yR = rR + kBoxH / 2, yC = rC + kBoxH / 2;   // their pipes
+    const bool prod = mass == pl::kProducts;
+    // fuel: the p-11B capsules -> the feed (the press, the injector) -> the throat
+    Box(g, 25, rF, 170, L"ТОПЛИВО p-¹¹B", c.fuel, {{L"запас", Fmt(c.fuelKg / 1e6, 2) + L" кт", ValCol(c.fuel)}, {L"расход", fM(c.fuelFlow)}}, 1);
+    {
+        const double cm = c.capsE / Plant::kEFus * 1e3;                   // g a capsule
+        Box(g, 215, rF, 365, L"ПОДАЧА КАПСУЛ · ПРЕСС И ИНЖЕКТОР", c.feed,
+            {{L"частота", Fmt(c.capsHz, 0) + L" Гц", c.capsHzMax > 0 && c.capsHz > 0.9 * c.capsHzMax ? cOr : cTx},
+             {L"предел пресса", Fmt(c.capsHzMax, 0) + L" Гц"},
+             {L"капсула", Fmt(cm, cm < 10 ? 1 : 0) + L" г"}, {L"энергия", fJ(c.capsE)},
+             {L"пропуски/мин", c.dipRisk >= 0.001 ? fP((std::min)(1.0, c.dipRisk)) : c.dipRisk > 0 ? L"< 0,1 %" : L"0 %", c.dip ? cRd : c.dipRisk > 0.001 ? cYe : cTx}}, 2);
+    }
+    const double fuelF = c.fuelFlow / (Plant::kFusionMax / Plant::kEFus);   // of the flow at 100 %
+    Pipe(g, {{195, yF}, {215, yF}}, cPipeF, fuelF, 6, flow_);
+    Pipe(g, {{580, yF}, {ax - 30, yF}, {ax - 30, ay - 40}, {ax - 6, ay - 6}}, cPipeF, fuelF, 6, flow_);
+    // the field store (charged by the ВЭУ; gives the field and the trigger's first charge) -> the ion trigger -> the throat
+    Box(g, 25, rT, 323, L"НАКОПИТЕЛЬ ПОЛЯ", c.store,
+        {{L"заряд", c.storeMax > 0 ? Pct(c.storeE / c.storeMax) : L"—", ValCol(c.store)}, {L"запас", fJ(c.storeE)},
+         {L"приток", fW(c.storeIn)}, {L"отдача", fW(c.storeOut)},
+         {L"ёмкость", fJ(c.storeMax), c.storeHealth < 1 ? cOr : cTx},
+         {L"сброс", c.dumpLeft > 0 ? Fmt(c.dumpLeft, 1) + L" с" : L"нет", c.dumpLeft > 0 ? cRd : cTx}}, 2);
+    Box(g, 368, rT, 212, L"ИОННЫЙ ТРИГГЕР", c.trigger,
+        {{L"мощность", fW(c.trigPower)}, {L"Q " + Fmt(c.gainQ, 0) + L" · импульс", fJ(c.pulseE)}}, 1);
+    Pipe(g, {{348, yT}, {368, yT}}, cPipeC, stage == pl::kStTrigger ? 1 : 0, 4, flow_);
+    Pipe(g, {{580, yT}, {ax - 8, ay - 4}}, cTrig, c.trigPower * c.gainQ / Plant::kFusionMax, 4, flow_);
+    // reaction mass: the tanks -> the pumps -> the jacket (cooling) -> the curtain into the burn
+    {
+        static const wchar_t* const kMassN[3] = {L"аргон", L"железо", L"продукты"};
+        const double left = c.massLeft >= 0 ? c.massLeft : mass == pl::kArgon ? v.argon : v.iron;
+        Box(g, 25, rR, 164, L"РАБОЧАЯ МАССА", c.mass,
+            {{kMassN[(std::max)(0, (std::min)(2, mass))], prod ? L"—" : Fmt(left / 1e6, 2) + L" кт", ValCol(c.mass)}, {L"подача", prod ? L"—" : fM(c.mdot)}}, 1);
+    }
+    Box(g, 207, rR, 164, L"НАСОСЫ", c.pump, {{L"предел", fM(c.mdotMax), c.pumpHealth < 1 ? cOr : cTx}, {L"мощность", fW(c.pumpPower)}}, 1);
+    Box(g, 390, rR, 190, L"РУБАШКА ЧАШИ", c.jacket,
+        {{L"вход", prod ? L"—" : Fmt(c.tIn, 0) + L" К"}, {L"выход", prod ? L"—" : Fmt(c.tOut, 0) + L" К", ValCol(c.jacket)},
+         {L"пар", prod ? L"—" : Pct(c.vapour)}}, 1);
+    const double rmF = !prod && c.mdotMax > 0 ? c.mdot / (c.mdotMax / tc::Core::kPumpMargin) : 0.0;   // of the nominal flow
+    Pipe(g, {{189, yR}, {207, yR}}, cPipeR, rmF, 7, flow_);
+    Pipe(g, {{371, yR}, {390, yR}}, cPipeR, rmF, 7, flow_);
+    Pipe(g, {{580, yR}, {ax - 30, yR}, {ax - 30, ay + 40}, {ax - 6, ay + 6}}, cPipeR, rmF, 7, flow_);
+    // the ВЭУ (powers the ship, the cryo, the pumps, charges the store) -> the cryo -> the windings
+    {
+        const bool gone = c.veu.state == tc::kLost;
+        Box(g, 25, rC, 323, L"ВЭУ · БОРТОВАЯ ЭНЕРГОУСТАНОВКА", c.veu,
+            {{L"мощность", fW(c.veuPower), ValCol(c.veu)}, {L"предел", fW(c.veuMax), c.veuHealth < 1 ? cOr : cTx},
+             {L"плазма", gone ? L"—" : c.veuPlasma ? L"горит" : L"погасла", gone ? cDim : c.veuPlasma ? cGr : cRd},
+             {L"перезапуск", c.veuRestart > 0 ? Fmt(std::ceil(c.veuRestart), 0) + L" с" : L"—", cYe},
+             {L"исправность", Pct(c.veuHealth), c.veuHealth <= 0 ? cRd : c.veuHealth < 1 ? cOr : cTx},
+             {L"топливо", Fmt(c.veuFuelDay, 1) + L" кг/сут"}}, 2);
+    }
+    Box(g, 368, rC, 212, L"КРИОГЕНИКА", c.cryo,
+        {{L"нагрузка", Fmt(c.cryoLoad / 1e3, 0) + L" / " + Fmt(c.cryoCap / 1e3, 0) + L" кВт",
+          c.cryoLoad > c.cryoCap ? cRd : c.cryoLoad > 0.8 * c.cryoCap ? cOr : cTx},
+         {L"обмотка", Fmt(c.coilT, 1) + L" К", c.coilT > 23 ? cOr : cTx}, {L"питание", fW(c.cryoPower)}}, 1);
+    Pipe(g, {{348, yC}, {368, yC}}, cPipeC, c.cryoPower > 0 && c.veuPower > 0 ? 0.5 : 0, 4, flow_);
+    Pipe(g, {{580, yC}, {ax - 50, yC}, {ax - 50, ay + 75}}, cPipeC,
+         c.cryoPower > 0 && c.cryoCap > 0 ? 0.2 + 0.8 * (std::min)(1.0, c.cryoLoad / c.cryoCap) : 0, 4, flow_);
     // the cup: windings (cross-section), field lines, the throat and the burn
     const double Bq = (B / Plant::kBNom) * (B / Plant::kBNom);
     const unsigned fieldCol = B > 16 ? cRd : B > 12.15 ? cYe : cPipeC;
     for (int s = -1; s <= 1; s += 2) {
-        g.Fill(ax - 18, ay + s * 58 - 14, 36, 28, stage == pl::kStQuench ? 0x5a1a14 : 0x203a52);
+        g.Fill(ax - 18, ay + s * 58 - 14, 36, 28, c.coil.state == tc::kFault || c.coil.state == tc::kLost ? 0x5a1a14 : 0x203a52);
         g.Stroke(ax - 18, ay + s * 58 - 14, 36, 28, fieldCol, 2);
     }
     g.T(L"ОБМОТКА", ax, ay - 82, cDim, 11, 1, 700);
@@ -299,30 +409,37 @@ void Screen::Draw(oapi::Sketchpad* skp, int ox, int oy, int w, int h, const View
         std::vector<Pt> a = Quad({ax - 6, ay - 44}, {ax + 28, ay - 40}, {ax + 34, ay - 14}), b = Quad({ax - 6, ay + 44}, {ax + 28, ay + 40}, {ax + 34, ay + 14});
         g.Polyline(a, cWh, 3); g.Polyline(b, cWh, 3);
     }
-    // sensors around the cup
-    const double yS = Y1(172), yS2 = Y1(460);
-    Gauge(g, ax - 10, yS, L"ПОЛЕ", Fmt(B, 2) + L" Тл", fieldCol);
-    Gauge(g, ax + 95, yS, L"ток обмотки", Fmt(2 * kRMarch * B / kMu0 / kCoilTurns / 1e3, 0) + L" кА");
-    Gauge(g, ax + 190, yS, L"напряжение", fP(Bq), B > 16 ? cRd : B > 12.15 ? cYe : cTx);
-    Gauge(g, ax + 280, yS, L"давление поля", Fmt(B * B / (2 * kMu0) / 1e6, 0) + L" МПа");
-    Gauge(g, ax - 40, yS2, L"струя", run && thr > 0 ? Fmt(cv / 1e3, 0) + L" км/с" : L"—");
-    Gauge(g, ax + 55, yS2, L"расход", run && thr > 0 ? fM(mdot) : L"—");
-    Gauge(g, ax + 160, yS2, L"тяга", fF(F), cWh);
-    // the stern and the crests
+    // the windings (the coil node): the lamp and the reason, the field, the current against the critical current, the margin
+    {
+        const double yA = Y1(152), yB = Y1(170), yW = Y1(188);
+        Lamp(g, 628, yA - 5, 5, c.coil.state, cBg);
+        const double xa = 640 + g.T(L"ОБМОТКА · ", 640, yA, cTx, 15, 0, 700);
+        g.T(FitR(g, W1251(c.coil.why ? c.coil.why : ""), 1002 - xa), xa, yA, WhyCol(c.coil.state), 15, 0, 500);
+        const double xb = Pair(g, 622, yB, L"поле", Fmt(B, 2) + L" Тл", fieldCol);
+        Pair(g, xb + 18, yB, L"давление поля", Fmt(B * B / (2 * kMu0) / 1e6, 0) + L" МПа", B > 16 ? cRd : B > 12.15 ? cYe : cTx);
+        const unsigned mc = c.margin < 0.15 ? cRd : c.margin < 0.3 ? cYe : cTx;
+        double xw = Pair(g, 622, yW, L"ток", Fmt(c.I / 1e3, 0) + L" кА", c.I > c.Ic ? cRd : cTx);
+        xw = Pair(g, xw + 18, yW, L"критический", Fmt(c.Ic / 1e3, 0) + L" кА");
+        Pair(g, xw + 18, yW, L"запас", c.Ic > 0 ? Pct(c.margin) : L"нет", mc);
+    }
+    // the march cup, the stern and the crests
+    Box(g, 600, rC, 215, L"МАРШЕВАЯ ЧАША", c.cup,
+        {{L"тяга", fF(c.thrust), cWh}, {L"струя", c.thrust > 0 ? Fmt(cv / 1e3, 0) + L" км/с" : L"—"},
+         {L"исправность", Pct(c.cupHealth), c.cupHealth <= 0 ? cRd : c.cupHealth < 1 ? cOr : cTx}}, 1);
     const unsigned Tc = T > TBOIL ? cRd : T > TSAFE ? cYe : cTx;
-    const double rK = Y1(250), rG = Y1(330), dRad = p.Damage(pl::kRadiators);
-    Node(g, 830, rK, 165, 62, L"КОРМА", T > TSAFE ? cRd : cFr); Gauge(g, 842, rK + 34, L"температура", Fmt(T, 0) + L" К", Tc);
-    Node(g, 830, rG, 165, 62, L"ГРЕБНИ-РАДИАТОРЫ");
-    Gauge(g, 842, rG + 34, L"сброс", fW(o.radiated) + (dRad < 1 ? L" · " + fP(dRad) : std::wstring()), dRad < 1 ? cYe : cTx);
-    Pipe(g, {{ax + 30, ay + 70}, {805, ay + 70}, {805, rG + 31}, {830, rG + 31}}, cPipeH, (std::min)(1.0, o.radiated / 7e8), 5, flow_);
+    const double rK = Y1(208), rG = Y1(320);
+    Box(g, 818, rK, 184, L"КОРМА", c.stern, {{L"температура", Fmt(T, 0) + L" К", Tc}, {L"приток тепла", fW(c.heatIn)}}, 1);
+    Box(g, 818, rG, 184, L"ГРЕБНИ-РАДИАТОРЫ", c.rad,
+        {{L"сброс", fW(c.radiated)}, {L"площадь", Fmt(c.radArea, 0) + L" м²", c.radHealth < 1 ? cOr : cTx}}, 1);
+    Pipe(g, {{ax + 30, ay + 70}, {805, ay + 70}, {805, rG + kBoxH / 2}, {818, rG + kBoxH / 2}}, cPipeH, (std::min)(1.0, o.radiated / 7e8), 5, flow_);
     // pods
     for (int i = 0; i < 4; ++i) {
         const bool on = v.pods == 2;
         const double px = 640 + i * 90, py = 74;
-        Node(g, px, py, 84, 50, L"ГОНДОЛА " + std::to_wstring(i + 1), on ? cOr : cFr);
-        g.T(on ? L"3 × " + Fmt(v.podCup / 1e6, 0) + L" МН" : v.pods == 1 ? L"готова" : L"в отсеке", px + 42, py + 40, on ? cOr : cDim, 12, 1, 600);
+        Node(g, px, py, 84, 46, L"ГОНДОЛА " + std::to_wstring(i + 1), on ? cOr : cFr);
+        g.T(on ? L"3 × " + Fmt(v.podCup / 1e6, 0) + L" МН" : v.pods == 1 ? L"готова" : L"в отсеке", px + 42, py + 39, on ? cOr : cDim, 12, 1, 600);
     }
-    g.T(L"гондолы — до М 0,8", 1000, 140, cDim, 11, 2);
+    g.T(L"гондолы — до М 0,8", 1000, 133, cDim, 11, 2);
 
     // ---- right: calculations ----
     Frame(g, 1025, 62, 560, mH, L"РАСЧЁТ");
@@ -448,21 +565,20 @@ void Screen::Draw(oapi::Sketchpad* skp, int ox, int oy, int w, int h, const View
         g.T(Fmt(skin[i], 0) + L" / " + std::to_wstring(long(lim)), 545, y, c, 13, 2, 700);
         Bar(g, 368, y + 4, 177, 4, skin[i] / lim, c);
     }
-    {   // the engines' temperatures
-        const double cupWall = run ? T + 250 * thr : T;
-        const bool podsOn = v.pods == 2;
-        const double noseRetro = 290 + (std::max)(0.0, skin[0] - 290) * 0.35, sternAna = (std::max)(290.0, skin[4] * 0.9);
-        const struct { const wchar_t* t; double v, lim; } eng[6] = {
-            {L"чаша маршевая, стенка", cupWall, 2000}, {L"рубашка, выход", mass == pl::kProducts ? 0 : jOut, 1100}, {L"обмотка", coilT, 26},
-            {L"гондолы 1–4, чаши", podsOn ? 600 + 500 * v.podLevel : (std::max)(290.0, skin[6]), 1300}, {L"камеры анамезона К1–К4", sternAna, 2000},
-            {L"ретро-чаши носа Н1–Н2", noseRetro, 2000}};
+    {   // the engines' temperatures: what the core models (the jacket's outlet, the windings - their bar the current against
+        // the critical current); the cup's wall, the pods' cups, the anamezon chambers and the nose retro cups are not modelled
+        const unsigned jc = ValCol(c.jacket), wc = c.margin < 0.15 ? cRd : c.margin < 0.3 ? cYe : cGr;
+        const struct { const wchar_t* t; double v; int dec; double bar; unsigned col; } eng[6] = {
+            {L"чаша маршевая, стенка", -1, 0, -1, cDim}, {L"рубашка, выход", mass == pl::kProducts ? -1 : c.tOut, 0, -1, jc},
+            {L"обмотка", c.coilT, 1, c.Ic > 0 ? c.I / c.Ic : 1.0, wc}, {L"гондолы 1–4, чаши", -1, 0, -1, cDim},
+            {L"камеры анамезона К1–К4", -1, 0, -1, cDim}, {L"ретро-чаши носа Н1–Н2", -1, 0, -1, cDim}};
         g.T(L"ДВИГАТЕЛИ", 565, Y2(580), cDim, 12, 0, 700);
         for (int i = 0; i < 6; ++i) {
             const double y = Y2(600 + i * 28);
             const bool ok = eng[i].v > 0;
             g.T(eng[i].t, 565, y, cTx, 12);
-            g.T(ok ? Fmt(eng[i].v, eng[i].lim < 100 ? 1 : 0) + L" К" : L"—", 750, y, ok ? Zc(eng[i].v, eng[i].lim) : cDim, 13, 2, 700);
-            if (ok) Bar(g, 565, y + 5, 185, 4, eng[i].v / eng[i].lim, Zc(eng[i].v, eng[i].lim));
+            g.T(ok ? Fmt(eng[i].v, eng[i].dec) + L" К" : L"—", 750, y, ok ? eng[i].col : cDim, 13, 2, 700);
+            if (ok && eng[i].bar >= 0) Bar(g, 565, y + 5, 185, 4, eng[i].bar, eng[i].col);
         }
     }
     // trends and journal (narrow)

@@ -43,6 +43,32 @@ public:
     typedef void (*Overlay)(void* ctx, SURFHANDLE surf, int w, int h, const VECTOR3& dir, const VECTOR3& up, double vfovDeg);
     void SetZoneOverlay(int zone, Overlay fn, void* ctx);
     void Frame();                        // every time step: re-aim the moving cameras (a walking host, telescopes), the overlays
+
+    // --- bands (opt-in; without SetBand the zones are plain cameras as above). Optical: the camera's colour picture on the
+    // screen (a monitor), rendered straight into its texture, the HUD on a glass in front. IR / UV: a sensor - a camera at a
+    // third of the resolution, its picture processed on the graphics card (colour matrix, gamma, sensor noise) at the
+    // sensor's own rate. Off: a dark screen. Zones marked as cameras (a telescope) keep their cameras whatever the band.
+    // (A window - the zone groups and occluders not drawn - is there for a ship that wants one: SetWindowOpen.)
+    enum Band { kBandCamera = -1, kBandOff = 0, kBandOptical = 1, kBandIR = 2, kBandUV = 3, kBandData = 4 };
+    // the data band: no cameras at all - every zone is a canvas for its page (2D, a few times a second)
+    typedef void (*Page)(void* ctx, int zone, SURFHANDLE surf, int w, int h);
+    void SetZonePage(int zone, Page fn, void* ctx);
+    // the viewer is where the screen can be seen (e.g. in the bridge capsule): without it no camera at all
+    void SetViewerPresent(bool present) { present_ = present; }
+    // the monitor's own refresh rate: a camera renders once per 1/hz, between that it costs nothing
+    void SetRefreshHz(double hz) { hz_ = hz > 1.0 ? hz : 1.0; }
+    void SetBand(int band);
+    int GetBand() const { return band_; }
+    void SetZoneGroup(int zone, DWORD group);        // the zone's own screen group (not drawn when the window is open)
+    void SetZoneCamera(int zone, bool camera);       // a camera whatever the band (a telescope)
+    void AddOccluder(UINT mesh, DWORD group);        // a group in the way of the window: not drawn while it is open
+    void SetWindowOpen(bool open);                   // every step from the host
+    bool WindowOpen() const { return windowShown_; }
+    void RefreshWindow() { windowShown_ = false; }   // someone redrew the groups (all shown): hide them again next frame
+    // a sheet of glass in front of a zone for its overlay (a HUD) in the optical band and over the sensor pictures:
+    // its texture is transparent, the overlay of zone `from` is drawn on it with that zone's projection
+    int AddGlass(UINT mesh, DWORD texSlot, int w, int h, int from);
+    static constexpr double kSensorHz = 12.0, kSensorScale = 1.0 / 3.0;
     bool On() const { return on_; }
     bool Available() const { return gc_; }
     void Shutdown();
@@ -56,7 +82,27 @@ private:
         VECTOR3 lastPos = {0, 0, 0}, lastDir = {0, 0, 0}, lastUp = {0, 0, 0}; bool aimed = false;   // the last set pose (host frame)
         SURFHANDLE surf = nullptr; void* cam = nullptr;      // CAMERAHANDLE of the client
         Overlay over = nullptr; void* overCtx = nullptr; SURFHANDLE raw = nullptr;   // an overlay: the camera renders into raw
+        DWORD group = DWORD(-1); bool camera = false;         // its screen group (the window); a camera in every band
+        SURFHANDLE sens = nullptr; int sw = 0, sh = 0;        // the sensor's own low-resolution picture (IR / UV)
+        bool glass = false; int from = -1;                    // a HUD glass over zone `from` (no camera)
+        double seenT = -1e9, shotT = -1e9; int onFrames = 0; bool camOn = false;   // in sight last; its last frame; on now
+        Page page = nullptr; void* pageCtx = nullptr;         // its data page
+        SURFHANDLE half = nullptr; bool halfOn = false;       // the half-resolution picture (the screen small on the display)
+        bool geom = false; VECTOR3 gc = {0, 0, 0}; double gw = 0.0;   // its group's centre and width (mesh frame)
     };
+    void Geometry(Zone& z);                // the zone's real size from its mesh group
+    void Resolution(Zone& z);              // full or half by how big the screen is on the user's display
+    SURFHANDLE Target(const Zone& z) const;
+    bool present_ = true;
+    double hz_ = 30.0, pageT_ = -1e9;
+    bool Sensing(const Zone& z) const { return z.camera || (band_ != kBandOff && band_ != kBandData); }
+    void ShowGroups();                     // the window: its zone groups and the occluders drawn or not
+    void Process(Zone& z);                 // the sensor picture -> the screen texture (IR / UV)
+    struct Occluder { UINT mesh; DWORD group; };
+    std::vector<Occluder> occluders_;
+    int band_ = kBandCamera;
+    bool windowWanted_ = false, windowShown_ = false;
+    double sensorT_ = -1e9;
     bool Start();
     void Aim(Zone& z, bool force = true);   // force = false: only if the pose moved noticeably (>30 cm, >0.2 deg)
     void Bind();

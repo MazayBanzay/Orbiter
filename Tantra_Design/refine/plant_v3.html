@@ -1,0 +1,1082 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Силовая установка v3</title>
+<style>
+:root{--pf:"GOST type A","GOST 2.304 type A","ISOCPEUR",sans-serif}
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:#11181b;color:#d8e2ea;font:17px/1.45 var(--pf)}
+#wrap{padding:12px 16px 32px;max-width:1700px;margin:0 auto}
+h1{font-size:22px;margin:0 0 4px;color:#e8eef3;letter-spacing:1px;font-weight:700}
+.note{font-size:16px;color:#9fb3be}
+#scr{display:block;width:100%;aspect-ratio:1600/800;border-radius:6px;background:#0a1311;touch-action:none}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.bar .lbl{color:#9fb3be;font-size:16px;margin-left:10px}
+button{font:inherit;font-size:16px;padding:4px 10px;border:1px solid #3a4652;border-radius:4px;background:#1f282f;color:#d8e2ea;cursor:pointer}
+button.on{background:#2b6cb0;border-color:#2b6cb0;color:#fff}
+input[type=range]{vertical-align:middle}
+#chk{font-size:15px;color:#e8d35a;white-space:pre-wrap;margin:6px 0}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:14px}
+@media (max-width:900px){.cols{grid-template-columns:1fr}}
+h2{font-size:19px;margin:0 0 6px;color:#e8eef3;letter-spacing:1px}
+ul{margin:4px 0 4px 20px;padding:0}li{margin:3px 0}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Силовая установка — доработка v3 (экран 1600 x 800)</h1>
+  <div class="note">Всё на экране работает: кнопки в группах, узлы мнемосхемы нажимаются — справа открываются подробности узла и его органы управления.
+    Среда (грунт / космос / перелёт / вход) — состояние корабля: на экране это строка-индикатор, выбор для модели — здесь, над экраном.</div>
+  <div class="bar">
+    <span class="lbl" style="margin-left:0">Шрифт</span><span id="fontB"></span>
+    <span class="lbl">Среда (модель)</span><span id="envB"></span>
+  </div>
+  <div class="bar">
+    <span class="lbl" style="margin-left:0">Рычаг тяги</span><input id="thr" type="range" min="0" max="100" value="40" style="width:300px"><span id="thrV" class="note"></span>
+    <span class="lbl">Угол атаки (вход)</span><input id="aoa" type="range" min="10" max="60" value="40" style="width:130px"><span id="aoaV" class="note">40°</span>
+    <span class="lbl">Время модели</span><span id="spdB"></span>
+    <button id="reset">СБРОС модели</button>
+    <button id="check">Проверить разметку</button>
+  </div>
+  <canvas id="scr" width="1600" height="800"></canvas>
+  <div id="chk"></div>
+  <div class="cols">
+    <div>
+      <h2>Что изменено и почему</h2>
+      <ul id="changes">
+        <li>Шрифт — ГОСТ 2.304 тип А (запас ISOCPEUR, переключатель над экраном); Segoe убран.</li>
+        <li>Кегли по шкале: ничего мельче 15 px, подписи 17–18, значения 22–26 жирно, главные показания 34–40.</li>
+        <li>Сетка: поля 24 px, между блоками 16, строки по 32; заголовки блоков в своей полосе, не врезаны в рамку.</li>
+        <li>Числа в колонках вправо, единицы — отдельной колонкой меньшим кеглем; шкалы под подписью, значение справа.</li>
+        <li>Кнопки — один модуль (56 px, углы 4, зазор 10, ширина по сетке 10), разложены по группам в рамках с заголовками: УСТАНОВКА (ПУСК, СТОП), ПОЛЕ (− уставка +), МОЩНОСТЬ (− уставка +), ОГРАНИЧИТЕЛЬ, РАБОЧАЯ МАССА (АВТО / АРГОН / ЖЕЛЕЗО / ПРОДУКТЫ), ГОНДОЛЫ, ТЯГА (рычаг).</li>
+        <li>Состояния кнопок по правилу: выкл — тёмное стекло; вкл — залито (янтарь / бирюза), подпись тёмная; предупреждение — красная рамка; недоступно — серое без рамки; нажатие — короткая вспышка.</li>
+        <li>ПУСК и СТОП разделены (одна кнопка со сменой надписи путала); «−» и «+» нарисованы линиями — в шрифте ГОСТ нет знака минус.</li>
+        <li>Масса: горит выбранный режим, полоска внизу клавиши — масса, которая реально идёт (АВТО → аргон/железо, подмена ограничителем — красная рамка).</li>
+        <li>Среда (ГРУНТ / КОСМОС / ПЕРЕЛЁТ / ВХОД) — не кнопки, а строка-индикатор в шапке: это состояние, его определяет корабль.</li>
+        <li>Мнемосхема стала рабочей и меньше: у каждого узла лампа (выкл / готов / работа / предел / отказ) и 1–2 живых значения из модели.</li>
+        <li>Трубы показывают реальные потоки модели: топливо (кг/с), рабочая масса (т/с), тепло (приход на корму, унос массой, сброс гребнями); ноль — труба стоит.</li>
+        <li>Узел нажимается — справа его подробности и свои органы управления (поле: − / +; триггер: мощность; масса и насосы: выбор массы; чаша и подача: рычаг; гондолы: ГОНДОЛЫ).</li>
+        <li>Цепочка поджига выстроена по сути: топливо → подача капсул → ионный триггер → чаша; криогеника → обмотка; масса → насосы → рубашка → чаша; тепло: горение → корма → рубашка / гребни.</li>
+        <li>Чаша нарисована чисто: обмотка в разрезе (⊗/⊙), линии поля не пересекаются, горение и струя — полосами без прозрачности (как может игра).</li>
+        <li>Убраны выдуманные показания: «накопитель поля» (формула-заглушка), ток обмотки (200 витков — константа экрана), частота и энергия капсулы (2000 Гц — константа экрана), вход/выход рубашки (теплоёмкости-заглушки), «запас по току» (формула-заглушка).</li>
+        <li>Термокарта обшивки и двигателей убрана — она на своей странице ТЕПЛО; оставлено только тепло установки: корма (шкала зон), обмотка, рубашка, гребни.</li>
+        <li>Расчёт сохранён и укрупнён: бюджет тяги (что ограничивает), тепло кормы, прогноз, риск; повреждения и риск по частям — в лампах и панелях узлов.</li>
+        <li>Тренды (тяга, поле, корма) и журнал оставлены, крупнее; линия «нос» убрана — это обшивка, страница ТЕПЛО.</li>
+        <li>Модель согласована с core/Plant.cpp: поле не выше предела обмотки (√ целости), ограничитель держит 12,1 Тл / 100 % и пишет об этом в журнал (рамка ОГРАНИЧИТЕЛЯ мигает), срыв «обмотка потеряна» до станции, рычаг установку не трогает.</li>
+        <li>Мокап стартует на режиме с рычагом 40 % (как корабль в игре — установка на режиме), чтобы схема сразу показывала потоки.</li>
+        <li>Знаки, которых в ГОСТ нет или которые шрифт подменяет, не рисуются: в «GOST type A» на месте × стоит Ч, на месте ¹ — №, на месте ² — І; поэтому «p-11B», «кв. м», «4 по 3»; тире и минус — дефисом или линией.</li>
+        <li>Исправлена ошибка старого мокапа: на полном поле он писал «ограничивает: МОЩНОСТЬ», хотя упор — поле (как в Plant.cpp: на мощности поля предел — поле).</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Нужно от системы</h2>
+      <ul id="need">
+        <li>Частота капсул и масса/энергия одной капсулы (сейчас в модели нет — экран мог бы показать темп подачи, а не только расход топлива).</li>
+        <li>Мощность ионного триггера, усиление каскада, заряд накопителя (в модели нет; «Q 120» и «накопитель» были константами экрана).</li>
+        <li>Криогеника: холодопроизводительность, расход хладагента, запас по критическому току обмотки (в модели есть только температура обмотки и целость линии; поток в трубе крио — условный).</li>
+        <li>Ток и число витков обмотки (для показания тока; сейчас только поле).</li>
+        <li>Рубашка: температура рабочей массы на входе и выходе, давление в каналах (в модели — только унесённая мощность и кипение выше 1100 К).</li>
+        <li>Насосы: своё состояние/повреждение (в модели насосов нет — расход берётся из тяги).</li>
+        <li>Запасы аргона и железа как часть установки (сейчас приходят от корабля, View.argon/iron) и порог «мало топлива» (на экране 10 % — правило экрана).</li>
+        <li>Гондолы: состояние каждой из 4 (сейчас одно на все — лампы 1–4 горят одинаково), их температура и отказы.</li>
+        <li>Гребни: выпущены/сложены — есть в Env.crestsOut, но экрану в View не передаётся.</li>
+        <li>Провал тяги от пропусков поджига (dipT) — в Plant скрыт; экран не может показать «пропуски».</li>
+      </ul>
+    </div>
+  </div>
+</div>
+<script src="../tantra_plant_model.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const cv = $("scr"), g = cv.getContext("2d"), W = 1600, H = 800;
+
+// ======================================================================================================
+//  THE MODEL — the mockup's own real-time model (tantra_plant_screen.html), harmonised with core/Plant.cpp
+// ======================================================================================================
+const CHI = 1e-5;                          // the clean ion-trigger reaction
+const ENV = {earth: {t: "атмосфера, грунт", g: 9.81, mass: "argon", air: true}, space: {t: "космос", g: 0, mass: "iron", air: false},
+             cruise: {t: "перелёт", g: 0, mass: "products", air: false}, entry: {t: "вход в атмосферу", g: 9.81, mass: "argon", air: true}};
+const ZONES = [{k: "nose", t: "нос (иридий)", rn: 3.0, lim: 2400, tau: 25}, {k: "belly", t: "днище", rn: 12.0, lim: 2200, tau: 40},
+  {k: "edge", t: "кромки крыльев", rn: 0.45, lim: 2100, tau: 15}, {k: "fin", t: "перо", rn: 3.0, lim: 2000, tau: 20},
+  {k: "stern", t: "корма", rn: 10.9, lim: 2000, tau: 40}, {k: "gear", t: "ноги", rn: 1.0, lim: 1300, tau: 10}, {k: "pods", t: "гондолы", rn: 1.0, lim: 1300, tau: 10}];
+const K_SG = 1.7415e-4, EPS_SKIN = 0.85;
+const FUEL_FULL = 2.0e6, POD_CUP = 117e6;
+function entryInit() { S.ent = {h: 120e3, v: 7800, gam: -1.2 * Math.PI / 180, done: false, qMax: 0}; S.skin = ZONES.map(() => 250); S.over = ZONES.map(() => 0); }
+function freshState() {
+  return {env: "earth", mode: "auto", stage: "run", stageT: 0, Bset: 12.1, B: 12.1, P: 100, lim: true, limArm: -99, heldT: -99, pods: true, thr: 0.4,
+    T: 300, coilT: 20, coilTarget: 20, alarms: [], trend: [], t: 0, speed: 1, sternH: 22.5, m: 52.34e6, argon: 6.2e6, iron: 3.8e6, fuel: FUEL_FULL, ve: 7000,
+    crossed: {}, refused: false, coilsLost: false, fuelOut: false, dipT: 0,
+    dmg: {coils: 1, drivers: 1, jacket: 1, radiators: 1, cryo: 1}, lostWhy: "", lostTitle: "", aoa: 40};
+}
+const S = freshState();
+entryInit();
+S.alarms.push({t: 0, txt: "Установка на режиме", lvl: "ok"});
+const C_STERN = PM.STERN_STORE / 1400;     // J/K: ~1 kt of stern structure
+const T_SAFE = 800, T_BOIL = 1100, T_SOFT = 1400, T_BREACH = 1700, T_LOST = 2300;
+const RISK0 = 2e-4, RISK_K = 7;
+const riskPerMin = e => e > 0 ? Math.min(5, RISK0 * (Math.exp(RISK_K * e) - 1)) : 0;
+const FAILS = {
+  field: [
+    {w: 5, txt: "Срыв поля (потеря сверхпроводимости): тяга ноль, охлаждение 20 с", act: () => quench()},
+    {w: 3, txt: "Сгорела секция обмотки: тяга -30 % до станции", act: () => { S.dmg.coils *= 0.7; quench(); }},
+    {w: 1, txt: "Лопнула опора обмотки: поле не выше 12 Тл до станции", act: () => { S.dmg.coils = Math.min(S.dmg.coils, 0.5); quench(); }},
+  ],
+  power: [
+    {w: 4, txt: "Серия пропусков поджига: провал тяги", act: () => { S.dipT = 1.5; }},
+    {w: 3, txt: "Сгорел модуль ионного триггера: мощность -25 % до станции", act: () => { S.dmg.drivers *= 0.75; }},
+    {w: 2, txt: "Плазма прорвала поле и ударила в чашу: охлаждение -30 %", act: () => { S.dmg.jacket *= 0.7; S.T += 120; }},
+  ],
+  heat: [
+    {w: 3, txt: "Покоробилась панель гребня: сброс тепла -20 %", act: () => { S.dmg.radiators *= 0.8; }},
+    {w: 3, txt: "Лопнул канал рубашки: охлаждение -30 %", act: () => { S.dmg.jacket *= 0.7; S.T += 80; }},
+    {w: 2, txt: "Отказ линии криогеники: обмотка теплеет", act: () => { S.dmg.cryo *= 0.6; }},
+    {w: 1, txt: "Срыв поля от нагрева обмотки", act: () => quench()},
+  ],
+};
+function setStage(s) { S.stage = s; S.stageT = 0; }
+function quench() { if (S.stage === "lost") return; setStage("quench"); }
+function alarm(txt, lvl = "warn") { S.alarms.unshift({t: S.t, txt, lvl}); if (S.alarms.length > 12) S.alarms.pop(); }
+const airNow = () => ENV[S.env].air;
+function massNow() { return S.mode !== "auto" ? S.mode : ENV[S.env].mass; }
+const bCap = () => (S.lim ? PM.B_NOM : PM.B_RUPTURE) * Math.sqrt(S.dmg.coils);
+function cupNow() {
+  let mass = massNow();
+  if (S.lim && airNow() && mass !== "argon") {
+    if (!S.refused) alarm(`Ограничитель: ${mass === "iron" ? "железо" : "продукты"} в атмосфере нельзя - аргон`, "warn");
+    S.refused = true; mass = "argon";
+  } else S.refused = false;
+  const B = Math.max(0.01, Math.min(S.B, bCap()));
+  const vEx = mass === "products" ? S.ve * 1e3 : undefined;
+  const c0 = PM.cup({B, PfMax: PM.PF_MARCH * S.dmg.drivers, mass, chi: CHI, d: 15, deployed: true, vEx});
+  const Pset = Math.min(S.P, S.lim ? 100 : 200);
+  const want = c0.Pf * Pset / 100, beta = want / Math.max(1, c0.Pf);
+  let c = c0, Pf = want, F, over = 0, limit;
+  if (beta <= 1 + 1e-9) {                // as Plant.cpp: at the field's own power the field is the limit
+    c = PM.cup({B, PfMax: want, mass, chi: CHI, d: 15, deployed: true, vEx}); Pf = c.Pf; F = c.F; limit = c.F >= c.Ffield * 0.999 ? "поле" : "мощность";
+  }
+  else if (c0.lim === "поле") {          // more fusion than the field holds: the plasma opens the field
+    const Freq = 2 * PM.ETA_N * want * (1 - CHI) / c0.v;
+    F = c0.F + 0.3 * (Freq - c0.F) * (1 - 1 / beta);
+    over = c0.Pjet * 0.0045 * (beta - 1) * (beta - 1);
+    limit = "поле";
+  } else { F = c0.F * beta; limit = "мощность"; }
+  const Ffield = PM.fieldThrust(B, PM.A_MARCH);
+  const Fpow = 2 * PM.ETA_N * PM.PF_MARCH * S.dmg.drivers * Pset / 100 * (1 - CHI) / c.v;
+  F *= S.dmg.coils;
+  if (S.lim && S.T > T_SAFE) { const kk = Math.max(0, 1 - (S.T - T_SAFE) / 250); Pf *= kk; F *= kk; limit = "тепло"; }
+  if (S.dipT > 0) F *= 0.4;
+  return {mass, c, v: c.v, Pf, F, mdot: F / c.v, over, beta, B, limit, Ffield, Fpow};
+}
+function step(dt) {
+  S.t += dt; S.stageT += dt;
+  if (S.dipT > 0) S.dipT -= dt;
+  if (S.stage === "lost") { S.B = Math.max(0, S.B - 12 * dt); return (S._last = deadOut()); }
+  stepSkin(dt);
+  if (S.stage === "lost") return (S._last = deadOut());
+  if (S.stage === "cryo" && S.stageT > 1) setStage("field");
+  const down = S.stage === "off" || S.stage === "quench";
+  const Btarget = down ? 0 : Math.min(S.Bset, bCap());
+  const rate = S.stage === "quench" ? 12 : 0.8;
+  S.B += Math.max(-rate * dt, Math.min(rate * dt, Btarget - S.B));
+  if (S.stage === "field" && Math.abs(S.B - Btarget) < 0.05) setStage("trigger");
+  if (S.stage === "trigger" && S.stageT > 2) setStage("feed");
+  if (S.stage === "feed" && S.stageT > 0.5) { setStage("run"); alarm("Установка на режиме", "ok"); }
+  if (S.stage === "quench" && !S.coilsLost && S.stageT > 20) { setStage("off"); alarm("Обмотка охлаждена: можно перезапускать", "ok"); }
+  const run = S.stage === "run";
+  const k = cupNow();
+  const thr = run && S.fuel > 0 ? S.thr : 0;
+  const F = k.F * thr, mdot = k.mdot * thr, Pf = k.Pf * thr, Pjet = F * k.v / 2;
+  const rho = S.env === "entry" ? 1.225 * Math.exp(-S.ent.h / 8500) : 1.225;
+  const qRad = CHI * Pf * PM.sternFraction(15);
+  const qOver = k.over * thr;
+  const qGround = S.env === "earth" ? PM.groundHeat(Pjet, S.sternH, k.mass) : 0;
+  const qAir = airNow() ? PM.airHeat(Pjet, rho, k.mass) : 0;
+  const qBreach = S.T > T_BREACH ? 0.004 * Pjet * Math.min(1, (S.T - T_BREACH) / 300) : 0;
+  const qIn = qRad + qOver + qGround + qAir + qBreach;
+  const boil = S.T < T_BOIL ? 1 : Math.max(0.3, 1 - (S.T - T_BOIL) / 500);
+  const regen = mdot * PM.H_COOL[k.mass] * boil * S.dmg.jacket;
+  const rad = 0.9 * PM.SIG * Math.pow(Math.min(S.T, 1800), 4) * PM.RAD_AREA * S.dmg.radiators;
+  S.T = Math.max(290, S.T + (qIn - regen - rad) * dt / C_STERN);
+  const marks = [[T_SAFE, "Корма выше безопасной (800 К): обмотка теплеет", "warn"], [T_BOIL, "Кипение в рубашке (1100 К): отвод тепла падает", "bad"],
+                 [T_SOFT, "Композит кормы размягчается (1400 К)", "bad"], [T_BREACH, "Рубашка чаши прорвана (1700 К): плазма на чашу", "bad"]];
+  for (const [tm, txt, lvl] of marks) {
+    if (S.T > tm && !S.crossed[tm]) { S.crossed[tm] = true; alarm(txt, lvl); }
+    if (S.T < tm - 50) S.crossed[tm] = false;
+  }
+  if (S.T > T_LOST) { setStage("lost"); S.lostTitle = "КОРМА ПРОГОРЕЛА"; S.lostWhy = "Корма прогорела (2300 К)"; alarm("КОРМА ПРОГОРЕЛА: КОРАБЛЬ ПОТЕРЯН", "bad"); return (S._last = deadOut()); }
+  S.coilTarget = 20 + 6 * Math.max(0, (S.B / PM.B_NOM) ** 2 - 1) + Math.max(0, S.T - T_SAFE) / 60 + (1 - S.dmg.cryo) * 12 + 0.3 * Math.abs(Btarget - S.B);
+  S.coilT += (S.coilTarget - S.coilT) * Math.min(1, dt / 8);
+  const ex = {field: Math.max(0, (S.B / PM.B_NOM) ** 2 - 1) + Math.max(0, (S.coilT - 23) / 12),
+              power: run && thr > 0 && k.beta > 1 ? k.beta - 1 : 0,
+              heat: Math.max(0, (S.T - T_SAFE) / T_SAFE)};
+  if (S.B > 1 && S.stage !== "quench") {
+    for (const cause of ["field", "power", "heat"]) {
+      const lam = riskPerMin(ex[cause]);
+      if (lam > 0 && Math.random() < lam / 60 * dt) {
+        const list = FAILS[cause], tot = list.reduce((a, f) => a + f.w, 0);
+        let r = Math.random() * tot, f = list[0];
+        for (const x of list) { r -= x.w; if (r <= 0) { f = x; break; } }
+        alarm(f.txt, "bad"); f.act();
+        if (S.dmg.coils < 0.3 && !S.coilsLost) { S.coilsLost = true; setStage("quench"); alarm("Обмотка потеряна: маршевая не работает до станции", "bad"); }
+      }
+    }
+  }
+  if (run && thr > 0) {
+    const dm = mdot * dt, df = Pf / PM.E_FUS * dt;
+    if (k.mass === "argon") S.argon = Math.max(0, S.argon - dm); else if (k.mass === "iron") S.iron = Math.max(0, S.iron - dm);
+    S.fuel = Math.max(0, S.fuel - df); S.m -= dm + df;
+    if (S.fuel <= 0 && !S.fuelOut) { S.fuelOut = true; alarm("Топливо p-11B кончилось: подача капсул остановлена", "bad"); }
+  }
+  if (!S.trend.length || S.t - S.trend[S.trend.length - 1].t >= 0.25) {
+    S.trend.push({t: S.t, F, B: S.B, T: S.T});
+    while (S.trend.length && S.t - S.trend[0].t > 60) S.trend.shift();
+  }
+  S._last = {mass: k.mass, k, c: k.c, F, mdot, Pf, Pjet, thr, run, qIn, src: {qRad, qOver, qGround, qAir, qBreach}, regen, rad, boil, ex, Btarget};
+  return S._last;
+}
+function stepSkin(dt) {             // the hull skin (for the entry and its loss; the map itself is on the page ТЕПЛО)
+  let rho = 0, v = 0;
+  if (S.env === "entry" && !S.ent.done) {
+    const E = S.ent, R = 6371e3, g0 = 9.81 * (R / (R + E.h)) ** 2;
+    rho = 1.225 * Math.exp(-E.h / 8500); v = E.v;
+    const a = S.aoa * Math.PI / 180, A = 5200 * Math.sin(a) + 650 * Math.cos(a), Cd = 1.6 * Math.sin(a) ** 2 + 0.3, CL = 0.9 * Math.sin(2 * a) * 0.5;
+    const q = 0.5 * rho * v * v, Dr = q * Cd * A, L = q * CL * A;
+    E.v += (-Dr / S.m - g0 * Math.sin(E.gam)) * dt;
+    E.gam += (L / (S.m * Math.max(50, E.v)) - (g0 / Math.max(50, E.v) - E.v / (R + E.h)) * Math.cos(E.gam)) * dt;
+    E.h += E.v * Math.sin(E.gam) * dt;
+    if (E.v < 600 || E.h < 12e3) { E.done = true; alarm(`Вход завершён: ${fmt(E.h / 1e3, 0)} км, ${fmt(E.v, 0)} м/с`, "ok"); }
+  } else if (S.env === "earth") { rho = 1.225; v = 0; }
+  const a = S.aoa * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+  const expo = {nose: Math.max(0.05, ca), belly: Math.max(0.05, sa), edge: 0.71, fin: 0.05, stern: 0.05, gear: 0, pods: 0};
+  const base = K_SG * Math.sqrt(Math.max(0, rho)) * v * v * v, Tamb = S.env === "space" || S.env === "cruise" ? 4 : 250;
+  const flux = ZONES.map(z => base / Math.sqrt(z.rn) * expo[z.k]);
+  ZONES.forEach((z, i) => {
+    const tEq = Math.pow(flux[i] / (EPS_SKIN * PM.SIG) + Tamb ** 4, 0.25);
+    S.skin[i] += (Math.max(tEq, z.k === "stern" ? Math.min(S.T, 3000) : 0) - S.skin[i]) * Math.min(1, dt / z.tau);
+    const over = (S.skin[i] - z.lim) / z.lim;
+    if (over > 0) {
+      S.over[i] += dt * over / 0.1;
+      if (!S.crossed["skin" + i]) { S.crossed["skin" + i] = true; alarm(`Обшивка: ${z.t} выше предела ${z.lim} К`, "bad"); }
+      if (S.over[i] > 20 && (z.k === "nose" || z.k === "belly")) { setStage("lost"); S.lostTitle = "ОБШИВКА ПРОГОРЕЛА"; S.lostWhy = `${z.t}: ${fmt(S.skin[i], 0)} К при пределе ${z.lim} К`; alarm("ОБШИВКА ПРОГОРЕЛА: КОРАБЛЬ ПОТЕРЯН", "bad"); }
+    } else if (S.skin[i] < z.lim - 100) S.crossed["skin" + i] = false;
+  });
+}
+function deadOut() {               // the plant gone: no flows, the screen shows the wreck's state
+  const k = cupNow();
+  return {mass: k.mass, k, c: k.c, F: 0, mdot: 0, Pf: 0, Pjet: 0, thr: 0, run: false, qIn: 0, src: {qRad: 0, qOver: 0, qGround: 0, qAir: 0, qBreach: 0},
+          regen: 0, rad: 0, boil: 1, ex: {field: 0, power: 0, heat: Math.max(0, (S.T - T_SAFE) / T_SAFE)}, Btarget: 0};
+}
+function lastSt() { return S._last || step(1e-6); }
+
+// controls (as core/Plant.cpp)
+function fieldStep(d) {
+  const want = Math.round((S.Bset + d) * 10) / 10;
+  S.Bset = Math.max(1, Math.min(S.lim ? PM.B_NOM : PM.B_RUPTURE, want));
+  if (S.lim && want > PM.B_NOM + 1e-9) { S.heldT = S.t; alarm("Ограничитель держит поле 12,1 Тл: снять - ОГРАНИЧИТЕЛЬ дважды", "warn"); }
+}
+function powerStep(d) {
+  const want = S.P + d;
+  S.P = Math.max(5, Math.min(S.lim ? 100 : 200, want));
+  if (S.lim && want > 100 + 1e-9) { S.heldT = S.t; alarm("Ограничитель держит мощность 100 %: снять - ОГРАНИЧИТЕЛЬ дважды", "warn"); }
+}
+function limiterPress() {
+  if (!S.lim) { S.lim = true; S.limArm = -99; S.Bset = Math.min(S.Bset, PM.B_NOM); S.P = Math.min(S.P, 100); alarm("Ограничитель включён: АВТОМАТ", "ok"); }
+  else if (S.t - S.limArm > 4) { S.limArm = S.t; alarm("Снять ограничитель? Ещё раз в течение 4 с", "warn"); }
+  else { S.lim = false; S.limArm = -99; alarm("Ограничитель снят: РУЧНОЙ режим", "bad"); }
+}
+function startPress() {
+  if (S.stage === "off") { setStage("cryo"); alarm("Пуск: проверка криогеники", "ok"); }
+  else if (S.stage === "quench") alarm(S.coilsLost ? "Обмотка потеряна: пуск только после станции" : "Обмотка охлаждается: пуск после охлаждения", "warn");
+}
+function stopPress() { if (S.stage !== "off" && S.stage !== "quench" && S.stage !== "lost") { setStage("off"); alarm("Останов: поле снимается", "ok"); } }
+function setThr(f) { S.thr = Math.max(0, Math.min(1, f)); $("thr").value = Math.round(S.thr * 100); $("thrV").textContent = Math.round(S.thr * 100) + " %"; }
+
+// ======================================================================================================
+//  DRAWING — only what the game can draw: rectangles, lines, polylines, convex polygons, circles, text;
+//  no transparency (translucent colours are mixed over the ground in advance), gradients as bands
+// ======================================================================================================
+const COL = {bg: "#0a1311", fr: "#1f3a35", ln: "#4f8f86", tx: "#7fe0d0", dim: "#6fb3a8", or: "#ee9a3a", ye: "#e8d35a", rd: "#ff5a4a", gr: "#5ad0a0",
+             wh: "#e8fffa", bl: "#7fb8ff", fuel: "#c8a24a", trig: "#b07cff", mass: "#4fa3d8", cryo: "#5fd8ff", heat: "#e0703a",
+             node: "#0f1c19", band: "#132622", edge: "#2c4f48", plate: "#0b1513", keyEdge: "#3d6b63", glass: "#0f1a18"};
+const FONTS = {gost: '"GOST type A"', iso: '"ISOCPEUR"'};
+let fontKey = "gost";
+const FF = () => `${FONTS[fontKey]}, "GOST 2.304 type A", "ISOCPEUR", sans-serif`;
+const fmt = (v, d = 1) => isFinite(v) ? v.toLocaleString("ru-RU", {minimumFractionDigits: d, maximumFractionDigits: d}) : "-";
+const san = s => String(s).replace(/[—–−]/g, "-").replace(/→/g, "->").replace(/×/g, "x").replace(/¹/g, "1").replace(/²/g, "2").replace(/³/g, "3");
+// GOST type A: no dashes / minus / arrows; and its cmap puts Ч on ×, № on ¹, І on ² (cp1251 leftovers) - never draw those
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+function hex(c) { const n = parseInt(c.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function mix(c, bg, a) { const p = hex(c), q = hex(bg); a = clamp(a); return "#" + p.map((v, i) => Math.round(v * a + q[i] * (1 - a)).toString(16).padStart(2, "0")).join(""); }
+// number + unit pairs (the unit goes to its own column)
+const nF = F => F >= 1e9 ? [fmt(F / 1e9, 2), "ГН"] : F >= 1e6 ? [fmt(F / 1e6, 0), "МН"] : [fmt(F / 1e3, 0), "кН"];
+const nW = w => w >= 1e12 ? [fmt(w / 1e12, 1), "ТВт"] : w >= 1e9 ? [fmt(w / 1e9, 1), "ГВт"] : w >= 1e6 ? [fmt(w / 1e6, 0), "МВт"] : [fmt(w / 1e3, 0), "кВт"];
+const nM = m => m >= 1000 ? [fmt(m / 1000, 2), "т/с"] : m >= 1 ? [fmt(m, 1), "кг/с"] : [fmt(m * 1000, 0), "г/с"];
+const nTime = s => s < 60 ? [fmt(s, 0), "с"] : s < 3600 ? [fmt(s / 60, 1), "мин"] : s < 172800 ? [fmt(s / 3600, 1), "ч"] : [fmt(s / 86400, 0), "сут"];
+const nPct = p => p >= 0.1 ? fmt(p * 100, 0) : p >= 0.001 ? fmt(p * 100, 2) : p > 0 ? fmt(p * 100, 4) : "0";
+const clock = t => { const s = Math.max(0, Math.floor(t)); return s < 3600 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
+
+// ---- text, with the layout recorder for the checker ----
+let REC = false; const TXT = [], SEG = [], SMALL = [];
+function setF(size, bold) { g.font = `${bold ? 700 : 400} ${size}px ${FF()}`; }
+function capH(size) { setF(size, true); const m = g.measureText("НПТ"); return m.actualBoundingBoxAscent || size * 0.68; }
+function TW(s, size, bold = false, ls = 0) { setF(size, bold); g.letterSpacing = ls + "px"; const w = g.measureText(san(s)).width; g.letterSpacing = "0px"; return w; }
+function T(s, x, y, col, size, al = "left", bold = false, ls = 0) {
+  s = san(s); setF(size, bold); g.letterSpacing = ls + "px"; g.fillStyle = col; g.textAlign = al; g.textBaseline = "alphabetic";
+  g.fillText(s, x, y); const w = g.measureText(s).width; g.letterSpacing = "0px";
+  if (REC) {
+    const x0 = al === "left" ? x : al === "center" ? x - w / 2 : x - w;
+    TXT.push({s, x0, x1: x0 + w, y0: y - 0.78 * size, y1: y + 0.2 * size});
+    if (size < 15) SMALL.push(`${size} px: «${s}»`);
+  }
+  return w;
+}
+function fitT(s, x, y, maxW, col, size, al = "left", bold = false, ls = 0, minSize = 15) {
+  let sz = size; while (sz > minSize && TW(s, sz, bold, ls) > maxW) sz -= 0.5;
+  let t = san(s);
+  if (TW(t, sz, bold, ls) > maxW) { while (t.length > 1 && TW(t + "...", sz, bold, ls) > maxW) t = t.slice(0, -1); t += "..."; }
+  return T(t, x, y, col, sz, al, bold, ls);
+}
+function seg(x1, y1, x2, y2, pad = 0) { if (REC) SEG.push({x1, y1, x2, y2, pad}); }
+function rectSeg(x, y, w, h) { seg(x, y, x + w, y); seg(x + w, y, x + w, y + h); seg(x, y + h, x + w, y + h); seg(x, y, x, y + h); }
+// ---- shapes ----
+function fillR(x, y, w, h, c) { g.fillStyle = c; g.fillRect(x, y, w, h); }
+function strokeR(x, y, w, h, c, lw = 1) { g.strokeStyle = c; g.lineWidth = lw; g.strokeRect(x, y, w, h); }
+function rrect(x, y, w, h, r, fill, stroke, lw = 1) {
+  g.beginPath(); g.moveTo(x + r, y); g.lineTo(x + w - r, y); g.arcTo(x + w, y, x + w, y + r, r); g.lineTo(x + w, y + h - r); g.arcTo(x + w, y + h, x + w - r, y + h, r);
+  g.lineTo(x + r, y + h); g.arcTo(x, y + h, x, y + h - r, r); g.lineTo(x, y + r); g.arcTo(x, y, x + r, y, r); g.closePath();
+  if (fill) { g.fillStyle = fill; g.fill(); }
+  if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw; g.stroke(); }
+}
+function poly(pts, c, lw = 1) { if (pts.length < 2) return; g.strokeStyle = c; g.lineWidth = lw; g.lineJoin = "round"; g.lineCap = "round"; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke(); g.lineCap = "butt"; }
+function shape(pts, c) { g.fillStyle = c; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.fill(); }
+function disc(x, y, r, c) { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
+function ring(x, y, r, c, lw = 1.5) { g.strokeStyle = c; g.lineWidth = lw; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke(); }
+// ---- lamps: off / ready / run / limit / fault ----
+const LCOL = {off: COL.ln, ready: COL.ye, run: COL.gr, limit: COL.or, fault: COL.rd};
+const LWORD = {off: "ВЫКЛ", ready: "ГОТОВ", run: "РАБОТА", limit: "ПРЕДЕЛ", fault: "ОТКАЗ"};
+function lamp(x, y, r, st) {
+  if (st === "off") { disc(x, y, r, "#14221f"); ring(x, y, r, COL.ln, 1.5); return; }
+  disc(x, y, r + 3, mix(LCOL[st], COL.bg, 0.22)); disc(x, y, r, LCOL[st]);
+}
+// ---- blocks and groups: a frame, the title in its own band ----
+function block(x, y, w, h, title, band = 32, size = 18) {
+  fillR(x, y, w, h, "#0c1614"); fillR(x, y, w, band, COL.band);
+  strokeR(x + 1, y + 1, w - 2, h - 2, COL.fr, 2); poly([[x + 2, y + band], [x + w - 2, y + band]], COL.fr, 1.5);
+  rectSeg(x, y, w, h); seg(x, y + band, x + w, y + band);
+  if (title) T(title, x + 12, y + band / 2 + capH(size) / 2, COL.dim, size, "left", true, 1);
+}
+// ---- keys: one module ----
+const KEYS = {off: {f: COL.glass, s: COL.keyEdge, lw: 1.5, t: COL.tx}, on: {f: COL.or, s: COL.or, lw: 1.5, t: "#0a1311"},
+  onT: {f: COL.gr, s: COL.gr, lw: 1.5, t: "#0a1311"}, warn: {f: "#170e0c", s: COL.rd, lw: 2.5, t: "#ff9a8c"},
+  na: {f: "#161e1d", s: null, lw: 0, t: "#4b5b58"}, press: {f: "#24453f", s: COL.wh, lw: 2, t: COL.wh}};
+const HIT = []; let PRESS = {id: "", t: -1e9};
+function key(id, label, x, y, w, h, state, act, o = {}) {
+  if (state !== "na" && PRESS.id === id && performance.now() - PRESS.t < 170) state = "press";
+  const k = KEYS[state];
+  rrect(x, y, w, h, 4, k.f, k.s, k.lw);
+  if (label === "-" || label === "+") {
+    const cx = x + w / 2, cy = y + h / 2;
+    poly([[cx - 10, cy], [cx + 10, cy]], k.t, 3);
+    if (label === "+") poly([[cx, cy - 10], [cx, cy + 10]], k.t, 3);
+  } else fitT(label, x + w / 2, y + h / 2 + capH(18) / 2, w - 16, k.t, 18, "center", true);
+  if (o.mark) fillR(x + 14, y + h - 9, w - 28, 4, state === "on" || state === "onT" ? "#0a1311" : COL.tx);
+  if (o.flash) strokeR(x - 4, y - 4, w + 8, h + 8, COL.ye, 2);
+  rectSeg(x, y, w, h);
+  HIT.push({x, y, w, h, act: state === "na" ? null : () => { PRESS = {id, t: performance.now()}; act(); }});
+}
+function plate(x, y, w, h, num, unit, col = COL.wh) {     // an indicator plate: flat, no frame - not a key
+  fillR(x, y, w, h, COL.plate);
+  const wn = TW(num, 24, true), wu = unit ? TW(unit, 17) + 6 : 0, x0 = x + (w - wn - wu) / 2, by = y + h / 2 + capH(24) / 2;
+  T(num, x0 + wn, by, col, 24, "right", true); if (unit) T(unit, x0 + wn + 6, by, COL.dim, 17);
+}
+function lever(id, x, y, w, h) {                          // the march lever: a track with a handle (drag or click)
+  const tw = w - 92, f = S.thr;
+  rrect(x, y, tw, h, 4, COL.glass, COL.keyEdge, 1.5);
+  fillR(x + 6, y + h / 2 - 6, (tw - 12) * f, 12, "#2f7f6a");
+  for (const q of [0.25, 0.5, 0.75]) poly([[x + 6 + (tw - 12) * q, y + 10], [x + 6 + (tw - 12) * q, y + 18]], COL.keyEdge, 1.5);
+  const hx = x + 6 + (tw - 12) * f;
+  rrect(hx - 7, y + 6, 14, h - 12, 3, COL.wh, null);
+  plate(x + tw + 10, y, 82, h, fmt(f * 100, 0), "%", COL.wh);
+  rectSeg(x, y, tw, h);
+  HIT.push({x, y, w: tw, h, drag: fx => setThr((fx - x - 6) / (tw - 12))});
+}
+// ---- pipes: the body, and dots that move with the model's real flow (zero - still) ----
+const PH = {};
+function pipe(id, pts, col, frac, wd, rdt) {
+  const on = frac > 0.001;
+  poly(pts, mix(col, COL.bg, on ? 0.5 : 0.24), wd);
+  const [a, b] = [pts[pts.length - 2], pts[pts.length - 1]], ang = Math.atan2(b[1] - a[1], b[0] - a[0]), s = 5 + wd * 0.6;
+  shape([[b[0], b[1]], [b[0] - s * 1.6 * Math.cos(ang) + s * Math.sin(ang), b[1] - s * 1.6 * Math.sin(ang) - s * Math.cos(ang)],
+         [b[0] - s * 1.6 * Math.cos(ang) - s * Math.sin(ang), b[1] - s * 1.6 * Math.sin(ang) + s * Math.cos(ang)]], mix(col, COL.bg, on ? 0.9 : 0.35));
+  for (let i = 1; i < pts.length; i++) seg(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], wd / 2 + 1);
+  if (!on) return;
+  const speed = 10 + 70 * Math.min(1.5, frac);
+  PH[id] = ((PH[id] || 0) + rdt * speed) % 14;
+  const segs = []; let L = 0;
+  for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); segs.push(l); L += l; }
+  for (let d = PH[id]; d < L - s * 1.4; d += 14) {
+    let acc = 0, i = 0; while (i < segs.length - 1 && acc + segs[i] < d) { acc += segs[i]; i++; }
+    const f = (d - acc) / segs[i];
+    disc(pts[i][0] + (pts[i + 1][0] - pts[i][0]) * f, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * f, Math.max(1.6, wd * 0.36), col);
+  }
+}
+const heatFrac = w => w > 1e6 ? clamp(Math.log10(w / 1e7) / 4, 0.05, 1.5) : 0;
+
+// ======================================================================================================
+//  LAYOUT (the 8-px grid: edges 24, between blocks 16)
+// ======================================================================================================
+const DG = {x: 24, y: 72, w: 744, h: 440};               // the mimic diagram
+const PN = {x: 784, y: 72, w: 300, h: 440};              // the selected node
+const CA = {x: 1100, y: 72, w: 476, h: 440};             // the computer's reckoning
+const TR = {x: 1100, y: 528, w: 476, h: 104};            // trends
+const JR = {x: 1100, y: 648, w: 476, h: 128};            // journal
+const GY1 = 528, GY2 = 660, GH = 116;                    // the two rows of key groups
+const NH = 82, AX = 602, AY = 255;                       // node height; the cup throat
+const NODES = {
+  cryo:  {t: "КРИОГЕНИКА", full: "КРИОГЕНИКА ОБМОТКИ", x: 36, y: 112, w: 152},
+  field: {t: "ОБМОТКА · ПОЛЕ", full: "ОБМОТКА ЧАШИ · ПОЛЕ", x: 216, y: 112, w: 332},
+  fuel:  {t: "ТОПЛИВО p-11B", full: "ТОПЛИВО p-11B · КАПСУЛЫ", x: 36, y: 214, w: 152},
+  feed:  {t: "ПОДАЧА КАПСУЛ", full: "ПОДАЧА КАПСУЛ · ИНЖЕКТОР", x: 216, y: 214, w: 152},
+  trig:  {t: "ИОННЫЙ ТРИГГЕР", full: "ИОННЫЙ ТРИГГЕР · ПОДЖИГ", x: 396, y: 214, w: 152},
+  mass:  {t: "РАБОЧАЯ МАССА", full: "РАБОЧАЯ МАССА · БАКИ", x: 36, y: 316, w: 152},
+  pump:  {t: "НАСОСЫ", full: "НАСОСЫ РАБОЧЕЙ МАССЫ", x: 216, y: 316, w: 152},
+  jack:  {t: "РУБАШКА ЧАШИ", full: "РУБАШКА ЧАШИ", x: 396, y: 316, w: 152},
+  pods:  {t: "ГОНДОЛЫ", full: "ГОНДОЛЫ 1-4 · 12 ЧАШ", x: 36, y: 418, w: 152},
+  rad:   {t: "ГРЕБНИ", full: "ГРЕБНИ-РАДИАТОРЫ", x: 216, y: 418, w: 152},
+  stern: {t: "КОРМА", full: "КОРМА · ТЕПЛО", x: 396, y: 418, w: 360},
+  cup:   {t: "ЧАША", full: "МАРШЕВАЯ ЧАША · СТРУЯ", x: 628, y: 112, w: 128},
+};
+let SEL = "field";
+const PASSIVE = {cryo: 1, fuel: 1, mass: 1, jack: 1, stern: 1, rad: 1};
+const MASS_RU = {argon: "аргон", iron: "железо", products: "продукты"};
+const MODE_RU = {auto: "АВТО", argon: "АРГОН", iron: "ЖЕЛЕЗО", products: "ПРОДУКТЫ"};
+
+// ======================================================================================================
+//  STATES of the nodes — from the model only
+// ======================================================================================================
+function derive(st) {
+  const run = S.stage === "run", seq = ["cryo", "field", "trigger", "feed"].includes(S.stage), lost = S.stage === "lost", quench = S.stage === "quench";
+  const L = st.thr, k = st.k;
+  const fuelRate = st.Pf / PM.E_FUS;
+  const store = k.mass === "argon" ? S.argon : k.mass === "iron" ? S.iron : 0;
+  const podsOut = S.pods && S.env === "earth", podsOn = podsOut && run && L > 0;
+  const podThrust = podsOn ? PM.N_POD * POD_CUP * L : 0;
+  const fieldCol = S.B < 0.05 ? COL.ln : S.B > 16 ? COL.rd : S.B > 12.15 ? COL.ye : COL.cryo;
+  const s = {}, why = {}, set = (id, v, w) => { s[id] = v; why[id] = w; };
+  // cryo
+  if (lost) set("cryo", "fault", "установка потеряна");
+  else if (S.dmg.cryo < 1) set("cryo", "fault", "линия повреждена");
+  else if (S.coilT > 23) set("cryo", "limit", "обмотка выше 23 К");
+  else if (S.stage === "cryo") set("cryo", "ready", "проверка криогеники");
+  else set("cryo", "run", "держит обмотку холодной");
+  // field
+  if (lost) set("field", "fault", "установка потеряна");
+  else if (S.coilsLost) set("field", "fault", "обмотка потеряна");
+  else if (quench) set("field", "fault", `срыв поля, ещё ${fmt(Math.max(0, 20 - S.stageT), 0)} с`);
+  else if (S.dmg.coils < 1) set("field", "fault", `повреждена, до ${fmt(bCap(), 1)} Тл`);
+  else if (st.ex.field > 0) set("field", "limit", "напряжение выше номинала");
+  else if (S.stage === "field") set("field", "ready", "подъём поля 0,8 Тл/с");
+  else if (S.B < 0.05) set("field", "off", "поле снято");
+  else if (Math.abs(S.B - st.Btarget) > 0.05) set("field", "ready", "поле идёт к уставке");
+  else set("field", "run", "поле на уставке");
+  // fuel
+  if (S.fuel <= 0) set("fuel", "fault", "запас пуст");
+  else if (S.fuel < 0.1 * FUEL_FULL) set("fuel", "limit", "меньше 10 % запаса");
+  else if (fuelRate > 0) set("fuel", "run", "идёт на подачу");
+  else if (run || seq) set("fuel", "ready", "подача стоит");
+  else set("fuel", "off", "установка выключена");
+  // feed
+  if (lost) set("feed", "fault", "установка потеряна");
+  else if (run && S.fuel <= 0) set("feed", "fault", "топливо кончилось");
+  else if (fuelRate > 0) set("feed", "run", "капсулы идут в чашу");
+  else if (S.stage === "feed") set("feed", "ready", "подача начинается");
+  else if (run) set("feed", "ready", "рычаг на нуле");
+  else set("feed", "off", seq ? "ждёт поле и триггер" : "установка выключена");
+  // trigger
+  if (lost) set("trig", "fault", "установка потеряна");
+  else if (S.dmg.drivers < 1) set("trig", "fault", `модуль сгорел, ${fmt(S.dmg.drivers * 100, 0)} %`);
+  else if (st.ex.power > 0) set("trig", "limit", "мощность сверх поля");
+  else if (st.Pf > 0) set("trig", "run", "поджиг идёт");
+  else if (S.stage === "trigger") set("trig", "ready", "заряд триггера");
+  else if (S.stage === "feed" || run) set("trig", "ready", "заряжен, ждёт капсулы");
+  else set("trig", "off", "установка выключена");
+  // reaction mass
+  if (k.mass === "products") set("mass", "off", "струя из продуктов");
+  else if (store <= 0) set("mass", "fault", `${MASS_RU[k.mass]}: запас пуст`);
+  else if (S.refused) set("mass", "limit", "в атмосфере только аргон");
+  else if (st.mdot > 0) set("mass", "run", `идёт ${MASS_RU[k.mass]}`);
+  else if (run || seq) set("mass", "ready", "подача стоит");
+  else set("mass", "off", "установка выключена");
+  // pumps
+  if (k.mass === "products") set("pump", "off", "стоят: режим ПРОДУКТЫ");
+  else if (st.mdot > 0) set("pump", "run", `качают ${MASS_RU[k.mass]}`);
+  else if (run) set("pump", "ready", "рычаг на нуле");
+  else set("pump", "off", "установка выключена");
+  // jacket
+  if (S.T > T_BREACH) set("jack", "fault", "прорвана, выше 1700 К");
+  else if (S.dmg.jacket < 1) set("jack", "fault", `каналы целы на ${fmt(S.dmg.jacket * 100, 0)} %`);
+  else if (S.T > T_BOIL) set("jack", "limit", "кипение, отвод падает");
+  else if (st.regen > 0) set("jack", "run", "масса уносит тепло");
+  else set("jack", "off", "нет потока массы");
+  // stern
+  if (lost) set("stern", "fault", "корма прогорела");
+  else if (S.T > T_BOIL) set("stern", "fault", "выше 1100 К");
+  else if (S.T > T_SAFE) set("stern", "limit", "выше безопасной 800 К");
+  else if (st.qIn > 0 || S.T > 310) set("stern", "run", "в пределах");
+  else set("stern", "off", "холодная, тепла нет");
+  // radiators
+  if (S.dmg.radiators < 1) set("rad", "fault", `панели целы на ${fmt(S.dmg.radiators * 100, 0)} %`);
+  else set("rad", "run", "выпущены, сбрасывают");
+  // pods
+  if (podsOn) set("pods", "run", "работают");
+  else if (podsOut) set("pods", "ready", "выпущены");
+  else set("pods", "off", S.pods ? "работают в атмосфере" : "в отсеке");
+  // the cup
+  if (lost) set("cup", "fault", "установка потеряна");
+  else if (quench) set("cup", "fault", "срыв поля: тяги нет");
+  else if (st.k.over > 0 && L > 0) set("cup", "limit", "плазма раскрывает поле");
+  else if (st.k.limit === "тепло" && L > 0) set("cup", "limit", "ограничитель срезает");
+  else if (st.F > 0) set("cup", "run", "тяга");
+  else if (run || seq) set("cup", "ready", run ? "рычаг на нуле" : "запуск");
+  else set("cup", "off", "установка выключена");
+  return {run, seq, lost, quench, L, fuelRate, store, podsOut, podsOn, podThrust, fieldCol, s, why};
+}
+
+// ======================================================================================================
+//  THE SCREEN
+// ======================================================================================================
+let lastDraw = performance.now();
+function draw(st, rdt) {
+  HIT.length = 0; TXT.length = 0; SEG.length = 0; SMALL.length = 0;
+  const D = derive(st); D_ = D; st_ = st;
+  fillR(0, 0, W, H, COL.bg);
+  drawHeader(st, D);
+  drawDiagram(st, D, rdt);
+  drawPanel(st, D);
+  drawCalc(st, D);
+  drawControls(st, D);
+  drawTrends();
+  drawJournal();
+}
+
+// ---- header: name, the stage, the environment as a status strip ----
+function drawHeader(st, D) {
+  const w = T("СИЛОВАЯ УСТАНОВКА", 24, 48, COL.tx, 22, "left", true, 1);
+  T("ионно-триггерная · маршевая чаша + 4 гондолы", 24 + w + 16, 48, COL.dim, 17);
+  const stTxt = {off: "ВЫКЛЮЧЕНА", cryo: "ПРОВЕРКА КРИОГЕНИКИ", field: "ПОДЪЁМ ПОЛЯ", trigger: "ЗАРЯД ТРИГГЕРА", feed: "ПОДАЧА КАПСУЛ", run: "НА РЕЖИМЕ",
+    quench: S.coilsLost ? "ОБМОТКА ПОТЕРЯНА" : "СРЫВ ПОЛЯ · ОХЛАЖДЕНИЕ", lost: "КОРАБЛЬ ПОТЕРЯН"}[S.stage];
+  const ls = D.run ? "run" : D.quench || D.lost ? "fault" : S.stage === "off" ? "off" : "ready";
+  lamp(PN.x + 9, 41, 9, ls);
+  T(stTxt, PN.x + 28, 48, ls === "off" ? COL.dim : LCOL[ls], 22, "left", true, 0.5);
+  // environment strip: lamps, not keys
+  const items = [["ГРУНТ", "earth"], ["КОСМОС", "space"], ["ПЕРЕЛЁТ", "cruise"], ["ВХОД", "entry"]];
+  let x = W - 24;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const [t, k] = items[i], on = S.env === k, tw = TW(t, 17, on);
+    x -= tw; T(t, x, 48, on ? COL.bl : COL.dim, 17, "left", on);
+    x -= 20; if (on) { disc(x + 7, 42, 10, mix(COL.bl, COL.bg, 0.22)); disc(x + 7, 42, 7, COL.bl); } else { disc(x + 7, 42, 7, "#14221f"); ring(x + 7, 42, 7, COL.ln); }
+    x -= 22;
+  }
+  T("СРЕДА", x - TW("СРЕДА", 17), 48, COL.dim, 17);
+}
+
+// ---- the mimic diagram ----
+function nodeBox(id, D) {
+  const n = NODES[id], st = D.s[id], sel = SEL === id;
+  const edge = st === "fault" ? COL.rd : st === "limit" ? COL.or : COL.edge;
+  fillR(n.x, n.y, n.w, NH, COL.node); fillR(n.x, n.y, n.w, 28, COL.band);
+  poly([[n.x, n.y + 28], [n.x + n.w, n.y + 28]], COL.fr, 1);
+  strokeR(n.x + 0.75, n.y + 0.75, n.w - 1.5, NH - 1.5, edge, st === "fault" || st === "limit" ? 2 : 1.5);
+  if (sel) strokeR(n.x - 3, n.y - 3, n.w + 6, NH + 6, COL.wh, 2);
+  lamp(n.x + 15, n.y + 14, 6, st);
+  fitT(n.t, n.x + 29, n.y + 14 + capH(17) / 2, n.w - 37, COL.tx, 17, "left", true, 0.5);
+  rectSeg(n.x, n.y, n.w, NH); seg(n.x, n.y + 28, n.x + n.w, n.y + 28);
+  HIT.push({x: n.x, y: n.y, w: n.w, h: NH, act: () => { SEL = id; }, node: true});
+}
+function v1(n, pair, col = COL.tx) { const xr = n.x + n.w - 46; T(pair[0], xr, n.y + 56, col, 26, "right", true); if (pair[1]) T(pair[1], xr + 6, n.y + 56, COL.dim, 17); }
+function v2(n, label, num, unit, col = COL.tx) {
+  T(label, n.x + 10, n.y + 76, COL.dim, 17);
+  if (unit !== null && unit !== undefined) { const xr = n.x + n.w - 46; T(num, xr, n.y + 76, col, 18, "right", true); if (unit) T(unit, xr + 6, n.y + 76, COL.dim, 15); }
+  else T(num, n.x + n.w - 10, n.y + 76, col, 17, "right", true);
+}
+function drawDiagram(st, D, rdt) {
+  block(DG.x, DG.y, DG.w, DG.h, "МНЕМОСХЕМА");
+  if (S.stage === "lost") { drawLost(); return; }       // the wreck: one plate over the whole diagram
+  // the legend of the lamps, in the band
+  let lx = DG.x + DG.w - 12;
+  for (const k of ["fault", "limit", "run", "ready", "off"].reverse().reverse()) { /* order kept below */ }
+  const leg = [["off", "выкл"], ["ready", "готов"], ["run", "работа"], ["limit", "предел"], ["fault", "отказ"]];
+  for (let i = leg.length - 1; i >= 0; i--) { const tw = TW(leg[i][1], 15); lx -= tw; T(leg[i][1], lx, DG.y + 21, COL.dim, 15); lx -= 16; lamp(lx + 5, DG.y + 16, 5, leg[i][0]); lx -= 18; }
+  const L = D.L, k = st.k, run = D.run;
+  // ---- the cup: field lines (behind), the jet, the burn, the shell, the windings ----
+  const fc = D.fieldCol, fa = S.B < 0.05 ? 0.1 : 0.22 + 0.5 * Math.min(1, (S.B / PM.B_NOM) ** 2), lineCol = mix(fc, COL.bg, fa);
+  for (const r0 of [9, 18, 27, 36]) for (const s of [-1, 1]) {
+    const pts = [];
+    for (let x = AX - 14; x <= DG.x + DG.w - 12; x += 4) { const r = r0 * Math.sqrt(1 + ((x - AX - 10) / 64) ** 2); if (r > 60) break; pts.push([x, AY + s * r]); }
+    poly(pts, lineCol, 1.5);
+  }
+  if (st.F > 0) {
+    const jc = k.mass === "argon" ? ["#ffeccc", "#ff8030"] : k.mass === "iron" ? ["#d2dcff", "#6e46ff"] : ["#e6d7ff", "#8c64ff"];
+    const wid = k.mass === "argon" ? 26 : k.mass === "iron" ? 15 : 6, x0 = AX + 50, x1 = DG.x + DG.w - 12, N = 12;
+    for (let i = 0; i < N; i++) {
+      const t0 = i / N, t1 = (i + 1) / N, tm = (t0 + t1) / 2, h0 = wid * (0.35 + (0.65 + L) * t0), h1 = wid * (0.35 + (0.65 + L) * t1);
+      shape([[x0 + (x1 - x0) * t0, AY - h0], [x0 + (x1 - x0) * t1, AY - h1], [x0 + (x1 - x0) * t1, AY + h1], [x0 + (x1 - x0) * t0, AY + h0]],
+            mix(mix(jc[1], jc[0], tm), COL.bg, (0.55 + 0.45 * L) * (1 - tm * 0.75)));
+    }
+    const rb = 8 + 20 * L, fl = 0.8 + 0.2 * Math.abs(Math.sin(performance.now() / 1000 * (20 + 40 * L)));
+    for (let i = 0; i < 6; i++) { const t = i / 6; disc(AX + 46, AY, rb * (1 - t * 0.8), mix(mix("#ffffff", "#7a5cff", t), COL.bg, fl * (0.5 + 0.5 * t))); }
+  }
+  const shell = s => { const p = []; for (let i = 0; i <= 14; i++) { const t = i / 14, u = 1 - t; p.push([u * u * (AX - 6) + 2 * u * t * (AX + 28) + t * t * (AX + 34), AY + s * (u * u * 46 + 2 * u * t * 42 + t * t * 14)]); } return p; };
+  poly(shell(-1), COL.wh, 4); poly(shell(1), COL.wh, 4);
+  for (const s of [-1, 1]) {
+    const cy = AY + s * 62;
+    fillR(AX - 18, cy - 14, 36, 28, D.quench ? "#5a1a14" : S.B < 0.05 ? "#13212a" : "#1d364c");
+    strokeR(AX - 17, cy - 13, 34, 26, fc, 2);
+    ring(AX, cy, 7, fc, 1.5);
+    if (s < 0) { poly([[AX - 4.5, cy - 4.5], [AX + 4.5, cy + 4.5]], fc, 1.5); poly([[AX - 4.5, cy + 4.5], [AX + 4.5, cy - 4.5]], fc, 1.5); } else disc(AX, cy, 2, fc);
+    HIT.push({x: AX - 18, y: cy - 14, w: 36, h: 28, act: () => { SEL = "field"; }, node: true});
+  }
+  // the field node feeds the windings
+  poly([[548, 186], [AX - 18, 186]], mix(fc, COL.bg, 0.8), 2); seg(548, 186, AX - 18, 186, 1);
+  // ---- pipes: the model's flows ----
+  const fuelFrac = D.fuelRate / (PM.PF_MARCH / PM.E_FUS);
+  const massFrac = k.mass !== "products" && st.mdot > 0 ? Math.sqrt(st.mdot / 29.5e3) : 0;
+  pipe("cryo", [[188, 153], [216, 153]], COL.cryo, D.lost ? 0 : 0.3 * S.dmg.cryo, 4, rdt);
+  pipe("fuel1", [[188, 255], [216, 255]], COL.fuel, fuelFrac, 6, rdt);
+  pipe("fuel2", [[368, 255], [396, 255]], COL.fuel, fuelFrac, 6, rdt);
+  pipe("trig", [[548, 249], [AX - 10, 249]], COL.trig, fuelFrac, 5, rdt);
+  pipe("mass1", [[188, 357], [216, 357]], COL.mass, massFrac, 8, rdt);
+  pipe("mass2", [[368, 357], [396, 357]], COL.mass, massFrac, 8, rdt);
+  pipe("mass3", [[548, 357], [568, 357], [568, 263], [AX - 10, 263]], COL.mass, massFrac, 8, rdt);
+  pipe("heatIn", [[AX + 46, AY + 26], [AX + 46, 418]], COL.heat, heatFrac(st.qIn), 6, rdt);
+  pipe("regen", [[472, 418], [472, 398]], COL.heat, heatFrac(st.regen), 6, rdt);
+  pipe("rad", [[396, 459], [368, 459]], COL.heat, heatFrac(st.rad), 6, rdt);
+  // ---- the nodes ----
+  for (const id of ["cryo", "field", "fuel", "feed", "trig", "mass", "pump", "jack", "pods", "rad", "stern"]) nodeBox(id, D);
+  const N = NODES;
+  v1(N.cryo, [fmt(S.coilT, 1), "К"], S.coilT > 23 ? COL.or : COL.tx);
+  v2(N.cryo, "запас", fmt(Math.max(0, 23 - S.coilT), 1), "К");
+  { // the field: the main organ, a wide node
+    const n = N.field;
+    T(fmt(S.B, 2), n.x + 150, n.y + 72, D.fieldCol === COL.ln ? COL.dim : D.fieldCol, 34, "right", true); T("Тл", n.x + 156, n.y + 72, COL.dim, 20);
+    const xr = n.x + n.w - 40;
+    T("уставка", n.x + 196, n.y + 51, COL.dim, 17); T(fmt(S.Bset, 1), xr, n.y + 51, COL.tx, 18, "right", true); T("Тл", xr + 6, n.y + 51, COL.dim, 15);
+    const cap = bCap();
+    T("предел", n.x + 196, n.y + 74, COL.dim, 17); T(fmt(cap, 1), xr, n.y + 74, cap < PM.B_NOM - 0.05 ? COL.ye : S.lim ? COL.tx : COL.or, 18, "right", true); T("Тл", xr + 6, n.y + 74, COL.dim, 15);
+  }
+  v1(N.fuel, [fmt(S.fuel / 1e6, 2), "кт"], S.fuel < 0.1 * FUEL_FULL ? COL.or : COL.tx);
+  v2(N.fuel, "доля", fmt(S.fuel / FUEL_FULL * 100, 0), "%");
+  v1(N.feed, D.fuelRate > 0 ? nM(D.fuelRate) : ["0", "кг/с"]);
+  v2(N.feed, "синтез", ...nW(st.Pf));
+  v1(N.trig, [fmt(S.P, 0), "%"], S.P > 100 ? COL.ye : COL.tx);
+  v2(N.trig, "модули", fmt(S.dmg.drivers * 100, 0), "%", S.dmg.drivers < 1 ? COL.rd : COL.tx);
+  if (k.mass === "products") { v1(N.mass, ["-", ""], COL.dim); v2(N.mass, "в работе", "нет", null, COL.dim); }
+  else { v1(N.mass, [fmt(D.store / 1e6, 2), "кт"]); v2(N.mass, "в работе", MASS_RU[k.mass], null, S.refused ? COL.or : COL.tx); }
+  v1(N.pump, k.mass === "products" ? ["0", "т/с"] : nM(st.mdot));
+  v2(N.pump, "режим", MODE_RU[S.mode], null);
+  v1(N.jack, nW(st.regen));
+  v2(N.jack, "кипение", S.T > T_BOIL ? "да" : "нет", null, S.T > T_BOIL ? COL.or : COL.tx);
+  { // pods: one lamp per pod (the model has one state for all)
+    const n = N.pods, ps = D.s.pods;
+    for (let i = 0; i < 4; i++) { lamp(n.x + 17 + i * 34, n.y + 49, 6, ps); T(String(i + 1), n.x + 27 + i * 34, n.y + 55, COL.dim, 15); }
+    if (D.podsOn) v2(n, "тяга", ...nF(D.podThrust)); else v2(n, "", D.podsOut ? "выпущены" : "в отсеке", null, D.podsOut ? COL.tx : COL.dim);
+  }
+  v1(N.rad, nW(st.rad));
+  v2(N.rad, "панели", S.dmg.radiators < 1 ? fmt(S.dmg.radiators * 100, 0) : "целы", S.dmg.radiators < 1 ? "%" : null, S.dmg.radiators < 1 ? COL.rd : COL.tx);
+  { // the stern: the temperature and its zones
+    const n = N.stern, Tc = S.T > T_BOIL ? COL.rd : S.T > T_SAFE ? COL.ye : COL.tx;
+    T(fmt(S.T, 0), n.x + 150, n.y + 72, Tc, 34, "right", true); T("К", n.x + 156, n.y + 72, COL.dim, 20);
+    thermo(n.x + 196, n.y + 40, n.w - 214, 10);
+    const xr = n.x + n.w - 46, q = nW(st.qIn);
+    T("приход", n.x + 196, n.y + 76, COL.dim, 17); T(q[0], xr, n.y + 76, COL.tx, 18, "right", true); T(q[1], xr + 6, n.y + 76, COL.dim, 15);
+  }
+  { // the cup's own plate
+    const n = N.cup, cs = D.s.cup, sel = SEL === "cup";
+    fillR(n.x, n.y, n.w, NH, COL.node); fillR(n.x, n.y, n.w, 28, COL.band); poly([[n.x, n.y + 28], [n.x + n.w, n.y + 28]], COL.fr, 1);
+    strokeR(n.x + 0.75, n.y + 0.75, n.w - 1.5, NH - 1.5, cs === "fault" ? COL.rd : cs === "limit" ? COL.or : COL.edge, 1.5);
+    if (sel) strokeR(n.x - 3, n.y - 3, n.w + 6, NH + 6, COL.wh, 2);
+    lamp(n.x + 15, n.y + 14, 6, cs); T(n.t, n.x + 29, n.y + 14 + capH(17) / 2, COL.tx, 17, "left", true, 0.5);
+    v1(n, nF(st.F), COL.wh);
+    T("струя", n.x + 10, n.y + 76, COL.dim, 17);
+    T(String(Math.round(k.v / 1e3)), n.x + n.w - 46, n.y + 76, COL.tx, 17, "right", true); T("км/с", n.x + n.w - 40, n.y + 76, COL.dim, 15);
+    rectSeg(n.x, n.y, n.w, NH); seg(n.x, n.y + 28, n.x + n.w, n.y + 28);
+    HIT.push({x: n.x, y: n.y, w: n.w, h: NH, act: () => { SEL = "cup"; }, node: true});
+    HIT.push({x: AX - 14, y: AY - 48, w: DG.x + DG.w - 12 - (AX - 14), h: 96, act: () => { SEL = "cup"; }, node: true});
+  }
+}
+function thermo(x, y, w, h) {
+  const Tmax = T_LOST + 100, TX = t => x + w * clamp((t - 300) / (Tmax - 300));
+  for (const [a, b, c] of [[300, T_SAFE, "#2c7a5a"], [T_SAFE, T_BOIL, "#9a8a2a"], [T_BOIL, T_SOFT, "#b8691f"], [T_SOFT, T_BREACH, "#a8322a"], [T_BREACH, Tmax, "#5a1010"]]) fillR(TX(a), y, TX(b) - TX(a), h, c);
+  fillR(TX(S.T) - 2, y - 5, 4, h + 10, COL.wh);
+  rectSeg(x, y - 5, w, h + 10);
+}
+
+// ---- the selected node: its details and its own controls ----
+function rowsOf(id, st, D) {
+  const k = st.k, R = [], r = (label, num, unit, col = COL.tx) => R.push({label, num, unit, col});
+  const risk = e => { const l = riskPerMin(e); return l > 0 ? [nPct(Math.min(1, l)), "%", l > 0.05 ? COL.rd : l > 0.001 ? COL.ye : COL.tx] : ["нет", null, COL.gr]; };
+  const intact = (f, word) => f < 1 ? [fmt(f * 100, 0), "%", f < 0.75 ? COL.rd : COL.ye] : [word, null, COL.gr];
+  let big, ctl = null, note = "";
+  switch (id) {
+    case "field": {
+      big = ["поле", fmt(S.B, 2), "Тл", D.fieldCol === COL.ln ? COL.dim : D.fieldCol];
+      r("уставка", fmt(S.Bset, 1), "Тл");
+      r("предел обмотки", fmt(bCap(), 1), "Тл", bCap() < PM.B_NOM - 0.05 ? COL.ye : S.lim ? COL.tx : COL.or);
+      const q = (S.B / PM.B_NOM) ** 2; r("напряжение", fmt(q * 100, 0), "%", S.B > 16 ? COL.rd : q > 1.002 ? COL.ye : COL.tx);
+      r("держит тягу", ...nF(k.Ffield));
+      r("температура", fmt(S.coilT, 1), "К", S.coilT > 23 ? COL.or : COL.tx);
+      r("срыв за минуту", ...risk(st.ex.field));
+      r("обмотка", ...intact(S.dmg.coils, "цела"));
+      ctl = "field"; break;
+    }
+    case "cryo":
+      big = ["обмотка", fmt(S.coilT, 1), "К", S.coilT > 23 ? COL.or : COL.tx];
+      r("запас до 23 К", fmt(Math.max(0, 23 - S.coilT), 1), "К", S.coilT > 23 ? COL.or : COL.tx);
+      r("установится", fmt(S.coilTarget, 1), "К", S.coilTarget > 23 ? COL.or : COL.tx);
+      r("линия криогеники", ...intact(S.dmg.cryo, "цела"));
+      r("превышение обмотки", st.ex.field > 0 ? "+" + fmt(st.ex.field * 100, 0) : "нет", st.ex.field > 0 ? "%" : null, st.ex.field > 0 ? COL.ye : COL.gr);
+      note = "органов управления нет · автомат"; break;
+    case "fuel":
+      big = ["запас", fmt(S.fuel / 1e6, 2), "кт", S.fuel < 0.1 * FUEL_FULL ? COL.or : COL.tx];
+      r("от полного (2 кт)", fmt(S.fuel / FUEL_FULL * 100, 0), "%");
+      r("расход", ...(D.fuelRate > 0 ? nM(D.fuelRate) : ["0", "кг/с"]));
+      r("хватит на", ...(D.fuelRate > 0 ? nTime(S.fuel / D.fuelRate) : ["-", null]));
+      r("энергия синтеза", "70", "ТДж/кг");
+      note = "органов управления нет"; break;
+    case "feed":
+      big = ["в чашу", ...(D.fuelRate > 0 ? nM(D.fuelRate) : ["0", "кг/с"]), COL.wh];
+      r("мощность синтеза", ...nW(st.Pf));
+      r("рычаг", fmt(D.L * 100, 0), "%");
+      r("мощность, уставка", fmt(S.P, 0), "%");
+      r("топливо", S.fuel > 0 ? "есть" : "пусто", null, S.fuel > 0 ? COL.gr : COL.rd);
+      ctl = "lever"; note = "темп подачи: рычаг и мощность"; break;
+    case "trig":
+      big = ["мощность", fmt(S.P, 0), "%", S.P > 100 ? COL.ye : COL.wh];
+      r("синтез сейчас", ...nW(st.Pf));
+      r("даёт тягу", ...nF(k.Fpow));
+      r("запрос сверх поля", k.beta > 1.0005 ? "+" + fmt((k.beta - 1) * 100, 0) : "нет", k.beta > 1.0005 ? "%" : null, k.beta > 1.0005 ? COL.ye : COL.gr);
+      r("модули триггера", ...intact(S.dmg.drivers, "целы"));
+      r("отказ за минуту", ...risk(st.ex.power));
+      ctl = "power"; break;
+    case "mass": {
+      if (k.mass === "products") big = ["рабочая масса", "нет", null, COL.dim];
+      else big = [`запас: ${MASS_RU[k.mass]}`, fmt(D.store / 1e6, 2), "кт", COL.wh];
+      r("аргон", fmt(S.argon / 1e6, 2), "кт");
+      r("железо", fmt(S.iron / 1e6, 2), "кт");
+      r("в работе", S.refused ? "аргон (огр.)" : MASS_RU[k.mass], null, S.refused ? COL.or : COL.tx);
+      r("хватит на", ...(st.mdot > 0 && D.store > 0 && k.mass !== "products" ? nTime(D.store / st.mdot) : ["-", null]));
+      ctl = "mass"; break;
+    }
+    case "pump":
+      big = ["расход", ...(k.mass === "products" ? ["0", "т/с"] : nM(st.mdot)), COL.wh];
+      r("скорость струи", fmt(k.v / 1e3, 0), "км/с");
+      r("режим", MODE_RU[S.mode], null);
+      r("в работе", MASS_RU[k.mass], null, S.refused ? COL.or : COL.tx);
+      ctl = "mass"; break;
+    case "jack": {
+      big = ["уносит", ...nW(st.regen), COL.wh];
+      r("теплосъём массы", fmt(PM.H_COOL[k.mass] / 1e6, 1), "МДж/кг");
+      r("кипение (выше 1100 К)", S.T > T_BOIL ? "да" : "нет", null, S.T > T_BOIL ? COL.or : COL.gr);
+      r("отвод от нормы", fmt(st.boil * S.dmg.jacket * 100, 0), "%", st.boil * S.dmg.jacket < 1 ? COL.ye : COL.tx);
+      r("каналы", ...intact(S.dmg.jacket, "целы"));
+      r("прорыв при", "1 700", "К");
+      note = "органов управления нет · автомат"; break;
+    }
+    case "stern": {
+      big = ["температура", fmt(S.T, 0), "К", S.T > T_BOIL ? COL.rd : S.T > T_SAFE ? COL.ye : COL.wh];
+      R.push({thermo: true});
+      const sr = st.src, qc = q => q > 1e10 ? COL.rd : q > 1e9 ? COL.ye : COL.tx;
+      r("излучение реакции", ...nW(sr.qRad), qc(sr.qRad));
+      r("прорыв плазмы", ...nW(sr.qOver), qc(sr.qOver));
+      r("отражение от грунта", ...nW(sr.qGround), qc(sr.qGround));
+      r("слой в воздухе", ...nW(sr.qAir), qc(sr.qAir));
+      r("плазма на чашу", ...nW(sr.qBreach), qc(sr.qBreach));
+      r("унос массой", ...nW(st.regen), COL.gr);
+      r("сброс гребнями", ...nW(st.rad), COL.gr);
+      r("отказ за минуту", ...risk(st.ex.heat));
+      break;
+    }
+    case "rad":
+      big = ["сброс", ...nW(st.rad), COL.wh];
+      r("температура", fmt(S.T, 0), "К");
+      r("площадь", "2 700", "кв. м");
+      r("излучательность", "0,9", null);
+      r("гребни", "выпущены", null);
+      r("панели", ...intact(S.dmg.radiators, "целы"));
+      note = "выпуск гребней - экран механизации"; break;
+    case "pods":
+      big = ["тяга гондол", ...nF(D.podThrust), COL.wh];
+      r("состояние", D.podsOn ? "работают" : D.podsOut ? "выпущены" : "в отсеке", null, D.podsOn ? COL.gr : D.podsOut ? COL.ye : COL.dim);
+      r("чаш", "4 по 3", null);
+      r("на чашу, полная", "117", "МН");
+      r("уровень", fmt((D.podsOn ? D.L : 0) * 100, 0), "%");
+      r("работают", "в атмосфере", null);
+      ctl = "pods"; break;
+    case "cup":
+      big = ["тяга", ...nF(st.F), COL.wh];
+      r("на полном рычаге", ...nF(k.F));
+      r("скорость струи", fmt(k.v / 1e3, 0), "км/с");
+      r("мощность струи", ...nW(st.Pjet));
+      r("ограничивает", k.limit.toUpperCase(), null, COL.or);
+      r("прорыв поля", ...(st.src.qOver > 0 ? nW(st.src.qOver) : ["нет", null]), st.src.qOver > 0 ? COL.rd : COL.gr);
+      r("рычаг", fmt(D.L * 100, 0), "%");
+      ctl = "lever"; break;
+  }
+  return {big, rows: R, ctl, note};
+}
+function drawPanel(st, D) {
+  const P = PN, n = NODES[SEL], ss = D.s[SEL], I = rowsOf(SEL, st, D);
+  block(P.x, P.y, P.w, P.h, "");
+  lamp(P.x + 20, P.y + 16, 8, ss);
+  fitT(n.full, P.x + 38, P.y + 16 + capH(18) / 2, P.w - 50, COL.tx, 18, "left", true, 1);
+  // the state, and why
+  const word = PASSIVE[SEL] && ss === "run" ? "НОРМА" : LWORD[ss];
+  const ww = T(word, P.x + 12, P.y + 60, ss === "off" ? COL.dim : LCOL[ss], 18, "left", true, 0.5);
+  fitT(D.why[SEL], P.x + 12 + ww + 12, P.y + 60, P.w - 36 - ww, COL.dim, 17);
+  // the big reading
+  const [cap, num, unit, col] = I.big;
+  T(cap, P.x + 12, P.y + 108, COL.dim, 17);
+  if (unit) { T(num, P.x + P.w - 58, P.y + 108, col, 40, "right", true); T(unit, P.x + P.w - 52, P.y + 108, COL.dim, 20); }
+  else T(num, P.x + P.w - 12, P.y + 108, col, 34, "right", true);
+  poly([[P.x + 12, P.y + 124], [P.x + P.w - 12, P.y + 124]], COL.fr, 1); seg(P.x + 12, P.y + 124, P.x + P.w - 12, P.y + 124);
+  // the controls at the bottom
+  const ctlRows = I.ctl === "mass" ? 2 : I.ctl ? 1 : 0;
+  const ctlTop = P.y + P.h - 14 - (ctlRows ? ctlRows * 56 + (ctlRows - 1) * 10 : 0);
+  const noteY = ctlRows ? ctlTop - 14 : P.y + P.h - 18;
+  const rowsEnd = (I.note ? noteY - 26 : ctlRows ? ctlTop - 16 : P.y + P.h - 10);
+  let y = P.y + 128;
+  for (const R of I.rows) {
+    if (y + 32 > rowsEnd) break;
+    if (R.thermo) { thermo(P.x + 12, y + 12, P.w - 24, 10); y += 32; continue; }
+    T(R.label, P.x + 12, y + 23, COL.dim, 17);
+    if (R.unit) { const ux = Math.min(P.x + P.w - 52, P.x + P.w - 12 - TW(R.unit, 17)); T(R.num, ux - 6, y + 23, R.col, 22, "right", true); T(R.unit, ux, y + 23, COL.dim, 17); }
+    else T(R.num, P.x + P.w - 12, y + 23, R.col, 20, "right", true);
+    y += 32;
+  }
+  if (I.note) fitT(I.note, P.x + 12, noteY, P.w - 24, COL.dim, 17);
+  const cx = P.x + 12, cw = P.w - 24;
+  if (I.ctl === "field") fieldCtl("p", cx + (cw - 250) / 2, ctlTop);
+  if (I.ctl === "power") powerCtl("p", cx + (cw - 250) / 2, ctlTop);
+  if (I.ctl === "lever") lever("pl", cx, ctlTop, cw, 56);
+  if (I.ctl === "pods") podsKey("p", cx + (cw - 140) / 2, ctlTop, 140);
+  if (I.ctl === "mass") massKeys("p", cx + (cw - 270) / 2, ctlTop, 130, 2);
+}
+
+// ---- the computer's reckoning ----
+function drawCalc(st, D) {
+  const X = CA.x, Y = CA.y, R = X + CA.w - 12, k = st.k;
+  block(X, Y, CA.w, CA.h, "РАСЧЁТ");
+  // the risk lamp, in the band
+  const lamMax = Math.max(riskPerMin(st.ex.field), riskPerMin(st.ex.power), riskPerMin(st.ex.heat));
+  const danger = Math.max(lamMax, S.T > T_SAFE ? 0.02 : 0);
+  const rs = D.lost ? "fault" : danger > 0.01 ? "fault" : danger > 1e-4 ? "limit" : "run";
+  const rw = D.lost ? "ГИБЕЛЬ" : danger > 0.01 ? "ОПАСНО" : danger > 1e-4 ? "ПОВЫШЕННЫЙ" : "НОРМА";
+  const rww = TW(rw, 18, true, 0.5);
+  T(rw, R, Y + 22, LCOL[rs], 18, "right", true, 0.5); lamp(R - rww - 16, Y + 16, 8, rs);
+  T("риск", R - rww - 34 - TW("риск", 17), Y + 22, COL.dim, 17);
+  // A. the thrust budget: what limits it
+  T("БЮДЖЕТ ТЯГИ", X + 12, Y + 58, COL.dim, 17, "left", true, 0.5);
+  const lw = TW(k.limit.toUpperCase(), 18, true, 0.5);
+  T(k.limit.toUpperCase(), R, Y + 58, COL.or, 18, "right", true, 0.5); T("ограничивает", R - lw - 10, Y + 58, COL.dim, 17, "right");
+  const Fmax = Math.max(k.Ffield, k.Fpow, k.F, 1);
+  const items = [["поле держит", k.Ffield, k.limit === "поле"], ["мощность даёт", k.Fpow, k.limit === "мощность"], ["тепло кормы", k.limit === "тепло" ? k.F : null, k.limit === "тепло"]];
+  items.forEach(([lbl, v, on], i) => {
+    const y = Y + 68 + i * 36;
+    T(lbl, X + 12, y + 16, on ? COL.or : COL.dim, 17);
+    if (v !== null) { const p = nF(v); T(p[0], R - 30, y + 18, on ? COL.or : COL.tx, 22, "right", true); T(p[1], R - 24, y + 18, COL.dim, 17); }
+    else T("не ограничивает", R, y + 17, COL.dim, 17, "right");
+    fillR(X + 12, y + 24, CA.w - 24, 8, "#14211e"); if (v !== null) fillR(X + 12, y + 24, (CA.w - 24) * clamp(v / Fmax), 8, on ? "#b8691f" : "#2c5a50");
+    rectSeg(X + 12, y + 24, CA.w - 24, 8);
+  });
+  const fN = nF(st.F), fM = nF(k.F);
+  T("тяга сейчас", X + 12, Y + 200, COL.dim, 17); T(fN[0], R - 30, Y + 200, COL.wh, 26, "right", true); T(fN[1], R - 24, Y + 200, COL.dim, 17);
+  T("на полном рычаге", X + 12, Y + 232, COL.dim, 17); T(fM[0], R - 30, Y + 232, COL.tx, 22, "right", true); T(fM[1], R - 24, Y + 232, COL.dim, 17);
+  poly([[X + 12, Y + 244], [R, Y + 244]], COL.fr, 1); seg(X + 12, Y + 244, R, Y + 244);
+  // B. the stern's heat (left) and C. the forecast (right)
+  const XL = X + 12, RL = X + 224, XC = X + 252, RC = R, ys = Y + 244;
+  poly([[X + 238, ys + 8], [X + 238, Y + CA.h - 10]], COL.fr, 1); seg(X + 238, ys + 8, X + 238, Y + CA.h - 10);
+  T("ТЕПЛО КОРМЫ", XL, ys + 22, COL.dim, 17, "left", true, 0.5);
+  const Tc = S.T > T_BOIL ? COL.rd : S.T > T_SAFE ? COL.ye : COL.tx;
+  T(fmt(S.T, 0), RL - 18, ys + 22, Tc, 20, "right", true); T("К", RL - 12, ys + 22, COL.dim, 17);
+  thermo(XL, ys + 34, RL - XL, 10);
+  const net = st.qIn - st.regen - st.rad;
+  const cell = (x, r, y, lbl, num, unit, col = COL.tx) => {
+    T(lbl, x, y, COL.dim, 17);
+    if (unit) { T(num, r - 36, y, col, 22, "right", true); T(unit, r - 30, y, COL.dim, 17); } else T(num, r, y, col, 18, "right", true);
+  };
+  const qi = nW(st.qIn), qo = nW(st.regen + st.rad);
+  cell(XL, RL, ys + 82, "приход", qi[0], qi[1]);
+  cell(XL, RL, ys + 114, "унос", qo[0], qo[1], COL.gr);
+  if (S.T >= T_SAFE) cell(XL, RL, ys + 146, "до 800 К", "выше", null, COL.rd);
+  else if (net > 0) { const t = nTime((T_SAFE - S.T) * C_STERN / net); cell(XL, RL, ys + 146, "до 800 К", t[0], t[1], COL.ye); }
+  else cell(XL, RL, ys + 146, "до 800 К", "не дойдёт", null, COL.gr);
+  if (net > 0) { const t = nTime((T_LOST - S.T) * C_STERN / net); cell(XL, RL, ys + 178, "до прогара", t[0], t[1], S.T > T_SAFE ? COL.rd : COL.ye); }
+  else cell(XL, RL, ys + 178, "до прогара", "не грозит", null, COL.gr);
+  T("ПРОГНОЗ", XC, ys + 22, COL.dim, 17, "left", true, 0.5);
+  const gl = ENV[S.env].g, m = S.m, Ftot = st.F + D.podThrust, tw = gl > 0 ? Ftot / (m * gl) : 0;
+  const prop = k.mass === "products" ? S.fuel : D.store, flow = k.mass === "products" ? D.fuelRate : st.mdot;
+  const dv = k.v * Math.log(m / Math.max(1, m - prop));
+  cell(XC, RC, ys + 54, "тяга / вес", gl > 0 ? fmt(tw, 2) : "-", null, gl > 0 && tw < 1 ? COL.rd : COL.tx);
+  cell(XC, RC, ys + 86, "ускорение", fmt(Ftot / m / 9.81, 2), "g");
+  cell(XC, RC, ys + 118, "запас скорости", fmt(dv / 1e3, 0), "км/с");
+  const hl = flow > 0 && prop > 0 ? nTime(prop / flow) : ["-", null];
+  cell(XC, RC, ys + 150, "массы хватит", hl[0], hl[1]);
+  const lm = Math.min(1, lamMax);
+  cell(XC, RC, ys + 182, "отказ за минуту", lm > 0 ? nPct(lm) : "нет", lm > 0 ? "%" : null, lm > 0.05 ? COL.rd : lm > 0.001 ? COL.ye : COL.gr);
+}
+
+// ---- the keys, grouped by function ----
+function group(x, y, w, h, title, right) {
+  block(x, y, w, h, title, 28, 18);
+  if (right) T(right, x + w - 12, y + 20, COL.dim, 15, "right");
+}
+function fieldCtl(p, x, y) {
+  key(p + "fd", "-", x, y, 60, 56, D_.s.field === "fault" && S.coilsLost ? "na" : "off", () => fieldStep(-0.1));
+  plate(x + 70, y, 110, 56, fmt(S.Bset, 1), "Тл", S.Bset > PM.B_NOM + 0.05 ? COL.ye : COL.wh);
+  key(p + "fu", "+", x + 190, y, 60, 56, D_.s.field === "fault" && S.coilsLost ? "na" : "off", () => fieldStep(0.1));
+}
+function powerCtl(p, x, y) {
+  key(p + "pd", "-", x, y, 60, 56, "off", () => powerStep(-5));
+  plate(x + 70, y, 110, 56, fmt(S.P, 0), "%", S.P > 100 ? COL.ye : COL.wh);
+  key(p + "pu", "+", x + 190, y, 60, 56, "off", () => powerStep(5));
+}
+function massKeys(p, x, y, kw, cols) {
+  const inUse = st_ ? st_.k.mass : "argon";
+  [["АВТО", "auto"], ["АРГОН", "argon"], ["ЖЕЛЕЗО", "iron"], ["ПРОДУКТЫ", "products"]].forEach(([t, m], i) => {
+    const cx = x + (i % cols) * (kw + 10), cy = y + Math.floor(i / cols) * 66;
+    const sel = S.mode === m, refusedHere = sel && S.refused;
+    key(p + "m" + m, t, cx, cy, kw, 56, refusedHere ? "warn" : sel ? "on" : "off", () => { S.mode = m; }, {mark: m === inUse});
+  });
+}
+function podsKey(p, x, y, w) { key(p + "pods", "ГОНДОЛЫ", x, y, w, 56, S.pods ? "on" : "off", () => { S.pods = !S.pods; }); }
+function limKey(p, x, y, w) {
+  const armed = S.lim && S.t - S.limArm <= 4, blink = Math.floor(performance.now() / 260) % 2 === 0;
+  const held = S.lim && S.t - S.heldT < 2.5 && blink;
+  key(p + "lim", S.lim ? (armed ? "СНЯТЬ? ЕЩЁ РАЗ" : "АВТОМАТ") : "РУЧНОЙ", x, y, w, 56, S.lim ? (armed ? (blink ? "warn" : "off") : "onT") : "warn", limiterPress, {flash: held});
+}
+let D_ = null, st_ = null;
+function drawControls(st, D) {
+  D_ = D; st_ = st;
+  const on = D.run || D.seq;
+  group(24, GY1, 254, GH, "УСТАНОВКА");
+  key("start", "ПУСК", 36, GY1 + 44, 110, 56, D.lost || D.quench ? "na" : on ? "onT" : "off", startPress);
+  key("stop", "СТОП", 156, GY1 + 44, 110, 56, on ? "off" : "na", stopPress);
+  group(294, GY1, 274, GH, "ПОЛЕ", "уставка"); fieldCtl("b", 306, GY1 + 44);
+  group(584, GY1, 274, GH, "МОЩНОСТЬ", "уставка"); powerCtl("b", 596, GY1 + 44);
+  group(874, GY1, 210, GH, "ОГРАНИЧИТЕЛЬ"); limKey("b", 889, GY1 + 44, 180);
+  group(24, GY2, 494, GH, "РАБОЧАЯ МАССА", `в работе: ${MASS_RU[st.k.mass]}`); massKeys("b", 36, GY2 + 44, 110, 4);
+  group(534, GY2, 164, GH, "ГОНДОЛЫ"); podsKey("b", 546, GY2 + 44, 140);
+  group(714, GY2, 370, GH, "ТЯГА · РЫЧАГ"); lever("bl", 726, GY2 + 44, 346, 56);
+}
+
+// ---- trends and the journal ----
+function drawTrends() {
+  block(TR.x, TR.y, TR.w, TR.h, "ТРЕНДЫ · 60 С", 28, 18);
+  let x = TR.x + TR.w - 12;
+  for (const [t, c] of [["корма", COL.heat], ["поле", COL.cryo], ["тяга", COL.wh]]) { const w = TW(t, 15); x -= w; T(t, x, TR.y + 20, c, 15); x -= 22; poly([[x, TR.y + 15], [x + 16, TR.y + 15]], c, 3); x -= 14; }
+  const x0 = TR.x + 12, x1 = TR.x + TR.w - 12, y0 = TR.y + 38, y1 = TR.y + TR.h - 10, t1 = S.t, tr = S.trend;
+  poly([[x0, y1], [x1, y1]], COL.fr, 1);
+  const line = (f, c, mx) => poly(tr.map(p => [x1 - (t1 - p.t) / 60 * (x1 - x0), y1 - clamp(f(p) / mx) * (y1 - y0)]), c, 2);
+  line(p => p.F, COL.wh, Math.max(1.8e9, ...tr.map(p => p.F)));
+  line(p => p.B, COL.cryo, PM.B_RUPTURE);
+  line(p => p.T - 300, COL.heat, T_LOST - 300);
+}
+function drawJournal() {
+  block(JR.x, JR.y, JR.w, JR.h, "ЖУРНАЛ", 28, 18);
+  S.alarms.slice(0, 4).forEach((a, i) => {
+    const y = JR.y + 50 + i * 24, c = a.lvl === "bad" ? COL.rd : a.lvl === "ok" ? COL.gr : COL.ye;
+    T(clock(a.t), JR.x + 56, y, COL.dim, 15, "right");
+    fitT(a.txt, JR.x + 66, y, JR.w - 78, c, 16, "left", false, 0, 16);
+  });
+}
+function drawLost() {
+  const x = DG.x + 12, y = DG.y + 40, w = DG.w - 24, h = DG.h - 52;
+  fillR(x, y, w, h, "#2a0b08"); strokeR(x, y, w, h, COL.rd, 2);
+  T(S.lostTitle || "КОРМА ПРОГОРЕЛА", x + w / 2, y + 150, "#ffd0c8", 40, "center", true, 1);
+  T("КОРАБЛЬ ПОТЕРЯН", x + w / 2, y + 200, "#ffd0c8", 28, "center", true, 1);
+  T(S.lostWhy, x + w / 2, y + 240, "#ffb0a0", 18, "center");
+  T("ремонт только на станции · в мокапе: СБРОС модели над экраном", x + w / 2, y + 276, "#ffb0a0", 17, "center");
+}
+
+// ======================================================================================================
+//  the layout checker: overlaps of text with text and of text with lines / frames; sizes under 15 px
+// ======================================================================================================
+function segHitsBox(s, b) {
+  const x0 = b.x0 - s.pad, x1 = b.x1 + s.pad, y0 = b.y0 - s.pad, y1 = b.y1 + s.pad;
+  let t0 = 0, t1 = 1; const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
+  for (const [p, q] of [[-dx, s.x1 - x0], [dx, x1 - s.x1], [-dy, s.y1 - y0], [dy, y1 - s.y1]]) {
+    if (p === 0) { if (q < 0) return false; continue; }
+    const r = q / p; if (p < 0) { if (r > t1) return false; if (r > t0) t0 = r; } else { if (r < t0) return false; if (r < t1) t1 = r; }
+  }
+  return true;
+}
+function checkLayout() {
+  const out = [], saveSel = SEL, ids = Object.keys(NODES);
+  for (const id of ids) {
+    SEL = id; REC = true; draw(lastSt(), 0); REC = false;
+    for (let i = 0; i < TXT.length; i++) for (let j = i + 1; j < TXT.length; j++) {
+      const a = TXT[i], b = TXT[j];
+      if (a.x0 < b.x1 - 0.5 && b.x0 < a.x1 - 0.5 && a.y0 < b.y1 - 0.5 && b.y0 < a.y1 - 0.5) out.push(`[${id}] текст на тексте: «${a.s}» × «${b.s}»`);
+    }
+    for (const t of TXT) for (const s of SEG) if (segHitsBox(s, t)) { out.push(`[${id}] текст на линии: «${t.s}» (${Math.round(t.x0)},${Math.round(t.y1)})`); break; }
+    for (const t of TXT) if (t.x0 < 0 || t.x1 > W || t.y0 < 0 || t.y1 > H) out.push(`[${id}] за краем: «${t.s}»`);
+    for (const s of SMALL) out.push(`[${id}] мелко: ${s}`);
+  }
+  SEL = saveSel;
+  return [...new Set(out)];
+}
+window.checkLayout = checkLayout;
+
+// ======================================================================================================
+//  input, page controls, the loop
+// ======================================================================================================
+let drag = null;
+function canvasXY(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; }
+cv.addEventListener("pointerdown", e => {
+  const [x, y] = canvasXY(e);
+  for (const h of HIT) if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) {
+    if (h.drag) { drag = h; h.drag(x); cv.setPointerCapture(e.pointerId); } else if (h.act) h.act();
+    return;
+  }
+});
+cv.addEventListener("pointermove", e => {
+  const [x, y] = canvasXY(e);
+  if (drag) { drag.drag(x); return; }
+  cv.style.cursor = HIT.some(h => (h.act || h.drag) && x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) ? "pointer" : "default";
+});
+cv.addEventListener("pointerup", () => { drag = null; });
+$("thr").addEventListener("input", e => setThr(e.target.value / 100));
+$("aoa").addEventListener("input", e => { S.aoa = +e.target.value; $("aoaV").textContent = S.aoa + "°"; });
+function btnRow(el, list, cur, onPick) {
+  el.innerHTML = "";
+  for (const [t, v] of list) { const b = document.createElement("button"); b.textContent = t; if (cur() === v) b.classList.add("on"); b.onclick = () => { onPick(v); btnRow(el, list, cur, onPick); }; el.appendChild(b); }
+}
+function fontRow() {
+  btnRow($("fontB"), [["ГОСТ", "gost"], ["ISOCPEUR", "iso"]], () => fontKey, v => { fontKey = v; document.documentElement.style.setProperty("--pf", `${FONTS[v]}, "GOST 2.304 type A", "ISOCPEUR", sans-serif`); });
+}
+function envRow() {
+  btnRow($("envB"), [["ГРУНТ", "earth"], ["КОСМОС", "space"], ["ПЕРЕЛЁТ", "cruise"], ["ВХОД", "entry"]], () => S.env, v => {
+    S.env = v; if (v === "entry") { entryInit(); alarm("Вход в атмосферу: 120 км, 7,8 км/с, днищем вперёд", "ok"); }
+  });
+}
+function spdRow() { btnRow($("spdB"), [["x1", 1], ["x2", 2], ["x5", 5], ["x10", 10]], () => S.speed, v => { S.speed = v; }); }
+fontRow(); envRow(); spdRow();
+$("reset").onclick = () => { const sp = S.speed, env = S.env; Object.assign(S, freshState(), {speed: sp, env}); entryInit(); S._last = null; S.alarms.push({t: 0, txt: "Сброс модели: установка на режиме", lvl: "ok"}); setThr(S.thr); envRow(); };
+$("check").onclick = () => { const r = checkLayout(); $("chk").textContent = r.length ? `Найдено ${r.length}:\n` + r.join("\n") : "Разметка чистая: наложений нет, мельче 15 px нет."; };
+setThr(S.thr);
+let last = performance.now();
+function frame() {
+  const now = performance.now(), rdt = Math.min(0.1, (now - last) / 1000), dt = rdt * S.speed; last = now;
+  const n = Math.max(1, Math.ceil(dt / 0.05)); let st;
+  for (let i = 0; i < n; i++) st = step(dt / n);
+  draw(st, rdt);
+}
+setInterval(frame, 33);
+document.fonts && document.fonts.ready.then(() => frame());
+</script>
+</body>
+</html>

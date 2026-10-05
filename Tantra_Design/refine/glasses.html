@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Стёкла командира</title>
+<style>
+:root{--bg:#080b0e;--panel:#0d1316;--card:#111a1e;--line:#1e3530;--ink:#d8e2ea;--mute:#8d9fab;--acc:#7fe0d0;--acc2:#2c6a54;--good:#7ee59a;--warn:#ffc46a;--bad:#ff7a6b;--yel:#ffd84a;--cy:#7fdcff;--hor:#ff9a3c}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.45 system-ui,"Segoe UI",Roboto,sans-serif}
+#app{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,430px);height:100%}
+#viewWrap{position:relative;min-width:0;min-height:0;overflow:hidden;background:#05080a}
+#view{position:absolute;inset:0;touch-action:none}
+#view canvas{display:block}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.l3{position:absolute;left:0;top:0;white-space:nowrap;font-size:11px;line-height:1.25;padding:1px 5px;border-radius:3px;background:rgba(5,10,12,.8);border-left:2px solid var(--acc);color:var(--ink);display:none}
+.l3.y{border-color:var(--yel)} .l3.c{border-color:var(--cy)} .l3.h{border-color:var(--hor)}
+#load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#4f8f86;font-size:15px;padding:20px;text-align:center}
+#load.err{color:var(--bad)}
+#panel{overflow:auto;background:var(--panel);border-left:1px solid var(--line);padding:12px 14px 28px}
+h1{font-size:15px;margin:0 0 4px;color:var(--acc)}
+h2{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:16px 0 6px;font-weight:600}
+.note{color:var(--mute);font-size:12px;margin:4px 0}
+.row{display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap}
+.row>.k{width:84px;flex:none;color:var(--mute);font-size:12px}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--acc2);border-radius:7px;overflow:hidden}
+.seg button{font:inherit;font-size:12px;padding:5px 9px;border:0;border-right:1px solid var(--acc2);background:#0f1a18;color:var(--acc);cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--acc2);color:#effffb}
+.seg button:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
+.seg.big button{font-size:13px;padding:7px 14px;font-weight:600}
+input[type=range]{flex:1;min-width:110px;accent-color:#3fbfa8}
+.val{min-width:62px;text-align:right;font-variant-numeric:tabular-nums}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+th,td{padding:4px 5px;border-bottom:1px solid #1a2a27;text-align:left;vertical-align:top}
+th{color:var(--mute);font-weight:500;font-size:11px;line-height:1.25}
+tr.sel td{background:#13261f}
+td.n,th.n{text-align:right;white-space:nowrap}
+td small{color:var(--mute)}
+.good{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+.star{color:var(--yel)}
+.badge{display:inline-block;font-size:10px;line-height:15px;padding:0 4px;border-radius:3px;background:var(--acc2);color:#effffb;margin-left:3px}
+.read{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+.legend{display:grid;grid-template-columns:auto 1fr;gap:3px 8px;align-items:center}
+.legend i{display:inline-block;width:20px;height:3px;border-radius:2px}
+.rec{background:#0f1d18;border:1px solid #2c6a54;border-radius:8px;padding:8px 12px;margin-top:16px}
+.rec h2{margin-top:4px;color:var(--acc)}
+.rec ol{margin:6px 0 4px 18px;padding:0} .rec li{margin:6px 0}
+a{color:var(--cy)}
+@media (max-width:820px){
+  html,body{height:auto}
+  #app{display:block;height:auto}
+  #viewWrap{height:56vh;min-height:280px}
+  #panel{border-left:0;border-top:1px solid var(--line);overflow:visible;padding:12px 16px 28px}
+}
+@media (max-width:420px){ th,td{padding:4px 3px} table{font-size:11.5px} }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="viewWrap"><div id="view"></div><div id="labels"></div><div id="load">Загружаю рубку…</div></div>
+  <aside id="panel">
+    <h1>Стёкла командира: сейчас и рекомендация</h1>
+    <p class="note">Меш рубки из игры (bridge_vc_check.js). Высоты — над полом рубки; глаз — командира в кресле у стола.</p>
+
+    <h2>Конфигурация</h2>
+    <div class="row"><div class="seg big" id="cfg"><button data-v="now">СЕЙЧАС</button><button data-v="rec">РЕКОМЕНДАЦИЯ</button></div></div>
+    <div class="row"><span class="k">ПЕРЕДНЕЕ</span><div class="seg" id="front"><button data-v="now">СЕЙЧАС</button><button data-v="low">НИЖЕ</button><button data-v="arc">ДУГА</button><button data-v="wide">ШИРЕ ★</button></div></div>
+    <div class="row"><span class="k">ЛЕВОЕ</span><div class="seg" id="sideL"><button data-v="work">РАБОТА</button><button data-v="tilt">НАКЛОН 30°</button><button data-v="tape">ЛЕНТА</button><button data-v="down">ВНИЗ</button></div></div>
+    <div class="row"><span class="k">ПРАВОЕ</span><div class="seg" id="sideR"><button data-v="work">РАБОТА</button><button data-v="tilt">НАКЛОН 30°</button><button data-v="tape">ЛЕНТА</button><button data-v="down">ВНИЗ</button></div></div>
+    <div class="row"><span class="k">ПРОЕКЦИЯ</span><div class="seg" id="proj"><button data-v="1.30">1,30 — как сейчас</button><button data-v="1.60">1,60 — поднять</button></div></div>
+    <p class="note" id="cfgNote"></p>
+
+    <h2>Кресло и вид</h2>
+    <div class="row"><span class="k">высота кресла</span><input type="range" id="h" min="-0.20" max="0.05" step="0.01" value="-0.10"><b class="val" id="hV"></b></div>
+    <div class="row"><span class="k">регулировка</span><input type="range" id="adj" min="0" max="0.35" step="0.01" value="0"><b class="val" id="adjV"></b></div>
+    <div class="row"><span class="k">вид</span><div class="seg" id="views"><button data-v="eye">ИЗ ГЛАЗА</button><button data-v="side">СБОКУ</button><button data-v="top">СВЕРХУ</button></div></div>
+    <p class="note" id="viewHint"></p>
+    <div class="legend note">
+      <i style="background:var(--yel)"></i><span>линия взгляда над передним стеклом — прямо и ±20°</span>
+      <i style="background:var(--cy)"></i><span>линия взгляда над боковыми — по середине стекла</span>
+      <i style="background:var(--hor)"></i><span>горизонт внешнего вида на большом экране</span>
+    </div>
+
+    <h2>Глаз</h2>
+    <div class="read" id="rEye"></div>
+
+    <h2>Переднее стекло — сравнение</h2>
+    <div class="tw"><table id="tFront"></table></div>
+    <p class="note" id="nFront"></p>
+
+    <h2>Боковые стёкла — режимы</h2>
+    <div class="tw"><table id="tSide"></table></div>
+    <p class="note" id="nSide"></p>
+
+    <h2>Горизонт</h2>
+    <div class="read" id="rHor"></div>
+
+    <div class="rec" id="rec"></div>
+    <p class="note">Раскладка содержимого переднего стекла — отдельно: <a href="front_v3.html">front_v3.html</a>. Исходный аудит: <a href="AUDIT_GLASSES.md">AUDIT_GLASSES.md</a>.</p>
+  </aside>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../bridge_vc_check.js"></script>
+<script>
+"use strict";
+(() => {
+const $ = id => document.getElementById(id);
+const fail = m => { const l = $("load"); l.textContent = m; l.classList.add("err"); l.style.display = "flex"; };
+if (!window.THREE) { fail("Не загрузился three.js r128 (cdnjs) — нужен интернет."); return; }
+if (typeof BRIDGE === "undefined" || !BRIDGE.parts) { fail("Не найден меш рубки ../bridge_vc_check.js — страница должна лежать в Tantra_Design/refine."); return; }
+
+// ===== the geometry (mesh frame: x right, y up, z forward, metres) =====
+const D2R = Math.PI / 180;
+const AXZ = 79.75, FLOOR = 1.0, DESK = 1.72, R0 = 1.25;                 // the desk axis (0, 79.75); the glasses' groove radius
+const T14 = Math.tan(14 * D2R), S14 = Math.sin(14 * D2R), C14 = Math.cos(14 * D2R);
+const H0F = 0.663, H0S = 0.96, MFD_V = 428 / 1228, HB = H0S * (1 - MFD_V);   // front / side glass heights; the side's MFD band
+const KSH = Math.hypot(0.2252, 0.1006), KSV = 0.9891, KSL = Math.hypot(0.2252, 0.9891, 0.1006);   // kSideRise per unit stroke
+const LOW = 1.24 - (DESK - FLOOR), ARC_END = 1.36 - (DESK - FLOOR);       // 0.52 / 0.64 over the desk top
+const SCR_BOT = 2.15, SCR_BAND = 3.70, SCR_Z = 83.25, SCR_MID = (SCR_BOT + SCR_BAND) / 2;
+const HOR = {"1.30": FLOOR + 1.30, "1.60": FLOOR + 1.60};
+const SEAT0 = {h: -0.10, adj: 0};
+const FE = 35;                          // the front glass's half width now, deg
+const FAU = 47, FHV = 0.70, FRM = 1.33; // the front face texture: ±47° across, 0.70 m up, arc radius for metres
+const FONT = '"GOST 2.304 type A", "GOST type A", ISOCPEUR, Bahnschrift, "Arial Narrow", sans-serif';
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const smooth = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+function b64f(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; }
+// Orbiter's frame is left-handed (x right, y up, z forward): three.js gets (x, y, -z)
+const V3 = (x, y, z) => new THREE.Vector3(x, y, -z);
+const V3p = p => V3(p.x, p.y, p.z);
+const fmt = (v, n = 2) => { if (v == null || !isFinite(v)) return "—"; const s = Math.abs(v).toFixed(n).replace(".", ","); return (v < 0 && Math.abs(v) >= 0.5 * Math.pow(10, -n) ? "−" : "") + s; };
+const fs = (v, n = 2) => (v > 0 ? "+" : "") + fmt(v, n);
+const cm = v => Math.round(v * 100);
+
+// ===== the scene =====
+const view = $("view"), wrap = $("viewWrap");
+const renderer = new THREE.WebGLRenderer({antialias: true});
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.localClippingEnabled = true;
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x06090b);
+scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+scene.add(new THREE.HemisphereLight(0xbfd8e8, 0x202428, 0.45));
+const lamp = new THREE.PointLight(0xffe2bf, 0.8, 12); lamp.position.copy(V3(0, 5.2, 79)); scene.add(lamp);
+
+function makeTex(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; const tex = new THREE.CanvasTexture(c);
+  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy()); return {c, ctx: c.getContext("2d"), tex}; }
+const texF = makeTex(2048, 1024), texL = makeTex(1024, 1024), texR = makeTex(1024, 1024);
+
+// the outside view on the main screen: sky over the horizon (the projection centre's height), ground under it
+const skyMat = new THREE.ShaderMaterial({
+  uniforms: {uH: {value: HOR["1.30"]}}, side: THREE.DoubleSide, clipping: true,
+  vertexShader: `#include <common>
+#include <clipping_planes_pars_vertex>
+varying float vY;
+void main() {
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vY = wp.y;
+  vec4 mvPosition = viewMatrix * wp;
+  gl_Position = projectionMatrix * mvPosition;
+  #include <clipping_planes_vertex>
+}`,
+  fragmentShader: `#include <common>
+#include <clipping_planes_pars_fragment>
+uniform float uH;
+varying float vY;
+void main() {
+  #include <clipping_planes_fragment>
+  float d = vY - uH;
+  vec3 c = d > 0.0 ? mix(vec3(0.50, 0.66, 0.78), vec3(0.09, 0.18, 0.30), clamp(d / 2.4, 0.0, 1.0))
+                   : mix(vec3(0.34, 0.28, 0.20), vec3(0.10, 0.085, 0.065), clamp(-d / 0.9, 0.0, 1.0));
+  gl_FragColor = vec4(c, 1.0);
+}`
+});
+
+const SCREEN = new Set(["bridge_screen_c", "bridge_screen_ls", "bridge_screen_rs"]);
+const DARK = new Set(["bridge_astro_screen", "bridge_mfd0", "bridge_mfd1", "bridge_mfd2", "bridge_mfd3", "bridge_mfd4", "bridge_mfd5", "bridge_mfd6", "bridge_seat_adj"]);
+const HIDE = new Set(["bridge_button_off", "bridge_yoke_uvt_lit", "bridge_cur_lit"]);   // lit twins of other parts
+const SEAT_RX = /^bridge_seat0|^bridge_button_(on|off)$|^bridge_seat_adj$|^bridge_cur_(ball|lit)$/;   // ride with the commander's seat
+const FACE = new Set(["bridge_centre", "bridge_sidescr0", "bridge_sidescr1"]);
+const DEFORM = new Set([...FACE, "bridge_frontdisp", "bridge_sidedisp0", "bridge_sidedisp1"]);
+const clipAbove = new THREE.Plane(new THREE.Vector3(0, 1, 0), -DESK), clipBelow = new THREE.Plane(new THREE.Vector3(0, -1, 0), DESK);
+// the view's section planes, on every bridge material (not on the sightlines): set per view, a no-op from the eye
+const CLIP = [new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e4), new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e4)];
+const clipped = new Set();
+function addClip(mat) { if (!clipped.has(mat)) { mat.clippingPlanes = [...(mat.clippingPlanes || []), ...CLIP]; clipped.add(mat); } return mat; }
+const PART = {}, screens = [];
+const seatGrp = new THREE.Group(); scene.add(seatGrp);
+function polarOf(o) { const n = o.length / 3, P = new Float64Array(n * 3);
+  for (let i = 0; i < n; i++) { const x = o[3 * i], dz = o[3 * i + 2] - AXZ; P[3 * i] = Math.atan2(x, dz) / D2R; P[3 * i + 1] = Math.hypot(x, dz); P[3 * i + 2] = o[3 * i + 1] - DESK; }
+  return P; }
+for (const p of BRIDGE.parts) {
+  const orig = new Float32Array(b64f(p.v)), v = new Float32Array(orig);
+  for (let i = 2; i < v.length; i += 3) v[i] = -v[i];
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(v, 3));
+  g.setIndex(new THREE.BufferAttribute(new Uint32Array(b64f(p.i)), 1));
+  if (FACE.has(p.name)) g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(orig.length / 3 * 2), 2));
+  g.computeVertexNormals();
+  const col = new THREE.Color(...(p.color || [0.5, 0.5, 0.5]));
+  let mat;
+  if (SCREEN.has(p.name)) mat = skyMat;
+  else if (p.name === "bridge_centre") mat = new THREE.MeshBasicMaterial({map: texF.tex, side: THREE.DoubleSide});
+  else if (p.name === "bridge_sidescr0" || p.name === "bridge_sidescr1") mat = new THREE.MeshBasicMaterial({map: (p.name.endsWith("0") ? texL : texR).tex, side: THREE.DoubleSide, clippingPlanes: [clipAbove]});
+  else if (p.name.startsWith("bridge_sidedisp")) mat = new THREE.MeshLambertMaterial({color: col.multiplyScalar(1.1), side: THREE.DoubleSide, clippingPlanes: [clipAbove]});
+  else if (DARK.has(p.name)) mat = new THREE.MeshBasicMaterial({color: 0x0c1513, side: THREE.DoubleSide});
+  else if (/leds|glow|cove|lamps|button|scr_led|scr_blink/.test(p.name)) mat = new THREE.MeshBasicMaterial({color: col, side: THREE.DoubleSide});
+  else mat = new THREE.MeshLambertMaterial({color: col.multiplyScalar(1.1), side: THREE.DoubleSide});
+  const m = new THREE.Mesh(g, addClip(mat)); m.name = p.name;
+  (SEAT_RX.test(p.name) ? seatGrp : scene).add(m);
+  if (HIDE.has(p.name)) m.visible = false;
+  if (SCREEN.has(p.name)) screens.push(m);
+  PART[p.name] = {orig, pol: DEFORM.has(p.name) ? polarOf(orig) : null, geo: g, mesh: m};
+}
+const missing = [...DEFORM, ...SCREEN].filter(n => !PART[n]);
+if (missing.length) { fail("В меше нет частей: " + missing.join(", ")); return; }
+scene.updateMatrixWorld(true);
+
+// the side glasses' face coordinates (u across by angle, v up) and their centre bearing from the axis
+let SIDE_C = 66;
+for (const n of ["bridge_sidescr0", "bridge_sidescr1"]) {
+  const P = PART[n].pol, uv = PART[n].geo.attributes.uv.array; let amin = 1e9, amax = -1e9;
+  for (let i = 0; i < P.length; i += 3) { amin = Math.min(amin, P[i]); amax = Math.max(amax, P[i]); }
+  for (let i = 0, j = 0; i < P.length; i += 3, j += 2) { uv[j] = (P[i] - amin) / (amax - amin); uv[j + 1] = P[i + 2] / H0S; }
+  PART[n].geo.attributes.uv.needsUpdate = true;
+  if (n.endsWith("1")) SIDE_C = (amin + amax) / 2;
+}
+// the sunk part of a side glass, seen in the side and top views only
+const ghostMat = new THREE.MeshBasicMaterial({color: 0x4fd6c4, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthTest: false, depthWrite: false, clippingPlanes: [clipBelow, ...CLIP]});
+const ghosts = ["bridge_sidescr0", "bridge_sidescr1"].map(n => { const g = new THREE.Mesh(PART[n].geo, ghostMat); g.renderOrder = 5; scene.add(g); return g; });
+
+// ===== the front glass variants. H(a): its height over the desk top at the ORIGINAL bearing a (deg from the axis) =====
+const FRONT = {
+  now:  {name: "СЕЙЧАС", H: () => H0F, k: 1},
+  low:  {name: "НИЖЕ", H: () => LOW, k: 1},
+  arc:  {name: "ДУГА", H: a => LOW + (ARC_END - LOW) * smooth((Math.abs(a) - 15) / 20), k: 1},
+  wide: {name: "ШИРЕ", H: () => LOW, k: 1}
+};
+// per vertex: the height over the desk scales by s(a) up to the glass top (the rim above it keeps its size), the radius
+// slides with it along the 14° lean (so the lean and the frame's depth stay), ШИРЕ spreads the angles by k
+function frontPos(v, a, r, hy) {
+  const s = v.H(clamp(a, -FE, FE)) / H0F, hy2 = hy <= H0F ? hy * s : H0F * s + (hy - H0F), r2 = r - (hy - hy2) * T14;
+  const aa = Math.abs(a), a2 = v.k === 1 ? a : Math.sign(a) * (aa <= FE ? aa * v.k : FE * v.k + aa - FE);
+  return [a2, r2, hy2];
+}
+function frontArray(v, P, uv) {
+  const n = P.length / 3, out = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const q = frontPos(v, P[3 * i], P[3 * i + 1], P[3 * i + 2]), ar = q[0] * D2R;
+    out[3 * i] = q[1] * Math.sin(ar); out[3 * i + 1] = DESK + q[2]; out[3 * i + 2] = AXZ + q[1] * Math.cos(ar);
+    if (uv) { uv[2 * i] = 0.5 + q[0] / (2 * FAU); uv[2 * i + 1] = q[2] / FHV; }
+  }
+  return out;
+}
+function triArea(pos, idx) {
+  let A = 0;
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
+    const ux = pos[b] - pos[a], uy = pos[b + 1] - pos[a + 1], uz = pos[b + 2] - pos[a + 2], wx = pos[c] - pos[a], wy = pos[c + 1] - pos[a + 1], wz = pos[c + 2] - pos[a + 2];
+    A += Math.hypot(uy * wz - uz * wy, uz * wx - ux * wz, ux * wy - uy * wx) / 2;
+  }
+  return A;
+}
+const IDX_F = PART.bridge_centre.geo.index.array, POL_F = PART.bridge_centre.pol;
+const AREA = {now: triArea(frontArray(FRONT.now, POL_F), IDX_F), low: triArea(frontArray(FRONT.low, POL_F), IDX_F)};
+const K_WIDE = AREA.now / AREA.low;          // ШИРЕ keeps the area: the angles spread by this
+FRONT.wide.k = K_WIDE;
+AREA.arc = triArea(frontArray(FRONT.arc, POL_F), IDX_F); AREA.wide = triArea(frontArray(FRONT.wide, POL_F), IDX_F);
+for (const k in FRONT) FRONT[k].end = FE * FRONT[k].k;
+const SHIFT_W = FE * (K_WIDE - 1);           // ШИРЕ: the side glasses move out by this, deg (the gap stays as now)
+
+function applyArray(part, arr) {
+  const g = PART[part].geo, pos = g.attributes.position.array;
+  for (let i = 0; i < arr.length; i += 3) { pos[i] = arr[i]; pos[i + 1] = arr[i + 1]; pos[i + 2] = -arr[i + 2]; }
+  g.attributes.position.needsUpdate = true; g.computeVertexNormals(); g.computeBoundingSphere(); g.computeBoundingBox();
+}
+function applyFront(vk) {
+  const v = FRONT[vk], uv = PART.bridge_centre.geo.attributes.uv;
+  applyArray("bridge_centre", frontArray(v, POL_F, uv.array)); uv.needsUpdate = true;
+  applyArray("bridge_frontdisp", frontArray(v, PART.bridge_frontdisp.pol));
+}
+
+// ===== the side glass modes: the lean (about its bottom line in the groove) and the drop along kSideRise =====
+const SIDE = {
+  work: {name: "РАБОТА", phi: 14, drop: 0},
+  tilt: {name: "НАКЛОН 30°", phi: 30, drop: 0.10},
+  tape: {name: "ЛЕНТА", phi: 14, drop: DESK + H0S - (FLOOR + 1.24)},
+  down: {name: "ВНИЗ", phi: 14, drop: KSV}
+};
+function sidePoint(a, r, hy, sgn, m, shift) {
+  if (m.phi !== 14) {   // its own plane: along l and across n from the groove line, turned to the new lean
+    const dr = r - R0, l = dr * S14 + hy * C14, nn = dr * C14 - hy * S14, sp = Math.sin(m.phi * D2R), cp = Math.cos(m.phi * D2R);
+    r = R0 + l * sp + nn * cp; hy = l * cp - nn * sp;
+  }
+  const a2 = (a + sgn * shift) * D2R, c = sgn * (SIDE_C + shift) * D2R, t = m.drop / KSV;   // the rail turns with the glass
+  return {x: r * Math.sin(a2) - t * KSH * Math.sin(c), y: DESK + hy - t * KSV, z: AXZ + r * Math.cos(a2) - t * KSH * Math.cos(c)};
+}
+function sideArray(P, sgn, m, shift) {
+  const n = P.length / 3, out = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { const q = sidePoint(P[3 * i], P[3 * i + 1], P[3 * i + 2], sgn, m, shift); out[3 * i] = q.x; out[3 * i + 1] = q.y; out[3 * i + 2] = q.z; }
+  return out;
+}
+function applySide(sgn, mk, shift) {
+  const k = sgn < 0 ? "0" : "1", m = SIDE[mk];
+  applyArray("bridge_sidescr" + k, sideArray(PART["bridge_sidescr" + k].pol, sgn, m, shift));
+  applyArray("bridge_sidedisp" + k, sideArray(PART["bridge_sidedisp" + k].pol, sgn, m, shift));
+}
+// the clearance from the left side glass to the left crew seat (rest / at its console), in plan, now and moved out
+function seatClearance(shift) {
+  const G = [];
+  for (const n of ["bridge_sidescr0", "bridge_sidedisp0"]) { const a = sideArray(PART[n].pol, -1, SIDE.work, shift); for (let i = 0; i < a.length; i += 6) G.push(a[i], a[i + 2]); }
+  const S = [];
+  for (const p of BRIDGE.parts) if (/^bridge_seat2/.test(p.name)) { const o = PART[p.name].orig; for (let i = 0; i < o.length; i += 3) if (o[i + 1] > DESK - 0.12) S.push(o[i], o[i + 2]); }
+  const res = [];
+  for (const ride of [0, 0.6]) {
+    let md = 1e9; const ox = -0.6204 * ride, oz = 0.7843 * ride;
+    for (let i = 0; i < G.length; i += 2) for (let j = 0; j < S.length; j += 2) { const d = Math.hypot(G[i] - S[j] - ox, G[i + 1] - S[j + 1] - oz); if (d < md) md = d; }
+    res.push(md);
+  }
+  return res;
+}
+const CLEAR = {now: seatClearance(0), wide: seatClearance(SHIFT_W)};
+
+// ===== the sightlines (as AUDIT_GLASSES.md: from the eye over the glass's top edge to the main screen) =====
+const ray = new THREE.Raycaster();
+const eyeOf = (h, adj) => ({x: 0, y: DESK + h + 0.687, z: 79.55 + adj - 0.10});
+function screenDist(E, beta) {   // the plan distance from the eye to the main screen along the bearing (the band is vertical)
+  ray.set(V3(E.x, 2.9, E.z), new THREE.Vector3(Math.sin(beta), 0, -Math.cos(beta)));
+  const h = ray.intersectObjects(screens, false);
+  return h.length ? h[0].distance : null;
+}
+function frontTop(v, a2) { const H = v.H(a2 / v.k), r = R0 + H * T14, a = a2 * D2R; return {x: r * Math.sin(a), y: DESK + H, z: AXZ + r * Math.cos(a)}; }
+function frontTopAtBearing(v, E, beta) {
+  const brg = a2 => { const p = frontTop(v, a2); return Math.atan2(p.x - E.x, p.z - E.z); };
+  let lo = -v.end, hi = v.end;
+  if (beta < brg(lo) || beta > brg(hi)) return null;
+  for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (brg(m) < beta) lo = m; else hi = m; }
+  const p = frontTop(v, (lo + hi) / 2); p.d = Math.hypot(p.x - E.x, p.z - E.z); return p;
+}
+function sight(E, top, beta) {   // -> {y: the height on the screen (mesh), end point, D, d}
+  const D = screenDist(E, beta); if (!D || !top) return null;
+  const s = D / top.d;
+  return {y: E.y + (top.y - E.y) * s, end: {x: E.x + (top.x - E.x) * s, y: E.y + (top.y - E.y) * s, z: E.z + (top.z - E.z) * s}, D, d: top.d, beta, top};
+}
+function frontMetrics(vk, E) {
+  const v = FRONT[vk], b20 = 20 * D2R;
+  return {ahead: sight(E, frontTopAtBearing(v, E, 0), 0), p20: sight(E, frontTopAtBearing(v, E, b20), b20), m20: sight(E, frontTopAtBearing(v, E, -b20), -b20)};
+}
+function sideMetrics(mk, sgn, shift, E) {
+  const m = SIDE[mk], top = sidePoint(sgn * SIDE_C, R0 + H0S * T14, H0S, sgn, m, shift);
+  const band = sidePoint(sgn * SIDE_C, R0 + HB * T14, HB, sgn, m, shift);
+  const res = {mk, top, bandBot: band.y};
+  if (top.y <= DESK + 1e-3) { res.hidden = true; return res; }
+  top.d = Math.hypot(top.x - E.x, top.z - E.z);
+  res.s = sight(E, top, Math.atan2(top.x - E.x, top.z - E.z));
+  return res;
+}
+
+// ===== the faces: simple but meaningful =====
+function mtext(ctx, s, X, Y, size, color, align = "left", weight = "") {
+  ctx.save(); ctx.translate(X, Y); ctx.scale(0.001, -0.001);
+  ctx.font = `${weight} ${Math.round(size * 1000)}px ${FONT}`; ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = "middle";
+  ctx.fillText(s, 0, 0); ctx.restore();
+}
+function drawFrontTex(vk) {   // a dark flight panel with the attitude instrument; in metres: X along the arc (r 1.33), Y up from the desk
+  const {c, ctx, tex} = texF, v = FRONT[vk], W = c.width, H = c.height, sx = W / (2 * FAU * D2R * FRM), sy = H / FHV;
+  const end = v.end, X = a => a * D2R * FRM, top = a => v.H(clamp(a, -end, end) / v.k), Xe = X(end);
+  const outline = () => { ctx.beginPath(); ctx.moveTo(-Xe, -0.02); for (let a = -end; a <= end + 1e-6; a += 0.5) ctx.lineTo(X(a), top(a)); ctx.lineTo(Xe, -0.02); ctx.closePath(); };
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "#0a1418"; ctx.fillRect(0, 0, W, H);
+  ctx.setTransform(sx, 0, 0, -sy, W / 2, H);
+  outline(); const gr = ctx.createLinearGradient(0, 0, 0, 0.7); gr.addColorStop(0, "#071012"); gr.addColorStop(1, "#0d1c21"); ctx.fillStyle = gr; ctx.fill();
+  ctx.save(); outline(); ctx.clip();
+  ctx.strokeStyle = "rgba(90,210,195,0.07)"; ctx.lineWidth = 0.002; ctx.beginPath();
+  for (let x = -1.2; x <= 1.2; x += 0.1) { ctx.moveTo(x, 0); ctx.lineTo(x, 0.7); }
+  for (let y = 0.1; y < 0.7; y += 0.1) { ctx.moveTo(-1.2, y); ctx.lineTo(1.2, y); }
+  ctx.stroke();
+  const Hc = top(0), cy = Hc * 0.5, R = Math.min(0.17, Hc * 0.36);
+  // the attitude instrument (a hint of the flight page)
+  ctx.save(); ctx.beginPath(); ctx.arc(0, cy, R, 0, 2 * Math.PI); ctx.clip(); ctx.translate(0, cy); ctx.rotate(-6 * D2R);
+  ctx.fillStyle = "#1f4c68"; ctx.fillRect(-R * 1.5, 0, R * 3, R * 1.5); ctx.fillStyle = "#4b3a22"; ctx.fillRect(-R * 1.5, -R * 1.5, R * 3, R * 1.5);
+  ctx.strokeStyle = "#e8f4f2"; ctx.lineWidth = 0.004; ctx.beginPath(); ctx.moveTo(-R * 1.5, 0); ctx.lineTo(R * 1.5, 0); ctx.stroke();
+  ctx.lineWidth = 0.0025; for (const p of [-2, -1, 1, 2]) { const y = p * R * 0.28, w = R * (Math.abs(p) === 1 ? 0.35 : 0.6); ctx.beginPath(); ctx.moveTo(-w / 2, y); ctx.lineTo(w / 2, y); ctx.stroke(); }
+  ctx.restore();
+  ctx.strokeStyle = "#7fe0d0"; ctx.lineWidth = 0.006; ctx.beginPath(); ctx.arc(0, cy, R, 0, 2 * Math.PI); ctx.stroke();
+  ctx.strokeStyle = "#ffc46a"; ctx.lineWidth = 0.006; ctx.beginPath(); ctx.moveTo(-R * 0.62, cy); ctx.lineTo(-R * 0.2, cy); ctx.lineTo(-R * 0.1, cy - R * 0.1); ctx.moveTo(R * 0.62, cy); ctx.lineTo(R * 0.2, cy); ctx.lineTo(R * 0.1, cy - R * 0.1); ctx.stroke();
+  ctx.fillStyle = "#ffc46a"; ctx.beginPath(); ctx.arc(0, cy, 0.008, 0, 2 * Math.PI); ctx.fill();
+  // the speed and height tapes
+  for (const [sg, lab, val] of [[-1, "СКОР", "312"], [1, "ВЫС", "4,2"]]) {
+    const xc = sg * 0.43, w = 0.10, y0 = Hc * 0.16, y1 = Hc * 0.80;
+    ctx.strokeStyle = "rgba(127,224,208,0.75)"; ctx.lineWidth = 0.003; ctx.strokeRect(xc - w / 2, y0, w, y1 - y0);
+    ctx.beginPath(); for (let i = 1; i < 10; i++) { const y = y0 + (y1 - y0) * i / 10, xi = xc - sg * w / 2; ctx.moveTo(xi, y); ctx.lineTo(xi + sg * (i % 2 ? 0.02 : 0.035), y); } ctx.stroke();
+    const ym = (y0 + y1) / 2; ctx.fillStyle = "#081214"; ctx.fillRect(xc - w / 2 - 0.01, ym - 0.025, w + 0.02, 0.05);
+    ctx.strokeStyle = "#ffc46a"; ctx.lineWidth = 0.003; ctx.strokeRect(xc - w / 2 - 0.01, ym - 0.025, w + 0.02, 0.05);
+    mtext(ctx, val, xc, ym, 0.032, "#ffd8a0", "center"); mtext(ctx, lab, xc, y1 + 0.032, 0.026, "#8fd3c8", "center");
+  }
+  mtext(ctx, "ПОЛЁТ", -0.29, Hc - 0.045, 0.028, "#7fe0d0");
+  // the end blocks: more of them where the glass is wider
+  const labs = ["ДВИГАТЕЛИ", "ТОПЛИВО", "СВЯЗЬ", "НАВИГАЦИЯ"], lev = [0.72, 0.55, 0.81, 0.64]; let li = 0;
+  for (const sg of [-1, 1]) for (let x0 = 0.535; x0 + 0.22 <= Xe - 0.035; x0 += 0.24) {
+    const xa = sg > 0 ? x0 : -(x0 + 0.22), aA = Math.abs(x0) / (D2R * FRM), aB = (x0 + 0.22) / (D2R * FRM);
+    let tmin = 9; for (let a = aA; a <= aB + 1e-6; a += 0.5) tmin = Math.min(tmin, top(a));
+    const y0 = 0.07, y1 = tmin - 0.06;
+    ctx.strokeStyle = "rgba(127,224,208,0.55)"; ctx.lineWidth = 0.003; ctx.strokeRect(xa, y0, 0.22, y1 - y0);
+    mtext(ctx, labs[li % 4], xa + 0.11, y1 - 0.03, 0.024, "#8fd3c8", "center");
+    for (let b = 0; b < 4; b++) { const bx = xa + 0.03 + b * 0.045, bh = (y1 - y0 - 0.1) * lev[(b + li) % 4];
+      ctx.fillStyle = "rgba(127,224,208,0.18)"; ctx.fillRect(bx, y0 + 0.03, 0.025, y1 - y0 - 0.1); ctx.fillStyle = "rgba(127,224,208,0.7)"; ctx.fillRect(bx, y0 + 0.03, 0.025, bh); }
+    li++;
+  }
+  ctx.restore();
+  outline(); ctx.strokeStyle = "rgba(127,224,208,0.55)"; ctx.lineWidth = 0.006; ctx.stroke();
+  tex.needsUpdate = true;
+}
+function drawSideTex(T, title) {   // the top 428/1228 = the MFD band (three MFDs), the rest = the system screen
+  const {c, ctx, tex} = T, W = c.width, H = c.height, WM = 1.3626, sx = W / WM, sy = H / H0S;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "#0b1417"; ctx.fillRect(0, 0, W, H);
+  ctx.setTransform(sx, 0, 0, -sy, 0, H);
+  ctx.strokeStyle = "rgba(90,210,195,0.06)"; ctx.lineWidth = 0.002; ctx.beginPath();
+  for (let x = 0.1; x < WM; x += 0.1) { ctx.moveTo(x, 0); ctx.lineTo(x, HB); }
+  for (let y = 0.1; y < HB; y += 0.1) { ctx.moveTo(0, y); ctx.lineTo(WM, y); }
+  ctx.stroke();
+  mtext(ctx, "СИСТЕМНЫЙ ЭКРАН · " + title, 0.07, HB - 0.05, 0.03, "#6fb3a8");
+  const bx = [0.12, 0.42, 0.72, 1.02];   // a plain mnemonic: units and their links
+  ctx.strokeStyle = "rgba(127,224,208,0.35)"; ctx.lineWidth = 0.003;
+  ctx.beginPath(); ctx.moveTo(0.22, 0.36); ctx.lineTo(1.12, 0.36); ctx.moveTo(0.67, 0.36); ctx.lineTo(0.67, 0.2); ctx.stroke();
+  for (const x of bx) { ctx.fillStyle = "#0e2024"; ctx.fillRect(x, 0.31, 0.2, 0.1); ctx.strokeRect(x, 0.31, 0.2, 0.1); }
+  for (let i = 0; i < 5; i++) { const y = 0.05 + i * 0.028; ctx.fillStyle = "rgba(127,224,208,0.14)"; ctx.fillRect(0.12, y, 1.1, 0.014); ctx.fillStyle = "rgba(127,224,208,0.5)"; ctx.fillRect(0.12, y, 1.1 * [0.7, 0.45, 0.82, 0.3, 0.6][i], 0.014); }
+  ctx.fillStyle = "#061012"; ctx.fillRect(0, HB, WM, H0S - HB);
+  ctx.strokeStyle = "#3fd6c0"; ctx.lineWidth = 0.004; ctx.beginPath(); ctx.moveTo(0, HB); ctx.lineTo(WM, HB); ctx.stroke();
+  const q = 0.27, gap = (WM - 3 * q) / 4, yb = HB + (H0S - HB - q) / 2;
+  for (let i = 0; i < 3; i++) {
+    const x = gap + i * (q + gap);
+    ctx.fillStyle = "#0a1c1e"; ctx.fillRect(x, yb, q, q);
+    ctx.strokeStyle = "rgba(127,224,208,0.25)"; ctx.lineWidth = 0.002; ctx.beginPath();
+    for (let k = 1; k < 4; k++) { ctx.moveTo(x + 0.03, yb + q * k / 4); ctx.lineTo(x + q - 0.03, yb + q * k / 4); } ctx.stroke();
+    ctx.strokeStyle = "#3fd6c0"; ctx.lineWidth = 0.006; ctx.strokeRect(x, yb, q, q);
+    mtext(ctx, "МФД", x + q / 2, yb + q - 0.032, 0.03, "#7fe0d0", "center");
+  }
+  tex.needsUpdate = true;
+}
+drawSideTex(texL, "ЛЕВОЕ"); drawSideTex(texR, "ПРАВОЕ");
+
+// ===== the helpers drawn into the scene: sightlines, marks on the screen, the horizon, the eye =====
+function mkLine(color, opacity, n) {
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  const l = new (n === 2 ? THREE.LineSegments : THREE.Line)(g, new THREE.LineBasicMaterial({color, transparent: opacity < 1, opacity}));
+  l.frustumCulled = false; l.renderOrder = 6; scene.add(l); return l;
+}
+function setPts(line, pts) { const a = line.geometry.attributes.position.array; pts.forEach((p, i) => { a[3 * i] = p.x; a[3 * i + 1] = p.y; a[3 * i + 2] = -p.z; }); line.geometry.attributes.position.needsUpdate = true; line.visible = true; }
+const SL = {ahead: mkLine(0xffd84a, 1, 3), p20: mkLine(0xffd84a, 0.55, 3), m20: mkLine(0xffd84a, 0.55, 3), L: mkLine(0x7fdcff, 1, 3), R: mkLine(0x7fdcff, 1, 3)};
+const MK = {ahead: mkLine(0xffd84a, 1, 2), p20: mkLine(0xffd84a, 1, 2), m20: mkLine(0xffd84a, 1, 2), L: mkLine(0x7fdcff, 1, 2), R: mkLine(0x7fdcff, 1, 2)};
+function showSight(key, s) {
+  if (!s) { SL[key].visible = MK[key].visible = false; return; }
+  setPts(SL[key], [S_EYE, s.top, s.end]);
+  const px = Math.cos(s.beta) * 0.12, pz = -Math.sin(s.beta) * 0.12, back = 0.01, e = s.end;
+  const bx = -Math.sin(s.beta) * back, bz = -Math.cos(s.beta) * back;   // a hair in front of the screen
+  setPts(MK[key], [{x: e.x - px + bx, y: e.y, z: e.z - pz + bz}, {x: e.x + px + bx, y: e.y, z: e.z + pz + bz}]);
+}
+function sliceScreens(y) {   // the horizon: the screens cut by the plane y, a hair toward the axis
+  const pts = [];
+  for (const m of screens) {
+    const p = m.geometry.attributes.position.array, idx = m.geometry.index.array;
+    for (let t = 0; t < idx.length; t += 3) {
+      const hit = [];
+      for (const [i, j] of [[0, 1], [1, 2], [2, 0]]) {
+        const a = idx[t + i] * 3, b = idx[t + j] * 3, ya = p[a + 1], yb = p[b + 1];
+        if ((ya - y) * (yb - y) < 0) { const f = (y - ya) / (yb - ya); hit.push([p[a] + (p[b] - p[a]) * f, p[a + 2] + (p[b + 2] - p[a + 2]) * f]); }
+      }
+      if (hit.length === 2) for (const [x, z] of hit) { const dx = -x, dz = -AXZ - z, L = Math.hypot(dx, dz) || 1; pts.push(x + dx / L * 0.008, y, z + dz / L * 0.008); }
+    }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+  const l = new THREE.LineSegments(g, new THREE.LineBasicMaterial({color: 0xffa040, clippingPlanes: CLIP})); l.renderOrder = 6; scene.add(l); return l;
+}
+const horLines = {"1.30": sliceScreens(HOR["1.30"]), "1.60": sliceScreens(HOR["1.60"])};
+const eyeDot = new THREE.Mesh(new THREE.SphereGeometry(0.03, 16, 10), new THREE.MeshBasicMaterial({color: 0xfff2b0}));
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 24, 14), new THREE.MeshLambertMaterial({color: 0xd58c58, transparent: true, opacity: 0.35, depthWrite: false}));
+scene.add(eyeDot, head);
+let S_EYE = eyeOf(SEAT0.h, SEAT0.adj);
+
+// the labels (side view): HTML tags pinned to points
+const LBL = {};
+const PLACE = {ul: "calc(-100% - 6px), calc(-100% - 3px)", ur: "6px, calc(-100% - 3px)", dl: "calc(-100% - 6px), 3px", dr: "6px, 3px"};
+for (const [k, c, pl] of [["eye", "", "ul"], ["ftop", "y", "ur"], ["fvis", "y", "dr"], ["hor", "h", "ur"], ["stop", "c", "dl"], ["svis", "c", "dr"]]) {
+  const el = document.createElement("div"); el.className = "l3 " + c; $("labels").appendChild(el); LBL[k] = {el, p: null, off: PLACE[pl]};
+}
+function setLabel(k, text, p) { LBL[k].el.textContent = text; LBL[k].p = p ? V3p(p) : null; }
+
+// ===== the cameras: the eye (look around), the side section and the top (orthographic, pan and zoom) =====
+const camEye = new THREE.PerspectiveCamera(70, 1, 0.03, 200);
+const camOrt = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
+const LOOK = {yaw: 0, pitch: 0, fov: 70};
+const ORT = {side: {t: V3(0, 2.5, 80.95), half: 2, need: [5.9, 3.3]}, top: {t: V3(0, 0, 80.8), half: 3.5, need: [9.9, 5.9]}};
+const AX_X = new THREE.Vector3(1, 0, 0), AX_NX = new THREE.Vector3(-1, 0, 0), AX_Y = new THREE.Vector3(0, 1, 0), AX_NY = new THREE.Vector3(0, -1, 0);
+function setClip(view) {
+  if (view === "side") { CLIP[0].set(AX_NX, 0.0005); CLIP[1].set(AX_X, 1.75); }   // a slab: the left half from his axis to past the left glass
+  else if (view === "top") { CLIP[0].set(AX_NY, 3.75); CLIP[1].set(AX_Y, 1e4); }  // the ceiling off
+  else { CLIP[0].set(AX_Y, 1e4); CLIP[1].set(AX_Y, 1e4); }
+}
+let vw = 1, vh = 1;
+function fitOrt(k) { const o = ORT[k], asp = vw / vh; o.half = Math.max(o.need[1] / 2, o.need[0] / 2 / asp); }
+function resetView(k) {
+  if (k === "eye") { const E = S_EYE; LOOK.yaw = 0; LOOK.pitch = Math.atan2(SCR_MID - E.y, SCR_Z - E.z); LOOK.fov = 70; }
+  else { ORT.side.t.copy(V3(0, 2.5, 80.95)); ORT.top.t.copy(V3(0, 0, 80.8)); fitOrt(k); }
+}
+const cvs = renderer.domElement, ptr = new Map(); let pinch0 = 0;
+const pdist = () => { const a = [...ptr.values()]; return a.length < 2 ? 0 : Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); };
+const vR = new THREE.Vector3(), vU = new THREE.Vector3();
+function drag(dx, dy) {
+  if (ST.view === "eye") { const k = LOOK.fov / 70 * 0.25 * D2R; LOOK.yaw -= dx * k; LOOK.pitch = clamp(LOOK.pitch + dy * k, -1.4, 1.4); }
+  else { const o = ORT[ST.view], wpp = 2 * o.half / vh; vR.setFromMatrixColumn(camOrt.matrix, 0); vU.setFromMatrixColumn(camOrt.matrix, 1); o.t.addScaledVector(vR, -dx * wpp).addScaledVector(vU, dy * wpp); }
+}
+function zoom(f) { if (ST.view === "eye") LOOK.fov = clamp(LOOK.fov * f, 20, 110); else ORT[ST.view].half = clamp(ORT[ST.view].half * f, 0.2, 25); }
+cvs.addEventListener("pointerdown", e => { try { cvs.setPointerCapture(e.pointerId); } catch (_) {} ptr.set(e.pointerId, {x: e.clientX, y: e.clientY}); pinch0 = pdist(); });
+cvs.addEventListener("pointermove", e => {
+  const p = ptr.get(e.pointerId); if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+  if (ptr.size === 1) drag(dx, dy); else if (ptr.size === 2) { const d = pdist(); if (pinch0 > 0 && d > 0) zoom(pinch0 / d); pinch0 = d; }
+});
+const pup = e => { ptr.delete(e.pointerId); pinch0 = pdist(); };
+cvs.addEventListener("pointerup", pup); cvs.addEventListener("pointercancel", pup);
+cvs.addEventListener("wheel", e => { e.preventDefault(); zoom(Math.exp(clamp(e.deltaY, -200, 200) * 0.0012)); }, {passive: false});
+cvs.addEventListener("dblclick", () => resetView(ST.view));
+function resize() {
+  const r = wrap.getBoundingClientRect(); vw = Math.max(1, Math.round(r.width)); vh = Math.max(1, Math.round(r.height));
+  renderer.setSize(vw, vh);
+}
+new ResizeObserver(() => { resize(); }).observe(wrap);
+resize();
+
+// ===== the state and the panel =====
+const REC_FRONT = "wide";
+const ST = {front: "now", L: "work", R: "work", proj: "1.30", view: "eye", h: SEAT0.h, adj: SEAT0.adj};
+const applied = {front: null, L: null, R: null, shift: null};
+const HINT = {eye: "ИЗ ГЛАЗА: тяните мышью или пальцем — осмотреться; колесо — поле зрения; двойной щелчок — снова на экран.",
+  side: "СБОКУ: разрез по оси командира (видна левая половина). Тянуть — сдвиг, колесо или щипок — масштаб. Голубая линия — над левым боковым (в проекции).",
+  top: "СВЕРХУ: потолок снят. Тянуть — сдвиг, колесо или щипок — масштаб."};
+function syncButtons() {
+  for (const [id, key] of [["front", "front"], ["sideL", "L"], ["sideR", "R"], ["proj", "proj"], ["views", "view"]])
+    for (const b of $(id).querySelectorAll("button")) b.classList.toggle("on", b.dataset.v === ST[key]);
+  const now = ST.front === "now" && ST.L === "work" && ST.R === "work", rec = ST.front === REC_FRONT && ST.L === "tape" && ST.R === "tape";
+  for (const b of $("cfg").querySelectorAll("button")) b.classList.toggle("on", (b.dataset.v === "now" && now) || (b.dataset.v === "rec" && rec));
+  $("cfgNote").textContent = now ? "Как в игре сейчас." : rec ? `Рекомендация: переднее ${FRONT[REC_FRONT].name}, оба боковых — ЛЕНТА (каждое можно поднять в РАБОТУ отдельно).` : "Своя конфигурация.";
+  $("viewHint").textContent = HINT[ST.view];
+  $("hV").textContent = fs(ST.h) + " м"; $("adjV").textContent = fs(ST.adj) + " м";
+}
+function bindSeg(id, fn) { $(id).addEventListener("click", e => { const b = e.target.closest("button"); if (b && b.dataset.v) { fn(b.dataset.v); update(); } }); }
+bindSeg("front", v => ST.front = v);
+bindSeg("sideL", v => ST.L = v);
+bindSeg("sideR", v => ST.R = v);
+bindSeg("proj", v => ST.proj = v);
+bindSeg("views", v => { ST.view = v; resetView(v); });
+bindSeg("cfg", v => { if (v === "now") Object.assign(ST, {front: "now", L: "work", R: "work"}); else Object.assign(ST, {front: REC_FRONT, L: "tape", R: "tape"}); });
+$("h").addEventListener("input", e => { ST.h = +e.target.value; update(); });
+$("adj").addEventListener("input", e => { ST.adj = +e.target.value; update(); });
+
+// ===== the readouts =====
+const fl = y => y - FLOOR;   // mesh y -> over the floor
+function visCell(s, yh) {
+  if (!s) return "—";
+  const y = s.y;
+  if (y <= SCR_BOT) return `<span class="good">весь</span> <small>(${fmt(fl(y))})</small>`;
+  return `<span class="${y < yh ? "warn" : "bad"}">${fmt(fl(y))}</span>`;
+}
+function horCell(s, yh) { if (!s) return "—"; const d = yh - s.y; return d > 0 ? `<span class="good">+${cm(d)}</span>` : `<span class="bad">${cm(d) === 0 ? "−0" : "−" + Math.abs(cm(d))}</span>`; }
+function topText(k) { return k === "now" ? fmt(fl(DESK + H0F)) : k === "arc" ? fmt(fl(DESK + LOW)) + "…" + fmt(fl(DESK + ARC_END)) : fmt(fl(DESK + LOW)); }
+function deskText(r) {
+  if (r.hidden) return `<span class="good">ничего</span>`;
+  const top = r.top.y - DESK, band = r.bandBot - DESK;
+  if (band >= 0) return `МФД целиком${band > 0.005 ? ` + сист. ${fmt(band)}` : ""}`;
+  return top > 0 ? `<span class="warn">МФД частично (${fmt(top)})</span>` : "ничего";
+}
+function update() {
+  const shift = ST.front === "wide" ? SHIFT_W : 0;
+  if (applied.front !== ST.front) { applyFront(ST.front); drawFrontTex(ST.front); applied.front = ST.front; }
+  for (const [side, sgn] of [["L", -1], ["R", 1]]) if (applied[side] !== ST[side] || applied.shift !== shift) { applySide(sgn, ST[side], shift); applied[side] = ST[side]; }
+  applied.shift = shift;
+  seatGrp.position.set(0, ST.h, -(0.6 + ST.adj));
+  const yh = HOR[ST.proj];
+  skyMat.uniforms.uH.value = yh; horLines["1.30"].visible = ST.proj === "1.30"; horLines["1.60"].visible = ST.proj === "1.60";
+  const E = S_EYE = eyeOf(ST.h, ST.adj);
+  eyeDot.position.copy(V3p(E)); head.position.copy(V3(E.x, E.y + 0.03, E.z - 0.08));
+  // the current configuration's lines
+  const fm = frontMetrics(ST.front, E);
+  showSight("ahead", fm.ahead); showSight("p20", fm.p20); showSight("m20", fm.m20);
+  const sm = {L: sideMetrics(ST.L, -1, shift, E), R: sideMetrics(ST.R, 1, shift, E)};
+  showSight("L", sm.L.s); showSight("R", sm.R.s);
+  setLabel("eye", "глаз " + fmt(fl(E.y)), E);
+  setLabel("ftop", "верх переднего " + fmt(fl(fm.ahead ? fm.ahead.top.y : NaN)), fm.ahead && fm.ahead.top);
+  setLabel("fvis", "экран виден выше " + fmt(fl(fm.ahead ? fm.ahead.y : NaN)), fm.ahead && fm.ahead.end);
+  setLabel("hor", "горизонт " + fmt(fl(yh)), {x: 0, y: yh, z: SCR_Z});
+  const fUp = fm.ahead && fm.ahead.y > yh;   // the two tags at the screen: the higher one above its point, left of the screen
+  LBL.fvis.off = fUp ? PLACE.ul : PLACE.dl; LBL.hor.off = fUp ? PLACE.dl : PLACE.ul;
+  setLabel("stop", sm.L.hidden ? "левое в шахте" : "верх левого " + fmt(fl(sm.L.top.y)), sm.L.top);
+  setLabel("svis", "бок. часть видна выше " + fmt(fl(sm.L.s ? sm.L.s.y : NaN)), sm.L.s && sm.L.s.end);
+  // the eye
+  $("rEye").innerHTML = `Глаз <b>${fmt(fl(E.y), 3)}</b> м над полом, ${fmt(Math.abs(E.z - AXZ))} м ${E.z < AXZ ? "позади" : "впереди"} оси стола `
+    + `<small class="note">(кресло ${fs(ST.h)}, регулировка ${fs(ST.adj)})</small>. Низ большого экрана 1,15, полоса до 2,70.`;
+  // the front variants
+  let t = `<tr><th>Переднее</th><th>Верх, м</th><th class="n">Экран виден<br>выше: прямо</th><th class="n">на ±20°</th><th class="n">Пло-<br>щадь</th><th class="n">Горизонт, см<br>прямо / ±20°</th></tr>`;
+  for (const k of ["now", "low", "arc", "wide"]) {
+    const m = k === ST.front ? fm : frontMetrics(k, E), w = m.p20 && m.m20 ? (m.p20.y > m.m20.y ? m.p20 : m.m20) : (m.p20 || m.m20);
+    t += `<tr class="${k === ST.front ? "sel" : ""}"><td>${FRONT[k].name}${k === REC_FRONT ? ' <span class="star">★</span>' : ""}</td><td>${topText(k)}<br><small>±${fmt(FRONT[k].end, 1)}°</small></td>`
+      + `<td class="n">${visCell(m.ahead, yh)}</td><td class="n">${visCell(w, yh)}</td><td class="n">${Math.round(AREA[k] / AREA.now * 100)} %</td>`
+      + `<td class="n">${horCell(m.ahead, yh)} / ${horCell(w, yh)}</td></tr>`;
+  }
+  $("tFront").innerHTML = t;
+  // the side modes (left and right alike), with the current shift
+  t = `<tr><th>Боковое</th><th>Верх, м</th><th class="n">Бок. часть<br>экрана видна выше</th><th>Над столом</th><th class="n">Гори-<br>зонт, см</th></tr>`;
+  for (const k of ["work", "tilt", "tape", "down"]) {
+    const r = sideMetrics(k, -1, shift, E), b = (ST.L === k ? '<span class="badge">Л</span>' : "") + (ST.R === k ? '<span class="badge">П</span>' : "");
+    t += `<tr class="${ST.L === k || ST.R === k ? "sel" : ""}"><td>${SIDE[k].name}${b}</td><td>${r.hidden ? "в шахте" : fmt(fl(r.top.y))}</td>`
+      + `<td class="n">${r.hidden ? '<span class="good">весь</span>' : visCell(r.s, yh)}</td><td>${deskText(r)}</td><td class="n">${r.hidden ? '<span class="good">открыт</span>' : horCell(r.s, yh)}</td></tr>`;
+  }
+  $("tSide").innerHTML = t;
+  const sl = sm.L.s;
+  $("nSide").innerHTML = (sl ? `Линия над левым (${SIDE[ST.L].name}): азимут середины стекла ${fmt(Math.abs(sl.beta / D2R), 0)}° от прямо, до кромки ${fmt(sl.d)} м, до экрана ${fmt(sl.D)} м. ` : "Левое убрано — линии нет. ")
+    + `ЛЕНТА — стекло опущено на ${fmt(SIDE.tape.drop)} м по вертикали (${fmt(SIDE.tape.drop / KSV * KSL, 3)} м вдоль хода, полный ход ${fmt(KSL, 3)} м): над столом остаётся ${fmt(1.24 - (DESK - FLOOR))} м — полоса МФД (${fmt(H0S * MFD_V, 3)}) и низ ${fmt(1.24 - (DESK - FLOOR) - H0S * MFD_V)} системного экрана. `
+    + `НАКЛОН 30° — компромисс: наклон 30° и утоплено на 0,10.` + (shift ? ` С передним ШИРЕ боковые повёрнуты наружу на ${fmt(shift, 1)}°.` : "");
+  $("nFront").innerHTML = `«Экран виден выше» — высота над полом, выше которой большой экран виден над стеклом: линия от глаза через верхнюю кромку стекла до экрана (как в аудите). `
+    + `ДУГА: верх 1,24 на ±15°, плавно до 1,36 к ±35°. ШИРЕ: верх 1,24, концы ±${fmt(FRONT.wide.end, 1)}° — площадь как сейчас; боковые с шахтами уходят наружу на ${fmt(SHIFT_W, 1)}°, `
+    + `зазор от бокового стекла до кресла экипажа ${cm(CLEAR.wide[0])} см в покое / ${cm(CLEAR.wide[1])} см у пульта (сейчас ${cm(CLEAR.now[0])} / ${cm(CLEAR.now[1])}). `
+    + `Рамка переднего стекла на 2,6 см выше стекла — по рамке линия легла бы ещё на ~6 см выше.`;
+  // the horizon
+  const hv = (s, hid) => hid ? '<span class="good">открыт (стекло в шахте)</span>' : !s ? "—" : s.y < yh ? `<span class="good">виден</span>, запас ${cm(yh - s.y)} см` : `<span class="bad">закрыт</span> на ${cm(s.y - yh)} см`;
+  $("rHor").innerHTML = `Проекция ${ST.proj.replace(".", ",")}: горизонт на экране на высоте ${fmt(fl(yh))}.<br>Прямо над передним: ${hv(fm.ahead)}; на ±20°: ${hv(fm.p20 && fm.m20 ? (fm.p20.y > fm.m20.y ? fm.p20 : fm.m20) : null)}.<br>`
+    + `Над левым: ${hv(sm.L.s, sm.L.hidden)}; над правым: ${hv(sm.R.s, sm.R.hidden)}.`;
+  syncButtons();
+}
+
+// ===== the recommendation, with the numbers at the usual seat (−0,10, adjustment 0) =====
+function buildRec() {
+  const E = eyeOf(SEAT0.h, SEAT0.adj), Elo = eyeOf(-0.20, 0), Ehi = eyeOf(0.05, 0), y13 = HOR["1.30"], y16 = HOR["1.60"];
+  const worst = m => m.p20 && m.m20 ? (m.p20.y > m.m20.y ? m.p20 : m.m20) : (m.p20 || m.m20);
+  const F = {}; for (const k in FRONT) F[k] = frontMetrics(k, E);
+  const Flo = frontMetrics(REC_FRONT, Elo), Fhi = frontMetrics(REC_FRONT, Ehi), Nlo = frontMetrics("now", Elo), Fw = frontMetrics(REC_FRONT, eyeOf(-0.20, 0.35));
+  const worstLo = Math.min(y13 - Flo.ahead.y, y13 - Fw.ahead.y, y13 - worst(Flo).y, y13 - worst(Fw).y);
+  const sW0 = sideMetrics("work", -1, 0, E), sW = sideMetrics("work", -1, SHIFT_W, E), sT = sideMetrics("tape", -1, SHIFT_W, E), sTi = sideMetrics("tilt", -1, SHIFT_W, E);
+  const v = s => s ? fmt(fl(s.y)) : "—", ar = k => Math.round(AREA[k] / AREA.now * 100);
+  const sideVis = s => s && s.y <= SCR_BOT ? `видны целиком — линия ${v(s)}, ниже низа экрана 1,15` : `видны выше ${v(s)}`;
+  $("rec").innerHTML = `<h2>Рекомендация</h2>
+  <p class="note">Предложение с цифрами — решает пользователь. Кресло −0,10, регулировка 0, глаз ${fmt(fl(E.y), 3)}.</p>
+  <ol>
+  <li><b>Переднее — верх 1,24 (было 1,38); форма <span class="star">★ ШИРЕ</span></b>: концы ±${fmt(FRONT.wide.end, 1)}° вместо ±35°, площадь ${ar("wide")} %.
+   Большой экран прямо виден выше <b>${v(F.wide.ahead)}</b> (было ${v(F.now.ahead)}), на ±20° — выше ${v(worst(F.wide))} (было ${v(worst(F.now))});
+   горизонт 1,30 открыт с запасом ${cm(y13 - F.wide.ahead.y)} см (сейчас закрыт на ${cm(F.now.ahead.y - y13)} см); при самом низком кресле −0,20 — впритык,
+   ${cm(worstLo)}…${cm(y13 - Flo.ahead.y)} см (экран виден выше ${v(Flo.ahead)}, сейчас ${v(Nlo.ahead)}); при +0,05 — выше ${v(Fhi.ahead)}.
+   <i>Почему:</i> сначала полный обзор экрана — у НИЖЕ и ШИРЕ он одинаковый и лучший, у ДУГИ на ±20° экран закрыт ниже ${v(worst(F.arc))}, горизонт впритык;
+   затем площадь для полётных страниц — ШИРЕ ${ar("wide")} %, ДУГА ${ar("arc")} %, НИЖЕ ${ar("low")} %.
+   <i>Цена:</i> боковые стёкла с шахтами уходят наружу на ${fmt(SHIFT_W, 1)}°, зазор до кресел экипажа ${cm(CLEAR.wide[0])} см в покое (сейчас ${cm(CLEAR.now[0])}) — проверить.
+   Если сдвигать боковые нельзя — <b>НИЖЕ</b> (тот же обзор, площадь ${ar("low")} %).</li>
+  <li><b>Боковые — обычное состояние ЛЕНТА</b>: верх 1,24, вровень с передним; над столом ряд МФД (${fmt(H0S * MFD_V, 2)} м) и ${fmt(LOW - H0S * MFD_V)} м системного экрана;
+   боковые части большого экрана ${sideVis(sT.s)}; поднятое в РАБОТУ — выше ${v(sW.s)} (сейчас ${v(sW0.s)}). <b>РАБОТА</b> — по стороне, когда нужен её системный экран; <b>ВНИЗ</b> — полный обзор.
+   НАКЛОН 30° (верх ${v({y: sTi.top.y})}) — промежуточный: видно выше ${v(sTi.s)}.</li>
+  <li><b>Дёшево добавить</b>: центр проекции 1,60 вместо 1,30 — горизонт на экране встанет над передним стеклом с запасом ${cm(y16 - F.wide.ahead.y)} см, при кресле −0,20 — ${cm(y16 - Math.max(Flo.ahead.y, Fw.ahead.y, worst(Fw).y))} см
+   (при нынешнем стекле 1,38 — ${cm(y16 - F.now.ahead.y)} см). Вид как из точки на 0,3 м выше глаза; HUD рисуется той же проекцией.</li>
+  </ol>
+  <p class="note">Боковые линии считаются точно: от глаза через середину верхней кромки (сейчас ${fmt(sW0.s ? sW0.s.d : NaN)} м) до экрана (${fmt(sW0.s ? sW0.s.D : NaN)} м по тому же азимуту).
+   В аудите для боковых было взято ~1,50 м до стекла, поэтому там цифры примерно на 0,1 выше (РАБОТА: 2,48).</p>`;
+}
+
+// ===== the loop =====
+const prj = new THREE.Vector3();
+function frame() {
+  requestAnimationFrame(frame);
+  const E = S_EYE, asp = vw / vh;
+  setClip(ST.view);
+  let cam;
+  if (ST.view === "eye") {
+    cam = camEye; cam.aspect = asp;
+    cam.fov = asp >= 1 ? LOOK.fov : Math.min(130, 2 * Math.atan(Math.tan(LOOK.fov / 2 * D2R) / asp) / D2R);
+    cam.updateProjectionMatrix();
+    cam.position.copy(V3p(E));
+    const cp = Math.cos(LOOK.pitch);
+    cam.lookAt(cam.position.x + Math.sin(LOOK.yaw) * cp, cam.position.y + Math.sin(LOOK.pitch), cam.position.z - Math.cos(LOOK.yaw) * cp);
+  } else {
+    cam = camOrt; const o = ORT[ST.view];
+    cam.left = -o.half * asp; cam.right = o.half * asp; cam.top = o.half; cam.bottom = -o.half; cam.updateProjectionMatrix();
+    if (ST.view === "side") { cam.up.set(0, 1, 0); cam.position.copy(o.t).add(new THREE.Vector3(30, 0, 0)); }
+    else { cam.up.set(0, 0, -1); cam.position.copy(o.t).add(new THREE.Vector3(0, 30, 0)); }
+    cam.lookAt(o.t); cam.updateMatrixWorld();
+  }
+  const ext = ST.view !== "eye";
+  eyeDot.visible = head.visible = ext;
+  for (const g of ghosts) g.visible = ext;
+  for (const k in SL) if (!ext) SL[k].visible = false; else if (MK[k].visible) SL[k].visible = true;
+  renderer.render(scene, cam);
+  for (const k in LBL) {
+    const L = LBL[k];
+    if (ST.view !== "side" || !L.p) { L.el.style.display = "none"; continue; }
+    prj.copy(L.p).project(cam);
+    if (Math.abs(prj.x) > 1.05 || Math.abs(prj.y) > 1.05) { L.el.style.display = "none"; continue; }
+    L.el.style.display = "block"; L.el.style.transform = `translate(${((prj.x + 1) / 2 * vw).toFixed(1)}px, ${((1 - prj.y) / 2 * vh).toFixed(1)}px) translate(${L.off})`;
+  }
+}
+resetView("eye"); fitOrt("side"); fitOrt("top");
+update(); buildRec();
+$("load").style.display = "none";
+frame();
+})();
+</script>
+</body>
+</html>

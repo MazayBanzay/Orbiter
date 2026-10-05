@@ -22,6 +22,7 @@
     <ClInclude Include="src\SuitComputer.h" />
     <ClInclude Include="src\Motion.h" />
     <ClInclude Include="src\Skin.h" />
+    <ClInclude Include="src\SeatArms.h" />
     <ClInclude Include="src\Sound.h" />
     <ClInclude Include="src\Surface.h" />
   </ItemGroup>
@@ -36,6 +37,7 @@
     <ClCompile Include="src\Wearable.cpp" />
     <ClCompile Include="src\Motion.cpp" />
     <ClCompile Include="src\Skin.cpp" />
+    <ClCompile Include="src\SeatArms.cpp" />
     <ClCompile Include="src\Sound.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

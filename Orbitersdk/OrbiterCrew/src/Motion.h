@@ -5,6 +5,7 @@
 // and a crouch for jumps and landings. Leans are critically damped springs, so nothing snaps or overshoots.
 #pragma once
 #include "Skin.h"
+#include "SeatArms.h"
 #include <random>
 
 namespace ocrew
@@ -39,6 +40,7 @@ namespace ocrew
 		VECTOR3 angVel{};              // angular velocity, vessel frame (rad/s): limbs lag behind the turning
 		int seat{};                    // 0 standing, 1 sitting down, 2 seated, 3 standing up
 		double seatT{};                // 0..1 through sitting down / standing up
+		HandTarget hand[2];            // seated: where the left / right hand rests or what it holds (the ship's, model frame)
 		double heading{};              // rad, + to the right: the whole figure turned about the vertical through the origin
 		                               // (inside a ship the vessel keeps the ship's orientation; she turns in her pose)
 	};
@@ -51,7 +53,8 @@ namespace ocrew
 		void Update(const MotionInput& in, const ClipSet& clips, Skin& skin);
 		int Footfalls() const { return footfalls; }   // foot contacts in the last Update
 		double RunWeight() const { return wRun; }
-		void Reset() { wMove = wRun = 0; pitch = pitchV = roll = rollV = crouch = crouchV = 0; settling = false; }
+		void Reset() { wMove = wRun = 0; pitch = pitchV = roll = rollV = crouch = crouchV = 0; settling = false; arms.Reset(); }
+		const SeatArms& Arms() const { return arms; }
 
 	private:
 		struct Spring { double x{}, v{}; void Step(double target, double w, double dt); };
@@ -81,5 +84,6 @@ namespace ocrew
 		std::mt19937 rng;
 		double seatW{};                        // 0 .. 1: the seat clips over the standing ones
 		Pose pIdle, pWalk, pRun, pLoco, pOut, pSeat;
+		SeatArms arms;                         // seated: the hands on the ship's controls
 	};
 }
