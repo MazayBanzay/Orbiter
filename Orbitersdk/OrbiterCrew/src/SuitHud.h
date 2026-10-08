@@ -9,10 +9,19 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <functional>
 
 namespace ocrew
 {
 	struct Suit;
+	// the machine she drives from its post (МПУ, Modules\MPU.dll, mpuDriverState): the same layout as MPU.dll's MpuState
+	// (TVChassis.h) field for field, with room behind it should that one grow
+	struct MpuState
+	{
+		double speed, speedMax; int full; double steer, deck, deckMin, deckMax; int brake; double charge;
+		double powerW, energyKWh, rangeKm;
+		double spare[32];
+	};
 	struct HudData
 	{
 		Suit* life{};   // the suit itself (power, loads, equipment, servo, economy): read and switched by the display
@@ -97,14 +106,39 @@ namespace ocrew
 		struct HelmetView { VECTOR3 eye; double yaw{}, pitch{}; bool show{}; };   // vessel frame: eye point, gaze yaw/pitch (rad)
 		UINT HelmetMesh(VESSEL* v);            // once, before the VC is loaded (clbkSetClassCaps): adds the plate, returns its mesh index
 		void RegisterVC();                     // in clbkLoadVC: the plate's group is the VC HUD
-		void HelmetFrame(VESSEL* v, VISHANDLE vis, const HelmetView& hv);   // every step, after the head is aimed
+		// every step, after the head is aimed; with the display's data the whole HUD is drawn into the light layer
+		void HelmetFrame(VESSEL* v, VISHANDLE vis, const HelmetView& hv, const HudData* d = nullptr);
 		Suit* life{};                          // the suit of the last frame (the switches act on it)
 		UINT plateIdx{ static_cast<UINT>(-1) }; bool onVisor{}; VISHANDLE plateVis{};
 		// the visor's modulator: the photonic layer in the glass that dims the outside light locally (behind the panels, along
 		// the visor's edges, over the sun, the whole view when the shade is down) - drawn into its own texture each step
 		SURFHANDLE modSrf{}; int modW{}, modH{}; DEVMESHHANDLE modDm{}; bool modLogged{};
 		double lastShade{}; bool lastSunlit{};
+		// particles through the optics: short sparks and streaks on the image, as dense as the dose rate (the field thins
+		// them)
+		struct Spark { double x, y, dx, dy, life; };
+		std::vector<Spark> sparks; double sparkAcc{}, sparkT{ -1 }; unsigned rng{ 12345 };
+		double Rand() { rng = rng * 1664525u + 1013904223u; return (rng >> 8) / 16777216.0; }   // 0..1
 		void Modulator(VESSEL* v);
+		// the light layer (trial): our own texture exactly the viewport's size, drawn as light on black and turned into
+		// colour + alpha by a pixel shader (Modules\OrbiterCrew\HudLight.hlsl through the client's gcIPInterface) - sharp
+		// 1:1, independent of Orbiter's PanelMfdHudSize. Group 2 of the visor plate
+		SURFHANDLE lightSrc{}, lightOut{}; int lightW{}, lightH{}; DEVMESHHANDLE lightDm{}; void* ipi{}; bool ipiTried{}, lightLogged{};
+		void LightLayer(VESSEL* v, const HudData* d);
+		int horizonMode{};       // the pitch ladder: 0 auto (in flight and in space, not on foot), 1 always, 2 off
+		int hudScale{ 2 };
+		// at a machine's post: its state this frame; the page МАШИНА comes up while she is there, the one before comes back
+		MpuState mpu{}; bool onMpu{}; int rpageBeforeMpu{ -1 }; OBJHANDLE mpuPerson{};
+		// others' signs on the helmet display (the crew's context menu and its Alt marks): called at the end of every frame
+		// the display is drawn, into the same surface - the light layer (or Orbiter's VC HUD while paused). W x H the view in
+		// pixels; kx, ky the surface's pixels per view pixel (draw at x * kx, y * ky)
+		std::function<void(oapi::Sketchpad* skp, double W, double H, double kx, double ky)> overlay;       // the light layer 2x smoothed (the default, the user's choice) or 1:1 with the screen
+		// the display's settings are the user's, not the scenario's: kept for good in Config\OrbiterCrew\SuitDisplay.cfg
+		// (look, palette, brightness, the map, the resolution) - read once, written on every change
+		bool prefsLoaded{};
+		void LoadPrefs();
+		void SavePrefs() const;
+		bool lightLive{}, drawingLight{};   // the HUD goes through the light layer (the VC HUD texture stays empty)
 		void PlaceVisor(VESSEL* v);            // the plate over the camera's own frame (position, axes, aperture) as it is now
 		void Click(double x, double y);        // a left click in the view, pixels of the HUD surface
 		bool mouseWasDown{};
@@ -118,7 +152,7 @@ namespace ocrew
 
 		enum Mode { EVA, FLIGHT, RDV, SYS };
 		enum LPage { L_LOCAL, L_ORBIT, L_POWER, L_OPTS, L_COUNT };
-		enum RPage { R_TARGETS, R_TRANSFER, R_LANDING, R_APPROACH, R_DOCK, R_BODY, R_FLIGHT };
+		enum RPage { R_TARGETS, R_TRANSFER, R_LANDING, R_APPROACH, R_DOCK, R_BODY, R_FLIGHT, R_MACHINE };
 		enum { AP_CRUISE = 200 };   // + 0..3: height -10 -1 +1 +10 m; + 10..14: speed -5 -1 stop +1 +5 m/s
 
 		struct Target
@@ -162,7 +196,7 @@ namespace ocrew
 		double lastRR{ -1 };
 
 		// what can be clicked, from the last frame (pixels)
-		enum HitKind { H_LTAB, H_RTAB, H_LFOLD, H_RFOLD, H_TGT, H_AP, H_PAL, H_ZOOM, H_MODE, H_NVG, H_NEXT, H_BRIGHT, H_LOOK, H_ACK, H_SUIT };
+		enum HitKind { H_LTAB, H_RTAB, H_LFOLD, H_RFOLD, H_TGT, H_AP, H_PAL, H_ZOOM, H_MODE, H_NVG, H_NEXT, H_BRIGHT, H_LOOK, H_ACK, H_SUIT, H_RES, H_HORIZON, H_MPU };
 		struct Hit { double x0, y0, x1, y1; int kind, arg; };
 		std::vector<Hit> hits;
 		int request{ -1 };

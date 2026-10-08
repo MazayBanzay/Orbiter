@@ -1,0 +1,55 @@
+BEGIN_DESC
+TANTRA BETA 9 - Moon, jet pack at Brighton Beach.
+Moon, Brighton Beach base: Niza Krit in the suit, the jet pack lying two metres in front of her
+(12 kg metallic hydrogen, 2 x 500 N, ~950 m/s). Walk up to it (W) and press B to put it on; B again takes it off.
+ON FOOT: W/S walk (S brakes), A/D turn, Q/E side step, Shift run, Space jump. F1 eyes / outside view. Right mouse held (eyes view):
+look around. H suit computer, L lamps, Shift+V sun shade.
+JET PACK: starts in MANUAL (no compensation). Space thrust up, left Ctrl down; Shift+Space full thrust, Shift+Ctrl thrust off
+(while held). Numpad 0 / . throttle. In the air: W/S pod vector (forward / brake), A/D turn, Q/E strafe, Shift full vector.
+J height hold, C landing autopilot, G booms, Caps Lock steering limiter.
+SUIT COMPUTER (eyes view, mouse): toggle ASSIST (top right) for safe thrust, upright hold and ground braking; buttons at the bottom
+of the right page: HEIGHT HOLD, TRANSFER (pick a target on TARGETS - fly to another base within 15 km and land on a pad),
+LANDING, STOP (kill all speeds, hold height). FLIGHT page: cruise height and speed. Screens are in Russian in this beta.
+Known: footsteps are heard in vacuum.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 58710.6
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Moon
+  POS -33.4375000 -41.1184000
+  HEADING 0.00
+  ALT 0.930
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+  SUIT 1
+END
+JetPack1:OrbiterCrew\JetPack
+  STATUS Landed Moon
+  POS -33.4375000 -41.1183340
+  HEADING 180.00
+  ALT 0.240
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+END
+END_SHIPS

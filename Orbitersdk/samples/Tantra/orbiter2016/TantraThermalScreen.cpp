@@ -1,7 +1,6 @@
 // TantraThermalScreen: see TantraThermalScreen.h. Draw() follows draw() of Tantra_Design/tantra_thermal_screen.html block by block -
 // drawShip() ThermalMap(), drawZones() ZoneTable(), drawCorridor() CorridorPlot(), drawFlight() FlightBox(), drawEngines()
-// EngineBox(); the coordinates are the mockup's. RunForecast() is its predict(): flightStep() with core/Aero's coefficients in place
-// of the mockup's aero() (the ship's own airfoils), skinStep() by core/Damage itself (a copy of the ship's zone model).
+// EngineBox(); the coordinates are the mockup's. RunForecast() (its predict()) lives in TantraEntryForecast.h.
 #include "TantraThermalScreen.h"
 #include "../core/Aero.h"
 
@@ -22,15 +21,7 @@ constexpr double kSound = 300.0;                  // the speed of sound of the f
 constexpr double kTop = 125e3;                    // the corridor's top: climbing out above it the entry is a skip [m]
 constexpr double kEndV = 600.0, kEndH = 12e3;     // the entry is over slower than this [m/s] or below this [m]
 constexpr double kAmbient = 250.0;                // the corridor's ambient temperature [K]
-// the forecast's step and reach: the mockup's 0.5 s x 4000 (2000 s) ended its own entries, the game's lift (L/D ~1.1 against the
-// mockup's ~0.5) glides 1100 .. 5100 s from 120 km with the heat peaks up to 3500 s in: 1 s x 6000 - the same peaks (within 2 K
-// and 1 s of the half-second step: the zones' lags are 10 s and more) to the end of any entry, 1 .. 8 ms a run
-constexpr double kDt = 1.0;                       // [s]
-constexpr int kSteps = 6000;                      // every 4th step on its track (the mockup's every 4 s)
 constexpr double kVMax = 12000.0, kHMax = 125e3;  // the corridor's axes
-// the airfoils of Tantra::DefineAerodynamics beyond the body: the wings 2 x 240 m^2 at aspect 1.5 (scaled by aeroCrest_), the
-// gear and the pods drag only (Cd 1.1, x1.4 supersonic, on aeroGearArea_) - the vessel's own numbers, not exported by it
-constexpr double kCrestArea = 480.0, kCrestAspect = 1.5, kGearCd = 1.1;
 constexpr unsigned cEdge = 0x6a8090;              // the hull's outline
 
 const wchar_t* const kZoneName[kZones] = {L"нос (иридий)", L"днище", L"кромки крыльев", L"перо · гребни", L"корма", L"ноги (створки)", L"гондолы"};
@@ -185,17 +176,7 @@ void Cell(Canvas& g, double x, double y, const std::wstring& name, double T) {  
     g.T(Fmt(T, 0), x + 72, y + 20, c, 13, 2, 700);
 }
 
-// lift and drag areas (coefficient x reference area) at an angle of attack: the body on its planform, the wings, the gear and the
-// pods - what the ship's airfoils give in the pitch plane [m^2]
-void AeroAreas(double aoa, double mach, double crest, double gearArea, double* SL, double* SD) {
-    namespace ae = tantra::aero;
-    double cl = 0.0, cd = 0.0;
-    ae::BodyPitch(aoa, mach, &cl, &cd);
-    double L = ae::kPlanform * cl, D = ae::kPlanform * cd;
-    if (crest > 0.0) { ae::Plate(aoa, mach, kCrestAspect, &cl, &cd); L += kCrestArea * crest * cl; D += kCrestArea * crest * cd; }
-    D += kGearCd * (mach > 1.0 ? 1.4 : 1.0) * gearArea;
-    *SL = L; *SD = D;
-}
+// AeroAreas(): TantraEntryForecast.h (the forecast's and the corridor's)
 
 // the zone model's own coefficients at an attitude, read off core/Damage (its nose radii, exposure laws and emissivity are private
 // to Damage.cpp): one step far longer than any thermal lag (the skin settles to its equilibrium) at a known flow and no ambient -
@@ -237,76 +218,7 @@ EngT EngineTemps(const View& v, const double* sk) {
 
 }  // namespace
 
-// ---- the atmosphere ----
-double Air::Rho(double h) const {
-    if (h > 200e3) return 0.0;
-    if (rho[0] <= 0.0) return 1.225 * std::exp(-h / 8500.0);
-    if (h <= 0.0) return rho[0];
-    const double u = h / kStep;
-    const int i = (std::min)(kN - 2, int(u));
-    const double a = rho[i], b = rho[i + 1], f = u - i;
-    if (a <= 0.0 || b <= 0.0) return (std::max)(0.0, a + (b - a) * f);
-    return a * std::pow(b / a, f);                                         // f > 1 above the table: its top scale height
-}
-double Air::Alt(double r) const {
-    if (r <= 0.0) return 1e9;
-    if (rho[0] <= 0.0) return -8500.0 * std::log(r / 1.225);
-    if (r > rho[0]) return -1.0;
-    for (int i = 0; i < kN - 1; ++i) {
-        const double a = rho[i], b = rho[i + 1];
-        if (r < b && i < kN - 2) continue;                                 // not yet between them (the top pair extrapolates)
-        if (a <= 0.0) return 1e9;
-        if (b <= 0.0) return (i + (a - r) / a) * kStep;                    // the planet's air ends here
-        if (b >= a) return i * kStep;
-        return (i + std::log(r / a) / std::log(b / a)) * kStep;
-    }
-    return 1e9;
-}
-
-// ---- the forecast: predict() of the mockup ----
-Forecast RunForecast(const ForecastIn& in) {
-    Forecast r;
-    const Path& p = in.path;
-    dm::Model skin = in.skin;
-    const double m = (std::max)(1.0, p.mass), R = (std::max)(1.0, p.body.R), g0 = p.body.g0, cb = std::cos(p.bank);
-    double h = p.h, v = p.v, gam = p.gamma, t = 0.0;
-    for (int z = 0; z < kZones; ++z) { r.peakT[z] = skin.Temperature(z); r.peakAt[z] = 0.0; }
-    {   // the load and the nose's flux now: the peaks start from them
-        double SL = 0.0, SD = 0.0;
-        AeroAreas(p.aoa, v / kSound, p.crestAvail, p.gearArea, &SL, &SD);
-        r.nMax = 0.5 * p.air.Rho(h) * v * v * std::hypot(SL, SD) / m / kG0;
-        r.qMax = skin.HeatFlux(dm::kZoneNose);
-    }
-    dm::Flight f;
-    f.aoa = p.aoa; f.ambientT = in.ambientT;
-    dm::Ground ground;
-    bool done = v < kEndV || h < kEndH, skip = false;
-    for (int k = 0; k < kSteps && !done; ++k) {
-        // the point mass at the held attitude, the lift turned by the bank (flightStep: v, then gamma with the new v, then h)
-        const double rr = R + h, gl = g0 * (R / rr) * (R / rr), q = 0.5 * p.air.Rho(h) * v * v;
-        double SL = 0.0, SD = 0.0;
-        AeroAreas(p.aoa, v / kSound, p.crestAvail, p.gearArea, &SL, &SD);
-        const double D = q * SD, L = q * SL;
-        v += (-D / m - gl * std::sin(gam)) * kDt;
-        const double vv = (std::max)(50.0, v);
-        gam += (L * cb / (m * vv) - (gl / vv - v / rr) * std::cos(gam)) * kDt;
-        h += v * std::sin(gam) * kDt;
-        const double n = std::hypot(D, L) / m / kG0;
-        if (v < kEndV || h < kEndH) done = true;
-        if (h > kTop && gam > 0.0) { done = true; skip = true; }
-        // the skin: core/Damage's own step at the new state (damage off: nothing breaks in a forecast)
-        f.rho = p.air.Rho(h); f.v = (std::max)(0.0, v); f.mach = f.v / kSound;
-        skin.Step(kDt, f, p.expo, ground, false);
-        t += kDt;
-        for (int z = 0; z < kZones; ++z) if (skin.Temperature(z) > r.peakT[z]) { r.peakT[z] = skin.Temperature(z); r.peakAt[z] = t; }
-        if (n > r.nMax) { r.nMax = n; r.nMaxAt = t; }
-        const double qn = skin.HeatFlux(dm::kZoneNose);
-        if (qn > r.qMax) { r.qMax = qn; r.qMaxAt = t; }
-        if (k % 4 == 0) r.track.push_back({v, h});
-    }
-    r.endH = h; r.endV = v; r.endT = t; r.skip = skip; r.valid = true;
-    return r;
-}
+// ---- the atmosphere and the forecast: TantraEntryForecast.h ----
 
 // ---- the screen ----
 bool Screen::Climbing(const View& v) const {   // the mockup's «СТАРТ С ЗЕМЛИ»: up through the air on the planetary engines
@@ -602,7 +514,7 @@ void Screen::CorridorPlot(Canvas& g, const View& v, double H) {
     // the forecast and the flown track
     if (entry_ && fc_.valid) {
         std::vector<Pt> f = {{X(p.v), Y(p.h)}};
-        for (const Pt& q : fc_.track) f.push_back({X(q.x), Y(q.y)});
+        for (const FcPt& q : fc_.track) f.push_back({X(q.x), Y(q.y)});
         DashPath(g, f, cYe, 1.5, 4, 4, 0, 0.7);
     }
     std::vector<Pt> tr;

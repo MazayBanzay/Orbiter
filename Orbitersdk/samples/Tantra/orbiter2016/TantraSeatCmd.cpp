@@ -105,7 +105,8 @@ bool TantraInterior::HoverRay(VECTOR3& o, VECTOR3& d) const {
     const HWND view = nullptr;
 #endif
     RECT rc{};
-    if (!w || pid != GetCurrentProcessId() || (view && w != view && !IsChild(view, w)) || !ScreenToClient(w, &p) || !GetClientRect(w, &rc) || rc.right <= 0 || rc.bottom <= 0) return false;
+    const HWND area = view ? view : w;                                   // the 3D view's own client area (not a child window's over it)
+    if (!w || pid != GetCurrentProcessId() || (view && w != view && !IsChild(view, w)) || !ScreenToClient(area, &p) || !GetClientRect(area, &rc) || rc.right <= 0 || rc.bottom <= 0) return false;
     const double W = rc.right, H = rc.bottom, fpx = (H / 2) / std::tan((std::max)(0.1, oapiCameraAperture()));
     VECTOR3 cp; oapiCameraGlobalPos(&cp); MATRIX3 Rc; oapiCameraRotationMatrix(&Rc);
     const VECTOR3 dg = mul(Rc, unit(_V((p.x - W / 2) / fpx, (H / 2 - p.y) / fpx, 1.0)));
@@ -167,7 +168,8 @@ void TantraInterior::SpotStep() {
                 NTVERTEX* v = vtx + (s * kSpotDiscs + k) * 13;
                 v[0].x = float(c.x); v[0].y = float(c.y); v[0].z = float(c.z);
                 for (int i = 0; i < 12; ++i) {
-                    const double a = 2 * PI * i / 12, r = kSpotR[k] * pulse;
+                    static const double kLaserR[kSpotDiscs] = {0.0010, 0.0016, 0.0024, 0.0034, 0.0046};   // a laser pointer's dot (the user, 2026-10-05: «тонкая»), not the sun spot's kSpotR
+                    const double a = 2 * PI * i / 12, r = kLaserR[k] * pulse;
                     const VECTOR3 q = c + (spotHit_.ex * std::cos(a) + spotHit_.up * std::sin(a)) * r;
                     v[1 + i].x = float(q.x); v[1 + i].y = float(q.y); v[1 + i].z = float(q.z);
                 }

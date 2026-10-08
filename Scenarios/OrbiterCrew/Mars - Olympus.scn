@@ -1,0 +1,58 @@
+BEGIN_DESC
+OrbiterCrew. The astronavigator in her suit on Mars, next to the Olympus base; a full jet pack lies in front of her.
+Астронавигатор в скафандре на Марсе, рядом с базой Olympus; перед ней лежит полный ранец.
+Walk: W/S, A/D turn, Q/E side step, Shift servo run, Space jump, F use, K suit, B jet pack, L lamps, Shift+V sun shade, H helmet display.
+Ходьба: W/S, A/D поворот, Q/E шаг вбок, Shift бег с сервоприводами, Пробел прыжок, F действие, K скафандр, B ранец, L фонари, Shift+V щиток, H дисплей шлема.
+Jet pack: Space/Ctrl thrust up/down, Shift+Space full, Shift+Ctrl off, W/S thrust vector, A/D turn, Q/E sideways; autopilot on the right MFD.
+Ранец: Пробел/Ctrl тяга больше/меньше, Shift+Пробел полная, Shift+Ctrl выкл, W/S вектор, A/D поворот, Q/E вбок; автопилот на правом MFD.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52001.9470
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Mars
+  POS -135.4300000 12.7440000
+  HEADING 180.00
+  ALT 0.930
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+  NAME Niza Krit
+  ROLE astronavigator
+  SEX female
+  SUIT 1
+  SUIT_O2 1.0
+  SUIT_WATER 2.0
+  SUIT_SORBENT 0.0
+  SUIT_BATTERY 6.0
+  SUIT_N2 1.5
+  SUIT_SERVO 1
+END
+JetPack1:OrbiterCrew\JetPack
+  STATUS Landed Mars
+  POS -135.4300000 12.7440340
+  HEADING 0.00
+  ALT 0.240
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+END
+END_SHIPS

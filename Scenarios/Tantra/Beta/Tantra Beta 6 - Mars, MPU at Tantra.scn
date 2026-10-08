@@ -1,0 +1,97 @@
+BEGIN_DESC
+TANTRA BETA 6 - Mars, MPU at Tantra.
+Mars, Valles Marineris: the floor of Coprates Chasma (13.7 S, 65.6 W), 4.3 km below datum. The Tantra stands nearby;
+the astronavigator in her suit 40 m beside the ship, her jet pack on the ground in front of her, the MPU next to her.
+ON FOOT: W/S walk, A/D turn, Q/E side step, Shift run, B put on the pack (walk up to it), K suit. The Tantra: its main airlock lift
+(F at its foot boards it, click UP inside the cabin).
+MPU (universal mobile platform) - BETA test sample: an open 8x8 platform with a standing control post, no cabin.
+It is driven only by a person at its post; the focus and the camera stay with the person.
+BOARDING: walk up to the platform (anywhere round it) - F climbs onto the deck. At the console - F takes the post (again: steps back).
+At the deck edge by the steps - F steps down to the ground.
+DRIVING (the person's own keys): W forward (40 km/h), Shift+W full power (80 km/h), A/D steer.
+S - service brake with ABS (the wheels keep turning and steering); from standstill S reverses (15 km/h).
+Space - emergency brake (wheels locked, it skids). B parking brake. Caps Lock raises the deck (+0.25 m) / lowers it back.
+V the platform from outside (V again - the driver's view).
+PHYSICS: terramechanics of each wheel in the soil of the body it drives on (Bekker sinkage and rolling resistance,
+Janosi-Hanamoto traction against slip, side force and bulldozing; Moon - lunar regolith, Mars - sand, Earth - firm loam):
+grip, wheelspin, sliding and skids come out of the soil. Traction control on W, none with Shift. Independent sprung suspension
+(squat on take-off, dive on braking, roll in turns), all-wheel steering (rear wheels counter-steer at low speed).
+8 hub motors, 3 MW, 1 MWh battery with regenerative braking; the speed limit holds downhill too.
+Speed, battery, draw and range are shown at the bottom of the screen (in the suit: in the helmet display).
+Dust from the wheels (ballistic in vacuum, a cloud in air). Sound only through air (none on the Moon, faint on Mars, full on Earth).
+COLLISIONS: people are struck by the platform (injuries through the suit); it meets the Tantra's legs and feet and other
+platforms; a crash above 30 km/h throws the people off the deck. Parked, it stands still on its brake.
+At the start the platform waits on its wheels until the terrain has loaded. Time warp above 2x: stiff suspension only; above 4x: parked.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52001.9470
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Niza_Krit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Niza_Krit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 50.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Tantra:Tantra
+  STATUS Landed Mars
+  POS -65.6048600 -13.6834700
+  HEADING 295.00
+  PRPLEVEL 0:1.000 1:1.000 2:1.000 3:1.000 4:1.000 5:1.000
+  ENGSET 0
+  IGNITION 0
+  GLIMIT 1 5.00
+  CARRIAGE 0.0000 0.0 1.000 1 0 0
+  CREW 1 44 62 82 Capt - Erg Noor
+  CREW 0 23 62 58 Spe Niza_Krit Niza Krit
+  CREW 1 36 62 74 Spe - Pel Lin
+  CREW 1 52 62 80 APhy - Pur Hiss
+  CREW 1 31 62 60 APhy - Ingrid Ditra
+  CREW 1 38 62 76 Bio - Eon Tal
+  CREW 1 35 62 57 Doc - Luma Lasvi
+  CREW 1 33 62 75 Eng - Kay Ber
+  CREW 1 34 62 62 Geo - Bina Led
+  LIFT 1.0000 1.0000 1.0000 1.0000 1
+  AIRLOCK 1
+END
+Niza_Krit:OrbiterCrew\Astronavigator
+  STATUS Landed Mars
+  POS -65.6048600 -13.6841460
+  HEADING 295.00
+  ALT 0.930
+  AFCMODE 7
+  NAME Niza Krit
+  ROLE Spe
+  SEX female
+  SUIT 1
+END
+JetPack1:OrbiterCrew\JetPack
+  STATUS Landed Mars
+  POS -65.6048915 -13.6841317
+  HEADING 115.00
+  ALT 0.240
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+END
+MPU-1:MPU
+  STATUS Landed Mars
+  POS -65.6047600 -13.6841460
+  HEADING 295.00
+  ALT 0.880
+  BATT 1.0
+  PARK 1
+END
+END_SHIPS

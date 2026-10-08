@@ -1,0 +1,2 @@
+OrbiterCrew: the crew member on foot, in the suit, with the jet pack.
+OrbiterCrew: человек пешком, в скафандре, с ранцем.

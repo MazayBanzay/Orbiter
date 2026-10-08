@@ -1,6 +1,10 @@
 BEGIN_DESC
-OrbiterCrew: the astronavigator 15 m from the ISS wearing the jet pack (about 280 m/s). Thrust runs along her body: fly head first.
-Numpad: rotation, / switches rotation and translation, 5 kills rotation. V sun shade, L lamps. F1 for her view, H for the HUD.
+OrbiterCrew. 15 m from the ISS wearing a full jet pack.
+15 м от МКС, на ней полный ранец.
+In space: numpad rotation, / rotation or translation, numpad 5 kills rotation.
+В космосе: цифровой блок поворот, / поворот или сдвиг, 5 гасит вращение.
+Jet pack: Space/Ctrl thrust up/down, Shift+Space full, Shift+Ctrl off, W/S thrust vector, A/D turn, Q/E sideways; autopilot on the right MFD.
+Ранец: Пробел/Ctrl тяга больше/меньше, Shift+Пробел полная, Shift+Ctrl выкл, W/S вектор, A/D поворот, Q/E вбок; автопилот на правом MFD.
 END_DESC
 
 BEGIN_ENVIRONMENT
@@ -43,8 +47,18 @@ NizaKrit:OrbiterCrew\Astronavigator
   AROT 20.000 -30.000 10.000
   RCSMODE 1
   AFCMODE 7
-  PRPLEVEL 0:1.000000 1:1.000000
+  PRPLEVEL 0:1.000000
+  NAME Niza Krit
+  ROLE astronavigator
+  SEX female
   SUIT 1
+  SUIT_O2 1.0
+  SUIT_WATER 2.0
+  SUIT_SORBENT 0.0
+  SUIT_BATTERY 6.0
+  SUIT_N2 1.5
+  SUIT_SERVO 1
   JETPACK 1
+  JET_FUEL 12
 END
 END_SHIPS

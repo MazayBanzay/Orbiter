@@ -28,6 +28,8 @@
 #include "TantraThermalScreen.h"
 #include "TantraAutopilotScreen.h"
 #include "TantraGuidance.h"
+#include "TantraBellyLand.h"
+#include "TantraReentry.h"
 #include "TantraScreenFont.h"
 #include "TantraGost.h"
 #include <string>
@@ -46,8 +48,19 @@ public:
     bool Touch(int screen, double u, double v);// u right, v down, 0..1 over the screen
     void Shutdown();
     void DrawHud(SURFHANDLE s, int w, int h, const VECTOR3& camDir, const VECTOR3& camUp, double vfovDeg);   // over the front picture
-    void PaintSpot(int screen, double u, double v);   // the cursor unit's light spot over a screen's picture (orange)
+    void FlyAttitude(const VECTOR3& nose, const VECTOR3* up, double dt, double rateMax);   // the autopilots' attitude by the RCS (TantraFlightCtl.cpp)
+    void FlyRelease();
+    void ApApply(double dt);                    // the engaged autopilot's commands to the ship
+    bool fcInit_ = false, fcFlying_ = false, apFlew_ = false; double fcEp_ = 0, fcEy_ = 0, fcEr_ = 0, fcWp_ = 0, fcWy_ = 0, fcWr_ = 0;
+    void PaintSpot(int screen, double u, double v);   // the cursor unit's laser dot over a screen's picture (after a full redraw)
+    // the dot moved without a redraw of its screen: the picture under the old dot put back, the new one painted (the user,
+    // 2026-10-05: the whole screen redrawn 20 times a second for it slowed the game)
+    void MoveSpot(int screen, double u, double v);
+    void SpotRedrawn(int screen) { if (screen == spotScr_) spotScr_ = -1; }   // its picture is new: nothing to put back
     double tSpot_ = 0.0;
+    int drawTurn_ = 0;                          // the screen redrawn next (one at a time in turn)
+    SURFHANDLE spotBak_ = nullptr;                    // the picture under the dot, saved
+    int spotScr_ = -1, spotX_ = 0, spotY_ = 0, spotW_ = 0, spotLastX_ = -1, spotLastY_ = -1;   // where it was saved from (-1: nothing saved)
     void DrawDataPage(int zone, SURFHANDLE s, int w, int h);   // the main screen's ДАННЫЕ band: zone 0 the front arc, 1 / 2 the end walls (TantraDataPages.cpp)
     void AckAlerts();                          // the alerts acknowledged: they stop blinking
 
@@ -122,13 +135,21 @@ private:
     // ---- АВТОПИЛОТ (TantraDisplaysAutopilot.cpp): the left glass's third page ----
     void FillAscentState(tantra::guidance::AscentState& s, double dt);
     void FillLandState(tantra::guidance::LandState& s, double dt);
+    void FillBellyState(tantra::guidance::BellyState& s, double dt);
+    void FillReentryState(tantra::reentry::ReentryState& s, double dt);
     void ApStep(double dt);
     void DrawAutopilot(oapi::Sketchpad* skp, int ox, int oy, int w, int h);
     bool TouchAutopilot(double x, double y);
     tantra::apscreen::Screen apScr_;
     tantra::guidance::Ascent asc_;
     tantra::guidance::Landing land_;
-    int apPage_ = 0;                           // 0 ВЗЛЁТ НА ОРБИТУ, 1 ПОСАДКА НА КОРМУ
+    tantra::guidance::BellyLand belly_;        // ПОСАДКА ЛЁЖА (TantraBellyLand)
+    double blGearT_ = -1e9;                    // the belly autopilot asked for the gear then (system time; once per 3 s)
+    tantra::reentry::Reentry rent_;            // СХОД (TantraReentry)
+    double rnSitesT_ = -1e9, rnWingT_ = -1e9;  // СХОД: the bases' list read then (sim time); a wing step asked then (system time)
+    OBJHANDLE rnRef_ = nullptr;                // the surface the bases' list is of
+    int rnHand_ = 0;                           // the handover to ПОСАДКА НА КОРМУ: 0 none, 1 its check runs, 2 started
+    int apPage_ = 0;                           // 0 ВЗЛЁТ НА ОРБИТУ, 1 ПОСАДКА НА КОРМУ, 2 ПОСАДКА ЛЁЖА, 3 СХОД
     double padLat_ = 0.0, padLon_ = 0.0; bool havePad_ = false;   // the landing point (where the ship was when armed)
     double apThE_ = 0.0, apThN_ = 0.0; bool apThInit_ = false;
     bool mechEstop_ = false;                   // the emergency stop of the mechanisation: the carriage held

@@ -38,6 +38,7 @@ namespace ocrew
 		if (s.econ) oapiWriteScenario_int(scn, const_cast<char*>("SUIT_ECON"), 1);
 		oapiWriteScenario_float(scn, const_cast<char*>("SUIT_TEQ"), s.tEq);
 		if (s.tripped) oapiWriteScenario_int(scn, const_cast<char*>("SUIT_TRIP"), 1);
+		if (s.optDark > 1e-4) oapiWriteScenario_float(scn, const_cast<char*>("SUIT_OPTDARK"), s.optDark);
 		oapiWriteScenario_int(scn, const_cast<char*>("FIELD"), s.fieldOn);
 		oapiWriteScenario_string(scn, const_cast<char*>("HUD"), const_cast<char*>(suit.computer->hud.Save().c_str()));
 		oapiWriteScenario_int(scn, const_cast<char*>("JETPACK"), pack->Worn());
@@ -58,6 +59,7 @@ namespace ocrew
 		else if (key == "SUIT_SERVO") { int b = 1; ss >> b; s.drivesOn = b != 0; }
 		else if (key == "SUIT_ECON") { int b = 0; ss >> b; s.econ = b != 0; }
 		else if (key == "SUIT_TEQ") ss >> s.tEq;
+		else if (key == "SUIT_OPTDARK") ss >> s.optDark;
 		else if (key == "SUIT_TRIP") { int b = 0; ss >> b; s.tripped = b != 0; }
 		else if (key == "FIELD") ss >> s.fieldOn;
 		else if (key == "HUD") { std::string rest; std::getline(ss, rest); suit.computer->hud.Load(rest); }

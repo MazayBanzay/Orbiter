@@ -1,0 +1,86 @@
+BEGIN_DESC
+TANTRA BETA 8 - Low Earth orbit, commander's seat.
+The Tantra in low Earth orbit (the date and neighbours of Orbiter's classic scenario: the ISS and Mir). Anamezon traps full,
+the field store charged, the planetary engine pods turned aft. Niza Krit sits in the commander's seat of the bridge capsule;
+the person keeps the focus: everything is done from the seat with the mouse and the numpad.
+INSIDE: F stand up / sit down at a seat (not in the suit); W/S/A/D/Q/E walk, Shift run, right mouse held turns the body with the look.
+Left click: screens and buttons within reach. V (in the commander's seat): outside view of the ship, V again back.
+BRIDGE: front screen tabs FLIGHT / ENGINES / PARAMETERS; side screens carry six Orbiter MFDs; left screen MECHANISMS (+ thermal),
+right screen POWER PLANT. Planetary engines: numpad + / - throttle, Ctrl + full, Ctrl - zero, * cut. Attitude numpad 2/8 4/6 1/3,
+/ rotation/linear, 5 kill rotation.
+ANAMEZON: ENGINES - IGNITION (field - kaon beam - feed). Near Earth it is locked by radiation (an oxygen world, crews nearby);
+the bypass needs two presses within 3 s. The exhaust's shock nodes stretch hundreds of km behind - watch from outside (V).
+G-limiter on ENGINES, compensator up to 200 g.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 51982.5501203704
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Niza_Krit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Niza_Krit
+  MODE Cockpit
+  FOV 50.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Orbit
+END_HUD
+
+BEGIN_SHIPS
+ISS:ProjectAlpha_ISS
+  STATUS Orbiting Earth
+  RPOS 6606225.07 78793.93 -1314330.24
+  RVEL 489.677 -7418.272 1995.128
+  AROT 30.00 0.00 50.00
+  IDS 0:588 100 1:586 100 2:584 100 3:582 100 4:580 100
+  NAVFREQ 0 0
+  XPDR 466
+END
+Mir
+  STATUS Orbiting Earth
+  RPOS -2176041.39 -384799.80 -6284253.30
+  RVEL 7319.246 -147.592 -2513.473
+  AROT 0.00 -45.00 90.00
+  IDS 0:540 100 1:542 100 2:544 100
+  XPDR 482
+END
+Tantra:Tantra
+  STATUS Orbiting Earth
+  RPOS 4751179.22 -1997358.49 4915397.45
+  RVEL -5410.497 -1917.607 4720.699
+  AROT -38.68 11.46 51.36
+  PRPLEVEL 0:1.000 1:1.000 2:1.000 3:1.000 4:1.000
+  ENGSET 0
+  IGNITION 0
+  GLIMIT 1 5.00
+  FIELDSTORE 1.000
+  CREW 1 44 62 82 Capt - Erg Noor
+  CREW 2 23 62 58 Spe Niza_Krit Niza Krit
+  CREW 1 36 62 74 Spe - Pel Lin
+  CREW 1 52 62 80 APhy - Pur Hiss
+  CREW 1 31 62 60 APhy - Ingrid Ditra
+  CREW 1 38 62 76 Bio - Eon Tal
+  CREW 1 35 62 57 Doc - Luma Lasvi
+  CREW 1 33 62 75 Eng - Kay Ber
+  CREW 1 34 62 62 Geo - Bina Led
+  AIRLOCK 0
+END
+Niza_Krit:OrbiterCrew\Astronavigator
+  STATUS Orbiting Earth
+  RPOS 4751179.22 -1997358.49 4915397.45
+  RVEL -5410.497 -1917.607 4720.699
+  AFCMODE 7
+  NAME Niza Krit
+  ROLE Spe
+  SEX female
+  SUIT 0
+  INTERIOR 0.000 1.000 78.550 0.0000 Tantra
+  SEAT 0
+END
+END_SHIPS

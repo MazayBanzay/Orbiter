@@ -1,0 +1,2 @@
+MPU: the mobile platforms (MPU, EMPU) and their charging station.
+МПУ: мобильные платформы (МПУ, Э.МПУ) и зарядная станция.

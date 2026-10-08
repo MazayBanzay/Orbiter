@@ -12,12 +12,13 @@
 // carries the tabs МЕХАНИЗАЦИЯ | ТЕПЛО where the mechanisation screen has them (the page switches without the tabs moving).
 // The forecast is the mockup's predict() with the game's models in place of its stand-ins: the point-mass entry at the held
 // attitude with core/Aero's coefficients (the airfoils of Tantra::DefineAerodynamics), the skin by a copy of the ship's own
-// core/Damage model stepped forward. RunForecast() is pure (no Orbiter calls): the ship calls it about once a second while
-// Entry() and hands the result to SetForecast().
+// core/Damage model stepped forward. RunForecast() is pure (no Orbiter calls; TantraEntryForecast.h): the ship calls it about
+// once a second while Entry() and hands the result to SetForecast().
 #pragma once
 #include "orbitersdk.h"
 #include "TantraScreenCanvas.h"
 #include "../core/Damage.h"
+#include "TantraEntryForecast.h"   // Air, Body, Path, ForecastIn, Forecast, RunForecast (pure: the autopilot СХОД runs it too)
 
 #include <array>
 #include <deque>
@@ -28,50 +29,6 @@
 namespace tantra::thermalscreen {
 
 enum Cmd { kCmdTabMech, kCmdTabThermal };   // the title bar's tabs: to the mechanisation page / this page
-
-constexpr int kZones = tantra::damage::kZoneCount;   // nose, belly, wing edges, fin, stern, gear, pods
-
-// the atmosphere of the forecast and the corridor: Orbiter's own density by altitude when the ship fills the table
-// (oapiGetPlanetAtmParams at its longitude and latitude, every 2 km), else the mockup's Earth, 1.225 e^(-h / 8500) - nothing
-// above 200 km either way; between the table's points log-linear, above its top extrapolated with its top scale height
-struct Air {
-    static constexpr int kN = 66;              // 0 .. 130 km
-    static constexpr double kStep = 2000.0;    // [m]
-    double rho[kN] = {};                       // [kg/m^3]; rho[0] == 0: no table
-    double Rho(double h) const;                // the density at an altitude [kg/m^3]
-    double Alt(double rho) const;              // the altitude of a density [m] (< 0: denser than at the ground)
-};
-struct Body { double R = 6371e3, g0 = 9.81; };   // the planet: mean radius [m], surface gravity [m/s^2] (the mockup's Earth)
-
-// the ship on its path, as the forecast and the corridor need it
-struct Path {
-    double h = 0.0, v = 0.0, gamma = 0.0;      // altitude [m], airspeed [m/s], flight path angle of the airspeed [rad] (< 0 down)
-    double mass = 0.0;                         // [kg]
-    double aoa = 0.0, bank = 0.0;              // [rad]: the forecast holds them (the pilot or the autopilot keeps the attitude)
-    double crestAvail = 1.0;                   // the wings in the flow: Tantra::aeroCrest_ (0 folded .. 1 out at 90 deg)
-    double gearArea = 0.0;                     // the gear and the pods in the flow: Tantra::aeroGearArea_ [m^2]
-    tantra::damage::Exposure expo;             // what the hull presents to the flow - as Tantra::UpdateDamage builds it
-    Air air;
-    Body body;
-};
-
-// the forecast: the ship's state and a copy of its zone model run forward to the end of the entry (the mockup's predict())
-struct ForecastIn {
-    Path path;
-    tantra::damage::Model skin;                // a copy of Tantra::damage_ (its temperatures now); stepped with damage off
-    double ambientT = 250.0;                   // the air's temperature for the radiative equilibrium [K] (the mockup's)
-};
-struct Forecast {
-    bool valid = false;
-    double peakT[kZones] = {}, peakAt[kZones] = {};   // each zone's highest temperature ahead [K] and in how long [s] (0: now)
-    double nMax = 0.0, nMaxAt = 0.0;           // the aerodynamic load's peak [g] and in how long [s]
-    double qMax = 0.0, qMaxAt = 0.0;           // the nose's heat flux peak [W/m^2] and in how long [s]
-    double endH = 0.0, endV = 0.0, endT = 0.0; // where the entry ends (slower than 600 m/s or below 12 km) and in how long [s]
-    bool skip = false;                         // it ends climbing out above 125 km: a skip
-    std::vector<scr::Pt> track;                // every 4 s: x the speed [m/s], y the altitude [m]
-};
-// up to 6000 steps of 1 s (to the end of any entry): 1 .. 8 ms; pure - no Orbiter calls
-Forecast RunForecast(const ForecastIn& in);
 
 // the ship as the screen shows it
 struct View {

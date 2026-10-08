@@ -10,6 +10,7 @@
 #include <sstream>
 #include <fstream>
 #include <map>
+#include <atomic>
 
 // oapiCameraAttach modes (OrbiterAPI.h: 0 internal, 1 external) - once used the other way round, by mistake
 const int CAM_INSIDE = 0, CAM_OUTSIDE = 1;
@@ -51,6 +52,46 @@ namespace ocrew
 	};
 	std::vector<ShipInterior>& interiors() { static std::vector<ShipInterior> v; return v; }
 	ShipInterior* InteriorOf(OBJHANDLE ship) { for (ShipInterior& s : interiors()) if (s.ship == ship) return &s; return nullptr; }
+
+	// ---- context actions: the wheel and helpers ----
+	namespace
+	{
+		// the wheel while a list of two or more is shown is hers (the view keeps it otherwise; Shift+wheel: always the view)
+		WNDPROC g_prevProc{}; HWND g_hookWnd{}; std::atomic<int> g_wheel{ 0 }; std::atomic<bool> g_wheelEat{ false }; int g_ctxUsers{};
+		LRESULT CALLBACK CtxWndProc(HWND h, UINT m, WPARAM w, LPARAM l)
+		{
+			if (m == WM_MOUSEWHEEL && g_wheelEat.load() && !(GET_KEYSTATE_WPARAM(w) & MK_SHIFT)) { g_wheel += GET_WHEEL_DELTA_WPARAM(w); return 0; }
+			return CallWindowProc(g_prevProc, h, m, w, l);
+		}
+		void HookWheel()
+		{
+			if (g_hookWnd) return;
+			gcCore2* core = gcGetCoreInterface();
+			HWND v = core ? core->GetRenderWindow() : nullptr;
+			if (!v) return;
+			g_prevProc = reinterpret_cast<WNDPROC>(SetWindowLongPtr(v, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(CtxWndProc)));
+			g_hookWnd = v;
+		}
+		void UnhookWheel()
+		{
+			if (g_hookWnd && IsWindow(g_hookWnd) && reinterpret_cast<WNDPROC>(GetWindowLongPtr(g_hookWnd, GWLP_WNDPROC)) == CtxWndProc)
+				SetWindowLongPtr(g_hookWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(g_prevProc));
+			g_hookWnd = nullptr; g_prevProc = nullptr;
+		}
+		std::string ToCp1251(const std::string& u8)   // our UTF-8 into the ships' code page (an OcAction's label)
+		{
+			int n = MultiByteToWideChar(CP_UTF8, 0, u8.c_str(), -1, nullptr, 0); std::wstring w(n > 0 ? n : 1, L'\0');
+			MultiByteToWideChar(CP_UTF8, 0, u8.c_str(), -1, &w[0], n);
+			int m = WideCharToMultiByte(1251, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr); std::string o(m > 0 ? m : 1, '\0');
+			WideCharToMultiByte(1251, 0, w.c_str(), -1, &o[0], m, nullptr, nullptr);
+			if (!o.empty() && o.back() == '\0') o.pop_back();
+			return o;
+		}
+		std::wstring Wide(const char* s, UINT cp) { int n = MultiByteToWideChar(cp, 0, s, -1, nullptr, 0); std::wstring w(n > 0 ? n - 1 : 0, L' '); if (n > 1) MultiByteToWideChar(cp, 0, s, -1, &w[0], n); return w; }
+		const DWORD kAmber = 0x30B0FF, kGrey = 0x707070, kDark = 0x0C0C0C, kSelBg = 0x123048;   // Sketchpad colours: 0xBBGGRR
+	}
+
+
 	struct PendingPlace { OBJHANDLE ship{}; VECTOR3 feet{}; double hdg{}; int seat{ -1 }; };   // seat >= 0: the body is made in it (ocSitAt)
 	PendingPlace& PendingInterior() { static PendingPlace p; return p; }
 	// the ship's label (its own code page, windows-1251) to UTF-8 for our HUD
@@ -119,6 +160,13 @@ namespace ocrew
 	CrewMember::~CrewMember()
 	{
 		everyone.erase(std::remove(everyone.begin(), everyone.end(), this), everyone.end());
+		if (everyone.empty()) UnhookWheel();   // the render window's wheel back to Orbiter alone
+		if (cursorHidden) { ShowCursor(TRUE); cursorHidden = false; }
+		if (cxSurf) { oapiDestroySurface(cxSurf); cxSurf = nullptr; }
+		if (gaugeSurf) { oapiDestroySurface(gaugeSurf); gaugeSurf = nullptr; }
+		if (gaugeShadow) { oapiDestroySurface(gaugeShadow); gaugeShadow = nullptr; }
+		if (cxShadow) { oapiDestroySurface(cxShadow); cxShadow = nullptr; }
+		for (oapi::Font*& f : cxFont) if (f) { oapiReleaseFont(f); f = nullptr; }
 		// the body leaves the world; the person stays in the registry with everything he or she is and wears:
 		// the worn items take their state back from the body's parts (fuel, cold gas) and let go of them
 		jet.Detach();
@@ -152,7 +200,8 @@ namespace ocrew
 		oapiReadItem_float(cfg, const_cast<char*>("WalkSpeed"), walkSpeed);
 		oapiReadItem_float(cfg, const_cast<char*>("RunSpeed"), runSpeed);
 		oapiReadItem_vec(cfg, const_cast<char*>("EyePos"), eye);
-		{ int dl = 0; if (oapiReadItem_int(cfg, const_cast<char*>("DebugLog"), dl)) debugLog = dl != 0; }   // test lines in Orbiter.log (clicks, the head camera)
+		{ int dl = 0; if (oapiReadItem_int(cfg, const_cast<char*>("DebugLog"), dl)) debugLog = dl != 0; }
+		{ int ct = 0; if (oapiReadItem_int(cfg, const_cast<char*>("CtxTest"), ct)) ctxTest = ct != 0; }   // test lines in Orbiter.log (clicks, the head camera)
 		if (!reborn) {   // the suit's supplies as issued (a person out of a ship has what is left)
 		if (oapiReadItem_float(cfg, const_cast<char*>("SuitO2"), v)) suit.o2 = suit.o2Cap = v;
 		if (oapiReadItem_float(cfg, const_cast<char*>("SuitSorbent"), v)) suit.sorbCap = v;
@@ -226,6 +275,14 @@ namespace ocrew
 			else if (key == "INTERIOR") { ss >> inFeet.x >> inFeet.y >> inFeet.z >> inHdg; std::getline(ss >> std::ws, inShipName); }
 			else if (key == "SHADE") { ss >> shadeTarget; shade = shadeTarget; }
 			else if (key == "LAMP") ss >> lampOn;
+			else if (key == "HELD")   // what she holds: kind mass w h d mesh|- label...
+			{
+				OcHeld h{}; h.size = sizeof h; std::string mesh, label;
+				ss >> h.kind >> h.massKg >> h.dims[0] >> h.dims[1] >> h.dims[2] >> mesh; std::getline(ss >> std::ws, label);
+				if (mesh != "-") std::snprintf(h.mesh, sizeof h.mesh, "%s", mesh.c_str());
+				std::snprintf(h.label, sizeof h.label, "%s", label.c_str());
+				held = h; heldPending = true;
+			}
 			else ParseScenarioLineEx(line, status);
 		}
 		suit.Seal();
@@ -238,6 +295,12 @@ namespace ocrew
 		who.Save(scn);                 // the person: who, the organism, what is worn
 		oapiWriteScenario_float(scn, const_cast<char*>("SHADE"), shadeTarget);   // the body's own state
 		oapiWriteScenario_int(scn, const_cast<char*>("LAMP"), lampOn);
+		if (holding)
+		{
+			char b[200]; std::snprintf(b, sizeof b, "%d %.3f %.3f %.3f %.3f %s %s", held.kind, held.massKg, held.dims[0], held.dims[1], held.dims[2],
+				held.mesh[0] ? held.mesh : "-", held.label);
+			oapiWriteScenario_string(scn, const_cast<char*>("HELD"), b);
+		}
 		if (inShip && oapiIsVessel(inShip))
 		{
 			char b[160]; std::snprintf(b, sizeof b, "%.3f %.3f %.3f %.4f %s", inFeet.x, inFeet.y, inFeet.z, inHdg, oapiGetVesselInterface(inShip)->GetName());
@@ -248,12 +311,14 @@ namespace ocrew
 
 	void CrewMember::clbkPostCreation()
 	{
+		if (heldPending) { heldPending = false; const OcHeld h = held; Give(h, false); }   // what she held when saved
 		air = atmospheres.Sample(this);
 		if (!suitFromScenario) suitOn = !air.Breathable();
 		// the pack's fuel: its own line (JET_FUEL) or, in older scenarios, the body's PRPLEVEL
 		if (jetFromScenario && suitOn) jet.Wear(jet.FuelKnown() ? jet.Kept() : GetPropellantMass(jet.Propellant()));
-		if (n2 && who.worn.suit.n2Kg >= 0) SetPropellantMass(n2, who.worn.suit.n2Kg);   // the suit's cold gas, its own line
-		else SetPropellantMass(jet.Propellant(), 0);
+		// the suit's cold gas: its own line (SUIT_N2), or a full bottle when the scenario does not say (an unlisted tank
+		// is left empty). The pack's fuel is not touched here - it came with the pack above
+		if (n2) SetPropellantMass(n2, who.worn.suit.n2Kg >= 0 ? who.worn.suit.n2Kg : GetPropellantMaxMass(n2));
 		SetEmptyMass(Mass());
 		ShowFigure();
 		if (!suitFig.ok) oapiWriteLogV("OrbiterCrew: %s has no suit figure yet, the coverall stands in for it", name.c_str());
@@ -292,6 +357,9 @@ namespace ocrew
 		SetCameraRotationRange(PI * 0.98, PI * 0.98, PI05 * 0.95, PI05 * 0.95);
 		SetCameraCatchAngle(0);
 		hud.RegisterVC();   // the helmet display's plate is the VC HUD (the suit computer draws into it: clbkDrawHUD)
+		// the caption drawn by the display itself, last, into the same surface as its own signs (its light layer, or the VC
+		// HUD when paused): the same layer and sharpness as the HUD («Архитектор - скафандр», 2026-10-07)
+		hud.overlay = [this](oapi::Sketchpad* s, double W, double H, double kx, double ky) { CtxPaintPlate(s, W, H, kx, ky); };
 		return true;
 	}
 
@@ -374,8 +442,9 @@ namespace ocrew
 
 	int CrewMember::clbkConsumeBufferedKey(DWORD key, bool down, char* kstate)
 	{
+		if (key == OAPI_KEY_X && !KEYMOD_CONTROL(kstate) && !KEYMOD_ALT(kstate)) { if (down && holding) DropHeld(KEYMOD_SHIFT(kstate)); return holding || !down ? 1 : 0; }
 		if (KEYMOD_CONTROL(kstate) || KEYMOD_ALT(kstate)) return 0;
-		if (key == OAPI_KEY_F) { if (down) DoUse(); return 1; }   // the action
+		if (key == OAPI_KEY_F) { if (down && !CtxUse()) DoUse(); return 1; }   // the action: the node she looks at first
 		// held at a machine's post (ocCarry, e.g. the MPU's driver): its keys drive the machine (it reads them itself) -
 		// no jump, no pack, no B here; F still lets her step off
 		if (inShip && carried > 0 && (key == OAPI_KEY_SPACE || key == OAPI_KEY_B || key == OAPI_KEY_K)) return 1;
@@ -402,7 +471,7 @@ namespace ocrew
 		if (!(GetFlightStatus() & 1) && !airborne) return 0;
 		if (key == OAPI_KEY_SPACE)
 		{
-			if (down && !airborne && !lying && bio.CanAct() && !jet.Worn()) Jump();   // with the pack Space is "up"
+			if (down && !airborne && !lying && bio.CanAct() && !jet.Worn() && !holding) Jump();   // with the pack Space is "up"; not with her hands full
 			return 1;
 		}
 		for (DWORD k : MOVE_KEYS) if (key == k) return 1;
@@ -411,12 +480,13 @@ namespace ocrew
 
 	void CrewMember::Drive(double dt, double g)
 	{
-		const Keys k = keysFresh ? keys : Keys{};
+		const Keys k = keysFresh && !cx.busy ? keys : Keys{};   // a long action: she stays where she is
 		// three profiles: coverall; suit with live drives (Shift = servo boost); suit with a flat battery (dead weight)
 		const bool drives = suitOn && suit.Drives();
 		double walkV = walkSpeed, runV = (std::min)(runSpeed, bio.RunLimit());
 		if (drives) runV = 4.2 + 2.3 * std::sqrt(bio.wbal);
 		else if (suitOn) { walkV = 1.0; runV = (std::min)(2.2, bio.RunLimit()); }
+		if (holding) { const double f = HeldSlow(); walkV *= f; runV = HeldWeight() > 0.6 * CarryLimit() ? walkV : runV * f; }   // her hands full
 		boost = drives && k.run && k.fwd;
 
 		// forward: accelerate within the grip of the soles, stop fast, brake hard on the opposite key
@@ -495,8 +565,24 @@ namespace ocrew
 		else bio.Spend(0.5 * Mass() * v0 * v0 / 0.25);   // muscles are about 25 % efficient
 	}
 
+	void CrewMember::Settle(double simt, double dt)
+	{
+		OBJHANDLE body = GetSurfaceRef();
+		if (!body || !(GetFlightStatus() & 1) || airborne) { settling = false; return; }   // not standing: nothing to hold
+		double lng, la, rad; GetEquPos(lng, la, rad);
+		const double e = oapiSurfaceElevation(body, lng, la);
+		if (std::abs(e - settleElev) > 0.005) { settleElev = e; settleStill = 0; } else settleStill += dt;
+		VESSELSTATUS2 s = Status(this); s.status = 1; DefSetStateEx(&s);   // landed again: on the ground as it is now
+		if ((settleStill > 1.0 && simt > 1.0) || simt > 15.0)
+		{
+			settling = false;
+			oapiWriteLogV("OrbiterCrew: %s: the ground under her settled at %.2f m (sim %.1f s)", name.c_str(), e, simt);
+		}
+	}
+
 	void CrewMember::GroundContactCheck(double dt)
 	{
+		if (settling) return;   // the terrain is still coming in
 		// every body point against the relief under that very point (hills, crater walls), not only the soles
 		OBJHANDLE body = GetSurfaceRef();
 		if (!body) return;
@@ -562,7 +648,9 @@ namespace ocrew
 		if (inShip || length(nIn) < 1e-6) return false;
 		const VECTOR3 n = nIn / length(nIn);
 		const double vn = dotp(vStrike, n);
-		if (vn < 0.3) return false;
+		// a slow touch is not a blow: she takes up to ~1 m/s by stepping back (the machines settling at the start touched her at
+		// 0.34 m/s and threw her - the user, 2026-10-05: «подскок при старте»); nor in her first seconds
+		if (settling || vn < 1.0 || oapiGetSimTime() - bornSim < 3.0) return false;
 		const double m = GetMass(), kick = vn * 1.2 * strikerMass / (strikerMass + m);   // the light side takes the heavy one's speed
 		VESSELSTATUS2 s = Status(this);
 		if (s.status == 1 && s.rbody)   // on the ground: thrown along the ground, sliding to a stop (friction 0.6), at most 3 m
@@ -740,10 +828,12 @@ namespace ocrew
 		HitBody(landingSpeed, Body::ON_FEET);
 	}
 
-	void CrewMember::TakePack()
+	void CrewMember::TakePack(OBJHANDLE which)
 	{
-		// the nearest jet pack within reach becomes part of her
+		// that jet pack (F at it) or the nearest within reach becomes part of her
 		OBJHANDLE best = nullptr; double bestD = 2.5;
+		if (which && oapiIsVessel(which)) { VECTOR3 d; GetRelativePos(which, d); if (length(d) < 3.0) { best = which; bestD = 0; } }
+		if (!best)
 		for (DWORD i = 0; i < oapiGetVesselCount(); ++i)
 		{
 			OBJHANDLE h = oapiGetVesselByIndex(i);
@@ -904,6 +994,7 @@ namespace ocrew
 		air = atmospheres.Sample(this);
 		if (n2) who.worn.suit.n2Kg = GetPropellantMass(n2);   // the suit's own record of its cold gas, kept current
 		FindUse(dt);
+		CtxStep(dt);
 		if (!inShip && !inShipName.empty())   // a scenario with her inside a ship: find it
 		{
 			OBJHANDLE s = oapiGetVesselByName(const_cast<char*>(inShipName.c_str()));
@@ -913,6 +1004,8 @@ namespace ocrew
 		// the user's view of this person, remembered in the person (through the eyes / from outside at that distance)
 		if (!takeView && oapiCameraTarget() == GetHandle()) { who.viewOutside = !oapiCameraInternal(); if (who.viewOutside) who.viewDist = oapiCameraTargetDist(); }
 		if (takeView && !inShip) ApplyView();
+		// the view on her at the start (through the eyes or from outside): 70 deg by default, once; the wheel changes it after
+		if (!fovSet && oapiCameraTarget() == GetHandle()) { oapiCameraSetAperture(kViewAperture); fovSet = true; }
 		// once at the start: where the Sun is for her (horizon frame: elevation, azimuth from north to the east) - and,
 		// with FACESUN 1 in her scenario block, she turns to face it (standing on the ground)
 		if (!sunLogged && !inShip && simt > 0.5 && GetSurfaceRef())
@@ -930,7 +1023,8 @@ namespace ocrew
 				DefSetStateEx(&s);
 			}
 		}
-		if (inShip) { InteriorStep(dt); if (takeView && inParent) ApplyView(); return; }
+		if (inShip) { settling = false; InteriorStep(dt); if (takeView && inParent) ApplyView(); return; }
+		if (settling) Settle(simt, dt);
 		jet.SetOxygen(air.ppO2 > 1.0);   // steam behind the jets only where hydrogen can burn
 		const double g = Gravity();
 		const bool landed = (GetFlightStatus() & 1) != 0;
@@ -950,7 +1044,7 @@ namespace ocrew
 		else humanW = LocomotionPower(Mass(), v, g) * 1.35;   // dead drives: extra mass and stiff joints
 		thermal = Surroundings();
 		double heat;
-		suit.vent = air.Breathable(); suit.ventPpO2 = air.ppO2; suit.ventPpCO2 = air.ppCO2; suit.pOut = air.p;   // breathable air: no tank, no sorbent
+		suit.vent = air.Breathable(); suit.ventPpO2 = air.ppO2; suit.ventPpCO2 = air.ppCO2; suit.pOut = air.p; suit.radRate = bio.doseRate;   // breathable air: no tank, no sorbent
 		if (suitOn) heat = suitResidual = suit.Step(dt, bio.O2Use(), bio.CO2Made(), driveDemandW, bio.Heat(), thermal.tEnv);
 		else
 		{
@@ -1026,7 +1120,7 @@ namespace ocrew
 			}
 			if (!bio.CanAct() && !lying) { fwd = lat = turn = 0; Place(true); }
 			else if (bio.CanAct() && lying && fallenT <= 0) Place(false);   // gets up once the fall is over
-			mouseTurnBy = 0; HeadStep(dt, false);   // outside: the right button turns her head (the keys turn her)
+			mouseTurnBy = HeadStep(dt, bio.CanAct() && !lying && !jet.Worn());   // outside: the constant look turns her (A/D step aside); the pack: the keys
 			if (bio.CanAct() && !lying) Drive(dt, g); else fwd = lat = turn = accel = 0;
 		}
 		else fwd = lat = turn = accel = 0;
@@ -1055,8 +1149,43 @@ namespace ocrew
 		return headSway.Step(dt, f, length(T) / m / 9.81, ship->GetDynPressure(), ship->GetMachNumber());
 	}
 
+	// the interface's language (the user, 2026-10-07: «2 язык - в конфиге будет настройка»; one for all of OrbiterCrew):
+	// Config\OrbiterCrew\OrbiterCrew.cfg, LANGUAGE ru | en
+	bool UiEnglish()
+	{
+		static int lang = -1;
+		if (lang < 0)
+		{
+			lang = 0;
+			std::ifstream f("Config\\OrbiterCrew\\OrbiterCrew.cfg");
+			std::string line;
+			while (std::getline(f, line))
+			{
+				std::istringstream ls(line); std::string k, v; ls >> k >> v;
+				if (k == "LANGUAGE") lang = v.size() >= 2 && (v[0] == 'e' || v[0] == 'E') ? 1 : 0;
+			}
+		}
+		return lang == 1;
+	}
+	// a caption in the interface's language
+	const char* Tr(const char* ru, const char* en) { return UiEnglish() ? en : ru; }
+
 	void CrewMember::HudBySuit()
 	{
+		// ---- the outside view never comes nearer than 2 m: near the ground D3D9Client cuts away everything within 1 m of
+		// the camera (its near plane outside, whatever its settings), and her body reaches a metre from her centre (the
+		// user, 2026-10-07: «как избавиться от обрезания камерой») ----
+		if (oapiCameraTarget() == GetHandle())
+		{
+			if (inShip && !oapiCameraInternal()) { thirdIn = !thirdIn; oapiCameraAttach(GetHandle(), 0); }   // F1 in a cabin
+			else if (!inShip && thirdIn) { thirdIn = false; oapiCameraAttach(GetHandle(), 1); }             // out: the outside view
+			else if (!inShip && !oapiCameraInternal())
+			{
+				const double d = oapiCameraTargetDist();
+				if (d > 0.05 && d < kCamMinDist) oapiCameraScaleDist(kCamMinDist / d);
+			}
+		}
+		else thirdIn = false;
 		// ---- no HUD without the suit (the generic cockpit has one; switch it off, give it back with the suit) ----
 		// Orbiter's own HUD is never hers (the suit computer draws its own, DrawSuitHud); in her eyes it stays off
 		const bool inHead = oapiCameraInternal() && oapiCameraTarget() == GetHandle();
@@ -1072,9 +1201,11 @@ namespace ocrew
 	void CrewMember::Animate(double dt, double g, bool landed)
 	{
 		// ---- animation ----
+		// over x10 she is not drawn anew at all (the user, 2026-10-05: «их вообще после 10х не надо считать... смысл?»): no
+		// motion, no arms, no hair, no mesh; at x10 and under it goes on from where it stood. (Her organism is not here: it runs on)
 		int footfalls = 0;
 		Figure& fig = Active();
-		if (vis && fig.ok && fig.skin.Attached())
+		if (vis && fig.ok && fig.skin.Attached() && oapiGetTimeAcceleration() <= 10.0)
 		{
 			MotionInput in;
 			in.dt = dt; in.fwd = fwd; in.lat = lat; in.turn = turn; in.accel = accel; in.g = g;
@@ -1089,7 +1220,7 @@ namespace ocrew
 			in.floating = !landed && !airborne;
 			if (in.floating) GetAngularVel(in.angVel);
 			if (in.floating) { VECTOR3 f; GetThrustVector(f); in.thrustAcc = f / GetMass(); GetAngularAcc(in.angAcc); }
-			const bool firstPerson = oapiCameraInternal() && oapiCameraTarget() == GetHandle();
+			const bool firstPerson = oapiCameraInternal() && oapiCameraTarget() == GetHandle() && !thirdIn;
 			// seated: the ship's cockpit view is her eyes in the seat - her own head must not be in it
 			fig.skin.SetHideHead(firstPerson);
 			// from inside the helmet its own parts sit at the camera: seen from within they show cut edges and their dark
@@ -1113,8 +1244,10 @@ namespace ocrew
 						if (h[i].on) { HandTarget& t = in.hand[i]; t.on = true; t.what = h[i].what; t.pos = h[i].pos - o; t.palm = h[i].palm; t.fwd = h[i].fwd; t.grip = h[i].grip; t.radius = h[i].radius; t.floor = h[i].elbowMinY != 0; t.elbowMinY = h[i].elbowMinY - o.y; }
 				}
 			}
+			if (holding && !seat && bio.CanAct()) { in.hold = true; HeldTargets(in.hand); }   // her hands on what she holds
 			motion.Update(in, fig.clips, fig.skin);
-			if (debugLog && seat == 2 && (handLogT -= dt) <= 0)   // the seated hands: what the ship gives, how the arm reaches it
+			if (holding) HeldPlace(fig);
+			if (debugLog && seat == 2 && (handLogT -= oapiGetSysStep()) <= 0)   // (real time: not every frame under time acceleration)   // the seated hands: what the ship gives, how the arm reaches it
 			{
 				handLogT = 2;
 				for (int i = 0; i < 2; ++i)
@@ -1130,7 +1263,7 @@ namespace ocrew
 				const VECTOR3 e = fig.skin.Point(fig.skin.Bone("Head"), eye);
 				camEye = e + HeadSwayStep(dt, e);
 				SetCameraOffset(camEye);
-			} else headSway.Reset();
+			} else { headSway.Reset(); if (thirdIn) camEye = fig.skin.Point(fig.skin.Bone("Head"), eye); }   // (from behind: AimHead)
 		}
 		// ---- sound ----
 		CrewSound::Input si;
@@ -1156,27 +1289,83 @@ namespace ocrew
 		landingSpeed = 0;
 		if (messageTime > 0) messageTime -= dt;
 		AimHead(dt);
+		CtxDraw();
 	}
 
 	// her eyes are not a ship's glass cockpit: Orbiter's navigation-mode and RCS buttons are not shown over them
 	bool CrewMember::clbkLoadGenericCockpit() { return false; }   // her eyes are the empty VC, in the suit and out of it
 
-	bool CrewMember::clbkDrawHUD(int, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp) { if (hps && skp) DrawSuitHud(skp, hps->W, hps->H); return true; }
+	bool CrewMember::clbkDrawHUD(int, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp)
+	{
+		if (hps && skp) DrawSuitHud(skp, hps->W, hps->H);   // (the caption: through the display's overlay)
+		return true;
+	}
+
+	// the caption on the helmet display: laid out in the screen's pixels each step (CtxDraw), painted by the display's own
+	// overlay into its surface (the view vw x vh; kx, ky its pixels per view pixel); the Alt marks projected through the
+	// camera as it is now, so they sit on their places
+	void CrewMember::CtxPaintPlate(oapi::Sketchpad* skp, double vw, double vh, double kx, double ky)
+	{
+		if (!skp || !plateOn || vw < 1 || vh < 1 || !suitOn || !hudOn || !oapiCameraInternal() || oapiCameraTarget() != GetHandle()) return;
+		if (!cxTextTried) { cxTextTried = true; cxText.Load(); }
+		auto rect = [&](double x0, double y0, double x1, double y1, DWORD col)
+		{
+			oapi::Brush* br = oapiCreateBrush(col);
+			skp->SetPen(nullptr); skp->SetBrush(br);
+			skp->Rectangle(static_cast<int>(std::lround(x0 * kx)), static_cast<int>(std::lround(y0 * ky)), static_cast<int>(std::lround(x1 * kx)), static_cast<int>(std::lround(y1 * ky)));
+			skp->SetBrush(nullptr); oapiReleaseBrush(br);
+		};
+		for (const CtxBox& b : plateBoxes) rect(b.x0, b.y0, b.x1, b.y1, b.col);
+		if (plateMarks)
+		{
+			VECTOR3 cg; oapiCameraGlobalPos(&cg); MATRIX3 Rc; oapiCameraRotationMatrix(&Rc);
+			const double f = vh / (2 * std::tan((std::max)(0.1, oapiCameraAperture())));
+			for (const auto& m : cx.marks)
+			{
+				if (!oapiIsVessel(m.ship)) continue;
+				VECTOR3 g; oapiGetVesselInterface(m.ship)->Local2Global(m.pos, g);
+				const VECTOR3 c = tmul(Rc, g - cg);
+				if (c.z < 0.1) continue;
+				const double sx = std::round(vw / 2.0 + c.x / c.z * f), sy = std::round(vh / 2.0 - c.y / c.z * f);
+				const double h = m.reach ? 7 : 4, th = m.reach ? 2 : 1;
+				const DWORD o = 0xFF2699FF;   // orange
+				rect(sx - h, sy - h, sx + h, sy - h + th, o); rect(sx - h, sy + h - th, sx + h, sy + h, o);
+				rect(sx - h, sy - h + th, sx - h + th, sy + h - th, o); rect(sx + h - th, sy - h + th, sx + h, sy + h - th, o);
+			}
+		}
+		if (!cxText.Ok()) return;
+		const oapi::FVECTOR4 black(0.0f, 0.0f, 0.0f, 1.0f);
+		for (const CtxRun& r : plateRuns)
+		{
+			if (r.black) skp->SetBrightness(&black);
+			cxText.Draw(skp, r.x * kx, r.base * ky, r.u, r.size, r.col, r.align, 2.0, kx, ky);
+			if (r.black) skp->SetBrightness(nullptr);
+		}
+	}
 
 
 	// every frame for every body: only the one whose eyes we look through, in the suit, with the HUD on, draws it
 	void CrewMember::DrawSuitHud(oapi::Sketchpad* skp, DWORD W, DWORD H)
 	{
 		// the person and the suit are apart (the user's rule): the suit computer's HUD exists only in the suit
-		if (!suitOn || !hudOn || !oapiCameraInternal() || oapiCameraTarget() != GetHandle()) return;
+		if (!suitOn || !hudOn || !oapiCameraInternal() || oapiCameraTarget() != GetHandle() || thirdIn) return;
 		if (!W || !H) return;
+		HudData d;
+		FillHudData(d);
+		hud.Mouse(W, H);                    // the clicks on the HUD (the suit computer's own, «Архитектор»)
+		hud.Draw(skp, W, H, d, this);
+	}
+
+	// what the suit computer shows: the person, the suit, the pack, the world around (for its HUD in the VC HUD and in its
+	// own light layer, SuitHud::HelmetFrame)
+	void CrewMember::FillHudData(HudData& d)
+	{
 		static const std::pair<const char*, const char*> WARN[] = {
 			{ "VACUUM - NO SUIT", "ВАКУУМ БЕЗ СКАФАНДРА" }, { "OVERHEATING", "ПЕРЕГРЕВ" }, { "HYPOTHERMIA", "ПЕРЕОХЛАЖДЕНИЕ" },
 			{ "HYPOXIA", "ГИПОКСИЯ" }, { "LOW OXYGEN", "МАЛО КИСЛОРОДА" }, { "CO2 NARCOSIS", "ОТРАВЛЕНИЕ CO2" },
 			{ "HIGH CO2", "ВЫСОКИЙ CO2" }, { "EXHAUSTED", "ИСТОЩЕНИЕ" }, { "INJURED", "ТРАВМА" },
 			{ "RADIATION - TAKE COVER", "РАДИАЦИЯ - В УКРЫТИЕ" }, { "RADIATION SICKNESS", "ЛУЧЕВАЯ БОЛЕЗНЬ" },
 			{ "DEHYDRATED", "ОБЕЗВОЖИВАНИЕ" }, { "STARVING", "ГОЛОД" } };
-		HudData d;
 		d.name = name; d.role = role == "astronavigator" ? "астронавигатор" : role; d.state = static_cast<int>(bio.state); d.suit = suitOn;
 		d.pulse = bio.pulse; d.breath = bio.breath; d.effort = (std::min)(1.0, bio.Effort()); d.stamina = bio.wbal;
 		d.ppO2 = suitOn ? suit.ppO2 : air.ppO2; d.ppCO2 = suitOn ? suit.ppCO2 : air.ppCO2; d.coreC = bio.coreT - 273.15; d.injury = (std::min)(1.0, bio.injury);
@@ -1200,7 +1389,7 @@ namespace ocrew
 		d.rcs = rcsLive ? 1 : ((GetFlightStatus() & 1) || airborne) ? 0 : 2;
 		d.life = &suit;   // the suit itself: its loads, equipment heat, SERVO and ECONOMY switches (the display's)
 		d.shadeDown = shadeTarget > 0.5; d.lampsOn = lampOn && suit.LampsUp(); d.shade = shade;
-		d.firstPerson = oapiCameraInternal() && oapiCameraTarget() == GetHandle();
+		d.firstPerson = oapiCameraInternal() && oapiCameraTarget() == GetHandle() && !thirdIn;
 		d.speed = std::hypot(fwd, lat); d.simt = oapiGetSimTime();
 		jet.Fill(d);
 		std::string w = bio.warning;
@@ -1217,13 +1406,986 @@ namespace ocrew
 		d.warning = w;
 		if (messageTime > 0) { d.message = message; d.messageLevel = messageLevel; }
 		else if (!useHint.empty()) { d.message = "F - " + useHint; d.messageLevel = 0; }
-		hud.Mouse(W, H);                    // the clicks on the HUD (the suit computer's own, «Архитектор»)
-		hud.Draw(skp, W, H, d, this);
 	}
 }
 
 namespace ocrew
 {
+	// ---- a thing lying about (OrbiterCrew\Item): what she put down or threw; F takes it again ----
+	namespace
+	{
+		std::vector<ItemVessel*>& itemsRef() { static std::vector<ItemVessel*> v; return v; }
+		OcHeld& PendingItem() { static OcHeld h{}; return h; }
+	}
+	ItemVessel* ItemOf(OBJHANDLE h) { for (ItemVessel* it : itemsRef()) if (it->GetHandle() == h) return it; return nullptr; }
+
+	ItemVessel::ItemVessel(OBJHANDLE h, int fm) : VESSEL4(h, fm)
+	{
+		itemsRef().push_back(this);
+		if (PendingItem().size) { held = PendingItem(); PendingItem() = OcHeld{}; }
+	}
+	ItemVessel::~ItemVessel()
+	{
+		itemsRef().erase(std::remove(itemsRef().begin(), itemsRef().end(), this), itemsRef().end());
+		if (tpl && !held.mesh[0]) oapiDeleteMesh(tpl);
+	}
+	void ItemVessel::clbkSetClassCaps(FILEHANDLE)
+	{
+		SetEmptyMass(1); SetSize(0.4); SetCW(0.5, 0.5, 0.5, 0.5); SetCrossSections(_V(0.1, 0.1, 0.1)); SetPMI(_V(0.02, 0.02, 0.02));
+		SetEnableFocus(false);
+		EnableTransponder(false);
+		Shape();
+	}
+	void ItemVessel::clbkLoadStateEx(FILEHANDLE scn, void* status)
+	{
+		char* line;
+		while (oapiReadScenario_nextline(scn, line))
+		{
+			std::istringstream ss(line); std::string key; ss >> key;
+			if (key == "ITEM")   // kind mass w h d mesh|- label...
+			{
+				OcHeld h{}; h.size = sizeof h; std::string mesh, label;
+				ss >> h.kind >> h.massKg >> h.dims[0] >> h.dims[1] >> h.dims[2] >> mesh; std::getline(ss >> std::ws, label);
+				if (mesh != "-") std::snprintf(h.mesh, sizeof h.mesh, "%s", mesh.c_str());
+				std::snprintf(h.label, sizeof h.label, "%s", label.c_str());
+				std::snprintf(h.owner, sizeof h.owner, "%s", held.owner); std::snprintf(h.data, sizeof h.data, "%s", held.data);
+				held = h;
+			}
+			else if (key == "ITEM_OWNER") { std::string v; std::getline(ss >> std::ws, v); std::snprintf(held.owner, sizeof held.owner, "%s", v.c_str()); }
+			else if (key == "ITEM_DATA") { std::string v; std::getline(ss >> std::ws, v); std::snprintf(held.data, sizeof held.data, "%s", v.c_str()); }
+			else ParseScenarioLineEx(line, status);
+		}
+		Shape();
+	}
+	void ItemVessel::clbkSaveState(FILEHANDLE scn)
+	{
+		VESSEL4::clbkSaveState(scn);
+		char b[220]; std::snprintf(b, sizeof b, "%d %.3f %.3f %.3f %.3f %s %s", held.kind, held.massKg, held.dims[0], held.dims[1], held.dims[2], held.mesh[0] ? held.mesh : "-", held.label);
+		oapiWriteScenario_string(scn, const_cast<char*>("ITEM"), b);
+		if (held.owner[0]) oapiWriteScenario_string(scn, const_cast<char*>("ITEM_OWNER"), held.owner);
+		if (held.data[0]) oapiWriteScenario_string(scn, const_cast<char*>("ITEM_DATA"), held.data);
+	}
+	void ItemVessel::clbkPostCreation() { Shape(); }
+	// its mass, its feet (the box's lower corners and its top: it tumbles), its look (its mesh, or a dark box of its size)
+	void ItemVessel::Shape()
+	{
+		if (!held.size) return;
+		const double hx = (std::max)(0.02, held.dims[0] / 2), hy = (std::max)(0.02, held.dims[1] / 2), hz = (std::max)(0.02, held.dims[2] / 2), m = (std::max)(0.2, held.massKg);
+		SetEmptyMass(m); SetSize((std::max)(0.2, std::sqrt(hx * hx + hy * hy + hz * hz)));
+		SetPMI(_V((hy * hy + hz * hz) / 3, (hx * hx + hz * hz) / 3, (hx * hx + hy * hy) / 3));
+		const double k = (std::max)(2000.0, m * 900), dmp = 2 * std::sqrt(k * m);
+		static TOUCHDOWNVTX td[8];
+		const VECTOR3 p[8] = { { -hx, -hy, -hz }, { hx, -hy, -hz }, { hx, -hy, hz }, { -hx, -hy, hz }, { -hx, hy, -hz }, { hx, hy, -hz }, { hx, hy, hz }, { -hx, hy, hz } };
+		for (int i = 0; i < 8; ++i) td[i] = { p[i], k, dmp, 1.2, 1.2 };
+		SetTouchdownPoints(td, 8);
+		if (mesh == static_cast<UINT>(-1))
+		{
+			if (held.mesh[0]) tpl = oapiLoadMeshGlobal(held.mesh);
+			if (!tpl)
+			{
+				static const int F[6][4] = { { 1, 5, 7, 3 }, { 4, 0, 2, 6 }, { 2, 3, 7, 6 }, { 4, 5, 1, 0 }, { 5, 4, 6, 7 }, { 0, 1, 3, 2 } };
+				static const double Nn[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+				std::vector<NTVERTEX> v(24); std::vector<WORD> idx;
+				for (int f = 0; f < 6; ++f)
+				{
+					for (int c4 = 0; c4 < 4; ++c4)
+					{
+						const int c = F[f][c4]; NTVERTEX& q = v[f * 4 + c4];
+						q.x = static_cast<float>((c & 1) ? hx : -hx); q.y = static_cast<float>((c & 2) ? hy : -hy); q.z = static_cast<float>((c & 4) ? hz : -hz);
+						q.nx = static_cast<float>(Nn[f][0]); q.ny = static_cast<float>(Nn[f][1]); q.nz = static_cast<float>(Nn[f][2]);
+					}
+					const WORD b0 = static_cast<WORD>(f * 4);
+					for (WORD t : { WORD(0), WORD(2), WORD(1), WORD(0), WORD(3), WORD(2) }) idx.push_back(static_cast<WORD>(b0 + t));
+				}
+				MESHGROUP g{}; g.Vtx = v.data(); g.nVtx = 24; g.Idx = idx.data(); g.nIdx = static_cast<DWORD>(idx.size()); g.TexIdx = static_cast<DWORD>(-1);
+				tpl = oapiCreateMesh(1, &g);
+				MATERIAL mt{}; mt.diffuse = { 0.22f, 0.23f, 0.24f, 1 }; mt.ambient = mt.diffuse; mt.specular = { 0.3f, 0.3f, 0.3f, 1 }; mt.power = 20; mt.emissive = { 0, 0, 0, 1 };
+				oapiAddMaterial(tpl, &mt);
+			}
+			mesh = AddMesh(tpl);
+			SetMeshVisibilityMode(mesh, MESHVIS_ALWAYS | MESHVIS_EXTPASS);
+		}
+	}
+
+	// X: what she holds is put down before her on the ground; Shift+X: thrown ahead (her speed + 3 m/s ahead, a little up)
+	void CrewMember::DropHeld(bool throwIt)
+	{
+		if (!holding) return;
+		// a plug is on its cable: let go, it goes back with the cable (its owner winds it in); it is neither laid nor thrown
+		if (held.kind == OC_HELD_PLUG) { Say("Отпущено: " + Utf8(held.label)); Take(nullptr); return; }
+		if (inShip) { Say("В корабле положить пока нельзя"); return; }
+		VESSELSTATUS2 s = Status(this);
+		MATRIX3 R; GetRotationMatrix(R);
+		const VECTOR3 fw = mul(R, _V(0, 0, 1)), up = mul(R, _V(0, 1, 0));
+		if (!throwIt && s.status == 1 && s.rbody)
+		{
+			surface::Walk(s, oapiGetSize(s.rbody), 0.6, 0);   // landed, 0.6 m before her: Orbiter sets it on its feet
+		}
+		else
+		{
+			if (s.status == 1 && s.rbody)   // from standing: a free start where her hands are
+			{
+				VECTOR3 me, pc; GetGlobalPos(me); oapiGetGlobalPos(s.rbody, &pc);
+				VECTOR3 vr; GetRelativeVel(s.rbody, vr);
+				s.status = 0; s.rpos = me - pc + fw * 0.45 + up * 0.15; s.rvel = vr;
+				s.arot = surface::Euler(R);
+			}
+			else s.rpos = s.rpos + fw * 0.45;
+			if (throwIt) s.rvel = s.rvel + fw * 3.0 + up * 1.2;
+		}
+		s.flag = 0; s.fuel = nullptr; s.thruster = nullptr; s.dockinfo = nullptr; s.nfuel = s.nthruster = s.ndockinfo = 0;
+		char nm[64];
+		for (int i = 1; ; ++i) { std::snprintf(nm, sizeof nm, "Item%d", i); if (!oapiGetVesselByName(nm)) break; }
+		PendingItem() = held; PendingItem().size = sizeof(OcHeld);
+		OBJHANDLE h = oapiCreateVesselEx(nm, "OrbiterCrew\\Item", &s);
+		PendingItem() = OcHeld{};
+		if (!h) { Say("Не вышло положить", 1); return; }
+		Say(std::string(throwIt ? "Брошено: " : "Положено: ") + Utf8(held.label));
+		Take(nullptr);
+	}
+
+	// ---- a thing in her hands ----
+	double CrewMember::HeldWeight() const
+	{
+		double g = 9.81;
+		if (inShip) { if (ShipInterior* si = InteriorOf(inShip)) if (si->fns.Gravity) { VECTOR3 gv{}; VECTOR3 f = inFeet; si->fns.Gravity(si->ctx, &f, &gv); g = length(gv); } }
+		else g = Gravity();
+		return held.massKg * g / 9.81;
+	}
+
+	double CrewMember::LiftLimit() const
+	{
+		double k = 1.0;
+		if (suitOn) k = suit.Drives() ? 2.0 : 0.85;   // the servos lift with her; a dead suit's stiff joints take from it
+		return bio.LiftCapacity() * k;
+	}
+
+	double CrewMember::HeldSlow() const
+	{
+		const double r = HeldWeight() / (std::max)(1.0, CarryLimit());   // its weight against what she carries on the move
+		return std::clamp(1.15 - 0.45 * r, 0.35, 1.0);
+	}
+
+	bool CrewMember::Give(const OcHeld& h0, bool check)
+	{
+		OcHeld h = h0; h.size = sizeof h;
+		if (check)
+		{
+			if (holding) { Say("Руки заняты: " + std::string(held.label)); return false; }
+			if (!bio.CanAct()) return false;
+			if (seat) { Say("В кресле не взять"); return false; }
+			const OcHeld keep = held; held = h;
+			const double w = HeldWeight(), lim = LiftLimit();
+			held = keep;
+			if (w > lim)
+			{
+				char b[128]; std::snprintf(b, sizeof b, "Слишком тяжело: %.0f кг здесь, могу поднять %.0f", w, lim);
+				Say(b, 1); return false;
+			}
+		}
+		held = h; holding = true;
+		SetEmptyMass(Mass());
+		HeldMeshMake();
+		if (check) Say(std::string("В руках: ") + h.label);
+		oapiWriteLogV("OrbiterCrew: %s takes %s (%.1f kg)", name.c_str(), h.label, h.massKg);
+		return true;
+	}
+
+	bool CrewMember::Take(OcHeld* out)
+	{
+		if (!holding) return false;
+		if (out) *out = held;
+		holding = false;
+		HeldMeshDrop();
+		SetEmptyMass(Mass());
+		oapiWriteLogV("OrbiterCrew: %s gives away %s", name.c_str(), held.label);
+		held = OcHeld{};
+		return true;
+	}
+
+	void CrewMember::HeldMeshMake()
+	{
+		HeldMeshDrop();
+		if (held.mesh[0]) heldTpl = oapiLoadMeshGlobal(held.mesh);
+		if (!heldTpl)   // a box of its size: dark, a lighter band (a cell's handle side)
+		{
+			const double hx = (std::max)(0.01, held.dims[0] / 2), hy = (std::max)(0.01, held.dims[1] / 2), hz = (std::max)(0.01, held.dims[2] / 2);
+			static const int F[6][4] = { { 1, 5, 7, 3 }, { 4, 0, 2, 6 }, { 2, 3, 7, 6 }, { 4, 5, 1, 0 }, { 5, 4, 6, 7 }, { 0, 1, 3, 2 } };   // +x -x +y -y +z -z
+			static const double Nn[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+			std::vector<NTVERTEX> v(24); std::vector<WORD> idx;
+			for (int f = 0; f < 6; ++f)
+			{
+				for (int k = 0; k < 4; ++k)
+				{
+					const int c = F[f][k];
+					NTVERTEX& p = v[f * 4 + k];
+					p.x = static_cast<float>((c & 1) ? hx : -hx); p.y = static_cast<float>((c & 2) ? hy : -hy); p.z = static_cast<float>((c & 4) ? hz : -hz);
+					p.nx = static_cast<float>(Nn[f][0]); p.ny = static_cast<float>(Nn[f][1]); p.nz = static_cast<float>(Nn[f][2]);
+					p.tu = static_cast<float>(k == 1 || k == 2); p.tv = static_cast<float>(k >= 2);
+				}
+				const WORD b = static_cast<WORD>(f * 4);
+				for (WORD t : { WORD(0), WORD(2), WORD(1), WORD(0), WORD(3), WORD(2) }) idx.push_back(static_cast<WORD>(b + t));   // (the left-handed frame's winding)
+			}
+			heldVtx.assign(1, v);   // its true shape; the template is blown up 25 times: the client's culling box is made from it once
+			for (NTVERTEX& p : v) { p.x *= 25; p.y *= 25; p.z *= 25; }
+			MESHGROUP g{}; g.Vtx = v.data(); g.nVtx = 24; g.Idx = idx.data(); g.nIdx = static_cast<DWORD>(idx.size()); g.MtrlIdx = 0; g.TexIdx = static_cast<DWORD>(-1);   // (no texture)
+			heldTpl = oapiCreateMesh(1, &g);
+			MATERIAL m{}; m.diffuse = { 0.22f, 0.23f, 0.24f, 1 }; m.ambient = m.diffuse; m.specular = { 0.3f, 0.3f, 0.3f, 1 }; m.power = 20; m.emissive = { 0, 0, 0, 1 };
+			oapiAddMaterial(heldTpl, &m);
+		}
+		if (held.mesh[0]) heldVtx.clear();
+		if (held.mesh[0]) for (DWORD gi = 0, n = oapiMeshGroupCount(heldTpl); gi < n; ++gi)
+		{
+			const MESHGROUP* g = oapiMeshGroup(heldTpl, gi);
+			heldVtx.emplace_back(g->Vtx, g->Vtx + g->nVtx);
+		}
+		heldMesh = AddMesh(heldTpl);
+		SetMeshVisibilityMode(heldMesh, MESHVIS_ALWAYS | MESHVIS_VC | MESHVIS_EXTPASS);   // one depth with the ship around her
+	}
+
+	void CrewMember::HeldMeshDrop()
+	{
+		if (heldMesh != static_cast<UINT>(-1)) { DelMesh(heldMesh); heldMesh = static_cast<UINT>(-1); }
+		if (heldTpl && !held.mesh[0]) oapiDeleteMesh(heldTpl);
+		heldTpl = nullptr; heldVtx.clear();
+	}
+
+	// her hands on it (model frame, the vessel's origin; inside a ship her heading is in the pose): a cell in both hands
+	// before her belly, the palms on its sides; a plug in her right hand
+	void CrewMember::HeldTargets(HandTarget hand[2]) const
+	{
+		const double h = inShip ? inHdg : 0.0;
+		const VECTOR3 rt = _V(std::cos(h), 0, -std::sin(h)), fw = _V(std::sin(h), 0, std::cos(h));
+		for (int s = 0; s < 2; ++s) hand[s] = HandTarget{};
+		if (held.kind == OC_HELD_PLUG)
+		{
+			HandTarget& t = hand[1]; t.on = true; t.what = 31;
+			t.pos = rt * 0.17 + fw * 0.30 + _V(0, 0.02, 0); t.palm = -rt; t.fwd = fw; t.grip = OC_GRIP_HANDLE; t.radius = 0.02;
+			return;
+		}
+		const double w = (std::max)(0.08, held.dims[0]), d = (std::max)(0.05, held.dims[2]);
+		const VECTOR3 c = fw * (0.16 + d / 2) + _V(0, 0.05, 0);
+		hand[0].on = hand[1].on = true; hand[0].what = 30; hand[1].what = 31;
+		hand[0].pos = c - rt * (w / 2); hand[0].palm = rt; hand[0].fwd = fw; hand[0].grip = OC_GRIP_FLAT;
+		hand[1].pos = c + rt * (w / 2); hand[1].palm = -rt; hand[1].fwd = fw; hand[1].grip = OC_GRIP_FLAT;
+	}
+
+	// the thing between her palms (or in her right one), turned with her: its vertices moved every frame
+	void CrewMember::HeldPlace(Figure& fig)
+	{
+		if (!vis || heldMesh == static_cast<UINT>(-1)) return;
+		DEVMESHHANDLE dev = GetDevMesh(vis, heldMesh);
+		if (!dev) return;
+		const double h = inShip ? inHdg : 0.0;
+		VECTOR3 X = _V(std::cos(h), 0, -std::sin(h)), Y = _V(0, 1, 0);
+		VECTOR3 C;
+		const int bL = fig.skin.Bone("LeftHand"), bR = fig.skin.Bone("RightHand");
+		const Skin::HandRest& hl = fig.skin.Hand(0); const Skin::HandRest& hr = fig.skin.Hand(1);
+		const bool posed = !seat && bL >= 0 && bR >= 0 && hl.ok && hr.ok;
+		if (held.kind == OC_HELD_PLUG)
+		{
+			if (posed) { const VECTOR3 p = fig.skin.Point(bR, hr.palm), n = fig.skin.Point(bR, hr.palm + hr.normal) - p; C = p + n * 0.02; }
+			else C = X * 0.17 + _V(std::sin(h), 0, std::cos(h)) * 0.30;
+		}
+		else if (posed)
+		{
+			const VECTOR3 pl = fig.skin.Point(bL, hl.palm), pr = fig.skin.Point(bR, hr.palm);
+			C = (pl + pr) * 0.5;
+			VECTOR3 x = pr - pl; x.y = 0;
+			if (length(x) > 0.02) X = x / length(x);
+		}
+		else { HandTarget t[2]; HeldTargets(t); C = (t[0].pos + t[1].pos) * 0.5; }
+		const VECTOR3 Z = crossp(X, Y);
+		for (size_t gi = 0; gi < heldVtx.size(); ++gi)
+		{
+			std::vector<NTVERTEX> v = heldVtx[gi];
+			for (NTVERTEX& p : v)
+			{
+				const VECTOR3 q = C + X * p.x + Y * p.y + Z * p.z, n = X * p.nx + Y * p.ny + Z * p.nz;
+				p.x = static_cast<float>(q.x); p.y = static_cast<float>(q.y); p.z = static_cast<float>(q.z);
+				p.nx = static_cast<float>(n.x); p.ny = static_cast<float>(n.y); p.nz = static_cast<float>(n.z);
+			}
+			GROUPEDITSPEC ges{}; ges.flags = GRPEDIT_VTXCRD | GRPEDIT_VTXNML; ges.Vtx = v.data(); ges.nVtx = static_cast<DWORD>(v.size());
+			oapiEditMeshGroup(dev, static_cast<DWORD>(gi), &ges);
+		}
+	}
+
+	// ---- context actions (CONTEXT_ACTIONS.md) ----
+	ShipInterior* CrewMember::CtxInterior() const { return cx.ship ? InteriorOf(cx.ship) : nullptr; }
+
+	bool CrewMember::CtxRay(VECTOR3& o, VECTOR3& d) const
+	{
+		if (cx.cursor)   // M-1: through the cursor, as a click
+		{
+			POINT p; if (!GetCursorPos(&p)) return false;
+			gcCore2* core = gcGetCoreInterface(); const HWND view = core ? core->GetRenderWindow() : nullptr;
+			RECT rc{};
+			if (!view || !ScreenToClient(view, &p) || !GetClientRect(view, &rc) || rc.right <= 0 || rc.bottom <= 0) return false;
+			const double W = rc.right, H = rc.bottom, fpx = (H / 2) / std::tan((std::max)(0.1, oapiCameraAperture()));
+			MATRIX3 Rc; oapiCameraGlobalPos(&o); oapiCameraRotationMatrix(&Rc);
+			d = mul(Rc, unit(_V((p.x - W / 2) / fpx, (H / 2 - p.y) / fpx, 1.0)));
+			return true;
+		}
+		if (oapiCameraInternal() && oapiCameraTarget() == GetHandle()) { oapiCameraGlobalPos(&o); oapiCameraGlobalDir(&d); return true; }
+		// from outside: her own look, from her eyes
+		const double yaw = inShip ? inHdg + headYaw : headYaw, p = headPitch;
+		MATRIX3 R; GetRotationMatrix(R);
+		Local2Global(camEye, o);
+		d = mul(R, _V(std::sin(yaw) * std::cos(p), std::sin(p), std::cos(yaw) * std::cos(p)));
+		return true;
+	}
+
+	void CrewMember::CtxStep(double dt)
+	{
+		const bool mine = oapiGetFocusObject() == GetHandle();
+		cx.cursor = mine && (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+		// a long action: its time, or broken off (F again, stepping away, not able)
+		if (cx.busy)
+		{
+			cx.t += dt;
+			VECTOR3 f = inFeet;
+			if (!inShip) { double lng, la, rad; GetEquPos(lng, la, rad); f = _V(lng * rad * std::cos(la), la * rad, 0); }   // on the ground: its own turning frame (m)
+			if (!bio.CanAct() || length(f - cx.feet0) > 0.6) CtxBreak(false);
+			else if (cx.t >= cx.dur) CtxBreak(true);
+		}
+		// the seat's display: while she sits, 10 times a second
+		const bool atPost = inShip && seat == 0 && carried > 0;   // a standing post (the MPU's): seatId -1
+		if (mine && (seat == 2 || atPost) && inShip && (seatGaugeT -= dt) <= 0)
+		{
+			seatGaugeT = 0.1;
+			seatGauges.clear();
+			if (ShipInterior* sg = InteriorOf(inShip))
+				if (sg->ext.SeatGauges)
+				{
+					OcGauge buf[12]{}; for (OcGauge& g : buf) g.size = sizeof g;
+					const int n = (std::min)(12, sg->ext.SeatGauges(sg->ctx, atPost ? -1 : seatId, who.id, buf, 12));
+					if (n > 0) seatGauges.assign(buf, buf + n);
+				}
+		}
+		else if ((seat != 2 && !atPost) || !inShip || !mine) seatGauges.clear();
+		if (!mine || !bio.CanAct() || seat || airborne || lying) { cx.ship = nullptr; cx.node = -1; cx.acts.clear(); cx.marks.clear(); g_wheelEat = false; farNode = false; return; }
+		if (!g_hookWnd) HookWheel();
+		// which node: every 0.1 s, the one nearest the ray within reach
+		if ((cx.scanT -= dt) <= 0 && !cx.busy)
+		{
+			cx.scanT = 0.1;
+			cx.marks.clear();
+			VECTOR3 o, d; OBJHANDLE bestShip{}; OcNode best{}; double bestOff = 1.0; VECTOR3 bestG{};   // the score: the ray's miss against what is taken (1 = the edge)
+			// taken: the ray passing within 22 cm of the node (a thing has a size: close by, its point may be 20 deg off
+			// the look) or within 12 deg far off; with the cursor 10 cm / 5 deg
+			auto score = [&](double miss, double t) { const double tol = cx.cursor ? (std::max)(0.10, 0.08 * t) : (std::max)(0.22, 0.21 * t); return miss / tol; };
+			VECTOR3 eye; Local2Global(camEye, eye);
+			int dbgShips = 0, dbgNodes = 0; double dbgOff = 1e9, dbgDist = 0, dbgReach = 0; std::string dbgName;   // (DebugLog: why no node)
+			const bool rayOk = CtxRay(o, d);
+			if (rayOk)
+				for (ShipInterior& si : interiors())
+				{
+					if (!oapiIsVessel(si.ship) || !si.ext.NodeCount || !si.ext.Node) continue;
+					if (inShip && si.ship != inShip) continue;
+					++dbgShips;
+					VESSEL* sv = oapiGetVesselInterface(si.ship);
+					VECTOR3 sp; oapiGetGlobalPos(si.ship, &sp);
+					if (!inShip && length(sp - eye) > sv->GetSize() + 30) continue;
+					for (int i = 0, n = si.ext.NodeCount(si.ctx); i < n; ++i)
+					{
+						OcNode nd{}; nd.size = sizeof nd;
+						if (!si.ext.Node(si.ctx, i, &nd) || (nd.inside != 0) != (inShip != nullptr)) continue;
+						VECTOR3 g; sv->Local2Global(nd.inside ? nd.pos + si.Origin() : nd.pos, g);
+						const VECTOR3 v = g - o; const double t = dotp(v, d);
+						const double off = t > 0.05 ? length(v - d * t) / t : 1e9;
+						++dbgNodes;
+						if (off < dbgOff) { dbgOff = off; dbgDist = length(g - eye); dbgReach = nd.reach > 0 ? nd.reach : 1.2; dbgName = nd.label; }
+						if (cx.cursor && t > 0.05 && length(g - eye) < 5.0)
+							cx.marks.push_back({ si.ship, nd.inside ? nd.pos + si.Origin() : nd.pos, length(g - eye) <= (nd.reach > 0 ? nd.reach : 1.2) });
+						// out of her reach; the one she has is kept 15 cm further (her eye sways with her breath: on the edge of
+						// the reach the caption came and went, the user 2026-10-07 «мерцает»)
+						const bool cur = si.ship == cx.ship && nd.id == cx.node;
+						if (length(g - eye) > (nd.reach > 0 ? nd.reach : 1.2) + (cur ? 0.15 : 0.0)) continue;
+						if (t <= 0.05) continue;
+						const double sc = score(length(v - d * t), t);
+						const double offK = cur ? sc * 0.5 : sc;   // the one she has: kept to twice the limit
+						if (offK < bestOff) { bestOff = offK; best = nd; bestShip = si.ship; bestG = g; }
+					}
+				}
+			// ours: a thing lying about (F: take it), a jet pack (F: put it on) - outside, within 2 m of her eyes
+			int bestLocal = 0;
+			if (rayOk && !inShip)
+				for (DWORD i = 0, nv = oapiGetVesselCount(); i < nv; ++i)
+				{
+					OBJHANDLE h = oapiGetVesselByIndex(i);
+					if (h == GetHandle()) continue;
+					ItemVessel* item = ItemOf(h);
+					const bool pack = !item && std::strcmp(oapiGetVesselInterface(h)->GetClassNameA(), "OrbiterCrew\\JetPack") == 0;
+					if (!item && !pack) continue;
+					VECTOR3 g; oapiGetGlobalPos(h, &g);
+					if (cx.cursor && length(g - eye) < 5.0 && dotp(g - o, d) > 0.05) cx.marks.push_back({ h, _V(0, 0, 0), length(g - eye) <= 2.0 });
+					if (length(g - eye) > (h == cx.ship && cx.local ? 2.15 : 2.0)) continue;
+					const VECTOR3 v = g - o; const double t = dotp(v, d);
+					if (t <= 0.05) continue;
+					const double sc = score(length(v - d * t), t), offK = h == cx.ship && cx.local ? sc * 0.5 : sc;
+					if (offK < bestOff)
+					{
+						bestOff = offK; bestShip = h; bestG = g; bestLocal = item ? 1 : 2;
+						best = OcNode{}; best.size = sizeof best; best.id = 0;
+						std::snprintf(best.label, sizeof best.label, "%s", item ? item->held.label : Tr("\xD0\xE0\xED\xE5\xF6", "Jet pack"));   // (cp1251: «Ранец»)
+					}
+				}
+			farNode = !bestShip && dbgOff < 0.21 && dbgDist < 8.0 && dbgDist > dbgReach;   // looked at (12 deg), but out of reach
+			if (debugLog && (cxLogT -= 0.1) <= 0)
+			{
+				cxLogT = 2.0;
+				oapiWriteLogV("OrbiterCrew: ctx: ray %d%s, %d ships with nodes, %d nodes; nearest to the ray '%s' off %.3f (limit %.3f) at %.2f m (reach %.2f) -> %s",
+					rayOk ? 1 : 0, cx.cursor ? " (cursor)" : "", dbgShips, dbgNodes, dbgName.c_str(), dbgOff, cx.cursor ? 0.06 : 0.12, dbgDist, dbgReach, bestShip ? best.label : "none");
+			}
+			if (bestShip != cx.ship || (bestShip && best.id != cx.node) || bestLocal != cx.local) { cx.ship = bestShip; cx.node = bestShip ? best.id : -1; cx.nd = best; cx.acts.clear(); cx.refreshT = 0; cx.local = bestLocal; }
+			cx.at = bestG; if (bestShip) cx.nd = best;
+			if (cx.local)   // our own action: take it / put it on (in the ships' code page, as theirs)
+			{
+				OcAction a{}; a.size = sizeof a; a.id = 1; a.available = 1;
+				if (cx.local == 1) std::snprintf(a.label, sizeof a.label, "%s", Tr("\xC2\xE7\xFF\xF2\xFC", "Pick up"));   // Взять
+				else
+				{
+					std::snprintf(a.label, sizeof a.label, "%s", Tr("\xCD\xE0\xE4\xE5\xF2\xFC", "Put on"));   // Надеть
+					if (!suitOn) { a.available = 0; std::snprintf(a.reason, sizeof a.reason, "%s", Tr("\xF1\xED\xE0\xF7\xE0\xEB\xE0 \xF1\xEA\xE0\xF4\xE0\xED\xE4\xF0 (K)", "suit first (K)")); }   // сначала скафандр (K)
+					else if (jet.Worn()) { a.available = 0; std::snprintf(a.reason, sizeof a.reason, "%s", Tr("\xF0\xE0\xED\xE5\xF6 \xF3\xE6\xE5 \xED\xE0\xE4\xE5\xF2", "pack already on")); }   // ранец уже надет
+				}
+				cx.acts.assign(1, a); cx.sel = 0;
+			}
+		}
+		// its actions: when it is new, twice a second, and the picked one kept by its id
+		ShipInterior* si = cx.local ? nullptr : CtxInterior();
+		if (si && cx.node >= 0 && si->ext.Actions && (cx.refreshT -= dt) <= 0)
+		{
+			cx.refreshT = 0.5;
+			OcAction buf[8]{}; for (OcAction& a : buf) a.size = sizeof a;
+			const int n = (std::min)(8, si->ext.Actions(si->ctx, cx.node, who.id, buf, 8));
+			const int keep = cx.sel >= 0 && cx.sel < static_cast<int>(cx.acts.size()) ? cx.acts[cx.sel].id : -1;
+			cx.acts.assign(buf, buf + (std::max)(0, n));
+			cx.sel = 0;
+			for (int k = 0; k < static_cast<int>(cx.acts.size()); ++k) if (cx.acts[k].id == keep) cx.sel = k;
+			if (keep < 0) for (int k = 0; k < static_cast<int>(cx.acts.size()); ++k) if (cx.acts[k].available) { cx.sel = k; break; }
+		}
+		if ((!si && !cx.local) || cx.node < 0) cx.acts.clear();
+		// the wheel: hers only while two or more are listed
+		const int n = static_cast<int>(cx.acts.size());
+		g_wheelEat = n >= 2 && !cx.busy;
+		const int w = g_wheel.exchange(0);
+		if (n >= 2 && w != 0) cx.sel = ((cx.sel + (w < 0 ? 1 : -1) * (std::max)(1, std::abs(w) / WHEEL_DELTA)) % n + n) % n;
+		// M-1: a click on a row of the panel picks it and does it; on the node: does the picked one
+		const bool lmb = cx.cursor && (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+		if (lmb && !cx.lmbWas && n > 0) CtxUse();
+		cx.lmbWas = lmb;
+	}
+
+	bool CrewMember::CtxUse()
+	{
+		if (cx.busy) { if (cx.interruptible) CtxBreak(false); return true; }
+		if (cx.local && cx.ship && oapiIsVessel(cx.ship) && !seat)
+		{
+			if (cx.local == 2) { if (!suitOn) Say("Ранец - на скафандр: сначала скафандр (K)", 1); else if (!jet.Worn()) TakePack(cx.ship); }
+			else if (ItemVessel* item = ItemOf(cx.ship))
+			{
+				const OcHeld h = item->held;
+				if (Give(h)) { oapiDeleteVessel(cx.ship, GetHandle()); cx.ship = nullptr; cx.node = -1; cx.local = 0; cx.acts.clear(); }
+			}
+			return true;
+		}
+		ShipInterior* si = CtxInterior();
+		if (!si || cx.node < 0 || cx.acts.empty() || seat) return false;
+		const OcAction& a = cx.acts[(std::min)(cx.sel, static_cast<int>(cx.acts.size()) - 1)];
+		if (!a.available) { Say(a.reason[0] ? Utf8(a.reason) : std::string("Сейчас нельзя"), 1); return true; }
+		if (!si->ext.Begin || !si->ext.Begin(si->ctx, cx.node, a.id, who.id)) { Say("Не вышло: " + Utf8(a.label), 1); return true; }
+		oapiWriteLogV("OrbiterCrew: %s begins '%s' at node %d of %s (%.1f s)", name.c_str(), a.label, cx.node, oapiGetVesselInterface(cx.ship)->GetName(), a.durationS);
+		if (a.durationS > 0)
+		{
+			cx.busy = true; cx.act = a.id; cx.t = 0; cx.dur = a.durationS; cx.interruptible = a.interruptible != 0;
+			cx.feet0 = inFeet;
+			if (!inShip) { double lng, la, rad; GetEquPos(lng, la, rad); cx.feet0 = _V(lng * rad * std::cos(la), la * rad, 0); }
+			fwd = lat = turn = 0;
+		}
+		cx.refreshT = 0;
+		return true;
+	}
+
+	void CrewMember::CtxBreak(bool done)
+	{
+		if (!cx.busy) return;
+		cx.busy = false;
+		if (ShipInterior* si = CtxInterior()) if (si->ext.End) si->ext.End(si->ctx, cx.node, cx.act, who.id, done ? 1 : 0);
+		oapiWriteLogV("OrbiterCrew: %s %s action %d at node %d", name.c_str(), done ? "finishes" : "breaks off", cx.act, cx.node);
+		if (!done) Say("Прервано");
+		cx.act = -1; cx.refreshT = 0;
+	}
+
+	// Painting letters on nothing: the sketchpad's ALPHABLEND keeps the target's alpha (D3D9: «retain destination alpha
+	// unchanged») - on a cleared, transparent surface everything stayed invisible. So the letters go with COPY (their
+	// atlas colour and alpha), and the shadow is a layer of its own (the same letters, black, on its own surface, drawn a
+	// pixel lower right and a little behind) - two copies never wipe each other's alpha
+	namespace
+	{
+		void CtxText(oapi::Sketchpad* skp, const HudText& t, int x, int base, const std::string& u, int size, int col, int align, double sc, bool shadow)
+		{
+			if (!t.Ok()) return;
+			const oapi::FVECTOR4 black(0.0f, 0.0f, 0.0f, 0.80f);
+			skp->SetBlendState(oapi::Sketchpad::COPY);
+			if (shadow) skp->SetBrightness(&black);
+			t.Draw(skp, x, base, u, size, col, align, sc);
+			if (shadow) skp->SetBrightness(nullptr);
+			skp->SetBlendState();
+		}
+		void CtxBar(oapi::Sketchpad* skp, int x0, int y0, int x1, int y1, DWORD argb, bool shadow)
+		{
+			if (x1 <= x0) return;
+			oapi::Brush* b = oapiCreateBrush(shadow ? 0xCC000000 : argb);
+			skp->SetBlendState(oapi::Sketchpad::COPY);
+			skp->SetPen(nullptr); skp->SetBrush(b); skp->Rectangle(x0, y0, x1, y1);
+			skp->SetBrush(nullptr); oapiReleaseBrush(b);
+			skp->SetBlendState();
+		}
+	}
+
+	// the seat's gauges into their row: the captions small and dim over the values (white; amber a warning, red an
+	// alarm), a thin bar under a value that has one
+	void CrewMember::GaugePaint(int& usedW)
+	{
+		std::string key;
+		for (const OcGauge& g : seatGauges) key += std::string(g.label) + "|" + g.value + "|" + std::to_string(static_cast<int>(g.frac * 100)) + "|" + std::to_string(g.state) + "#";
+		if (!cxTextTried) { cxTextTried = true; cxText.Load(); }
+		const double sc = 2.0;
+		std::vector<int> w;
+		int total = 0;
+		for (const OcGauge& g : seatGauges)
+		{
+			const int lw = cxText.Ok() ? static_cast<int>(cxText.Width(Utf8(g.label), 0, sc)) : 8 * static_cast<int>(std::strlen(g.label));
+			const int vw = cxText.Ok() ? static_cast<int>(cxText.Width(Utf8(g.value), 1, sc)) : 11 * static_cast<int>(std::strlen(g.value));
+			w.push_back((std::max)((std::max)(lw, vw), 40)); total += w.back() + 28;
+		}
+		total = (std::min)(1024, (std::max)(64, total));
+		usedW = total;
+		if (key == gaugePainted) return;
+		gaugePainted = key;
+		for (int layer = 0; layer < 2; ++layer)
+		{
+			SURFHANDLE surf = layer ? gaugeShadow : gaugeSurf;
+			if (!surf) continue;
+			const bool sh = layer == 1;
+			oapiClearSurface(surf, 0);
+			oapi::Sketchpad* skp = oapiGetSketchpad(surf);
+			if (!skp) continue;
+			int x = 14;
+			for (size_t k = 0; k < seatGauges.size() && k < w.size(); ++k)
+			{
+				const OcGauge& g = seatGauges[k];
+				const int cxm = x + w[k] / 2;
+				CtxText(skp, cxText, cxm, 20, Utf8(g.label), 0, 4, 1, sc, sh);
+				CtxText(skp, cxText, cxm, 46, Utf8(g.value), 1, g.state == 2 ? 3 : g.state == 1 ? 1 : 2, 1, sc, sh);
+				if (g.frac >= 0)
+				{
+					const DWORD col = g.state == 2 ? 0xFF4646FF : g.state == 1 ? 0xFF2894FF : 0xFFFFE246;
+					CtxBar(skp, x, 54, x + w[k], 56, 0x70FFE246, sh);
+					CtxBar(skp, x, 54, x + static_cast<int>(w[k] * std::clamp(g.frac, 0.0, 1.0)), 56, col, sh);
+				}
+				x += w[k] + 28;
+			}
+			oapiReleaseSketchpad(skp);
+		}
+	}
+
+	// the caption (the user's choice, 2026-10-07: «только текст с тенью»): no frame, no plate - the helmet display's own
+	// letters, one atlas texel to a screen pixel (as sharp as the suit's display), their shadow a layer of its own. One
+	// action: «F  ВСТАТЬ» - the key in cyan, the action white. Several: the node's name small and dim, the actions (the
+	// picked one white with a thin cyan bar at its left, one that cannot be done dim with why in amber), «колесо — выбор»
+	static const int kCtxPanelW = 420, kCtxTitleH = 22, kCtxRowH = 26, kCtxHintH = 22;
+	static const double kCtxScale = 2.0;   // the atlas's own pixels: 1:1
+	void CrewMember::CtxPaint()
+	{
+		if (!cxSurf) return;
+		std::string key = std::string(cx.nd.label) + "|" + std::to_string(cx.node) + "|" + std::to_string(cx.sel) + "|" + std::to_string(cx.busy ? static_cast<int>(60 * cx.t / (std::max)(0.1, cx.dur)) : -1);
+		for (const OcAction& a : cx.acts) key += std::string("|") + std::to_string(a.id) + a.label + (a.available ? "+" : "-") + a.reason;
+		if (key == cx.painted) return;
+		cx.painted = key;
+		if (!cxTextTried) { cxTextTried = true; cxText.Load(); }
+		auto upper = [](const std::string& u)
+		{
+			std::wstring w = Wide(u.c_str(), CP_UTF8);
+			if (!w.empty()) CharUpperBuffW(&w[0], static_cast<DWORD>(w.size()));
+			int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr); std::string o(n > 0 ? n - 1 : 0, ' ');
+			if (n > 1) WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, &o[0], n, nullptr, nullptr);
+			return o;
+		};
+		const int n = static_cast<int>(cx.acts.size()), rows = (std::min)(n, 6);
+		const double prog = cx.busy ? std::clamp(cx.t / (std::max)(0.1, cx.dur), 0.0, 1.0) : 0.0;
+		for (int layer = 0; layer < 2; ++layer)
+		{
+			SURFHANDLE surf = layer ? cxShadow : cxSurf;
+			if (!surf) continue;
+			const bool sh = layer == 1;
+			oapiClearSurface(surf, 0);
+			oapi::Sketchpad* skp = oapiGetSketchpad(surf);
+			if (!skp) continue;
+			auto text = [&](int x, int base, const std::string& u, int size, int col, int align) { CtxText(skp, cxText, x, base, u, size, col, align, kCtxScale, sh); };
+			if (n == 1)
+			{
+				const OcAction& a = cx.acts[0];
+				if (a.id != -101) text(4, kCtxRowH - 6, "F", 1, a.available ? 0 : 4, 0);
+				text(28, kCtxRowH - 6, upper(Utf8(a.label)), 1, a.available ? 2 : 4, 0);
+				if (!a.available && a.reason[0]) text(28, kCtxRowH + 16, Utf8(a.reason), 0, 1, 0);
+				if (cx.busy) CtxBar(skp, 28, kCtxRowH - 1, 28 + static_cast<int>(200 * prog), kCtxRowH + 1, 0xFFFFE246, sh);
+			}
+			else
+			{
+				if (cx.node >= 0) text(10, kCtxTitleH - 5, upper(Utf8(cx.nd.label)), 0, 4, 0);
+				int y = kCtxTitleH;
+				for (int k = 0; k < rows; ++k, y += kCtxRowH)
+				{
+					const OcAction& a = cx.acts[k];
+					const bool picked = k == cx.sel;
+					if (picked) CtxBar(skp, 2, y + 5, 4, y + kCtxRowH - 4, 0xFFFFE246, sh);
+					text(10, y + kCtxRowH - 6, upper(Utf8(a.label)), 1, !a.available ? 4 : picked ? 2 : 0, 0);
+					if (!a.available && a.reason[0]) text(kCtxPanelW - 6, y + kCtxRowH - 7, Utf8(a.reason), 0, 1, 2);
+					if (cx.busy && a.id == cx.act) CtxBar(skp, 10, y + kCtxRowH - 2, 10 + static_cast<int>((kCtxPanelW - 20) * prog), y + kCtxRowH, 0xFFFFE246, sh);
+				}
+				const std::string hint = cx.busy ? (cx.interruptible ? Tr("F \xE2\x80\x94 \xD0\xBF\xD1\x80\xD0\xB5\xD1\x80\xD0\xB2\xD0\xB0\xD1\x82\xD1\x8C", "F \xE2\x80\x94 stop") : "")
+				                                 : Tr("\xD0\xBA\xD0\xBE\xD0\xBB\xD0\xB5\xD1\x81\xD0\xBE \xE2\x80\x94 \xD0\xB2\xD1\x8B\xD0\xB1\xD0\xBE\xD1\x80", "wheel \xE2\x80\x94 choose");   // F — прервать / колесо — выбор
+				if (!hint.empty()) text(10, y + kCtxHintH - 6, hint, 0, 4, 0);
+			}
+			oapiReleaseSketchpad(skp);
+		}
+	}
+
+	// ---- the context layer's letters: the helmet display's own glyphs (Config\Tantra\HudFont.txt + its atlas
+	// Textures\Tantra\HudFont.dds, Jura), each a small quad of the layer's mesh with the atlas's own alpha. Painting them
+	// into a surface lost them (ALPHABLEND keeps the target's alpha, COPY took the wrong cells); quads of the atlas are
+	// exact, one atlas texel to a screen pixel, and their shadow is the same quads in black ----
+	namespace
+	{
+		struct AGlyph { int x{}, y{}, w{}, h{}, ox{}, oy{}; float adv{}; };
+		struct Atlas { bool tried{}, ok{}; double W{ 2048 }, H{ 2048 }; std::map<unsigned long long, AGlyph> g; };
+		unsigned long long AKey(int size, int col, unsigned cp) { return (static_cast<unsigned long long>(size) << 40) | (static_cast<unsigned long long>(col) << 32) | cp; }
+		Atlas& TheAtlas()
+		{
+			static Atlas a;
+			if (a.tried) return a;
+			a.tried = true;
+			FILE* f = std::fopen("Config\\Tantra\\HudFont.txt", "r");
+			if (!f) return a;
+			char line[256];
+			while (std::fgets(line, sizeof line, f))
+			{
+				if (line[0] == '#') continue;
+				int aw, ah, u;
+				if (std::sscanf(line, "ATLAS %d %d %d", &aw, &ah, &u) == 3) { a.W = aw; a.H = ah; continue; }
+				int si, ci, x, y, w, h, ox, oy; unsigned cp; float adv;
+				if (std::sscanf(line, "%d %d %u %d %d %d %d %d %d %f", &si, &ci, &cp, &x, &y, &w, &h, &ox, &oy, &adv) == 10) a.g[AKey(si, ci, cp)] = { x, y, w, h, ox, oy, adv };
+			}
+			std::fclose(f);
+			a.ok = !a.g.empty();
+			return a;
+		}
+		std::vector<unsigned> U8(const std::string& s)
+		{
+			std::vector<unsigned> o;
+			for (size_t i = 0; i < s.size();)
+			{
+				const unsigned char c = static_cast<unsigned char>(s[i]);
+				unsigned cp = c; int n = 1;
+				if (c >= 0xF0 && i + 3 < s.size()) { cp = ((c & 7u) << 18) | ((s[i + 1] & 0x3Fu) << 12) | ((s[i + 2] & 0x3Fu) << 6) | (s[i + 3] & 0x3Fu); n = 4; }
+				else if (c >= 0xE0 && i + 2 < s.size()) { cp = ((c & 15u) << 12) | ((s[i + 1] & 0x3Fu) << 6) | (s[i + 2] & 0x3Fu); n = 3; }
+				else if (c >= 0xC0 && i + 1 < s.size()) { cp = ((c & 31u) << 6) | (s[i + 1] & 0x3Fu); n = 2; }
+				o.push_back(cp); i += n;
+			}
+			return o;
+		}
+		struct GQuad { double x0, y0, x1, y1; float u0, v0, u1, v1; };   // screen px from the top left of its block (y down), its texels
+		double TextW(const std::string& u, int size)
+		{
+			Atlas& A = TheAtlas(); double w = 0;
+			for (unsigned cp : U8(u)) { auto it = A.g.find(AKey(size, 0, cp)); if (it != A.g.end()) w += it->second.adv; }
+			return w;
+		}
+		// a line at the pen (x, the baseline), in the atlas's colour col: its quads
+		void Lay(std::vector<GQuad>& q, double x, double base, const std::string& u, int size, int col, int align)
+		{
+			Atlas& A = TheAtlas();
+			double pen = x - (align == 1 ? 0.5 : align == 2 ? 1.0 : 0.0) * TextW(u, size);
+			for (unsigned cp : U8(u))
+			{
+				auto it = A.g.find(AKey(size, col, cp));
+				if (it == A.g.end()) continue;
+				const AGlyph& g = it->second;
+				if (g.w > 0 && g.h > 0)
+				{
+					const double x0 = std::floor(pen + g.ox + 0.5), y0 = std::floor(base + g.oy + 0.5);
+					q.push_back({ x0, y0, x0 + g.w, y0 + g.h, static_cast<float>(g.x / A.W), static_cast<float>(g.y / A.H), static_cast<float>((g.x + g.w) / A.W), static_cast<float>((g.y + g.h) / A.H) });
+				}
+				pen += g.adv;
+			}
+		}
+		std::string Upper8(const std::string& u)
+		{
+			std::wstring w = Wide(u.c_str(), CP_UTF8);
+			if (!w.empty()) CharUpperBuffW(&w[0], static_cast<DWORD>(w.size()));
+			int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr); std::string o(n > 0 ? n - 1 : 0, ' ');
+			if (n > 1) WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, &o[0], n, nullptr, nullptr);
+			return o;
+		}
+	}
+
+	// on the screen: the node's caption beside the aim (or beside the cursor with Alt), the seat's gauges along the
+	// bottom, the cursor's cross. No brackets, no frames, no plates (the user, 2026-10-07: «только текст с тенью»):
+	// the helmet display's letters with their shadow. All on a plane 0.3 m before her eyes, laid out in the screen's
+	// pixels and placed in her vessel's own frame from her camera there (never through the global frame)
+	void CrewMember::CtxDraw()
+	{
+		if (ctxTest)   // a drawing test: a caption and a gauge row always
+		{
+			if (useHint.empty()) useHint = "\xD1\x82\xD0\xB5\xD1\x81\xD1\x82 \xD0\xBC\xD0\xB5\xD0\xBD\xD1\x8E";   // тест меню (UTF-8)
+			if (seatGauges.empty())
+			{
+				OcGauge g{}; g.size = sizeof g;   // (cp1251, as a ship gives them)
+				std::snprintf(g.label, sizeof g.label, "%s", "\xD1\xCA\xCE\xD0\xCE\xD1\xD2\xDC"); std::snprintf(g.value, sizeof g.value, "%s", "12 \xEA\xEC/\xF7"); g.frac = -1; seatGauges.push_back(g);
+				std::snprintf(g.label, sizeof g.label, "%s", "\xC7\xC0\xD0\xDF\xC4"); std::snprintf(g.value, sizeof g.value, "%s", "78 %"); g.frac = 0.78; seatGauges.push_back(g);
+				std::snprintf(g.label, sizeof g.label, "%s", "\xCA\xD0\xC5\xCD"); std::snprintf(g.value, sizeof g.value, "%s", "+16\xB0"); g.frac = -1; g.state = 1; seatGauges.push_back(g);
+			}
+		}
+		const bool nodeMenu = cx.ship && cx.node >= 0 && !cx.acts.empty();
+		// F's old uses (seen without the suit's display); a node out of reach. Not while she sits: F stands her up, and that
+		// is not shown all the time she drives (the user, 2026-10-07: «постоянное ВСТАТЬ в машине - убрать»)
+		const bool fHint = !nodeMenu && !seat && ((!useHint.empty() && (!(suitOn && hudOn) || ctxTest)) || farNode) && bio.CanAct();
+		const bool menu = nodeMenu || fHint;
+		const bool cross = simCursor;
+		const bool gauges = !seatGauges.empty();
+		const bool marks = cx.cursor && !cx.marks.empty();
+		const bool show = menu || cross || gauges || marks;
+		// in the suit with its display on: onto the display's plate (CtxPaintPlate); else our own layer before her eyes
+		const bool plate = oapiCameraInternal() && oapiCameraTarget() == GetHandle() && suitOn && hudOn && !thirdIn;
+		plateOn = false; plateRuns.clear(); plateBoxes.clear(); plateMarks = plate && marks;
+		if (plate) { if (cxMesh != static_cast<UINT>(-1)) SetMeshVisibilityMode(cxMesh, MESHVIS_NEVER); }
+		else
+		{
+			if (cxMesh == static_cast<UINT>(-1))
+			{
+				if (!show) return;
+				cxMesh = AddMesh("OrbiterCrew\\CtxMarker");
+			}
+			SetMeshVisibilityMode(cxMesh, !show ? MESHVIS_NEVER : oapiCameraInternal() ? MESHVIS_COCKPIT | MESHVIS_VC : MESHVIS_EXTERNAL);
+		}
+		if (!show) return;
+		DEVMESHHANDLE dev = nullptr;
+		if (!plate)
+		{
+			if (!vis) return;
+			dev = GetDevMesh(vis, cxMesh);
+			if (!dev) return;
+		}
+		if (!TheAtlas().ok) return;
+		gcCore2* core = gcGetCoreInterface(); const HWND view = core ? core->GetRenderWindow() : nullptr;
+		RECT rc{}; if (!view || !GetClientRect(view, &rc) || rc.bottom <= 0) return;
+		const double Wp = rc.right, Hp = rc.bottom;
+		MATRIX3 Rc; oapiCameraRotationMatrix(&Rc); MATRIX3 Rv; GetRotationMatrix(Rv);
+		VECTOR3 R = tmul(Rv, mul(Rc, _V(1, 0, 0))), U = tmul(Rv, mul(Rc, _V(0, 1, 0))), F = tmul(Rv, mul(Rc, _V(0, 0, 1)));
+		VECTOR3 C;
+		if (oapiCameraInternal() && oapiCameraTarget() == GetHandle() && !thirdIn)
+		{
+			C = camEye;
+			if (headAsked)   // her eyes: the look set this frame (yaw from her vessel's nose, + right; pitch + up)
+			{
+				const double y = headWantYaw, p = headWantPitch;
+				F = _V(std::sin(y) * std::cos(p), std::sin(p), std::cos(y) * std::cos(p));
+				R = _V(std::cos(y), 0, -std::sin(y));
+				U = crossp(F, R);
+			}
+		}
+		else { VECTOR3 cg; oapiCameraGlobalPos(&cg); Global2Local(cg, C); }
+		// 0.25 m: well beyond the cockpit's near plane (0.1 m, D3D9Client VCNearPlane). The helmet display's plate is never
+		// shown with this layer (in the suit with the display on the caption is on the plate itself): nothing to fight.
+		// The mesh's groups go back to front: band 0, key 1, bar shadow 2, letter shadow 3, bars 4, letters 5, cross
+		// outline 6, cross 7, Alt marks 8
+		const double q = 0.25, tanA = std::tan((std::max)(0.1, oapiCameraAperture())), px = 2 * q * tanA / Hp;
+		// screen px: from the top left of the window (x right, y down), on the pixel grid (D3D9's half pixel)
+		const double ox = Wp / 2, oy = Hp / 2;
+		auto at = [&](double sx, double sy, double dq) { const double k = (q + dq) / q, X = sx - 0.5 - ox, Y = oy - (sy - 0.5); return C + F * (q + dq) + R * (X * px * k) + U * (Y * px * k); };
+		auto put = [&](NTVERTEX& v, const VECTOR3& l, float tu, float tv)
+		{
+			v.x = static_cast<float>(l.x); v.y = static_cast<float>(l.y); v.z = static_cast<float>(l.z);
+			v.nx = static_cast<float>(-F.x); v.ny = static_cast<float>(-F.y); v.nz = static_cast<float>(-F.z); v.tu = tu; v.tv = tv;
+		};
+		// a quad, clockwise as seen: bottom left, top left, top right, bottom right
+		auto quad = [&](NTVERTEX* v, double x0, double y0, double x1, double y1, double dq, float u0 = 0, float v0 = 0, float u1 = 0, float v1 = 0)
+		{
+			put(v[0], at(x0, y1, dq), u0, v1); put(v[1], at(x0, y0, dq), u0, v0); put(v[2], at(x1, y0, dq), u1, v0); put(v[3], at(x1, y1, dq), u1, v1);
+		};
+		auto edit = [&](DWORD g, std::vector<NTVERTEX>& v)
+		{
+			GROUPEDITSPEC e{}; e.flags = GRPEDIT_VTXCRD | GRPEDIT_VTXNML | GRPEDIT_VTXTEX; e.Vtx = v.data(); e.nVtx = static_cast<DWORD>(v.size());
+			oapiEditMeshGroup(dev, g, &e);
+		};
+		std::vector<GQuad> glyphs, keyLetters;               // screen px (top left, y down); a key cap's letter: black, on the cap
+		auto lay = [&](std::vector<GQuad>& qv, double x, double base, const std::string& u, int size, int col, int align)
+		{
+			Lay(qv, x, base, u, size, col, align);
+			if (plate) plateRuns.push_back({ x, base, u, size, col, align, &qv == &keyLetters });
+		};
+		struct Bar { double x0, y0, x1, y1; };
+		std::vector<Bar> bars;
+		// ---- the caption: a neutral key cap with its letter, the picked action white on a soft dark band, the others dim
+		// above and below it (the list stays where it is, the band moves), a thin bar of a long action's time along the
+		// band's foot (the user's examples, 2026-10-07) ----
+		struct Box { double x0, y0, x1, y1; };
+		std::vector<Box> keys, bands;
+		double ex = ox, ey = oy;   // the eye's point: the middle, or the cursor
+		if (cross) { POINT p; if (GetCursorPos(&p) && ScreenToClient(view, &p)) { ex = p.x; ey = p.y; } }
+		if (menu)
+		{
+			std::vector<OcAction> acts = cx.acts;
+			int sel = (std::min)(cx.sel, static_cast<int>(acts.size()) - 1);
+			if (fHint)
+			{
+				OcAction a{}; a.size = sizeof a; a.id = -100; a.available = 1;
+				const bool own = !useHint.empty() && (!(suitOn && hudOn) || ctxTest);
+				const std::string h = own ? useHint : std::string(Tr("\xD0\xBF\xD0\xBE\xD0\xB4\xD0\xBE\xD0\xB9\xD0\xB4\xD0\xB8\xD1\x82\xD0\xB5 \xD0\xB1\xD0\xBB\xD0\xB8\xD0\xB6\xD0\xB5", "come closer"));   // подойдите ближе
+				if (!own) { a.available = 0; a.id = -101; }
+				std::snprintf(a.label, sizeof a.label, "%s", ToCp1251(h).c_str());
+				acts.assign(1, a); sel = 0;
+			}
+			const int n = (std::min)(static_cast<int>(acts.size()), 7);
+			const double rowH = 30, smallH = 22, keyW = 22;
+			const double prog = cx.busy ? std::clamp(cx.t / (std::max)(0.1, cx.dur), 0.0, 1.0) : 0.0;
+			// the picked row level with the eye's point, a little right of it; the others stacked above and below
+			const double xk = std::floor(ex + 26), xt = xk + keyW + 10;
+			const double ySel = std::floor(ey - rowH / 2 + 2);
+			for (int k = 0; k < n; ++k)
+			{
+				const OcAction& a = acts[k];
+				if (k == sel)
+				{
+					const std::string t = Utf8(a.label);
+					const double tw = TextW(t, 2);
+					bands.push_back({ xk - 6, ySel, xt + tw + 14, ySel + rowH });
+					if (a.id != -101) { keys.push_back({ xk, ySel + 4, xk + keyW, ySel + rowH - 4 }); lay(keyLetters, xk + keyW / 2, ySel + rowH - 9, "F", 1, 0, 1); }
+					lay(glyphs, xt, ySel + rowH - 8, t, 2, a.available ? 2 : 6, 0);
+					if (!a.available && a.reason[0]) lay(glyphs, xt + tw + 24, ySel + rowH - 9, Utf8(a.reason), 0, 1, 0);
+					if (cx.busy && a.id == cx.act) bars.push_back({ xk - 6, ySel + rowH - 2, xk - 6 + (xt + tw + 20 - xk) * prog, ySel + rowH });
+				}
+				else
+				{
+					const double y = k < sel ? ySel - smallH * (sel - k) : ySel + rowH + smallH * (k - sel - 1);
+					lay(glyphs, xt, y + smallH - 6, Utf8(a.label), 1, 6, 0);
+				}
+			}
+			// the node's name: small and dim over the list
+			if (cx.node >= 0 && !fHint) lay(glyphs, xt, ySel - smallH * sel - 8, Upper8(Utf8(cx.nd.label)), 0, 6, 0);
+		}
+		// ---- the seat's gauges along the bottom: each caption over its value ----
+		if (gauges)
+		{
+			std::vector<double> w; double total = 0;
+			for (const OcGauge& g : seatGauges) { w.push_back((std::max)((std::max)(TextW(Utf8(g.label), 0), TextW(Utf8(g.value), 1)), 40.0)); total += w.back() + 28; }
+			total -= 28;
+			double x = std::floor(ox - total / 2);
+			const double yb = Hp - (suitOn && hudOn ? 150 : 34);   // the values' baseline
+			for (size_t k = 0; k < seatGauges.size(); ++k)
+			{
+				const OcGauge& g = seatGauges[k];
+				const double cxm = x + w[k] / 2;
+				lay(glyphs, cxm, yb - 26, Utf8(g.label), 0, 4, 1);
+				lay(glyphs, cxm, yb, Utf8(g.value), 1, g.state == 2 ? 3 : g.state == 1 ? 1 : 2, 1);
+				if (g.frac >= 0) bars.push_back({ x, yb + 8, x + w[k] * std::clamp(g.frac, 0.0, 1.0), yb + 10 });
+				x += w[k] + 28;
+			}
+		}
+		if (plate)
+		{
+			// the plate adds light to the view: the dark band and the shadows would be nothing on it - the key caps, the
+			// bars and the cross are (ABGR)
+			for (const Box& b : keys) plateBoxes.push_back({ b.x0, b.y0, b.x1, b.y1, 0xFFDBD6D1 });
+			for (const Bar& b : bars) if (b.x1 > b.x0) plateBoxes.push_back({ b.x0, b.y0, b.x1, b.y1, 0xFFFFE345 });
+			if (cross)
+			{
+				const double g = 3, Ln = 8, h = 1;
+				const double arms[4][4] = { { g, -h, g + Ln, h }, { -g - Ln, -h, -g, h }, { -h, g, h, g + Ln }, { -h, -g - Ln, h, -g } };
+				for (const auto& a : arms) plateBoxes.push_back({ ex + a[0], ey + a[1], ex + a[2], ey + a[3], 0xFFFFE345 });
+			}
+			plateOn = true;
+			return;
+		}
+		// ---- into the mesh: the letters (1) and their shadow (4), the bars (0) and theirs (5), the cross (2, 3) ----
+		{
+			std::vector<NTVERTEX> L(4000), S(4000);
+			int k = 0, ks = 0;
+			// each glyph a hair nearer than the one before: their quads overlap, and on one depth the clear edge of one
+			// hid a strip of its neighbour, a different one each frame
+			for (const GQuad& g : glyphs)
+			{
+				if (k >= 1000 || ks >= 1000) break;
+				quad(&L[k * 4], g.x0, g.y0, g.x1, g.y1, -2e-6 * k, g.u0, g.v0, g.u1, g.v1);
+				quad(&S[ks * 4], g.x0 + 1, g.y0 + 1, g.x1 + 1, g.y1 + 1, 0.0015 - 2e-6 * ks, g.u0, g.v0, g.u1, g.v1);
+				++k; ++ks;
+			}
+			for (const GQuad& g : keyLetters)   // black, on its cap (the cap lies behind it)
+			{
+				if (ks >= 1000) break;
+				quad(&S[ks * 4], g.x0, g.y0, g.x1, g.y1, -2e-6 * ks, g.u0, g.v0, g.u1, g.v1);
+				++ks;
+			}
+			edit(5, L); edit(3, S);
+			std::vector<NTVERTEX> K(64), BD(64);
+			int kk = 0, kb = 0;
+			for (const Box& b : keys) if (kk < 16) quad(&K[kk++ * 4], b.x0, b.y0, b.x1, b.y1, 0.002);
+			for (const Box& b : bands) if (kb < 16) quad(&BD[kb++ * 4], b.x0, b.y0, b.x1, b.y1, 0.003);
+			edit(1, K); edit(0, BD);
+		}
+		{
+			std::vector<NTVERTEX> B(256), BS(256);
+			int k = 0;
+			for (const Bar& b : bars)
+			{
+				if (k >= 64 || b.x1 <= b.x0) continue;
+				quad(&B[k * 4], b.x0, b.y0, b.x1, b.y1, 0.0);
+				quad(&BS[k * 4], b.x0 + 1, b.y0 + 1, b.x1 + 1, b.y1 + 1, 0.0015);
+				++k;
+			}
+			edit(4, B); edit(2, BS);
+		}
+		{
+			std::vector<NTVERTEX> A(16), O(16);
+			if (cross)
+			{
+				const double g = 3, L = 8, h = 0.75;
+				const double arms[4][4] = { { g, -h, g + L, h }, { -g - L, -h, -g, h }, { -h, g, h, g + L }, { -h, -g - L, h, -g } };
+				for (int k = 0; k < 4; ++k)
+				{
+					quad(&A[k * 4], ex + arms[k][0], ey + arms[k][1], ex + arms[k][2], ey + arms[k][3], 0.0);
+					quad(&O[k * 4], ex + arms[k][0] - 1, ey + arms[k][1] - 1, ex + arms[k][2] + 1, ey + arms[k][3] + 1, 0.002);
+				}
+			}
+			edit(7, A); edit(6, O);
+		}
+		{   // ---- with Alt: the places of actions, orange squares - near her hand big and bright, further small ----
+			std::vector<NTVERTEX> MK(256);
+			int k = 0;
+			if (marks)
+			{
+				const double f = Hp / (2 * tanA);   // screen px per unit of the view's tangent
+				for (const auto& m : cx.marks)
+				{
+					if (!oapiIsVessel(m.ship) || k + 4 > 64) continue;
+					VECTOR3 g, l; oapiGetVesselInterface(m.ship)->Local2Global(m.pos, g); Global2Local(g, l);
+					const VECTOR3 v = l - C; const double z = dotp(v, F);
+					if (z < 0.1) continue;
+					const double sx = std::round(ox + dotp(v, R) / z * f), sy = std::round(oy - dotp(v, U) / z * f);
+					if (sx < 0 || sy < 0 || sx > Wp || sy > Hp) continue;
+					const double h = m.reach ? 7 : 4, th = m.reach ? 2 : 1;
+					quad(&MK[k++ * 4], sx - h, sy - h, sx + h, sy - h + th, 0.0);
+					quad(&MK[k++ * 4], sx - h, sy + h - th, sx + h, sy + h, 0.0);
+					quad(&MK[k++ * 4], sx - h, sy - h + th, sx - h + th, sy + h - th, 0.0);
+					quad(&MK[k++ * 4], sx + h - th, sy - h + th, sx + h, sy + h - th, 0.0);
+				}
+			}
+			edit(8, MK);
+		}
+	}
+
 	// ---- inside a ship ----
 	void CrewMember::EnterShip(OBJHANDLE ship, const VECTOR3& feet, const VECTOR3& dir)
 	{
@@ -1297,6 +2459,7 @@ namespace ocrew
 	{
 		takeView = false;
 		oapiSetFocusObject(GetHandle());
+		oapiCameraSetAperture(kViewAperture); fovSet = true;   // her view: 70 deg (the user, 2026-10-05)
 		if (!who.viewOutside) { oapiCameraAttach(GetHandle(), CAM_INSIDE); return; }
 		oapiCameraAttach(GetHandle(), CAM_OUTSIDE);
 		const double d = oapiCameraTargetDist();
@@ -1390,10 +2553,14 @@ namespace ocrew
 		if (!coreTried) { coreTried = true; core = gcGetCoreInterface(); }
 		const HWND view = core ? core->GetRenderWindow() : nullptr;
 		RECT rc{};
-		if (!w || pid != GetCurrentProcessId() || (view && w != view && !IsChild(view, w)) || !ScreenToClient(w, &p) || !GetClientRect(w, &rc) || rc.right <= 0 || rc.bottom <= 0) return;
+		// the cursor and the frame's size in the 3D view's own client area: over a child window of it (the menu bar) its
+		// rect would shift and scale the ray (the user, 2026-10-05: the seat's keys pressed beside where clicked)
+		const HWND area = view ? view : w;
+		if (!w || pid != GetCurrentProcessId() || (view && w != view && !IsChild(view, w)) || !ScreenToClient(area, &p) || !GetClientRect(area, &rc) || rc.right <= 0 || rc.bottom <= 0) return;
 		const double W = rc.right, H = rc.bottom, fpx = (H / 2) / std::tan((std::max)(0.1, oapiCameraAperture()));
 		VECTOR3 cp; oapiCameraGlobalPos(&cp); MATRIX3 Rc; oapiCameraRotationMatrix(&Rc);
 		const VECTOR3 dg = mul(Rc, unit(_V((p.x - W / 2) / fpx, (H / 2 - p.y) / fpx, 1.0)));   // camera -> global
+		if (debugLog) oapiWriteLogV("OrbiterCrew: click at (%ld,%ld) of %.0fx%.0f, aperture %.1f deg%s", p.x, p.y, W, H, oapiCameraAperture() * DEG, w != area ? " (over a child window)" : "");
 		VESSEL* sv = oapiGetVesselInterface(si.ship);
 		VECTOR3 o; sv->Global2Local(cp, o); o -= si.Origin();
 		MATRIX3 Rs; sv->GetRotationMatrix(Rs);
@@ -1437,8 +2604,38 @@ namespace ocrew
 		HWND fw = GetForegroundWindow(); DWORD pid = 0;
 		if (fw) GetWindowThreadProcessId(fw, &pid);
 		const bool rmb = eyes && fw && pid == GetCurrentProcessId() && (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
-		mouseRmb = rmb;
-		mouseMode = kMouseWalk && eyes && inShip && seat == 0 && canTurn;
+		// the constant look: her eyes, Orbiter's 3D view in front (no dialog over it), not seated, Alt not held, not the
+		// right button (Orbiter's own turning then)
+		static gcCore2* core = nullptr; static bool coreTried = false;
+		if (!coreTried) { coreTried = true; core = gcGetCoreInterface(); }
+		const HWND view = core ? core->GetRenderWindow() : nullptr;
+		const bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+		const bool front = fw && view && (fw == view || IsChild(fw, view) || IsChild(view, fw) || GetAncestor(view, GA_ROOT) == fw);
+		lookCapture = eyes && front && seat == 0 && !alt && !rmb && bio.state != Body::DEAD;
+		simCursor = false;   // (Alt: Windows' own cursor for now - the sim's cross broke clicks on Orbiter's menu, the user 2026-10-07)
+		double mdx = 0, mdy = 0;
+		if (lookCapture && view)
+		{
+			RECT rc{}; GetClientRect(view, &rc);
+			POINT c = { (rc.right - rc.left) / 2, (rc.bottom - rc.top) / 2 }; ClientToScreen(view, &c);
+			POINT p; GetCursorPos(&p);
+			if (lookWas) { mdx = p.x - c.x; mdy = p.y - c.y; }
+			if (p.x != c.x || p.y != c.y) SetCursorPos(c.x, c.y);
+			if (!cursorHidden) { ShowCursor(FALSE); cursorHidden = true; }
+			if (!lookHinted) { lookHinted = true; lookHintT = 7.0; }
+		}
+		else if (simCursor) { if (!cursorHidden) { ShowCursor(FALSE); cursorHidden = true; } }
+		else if (cursorHidden) { ShowCursor(TRUE); cursorHidden = false; }
+		lookWas = lookCapture;
+		if (lookHintT > 0) lookHintT -= dt;
+		// the free look: on foot (not seated, not at a post), the right button turns the head alone
+		const bool driving = seat != 0 || carried > 0;
+		const bool fl = eyes && rmb && !driving;
+		if (fl && !freeLook) { freeYaw0 = headYaw; freePitch0 = headPitch; lookBack = false; }
+		if (!fl && freeLook) lookBack = true;
+		freeLook = fl;
+		mouseRmb = (rmb && !fl) || lookCapture;   // the body follows the look (not in the free look)
+		mouseMode = kMouseWalk && eyes && seat == 0 && canTurn && !fl && (inShip || lookCapture);
 		headStepped = true;
 		if (!eyes) { headAsked = false; return 0; }
 		// the mouse is Orbiter's (right button: it hides the cursor, keeps it in place and turns its cockpit camera): what
@@ -1450,10 +2647,17 @@ namespace ocrew
 			dYaw = std::remainder(y - headWantYaw, PI2);
 			dPitch = p - headWantPitch;
 		}
+		dYaw += mdx * kLookPerPx; dPitch -= mdy * kLookPerPx;   // the constant look's own mouse
 		double turnBy = 0;
+		if (lookBack && !freeLook)   // the free look let go: back where it was, in ~0.25 s (the mouse meanwhile turns as ever)
+		{
+			const double k = (std::min)(1.0, dt / 0.08);
+			headYaw += (freeYaw0 - headYaw) * k; headPitch += (freePitch0 - headPitch) * k;
+			if (std::abs(headYaw - freeYaw0) < 0.002 && std::abs(headPitch - freePitch0) < 0.002) { headYaw = freeYaw0; headPitch = freePitch0; lookBack = false; }
+		}
 		if (mouseMode) turnBy = dYaw;                                         // walking inside: she turns where she looks
 		else headYaw = std::clamp(headYaw + dYaw, -70 * RAD, 70 * RAD);       // in a seat, outside: the neck
-		if (mouseMode && !rmb) headYaw = Approach(headYaw, 0.0, 1.5, dt);     // walking on, the head comes back ahead
+		if (mouseMode && !mouseRmb) headYaw = Approach(headYaw, 0.0, 1.5, dt);   // walking on, the head comes back ahead
 		headPitch = std::clamp(headPitch + dPitch, -75 * RAD, 75 * RAD);
 		return turnBy;
 	}
@@ -1482,11 +2686,39 @@ namespace ocrew
 		// (yaw = -first), the second up (pitch = second); set at once, not limited by the rotation range
 		oapiCameraSetCockpitDir(-yaw, headPitch);
 		headWantYaw = yaw; headWantPitch = headPitch; headAsked = true;
+		if (thirdIn)
+		{
+			// behind her head along her look, a little over it; in the interior's frame the walls stop it (a camera 0.15 m
+			// round), and it keeps within 0.35 m over / 0.3 m under her eyes (no ceiling of its own: no farther)
+			const VECTOR3 F = _V(std::sin(yaw) * std::cos(headPitch), std::sin(headPitch), std::cos(yaw) * std::cos(headPitch));
+			VECTOR3 c = camEye - F * kThirdDist + _V(0, 0.12, 0);
+			ShipInterior* si = InteriorOf(inShip);
+			const bool ceil = si && si->ext.Ceiling;
+			c.y = std::clamp(c.y, camEye.y - 0.3, camEye.y + (ceil ? 0.6 : 0.2));
+			if (si)
+			{
+				const VECTOR3 o = inFeet + _V(0, height, 0);   // her frame -> the interior's
+				if (si->fns.Walls)
+				{
+					VECTOR3 from = camEye + o - _V(0, 0.05, 0), to = c + o - _V(0, 0.05, 0);
+					si->fns.Walls(si->ctx, &from, &to, 0.15, 0.1);
+					c = to - o + _V(0, 0.05, 0);
+				}
+				if (ceil)   // 0.15 m under the ceiling there (the near plane is 0.1 m: nothing of it is cut)
+				{
+					const VECTOR3 at = c + o;
+					const double top = si->ext.Ceiling(si->ctx, &at) - o.y - 0.15;
+					if (c.y > top) c.y = (std::max)(top, camEye.y - 0.3);
+				}
+			}
+			SetCameraOffset(c);
+		}
 		// the helmet display: before her eyes, along her look, in the suit with the HUD on
 		SuitHud::HelmetView hv;
 		hv.eye = camEye; hv.yaw = yaw; hv.pitch = headPitch;
-		hv.show = suitOn && hudOn;
-		hud.HelmetFrame(this, vis, hv);
+		hv.show = suitOn && hudOn && !thirdIn;
+		if (hv.show) { HudData d; FillHudData(d); hud.HelmetFrame(this, vis, hv, &d); }   // the whole HUD into its light layer
+		else hud.HelmetFrame(this, vis, hv);
 	}
 
 	// the outside camera: how Orbiter's azimuth / polar turns move the view (its sign and frame are not documented):
@@ -1576,20 +2808,33 @@ namespace ocrew
 			EnterShip(s, f0, _V(std::sin(h0), 0, std::cos(h0))); if (!inShip) { who.where = Person::IN_WORLD; return; } }
 		// the ship's air, dose and supplies where she stands (OcInteriorExt::Cabin); without it a sealed cabin
 		air = Air{}; air.body = "ship"; air.p = 101.3; air.T = 294; air.ppO2 = 21.2; air.ppCO2 = 0.04;
-		double cabinDose = 0; bool supplied = true;
+		double cabinDose = 0; bool supplied = true, open = false;   // no Cabin: a sealed cabin (Tantra); an open post says so itself
 		if (si->ext.Cabin)
 		{
 			OcCabin c{}; c.size = sizeof c;
 			if (si->ext.Cabin(si->ctx, &inFeet, &c)) { air.p = c.p; air.T = c.T; air.ppO2 = c.ppO2; air.ppCO2 = c.ppCO2; cabinDose = c.doseSvh; supplied = c.supplied != 0; }
+			open = !supplied && c.ppO2 <= 0;   // no oxygen, no supplies: an open platform (the MPU), not a cabin
 		}
 		double g = 9.81;
 		if (si->fns.Gravity) { VECTOR3 gv{}; si->fns.Gravity(si->ctx, &inFeet, &gv); g = length(gv); }
+		// an open platform (its Cabin gives no oxygen and no supplies: the MPU's post): the world outside is hers - its air (the suit's oxygen in vacuum), its cold
+		// and heat, its radiation through the suit (the user, 2026-10-05)
+		double tEnv = air.T;
+		if (open)
+		{
+			air = atmospheres.Sample(this);
+			thermal = Surroundings(); tEnv = thermal.tEnv;
+			radEnv = rad.Sample(this, air.p, g);
+			cabinDose = Radiation::Dose(radEnv, suitOn ? suit.shieldGcm2 : 0.3, suitOn && suit.FieldUp() ? suit.fieldFactor : 1.0);
+			supplied = false;
+		}
 		// the organism: walking costs, the ship's air, shielded (the ship's own radiation model belongs to the ship)
 		const double v = std::hypot(fwd, lat);
 		humanW = LocomotionPower(suitOn ? Mass() : bio.mass, v, g);
 		double heat = 0;
-		suit.vent = air.Breathable(); suit.ventPpO2 = air.ppO2; suit.ventPpCO2 = air.ppCO2; suit.pOut = air.p;   // a cabin without air: the suit's own
-		if (suitOn) heat = suitResidual = suit.Step(dt, bio.O2Use(), bio.CO2Made(), 0, bio.Heat(), air.T);
+		suit.vent = air.Breathable(); suit.ventPpO2 = air.ppO2; suit.ventPpCO2 = air.ppCO2; suit.pOut = air.p; suit.radRate = bio.doseRate;   // a cabin without air: the suit's own
+		if (suitOn) heat = suitResidual = suit.Step(dt, bio.O2Use(), bio.CO2Made(), 0, bio.Heat(), tEnv);
+		else if (open) { const double net = bio.Heat() + 8 * (air.p > 1 ? air.T - 295 : 0); heat = net > 150 ? net - 150 : net < -150 ? net + 150 : 0; }   // as outside
 		bio.Step(dt, humanW + (turn ? 25 : 0), suitOn ? suit.ppO2 : air.ppO2, suitOn ? suit.ppCO2 : air.ppCO2, air.p, suitOn, heat);
 		bio.Irradiate(dt, cabinDose);
 		bio.Sustain(dt, supplied, suitOn ? &suit.water : nullptr, air.T, suitOn);
@@ -1597,7 +2842,7 @@ namespace ocrew
 		// walking: the keys as outside, in the ship's frame
 		Keys k = keysFresh ? keys : Keys{};
 		keysFresh = false;
-		if (seat) k = Keys{};                        // in a seat (or getting in / out of it) she does not walk
+		if (seat || cx.busy) k = Keys{};             // in a seat (or getting in / out of it), or at a long action, she does not walk
 		if (carried > 0) { carried -= dt; k = Keys{}; fwd = lat = turn = accel = 0; }   // the ship carries her (a lift)
 		if (seat)
 		{
@@ -1666,7 +2911,8 @@ namespace ocrew
 		if (!shipLets && (k.fwd || k.back || k.left || k.right || k.stepL || k.stepR) && messageTime <= 0)
 			Say(why[0] ? Utf8(why) : std::string("Ходить сейчас нельзя"));
 		const bool act = bio.CanAct() && shipLets;
-		const double target = !act ? 0 : k.fwd && !k.back ? (k.run ? (std::min)(runSpeed, 3.0) : walkSpeed) : k.back && !k.fwd ? -0.9 : 0;
+		const double hs = holding ? HeldSlow() : 1.0, runIn = holding && HeldWeight() > 0.6 * CarryLimit() ? walkSpeed : (std::min)(runSpeed, 3.0);
+		const double target = !act ? 0 : k.fwd && !k.back ? (k.run ? runIn : walkSpeed) * hs : k.back && !k.fwd ? -0.9 * hs : 0;
 		const double nf = Approach(fwd, target, std::abs(target) > std::abs(fwd) ? 2.5 : 6.0, dt);
 		accel = (nf - fwd) / dt; fwd = nf;
 		// inside a ship the mouse turns her (an experiment, the user 2026-10-03; outside as before): A/D step aside.
@@ -1699,6 +2945,14 @@ namespace ocrew
 		if (seat || carried > 0) {}
 		else if (!si->fns.Ground || si->fns.Ground(si->ctx, &to, 0.45, &fy)) { to.y = fy; inFeet = to; }
 		else { fwd = lat = 0; }                       // no floor there: she does not step into the void
+		// why she does not walk when asked (the user, 2026-10-05: «не двигается экипаж в корабле»): once a second into the log
+		if ((k.fwd || k.back || k.stepL || k.stepR) && std::hypot(fwd, lat) < 0.05 && (noWalkLogT -= oapiGetSysStep()) <= 0)
+		{
+			noWalkLogT = 1.0; double gy = 0; VECTOR3 here = inFeet;
+			const bool floorHere = !si->fns.Ground || si->fns.Ground(si->ctx, &here, 0.45, &gy);
+			oapiWriteLogV("OrbiterCrew: %s does not walk: seat %d carried %.2f canAct %d shipLets %d (%s) floor here %d at (%.2f %.2f %.2f)",
+				name.c_str(), seat, carried, bio.CanAct() ? 1 : 0, shipLets ? 1 : 0, why, floorHere ? 1 : 0, inFeet.x, inFeet.y, inFeet.z);
+		}
 		// the vessel does not turn with her (the ship's screens are rendered from cameras on this focus body; a turning
 		// body made their zones flicker): its frame stays the ship's, her heading is in the pose (Motion heading)
 		sv->SetAttachmentParams(inParent, inFeet + si->Origin(), _V(0, 0, 1), _V(0, 1, 0));
@@ -1719,7 +2973,7 @@ namespace ocrew
 		useScan = 0.2;
 		useShip = nullptr; useId = -1; useHint.clear();
 		if ((who.where != Person::IN_WORLD && who.where != Person::INTERIOR) || !bio.CanAct()) return;
-		if (inShip && seat) { if (seat == 2) { useShip = inShip; useHint = "встать"; } return; }   // in the seat: F - stand up
+		if (inShip && seat) { if (seat == 2) { useShip = inShip; useHint = Tr("встать", "stand up"); } return; }   // in the seat: F - stand up
 		if (inShip)
 		{
 			ShipInterior* si = InteriorOf(inShip);
@@ -1842,8 +3096,19 @@ namespace ocrew
 	}
 }
 
-DLLCLBK VESSEL* ovcInit(OBJHANDLE hVessel, int fModel) { return new ocrew::CrewMember(hVessel, fModel); }
-DLLCLBK void ovcExit(VESSEL* vessel) { delete static_cast<ocrew::CrewMember*>(vessel); }
+// two classes in this module: the person's body, and a thing lying about (OrbiterCrew\Item)
+DLLCLBK VESSEL* ovcInit(OBJHANDLE hVessel, int fModel)
+{
+	VESSEL probe(hVessel, fModel);
+	const char* cn = probe.GetClassNameA();
+	if (cn && std::strcmp(cn, "OrbiterCrew\\Item") == 0) return new ocrew::ItemVessel(hVessel, fModel);
+	return new ocrew::CrewMember(hVessel, fModel);
+}
+DLLCLBK void ovcExit(VESSEL* vessel)
+{
+	if (ocrew::ItemVessel* it = ocrew::ItemOf(vessel->GetHandle())) { delete it; return; }   // (VESSEL is not polymorphic: by the registry)
+	delete static_cast<ocrew::CrewMember*>(vessel);
+}
 
 // ---- the interface for ships (include/OrbiterCrewApi.h) ----
 
@@ -2062,6 +3327,40 @@ extern "C" __declspec(dllexport) int ocSuitWorn(int id)
 	if (p->where == ocrew::Person::IN_WORLD || p->where == ocrew::Person::INTERIOR)
 		if (ocrew::CrewMember* c = BodyOf(p->vessel)) c->KeepWorn();   // the body's own state into the person
 	return p->worn.suit.on ? 1 : 0;
+}
+// a thing into a person's hands, out of them, what she holds (OcHeld; CONTEXT_ACTIONS.md)
+extern "C" __declspec(dllexport) int ocGive(int id, const OcHeld* h)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p || !h || h->size < static_cast<int>(offsetof(OcHeld, owner)) || (p->where != ocrew::Person::IN_WORLD && p->where != ocrew::Person::INTERIOR)) return 0;
+	ocrew::CrewMember* c = BodyOf(p->vessel);
+	OcHeld full{}; std::memcpy(&full, h, (std::min)(static_cast<size_t>(h->size), sizeof full)); full.size = sizeof full;   // an older caller: no owner, no data
+	return c && c->Give(full) ? 1 : 0;
+}
+extern "C" __declspec(dllexport) int ocTake(int id, OcHeld* out)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p) return 0;
+	ocrew::CrewMember* c = BodyOf(p->vessel);
+	if (!c) return 0;
+	OcHeld full{};
+	if (!c->Take(&full)) return 0;
+	if (out && out->size >= static_cast<int>(offsetof(OcHeld, owner))) { const int n = out->size; std::memcpy(out, &full, (std::min)(static_cast<size_t>(n), sizeof full)); out->size = n; }
+	return 1;
+}
+namespace ocrew { bool UiEnglish(); }
+extern "C" __declspec(dllexport) const char* ocLanguage() { return ocrew::UiEnglish() ? "en" : "ru"; }
+
+extern "C" __declspec(dllexport) int ocHeldOf(int id, OcHeld* out)
+{
+	ocrew::Person* p = ocrew::Crew::Find(id);
+	if (!p) return 0;
+	ocrew::CrewMember* c = BodyOf(p->vessel);
+	if (!c) return 0;
+	OcHeld full{};
+	if (!c->Held(&full)) return 0;
+	if (out && out->size >= static_cast<int>(offsetof(OcHeld, owner))) { const int n = out->size; std::memcpy(out, &full, (std::min)(static_cast<size_t>(n), sizeof full)); out->size = n; }
+	return 1;
 }
 extern "C" __declspec(dllexport) int ocStand(int id)
 {

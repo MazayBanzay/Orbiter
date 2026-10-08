@@ -84,6 +84,24 @@ typedef OBJHANDLE (*ocExitTo_t)(int id, const char* vesselName, const VESSELSTAT
 // may walk is the ship's: CanWalk = 0 (with a reason) holds her where she stands (takeoff, landing, anamezon drive...).
 struct OcCabin;   // below: the air, the dose and the supplies of a cabin
 struct OcHand;    // below: where a seated person's hand rests or holds
+// Context actions (CONTEXT_ACTIONS.md, the user's decision 2026-10-07): the things on a ship or a machine a person can act
+// on. She looks at a node within reach - the middle of her view (F-1), or the cursor with Alt held (M-1) - it is marked
+// with corner brackets and its actions are listed beside it; the mouse wheel picks one (only while two or more are
+// listed: otherwise the wheel is the view's), F does it (with Alt: a click on its row). A long action runs its time with a
+// bar, she stays where she is; F again or stepping away breaks it off. The ship checks its own conditions (a crane near,
+// the cable reaching, the brake on); OrbiterCrew her reach and her state.
+// pos: inside = 1 the interior frame (a person inside), inside = 0 the ship's own frame (a person outside, on the ground)
+struct OcNode { int size; int id; VECTOR3 pos; double reach; int inside; char label[64]; };   // reach 0: 1.2 m from her eyes
+struct OcAction { int size; int id; char label[64]; int available; char reason[64]; double durationS; int interruptible; };
+// A seat's display on the person's screen (SEAT_HUD.md, the user's decision 2026-10-07: 2D on the screen, as the suit's
+// display): while she sits in seatId, in any clothes, a row along the bottom - each gauge its caption over its value
+struct OcGauge {
+    int size;            // sizeof(OcGauge) as OrbiterCrew knows it: the ship writes no field beyond it
+    char label[24];      // the caption, in the ship's code page: «СКОРОСТЬ»
+    char value[24];      // the value with its unit, as shown: «12 км/ч»
+    double frac;         // 0..1: a bar under the value (a charge); < 0: none
+    int state;           // 0 normal, 1 warning (amber), 2 alarm (red)
+};
 struct OcInteriorExt {
     int size;                                                    // sizeof(OcInteriorExt): fields may be added at the end
     void (*Origin)(void* ctx, VECTOR3* o);                       // NULL: (0,0,0) - the interior frame is the ship frame
@@ -111,6 +129,21 @@ struct OcInteriorExt {
     // 'what') reaches there over ~0.3-0.8 s - lifts off, travels, opens and closes round it; with the same 'what' it
     // follows the target rigidly (a wheel turning, a lever moving, the structure shaking). NULL / on = 0: her own pose
     void (*SeatHands)(void* ctx, int seatId, int personId, OcHand* left, OcHand* right);
+    // Context actions (OcNode, OcAction above). NodeCount/Node: the ship's nodes (OrbiterCrew sets out->size; 1 = given);
+    // Actions: what can be done at a node now, by this person (out[k].size set; -> how many, at most max), asked when
+    // shown and twice a second; Begin: 1 = begun (an instant action: done); End: a long one done (1) or broken off (0).
+    // Labels in the ship's code page. NULL: no nodes
+    int (*NodeCount)(void* ctx);
+    int (*Node)(void* ctx, int i, OcNode* out);
+    int (*Actions)(void* ctx, int nodeId, int personId, OcAction* out, int max);
+    int (*Begin)(void* ctx, int nodeId, int actionId, int personId);
+    void (*End)(void* ctx, int nodeId, int actionId, int personId, int completed);
+    // The display of seatId for the person sitting in it, in the order shown (OcGauge above; out[k].size set by
+    // OrbiterCrew). Asked 10 times a second. -> how many (at most max); 0 / NULL: none
+    int (*SeatGauges)(void* ctx, int seatId, int personId, OcGauge* out, int max);
+    // The ceiling over a point, interior frame: its height (y) there; a very large value: none. For the view from behind
+    // the person inside (the camera keeps 0.15 m under it). NULL: the camera keeps within 0.2 m over her eyes
+    double (*Ceiling)(void* ctx, const VECTOR3* at);
 };
 // A hand target, interior frame. pos: the point where the middle of the palm touches the thing (on the top of a ball, on
 // the surface of a handle facing the palm); palm: unit normal out of the palm, into the thing; fwd: unit direction of
@@ -166,6 +199,21 @@ typedef int (*ocCarry_t)(int id, OBJHANDLE ship, const VECTOR3* pos, const VECTO
 typedef int (*ocInteriorPos_t)(int id, VECTOR3* feet, double* hdg);
 // is the person in the space suit: 1 yes, 0 no, -1 no such person
 typedef int (*ocSuitWorn_t)(int id);
+// a thing in a person's hands (CONTEXT_ACTIONS.md, «Предметы в руках»): a machine hands it to her (ocGive) and takes it
+// back (ocTake). She holds it in both hands before her (a plug: in her right), it is seen there, its mass is on her body;
+// its weight here (mass x local g / 9.81) is against what she can lift (the suit's servos help) and slows her walk.
+// mesh: a mesh name (Meshes\..., its own frame: x right, y up, z forward, its middle at 0) or empty: a box of dims (m)
+enum OcHeldKind { OC_HELD_NONE = 0, OC_HELD_CELL = 1, OC_HELD_PLUG = 2, OC_HELD_OTHER = 3 };
+// owner, data (added 2026-10-07; an older caller's smaller size is taken as it is): whose thing it is and what it is to
+// its owner (e.g. "TVehicles", "cell 3 charge 0.82") - kept with it when she puts it down (X: put down, Shift+X: throw)
+// and picks it up again (F); the owner reads them back through ocHeldOf
+struct OcHeld { int size; int kind; double massKg; double dims[3]; char mesh[64]; char label[64]; char owner[32]; char data[96]; };
+typedef int (*ocGive_t)(int id, const OcHeld* h);   // -> 1 in her hands; 0: too heavy here, hands busy, seated, not able
+typedef int (*ocTake_t)(int id, OcHeld* out);        // -> 1 taken from her hands (out: what it was; may be NULL)
+typedef int (*ocHeldOf_t)(int id, OcHeld* out);
+// the interface's language, the user's choice for all of OrbiterCrew (Config\OrbiterCrew\OrbiterCrew.cfg, LANGUAGE):
+// "ru" or "en". A vessel gives its node names, actions, reasons and gauges in it (NULL with an older CrewMember.dll: "ru")
+typedef const char* (*ocLanguage_t)();      // -> 1 she holds something (out: what; may be NULL)
 
 struct OcApi {
     HMODULE dll = nullptr;
@@ -193,6 +241,10 @@ struct OcApi {
     ocStepAboard_t StepAboard = nullptr;
     ocSetPlace_t SetPlace = nullptr;
     ocPlaceOf_t PlaceOf = nullptr;
+    ocGive_t Give = nullptr;
+    ocTake_t Take = nullptr;
+    ocHeldOf_t HeldOf = nullptr;
+    ocLanguage_t Language = nullptr;   // optional
 
     bool Load() {
         if (dll) return true;
@@ -222,10 +274,15 @@ struct OcApi {
         StepAboard = (ocStepAboard_t)GetProcAddress(dll, "ocStepAboard");
         SetPlace = (ocSetPlace_t)GetProcAddress(dll, "ocSetPlace");
         PlaceOf = (ocPlaceOf_t)GetProcAddress(dll, "ocPlaceOf");
+        Give = (ocGive_t)GetProcAddress(dll, "ocGive");
+        Take = (ocTake_t)GetProcAddress(dll, "ocTake");
+        HeldOf = (ocHeldOf_t)GetProcAddress(dll, "ocHeldOf");
+        Language = (ocLanguage_t)GetProcAddress(dll, "ocLanguage");
         if (!(CreatePerson && SetAboard && Board && Disembark && PersonOfBody && Info && SavePerson && LoadPerson)) { Unload(); return false; }
         return true;
     }
     void Unload() { if (dll) FreeLibrary(dll); *this = OcApi(); }
     bool Ok() const { return dll != nullptr; }
     bool HasInterior() const { return RegisterInterior && EnterInterior && LeaveInterior && ExitTo; }
+    bool English() const { const char* l = Language ? Language() : nullptr; return l && l[0] == 'e'; }
 };

@@ -41,6 +41,7 @@ namespace ocrew
 		int seat{};                    // 0 standing, 1 sitting down, 2 seated, 3 standing up
 		double seatT{};                // 0..1 through sitting down / standing up
 		HandTarget hand[2];            // seated: where the left / right hand rests or what it holds (the ship's, model frame)
+		bool hold{};                   // standing, the hands on hand[] all the same (a thing in her hands)
 		double heading{};              // rad, + to the right: the whole figure turned about the vertical through the origin
 		                               // (inside a ship the vessel keeps the ship's orientation; she turns in her pose)
 	};
@@ -55,6 +56,7 @@ namespace ocrew
 		double RunWeight() const { return wRun; }
 		void Reset() { wMove = wRun = 0; pitch = pitchV = roll = rollV = crouch = crouchV = 0; settling = false; arms.Reset(); }
 		const SeatArms& Arms() const { return arms; }
+		void Blink() { if (blinkT < 0) blinkT = 0; }   // a blink now (a landing, a blow: the user 2026-10-07)
 
 	private:
 		struct Spring { double x{}, v{}; void Step(double target, double w, double dt); };

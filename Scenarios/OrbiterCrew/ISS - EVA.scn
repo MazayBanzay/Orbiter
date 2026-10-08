@@ -1,6 +1,8 @@
 BEGIN_DESC
-OrbiterCrew: the astronavigator in open space, 15 m from the ISS, with the suit's cold-gas RCS (about 10 m/s).
-Numpad: rotation, / switches rotation and translation, 5 kills rotation. V sun shade, L lamps. F1 for her view, H for the HUD.
+OrbiterCrew. Open space, 15 m from the ISS, the suit's cold-gas RCS (1.5 kg of N2, about 10 m/s).
+Открытый космос, 15 м от МКС, РСУ скафандра на азоте (1,5 кг, около 10 м/с).
+In space: numpad rotation, / rotation or translation, numpad 5 kills rotation.
+В космосе: цифровой блок поворот, / поворот или сдвиг, 5 гасит вращение.
 END_DESC
 
 BEGIN_ENVIRONMENT
@@ -44,6 +46,15 @@ NizaKrit:OrbiterCrew\Astronavigator
   RCSMODE 1
   AFCMODE 7
   PRPLEVEL 0:1.000000
+  NAME Niza Krit
+  ROLE astronavigator
+  SEX female
   SUIT 1
+  SUIT_O2 1.0
+  SUIT_WATER 2.0
+  SUIT_SORBENT 0.0
+  SUIT_BATTERY 6.0
+  SUIT_N2 1.5
+  SUIT_SERVO 1
 END
 END_SHIPS

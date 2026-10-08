@@ -233,6 +233,7 @@ private:
     int suspFrame_ = 0, forceFrame_ = 0, frame_ = 0;   // which frame last called SetTouchdownPoints / AddForce (rest diagnostics)
     double restLostLog_ = -1e9;
     void FootEvents();
+    bool Coast(double simdt);                // time warp over x10 on the ground: held, not simulated
     VESSELSTATUS2 frozenVs_ = {};           // the landed state the ship is held in under time warp
     OBJHANDLE lastTrapsChunk_ = nullptr;      // the trap-block piece of a break-up (the camera follows it)
     bool LegJointDebris(int leg);              // a leg lost at a joint: its foot / lowest stage as debris
@@ -402,6 +403,7 @@ private:
     tantra::plant::Output plantOut_;
     tantra::tcore::Core core_;                    // the energy core around the plant: nodes, power, the shocks' consequences
     void CoreStep(double simdt);                  // after UpdateDamage (TantraCoreStep.cpp)
+    void CoreWarpStep(double simdt);              // frozen on the ground under warp (Coast): the plant (no thrust) and the core in ~1 s substeps
     unsigned plantKeyPrev_ = 0;
     int plantStage_ = -1;                          // the plant's stage last step (the march lever drops off the run)
     void LoadPlantConfig();

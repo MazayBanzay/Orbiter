@@ -1,26 +1,44 @@
-# Tantra and OrbiterCrew — public beta (Orbiter 2024)
+﻿# Tantra, OrbiterCrew and MPU — public beta 0.2051026 (Orbiter 2024)
 
-The starship *Tantra* from Ivan Yefremov's *Andromeda* and OrbiterCrew, a crew system written from scratch: living, mocap-animated people with physiology, a space suit and a jet pack. Early beta: much is still rough.
+The starship *Tantra* from Ivan Yefremov's *Andromeda*; OrbiterCrew, a crew system written from scratch: living, mocap-animated people with physiology, a space suit and a jet pack; and the MPU, a fast 8×8 universal mobile platform driven by those people. Early beta: much is still rough.
+
+## Packages
+
+The beta comes as three archives. Each one only adds files; unpack them into the Orbiter folder.
+
+| Archive | Contents | Needs |
+|---|---|---|
+| **OrbiterCrew** | people, suit, jet pack, helmet display, this manual | — (install it first) |
+| **Tantra** | the starship, its bridge and interior, debris | OrbiterCrew |
+| **MPU** | the universal mobile platform | OrbiterCrew; Beta 6 also needs Tantra |
+
+Binaries only (no source code) in this beta.
 
 ## Install
 
-1. Orbiter 2024 (x86) with the bundled D3D9Client and XRSound.
-2. Unpack the archive into the Orbiter folder (it only adds files).
-3. Scenarios: `Tantra / Beta`.
+1. A clean **Orbiter 2024** (x86) is enough — no other add-ons are needed. The DLLs use only the Microsoft Visual C++ 2015–2022 runtime that Orbiter 2024 itself needs.
+2. Start Orbiter with **Orbiter_ng.exe** (the D3D9 graphics client bundled with Orbiter 2024). The inline-graphics `orbiter.exe` is not supported.
+3. In the Launchpad, tab **Modules**, tick **XRSound** (bundled with Orbiter 2024) — all sound goes through it.
+4. Unpack the archives into the Orbiter folder: OrbiterCrew first, then Tantra and/or MPU.
+5. Scenarios: `Tantra / Beta`.
 
 ## Scenarios
 
-| Scenario | What to do |
-|---|---|
-| **Beta 1 — Mars, jet pack at Tantra** | Fly the jet pack in Valles Marineris, walk into Tantra's feet (collision test), board the lift |
-| **Beta 2 — Mars, commander's seat** | Raise the ship onto the stern, lift off on planetary engines, light the anamezon far out |
-| **Beta 3 — Io, suit field** | Stand in Jupiter's radiation belts, switch the suit's magnetic field off and on |
+| Scenario | Package | What to do |
+|---|---|---|
+| **Beta 1 — Mars, jet pack at Tantra** | Tantra | Fly the jet pack in Valles Marineris, walk into Tantra's feet (collision test), board the lift |
+| **Beta 2 — Mars, commander's seat** | Tantra | Raise the ship onto the stern, lift off on planetary engines, light the anamezon far out |
+| **Beta 3 — Io, suit field** | MPU | Stand in Jupiter's radiation belts, switch the suit's magnetic field off and on; drive the MPU |
+| **Beta 4 — Earth, MPU at KSC** | MPU | Drive the MPU on firm ground in air: full sound, dust clouds |
+| **Beta 5 — Moon, MPU at Brighton Beach** | MPU | Drive on regolith in vacuum: low grip, long skids, silent |
+| **Beta 6 — Mars, MPU at Tantra** | MPU + Tantra | Drive round the ship; the platform meets Tantra's legs and feet |
+| **Beta 7 — Moon, two MPU crash** | MPU | Two platforms 400 m apart: drive one into the other (F3 switches drivers) |
+| **Beta 8 — Earth orbit, commander's seat** | Tantra | Tantra in low Earth orbit, Niza Krit on the bridge |
+| **Beta 9 — Moon, jet pack at Brighton Beach** | OrbiterCrew | Put on the jet pack (B), fly, transfer to a base and land on a pad |
 
 The full controls are in each scenario's description in the Launchpad.
 
 ## OrbiterCrew
-
-![walking](img/walk.jpg)
 
 - **People.** Skeletal mocap animation (walk, run, jump, sit, stand up); two sets — without and with the suit.
 - **Physiology.** O₂ and CO₂, stamina, body temperature, water, food, injuries by body part, radiation dose. Death from hypoxia, CO₂, heat or cold, radiation sickness, injuries.
@@ -132,17 +150,76 @@ From Tantra's own focus (F3), the keys are K planetary/anamezon, J next ignition
   A hard landing leaves broken parts behind as debris.
 - **Rules:** the gear deploys only in the air (the blades have no room to open on the belly). Wings stay folded lying on the ground and while the carriage moves, open when standing on the stern.
 
-## Language and fonts
+## MPU — universal mobile platform (test sample)
 
-- The suit computer and the ship's screens are **in Russian** in this beta. The scenario descriptions are in English.
-- The suit computer uses its own built-in font (works on any Windows).
-- The bridge screens use **Segoe UI** (part of Windows).
-- The bridge **key lettering uses the TrueType font "GOST type A"**, which is not part of Windows and not included. Without it, Windows substitutes another font: the text stays readable, but some labels may not fit their keys. Install any "GOST type A" font yourself for the intended look.
-- Some ship labels use "Arial Cyr" (a standard Windows Cyrillic alias).
+- **Vehicle:** an open 8×8 platform with a driver's post up front.
+  - airless wheels with hub motors, active suspension, all-wheel steering;
+  - battery drive with energy recovered on braking.
+- **Wheel–soil physics (terramechanics, not a game tyre curve):**
+  - sinkage and rolling resistance from Bekker's pressure–sinkage law;
+  - traction against wheel slip from the Janosi–Hanamoto shear law; side force from the same shear against the slip angle, plus bulldozing of the soil in front of a sliding wheel;
+  - the side force comes first inside the friction circle — the platform stays stable, but past the grip it slides honestly;
+  - soils per body: Moon — lunar regolith (Lunar Sourcebook values), Mars — sand (assumed within the rovers' estimates), Earth — firm loam;
+  - grip, wheelspin, sliding and skids come out of the soil and the local gravity: the same platform behaves differently on each world.
+- **Suspension:** independent and sprung on every wheel — squat on take-off, dive on braking, roll in turns. At the start the platform waits on its wheels until the terrain has loaded; parked, it stands still on its brake.
+- **Drive:** 8 hub motors, 3 MW in all; 1 MWh battery with energy recovered on braking; the speed limit holds downhill too (the motors brake). Traction control on W; none with Shift.
+- **Driven only by a person** — it never drives itself, and the focus stays on the person:
+  1. Walk up to the platform anywhere round it and press F to climb onto the deck; F at the console takes the post.
+  2. W forward (40 km/h), Shift+W full power (80 km/h), A/D steer (all-wheel; the rear wheels counter-steer at low speed).
+  3. S — service brake with ABS (the wheels keep turning and steering); from a standstill S reverses (15 km/h).
+  4. Space — emergency brake (the wheels lock, it skids). B — parking brake.
+  5. Caps Lock raises the deck by 0.25 m / lowers it back (the normal height is the lowest).
+  6. V — the platform from outside; V again — the driver's view.
+  7. F at the post steps back; F at the deck edge steps down to the ground.
+- **Status:** speed, battery, power draw and range — at the bottom of the screen, or in the helmet display when the driver wears the suit.
+- **Dust and sound:** dust from the wheels (ballistic in vacuum, a cloud in air). Sound only through air: none on the Moon, faint on Mars, full on Earth.
+- **Time warp:** above 2× the suspension is stiff; above 4× the platform is parked.
+
+## Collisions
+
+- **A person and Tantra:** a person on foot is stopped at the rim of Tantra's footpads while the ship stands on the ground.
+- **MPU and people:** a person struck by the platform takes the blow on their own side (injuries through the suit).
+- **MPU and Tantra:** the platform meets the ship's standing legs and feet (Tantra exports them for other vehicles).
+- **MPU and MPU:** platforms collide with each other, pushed by their masses.
+- **Crash:** above 30 km/h the people on the deck are thrown forward and may hit the ground or a support.
+- Not yet:
+  - the hull and upper legs;
+  - anything in flight (a person on the jet pack passes through the ship).
+
+## Language, fonts and encodings
+
+The suit computer and the ship's screens are **in Russian** in this beta; the scenario descriptions are in English. The Russian text stays Russian on any Windows (English, US, other locales). How each part draws its text:
+
+| Where | How | On non-Russian Windows |
+|---|---|---|
+| Suit computer and its messages | own bitmap font (Jura), Cyrillic baked into a texture | identical everywhere, independent of the system locale |
+| Bridge screens | Segoe UI, Unicode text | Segoe UI ships with every Windows, Cyrillic included |
+| Bridge key lettering | "GOST type A", Unicode text | stays Russian; if the font is missing Windows substitutes another one — readable, but some labels may not fit their keys |
+| Ship status in Orbiter's HUD, interior labels | "Arial Cyr", single-byte Windows-1251 text | correct through the standard Windows alias "Arial Cyr" → Cyrillic Arial; would break only on a system without that alias |
+| Scenario descriptions | plain ASCII English | — |
+
+"GOST type A" is not part of Windows and not included; install any "GOST type A" TrueType font yourself for the intended look.
+
+## Credits and third-party licences
+
+The ship, the MPU, the suit, the jet pack, the interiors, the code and the MPU sounds are our own work. Third-party material used:
+
+| What | Source | Licence |
+|---|---|---|
+| Human body, skin, eyes, brows, lashes, boots, rig | MakeHuman / MPFB system assets | CC0 |
+| Hair | `cortu_strawberry_cloud_hair`, MakeHuman Community | CC0 |
+| Coverall fabric relief (normal map) | `elvs_racing_fire_suit_female1` by Elvaerwyn, MakeHuman Community | CC BY 4.0 |
+| Walk and run motion | 100STYLE dataset (I. Mason, S. Starke, T. Komura, 2022) | CC BY 4.0 |
+| Sitting and standing-up motion | CMU Graphics Lab Motion Capture Database, mocap.cs.cmu.edu (created with funding from NSF EIA-0196217) | free to use |
+| Footsteps, impacts | Kenney, "Impact Sounds" | CC0 |
+| Suit and step effects | OwlishMedia, "Sound Effects Pack" (OpenGameArt) | CC0 |
+| Breathing | mikeask, "Breathing Tired" (OpenGameArt) | CC0 |
+| Helmet display font | Jura, The Jura Project Authors | SIL Open Font License 1.1 (text in `Textures\Tantra\HudFont_Jura_OFL.txt`) |
 
 ## Known issues
 
 - Footstep sounds play in vacuum.
-- Only the feet are solid for a person outside (on foot, ship on the ground); the hull, upper legs and anything in flight are not.
+- Collisions: not yet with the hull, the upper legs or anything in flight (see Collisions).
+- MPU: the wheels have no rotation of their own yet (slip is solved from the forces); no ground sounds under the wheels.
 - Jupiter's shadow on Io is not modelled.
 - Time acceleration is limited to 10x while a person is outside a safe zone.

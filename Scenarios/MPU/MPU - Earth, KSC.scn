@@ -1,0 +1,79 @@
+BEGIN_DESC
+MPU. Earth, the KSC runway (in the coverall): the charging station, the electric platform (EMPU) facing it 12 m away, an MPU 12 m behind (ready to couple: 3 m between the pins). Both machines start half empty. A full jet pack lies beside her (B).
+МПУ. Земля, полоса KSC (в комбинезоне): зарядная станция, Э.МПУ в 12 м перед ней, МПУ в 12 м позади (можно сцепить: 3 м между пальцами). Обе машины полупустые. Рядом лежит полный ранец (B).
+LOOK at a thing within arm's reach - its actions show beside the aim; the mouse wheel picks one, F does it. Alt: the cursor.
+CHARGING: F at the station - take the cable; walk to a machine's power socket (front bumper, right) - F plugs it in.
+CELLS: F at a cell's hatch on the machine - out into the hands; F at the station's rack - on charge, or a charged one; F at an empty bay - in.
+DRIVING: F climbs on, F at the post or seat. W/S/A/D, Shift full power, S brake, Space emergency brake, B parking brake, Caps Lock deck up/down, V outside view.
+Посмотрите на предмет рядом - его действия у прицела; колесо мыши выбирает, F выполняет. Alt - курсор.
+ЗАРЯДКА: F у станции - взять кабель; подойти к разъёму машины (передний бампер справа) - F подключить.
+ЯЧЕЙКИ: F у люка ячейки на машине - в руки; F у стеллажа станции - на зарядку или взять заряженную; F у пустого гнезда - вставить.
+ВОЖДЕНИЕ: F подняться, F за пульт или в кресло. W/S/A/D, Shift полная мощность, S тормоз, Пробел экстренный тормоз, B стояночный, Caps Lock палуба вверх/вниз, V вид снаружи.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 58710.6
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Station-1:TVehicles\Station
+  STATUS Landed Earth
+  POS -80.6943771 28.6150000
+  HEADING 270.00
+  ALT 1.000
+  CELLS 1.000 1.000 1.000 0.500 1.000 -1.000
+END
+EMPU-1:EMPU
+  STATUS Landed Earth
+  POS -80.6945000 28.6150000
+  HEADING 90.00
+  ALT 0.880
+  BATT 0.45
+  PARK 1
+END
+MPU-1:MPU
+  STATUS Landed Earth
+  POS -80.6946240 28.6150000
+  HEADING 90.00
+  ALT 0.880
+  CELLS 0.350 0.400 0.200 -1.000
+  PARK 1
+END
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Earth
+  POS -80.6945205 28.6150540
+  HEADING 180.00
+  ALT 0.930
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+  NAME Niza Krit
+  ROLE astronavigator
+  SEX female
+  SUIT 0
+END
+JetPack1:OrbiterCrew\JetPack
+  STATUS Landed Earth
+  POS -80.6945051 28.6150540
+  HEADING 0.00
+  ALT 0.240
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+END
+END_SHIPS

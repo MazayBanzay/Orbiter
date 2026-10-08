@@ -1,0 +1,53 @@
+BEGIN_DESC
+TANTRA BETA 10 - Moon, EMPU at Brighton Beach (crew platform, look C "exoskeleton").
+EMPU = the MPU chassis with the crew module: a framed nose (its lower panes show the ground at the front wheels), the pressure
+hull in an external load frame, the system bays over the fenders (gases, CO2, water on the left; the thermal loop and heaters on
+the right), radiators stowed on the roof, a solar panel and the mast; the airlock in the stern.
+BOARDING: walk to the stern door's stairs - F enters the airlock. The inner door leads into the habitat (the passage is open).
+Inside: two seats at the console (the driver's on the left, with the yoke), four bunks on the right, a table with two benches and
+the galley on the left. The cabin holds shirt-sleeve air: K takes the suit off.
+SEATS: F at a seat sits down; F again stands up. In the driver's seat the hands go to the yoke and the driver's keys drive:
+W forward (40 km/h), Shift+W full power (80 km/h), A/D steer, S service brake / reverse, Space emergency brake, B parking brake,
+Caps Lock deck up / down, V the EMPU from outside. Leaving: F by the stern door inside the airlock - out at the foot of the stairs.
+CONTEXT ACTIONS (look at a part, wheel to pick, F to do): the power socket and the four energy cells (right side), the couplings.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52006.7547855787
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+EMPU-1:EMPU
+  STATUS Landed Moon
+  POS -33.4100000 41.1300000
+  HEADING 90.00
+  ALT 0.880
+  BATT 1.0
+  PARK 1
+END
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Moon
+  POS -33.4101200 41.1302000
+  HEADING 180.00
+  ALT 0.930
+  AFCMODE 7
+  SUIT 1
+END
+END_SHIPS

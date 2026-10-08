@@ -32,6 +32,7 @@ namespace ocrew
 	void Motion::Spring::Step(double target, double w, double dt)
 	{
 		// critically damped: reaches the target in about 4/w seconds without overshoot; substeps keep it stable at any dt
+		dt = (std::min)(dt, 0.1);   // visual only: at high time acceleration a frame is seconds - its substeps spiralled (0 FPS at x10000)
 		const int n = (std::max)(1, static_cast<int>(std::ceil(dt * w / 0.2)));
 		const double h = dt / n;
 		for (int i = 0; i < n; ++i) { v += (w * w * (target - x) - 2 * w * v) * h; x += v * h; }
@@ -220,9 +221,11 @@ namespace ocrew
 		{
 			blinkT += dt;
 			const double w = blinkT < 0.07 ? blinkT / 0.07 : blinkT < 0.10 ? 1.0 : 1.0 - (blinkT - 0.10) / 0.12;
-			skin.SetMorph("blink", F(std::clamp(w, 0.0, 1.0)));
-			if (blinkT > 0.22) { blinkT = -1; skin.SetMorph("blink", 0.0f); }
+			const double r = skin.LidRest();   // the lids at rest (a share of the blink): the blink goes from there
+			skin.SetMorph("blink", F(r + (1 - r) * std::clamp(w, 0.0, 1.0)));
+			if (blinkT > 0.22) { blinkT = -1; skin.SetMorph("blink", F(r)); }
 		}
+		else if (skin.LidRest() > 0) skin.SetMorph("blink", F(skin.LidRest()));
 
 		// ---- weightlessness: the neutral body posture of people in orbit, slow drift of the limbs,
 		//      and limbs that lag behind the thrust (underdamped springs: they swing and settle) ----
@@ -236,7 +239,8 @@ namespace ocrew
 			auto spring = [dt, j](double& x, double& v, double target)
 			{
 				const double w = Lerp(5.0, 6.0, j), z = Lerp(0.45, 0.85, j);   // muscles hold the limbs (with the pack: barely any swing back)
-				const int n = (std::max)(1, static_cast<int>(std::ceil(dt * w / 0.2))); const double h = dt / n;
+				const double ds = (std::min)(dt, 0.1);   // (visual: capped, as Spring::Step)
+				const int n = (std::max)(1, static_cast<int>(std::ceil(ds * w / 0.2))); const double h = ds / n;
 				for (int i = 0; i < n; ++i) { v += (w * w * (target - x) - 2 * z * w * v) * h; x += v * h; }
 			};
 			spring(swayZ, swayZV, in.floating ? std::clamp(K * in.thrustAcc.z + KR * in.angAcc.x + KW * in.angVel.x, -LIM, LIM) : 0.0);    // forward thrust / pitch: limbs trail
@@ -342,14 +346,14 @@ namespace ocrew
 
 		if (in.heading != 0) skin.TurnAll(pOut, _V(0, 0, 0), AX_UP, F(in.heading));
 		// seated: the hands on the ship's controls, after every other layer (SeatArms); each hand closes on its own
-		if (in.seat) arms.Update(dt, in.hand, in.heading, clips, skin, pOut); else arms.Reset();
+		if (in.seat || in.hold) arms.Update(dt, in.hand, in.heading, clips, skin, pOut); else arms.Reset();
 		if (skin.HasFingers())   // finger bones (finger_rig.py): each finger closes to its contact; the hand shapes are off
 		{
 			for (int s = 0; s < 2; ++s)
 			{
 				skin.ClearCurl(s);
 				skin.Fist(pOut, s, runFist);
-				if (!in.seat) continue;
+				if (!in.seat && !in.hold) continue;
 				Skin::Shape to, from; float wTo = 0, wFrom = 0;
 				arms.Hold(s, to, wTo, from, wFrom);
 				skin.Wrap(pOut, s, from, wFrom);

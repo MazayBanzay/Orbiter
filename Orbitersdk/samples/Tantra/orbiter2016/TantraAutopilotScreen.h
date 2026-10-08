@@ -9,7 +9,14 @@
 //   ПОСАДКА НА КОРМУ - the profile (the stern's height on a root scale, the descent rate), the side view over the point (the
 //     wind, the drift, the tilt x5, the TVC), the conditions (the field АВТО / РУЧН, the hover height, the start, the norms, the
 //     plan), the values now, the thrust / field / legs commands, the landing program, its keys, the journal, the stern's heat,
-//     the trends of thrust, field and load.
+//     the trends of thrust, field and load;
+//   ПОСАДКА ЛЁЖА - the belly autopilot (TantraBellyLand): the targets (height, ground speed, heading) by the arrows in flight,
+//     the values now, the thrust split (the pods' lift against the weight, the cups' angle, the march), the gear, the phases,
+//     ВКЛ / ПОСАДКА / ОТМЕНА, the readiness check, the journal. Sizes after Tantra_Design/refine/SPEC.md (text >= 15 px, keys 48);
+//   СХОД - the deorbit and the entry (TantraReentry, refine/REENTRY.md): the choice (the regime, the wings, the g limit, the site),
+//     the plan's profile (altitude over downrange) with the ship on it, the plan, the values now, the commands (the thrust and
+//     what limits it, the attitude, the wings, the forecast's verdict), the phases, ВЗВЕСТИ / ПУСК / УДЕРЖАНИЕ / РУЧНОЕ / ОТМЕНА /
+//     СБРОС, the readiness check, the journal.
 // Everything shown comes from the guidance (TantraGuidance: the targets, the plans, the flights, the journals) and the plant's
 // heat flows; the keys go back to the guidance (Press). In the game the launch site is where the ship stands and the wind is
 // measured: those two rows only show. The mockup's "модель ×N" (its own time speed) is the time acceleration.
@@ -17,6 +24,8 @@
 #include "orbitersdk.h"
 #include "TantraScreenCanvas.h"
 #include "TantraGuidance.h"
+#include "TantraBellyLand.h"
+#include "TantraReentry.h"
 
 #include <string>
 #include <vector>
@@ -36,15 +45,27 @@ enum Cmd {
     kCmdFieldAuto, kCmdFieldManual,                      // ПОЛЕ МАРШЕВОЙ ЧАШИ: АВТО | РУЧН
     kCmdHoverDn, kCmdHoverUp,                            // ВЫСОТА ВИСЕНИЯ: 5 м
     kCmdLArm, kCmdLStart, kCmdLGoAround, kCmdLAbort, kCmdLManual, kCmdLReset,
+    // ПОСАДКА ЛЁЖА: the third tab; the arrows (the fine step, the coarse one), the keys
+    kCmdPageBelly,
+    kCmdBAltDn, kCmdBAltUp, kCmdBAltDn100, kCmdBAltUp100,   // ВЫСОТА: 10 / 100 м
+    kCmdBSpdDn, kCmdBSpdUp, kCmdBSpdDn20, kCmdBSpdUp20,     // ГОР. СКОРОСТЬ: 5 / 20 м/с
+    kCmdBHdgDn, kCmdBHdgUp, kCmdBHdgDn30, kCmdBHdgUp30,     // КУРС: 5 / 30°
+    kCmdBOn, kCmdBLand, kCmdBOff,                           // ВКЛ, ПОСАДКА, ОТМЕНА · РУЧНОЕ
+    // СХОД: the fourth tab; the choice's arrows, the keys
+    kCmdPageRent,
+    kCmdRRegDn, kCmdRRegUp, kCmdRWingDn, kCmdRWingUp, kCmdRGDn, kCmdRGUp, kCmdRSiteDn, kCmdRSiteUp,
+    kCmdRArm, kCmdRStart, kCmdRHold, kCmdRManual, kCmdRAbort, kCmdRReset,
 };
 
 struct View {
-    int page = 0;                                        // 0 ВЗЛЁТ НА ОРБИТУ, 1 ПОСАДКА НА КОРМУ
+    int page = 0;                                        // 0 ВЗЛЁТ НА ОРБИТУ, 1 ПОСАДКА НА КОРМУ, 2 ПОСАДКА ЛЁЖА
     double sysT = 0.0;                                   // system time: the lamps blink, the check runs its lines, the 3 s confirmations
     double warp = 1.0;                                   // the time acceleration (the mockup's "модель ×N")
     std::wstring site;                                   // the place under the ship (the nearest base; empty: the latitude alone)
     const guidance::Ascent* asc = nullptr;
     const guidance::Landing* land = nullptr;
+    const guidance::BellyLand* belly = nullptr;
+    const reentry::Reentry* rent = nullptr;              // СХОД (page 3)
     // КОРМА · ТЕПЛО (plant::Output): W into the stern - the jet off the ground (sources[2]), the reaction's radiation (sources[0]);
     // W out - the reaction mass through the jacket (regen), the crests (radiated)
     double qGround = 0.0, qRad = 0.0, qRegen = 0.0, qCrests = 0.0;
@@ -74,10 +95,15 @@ private:
     void LCommands(scr::Canvas& g, const View& v, unsigned lc);
     void LHeat(scr::Canvas& g, const View& v);
     void LTrends(scr::Canvas& g, const View& v);
+    void PageBelly(scr::Canvas& g, const View& v, double W, double H);
+    void PageReentry(scr::Canvas& g, const View& v, double W, double H);
     std::vector<scr::Hit> hits_;
 };
 
-// a key of the screen -> the autopilot (the mockup's onArm, onStart, ... and the target's arrows); page: the page shown
-void Press(int cmd, guidance::Ascent& asc, guidance::Landing& land, double sysNow, int* page);
+// a key of the screen -> the autopilot (the mockup's onArm, onStart, ... and the target's arrows); page: the page shown.
+// One autopilot flies at a time: the one engaged by the key lets the others go.
+void Press(int cmd, guidance::Ascent& asc, guidance::Landing& land, guidance::BellyLand& belly, double sysNow, int* page);
+// the same with СХОД (its keys; it too lets the others go and is let go by them)
+void Press(int cmd, guidance::Ascent& asc, guidance::Landing& land, guidance::BellyLand& belly, reentry::Reentry& rent, double sysNow, int* page);
 
 }  // namespace tantra::apscreen

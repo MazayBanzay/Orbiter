@@ -60,6 +60,12 @@ namespace ocrew
 		if (tripped && tEq < EQ_BACK) { tripped = false; restartT = 30; }
 		if (restartT > 0) restartT = (std::max)(0.0, restartT - dt);
 		const bool power = Powered();
+		// ~0.13 of the way to dark per Sv, half recovered in ~4 h without radiation (slower under it)
+		{
+			const double sv = (std::max)(0.0, radRate) * dt / 3600;
+			optDark += 0.13 * sv * (1 - optDark) - optDark * dt / (6 * 3600) * (radRate < 1e-3 ? 1.0 : 0.2);
+			optDark = std::clamp(optDark, 0.0, 0.95);
+		}
 		const double heatMax = econ ? 0.5 * heatMaxW : heatMaxW, coolMax = econ ? 0.5 * coolMaxW : coolMaxW, life = econ ? 0.75 * lifeW : lifeW;
 
 		// heat to move: her own heat, what leaks in (+) or out (-) through the insulation, and the equipment's heat the

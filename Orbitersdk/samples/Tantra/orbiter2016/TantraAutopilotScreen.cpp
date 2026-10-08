@@ -159,8 +159,10 @@ void Screen::Header(Canvas& g, const View& v, const std::wstring& txt, unsigned 
     g.T(L"АВТОПИЛОТ", 22, 38, cTx, 22, 0, 700);
     Key(g, hits_, L"ВЗЛЁТ НА ОРБИТУ", 184, 14, 190, 36, v.page == 0, kCmdPageAsc, cOr, true);
     Key(g, hits_, L"ПОСАДКА НА КОРМУ", 382, 14, 190, 36, v.page == 1, kCmdPageLand, cOr, true);
-    g.Disc(600, 32, 9, blink ? lc : cBarBg); g.Circle(600, 32, 9, lc, 1.5);
-    g.T(txt, 616, 38, lc, 16, 0, 700);
+    Key(g, hits_, L"ПОСАДКА ЛЁЖА", 580, 14, 170, 36, v.page == 2, kCmdPageBelly, cOr, v.belly != nullptr);
+    Key(g, hits_, L"СХОД", 758, 14, 100, 36, v.page == 3, kCmdPageRent, cOr, v.rent != nullptr);
+    g.Disc(886, 32, 9, blink ? lc : cBarBg); g.Circle(886, 32, 9, lc, 1.5);
+    g.T(g.Fit(txt, W - 22 - g.Width(right, 13, 500) - 24 - 902, 16, 700), 902, 38, lc, 16, 0, 700);
     g.T(right, W - 22, 38, cDim, 13, 2);
 }
 
@@ -168,7 +170,9 @@ void Screen::Draw(oapi::Sketchpad* skp, ScreenFont& font, int ox, int oy, int w,
     hits_.clear();
     if (!skp || !v.asc || !v.land) return;
     Canvas g(skp, font, ox, oy);
-    if (v.page == 1) PageLanding(g, v, w, h);
+    if (v.page == 3 && v.rent) PageReentry(g, v, w, h);
+    else if (v.page == 2 && v.belly) PageBelly(g, v, w, h);
+    else if (v.page == 1) PageLanding(g, v, w, h);
     else PageAscent(g, v, w, h);
 }
 
@@ -328,7 +332,7 @@ void Screen::Course(Canvas& g, const View& v) {
 
 void Screen::Target(Canvas& g, const View& v) {
     const gd::Ascent& A = *v.asc; const gd::Targets& tg = A.Tg(); const gd::TargetDerived& td = A.Td();
-    const bool en = A.Editable();
+    const bool en = A.Retargetable();
     Frame(g, 675, 62, 435, 300, L"ЦЕЛЬ");
     if (!en) g.T(A.F().mode == gd::kIdle ? L"ВЗВЕДЕНО — ЦЕЛЬ ЗАФИКСИРОВАНА" : L"ЦЕЛЬ ЗАФИКСИРОВАНА", 1100, 67, cDim, 11, 2, 700);
     // the site is where the ship stands: shown, not set
@@ -593,7 +597,7 @@ void Screen::LSide(Canvas& g, const View& v) {
 
 void Screen::LTarget(Canvas& g, const View& v) {
     const gd::Landing& L = *v.land; const gd::LFlight& s = L.F(); const gd::LandPlan& P = L.Plan();
-    const bool en = L.Editable();
+    const bool en = L.Retargetable();
     Frame(g, 675, 62, 435, 300, L"ПОСАДКА · УСЛОВИЯ");
     // the field mode: the condition of the automatic landing
     g.T(L"ПОЛЕ МАРШЕВОЙ ЧАШИ", 690, 92, cDim, 12, 0, 700);
@@ -739,7 +743,147 @@ void Screen::LTrends(Canvas& g, const View& v) {
 }
 
 // ======================= the keys =======================
-void Press(int cmd, gd::Ascent& asc, gd::Landing& land, double now, int* page) {
+// ======================= ПОСАДКА ЛЁЖА =======================
+// The belly autopilot (TantraBellyLand). Sizes after refine/SPEC.md: text 15 px and up, values 17-24 bold, keys 52-56 px high.
+void Screen::PageBelly(Canvas& g, const View& v, double W, double H) {
+    const gd::BellyLand& B = *v.belly; const gd::BellyState& s = B.State(); const gd::BellyCmd& c = B.Cmd();
+    const int m = B.Mode();
+    const bool on = B.Engaged();
+    std::wstring st; unsigned lc;
+    if (m == gd::BellyLand::kHoldM) { st = std::wstring(L"РАБОТАЕТ: ") + gd::kBPhases[B.Phase()]; lc = B.Phase() == 0 ? cYe : cGr; }
+    else if (m == gd::BellyLand::kLand) { st = std::wstring(L"ПОСАДКА: ") + gd::kBPhases[B.Phase()]; lc = cGr; }
+    else if (m == gd::BellyLand::kLandedM) { const bool ok = B.TdVz() <= gd::kBNormVz && B.TdVh() <= gd::kBNormVh; st = ok ? L"НА ЛОПАСТЯХ · ОТСЕЧКА" : L"КАСАНИЕ ВНЕ НОРМ"; lc = ok ? cGr : cYe; }
+    else { st = L"ВЫКЛЮЧЕН"; lc = cDim; }
+    const bool blink = B.Phase() == 0 && on ? std::fmod(v.sysT, 1.0) < 0.6 : true;
+    Header(g, v, st, lc, blink, B.TLabel() + L" · g " + Fmt(s.g, 2) + L" м/с² · " + Warp(v.warp), W, H);
+    auto bigKey = [&](const std::wstring& t, double x, double y, double w, double h, bool lit, int cmd, unsigned col, bool en) {
+        int sz = 20;
+        while (sz > 15 && g.Width(t, sz, 700) > w - 12) --sz;
+        if (!en) { g.Fill(x, y, w, h, cKeyOff); g.T(t, x + w / 2, y + h / 2 + sz * 0.36, cKeyOffTx, sz, 1, 700); return; }
+        g.Fill(x, y, w, h, lit ? cKeyOn : cKeyBg); g.Stroke(x, y, w, h, lit ? col : cKeyEdge, lit ? 2 : 1);
+        g.T(t, x + w / 2, y + h / 2 + sz * 0.36, lit ? cKeyOnTx : col, sz, 1, 700);
+        hits_.push_back({x, y, w, h, cmd});
+    };
+    // ---- ЦЕЛИ: the arrows work in flight (the user: «горячая корректировка») ----
+    Frame(g, 15, 62, 640, 250, L"ЦЕЛИ");
+    struct Row { const wchar_t* l; std::wstring tg, now; int fine, coarse; };
+    const bool landing = m == gd::BellyLand::kLand;
+    const Row rows[3] = {
+        {L"ВЫСОТА НАД ГРУНТОМ · 10 / 100 м", landing ? std::wstring(L"снижение") : Fmt(B.AltT(), 0) + L" м", Fmt(s.alt, 0) + L" м", kCmdBAltDn, kCmdBAltDn100},
+        {L"ГОР. СКОРОСТЬ · 5 / 20 м/с", landing ? std::wstring(L"0 м/с") : B.SpdT() <= 0 ? std::wstring(L"0 · висение") : Fmt(B.SpdT(), 0) + L" м/с", Fmt(s.vF, 1) + L" м/с", kCmdBSpdDn, kCmdBSpdDn20},
+        {L"КУРС · 5 / 30°", Fmt(B.HdgT(), 0) + L"°", Fmt(s.hdg, 0) + L"°", kCmdBHdgDn, kCmdBHdgDn30}};
+    for (int i = 0; i < 3; ++i) {
+        const Row& r = rows[i];
+        const double y = 82 + i * 74.0, h = 56;
+        ArrowKey(g, hits_, 28, y, 56, h, -1, true, r.coarse, on); ArrowKey(g, hits_, 94, y, 56, h, -1, false, r.fine, on);
+        ArrowKey(g, hits_, 520, y, 56, h, 1, false, r.fine + 1, on); ArrowKey(g, hits_, 586, y, 56, h, 1, true, r.coarse + 1, on);
+        g.Fill(160, y, 350, h, cValBg); g.Stroke(160, y, 350, h, cFr, 1);
+        g.T(r.l, 170, y + 19, cDim, 15, 0, 700);
+        g.T(on ? r.tg : std::wstring(L"—"), 170, y + 47, on ? cWh : cDim, 24, 0, 700);
+        g.T(L"сейчас " + r.now, 500, y + 47, cTx, 17, 2, 600);
+    }
+    // ---- СЕЙЧАС ----
+    Frame(g, 15, 328, 640, 232, L"СЕЙЧАС");
+    struct R { const wchar_t* n; std::wstring val; unsigned c; };
+    const std::wstring gearTxt = !s.gearLying ? std::wstring(s.gear > 0 ? L"кормовые ноги" : L"убрано (на корму)")
+                               : s.gear >= 1 ? std::wstring(L"на замках") : s.gear > 0 ? L"выпуск " + Fmt(s.gear * 100, 0) + L" %" : std::wstring(L"убрано");
+    const std::wstring podTxt = s.podOut >= 1 ? std::wstring(s.podAimed ? L"наведены" : L"поворот чаш") : s.podOut > 0 ? L"выход " + Fmt(s.podOut * 100, 0) + L" %" : std::wstring(L"в отсеках");
+    const R col1[7] = {{L"высота", Fmt(s.alt, s.alt < 100 ? 1 : 0) + L" м", cWh}, {L"верт. скорость", gd::FmtS(s.vz, 2) + L" м/с", cWh},
+                       {L"скорость вперёд", gd::FmtS(s.vF, 2) + L" м/с", cWh}, {L"снос вбок", gd::FmtS(s.vS, 2) + L" м/с", std::fabs(s.vS) <= 1 ? cTx : cYe},
+                       {L"курс", Fmt(s.hdg, 1) + L"°", cWh}, {L"тангаж / крен", gd::FmtS(s.pitch, 1) + L"° / " + gd::FmtS(s.bank, 1) + L"°", cTx},
+                       {L"число Маха", L"М " + Fmt(s.mach, 2), s.mach >= 0.7 ? cYe : cTx}};
+    const R col2[7] = {{L"масса", Fmt(s.mass / 1e6, 3) + L" кт", cTx}, {L"вес", gd::Force(B.Weight()), cTx},
+                       {L"гондолы", podTxt, s.podOut >= 1 && s.podAimed ? cGr : cYe},
+                       {L"шасси лёжа", gearTxt, s.gearLying && s.gear >= 1 ? cGr : s.gearLying ? cTx : cYe},
+                       {L"крылья", s.wingsFolded ? L"сложены" : L"развёрнуты", s.wingsFolded ? cRd : cTx},
+                       {L"установка", s.plantRun ? L"на режиме" : L"не на режиме", s.plantRun ? cTx : cRd},
+                       {L"контакт", s.contact ? L"на грунте" : L"в воздухе", s.contact ? cYe : cTx}};
+    for (int i = 0; i < 7; ++i) {
+        const double y = 356 + i * 28.0;
+        g.T(col1[i].n, 30, y, cDim, 15); g.T(col1[i].val, 330, y, col1[i].c, 17, 2, 700);
+        g.T(col2[i].n, 350, y, cDim, 15); g.T(g.Fit(col2[i].val, 190, 17, 700), 640, y, col2[i].c, 17, 2, 700);
+    }
+    // ---- ТЯГА: the pods' lift against the weight, the lever, the cups, the tilt, the march ----
+    Frame(g, 670, 62, 440, 498, L"ТЯГА");
+    const double bx = 686, bw = 408, Wt = B.Weight(), Lmax = B.LiftMax();
+    auto row = [&](double y, const wchar_t* label, const std::wstring& val, unsigned col) {
+        g.T(label, bx, y, cDim, 15); g.T(g.Fit(val, bw - g.Width(label, 15, 500) - 12, 17, 700), bx + bw, y, col, 17, 2, 700);
+    };
+    auto tick = [&](double x, double y, double h, unsigned col) { g.Fill(x - 1.5, y - 3, 3, h + 6, col); };
+    double pf = 0, pu = 0; gd::BellyLand::PodDir(s, s.podAngle, pf, pu);
+    const double liftNow = s.podAimed ? s.podLv * s.podMax * pu : 0.0;
+    const double scale = (std::max)({Lmax, Wt * 1.2, 1.0});
+    row(90, L"подъём гондол / вес", gd::Force(liftNow) + L" / " + gd::Force(Wt), cWh);
+    Bar(g, bx, 100, bw, 12, liftNow / scale, cBarG); tick(bx + bw * Clamp(Wt / scale, 0, 1), 100, 12, cWh); tick(bx + bw * Clamp(Lmax / scale, 0, 1), 100, 12, cRd);
+    row(136, L"запас: наибольший / вес", (Wt > 0 ? L"×" + Fmt(Lmax / Wt, 2) : std::wstring(L"—")) + (s.podMaxEst ? L" (оценка)" : L""), Lmax >= gd::kBThrustMargin * Wt ? cGr : cRd);
+    row(170, L"рычаг гондол · команда / факт", Fmt(c.podLv * 100, 0) + L" / " + Fmt(s.podLv * 100, 0) + L" %", c.satUp ? cRd : cWh);
+    Bar(g, bx, 180, bw, 10, s.podLv, cBarG); tick(bx + bw * Clamp(c.podLv, 0, 1), 180, 10, cOr);
+    const double va = B.VertAngle();
+    row(216, L"чаши · команда / факт", Fmt(c.podAngle, 1) + L"° / " + Fmt(s.podAngle, 1) + L"°", s.podAimed ? cWh : cYe);
+    row(244, L"вертикальная тяга при", std::isfinite(va) ? Fmt(va, 1) + L"°" : std::wstring(L"недостижима"), std::isfinite(va) ? cTx : cRd);
+    // the tilt of the pods' thrust off the vertical: + forward (the speed), - aft (the braking)
+    const double tilt = c.FpUp > 1 ? std::atan2(c.FpFwd, c.FpUp) * gd::kR2D : 0.0;
+    row(276, L"наклон тяги гондол (вперёд +)", gd::FmtS(tilt, 1) + L"°", cWh);
+    CBar(g, bx, 286, bw, 10, tilt / gd::kBTiltAft, cTvc);
+    const double mLv = s.marchMax > 0 ? s.marchLv : 0.0;
+    row(322, L"маршевая чаша", s.marchMax > 0 ? gd::Force(mLv * s.marchMax) + L" · " + Fmt(mLv * 100, 0) + L" %" : std::wstring(L"не на ходу"), s.marchMax > 0 ? cWh : cDim);
+    Bar(g, bx, 332, bw, 10, mLv, cBarG); tick(bx + bw * Clamp(c.march, 0, 1), 332, 10, cOr);
+    g.Line(680, 360, 1100, 360, cFr, 1);
+    row(386, L"команда: верт. скорость", on ? gd::FmtS(c.vzCmd, 1) + L" м/с" : std::wstring(L"—"), cOr);
+    row(414, L"команда: гор. ускорение", on ? gd::FmtS(c.axCmd, 2) + L" м/с²" : std::wstring(L"—"), cOr);
+    row(442, L"команда: крен (снос)", on ? gd::FmtS(c.bank, 1) + L"°" : std::wstring(L"—"), cOr);
+    row(470, L"ориентация", on ? L"тангаж 0 · курс " + Fmt(B.HdgT(), 0) + L"° · РСУ" : std::wstring(L"пилот"), cTx);
+    row(498, L"шасси", on && c.gear ? std::wstring(L"лёжа: выпуск") : std::wstring(L"не трогает"), cTx);
+    row(526, L"правила", L"шасси до 150 м · ниже 50 м 1 м/с", cDim);
+    // ---- РЕЖИМ: the phases, the keys ----
+    Frame(g, 1125, 62, 460, 498, L"РЕЖИМ");
+    for (int i = 0; i < gd::kBPhaseCount; ++i) {
+        const double y = 98 + i * 30.0;
+        const bool cur = (on || m == gd::BellyLand::kLandedM) && i == B.Phase();
+        const bool done = i != 1 && ((m == gd::BellyLand::kLand && i < B.Phase()) || (m == gd::BellyLand::kLandedM && i < 6));
+        if (cur) { g.Fill(1138, y - 19, 434, 26, cCur); g.Stroke(1138, y - 19, 434, 26, lc, 1); }
+        if (cur) g.Disc(1152, y - 6, 7, lc); else if (done) g.Disc(1152, y - 6, 7, cDone); else g.Circle(1152, y - 6, 7, cFr, 1.5);
+        g.T(Fmt(i, 0) + L"  " + gd::kBPhases[i], 1168, y, cur ? cWh : done ? cDim : cWait, 17, 0, cur ? 700 : 500);
+    }
+    bigKey(on ? L"ВКЛ · ДЕРЖАТЬ ТЕКУЩЕЕ" : L"ВКЛ", 1140, 316, 430, 52, on, kCmdBOn, cGr, !s.contact);
+    bigKey(L"ПОСАДКА", 1140, 378, 430, 52, landing, kCmdBLand, cOr, B.CanLand());
+    bigKey(L"ОТМЕНА · РУЧНОЕ", 1140, 440, 430, 52, false, kCmdBOff, cRd, on);
+    if (std::isfinite(B.TdVz())) {
+        const bool ok = B.TdVz() <= gd::kBNormVz && B.TdVh() <= gd::kBNormVh;
+        g.T(L"касание: верт " + Fmt(B.TdVz(), 2) + L" · гориз " + Fmt(B.TdVh(), 2) + L" м/с", 1140, 522, ok ? cGr : cYe, 17, 0, 700);
+    }
+    g.T(L"нормы: верт ≤ 1,5 м/с · гориз ≤ 1 м/с", 1140, 548, cDim, 15);
+    // ---- ГОТОВНОСТЬ: the check of the last ВКЛ ----
+    Frame(g, 15, 576, 640, 212, L"ГОТОВНОСТЬ (ВКЛ)");
+    {
+        const std::vector<gd::Check>& ch = B.Checks();
+        int i = 0;
+        for (const gd::Check& k : ch) {
+            if (i >= 8) break;
+            const double y = 604 + i * 23.0;
+            Mark(g, k.ok ? 0 : 1, 28, y, k.ok ? cGr : cRd);
+            g.T(g.Fit(k.t, 600, 15, 500), 46, y, k.ok ? cTx : cRd, 15);
+            ++i;
+        }
+        if (ch.empty()) g.T(L"проверка — по ВКЛ", 28, 604, cDim, 15);
+    }
+    // ---- ЖУРНАЛ ----
+    Frame(g, 670, 576, 915, 212, L"ЖУРНАЛ");
+    {
+        int i = 0;
+        for (const gd::Line& l : B.Log().lines) {
+            if (i >= 8) break;
+            const double y = 604 + i * 23.0;
+            const unsigned col = LvlCol(l.lvl);
+            g.T(l.tt, 684, y, cDim, 15, 0, 600);
+            g.T(g.Fit(l.txt, 800, 15, i == 0 ? 700 : 500), 770, y, i == 0 ? col : col == cGr ? cTx : col, 15, 0, i == 0 ? 700 : 500);
+            ++i;
+        }
+    }
+}
+
+void Press(int cmd, gd::Ascent& asc, gd::Landing& land, gd::BellyLand& belly, double now, int* page) {
+    const bool a0 = asc.Engaged(), l0 = land.Engaged(), b0 = belly.Engaged();
     switch (cmd) {
         case kCmdPageAsc: if (page) *page = 0; break;
         case kCmdPageLand: if (page) *page = 1; break;
@@ -777,8 +921,213 @@ void Press(int cmd, gd::Ascent& asc, gd::Landing& land, double now, int* page) {
         case kCmdLAbort: land.Abort(now); break;
         case kCmdLManual: land.Manual(now); break;
         case kCmdLReset: land.Reset(now); break;
+        case kCmdPageBelly: if (page) *page = 2; break;
+        case kCmdBAltDn: belly.StepAlt(-1, false); break;
+        case kCmdBAltUp: belly.StepAlt(1, false); break;
+        case kCmdBAltDn100: belly.StepAlt(-1, true); break;
+        case kCmdBAltUp100: belly.StepAlt(1, true); break;
+        case kCmdBSpdDn: belly.StepSpd(-1, false); break;
+        case kCmdBSpdUp: belly.StepSpd(1, false); break;
+        case kCmdBSpdDn20: belly.StepSpd(-1, true); break;
+        case kCmdBSpdUp20: belly.StepSpd(1, true); break;
+        case kCmdBHdgDn: belly.StepHdg(-1, false); break;
+        case kCmdBHdgUp: belly.StepHdg(1, false); break;
+        case kCmdBHdgDn30: belly.StepHdg(-1, true); break;
+        case kCmdBHdgUp30: belly.StepHdg(1, true); break;
+        case kCmdBOn: belly.Engage(now); break;
+        case kCmdBLand: belly.Land(now); break;
+        case kCmdBOff: belly.Release(L"ОТМЕНА: управление пилоту"); break;
         default: break;
     }
+    // one autopilot at a time: the one just engaged lets the others go
+    const bool aNew = asc.Engaged() && !a0, lNew = land.Engaged() && !l0, bNew = belly.Engaged() && !b0;
+    if (bNew || lNew) { if (asc.Engaged()) asc.Manual(now); }
+    if (bNew || aNew) { if (land.Engaged()) land.Manual(now); }
+    if ((aNew || lNew) && belly.Engaged()) belly.Release(L"управление взял другой автопилот");
+}
+
+// ======================= СХОД =======================
+// The deorbit and the entry (TantraReentry). Sizes after refine/SPEC.md: text 15 px and up, values 17-24 bold, keys 48-52 px.
+void Screen::PageReentry(Canvas& g, const View& v, double W, double H) {
+    namespace rn = tantra::reentry;
+    const rn::Reentry& R = *v.rent; const rn::ReentryState& s = R.State(); const rn::ReentryPlan& P = R.Plan(); const rn::ReentryCmd& c = R.Cmd();
+    const rn::Reg& rg = R.Regulation();
+    const int m = R.Mode();
+    const bool checking = R.Checking(), armed = R.Armed(), on = R.Engaged();
+    const unsigned lc = m == gd::kAuto || m == gd::kLanded ? cGr : m == gd::kHold ? cYe : m == gd::kManual ? cBl : m == gd::kAbort ? cRd : armed ? cGr : checking ? cYe : cDim;
+    std::wstring st;
+    if (m == gd::kIdle) st = checking ? L"ПРОВЕРКА ГОТОВНОСТИ" : armed ? L"ГОТОВ К ПУСКУ" : L"НЕ ВЗВЕДЁН";
+    else if (m == gd::kAuto) st = std::wstring(L"РАБОТАЕТ: ") + rn::kRPhases[R.Phase()];
+    else if (m == gd::kHold) st = L"УДЕРЖАНИЕ";
+    else if (m == gd::kManual) st = L"РУЧНОЕ";
+    else if (m == gd::kLanded) st = L"ПЕРЕДАН «ПОСАДКЕ НА КОРМУ»";
+    else st = L"ОТМЕНЁН";
+    const bool blink = m == gd::kAuto || checking ? std::fmod(v.sysT, 1.0) < 0.6 : true;
+    Header(g, v, st, lc, blink, R.TLabel() + L" · " + Warp(v.warp), W, H);
+    auto bigKey = [&](const std::wstring& t, double x, double y, double w, double h, bool lit, int cmd, unsigned col, bool en) {
+        int sz = 19;
+        while (sz > 15 && g.Width(t, sz, 700) > w - 12) --sz;
+        if (!en) { g.Fill(x, y, w, h, cKeyOff); g.T(t, x + w / 2, y + h / 2 + sz * 0.36, cKeyOffTx, sz, 1, 700); return; }
+        g.Fill(x, y, w, h, lit ? cKeyOn : cKeyBg); g.Stroke(x, y, w, h, lit ? col : cKeyEdge, lit ? 2 : 1);
+        g.T(t, x + w / 2, y + h / 2 + sz * 0.36, lit ? cKeyOnTx : col, sz, 1, 700);
+        hits_.push_back({x, y, w, h, cmd});
+    };
+    // ---- ВЫБОР: the regime, the wings (in flight too), the g limit, the site ----
+    Frame(g, 15, 62, 640, 250, L"ВЫБОР");
+    {
+        struct Row { const wchar_t* l; std::wstring val; int dn; bool en; };
+        const bool ed = R.Editable();
+        const Row rows[4] = {{L"РЕЖИМ", rn::kRegimes[R.RegimeSel()], kCmdRRegDn, ed},
+                             {L"КРЫЛЬЯ", R.RegimeSel() == rn::kRNose ? std::wstring(rn::kWingSel[R.WingsSel()]) : std::wstring(L"сложены (кормой)"), kCmdRWingDn, R.RegimeSel() == rn::kRNose},
+                             {L"ПРЕДЕЛ ПЕРЕГРУЗКИ · 0,5 g", Fmt(R.GLim(), 1) + L" g", kCmdRGDn, ed},
+                             {L"ПЛОЩАДКА", R.SiteName(), kCmdRSiteDn, ed}};
+        for (int i = 0; i < 4; ++i) {
+            const Row& r = rows[i];
+            const double y = 78 + i * 58.0, h = 50;
+            ArrowKey(g, hits_, 28, y, 56, h, -1, false, r.dn, r.en);
+            ArrowKey(g, hits_, 586, y, 56, h, 1, false, r.dn + 1, r.en);
+            g.Fill(94, y, 482, h, cValBg); g.Stroke(94, y, 482, h, cFr, 1);
+            g.T(r.l, 106, y + 19, cDim, 15, 0, 700);
+            g.T(g.Fit(r.val, 460, 21, 700), 106, y + 44, r.en ? cWh : cTx, 21, 0, 700);
+        }
+    }
+    // ---- ПРОФИЛЬ: the plan's altitude over its downrange (dashed), the ship on it ----
+    Frame(g, 15, 328, 640, 232, L"ПРОФИЛЬ ПЛАНА · ВЫСОТА ПО ДАЛЬНОСТИ");
+    {
+        const Box b{70, 346, 640, 528};
+        double xMax = 1.0, yMax = 130e3;
+        for (const rn::RSample& q : P.track) { xMax = (std::max)(xMax, q.dr); yMax = (std::max)(yMax, q.h); }
+        xMax = NiceCeil(xMax / 1e3) * 1e3; yMax = NiceCeil(yMax / 1e3) * 1e3;
+        auto X = [&](double d) { return b.x0 + (b.x1 - b.x0) * d / xMax; };
+        auto Y = [&](double h) { return b.y1 - (b.y1 - b.y0) * Clamp(h, 0, yMax) / yMax; };
+        g.Stroke(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0, cGrid, 1);
+        for (double hh : {rn::kEI, rn::kHandH}) { g.Dashed(b.x0, Y(hh), b.x1, Y(hh), cGrid, 1, 6, 6); }
+        g.T(L"вход " + Fmt(rn::kEI / 1e3, 0) + L" км", b.x1 - 4, Y(rn::kEI) - 4, cDim, 15, 2);
+        g.T(Fmt(yMax / 1e3, 0) + L" км", b.x0 - 6, b.y0 + 12, cDim, 15, 2);
+        g.T(L"0", b.x0 - 6, b.y1, cDim, 15, 2);
+        g.T(Fmt(xMax / 1e3, 0) + L" км", b.x1, b.y1 + 22, cDim, 15, 2);
+        std::vector<Pt> pl;
+        for (const rn::RSample& q : P.track) pl.push_back({X(q.dr), Y(q.h)});
+        Path(g, pl, P.ok ? cTx : cRd, 1.6, 7, 5, &b);
+        // the ship: the plan's downrange at its age, the altitude now
+        const double age = R.PlanAge();
+        double dr = 0.0;
+        for (size_t i = 1; i < P.track.size(); ++i) if (P.track[i].t >= age) {
+            const rn::RSample& a = P.track[i - 1]; const rn::RSample& q = P.track[i];
+            dr = a.dr + (q.dr - a.dr) * Clamp((age - a.t) / (std::max)(1e-6, q.t - a.t), 0, 1); break;
+        }
+        if (In(b, X(dr), Y(s.alt))) Diamond(g, X(dr), Y(s.alt));
+        if (!P.ok && !P.why.empty()) g.T(g.Fit(L"план: " + P.why, 560, 15, 700), 72, 552, cRd, 15, 0, 700);
+    }
+    // ---- ПЛАН · СЕЙЧАС · КОМАНДЫ ----
+    Frame(g, 670, 62, 440, 498, L"ПЛАН · СЕЙЧАС · КОМАНДЫ");
+    {
+        const double bx = 686, bw = 408;
+        int i = 0;
+        auto row = [&](const wchar_t* label, const std::wstring& val, unsigned col) {
+            const double y = 90 + i * 27.0; ++i;
+            g.T(label, bx, y, cDim, 15); g.T(g.Fit(val, bw - g.Width(label, 15, 500) - 12, 17, 700), bx + bw, y, col, 17, 2, 700);
+        };
+        auto sep = [&]() { const double y = 90 + i * 27.0 - 19; g.Line(680, y, 1100, y, cFr, 1); };
+        const double ttb = R.TimeToBurn();
+        row(L"импульс схода", std::isfinite(P.tBurn) && std::isfinite(ttb) && ttb > 0 ? L"через " + Clock(ttb) + L" · Δv " + Fmt(P.dvBurn, 0) + L" м/с" : std::wstring(L"дан"), cWh);
+        row(L"перицентр коридора", gd::Km(P.hpT), cTx);
+        row(L"вход в атмосферу", std::isfinite(P.tEI) ? Fmt(P.vEI, 0) + L" м/с · " + Fmt(P.gamEI, 1) + L"°" : std::wstring(L"—"), cTx);
+        const int hz = P.hot >= 0 ? P.hot : 0;
+        row(L"пик перегрузки", Fmt(P.nMax, 2) + L" g из " + Fmt(R.GLim(), 1), P.nMax <= R.GLim() + 0.05 ? cTx : cRd);
+        row(L"ближе к пределу", std::wstring(rn::kZoneRu[hz]) + L" " + Fmt(P.peakT[hz], 0) + L" / " + Fmt(P.lim[hz], 0) + L" К", P.margin >= 0 ? cTx : cRd);
+        row(L"рабочая масса", L"аргон " + Fmt(P.argon / 1e6, 2) + L" · железо " + Fmt(P.iron / 1e6, 2) + L" кт", P.argon <= s.argon ? cTx : cRd);
+        row(L"вход посадки", std::isfinite(P.tHand) ? (P.site ? L"промах " + Fmt(P.miss / 1e3, 1) + L" км · " : std::wstring(L"по трассе · ")) + L"через " + Clock(P.tHand - R.PlanAge()) : std::wstring(L"не достигнут"), P.ok ? cGr : cRd);
+        sep();
+        const double va = std::sqrt(s.vE * s.vE + s.vN * s.vN + s.vU * s.vU);
+        row(L"высота · скорость", gd::Km(s.alt) + L" · " + Fmt(va, 0) + L" м/с", cWh);
+        row(L"орбита", gd::Km(R.El().peri) + L" × " + (std::isfinite(R.El().apo) ? gd::Km(R.El().apo) : std::wstring(L"—")), cTx);
+        row(L"перегрузка · вертикальная", Fmt(R.Felt(), 2) + L" g · " + gd::FmtS(s.vU, 0) + L" м/с", R.Felt() <= R.GLim() ? cTx : cRd);
+        int hn = 0; double mn = 1e9;
+        for (int z = 0; z < rn::kZones; ++z) if (s.skinLim[z] > 0 && s.skinLim[z] - s.skinT[z] < mn) { mn = s.skinLim[z] - s.skinT[z]; hn = z; }
+        row(L"ближе к пределу", std::wstring(rn::kZoneRu[hn]) + L" " + Fmt(s.skinT[hn], 0) + L" / " + Fmt(s.skinLim[hn], 0) + L" К", mn >= rn::kMarginK ? cTx : cYe);
+        row(L"корма установки", Fmt(s.sternT, 0) + L" / " + Fmt(s.tSafe, 0) + L" К", s.sternT < s.tSafe - 50 ? cTx : cYe);
+        sep();
+        row(L"тяга маршевой · гондол", on && c.thrust ? Fmt(c.march * 100, 0) + L" % · " + Fmt(c.pods * 100, 0) + L" %" : std::wstring(L"—"), cOr);
+        row(L"ограничивает", rn::kLimRu[(std::max)(0, (std::min)(5, c.lim))], c.lim == rn::kRLimG || c.lim == rn::kRLimStern ? cYe : cTx);
+        static const wchar_t* const kAttRu[5] = {L"пилот", L"нос против скорости", L"кормой вперёд", L"носом, атака 40°", L"по тяге, кормой вниз"};
+        row(L"ориентация", on && c.attitude ? std::wstring(kAttRu[(std::max)(0, (std::min)(4, c.att))]) + L" · " + Fmt(c.pitch, 0) + L"°/" + Fmt(c.hdg, 0) + L"°" : std::wstring(L"пилот"), cTx);
+        row(L"прогноз (ТЕПЛО)", rg.fcHot >= 0 ? (rg.fcOk ? L"в пределах · запас " : L"ВНЕ ПРЕДЕЛОВ · ") + Fmt(rg.fcMargin, 0) + L" К · " + Fmt(rg.fcG, 2) + L" g" : std::wstring(L"—"), rg.fcOk ? cTx : cRd);
+    }
+    // ---- РЕЖИМ: the phases, the keys ----
+    Frame(g, 1125, 62, 460, 498, L"ПРОГРАММА");
+    for (int i = 0; i < rn::kRPhaseCount; ++i) {
+        const double y = 94 + i * 26.0;
+        const bool cur = m != gd::kIdle && i == R.Phase(), done = m != gd::kIdle && i < R.Phase();
+        if (cur) { g.Fill(1138, y - 18, 434, 24, cCur); g.Stroke(1138, y - 18, 434, 24, lc, 1); }
+        if (cur) g.Disc(1152, y - 6, 7, lc); else if (done) g.Disc(1152, y - 6, 7, cDone); else g.Circle(1152, y - 6, 7, cFr, 1.5);
+        g.T(Fmt(i, 0) + L"  " + rn::kRPhases[i], 1168, y, cur ? cWh : done ? cDim : cWait, 16, 0, cur ? 700 : 500);
+    }
+    const double now = v.sysT;
+    bigKey(armed ? L"СНЯТЬ ВЗВОД" : L"ВЗВЕСТИ", 1140, 330, 210, 50, armed || checking, kCmdRArm, cGr, R.CanArm());
+    bigKey(R.GoArmed(now) ? L"ПОДТВЕРДИТЬ" : L"ПУСК", 1360, 330, 210, 50, R.GoArmed(now), kCmdRStart, cGr, R.CanStart());
+    bigKey(m == gd::kHold ? L"ПРОДОЛЖИТЬ" : L"УДЕРЖАНИЕ", 1140, 390, 210, 50, m == gd::kHold, kCmdRHold, cYe, R.CanHold());
+    bigKey(L"РУЧНОЕ", 1360, 390, 210, 50, m == gd::kManual, kCmdRManual, cBl, R.CanManual());
+    bigKey(R.AbArmed(now) ? L"ПОДТВЕРДИТЬ" : L"ОТМЕНА", 1140, 450, 210, 50, R.AbArmed(now), kCmdRAbort, cRd, R.CanAbort());
+    bigKey(L"СБРОС", 1360, 450, 210, 50, false, kCmdRReset, cOr, R.CanReset());
+    g.T(c.handover ? L"передача «ПОСАДКЕ НА КОРМУ»" : L"ОТМЕНА после импульса: баллистика кормой", 1140, 536, c.handover ? cGr : cDim, 15, 0, c.handover ? 700 : 500);
+    // ---- ГОТОВНОСТЬ ----
+    Frame(g, 15, 576, 640, 212, L"ГОТОВНОСТЬ (ВЗВЕСТИ)");
+    {
+        const std::vector<gd::Check> ch = R.ChecksShown();
+        const int done = R.ChecksDone(now);
+        for (int i = 0; i < (int)ch.size() && i < 12; ++i) {
+            const double x = i < 6 ? 28 : 342, y = 602 + (i % 6) * 30.0;
+            const gd::Check& k = ch[i];
+            const int mk = checking ? (i < done ? (k.ok ? 0 : 1) : 2) : done < 0 ? 3 : (k.ok ? 0 : 1);
+            const unsigned col = mk == 0 ? cGr : mk == 1 ? cRd : cDim;
+            Mark(g, mk, x, y, col);
+            g.T(g.Fit(k.t, 290, 15, 500), x + 18, y, mk == 1 ? cRd : cTx, 15);
+        }
+    }
+    // ---- ЖУРНАЛ ----
+    Frame(g, 670, 576, 915, 212, L"ЖУРНАЛ СХОДА");
+    {
+        int i = 0;
+        for (const gd::Line& l : R.Log().lines) {
+            if (i >= 8) break;
+            const double y = 604 + i * 23.0;
+            const unsigned col = LvlCol(l.lvl);
+            g.T(l.tt, 684, y, cDim, 15, 0, 600);
+            g.T(g.Fit(l.txt, 790, 15, i == 0 ? 700 : 500), 780, y, i == 0 ? col : col == cGr ? cTx : col, 15, 0, i == 0 ? 700 : 500);
+            ++i;
+        }
+    }
+}
+
+void Press(int cmd, gd::Ascent& asc, gd::Landing& land, gd::BellyLand& belly, tantra::reentry::Reentry& rent, double now, int* page) {
+    const bool r0 = rent.Engaged(), a0 = asc.Engaged(), l0 = land.Engaged(), b0 = belly.Engaged();
+    switch (cmd) {
+        case kCmdPageRent: if (page) *page = 3; break;
+        case kCmdRRegDn: rent.StepRegime(-1); break;
+        case kCmdRRegUp: rent.StepRegime(1); break;
+        case kCmdRWingDn: rent.StepWings(-1); break;
+        case kCmdRWingUp: rent.StepWings(1); break;
+        case kCmdRGDn: rent.StepGLim(-1); break;
+        case kCmdRGUp: rent.StepGLim(1); break;
+        case kCmdRSiteDn: rent.StepSite(-1); break;
+        case kCmdRSiteUp: rent.StepSite(1); break;
+        case kCmdRArm: rent.Arm(now); break;
+        case kCmdRStart: rent.Start(now); break;
+        case kCmdRHold: rent.Hold(now); break;
+        case kCmdRManual: rent.Manual(now); break;
+        case kCmdRAbort: rent.Abort(now); break;
+        case kCmdRReset: rent.Reset(now); break;
+        default: Press(cmd, asc, land, belly, now, page); break;
+    }
+    // one autopilot at a time: СХОД engaged lets the others go; another engaged lets СХОД go
+    const bool rNew = rent.Engaged() && !r0, oNew = (asc.Engaged() && !a0) || (land.Engaged() && !l0) || (belly.Engaged() && !b0);
+    if (rNew) {
+        if (asc.Engaged()) asc.Manual(now);
+        if (land.Engaged()) land.Manual(now);
+        if (belly.Engaged()) belly.Release(L"управление взял СХОД");
+    }
+    if (oNew && rent.Engaged()) rent.Manual(now);
 }
 
 }  // namespace tantra::apscreen

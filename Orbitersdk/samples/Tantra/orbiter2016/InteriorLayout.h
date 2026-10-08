@@ -1454,22 +1454,22 @@ struct MfdPlace { double c[3], ex[3], up[3], n[3], s; unsigned slot; int mode; }
 constexpr int kMfdCount = 6;
 constexpr MfdPlace kMfd[6] = {{{1.8283, 1.9580, 79.1788}, {1.0000, 0.0000, 0.0000}, {0.0000, 0.9703, 0.2419}, {0.0000, 0.2419, -0.9703}, 0.400, 22u, 9}, {{2.2483, 1.9580, 79.1788}, {1.0000, 0.0000, 0.0000}, {0.0000, 0.9703, 0.2419}, {0.0000, 0.2419, -0.9703}, 0.400, 23u, 1}, {{2.6683, 1.9580, 79.1788}, {1.0000, 0.0000, 0.0000}, {0.0000, 0.9703, 0.2419}, {0.0000, 0.2419, -0.9703}, 0.400, 24u, 3}, {{-2.6683, 1.9580, 79.1788}, {1.0000, 0.0000, 0.0000}, {0.0000, 0.9703, 0.2419}, {0.0000, 0.2419, -0.9703}, 0.400, 25u, 2}, {{-2.2483, 1.9580, 79.1788}, {1.0000, 0.0000, 0.0000}, {0.0000, 0.9703, 0.2419}, {0.0000, 0.2419, -0.9703}, 0.400, 26u, 1}, {{-1.8283, 1.9580, 79.1788}, {1.0000, 0.0000, 0.0000}, {0.0000, 0.9703, 0.2419}, {0.0000, 0.2419, -0.9703}, 0.400, 27u, 6}};
 constexpr unsigned kLiftStatusSlot = 21u;   // the status screen's texture slot in TantraVC (drawn by the module)
-constexpr int kLiftBtnLit[3] = {145, 147, 149}, kLiftBtnDim[3] = {146, 148, 150};   // TantraVC groups of the caps
+constexpr int kLiftBtnLit[3] = {146, 148, 150}, kLiftBtnDim[3] = {147, 149, 151};   // TantraVC groups of the caps
 // the lift: door B (two leaves, built open, each slides kDoorBTravel to the middle: a -> +z, b -> -z), its half width;
 // the cabin's panel: the groups that ride with the cabin, the caps (DOWN, UP, OUT) lit / dim and their fronts (stowed), the screen's slot
-constexpr int kDoorBGroups[4] = {152, 153, 154, 155}; constexpr double kDoorBTravel = 0.700, kDoorBHw = 0.700;
+constexpr int kDoorBGroups[4] = {153, 154, 155, 156}; constexpr double kDoorBTravel = 0.700, kDoorBHw = 0.700;
 // the inner lift (lobby shaft): cab groups, cab floor x/z range, the three stop floors, the door in the east shaft wall
-constexpr int kILiftGroups[2] = {169, 170};
+constexpr int kILiftGroups[2] = {170, 171};
 constexpr double kILiftX0 = -2.720, kILiftX1 = -1.380, kILiftZ0 = 62.480, kILiftZ1 = 64.720, kILiftDoorX = -1.300, kILiftDoorZ = 63.600, kILiftDoorHw = 0.600;
 constexpr double kILiftStop[3] = {-4.425, 1.075, 5.575};
-constexpr int kILiftDoor[3] = {174, 177, 180}; constexpr int kILiftDoorN[3] = {175, 178, 181}; constexpr int kILiftSend[3] = {171, 172, 173}; constexpr int kILiftCall[3] = {176, 179, 182};
+constexpr int kILiftDoor[3] = {175, 178, 181}; constexpr int kILiftDoorN[3] = {176, 179, 182}; constexpr int kILiftSend[3] = {172, 173, 174}; constexpr int kILiftCall[3] = {177, 180, 183};
 constexpr double kILiftCallPos[3][3] = {{-1.550, -3.225, 64.840}, {-1.550, 2.275, 64.840}, {-1.550, 6.775, 64.840}};   // the call buttons' fronts (forward end of the shaft, facing +z)
 constexpr double kILiftSendPos[3][3] = {{-2.640, -3.175, 63.300}, {-2.640, -3.175, 63.600}, {-2.640, -3.175, 63.900}};   // the send buttons' fronts, the cab at the lower stop
-constexpr int kCabRideCount = 13; constexpr int kCabRide[13] = {156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168};
-constexpr int kCabBtnLit[3] = {159, 161, 163}, kCabBtnDim[3] = {160, 162, 164};
+constexpr int kCabRideCount = 13; constexpr int kCabRide[13] = {157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169};
+constexpr int kCabBtnLit[3] = {160, 162, 164}, kCabBtnDim[3] = {161, 163, 165};
 constexpr double kCabBtn[3][3] = {{-8.270, 2.318, 70.398}, {-7.850, 2.318, 70.398}, {-7.430, 2.318, 70.398}};
 constexpr unsigned kCabScreenSlot = 36u;   // the cabin's screen (drawn by the module)
-constexpr int kCabDoorA[3] = {165, 167, 168}, kCabDoorB = 166; constexpr double kCabDoorTravel = 0.66;   // the cabin's doors: a (+edge, +porthole glass) slides -z, b +z
+constexpr int kCabDoorA[3] = {166, 168, 169}, kCabDoorB = 167; constexpr double kCabDoorTravel = 0.66;   // the cabin's doors: a (+edge, +porthole glass) slides -z, b +z
 constexpr double kCabLight[3] = {-7.850, 3.150, 69.000};   // the cabin's ceiling light (stowed): a point light that rides with it
 constexpr double kCabSpot[2][3] = {{-8.850, 3.330, 67.700}, {-8.850, 3.330, 70.300}}, kCabSpotDir[3] = {-0.45, -0.893, 0.0};   // the floodlights (stowed)
 // the medical bay's beds: the pelvis lying on the couch (x, y, z) and the direction to the head (x, z); OrbiterCrew lies down there
@@ -1495,19 +1495,19 @@ constexpr int kGrpScrBlink = 86;
 constexpr double kSeatTravel[3] = {1.000, 0.600, 0.600}; constexpr double kSeatBox[4] = {0.380, -0.450, 0.000, 1.500};
 constexpr int kSeatGroups[3][12] = {{63, 64, 65, 66, 67, 22, 23, 87, 78, 79, 80, -1}, {68, 69, 70, 71, 72, -1, -1, -1, -1, -1, -1, -1}, {73, 74, 75, 76, 77, -1, -1, -1, -1, -1, -1, -1}};   // -1: none
 // the commander's seat (variant 7): its base (the sled, the pedestal's outer tube) does not go up and down; the cursor unit's ball dark / lit
-constexpr int kSeat0Base = 78, kCurBallGrp = 79, kCurLitGrp = 80, kSpotGrp = 88;
+constexpr int kSeat0Base = 78, kCurBallGrp = 79, kCurLitGrp = 80, kSpotGrp = 89;
 constexpr int kGlassMat = 79;   // the glasses' material (0-based): its opacity is НЕПРОЗР. (TantraDisplays)
 // the hybrid main screen (TantraScreen): the screen's groups (zones l, c, r, ls, rs; l and r are empty - the front is one surface),
 // the groups behind it in its view cone from the design eye (hidden in ОПТИКА: the world is seen through the screen; the capsule
 // and the way behind it stay), the HUD glass 2 cm before the front zone (its own slot, alpha from the game's surface; aspect of the zone)
 constexpr int kGrpScreen[5] = {9, 10, 11, 12, 13};
-constexpr int kGrpHudGlass = 183; constexpr unsigned kHudSlot = 54u; constexpr double kHudAspect = 3.4416;
+constexpr int kGrpHudGlass = 184; constexpr unsigned kHudSlot = 54u; constexpr double kHudAspect = 3.4416;
 constexpr int kSpotDiscs = 5;   // the light spot: discs of 13 vertices (centre, 12 round), front then back faces
 constexpr double kSpotR[5] = {0.0050, 0.0090, 0.0160, 0.0260, 0.0380};
 // the sensor strips ХОД, ВЫСОТА on his right armrest and the cursor unit's key plate on the left one: centres at the seat's rest place
 // (height 0), sizes across / along the facing; one texture (kSeatAdjSlot) for all three, kSeatPanelPx px per metre, v 0 at the front
-constexpr double kSeatAdjC[3] = {0.2820, 1.8658, 79.1500}, kSeatHgtC[3] = {0.3180, 1.8658, 79.1500}, kCurPlateC[3] = {-0.2900, 1.8798, 78.9900};
-constexpr double kSeatStripLen = 0.170, kSeatStripWid = 0.030, kCurPlateW = 0.140, kCurPlateD = 0.170; constexpr unsigned kSeatAdjSlot = 51u;
+constexpr double kSeatAdjC[3] = {-0.5050, 1.7920, 79.6150}, kSeatHgtC[3] = {-0.5450, 1.7920, 79.6150}, kCurPlateC[3] = {-0.2900, 1.8798, 78.9900};
+constexpr double kSeatStripLen = 0.110, kSeatStripWid = 0.030, kCurPlateW = 0.140, kCurPlateD = 0.170; constexpr unsigned kSeatAdjSlot = 51u;
 constexpr int kSeatPanelW = 400, kSeatPanelH = 340; constexpr double kSeatPanelPx = 2000.0;
 constexpr double kCurBall[4] = {-0.3000, 1.8810, 79.0100, 0.0230};   // the ball: x, y, z (interior frame, at the rest place), radius
 constexpr double kHandRest[3] = {0.3000, 1.8650, 79.0100};   // his right hand's rest on the right armrest: the palm's point (interior frame, at the rest place)

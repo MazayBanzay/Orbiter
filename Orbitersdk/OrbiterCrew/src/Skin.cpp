@@ -120,6 +120,7 @@ namespace ocrew
 		while (f >> tok)
 		{
 			if (tok == "MESH") f >> meshName;
+			else if (tok == "LIDREST") f >> lidRest;
 			else if (tok == "BONES")
 			{
 				int n; f >> n; bones.resize(n);
@@ -448,7 +449,7 @@ namespace ocrew
 	void Skin::SetHairDrive(double dt, const VECTOR3& a, double g)
 	{
 		hair.driven = hair.group >= 0 && dt > 0;
-		hair.dt = dt; hair.g = g; hair.ax = a.x; hair.ay = a.y; hair.az = a.z;
+		hair.dt = (std::min)(dt, 0.1);   // visual only: a frame of seconds (time acceleration) would be 10^5 substeps hair.g = g; hair.ax = a.x; hair.ay = a.y; hair.az = a.z;
 	}
 
 	void Skin::StepHair(const float* s)

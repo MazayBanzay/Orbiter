@@ -89,6 +89,9 @@ namespace ocrew
 		double tEq{ 305 }, cEq{ 8000 }, gEq{ 6 }, gEqOut{ 0.3 };   // K, J/K, W/K to the cooling loop, W/K to the outside
 		bool tripped{}; double restartT{};
 		static constexpr double EQ_WARN = 333.15, EQ_LIMIT = 348.15, EQ_TRIP = 363.15, EQ_BACK = 323.15;
+		// the optics in radiation: colour centres in the visor glass and the light guides darken them (blue first), the
+		// projection's sources weaken; out of the radiation the glass anneals slowly. radRate: Sv/h where she is (set before Step)
+		double radRate{}, optDark{};   // optDark 0 clear .. 0.95
 		bool econ{};   // economy: half the thermal capacity, slower fans - a longer battery, a wider swing inside
 
 		bool Powered() const { return batt > 0 && !tripped; }

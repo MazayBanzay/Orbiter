@@ -77,3 +77,18 @@ __pycache__/
 !/Doc/
 /Doc/*
 !/Doc/TantraCrew/
+
+# --- MPU (universal mobile platform): sources, meshes, textures, configs, scenarios ---
+!/Orbitersdk/samples/MPU/
+/Orbitersdk/samples/MPU/build/
+!/Meshes/MPU/
+!/Textures/MPU/
+!/Config/Vessels/MPU.cfg
+!/Config/Vessels/EMPU.cfg
+!/Scenarios/MPU/
+# local test scenarios
+/Scenarios/Tantra/_ClaudeTest/
+!/Orbitersdk/samples/TVehicles/
+/Orbitersdk/samples/TVehicles/build/
+!/Config/Vessels/TVehicles/
+!/Meshes/TVehicles/

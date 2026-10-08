@@ -1315,7 +1315,9 @@ void Tantra::SeatKeys() {
 
 void Tantra::clbkPreStep(double, double simdt, double) {
     tantra::perf::P().Begin();
-    interior_.Step(simdt);                        // the moving bridge seats, the deferred stand-up (OrbiterCrew)
+    if (Coast(simdt)) { TANTRA_PERF("coast"); return; }   // time warp over x10 on the ground: the ship held, nothing simulated
+    if (oapiGetTimeAcceleration() <= 10.0)        // over x10 the interior is not computed at all (the user: no sense in it)
+        interior_.Step(simdt);                    // the moving bridge seats, the deferred stand-up (OrbiterCrew)
     TANTRA_PERF("interior");
     SeatKeys();
     TANTRA_PERF("seatkeys");
@@ -1446,6 +1448,7 @@ void Tantra::clbkPreStep(double, double simdt, double) {
 
 void Tantra::clbkPostStep(double, double simdt, double) {
     tantra::perf::P().Begin();
+    if (frozen_ && oapiGetTimeAcceleration() > 10.0 && !carriage_.Busy()) { tantra::perf::P().Frame(); return; }
     properTime_ += simdt * ProperTimeRate(beta_);
 
     // Settling after a start on the ground: count the time at rest on the contacts.
@@ -3204,7 +3207,7 @@ void Tantra::UpdateWarpFreeze(double dt) {
     // ground and out at 5 km/s; the ground mechanism holds it then (kinematic) and the warp hurries it
     // from x100 on the ground the contact physics is off whatever the ship does (thrust, sliding): it is held where it is
     // and let go at the same point when the warp drops (the user)
-    const bool cond = !carriage_.Busy() && (warp >= 100.0 || (warp > sp::kWarpFreeze && thrustAccel_ < 0.3 * LocalG()));
+    const bool cond = !carriage_.Busy() && warp > 10.0;   // over x10 on the ground: held whatever it does (the user)
     const bool want = frozen_ ? cond : contact && cond;     // once held, held while the warp lasts (thrust lets go of contact)
     if (frozen_ && want && !landed) {                       // the engines let it go: back on the very same point
         VESSELSTATUS2 vs = frozenVs_;
@@ -3221,6 +3224,18 @@ void Tantra::UpdateWarpFreeze(double dt) {
         frozen_ = false;
         Message("Нормальное время: фиксация снята", "Normal time: ship released");
     }
+}
+
+// Time warp over x10 with the ship on the ground (the user: «выше 10 отключать симуляцию физики»): the ship is held at its
+// point (UpdateWarpFreeze: Orbiter's landed state, put back there if anything lets it go) and nothing of the ship is
+// simulated - no contacts, gear, damage, plant, core, screens. At x10 and below everything goes on from the same point.
+// The carriage moving keeps its own way (the ground mechanism places the hull; the warp hurries it).
+bool Tantra::Coast(double simdt) {
+    if (oapiGetTimeAcceleration() <= 10.0 || carriage_.Busy() || !GetSurfaceRef()) return false;
+    if (!frozen_ && !GroundContact() && !restLock_) return false;       // in flight: the normal step
+    UpdateWarpFreeze((std::min)(simdt, 0.05));
+    if (frozen_) CoreWarpStep(simdt);                                   // the energy core goes on in 1 s sub-steps (the user)
+    return frozen_;
 }
 
 // Ground mechanism. While the carriage moves on the ground (lift, turn, lowering) the ship is a mechanism, not a free
@@ -4034,18 +4049,18 @@ int Tantra::clbkConsumeDirectKey(char* kstate) {
 }
 
 // The user's rule for walking inside (Orbiter's physics does not act on the people inside: the ship decides):
-// not during takeoff and landing, not on the anamezon drive; in cruise yes; on the ground only lying horizontally (+-10 deg).
+// not during takeoff and landing, not on the anamezon drive; in cruise and on the ground yes.
 int Tantra::CanWalk(char* reason, int n) const {
     auto no = [&](const char* r) { if (reason && n > 0) snprintf(reason, n, "%s", r); return 0; };
     if (engineSet_ == EngineSet::Anamezon) {
         for (int i = 0; i < tantra::spec::kAnaCount; i++)
             if (ana_[i] && GetThrusterLevel(ana_[i]) > 0.0) return no("Анамезонный двигатель: все в креслах");
     }
-    const double lim = 10.0 * PI / 180.0;
-    if (GroundContact()) {
-        if (std::fabs(GetPitch()) > lim || std::fabs(GetBank()) > lim) return no("Корабль не горизонтален: ходить нельзя");
-        return 1;
-    }
+    // on the ground (Orbiter's contact or landed status, or at rest at the surface on her own feet) and in space: free (the
+    // user, 2026-10-05: «на грунте и в космосе это отключено должно быть»; on Mars on her legs the contact was not seen)
+    VECTOR3 gs; GetGroundspeedVector(FRAME_HORIZON, gs);
+    const bool atRest = length(gs) < 1.0 && const_cast<Tantra*>(this)->GetAltitude(ALTMODE_GROUND) < 60.0;   // (the API's ground mode is not const)
+    if (GroundContact() || (GetFlightStatus() & 1) || atRest) return 1;
     if (GetAltitude() < 100e3) return no("Взлёт или посадка: все в креслах");
     return 1;
 }

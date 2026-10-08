@@ -3840,7 +3840,8 @@ def _bridge_seat(G, x, z, accent, ctl, yaw=0.0):
 BR_CUR = (-0.29, 0.19, 0.14, 0.17)                            # the cursor unit on the left armrest's front end: x, z from the seat, width, depth
 BR_BALL = (-0.30, 0.881, 0.21, 0.023)                         # its ball: x, y over the floor, z from the seat, radius
 BR_HAND_REST = (0.30, 0.21)                                   # his right hand's rest on the right armrest: x, z from the seat
-BR_STRIPS = ((0.282, 0.35), (0.318, 0.35), 0.17, 0.03)         # the sensor strips ХОД, ВЫСОТА: on the right armrest's top, ahead of his hand, side by side (the user's mark, 2026-10-05)
+BR_STRIPS = ((-0.505, -0.385), (-0.545, -0.385), 0.11, 0.03)   # the sensor strips ХОД, ВЫСОТА: on the left side console's near end, between its key field and its end, along the facing
+                                                              # (x, z from his axis as the console's; the user's mark, 2026-10-05 «вот сюда вместить»); fixed, not on the seat
 BR_SEAT_TOP = 0.865                                           # the armrests' top over the floor
 
 
@@ -4152,9 +4153,18 @@ def _bridge_volume(out):
              for ex, ez in ((-1, -1), (-1, 1), (1, 1), (1, -1))]
         adj.quad(*q, np.array([0, 1.0, 0]))
         return c
-    (ax_, az_), (hx_, hz_), sl, sw = BR_STRIPS                                            # on the seat (it rides with it)
-    c0 = rect(ax_, az_, sw, sl, BR_SEAT_TOP + .0008, 0)
-    c1 = rect(hx_, hz_, sw, sl, BR_SEAT_TOP + .0008, sw * PS)
+    # the strips on the left side console (fixed: their own group, the same picture): u across, v 0 at the far end, the whole
+    # strip's picture (kSeatPanelH px) over its length
+    (ax_, az_), (hx_, hz_), sl, sw = BR_STRIPS
+    strips = Group("bridge_seat_strips", MAT["br_display"]); strips.tex = BR_ADJ_SLOT
+    def srect(x, z, px0):
+        c = np.array([BR_CMD[0] + x, F + .792, zc + BR_CMD[1] + z])
+        q = [strips.vert(c + np.array([ex * sw / 2, 0, ez * sl / 2]), (0, 1, 0), ((px0 + (ex + 1) / 2 * sw * PS) / PW, (1 - ez) / 2))
+             for ex, ez in ((-1, -1), (-1, 1), (1, 1), (1, -1))]
+        strips.quad(*q, np.array([0, 1.0, 0]))
+        return c
+    c0 = srect(ax_, az_, 0)
+    c1 = srect(hx_, hz_, sw * PS)
     cx, cz, cw, cd = BR_CUR
     c2 = rect(cx, cz, cw, cd, .8798, 2 * sw * PS)                           # on the housing's top (0.879)
     px0_ = 2 * sw * PS
@@ -4163,7 +4173,7 @@ def _bridge_volume(out):
         _cap(adj, Pc, np.array([0.0, 1.0, 0.0]), ((kx - kw / 2) / PS, (ky - kh / 2) / PS, kw / PS, kh / PS),
              lambda a, b: ((px0_ + a * PS) / PW, b * PS / PH), hk=.005)
     BR_ADJ_C[:] = [list(c0), list(c1), list(c2)]
-    out.append(adj)
+    out.append(adj); out.append(strips)
     # the light spot («солнечный зайчик») on the glasses: stacked discs of a faint light; the game puts their vertices where the
     # cursor points (TantraInterior), front and back faces (5 discs x 13 vertices, twice)
     spot = Group("bridge_spot", MAT["br_spot"])

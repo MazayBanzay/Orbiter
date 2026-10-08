@@ -1,11 +1,12 @@
 BEGIN_DESC
-TANTRA BETA 3 - Io, day side: astronaut with the suit's magnetic field on.
+TANTRA BETA 3 - Io, day side: astronaut with the suit's magnetic field on, and the MPU.
 Io sits inside Jupiter's radiation belts: about 2.8 Sv/h in open space at its orbit, halved at the surface by the moon itself (70 % electrons, 30 % protons).
 HOW THE SUIT PROTECTS: passive shell 2 g/cm2 (dose falls exponentially with the areal density); the active field (600 W from the suit battery) deflects charged particles and divides their dose by 30 (galactic cosmic rays only by 1.5).
 Dose rate here: coverall ~1.4 Sv/h, suit without the field ~0.38 Sv/h (9 Sv a day - lethal), suit with the field ~0.02 Sv/h (0.5 Sv a day).
 COST: the field is the biggest load. With it the 6 kWh battery lasts ~8-9 h by day, ~7 h at night; walking with the servos shortens it. If demand exceeds the supply or the electronics overheat, the field is shed first. ECONOMY mode cuts life support.
 WHAT TO TRY: H opens the suit computer (eyes view, F1). Watch dose rate and dose; toggle FIELD (top right) off and on and see the rate jump; watch the battery time left. Day side: the ground is about -50 to -70 C, the suit's environment ~ -75 C, within its rating; the night side is below it.
 ON FOOT: W/S walk, A/D turn, Q/E side step, Shift run, Space jump (Io gravity 1.8 m/s2), L lamps, Shift+V sun shade.
+MPU (universal mobile platform, 8x8, battery drive) stands 15 m ahead of her. Climb the steps (F), take the post (F); W drive, Shift+W full power (40 / 80 km/h), S service brake (from standstill: reverse 15 km/h), A/D steer, Space emergency brake, B parking brake, Caps Lock deck up / down, V outside view; F at the post steps back, F at the deck edge steps down. It never drives itself. See Beta 4-7 for the MPU in full.
 Note: Jupiter's shadow on Io is not modelled. Time acceleration is limited to 10x here (radiation).
 END_DESC
 
@@ -42,5 +43,13 @@ Niza_Krit:OrbiterCrew\Astronavigator
   SEX female
   SUIT 1
   FIELD 1
+END
+MPU-1:MPU
+  STATUS Landed Io
+  POS -45.0004720 0.0000000
+  HEADING 0.00
+  ALT 0.880
+  BATT 1.0
+  PARK 1
 END
 END_SHIPS

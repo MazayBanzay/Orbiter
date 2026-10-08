@@ -326,26 +326,29 @@ void TantraDisplays::Step(double dt) {
     const double rdt = oapiGetSysStep() / (oapiGetTimeAcceleration() > 10.0 ? 4.0 : 1.0);   // the redraw timers on real time (at x100+ a frame is
                                                                           // seconds); over x10 the screens 4 times rarer (the user)
     if ((tRiser_ -= rdt) <= 0.0 || t_redraw_ - rdt <= 0.0) {                // the plant's flows move (the right panel); the spot over it
-        tRiser_ = 0.05; DrawPanel(kRight); riserDt_ = 0.0;
+        tRiser_ = 0.1; if (t_->interior_.ViewerInBridge()) { DrawPanel(kRight); SpotRedrawn(kRight); } riserDt_ = 0.0;   // (10 a second, only seen)
         int ss = -1; double su = 0.0, sv = 0.0;
         if (t_->interior_.SpotScreen(ss, su, sv) && ss == kRight) PaintSpot(ss, su, sv);
     }
     int ss = -1; double su = 0.0, sv = 0.0;                                // the cursor unit's light spot: painted into its screen
     const bool spot = t_->interior_.SpotScreen(ss, su, sv);
     if (spot && (tSpot_ -= rdt) <= 0.0 && t_redraw_ - rdt > 0.0) {          // its screen 20 times a second (the others as usual)
-        tSpot_ = 0.05;
-        switch (ss) {
-            case kLeft: DrawPanel(kLeft); break; case kRight: break; case kCentre: DrawFront(); break; case kKeys: DrawKeys(); break;
-            case kRiserR: DrawConsoleR(); break; case kRiserL: DrawConsoleL(); break; case kWingL: DrawMachine(); break; case kWingR: DrawPods(); break;
-            default: break;
-        }
-        PaintSpot(ss, su, sv);
+        tSpot_ = 0.02;                                                    // (cheap now: up to 50 times a second)
+        if (ss != kRight) MoveSpot(ss, su, sv);                           // (the right panel redraws itself 20 times a second)
     }
+    // The screens: one at a time in turn (seven of them, ~0.04 s apart: each about 3.5 times a second) - not all in one frame (at
+    // a slow frame the whole set fell into every frame); none while nobody looks from the bridge (the person's eyes / the VC).
+    if (!t_->interior_.ViewerInBridge()) return;
     if ((t_redraw_ -= rdt) > 0.0) return;
-    t_redraw_ = 0.2;
-    DrawPanel(kLeft); DrawFront(); DrawKeys();                            // the panels (the risers and the wing shelves are gone)
-    DrawConsoleR(); DrawConsoleL(); DrawMachine(); DrawPods();            // the side consoles, the pods' display (variant 7)
-    if (spot) PaintSpot(ss, su, sv);
+    t_redraw_ = 0.04;
+    const int k = drawTurn_++ % 7;
+    const int scr[7] = {kLeft, kCentre, kKeys, kRiserR, kRiserL, kWingL, kWingR};
+    if (spotScr_ == scr[k]) spotScr_ = -1;                                // its picture new (the spot's saved patch is stale)
+    switch (k) {
+        case 0: DrawPanel(kLeft); break; case 1: DrawFront(); break; case 2: DrawKeys(); break; case 3: DrawConsoleR(); break;
+        case 4: DrawConsoleL(); break; case 5: DrawMachine(); break; default: DrawPods(); break;
+    }
+    if (spot && ss == scr[k]) PaintSpot(ss, su, sv);
 }
 
 // The light spot («солнечный зайчик») over a screen's picture: an orange disc with a bright core and a ring (the user: orange).
@@ -354,14 +357,30 @@ void TantraDisplays::PaintSpot(int screen, double u, double v) {
     int W = 0, H = 0; oapiGetSurfaceSize(s_[screen], &W, &H);
     oapi::Sketchpad* skp = oapiGetSketchpad(s_[screen]);
     if (!skp) return;
-    const int x = int(u * W), y = int(v * H), r = (std::max)(10, int(H * 0.022));
-    oapi::Brush* b1 = oapiCreateBrush(0x1C78FF); oapi::Brush* b2 = oapiCreateBrush(0x8CD8FF); oapi::Pen* pn = oapiCreatePen(1, (std::max)(2, r / 5), 0x30A0FF);
-    skp->SetPen(nullptr); skp->SetBrush(b1); skp->Ellipse(x - r, y - r, x + r, y + r);
-    skp->SetBrush(b2); skp->Ellipse(x - r / 3, y - r / 3, x + r / 3, y + r / 3);
-    skp->SetBrush(nullptr); skp->SetPen(pn); skp->Ellipse(x - r * 2, y - r * 2, x + r * 2, y + r * 2);
+    // a laser pointer's dot (the user, 2026-10-05: «как от лазерной указки, тонкая»): a small bright red core in a faint glow
+    const int x = int(u * W), y = int(v * H), r = (std::max)(2, int(H * 0.0035 + 0.5));
+    {                                                                     // the picture under it saved, to be put back when it moves
+        const int w = 4 * r + 4;
+        if (!spotBak_ || w > spotW_) { if (spotBak_) oapiDestroySurface(spotBak_); spotBak_ = oapiCreateSurfaceEx(w, w, OAPISURFACE_RENDERTARGET | OAPISURFACE_TEXTURE); spotW_ = w; }
+        const int x0 = (std::clamp)(x - w / 2, 0, (std::max)(0, W - w)), y0 = (std::clamp)(y - w / 2, 0, (std::max)(0, H - w));
+        if (spotBak_ && W >= w && H >= w) { oapiBlt(spotBak_, s_[screen], 0, 0, x0, y0, w, w); spotScr_ = screen; spotX_ = x0; spotY_ = y0; spotLastX_ = x; spotLastY_ = y; }
+        else spotScr_ = -1;
+    }
+    oapi::Brush* b0 = oapiCreateBrush(0x101070); oapi::Brush* b1 = oapiCreateBrush(0x2020FF); oapi::Brush* b2 = oapiCreateBrush(0xD0D0FF);
+    skp->SetPen(nullptr); skp->SetBrush(b0); skp->Ellipse(x - r * 2, y - r * 2, x + r * 2 + 1, y + r * 2 + 1);
+    skp->SetBrush(b1); skp->Ellipse(x - r, y - r, x + r + 1, y + r + 1);
+    skp->SetBrush(b2); skp->Ellipse(x - r / 2, y - r / 2, x + r / 2 + 1, y + r / 2 + 1);
     skp->SetPen(nullptr); skp->SetBrush(nullptr);
-    oapiReleaseBrush(b1); oapiReleaseBrush(b2); oapiReleasePen(pn);
+    oapiReleaseBrush(b0); oapiReleaseBrush(b1); oapiReleaseBrush(b2);
     oapiReleaseSketchpad(skp);
+}
+
+void TantraDisplays::MoveSpot(int screen, double u, double v) {
+    if (screen < 0 || screen >= kScreens || !s_[screen]) return;
+    int W = 0, H = 0; oapiGetSurfaceSize(s_[screen], &W, &H);
+    if (spotScr_ == screen && int(u * W) == spotLastX_ && int(v * H) == spotLastY_) return;   // it stands: nothing to do
+    if (spotScr_ >= 0 && s_[spotScr_] && spotBak_) oapiBlt(s_[spotScr_], spotBak_, spotX_, spotY_, 0, 0, spotW_, spotW_);   // the old place clean
+    PaintSpot(screen, u, v);
 }
 
 bool TantraDisplays::Touch(int screen, double u, double v) {

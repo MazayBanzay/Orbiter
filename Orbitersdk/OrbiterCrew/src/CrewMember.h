@@ -19,6 +19,7 @@
 #include "Person.h"
 #include "Radiation.h"
 #include "Motion.h"
+#include "../include/OrbiterCrewApi.h"
 #include "Skin.h"
 #include "SuitComputer.h"
 #include "SuitHud.h"
@@ -30,6 +31,22 @@
 namespace ocrew
 {
 	struct ShipInterior;
+	// a thing lying about: what a person put down (X) or threw (Shift+X); F takes it again (OrbiterCrew\Item, this module)
+	class ItemVessel : public VESSEL4
+	{
+	public:
+		ItemVessel(OBJHANDLE h, int fm);
+		~ItemVessel();
+		void clbkSetClassCaps(FILEHANDLE cfg) override;
+		void clbkLoadStateEx(FILEHANDLE scn, void* status) override;
+		void clbkSaveState(FILEHANDLE scn) override;
+		void clbkPostCreation() override;
+		OcHeld held{};
+	private:
+		void Shape();
+		UINT mesh{ static_cast<UINT>(-1) }; MESHHANDLE tpl{};
+	};
+	ItemVessel* ItemOf(OBJHANDLE h);
 	class CrewMember : public VESSEL4
 	{
 	public:
@@ -64,7 +81,7 @@ namespace ocrew
 		struct Keys { bool fwd{}, back{}, left{}, right{}, stepL{}, stepR{}, run{}; };
 
 		Figure& Active() { return suitOn && suitFig.ok ? suitFig : bodyFig; }
-		double Mass() const { return bio.mass + who.worn.DryMass(); }   // the propellant: Orbiter adds its tanks
+		double Mass() const { return bio.mass + who.worn.DryMass() + (holding ? held.massKg : 0); }   // the propellant: Orbiter adds its tanks; + what she holds
 		double Gravity() const;
 		// a line for her display; level 1 caution (amber), 2 danger (red)
 		void Say(const std::string& text, int level = 0) { message = text; messageLevel = level; messageTime = 6; }
@@ -134,7 +151,8 @@ namespace ocrew
 		void GroundContactCheck(double dt);
 		void Fall(double impact, const char* why, Body::Contact c = Body::ON_BACK);
 		double fallenT{};
-		void TakePack();
+		void TakePack(OBJHANDLE which = nullptr);   // which: that one (F at it), else the nearest within reach
+		void DropHeld(bool throwIt);                // X: what she holds put down before her; Shift+X: thrown
 		void DropPack();
 		double ShellHalf() const { return jet.ShellHalfHeight(); }
 		void SetupRcs();
@@ -148,8 +166,10 @@ namespace ocrew
 		// (SuitHud::HelmetFrame), drawn through clbkDrawHUD; only in the suit, H switches it
 		bool hudOn{ true };
 		double handLogT{};                   // the seated hands' test line (DebugLog)
+		bool ctxTest{};                      // CtxTest = 1 in her config: the caption and a gauge row always shown (a drawing test)
 		bool debugLog{};                     // DebugLog = 1 in her config: test lines in Orbiter.log (clicks, the head camera)
 		void DrawSuitHud(oapi::Sketchpad* skp, DWORD W, DWORD H);
+		void FillHudData(HudData& d);
 		// F - the action (user 2026-10-03: F everywhere): what is within reach - a ship's lift or airlock, later
 		// a seat, a terminal, a door inside
 		OBJHANDLE useShip{}; int useId{ -1 }, useKind{}; std::string useHint; double useScan{};
@@ -171,6 +191,15 @@ namespace ocrew
 		// walking, she turns with it (mouseMode) and A/D step aside. Released - the cursor is free, A/D turn her
 		static constexpr bool kMouseWalk = true;
 		bool mouseMode{}, mouseRmb{};
+		// the constant look (CONTEXT_ACTIONS.md «Мышь», the user's decision 2026-10-07): on foot and at a standing post,
+		// through her eyes, the mouse always turns the look - the cursor hidden and held in the middle, an aim dot there;
+		// Alt frees the cursor (the menu's M-1, buttons, Orbiter's menus and dialogs). In a seat: the cursor, the look by the
+		// right button, as before
+		// the free look (the user, 2026-10-07): on foot, out of a machine's control, the right button turns the head alone;
+		// let go, the look comes back to where it was before it
+		bool freeLook{}, lookBack{}; double freeYaw0{}, freePitch0{};
+		bool lookCapture{}, lookWas{}, cursorHidden{}, simCursor{}; double lookHintT{}; bool lookHinted{};
+		static constexpr double kLookPerPx = 0.0022;   // rad of the look per pixel of the mouse
 		bool seatHelm{};                     // the seat she sits in is a helm (OC_HELM): V works
 		bool shipView{};                     // V: the camera on the ship from outside
 		void ShipView();
@@ -200,6 +229,71 @@ namespace ocrew
 		void ClickInside(ShipInterior& si);   // a mouse click on a button of the ship (OC_BUTTON)
 		double carried{};                    // seconds left of being carried by the ship (ocCarry): no walking
 		int attachWait{};                    // frames a new body waits before it is attached
+		// at the start the terrain is not loaded yet (the user, 2026-10-05): standing, she is held on the ground as it comes
+		// until its height under her has stood still for a second (at most 15 s); no falls, no blows meanwhile
+		bool settling{ true }; double settleElev{ -1e9 }, settleStill{};
+		void Settle(double simt, double dt);
+		double bornSim{ oapiGetSimTime() };
+	public:
+		// a thing in her hands (ocGive / ocTake / ocHeldOf; the user, 2026-10-07: «и предметы»)
+		bool Give(const OcHeld& h, bool check = true);
+		bool Take(OcHeld* out);
+		bool Held(OcHeld* out) const { if (out && holding) *out = held; return holding; }
+	private:
+		OcHeld held{}; bool holding{}; bool heldPending{};
+		UINT heldMesh{ static_cast<UINT>(-1) }; MESHHANDLE heldTpl{};
+		std::vector<std::vector<NTVERTEX>> heldVtx;   // the thing's mesh in its own frame, per group
+		double HeldWeight() const;                    // kg it weighs here (mass x g / 9.81)
+		double LiftLimit() const;                     // kg she can lift here and now (the suit's servos help)
+		double CarryLimit() const { return LiftLimit() / 3; }
+		double HeldSlow() const;                      // her walking speed's factor under it (1: none)
+		void HeldMeshMake(); void HeldMeshDrop();
+		void HeldTargets(HandTarget hand[2]) const;   // her hands on it (model frame)
+		void HeldPlace(Figure& fig);                  // the thing where her hands are, after the pose
+		// context actions (CONTEXT_ACTIONS.md, F-1 / M-1): the node she looks at, its actions, the one picked, a long one
+		struct CtxState
+		{
+			OBJHANDLE ship{}; int node{ -1 }; OcNode nd{}; std::vector<OcAction> acts; int sel{}; double scanT{}, refreshT{};
+			VECTOR3 at{};                              // the node, global
+			bool busy{}; int act{ -1 }; double t{}, dur{}; bool interruptible{}; VECTOR3 feet0{};
+			bool cursor{}, lmbWas{};                  // M-1: Alt held; the left button last step
+			int local{};                              // the node is ours, not a ship's: 1 a thing lying (OrbiterCrew\\Item), 2 a jet pack
+			std::string painted;                      // what the panel shows now
+			// with Alt: every place of an action within 5 m, marked (the user, 2026-10-07: «на альт подсветить оранжевым
+			// зоны интерактивности»); the point in its own vessel's frame, so the moving global frame never shifts it
+			struct Mark { OBJHANDLE ship{}; VECTOR3 pos{}; bool reach{}; };
+			std::vector<Mark> marks;
+		} cx;
+		double cxLogT{}; UINT cxMesh{ static_cast<UINT>(-1) }; SURFHANDLE cxSurf{}; VISHANDLE cxVis{}; oapi::Font* cxFont[2]{};
+		HudText cxText; bool cxTextTried{}; bool layerLogged{};
+		std::string useHintTitle;                    // the caption's title for F's old uses (empty)
+		// the seat's display (SEAT_HUD.md): its gauges, asked 10 times a second while she sits; drawn along the bottom
+		std::vector<OcGauge> seatGauges; double seatGaugeT{}; SURFHANDLE gaugeSurf{}, gaugeShadow{}, cxShadow{}; VISHANDLE gaugeVis{}; std::string gaugePainted;
+		bool farNode{};                              // she looks at a node out of her reach: «подойдите ближе»
+		void GaugePaint(int& usedW);          // the helmet display's own letters (Jura, its atlas): the same look everywhere
+		void CtxStep(double dt);                      // find the node, keep its actions, the wheel, a long action's time
+		bool CtxUse();                                // F: the picked action (false: no node - the old F)
+		void CtxBreak(bool done);                     // a long action ends
+		void CtxDraw();                               // the marker and the panel at the node
+		// in the suit with its display on, the caption goes onto the helmet display's own plate, drawn with the frame
+		// (clbkDrawHUD: the camera is final then) - no layer of ours between her eye and the plate to fight it
+		struct CtxRun { double x, base; std::string u; int size, col, align; bool black; };
+		struct CtxBox { double x0, y0, x1, y1; DWORD col; };
+		std::vector<CtxRun> plateRuns; std::vector<CtxBox> plateBoxes; bool plateOn{}, plateMarks{};
+		void CtxPaintPlate(oapi::Sketchpad* skp, double vw, double vh, double kx, double ky);   // (SuitHud's overlay)
+		void CtxPaint();
+		bool CtxRay(VECTOR3& o, VECTOR3& d) const;    // global: through the cursor (Alt), the view's middle, or her look
+		ShipInterior* CtxInterior() const;
+	public:
+		bool fovSet{};                       // her default view angle given once
+		static constexpr double kViewAperture = 35.0 * PI / 180.0;   // half the vertical field: 70 deg
+		static constexpr double kCamMinDist = 2.0;   // the outside view's least distance, m (D3D9's near plane outside: 1 m)
+		// inside a cabin the view from behind her is a view from inside (the user's choice, 2026-10-07): D3D9 cuts away all
+		// within 1 m of an outside camera, the walls with it; from inside its near plane is 0.1 m. F1 there: her eyes <->
+		// behind her; the camera stops short of the walls
+		bool thirdIn{};
+		static constexpr double kThirdDist = 1.6;    // m behind her head
+		double noWalkLogT{};               // the "does not walk" log line, once a second  // sim time she was made (a blow in her first seconds is the machines settling)
 		bool takeView{};                     // take the focus and the person's own view at the next step
 		void ApplyView();
 		std::string inShipName;              // from the scenario, found again after loading
@@ -214,7 +308,7 @@ namespace ocrew
 		bool DoUse();
 		void ApRequest(int req);
 		// what of an impact reaches the body: in the suit, through its frame and dampers (Suit::ImpactThrough)
-		void HitBody(double v, Body::Contact c) { bio.Impact(suitOn ? Suit::ImpactThrough(v, bio.mass, who.worn.Mass(), c) : v, c); }
+		void HitBody(double v, Body::Contact c) { if (v > 1.5) motion.Blink(); bio.Impact(suitOn ? Suit::ImpactThrough(v, bio.mass, who.worn.Mass(), c) : v, c); }
 		double LieHeight() const { return jet.Worn() ? 0.36 : 0.18; }
 		// how far a base's landing pad under her stands above the relief there (0 = none): bases with
 		// MapObjectsToSphere put the pads on the smooth sphere, which can be above the real ground

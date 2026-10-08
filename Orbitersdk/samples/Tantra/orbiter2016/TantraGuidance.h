@@ -210,6 +210,7 @@ public:
     bool Engaged() const { return fl_.mode == kAuto || fl_.mode == kHold || fl_.mode == kAbort; }
     // ---- the keys (sysNow: the system time - the checks and the confirmations run in it) ----
     bool Editable() const { return fl_.mode == kIdle && !armed_ && checkT_ < 0; }
+    bool Retargetable() const { return Editable() || Engaged() || fl_.mode == kManual; }   // the targets change in flight too (the user: «горячая корректировка»)
     void StepInc(int dir, bool coarse);           // 0,1° / 5°
     void StepAz(int dir, bool coarse);            // 0,5° / 5° of the inertial azimuth (sets the inclination and the branch)
     void StepPeri(int dir, bool coarse);          // 10 / 50 km, 150..2000, the apoapsis not under it
@@ -248,6 +249,7 @@ public:
 
 private:
     void Replan();
+    void Retarget();                              // after a target key: the plan, and in flight the live targets
     void FixInc();
     void Tick(double now);                        // the mockup's uiTick: the check's verdict
     std::vector<Check> BuildChecks() const;
@@ -336,6 +338,7 @@ public:
     bool Engaged() const { return fl_.mode == kAuto || fl_.mode == kHold || fl_.mode == kGoAround; }
     // ---- the keys ----
     bool Editable() const { return fl_.mode == kIdle && !armed_ && checkT_ < 0; }
+    bool Retargetable() const { return Editable() || Flying(); }   // the hover height changes in flight too
     void StepHover(int dir);                      // ВЫСОТА ВИСЕНИЯ: 5 m, 60..80
     void Field(bool autoMode, double now);        // the field switch АВТО / РУЧН (the mockup's onField)
     void Arm(double now);

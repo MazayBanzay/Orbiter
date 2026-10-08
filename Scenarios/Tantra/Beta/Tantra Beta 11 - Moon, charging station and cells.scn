@@ -1,0 +1,59 @@
+BEGIN_DESC
+TANTRA BETA 11 - Moon, charging station and energy cells (demo).
+The MPU's battery is four energy cells, 250 kWh / 80 kg each, in bays in its RIGHT side between the middle axles (red handles).
+Its power socket is on the front bumper (right). The station 12 m ahead of it: a cabinet with a 15 m cable on a reel, a rack of
+six cells, 300 kW input. The MPU starts low: its cells at 35, 40, 20 % and one bay empty.
+CHARGING: at the station's front F - take the cable; walk to the MPU's front bumper (the cable trails after you) - F plugs it in.
+Charging runs at up to 300 kW, the emptiest cell first (the socket's hint shows the charge and the power). F at the socket - the
+plug back into your hands; F at the station - the cable back on its reel. Walk or drive farther than 15 m - the plug pulls out.
+CELLS: F at a cell's hatch on the MPU's right side - the cell out into your hands; F at the station's rack - put it on charge, or
+take a charged one; F at an empty bay of the MPU - put it in. One thing in the hands at a time. 80 kg weighs 13 kg here.
+Driving: walk up to the platform, F climbs on; F at the post; W/S/A/D, Shift, Space emergency brake, B parking brake.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52006.7547855787
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+MPU-1:MPU
+  STATUS Landed Moon
+  POS -33.4100000 41.1300000
+  HEADING 90.00
+  ALT 0.880
+  CELLS 0.350 0.400 0.200 -1.000
+  PARK 1
+END
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Moon
+  POS -33.4101200 41.1302000
+  HEADING 180.00
+  ALT 0.930
+  AFCMODE 7
+  SUIT 1
+END
+Station-1:TVehicles\Station
+  STATUS Landed Moon
+  POS -33.4094750 41.1300000
+  HEADING 270.00
+  ALT 1.000
+  CELLS 1.000 1.000 1.000 0.500 1.000 -1.000
+END
+END_SHIPS

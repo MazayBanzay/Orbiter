@@ -1,0 +1,57 @@
+BEGIN_DESC
+TANTRA BETA 12 - Moon, coupling two MPU (demo).
+MPU-1 in front, MPU-2 behind it, their coupling pins 1.5 m apart, both facing east. Niza Krit stands beside the gap.
+COUPLING: walk to MPU-1's rear bumper (or MPU-2's front) - F "couple with MPU-2". A tow bar joins the pins: a stiff spring with
+a damper along it, the pins free to turn - the train jack-knifes in turns, the cars pull and push each other.
+DRIVING THE TRAIN: climb onto MPU-1 (F), take its post (F) and drive. MPU-2 has nobody at its post: it follows - the leader's
+drive, brakes and parking brake; its wheels steer along the bar so it tracks the leader's path.
+UNCOUPLING: F at the coupling again. The coupling is saved in the scenario (the leader keeps its follower).
+Keys: W/S/A/D, Shift full power, S service brake, Space emergency brake, B parking brake, Caps Lock deck up/down, V outside view.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52006.7547855787
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+MPU-1:MPU
+  STATUS Landed Moon
+  POS -33.4100000 41.1300000
+  HEADING 90.00
+  ALT 0.880
+  BATT 1.0
+  PARK 1
+END
+MPU-2:MPU
+  STATUS Landed Moon
+  POS -33.4104640 41.1300000
+  HEADING 90.00
+  ALT 0.880
+  PARK 1
+END
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Moon
+  POS -33.4102300 41.1301300
+  HEADING 180.00
+  ALT 0.930
+  AFCMODE 7
+  SUIT 1
+END
+END_SHIPS

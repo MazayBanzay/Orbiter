@@ -323,8 +323,8 @@ void TantraInterior::cSeated(void* c, int seatId, int personId, int on) {
     oapiWriteLogV("Tantra interior: person %d %s the seat %d", personId, on ? "sits in" : "leaves", seatId);
 }
 
-// The commander's hands (OrbiterCrew reaches them with the arm and holds them, OcInteriorExt::SeatHands): the left palm on the
-// cursor ball, the fingers forward; the right on its armrest's front end, ahead of the ХОД / ВЫСОТА strips; with the yoke out
+// The commander's hands (OrbiterCrew reaches them with the arm and holds them, OcInteriorExt::SeatHands): the left palm on
+// its armrest behind the cursor unit, the fingers forward; the right on its armrest's front end, ahead of the ХОД / ВЫСОТА strips; with the yoke out
 // both on its horns, the thumbs up, the fingers across the horn along the arm (OrbiterCrew turns the hand round the horn to
 // her forearm). The ball and the rest go with the seat (its travel, adjustment, height); the horns with the hub (TantraYoke).
 void TantraInterior::cSeatHands(void* c, int seatId, int, OcHand* left, OcHand* right) {
@@ -352,7 +352,9 @@ void TantraInterior::cSeatHands(void* c, int seatId, int, OcHand* left, OcHand* 
         }
         return;
     }
-    put(left, 1, _V(kCurBall[0], kCurBall[1] + kCurBall[3], kCurBall[2]) + mv, -up, f, OC_GRIP_BALL, 0.0);
+    // the left palm on its armrest just behind the cursor unit, the fingertips short of it: the unit stays in sight (the user,
+    // 2026-10-05: «ПУЛЬТ КРЕСЛА НЕ ВИДНО» - the hand on the ball hid it under the forearm)
+    put(left, 1, _V(-kHandRest[0], kHandRest[1], kSeats[0].z + 0.0) + mv, -up, f, OC_GRIP_FLAT, 0.0);
     put(right, 2, _V(kHandRest[0], kHandRest[1], kHandRest[2]) + mv, -up, f, OC_GRIP_FLAT, 0.0);
 }
 
@@ -649,12 +651,13 @@ int TantraInterior::cClick(void* c, const VECTOR3* o, const VECTOR3* d, int pers
     const bool anyDist = t->spotOn_ && t->seat_ == 0 && personId == t->person_;
     Pick best;
     t->PickScreens(*o, *d, haveHead && !anyDist ? &head : nullptr, best);
-    // the seat's own controls ride with it: the strips (5 ХОД, 6 ВЫСОТА), the cursor unit's key plate (7) and its ball (8)
+    // the seat's controls: the strips (5 ХОД, 6 ВЫСОТА) on the left side console, the cursor unit's key plate (7) and its ball (8)
+    // riding with the seat
     const VECTOR3 f = _V(kSeats[0].fx, 0, kSeats[0].fz), rt = _V(kSeats[0].fz, 0, -kSeats[0].fx);
     const VECTOR3 mv = f * t->CmdSeatOffset() + _V(0, t->CmdSeatHeight(), 0);
     int sk = -1; double su = 0, sv = 0, st = best.kind >= 0 ? best.t : 1e9;
-    auto flat = [&](int kind, const double* c0, double w, double dd) {   // a plate on the seat: u across, v from the front
-        const VECTOR3 C = _V(c0[0], c0[1], c0[2]) + mv, N = _V(0, 1, 0);
+    auto flat = [&](int kind, const double* c0, double w, double dd, bool onSeat) {   // a plate: u across, v from the front
+        const VECTOR3 C = _V(c0[0], c0[1], c0[2]) + (onSeat ? mv : _V(0, 0, 0)), N = _V(0, 1, 0);
         const double den = dotp(*d, N);
         if (den > -1e-6) return;
         const double tt = dotp(C - *o, N) / den;
@@ -665,9 +668,9 @@ int TantraInterior::cClick(void* c, const VECTOR3* o, const VECTOR3* d, int pers
         if (u < -mu || u > 1 + mu || v < -mv_ || v > 1 + mv_) return;
         sk = kind; su = Clamp(u, 0.0, 1.0); sv = Clamp(v, 0.0, 1.0); st = tt;
     };
-    flat(5, kSeatAdjC, kSeatStripWid, kSeatStripLen);
-    flat(6, kSeatHgtC, kSeatStripWid, kSeatStripLen);
-    flat(7, kCurPlateC, kCurPlateW, kCurPlateD);
+    flat(5, kSeatAdjC, kSeatStripWid, kSeatStripLen, false);              // the strips: on the left side console (fixed)
+    flat(6, kSeatHgtC, kSeatStripWid, kSeatStripLen, false);
+    flat(7, kCurPlateC, kCurPlateW, kCurPlateD, true);
     if (t->yokeE_ > 0.9) {                                              // the yoke's hub (it moves): its keys' face (9), its screen (10)
         auto hub = [&](int kind, const double* r5) {
             const VECTOR3 C = t->hubH_ + t->hubX_ * r5[0] + t->hubY_ * r5[1] + t->hubZ_ * r5[2], N = t->hubZ_;

@@ -1,5 +1,5 @@
 MSHX1
-GROUPS 2
+GROUPS 3
 LABEL VisorModulator
 MATERIAL 1
 TEXTURE 1
@@ -22,12 +22,30 @@ GEOM 4 2
 -0.5 -0.5 0.5 0 0 -1 0 1
 0 1 2
 0 2 3
-MATERIALS 1
+LABEL VisorLight
+MATERIAL 2
+TEXTURE 2
+FLAG 5
+GEOM 4 2
+-0.5 0.5 -0.5 0 0 -1 0 0
+0.5 0.5 0.5 0 0 -1 1 0
+0.5 -0.5 -0.5 0 0 -1 1 1
+-0.5 -0.5 0.5 0 0 -1 0 1
+0 1 2
+0 2 3
+MATERIALS 2
 VisorDark
+VisorLight
 MATERIAL VisorDark
 0 0 0 1
 0 0 0 1
 0 0 0 1 0
 0 0 0 1
-TEXTURES 1
+MATERIAL VisorLight
+1 1 1 1
+0 0 0 1
+0 0 0 1 0
+1 1 1 1
+TEXTURES 2
+Tantra\VisorClear.dds
 Tantra\VisorClear.dds

@@ -1,0 +1,48 @@
+BEGIN_DESC
+OrbiterCrew. The astronavigator in her suit on the Moon, next to Brighton Beach. Suit full: O2, battery, N2.
+Астронавигатор в скафандре на Луне, рядом с базой Brighton Beach. Скафандр полный: кислород, батарея, азот.
+Walk: W/S, A/D turn, Q/E side step, Shift servo run, Space jump, F use, K suit, B jet pack, L lamps, Shift+V sun shade, H helmet display.
+Ходьба: W/S, A/D поворот, Q/E шаг вбок, Shift бег с сервоприводами, Пробел прыжок, F действие, K скафандр, B ранец, L фонари, Shift+V щиток, H дисплей шлема.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52006.7547855787
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Moon
+  POS -33.4100000 41.1300000
+  HEADING 180.00
+  ALT 0.930
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+  NAME Niza Krit
+  ROLE astronavigator
+  SEX female
+  SUIT 1
+  SUIT_O2 1.0
+  SUIT_WATER 2.0
+  SUIT_SORBENT 0.0
+  SUIT_BATTERY 6.0
+  SUIT_N2 1.5
+  SUIT_SERVO 1
+END
+END_SHIPS

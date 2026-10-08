@@ -636,6 +636,14 @@ void Ascent::NewFlight() {
     fl_ = f;
 }
 
+// A target changed: the plan anew; flying, the live flight takes the new targets at once (its target plane from the stand).
+void Ascent::Retarget() {
+    Replan();
+    if (fl_.mode == kIdle) return;
+    fl_.tg = tg_; fl_.td = Derive(tg_, fl_.lat0, fl_.pl);
+    Note(L"Цели изменены в полёте: i " + Fmt(tg_.inc, 1) + L"°, " + std::to_wstring(tg_.peri) + L" × " + std::to_wstring(tg_.apo) + L" км, предел " + Fmt(tg_.gLim, 1) + L" g", kOk);
+}
+
 void Ascent::FixInc() { const double lat = std::fabs(SiteLat()); tg_.inc = Clamp(tg_.inc, lat, 180 - lat); }
 
 void Ascent::Replan() {
@@ -762,31 +770,31 @@ void Ascent::Step(const AscentState& st, double now) {
 
 // ---- the keys ----
 void Ascent::StepInc(int dir, bool coarse) {
-    if (!Editable()) return;
+    if (!Retargetable()) return;
     tg_.inc = coarse ? JsRound(tg_.inc + dir * 5) : JsRound((tg_.inc + dir * 0.1) * 100) / 100;
-    FixInc(); Replan();
+    FixInc(); Retarget();
 }
 void Ascent::StepAz(int dir, bool coarse) {
-    if (!Editable()) return;
+    if (!Retargetable()) return;
     const double lat = SiteLat() * kD2R, b = (Derive(tg_, lat, st_.planet).azI + dir * (coarse ? 5.0 : 0.5)) * kD2R;
     tg_.inc = JsRound(std::acos(Clamp(std::cos(lat) * std::sin(b), -1, 1)) * kR2D * 100) / 100;
     tg_.south = !(std::cos(b) >= -1e-9);
-    FixInc(); Replan();
+    FixInc(); Retarget();
 }
 void Ascent::StepPeri(int dir, bool coarse) {
-    if (!Editable()) return;
+    if (!Retargetable()) return;
     tg_.peri = int(Clamp(tg_.peri + dir * (coarse ? 50 : 10), 150, 2000)); tg_.apo = (std::max)(tg_.apo, tg_.peri);
-    Replan();
+    Retarget();
 }
 void Ascent::StepApo(int dir, bool coarse) {
-    if (!Editable()) return;
+    if (!Retargetable()) return;
     tg_.apo = int(Clamp(tg_.apo + dir * (coarse ? 50 : 10), 150, 2000)); tg_.peri = (std::min)(tg_.peri, tg_.apo);
-    Replan();
+    Retarget();
 }
 void Ascent::StepGLim(int dir) {
-    if (!Editable()) return;
+    if (!Retargetable()) return;
     tg_.gLim = Clamp(tg_.gLim + dir * 0.5, 1.5, 5);
-    Replan();
+    Retarget();
 }
 void Ascent::Arm(double now) {
     if (!CanArm()) return;
@@ -999,8 +1007,9 @@ void Landing::Step(const LandState& st, double now) {
 
 // ---- the keys ----
 void Landing::StepHover(int dir) {
-    if (!Editable()) return;
+    if (!Retargetable()) return;
     fl_.hHover = Clamp(fl_.hHover + 5 * dir, 60, 80);
+    if (Flying()) Note(L"Высота висения в полёте: " + Fmt(fl_.hHover, 0) + L" м", kOk);
     Replan();
 }
 void Landing::Field(bool autoMode, double /*now*/) {

@@ -52,6 +52,9 @@ namespace ocrew
 		void SetMorph(const char* name, float weight) { SetMorphSide(name, weight, weight); }
 		// the same with its own weight on each side of the body (model x < 0: her left), e.g. one hand closed on a handle
 		void SetMorphSide(const char* name, float left, float right);
+		// the upper lids' place at rest, as a share of the blink (LIDREST in the .skin; the coverall face: 0.2, the user
+		// 2026-10-07: a calm look into the distance, as the suit's face has)
+		double LidRest() const { return lidRest; }
 		bool HasMorph(const char* name) const { for (const auto& m : morphs) if (m.name == name) return true; return false; }
 		// the rest pose of a bone (model frame): its rotation (row-major 3x3) and its joint
 		const float* RestR(int b) const { return bones[b].R0; }
@@ -125,6 +128,7 @@ namespace ocrew
 		void FindHands();
 		Pose last;
 		std::string meshName;
+		double lidRest{};
 		DEVMESHHANDLE dev{};
 		bool hideHead{};
 		int headBone{ -1 };

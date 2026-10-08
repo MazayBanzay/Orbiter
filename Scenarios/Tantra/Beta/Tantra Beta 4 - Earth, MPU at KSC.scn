@@ -1,0 +1,63 @@
+BEGIN_DESC
+TANTRA BETA 4 - Earth, MPU at KSC.
+Earth, Kennedy Space Center runway: the astronavigator in her coverall, the MPU 8 m to her east.
+ON FOOT: W/S walk, A/D turn, Q/E side step, Shift run, Space jump. F1 eyes / outside view.
+MPU (universal mobile platform) - BETA test sample: an open 8x8 platform with a standing control post, no cabin.
+It is driven only by a person at its post; the focus and the camera stay with the person.
+BOARDING: walk up to the platform (anywhere round it) - F climbs onto the deck. At the console - F takes the post (again: steps back).
+At the deck edge by the steps - F steps down to the ground.
+DRIVING (the person's own keys): W forward (40 km/h), Shift+W full power (80 km/h), A/D steer.
+S - service brake with ABS (the wheels keep turning and steering); from standstill S reverses (15 km/h).
+Space - emergency brake (wheels locked, it skids). B parking brake. Caps Lock raises the deck (+0.25 m) / lowers it back.
+V the platform from outside (V again - the driver's view).
+PHYSICS: terramechanics of each wheel in the soil of the body it drives on (Bekker sinkage and rolling resistance,
+Janosi-Hanamoto traction against slip, side force and bulldozing; Moon - lunar regolith, Mars - sand, Earth - firm loam):
+grip, wheelspin, sliding and skids come out of the soil. Traction control on W, none with Shift. Independent sprung suspension
+(squat on take-off, dive on braking, roll in turns), all-wheel steering (rear wheels counter-steer at low speed).
+8 hub motors, 3 MW, 1 MWh battery with regenerative braking; the speed limit holds downhill too.
+Speed, battery, draw and range are shown at the bottom of the screen (in the suit: in the helmet display).
+Dust from the wheels (ballistic in vacuum, a cloud in air). Sound only through air (none on the Moon, faint on Mars, full on Earth).
+COLLISIONS: people are struck by the platform (injuries through the suit); it meets the Tantra's legs and feet and other
+platforms; a crash above 30 km/h throws the people off the deck. Parked, it stands still on its brake.
+At the start the platform waits on its wheels until the terrain has loaded. Time warp above 2x: stiff suspension only; above 4x: parked.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 58710.6
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+MPU-1:MPU
+  STATUS Landed Earth
+  POS -80.6944200 28.6150000
+  HEADING 0.00
+  ALT 0.880
+  BATT 1.0
+  PARK 1
+END
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Earth
+  POS -80.6945000 28.6150000
+  HEADING 90.00
+  ALT 0.930
+  AFCMODE 7
+  SUIT 0
+END
+END_SHIPS
