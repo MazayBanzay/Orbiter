@@ -106,6 +106,7 @@ namespace ocrew
 		CrewSound sound;
 		oc::HeadSway headSway;               // the eyes on the neck aboard a ship: lag and vibration
 		VECTOR3 HeadSwayStep(double dt, const VECTOR3& eye);
+		VECTOR3 swayV{}, swayA{}; bool swayVOk{};   // the ship's velocity last step (to the surface), its measured acceleration
 		std::string voice{ "female1" };
 		VISHANDLE vis{};
 		VECTOR3 eye{ 0, 0.69, 0.17 };
@@ -287,6 +288,7 @@ namespace ocrew
 	public:
 		bool fovSet{};                       // her default view angle given once
 		static constexpr double kViewAperture = 35.0 * PI / 180.0;   // half the vertical field: 70 deg
+		static constexpr double kMarkRange = 8.0;    // the Alt marks, m from her eyes (the user, 2026-10-08: «чуть дальше ... с 5 метров»)
 		static constexpr double kCamMinDist = 2.0;   // the outside view's least distance, m (D3D9's near plane outside: 1 m)
 		// inside a cabin the view from behind her is a view from inside (the user's choice, 2026-10-07): D3D9 cuts away all
 		// within 1 m of an outside camera, the walls with it; from inside its near plane is 0.1 m. F1 there: her eyes <->
@@ -308,6 +310,14 @@ namespace ocrew
 		bool DoUse();
 		void ApRequest(int req);
 		// what of an impact reaches the body: in the suit, through its frame and dampers (Suit::ImpactThrough)
+		// aboard a ship that is not ours (Config\OrbiterCrew\Ships\<its class>.cfg: its airlock in her menu): she flies it
+		// (the user, 2026-10-08: «в не наших кораблях только путь 1») - her body hidden in it, moved with it, breathing its
+		// cabin; the ship has the focus; F on it takes her out at its airlock when it stands on the ground
+		OBJHANDLE ride{}; std::string rideName; bool rideKeyWas{}; NOTEHANDLE rideNote{}; double rideNoteT{}, rideWait{}, rideCamT{};
+		void RideStep(double dt);
+		bool RideBoard(OBJHANDLE ship);
+		void RideExit();
+		void RideSay(const std::string& utf8, double seconds = 6);
 		void HitBody(double v, Body::Contact c) { if (v > 1.5) motion.Blink(); bio.Impact(suitOn ? Suit::ImpactThrough(v, bio.mass, who.worn.Mass(), c) : v, c); }
 		double LieHeight() const { return jet.Worn() ? 0.36 : 0.18; }
 		// how far a base's landing pad under her stands above the relief there (0 = none): bases with

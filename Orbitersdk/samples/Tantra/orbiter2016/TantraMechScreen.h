@@ -55,7 +55,7 @@ struct View {
     int wingMode = 0;                        // 0 = 90 deg, 1 = 30 deg, 2 = folded
     double wingFold = 0.0;                   // the ground fold now (pose.tuck): 0 as set .. 1 folded flat
     double podOut = 0.0, podAngle = 0.0, podTarget = 0.0; bool podsWanted = false;
-    int podBlock = 0;                        // the bays held shut (Tantra::UpdatePods): 0 no, 1 the wings folded, 2 over Mach 0.8
+    int podBlock = 0;                        // the bays held shut (Tantra::UpdatePods): 0 no, 1 the carriage lies/moves, 2 over kPodMaxQ
     double rovers = 0.0, hangar = 0.0, hangarT = 0.0, bayDoors = 0.0;
     double irisAna = 0.0, irisNose = 0.0, marchOut = 0.0;
     bool liftStowed = true, liftAtGround = false, liftLowering = false; double liftMove = 0.0;   // the airlock lift

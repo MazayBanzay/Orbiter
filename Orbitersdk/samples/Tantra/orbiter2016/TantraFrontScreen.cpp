@@ -522,7 +522,7 @@ void Flight::Draw(oapi::Sketchpad* skp, ScreenFont& font, GostFont& gost, double
         g.Block(kM, kUY0, Lw, kUY1 - kUY0, L"УГЛЫ · МАХ");
         const std::wstring cells[7][2] = {{L"ТАНГАЖ", NumS(F.pitch, 1) + L"°"}, {L"КРЕН", std::wstring(F.bank >= 0 ? L"П " : L"Л ") + Num(std::fabs(F.bank), 1) + L"°"},
                                           {L"АТАКА", Num(F.aoa, 1) + L"°"}, {L"СКОЛЬЖЕНИЕ", Num(F.slip, 1) + L"°"}, {L"ГЛИССАДА", NumS(F.fpa, 1) + L"°"},
-                                          {L"ГОНДОЛЫ", Num(F.pods, 0) + L"°"}, {L"МАХ", F.air ? Num(F.mach, 2) : L"—"}};
+                                          {L"ВЫДВ. БЛОКИ", Num(F.pods, 0) + L"°"}, {L"МАХ", F.air ? Num(F.mach, 2) : L"—"}};
         const int cols = Lw >= 700 ? 3 : 2, rows = (7 + cols - 1) / cols;
         const double step = rows >= 4 ? 64 : 80, cwid = (Lw - 32) / cols, vsz = step >= 80 ? 34 : 26;
         for (int i = 0; i < 7; ++i) {

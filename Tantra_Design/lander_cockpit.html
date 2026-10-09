@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Кокпит «Грань»</title>
+<style>
+:root{--bg:#0b1016;--pan:#14171b;--fr:#2a2e34;--tx:#c8ccd2;--dim:#7d8792;--em:#3fe07a;--cy:#5fd8ff;--am:#ffd05a;--rd:#e04030;--metal:#2a2e34;--metal2:#23262c;--ink:#cfd2d8}
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 "GOST 2.304 type A","GOST type A",system-ui,Segoe UI,sans-serif}
+#wrap{max-width:1500px;margin:0 auto;padding:12px 16px}
+h1{font-size:19px;margin:0 0 4px;color:#e8eef3;letter-spacing:.04em}
+h2{font-size:15px;margin:18px 0 6px;color:var(--em);letter-spacing:.06em;text-transform:uppercase}
+.note{font-size:12.5px;color:var(--dim);max-width:1200px}
+.row{display:flex;flex-wrap:wrap;gap:14px}
+.card{background:#10151a;border:1px solid #232a30;border-radius:8px;padding:10px;flex:1 1 560px;min-width:0}
+svg{width:100%;height:auto;display:block}
+.keys{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.k{font:600 12px/1 inherit;font-family:inherit;padding:8px 12px;border-radius:5px;cursor:pointer;color:var(--ink);
+ background:linear-gradient(#3a4048,#22262c);border:1px solid #11151a;box-shadow:inset 0 1px 0 #59616b,0 2px 0 #090b0e;letter-spacing:.05em}
+.k.on{color:#03110a;background:radial-gradient(ellipse at 50% 40%,#8dffb6,#3fe07a 60%,#1f8f4a);box-shadow:0 0 10px #3fe07a88,inset 0 0 6px #d8ffe6;border-color:#1f8f4a}
+.k:active{transform:translateY(1px);box-shadow:inset 0 2px 3px #0008}
+canvas.mfd{display:block;width:100%;aspect-ratio:1100/700;background:#03110a;border-radius:10px;border:10px solid var(--metal);box-shadow:0 0 0 2px var(--metal2),inset 0 0 30px #000;cursor:pointer}
+.mt{font-size:13px;color:#c9a24a;letter-spacing:.06em;font-weight:600}
+table{border-collapse:collapse;font-size:12.5px}
+td,th{padding:3px 8px;border-bottom:1px solid #1d2329;vertical-align:top;text-align:left}
+th{color:var(--dim);font-weight:600}
+td:first-child{color:var(--em)}
+.lay td:first-child{white-space:nowrap}
+.bez{background:var(--pan);border:1px solid var(--fr);border-radius:10px;padding:10px;max-width:1140px}
+.und{color:var(--am)}
+#tt{position:fixed;z-index:9;pointer-events:none;display:none;max-width:420px;background:#0d1a14;border:1px solid #2f7a50;border-radius:6px;padding:6px 9px;font-size:12px;color:#d8f5e4;white-space:pre-line;box-shadow:0 4px 14px #000a}
+.tw{overflow-x:auto}
+</style>
+</head>
+<body>
+<div id="wrap">
+<h1>«Грань» (Т1Б-Н2) — кокпит на двух пилотов рядом и экраны МФД (концепт)</h1>
+<div class="note" style="border-left:3px solid #c9a24a;padding-left:8px">2026-10-09: числа экранов и таблиц приведены к итоговой версии Т1Б-Ф — массы 90,74 / 55,61 / 71,91 т, аргон 25,12 т (lander_gran_final.json ttx); Т/В чаш 1,70 / 1,13 на массе входа, 1,35 / 0,90 на старте (final.tw); висение 47 кг/с, 140 / 371 / 849 с; β баллистический 213; габариты и допуски захвата по мешу (lander_mesh.json final.lengths): бок 0,45 / 0,29 м, по длине −0,0075 м — не проходит (решение пользователя, lander_status.html п. 5). Компоновка кабины не менялась. Ядро TantraLander с этими числами не синхронизировано (после решений пользователя).</div>
+<div class="note">Рубка лэндера в языке «Тантры»: окон нет, обзор — экраны и фотонная полоса датчиков в лопаточном носу (x +11…+6). Фотоника — квантовая оптика: изображение идёт от датчика до экрана светом, без электрического преобразования и без кремния; это не голограммы. Экраны сенсорные. Клавиши на пульте — только для контроля главных систем (горят изумрудным светом, если система в работе); ввод — касанием экранов. Спереди — приборы. Гасителя инерции нет: кресла полулёжа с ложементами по телу (до 5,5 g грудь–спина). Рычага газа нет: тяга задаётся касанием шкалы на МФД или автоматом.</div>
+<div class="keys">Отделка: серый военный металл (решение пользователя)</div>
+
+<h2>1. Компоновка кокпита — план и вид сбоку</h2>
+<div class="row">
+<div class="card">
+<svg viewBox="0 0 640 470" id="plan" font-family="inherit">
+ <defs><pattern id="hat" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#2c3a36" stroke-width="2"/></pattern></defs>
+ <text x="10" y="18" fill="#7d8792" font-size="12">ПЛАН (вид сверху), масштаб 1 м = 150 px; нос вверху</text>
+ <path d="M200 40 L440 40 L560 330 L560 460 L80 460 L80 330 Z" fill="#14171b" stroke="#8a8f98" stroke-width="2"/>
+ <path d="M205 46 L435 46 L470 128 L170 128 Z" fill="url(#hat)" stroke="#5fd8ff" stroke-dasharray="4 3"/>
+ <text x="320" y="92" fill="#5fd8ff" font-size="12" text-anchor="middle">отсек фотонной полосы датчиков (x +6…+11)</text>
+ <path d="M168 132 L472 132 L486 168 L154 168 Z" fill="#23262c" stroke="#3fe07a"/>
+ <text x="320" y="155" fill="#3fe07a" font-size="11" text-anchor="middle">передняя приборная доска: 3 обзорных экрана + приборы</text>
+ <rect x="112" y="200" width="30" height="120" fill="#23262c" stroke="#3fe07a"/><text x="127" y="345" fill="#3fe07a" font-size="10" text-anchor="middle">МФД-Л</text>
+ <rect x="498" y="200" width="30" height="120" fill="#23262c" stroke="#3fe07a"/><text x="513" y="345" fill="#3fe07a" font-size="10" text-anchor="middle">МФД-П</text>
+ <rect x="293" y="170" width="54" height="190" fill="#23262c" stroke="#ffd05a"/>
+ <text x="320" y="270" fill="#ffd05a" font-size="10" text-anchor="middle" transform="rotate(-90 320 270)">центральный пульт 0,36 м</text>
+ <g><rect x="160" y="180" width="110" height="200" rx="26" fill="#2a2622" stroke="#c9a24a"/><ellipse cx="215" cy="358" rx="30" ry="18" fill="#3a332c"/><text x="215" y="290" fill="#c9a24a" font-size="12" text-anchor="middle">КОМАНДИР</text><text x="215" y="306" fill="#7d8792" font-size="10" text-anchor="middle">кресло 0,62 м</text></g>
+ <g><rect x="370" y="180" width="110" height="200" rx="26" fill="#2a2622" stroke="#c9a24a"/><ellipse cx="425" cy="358" rx="30" ry="18" fill="#3a332c"/><text x="425" y="290" fill="#c9a24a" font-size="12" text-anchor="middle">2-Й ПИЛОТ / ИНЖ.</text><text x="425" y="306" fill="#7d8792" font-size="10" text-anchor="middle">кресло 0,62 м</text></g>
+ <circle cx="152" cy="250" r="9" fill="#5fd8ff"/><text x="146" y="236" fill="#5fd8ff" font-size="9" text-anchor="end">РУС</text>
+ <circle cx="488" cy="250" r="9" fill="#5fd8ff"/><text x="494" y="236" fill="#5fd8ff" font-size="9">РУС</text>
+ <circle cx="215" cy="300" r="105" fill="none" stroke="#3fe07a" stroke-opacity=".45" stroke-dasharray="6 4"/>
+ <circle cx="425" cy="300" r="105" fill="none" stroke="#3fe07a" stroke-opacity=".45" stroke-dasharray="6 4"/>
+ <text x="88" y="410" fill="#3fe07a" font-size="10">зона досягаемости R 0,70 м от плеча (пристёгнут)</text>
+ <line x1="80" y1="400" x2="560" y2="400" stroke="#8a8f98" stroke-width="3"/>
+ <rect x="296" y="398" width="48" height="6" fill="#ffd05a"/><text x="320" y="420" fill="#ffd05a" font-size="10" text-anchor="middle">проход 0,48 м → салон</text>
+ <text x="320" y="450" fill="#7d8792" font-size="11" text-anchor="middle">САЛОН 12 КРЕСЕЛ (x +4,5…−1), шлюз сбоку</text>
+ <line x1="160" y1="172" x2="480" y2="172" stroke="#9aa0aa" stroke-width=".7"/>
+ <text x="600" y="190" fill="#9aa0aa" font-size="10" text-anchor="middle">x +6,0</text>
+ <text x="600" y="404" fill="#9aa0aa" font-size="10" text-anchor="middle">x +4,5</text>
+ <line x1="580" y1="168" x2="580" y2="400" stroke="#9aa0aa"/><text x="610" y="290" fill="#9aa0aa" font-size="10" text-anchor="middle">1,55 м</text>
+ <line x1="110" y1="440" x2="530" y2="440" stroke="#9aa0aa"/><text x="140" y="436" fill="#9aa0aa" font-size="10">ширина кабины 2,80 м</text>
+</svg>
+</div>
+<div class="card">
+<svg viewBox="0 0 640 470" font-family="inherit">
+ <text x="10" y="18" fill="#7d8792" font-size="12">ВИД СБОКУ (командир), 1 м = 150 px; нос слева</text>
+ <path d="M20 250 Q60 205 150 190 L620 150 L620 420 L150 420 Q60 410 20 300 Z" fill="#14171b" stroke="#8a8f98" stroke-width="2"/>
+ <path d="M24 255 Q60 215 150 200 L150 410 Q60 400 24 296 Z" fill="url(#hat)" stroke="#5fd8ff" stroke-dasharray="4 3"/>
+ <text x="70" y="440" fill="#5fd8ff" font-size="11">фотонная полоса датчиков</text>
+ <line x1="150" y1="392" x2="620" y2="392" stroke="#8a8f98"/>
+ <text x="560" y="408" fill="#7d8792" font-size="10">пол</text>
+ <path d="M152 214 L196 214 L214 330 L170 330 Z" fill="#23262c" stroke="#3fe07a"/>
+ <text x="214" y="208" fill="#3fe07a" font-size="10">центральный обзорный экран 0,9 × 0,5 м, наклон 15°</text>
+ <path d="M330 382 L470 382 L560 230 L540 220 L455 362 L340 362 Z" fill="#2a2622" stroke="#c9a24a"/>
+ <circle cx="520" cy="228" r="20" fill="#556" stroke="#c8ccd2"/>
+ <path d="M505 250 L450 350 L330 345 L250 330" fill="none" stroke="#c8ccd2" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+ <path d="M490 270 L420 300 L380 280" fill="none" stroke="#c8ccd2" stroke-width="9" stroke-linecap="round"/>
+ <circle cx="378" cy="279" r="8" fill="#5fd8ff"/><text x="372" y="268" fill="#5fd8ff" font-size="10" text-anchor="end">РУС на внешнем подлокотнике</text>
+ <line x1="518" y1="226" x2="180" y2="268" stroke="#ffd05a" stroke-dasharray="5 4"/>
+ <text x="300" y="232" fill="#ffd05a" font-size="10">линия взгляда, 1,0 м до экрана</text>
+ <path d="M340 400 L470 400" stroke="#3fe07a" stroke-width="2" marker-end="url(#ar)"/>
+ <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#3fe07a"/></marker></defs>
+ <text x="340" y="418" fill="#3fe07a" font-size="10">кресло отъезжает назад 0,6 м к проходу пустым, после посадки подъезжает</text>
+ <path d="M490 262 m-150 0 a150 150 0 0 1 60 -120" fill="none" stroke="#3fe07a" stroke-opacity=".5" stroke-dasharray="6 4"/>
+ <text x="340" y="150" fill="#3fe07a" font-size="10">досягаемость пальцем до экрана</text>
+ <line x1="600" y1="155" x2="600" y2="392" stroke="#8a8f98" stroke-width="3"/>
+ <text x="604" y="140" fill="#7d8792" font-size="10" text-anchor="end">переборка, салон →</text>
+ <line x1="580" y1="170" x2="580" y2="392" stroke="#9aa0aa"/><text x="575" y="186" fill="#9aa0aa" font-size="10" text-anchor="end">1,45 м</text>
+ <text x="430" y="200" fill="#c9a24a" font-size="10">спинка 40° от горизонта, ложемент по телу (5,5 g)</text>
+</svg>
+</div>
+</div>
+<table class="lay" style="margin-top:8px">
+<tr><td>Объём</td><td>Кабина x +6,0…+4,5 по спецификации (1,5 м вдоль); голени уходят под переднюю доску до x +6,6 (в отсек датчиков, в тени экрана). Ширина 2,8 м, высота над полом 1,45 м — стоять негде, поэтому вход — сразу посадкой в кресло.</td></tr>
+<tr><td>Вход</td><td>Из салона через центральный проход 0,48 м: пустое кресло стоит отодвинутым назад на 0,6 м, человек садится, ложемент подхватывает, кресло подъезжает к приборам.</td></tr>
+<tr><td>Ручки</td><td>По геометрии кресла: РУС на внешних подлокотниках — у командира под левой рукой, у второго пилота под правой; внутренняя рука свободна для касания экранов и клавиш центрального пульта. Рычага газа нет.</td></tr>
+<tr><td>Обзор</td><td>Три обзорных фотонных экрана (левый, центральный, правый) — картинка с полосы датчиков в носу; поле зрения 170° по горизонтали складывается из трёх. Под ними приборы (вид спереди — раздел 2).</td></tr>
+<tr><td>МФД</td><td>У внешних локтей — дисплеи на тумбах: МФД-Л у командира, МФД-П у второго; у каждого свой выбор режима (раздел 4).</td></tr>
+<tr><td>Отделка</td><td>Серый военный металл. Изумрудный — свет: включённая система горит, выключенная — тёмная клавиша без заливки.</td></tr>
+</table>
+
+<h2>2. Передняя доска — вид спереди (от кресел к носу), масштаб 1 м = 300 px</h2>
+<div class="card" style="max-width:1140px">
+<svg viewBox="0 0 960 560" font-family="inherit" id="front">
+ <defs>
+  <linearGradient id="mt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3f46"/><stop offset="1" stop-color="#25292e"/></linearGradient>
+  <radialGradient id="scr" cx=".5" cy=".45" r=".7"><stop offset="0" stop-color="#0a2a1c"/><stop offset="1" stop-color="#03110a"/></radialGradient>
+  <radialGradient id="pho" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#6cff9c"/><stop offset=".35" stop-color="#1c7a44"/><stop offset="1" stop-color="#041a0d"/></radialGradient>
+ </defs>
+ <text x="10" y="18" fill="#7d8792" font-size="12">сечение кабины по x +6,0: ширина 2,80 м, высота 1,45 м над полом; пол — y 500</text>
+ <!-- cabin section -->
+ <path d="M60 500 L60 120 L130 65 L830 65 L900 120 L900 500 Z" fill="url(#mt)" stroke="#8a8f98" stroke-width="2"/>
+ <!-- screens: centre 0.90x0.50 at 0.80..1.30 m; side 0.75x0.45 toed-in 25 deg (projection 0.68 m) -->
+ <rect x="345" y="110" width="270" height="150" rx="6" fill="url(#scr)" stroke="#3fe07a" stroke-width="2"/>
+ <path d="M130 122 L334 113 L334 257 L130 248 Z" fill="url(#scr)" stroke="#3fe07a" stroke-width="2"/>
+ <path d="M626 113 L830 122 L830 248 L626 257 Z" fill="url(#scr)" stroke="#3fe07a" stroke-width="2"/>
+ <text x="480" y="190" fill="#3fe07a" font-size="13" text-anchor="middle">ЦЕНТРАЛЬНЫЙ ОБЗОРНЫЙ 0,90 × 0,50 м</text>
+ <text x="232" y="190" fill="#3fe07a" font-size="12" text-anchor="middle">ЛЕВЫЙ 0,75 × 0,45 м</text>
+ <text x="728" y="190" fill="#3fe07a" font-size="12" text-anchor="middle">ПРАВЫЙ 0,75 × 0,45 м</text>
+ <text x="232" y="207" fill="#7d8792" font-size="10" text-anchor="middle">развёрнут к пилоту на 25°</text>
+ <text x="728" y="207" fill="#7d8792" font-size="10" text-anchor="middle">развёрнут к пилоту на 25°</text>
+ <!-- instrument row 0.55..0.78 m: commander -->
+ <g id="instL">
+  <circle cx="225" cy="302" r="30" fill="#03110a" stroke="#8a8f98" stroke-width="3"/>
+  <path d="M197 302 A28 28 0 0 1 253 302 Z" fill="#0b3a5a"/><path d="M197 302 A28 28 0 0 0 253 302 Z" fill="#3a2a12"/>
+  <line x1="205" y1="302" x2="245" y2="302" stroke="#ffd05a" stroke-width="2"/><line x1="225" y1="285" x2="225" y2="319" stroke="#5fd8ff"/><line x1="208" y1="298" x2="242" y2="298" stroke="#5fd8ff"/>
+  <text x="225" y="347" fill="#9aa0aa" font-size="9.5" text-anchor="middle">авиагоризонт + директор Ø0,20</text>
+  <rect x="140" y="275" width="40" height="55" rx="3" fill="#03110a" stroke="#8a8f98" stroke-width="2"/>
+  <text x="160" y="293" fill="#3fe07a" font-size="9" text-anchor="middle">H</text><text x="160" y="306" fill="#3fe07a" font-size="9" text-anchor="middle">Vy</text><text x="160" y="319" fill="#3fe07a" font-size="9" text-anchor="middle">q</text>
+  <text x="160" y="347" fill="#9aa0aa" font-size="9.5" text-anchor="middle">высота, Vy</text>
+  <g><rect x="270" y="275" width="70" height="55" rx="3" fill="#03110a" stroke="#8a8f98" stroke-width="2"/>
+   <rect x="278" y="290" width="10" height="34" fill="#06180f" stroke="#2f7a50"/><rect x="278" y="304" width="10" height="20" fill="#ffb040"/>
+   <rect x="300" y="290" width="10" height="34" fill="#06180f" stroke="#2f7a50"/><rect x="300" y="306" width="10" height="18" fill="#ffb040"/>
+   <rect x="322" y="290" width="10" height="34" fill="#06180f" stroke="#2f7a50"/><rect x="322" y="312" width="10" height="12" fill="#ffd05a"/>
+   <line x1="275" y1="294" x2="336" y2="294" stroke="#e04030"/><text x="305" y="286" fill="#3fe07a" font-size="8.5" text-anchor="middle">Т нос·кромка·грань</text></g>
+  <text x="305" y="347" fill="#9aa0aa" font-size="9.5" text-anchor="middle">температуры, К</text>
+ </g>
+ <!-- copilot -->
+ <g id="instR">
+  <circle cx="735" cy="302" r="30" fill="#03110a" stroke="#8a8f98" stroke-width="3"/>
+  <path d="M707 302 A28 28 0 0 1 763 302 Z" fill="#0b3a5a"/><path d="M707 302 A28 28 0 0 0 763 302 Z" fill="#3a2a12"/>
+  <line x1="715" y1="302" x2="755" y2="302" stroke="#ffd05a" stroke-width="2"/><line x1="735" y1="285" x2="735" y2="319" stroke="#5fd8ff"/><line x1="718" y1="298" x2="752" y2="298" stroke="#5fd8ff"/>
+  <text x="735" y="347" fill="#9aa0aa" font-size="9.5" text-anchor="middle">авиагоризонт + директор Ø0,20</text>
+  <rect x="780" y="275" width="40" height="55" rx="3" fill="#03110a" stroke="#8a8f98" stroke-width="2"/>
+  <text x="800" y="293" fill="#3fe07a" font-size="9" text-anchor="middle">H</text><text x="800" y="306" fill="#3fe07a" font-size="9" text-anchor="middle">Vy</text><text x="800" y="319" fill="#3fe07a" font-size="9" text-anchor="middle">n</text>
+  <text x="800" y="347" fill="#9aa0aa" font-size="9.5" text-anchor="middle">высота, Vy</text>
+  <g><rect x="620" y="275" width="70" height="55" rx="3" fill="#03110a" stroke="#8a8f98" stroke-width="2"/>
+   <g fill="#3fe07a"><circle cx="637" cy="294" r="6"/><circle cx="655" cy="294" r="6"/><circle cx="673" cy="294" r="6"/><circle cx="637" cy="314" r="6"/><circle cx="655" cy="314" r="6"/><circle cx="673" cy="314" r="6"/></g>
+   <text x="655" y="286" fill="#3fe07a" font-size="8.5" text-anchor="middle">поле чаш 2 × 3</text></g>
+  <text x="655" y="347" fill="#9aa0aa" font-size="9.5" text-anchor="middle">поле чаш, Тл</text>
+ </g>
+ <!-- photonic computer with its own luminophore screen -->
+ <rect x="400" y="268" width="160" height="78" rx="5" fill="#1d2025" stroke="#c9a24a" stroke-width="1.5"/>
+ <circle cx="440" cy="307" r="27" fill="url(#pho)" stroke="#8a8f98" stroke-width="2.5"/>
+ <path d="M418 312 Q430 290 440 305 T462 300" fill="none" stroke="#b8ffd0" stroke-width="1.2"/>
+ <text x="512" y="290" fill="#c9a24a" font-size="10" text-anchor="middle">ФОТОННЫЙ</text><text x="512" y="303" fill="#c9a24a" font-size="10" text-anchor="middle">ВЫЧИСЛИТЕЛЬ</text>
+ <text x="512" y="318" fill="#7d8792" font-size="8.5" text-anchor="middle">люминофорный</text><text x="512" y="329" fill="#7d8792" font-size="8.5" text-anchor="middle">экран Ø0,18</text>
+ <text x="480" y="360" fill="#9aa0aa" font-size="9.5" text-anchor="middle">аналоговый контур 2–3 петли, без кремния</text>
+ <!-- central console with system keys 0.36 m -->
+ <rect x="426" y="372" width="108" height="128" fill="#23262c" stroke="#ffd05a"/>
+ <g fill="#2b3036" stroke="#11151a">
+  <rect x="434" y="382" width="28" height="14" rx="2"/><rect x="466" y="382" width="28" height="14" rx="2"/><rect x="498" y="382" width="28" height="14" rx="2"/>
+  <rect x="434" y="402" width="28" height="14" rx="2"/><rect x="466" y="402" width="28" height="14" rx="2"/><rect x="498" y="402" width="28" height="14" rx="2"/>
+  <rect x="434" y="422" width="28" height="14" rx="2"/><rect x="466" y="422" width="28" height="14" rx="2"/><rect x="498" y="422" width="28" height="14" rx="2"/>
+  <rect x="434" y="442" width="28" height="14" rx="2"/><rect x="466" y="442" width="28" height="14" rx="2"/>
+ </g>
+ <g fill="#3fe07a"><rect x="434" y="382" width="28" height="14" rx="2"/><rect x="466" y="382" width="28" height="14" rx="2"/><rect x="498" y="382" width="28" height="14" rx="2"/><rect x="466" y="402" width="28" height="14" rx="2"/><rect x="498" y="402" width="28" height="14" rx="2"/><rect x="434" y="422" width="28" height="14" rx="2"/><rect x="466" y="422" width="28" height="14" rx="2"/><rect x="434" y="442" width="28" height="14" rx="2"/></g>
+ <text x="480" y="476" fill="#ffd05a" font-size="9.5" text-anchor="middle">клавиши контроля</text><text x="480" y="489" fill="#ffd05a" font-size="9.5" text-anchor="middle">систем, 0,36 м</text>
+ <!-- seats (dashed, behind) and side-sticks on outer armrests -->
+ <rect x="177" y="380" width="186" height="120" rx="22" fill="none" stroke="#c9a24a" stroke-dasharray="6 4"/>
+ <rect x="597" y="380" width="186" height="120" rx="22" fill="none" stroke="#c9a24a" stroke-dasharray="6 4"/>
+ <text x="270" y="470" fill="#c9a24a" font-size="11" text-anchor="middle">кресло командира 0,62 м</text>
+ <text x="690" y="470" fill="#c9a24a" font-size="11" text-anchor="middle">кресло 2-го пилота 0,62 м</text>
+ <rect x="150" y="395" width="26" height="60" rx="4" fill="#2a2622" stroke="#c9a24a"/><circle cx="163" cy="388" r="11" fill="#5fd8ff"/><text x="163" y="372" fill="#5fd8ff" font-size="10" text-anchor="middle">РУС</text>
+ <rect x="784" y="395" width="26" height="60" rx="4" fill="#2a2622" stroke="#c9a24a"/><circle cx="797" cy="388" r="11" fill="#5fd8ff"/><text x="797" y="372" fill="#5fd8ff" font-size="10" text-anchor="middle">РУС</text>
+ <!-- side MFDs on towers, faces turned 60 deg to the pilot: projected width 0.15 m -->
+ <path d="M66 285 L111 295 L111 415 L66 425 Z" fill="url(#scr)" stroke="#3fe07a" stroke-width="2"/>
+ <path d="M849 295 L894 285 L894 425 L849 415 Z" fill="url(#scr)" stroke="#3fe07a" stroke-width="2"/>
+ <text x="88" y="445" fill="#3fe07a" font-size="11" text-anchor="middle">МФД-Л</text><text x="871" y="445" fill="#3fe07a" font-size="11" text-anchor="middle">МФД-П</text>
+ <text x="88" y="459" fill="#7d8792" font-size="9" text-anchor="middle">0,30×0,45, к пилоту 60°</text><text x="871" y="459" fill="#7d8792" font-size="9" text-anchor="middle">0,30×0,45, к пилоту 60°</text>
+ <!-- dims -->
+ <line x1="60" y1="530" x2="900" y2="530" stroke="#9aa0aa"/><line x1="60" y1="522" x2="60" y2="538" stroke="#9aa0aa"/><line x1="900" y1="522" x2="900" y2="538" stroke="#9aa0aa"/>
+ <text x="480" y="548" fill="#9aa0aa" font-size="11" text-anchor="middle">2,80 м</text>
+ <line x1="925" y1="65" x2="925" y2="500" stroke="#9aa0aa"/><text x="940" y="285" fill="#9aa0aa" font-size="11" text-anchor="middle" transform="rotate(-90 940 285)">1,45 м</text>
+ <line x1="345" y1="98" x2="615" y2="98" stroke="#9aa0aa" stroke-width=".7"/><text x="480" y="94" fill="#9aa0aa" font-size="10" text-anchor="middle">0,90 м</text>
+ <line x1="30" y1="260" x2="56" y2="260" stroke="#9aa0aa" stroke-width=".7"/><text x="28" y="257" fill="#9aa0aa" font-size="9" text-anchor="end">0,80</text>
+ <line x1="30" y1="110" x2="56" y2="110" stroke="#9aa0aa" stroke-width=".7"/><text x="28" y="107" fill="#9aa0aa" font-size="9" text-anchor="end">1,30</text>
+</svg>
+<div class="note">Сверху — три обзорных экрана (сенсорные); под ними приборы, а не кнопки: перед каждым пилотом авиагоризонт с директором, высота/Vy; у командира — температуры носа, кромки крыла и кромок граней (модель раздела 4, СПУСК); у второго — поле подъёмных чаш 2 × 3. В центре — фотонный вычислитель со своим люминофорным экраном (зелёный люминофор, фазовые кривые контуров), под ним центральный пульт клавиш контроля. МФД на тумбах у внешних локтей, развёрнуты к лицу пилота. РУС — на внешних подлокотниках.</div>
+</div>
+
+<h2>3. Центральный пульт — клавиши контроля (нажимаются курсором)</h2>
+<div class="bez">
+<div class="note">Только главные системы; состояние видно сразу. Клавиша не вводит параметры — она включает/выключает и показывает «в работе». Двигателей ориентации в спецификации Н2 нет (8 моторов: 2 маршевых + 6 чаш) — клавиши для них нет.</div>
+<div class="keys" id="ckeys"></div>
+</div>
+
+<h2>4. МФД командира и второго пилота — режимы независимы (экран сенсорный)</h2>
+<div class="note">Наведите курсор на число — подсказка с формулой и источником. <span class="und">Жёлтое «не опр.»</span> — в спецификации нет данных, число не выдумывается. Траектории на экранах — демонстрационный проигрыш; числа на них считаются по моделям из подсказок.</div>
+<div class="row">
+<div class="card"><div class="mt">МФД-Л — КОМАНДИР</div><div class="keys" id="keysL"></div><canvas class="mfd" id="mfdL" width="1100" height="700"></canvas><div class="note" id="noteL" style="margin-top:6px"></div></div>
+<div class="card"><div class="mt">МФД-П — 2-Й ПИЛОТ</div><div class="keys" id="keysR"></div><canvas class="mfd" id="mfdR" width="1100" height="700"></canvas><div class="note" id="noteR" style="margin-top:6px"></div></div>
+</div>
+
+<h2>5. Выведенные числа и источники</h2>
+<div class="tw"><table id="dtab"><tr><th>Число на экране</th><th>Значение</th><th>Формула</th><th>Источник</th></tr></table></div>
+</div>
+<div id="tt"></div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+// ================= physics: constants from the specification and the shared Tantra model =================
+// 2026-10-09: массы, β, габариты — Т1Б-Ф (lander_gran_final.json ttx; lander_mesh.json final.lengths/ballistic_beta)
+const SP={m0:90.74,dry:55.61,ar:25.12,mEntry:71.91,betaL:513,betaB:213,RN:0.62,RW:0.17,LW:55,RF:0.04,LF:74,eps:0.85,LD40:1.12,
+ nB:5.5,Fcup:200e3,vCup:15e3,mdotCup:13.3,Fmar:450e3,vMarEff:40e3,dv:9.3,hOrb:200,B:12.1,open:16.7,openL:20.0,span:15.8,len:20.015,hgt:3.208};
+// висение: ṁ = m·g/v на массе входа; t = v/g·ln(m/(m−6,3 т)) — Земля / Марс / Луна
+const MDOT_HOV=SP.mEntry*1000*9.80665/SP.vCup, T_HOV=[9.80665,3.711,1.62].map(gg=>SP.vCup/gg*Math.log(SP.mEntry/(SP.mEntry-6.3)));
+const TW_CUP=6*SP.Fcup/(SP.mEntry*1000*9.80665), TW_FAIL=4*SP.Fcup/(SP.mEntry*1000*9.80665), TW_CUP0=6*SP.Fcup/(SP.m0*1000*9.80665), TW_FAIL0=4*SP.Fcup/(SP.m0*1000*9.80665);
+const MU=3.986e14,RE=6.371e6,G0=9.81,VC=Math.sqrt(G0*RE),HS=7200,RHO0=1.225,KSG=1.7415e-4,SIG=5.670e-8;
+const ETA_N=0.9,CHI=1e-3;                       // tantra_plant_model.js: magnetic nozzle 0.9; canon chi 0.1 % (novel, footnote 11)
+const T_SAFE=800,EPS_T=0.9;                     // tantra_thermal_screen.html: the stern safe to 800 K; radiators eps 0.9
+const Q_ALLOW=EPS_T*SIG*T_SAFE**4-1361;         // W/m2 the hull sheds at T_SAFE, minus the Sun
+const DOSE_LIM=20e-3/1700/3600;                 // Sv/s: NRB-99/2009 personnel group A 20 mSv/yr over 1700 h
+const SV_PER_JM2=2.8e-3;                        // 1 MeV photons, ICRP-74: ~4.5 pSv*cm2 per photon
+const Tw=q=>Math.pow(Math.max(0,q)/(SP.eps*SIG)+250**4,0.25);
+const qSG=(rho,V,R)=>KSG*Math.sqrt(rho/R)*V*V*V;
+const cosk=d=>Math.pow(Math.cos(d*Math.PI/180),1.2);
+// vertical L/D fitted so the equilibrium glide passes the spec design point (V 7 km/s, rho 8.3e-5)
+const LDV=2*SP.betaL*G0*(1-49e6/VC/VC)/(49e6*8.3e-5), BANK=Math.acos(LDV/SP.LD40)*180/Math.PI;
+const rhoLift=V=>2*SP.betaL*G0*Math.max(1e-4,1-V*V/VC/VC)/(V*V*LDV);
+// ballistic: Allen-Eggers; sin(gamma) fitted to the spec's 0.39 MW/m2 on the belly (R_eff 6 m)
+const VE=7800,VPK=VE*Math.exp(-1/6),SING=3*HS*6*Math.pow(0.39e6/(KSG*VPK**3),2)/SP.betaB;
+const rhoBall=V=>Math.max(1e-9,-Math.log(V/VE)*2*SP.betaB*SING/HS);
+const hOf=rho=>HS*Math.log(RHO0/rho)/1000;
+const Q2400=SP.eps*SIG*2400**4;
+const rhoHeat=V=>SP.RN*Math.pow(Q2400/(KSG*V*V*V),2);
+const rhoG=V=>SP.nB*2*SP.betaL*G0/(V*V*Math.hypot(1,SP.LD40));
+// jets near the Tantra
+const PjCup=SP.Fcup*SP.vCup/2, PfCup=PjCup/(ETA_N*(1-CHI));
+const PjMar=v=>SP.Fmar*v/2, PfMar=v=>PjMar(v)/(ETA_N*(1-CHI));
+const rJet=(P,th)=>Math.sqrt(P/(Math.PI*Q_ALLOW*Math.tan(th*Math.PI/180)**2));
+const rDose=Pr=>Math.sqrt(Pr*SV_PER_JM2/(4*Math.PI*DOSE_LIM));
+const rChiHeat=Pr=>Math.sqrt(Pr/(4*Math.PI*Q_ALLOW));
+const D={cup10:rJet(6*PjCup,10),cup20:rJet(6*PjCup,20),mar10:rJet(2*PjMar(60e3),10),mar20:rJet(2*PjMar(60e3),20),
+ doseCup:rDose(6*CHI*PfCup),doseMar:rDose(2*CHI*PfMar(60e3)),chiCup:rChiHeat(6*CHI*PfCup),chiMar:rChiHeat(2*CHI*PfMar(60e3))};
+// capture
+const LAT=(SP.open-SP.span)/2, LATR=(SP.open-Math.hypot(SP.span,SP.hgt))/2, LMARG=(SP.openL-SP.len)/2;
+const VPUSH=Math.sqrt(2*0.5*G0*3);              // DESIGN_LOCAL.md p.4 proposal: < 0.5 g over a 3 m stroke
+// ascent
+const VC200=Math.sqrt(MU/(RE+SP.hOrb*1e3)), ARG_USED=SP.m0*(1-Math.exp(-SP.dv/(SP.vMarEff/1000)));
+const MDOT_MAR=2*SP.Fmar/SP.vMarEff, T_ASC=ARG_USED*1000/MDOT_MAR;
+const fmt=(v,d=0)=>isFinite(v)?v.toLocaleString("ru-RU",{minimumFractionDigits:d,maximumFractionDigits:d}):"—";
+
+// formulas + sources (tooltips and the table)
+const TIPS={
+ Tn:"T нос = (q/εσ)^¼, q = k·√(ρ/R)·V³ (Саттон–Грейвс, k 1,7415·10⁻⁴)\nR 0,62 м (нос, R_экв), ε 0,85 — спецификация thermal_ru.\nПроверка: V 7 км/с, ρ 8,3·10⁻⁵ → 0,69 МВт/м², 1945 К (как в спец.).",
+ Te:"T кромки крыла: q = k·√(ρ/0,17)·V³·cos^1,2(55°), T = (q/εσ)^¼\nR 0,17 м, Λ 55° — спецификация. В точке спец. 1935 К.",
+ Tf:"T кромок граней: q = k·√(ρ/0,04)·V³·cos^1,2(74°)\nR 4 см, Λ 74° — спецификация. В точке спец. ≈1860 К.",
+ Tb:"Днище в планирующем входе: в спецификации только «ниже 1500 K»; модели плоской пластины нет — не определено.",
+ Tball:"Днище при баллистическом входе: q = k·√(ρ/6)·V³ (R_эфф 6 м — спец.), T = (q/εσ)^¼. Пик 0,39 МВт/м² ≈ 1685 К (спец.).",
+ corr:"Нижняя граница коридора — большее из двух:\n• нагрев носа 2400 К: ρ = R·(εσT⁴/(k V³))², h = H·ln(ρ₀/ρ)\n• перегрузка 5,5 g: ρ = 2β·n·g/(V²·√(1+(L/D)²)), β 513, L/D 1,12 (α 40°)\nАтмосфера экспоненциальная ρ₀ 1,225, H 7,2 км (допущение).",
+ nom:"Номинал: равновесное планирование ρ = 2βg(1−V²/V₁²)/(V²·(L/D)·cos γ_кр)\nβ 513 (спец.); (L/D)·cos γ_кр = 0,53 подобрано так, чтобы кривая шла через расчётную точку спецификации (7 км/с, ρ 8,3·10⁻⁵) → крен ≈ 61°.",
+ ball:"Баллистический: Аллен–Эггерс V = V_вх·exp(−ρH/(2β sin θ)), β 213 (меш: 71 910/(2,009·168), lander_mesh.json final.ballistic_beta).\nsin θ подобран по пику 0,39 МВт/м² из спец.: θ ≈ 2,0°; тогда пиковая перегрузка 5,6 g — сходится со спец. 5,5 g.",
+ n:"n = ρV²/(2βg)·√(1+(L/D)²) (планирование) или ρV²/(2βg) (баллистика); β из спец.",
+ bank:"Крен ≈ arccos(0,53/1,12) — из подбора к расчётной точке спецификации (см. «номинал»).",
+ range:"Дальность до полосы: модели наведения нет — не определено. Боковая ±1700 км — спецификация (hypersonic_ru).",
+ apo:"Апоцентр/перицентр из состояния (r, V_гор, V_верт): ε = V²/2 − μ/r, h = r·V_гор,\ne = √(1+2εh²/μ²), a = −μ/2ε, r_а,п = a(1±e). μ 3,986·10¹⁴, R 6371 км, без вращения Земли.\nПрофиль подъёма — демонстрационный, конец — круговая 200 км (V 7,78 км/с).",
+ dv:"Δv 9,3 км/с до орбиты 200 км — спецификация (propulsion_ru); на экране Δv растёт по профилю демонстрации.",
+ arg:"Аргон: m_расх = m₀(1 − e^(−Δv/v_эфф)), m₀ 90,74 т, v_эфф 40 км/с (ttx) → 18,82 т на 9,3 км/с, остаток 6,30 т (ttx: 25,12 т всего).\nПо траектории (lander_ascent.json, струя 15 км/с у грунта) расход больше — здесь не учтено.",
+ tw:"Т/В = 2·450 кН·тяга/(m·g), m = 90,74 т − израсходованный аргон; на старте 1,01 (ttx.tw_mains_start).",
+ tasc:"Время работы маршевых: 18,82 т / (2·450 кН / 40 км/с = 22,5 кг/с) ≈ 837 с; проигрыш ускорен.",
+ vj:"Скорость струи: чаши 15 км/с; маршевые 40 км/с в пустоте (расчёт; диапазон 30–60 км/с — propulsion_ru). У грунта 15 км/с, линейно по давлению — допущение lander_ascent (ascent.py).",
+ cupD:"Безопасная дистанция для струи чаш: R = √(P/(π·q_доп·tg²θ)), P = 6·F·v/2 = 6·1,5 ГВт (спец.).\nq_доп = εσT⁴ − 1361 = 19,5 кВт/м²: T 800 К — «корма безопасно до 800 К» (tantra_thermal_screen.html), ε 0,9 (tantra_plant_model.js).\nРасходимость θ в спецификации не задана — показано для 10° и 20°.",
+ marD:"Маршевые: P = 2·450 кН·60 км/с/2 = 27 ГВт (верх диапазона спец.), та же формула и q_доп; θ не задана — 10°/20°.",
+ dose:"Излучение реакции χ = 0,1 % (канон, роман, сноска 11 — tantra_plant_model.js VARIANTS): P_изл = χ·P_синт, P_синт = P_струи/(0,9·(1−χ)).\nПредел дозы НРБ-99/2009, персонал гр. А: 20 мЗв/год на 1700 ч = 11,8 мкЗв/ч; 1 МэВ: 2,8·10⁻³ Зв на 1 Дж/м² (МКРЗ-74).\nR = √(P_изл·k/(4π·Ḋ)). Без экранирования корпусом «Тантры» — экран не определён, поэтому это верхняя оценка.\nНагрев обшивки тем же излучением: R = √(P_изл/(4π q_доп)) — единицы метров, не ограничивает.",
+ lat:"Боковой допуск: (проём 16,7 − размах сложенный 15,8)/2 = 0,45 м при нулевом крене;\nпри любом крене (диагональ сечения √(15,8²+3,208²) = 16,12 м): (16,7 − 16,12)/2 = 0,29 м.\nПроём 16,7 × 20 м — lander_variants.html; размах 15,8, высота 3,208 м — меш (lander_mesh.json final.lengths.stowed).",
+ lon:"Продольный: проём 20,0 м, лэндер 20,015 м (меш; в переходе 20,31) — зазор (20,0 − 20,015)/2 = −0,0075 м: НЕ ПРОХОДИТ.\nВарианты (проём 20,215 м или укорочение на 0,115–0,215 м) — решение пользователя, lander_status.html п. 5 «Длина и проём ангара».",
+ vcap:"Скорость, которую гасит толкатель: v = √(2·a·s), a ≤ 0,5 g, ход 3 м → 5,4 м/с.\nИсточник: DESIGN_LOCAL.md, предложение 4 (ждёт решения пользователя). Ложемент: геометрия не задана — допуск посадки на ложемент не определён.",
+ ang:"Крен — любой при боке ≤ 0,29 м (диагональ сечения 16,12 м меньше проёма 16,7). Тангаж/рыскание — по длине зазор отрицательный (−0,0075 м): не проходит, не опр. до решения пользователя.",
+ cupT:"F = 2P/v: P 1,5 ГВт на чашу (спец.), v 15 км/с → 200 кН; аварийно v 11,5 км/с → 261 кН (+30 %).",
+ cupFail:"При отказе гасится противолежащая, 4 × 200 кН: Т/В = 800 кН/(71,91 т·g) = 1,13 на массе входа; на старте 800/(90,74·g) = 0,90 (final.tw).\nБез отказа: 1,2 МН/(71,91 т·g) = 1,70; на старте 1,35.",
+ emT:"Длительность аварийного режима 11,5 км/с в спецификации Н2 не задана — не определено; счётчик показывает время в режиме.",
+ mdot:"Расход: маршевые ṁ = F/v (40 км/с в пустоте), чаши на полной тяге 13,3 кг/с каждая (200 кН/15 км/с), аварийно ṁ = 261 кН/11,5 км/с = 22,7 кг/с.\nВисение: ṁ = m·g/v = 71,91 т·g/15 км/с = 47 кг/с; время на 6,3 т: Земля 140 с, Марс 371 с, Луна 849 с (t = v/g·ln(71,91/65,61)).",
+ chiP:"Мощность излучения реакции: χ·P_синт, χ 0,1 % (канон), P_синт = F·v/(2·0,9·(1−χ)).",
+ coil:"Температура катушек: в спецификации Н2 нет — не определено.",
+ Bf:"Поле 12,1 Тл — спецификация; 16 Тл кратко — при отказе маршевого (emergencies), грозит срывом поля (risks)."
+};
+const TAB=[
+ ["Безопасная дистанция, подъёмные чаши",fmt(D.cup10/1000,1)+" км (θ 10°) / "+fmt(D.cup20/1000,1)+" км (θ 20°)","R = √(P/(π q_доп tg²θ)), P = 9 ГВт","спец. (1,5 ГВт/чаша); q_доп 19,5 кВт/м² — T 800 К, tantra_thermal_screen; θ — не определено"],
+ ["Безопасная дистанция, маршевые",fmt(D.mar10/1000,1)+" км (θ 10°) / "+fmt(D.mar20/1000,1)+" км (θ 20°)","то же, P = 27 ГВт (60 км/с)","спец.; θ — не определено"],
+ ["Дистанция по дозе χ 0,1 %, чаши / маршевые",fmt(D.doseCup/1000,0)+" / "+fmt(D.doseMar/1000,0)+" км без экрана","R = √(χP_синт·k/(4πḊ))","χ — канон (tantra_plant_model.js); НРБ-99/2009 20 мЗв/год; экран корпуса «Тантры» — не определено"],
+ ["Нагрев обшивки излучением χ",fmt(D.chiCup,1)+" / "+fmt(D.chiMar,1)+" м","R = √(χP_синт/(4π q_доп))","не ограничивает"],
+ ["Боковой допуск захвата",fmt(LAT,2)+" м (крен 0) / "+fmt(LATR,2)+" м (любой крен)","(16,7 − 15,8)/2; (16,7 − 16,12)/2","проём 16,7 × 20 — lander_variants.html; размах 15,8, высота 3,208 — меш final.lengths"],
+ ["Продольный допуск, тангаж, рыскание",fmt(LMARG,4)+" м — НЕ ПРОХОДИТ","(20,0 − 20,015)/2","меш 20,015 м (в переходе 20,31); решение пользователя — lander_status.html п. 5 (проём 20,215 или укорочение)"],
+ ["Скорость, которую гасит толкатель","≤ "+fmt(VPUSH,1)+" м/с","√(2·0,5g·3 м)","DESIGN_LOCAL.md п. 4 (предложение); ложемент — не определено"],
+ ["T носа на пике (точка спец.)",fmt(Tw(qSG(8.3e-5,7000,SP.RN)),0)+" К","Саттон–Грейвс, R 0,62, ε 0,85","спец. thermal_ru"],
+ ["Нижняя граница коридора h(V)","кривая","нагрев 2400 К и 5,5 g","спец.: β 513, L/D 1,12, предел боридов 2400 К; атмосфера H 7,2 км — допущение"],
+ ["Крен номинала",fmt(BANK,0)+"°","arccos(0,53/1,12)","подбор к точке спец."],
+ ["Угол баллистического входа",fmt(Math.asin(SING)*180/Math.PI,1)+"°","по пику 0,39 МВт/м², Аллен–Эггерс","спец.; даёт 5,6 g (спец. 5,5 g)"],
+ ["Орбита",SP.hOrb+" км, V "+fmt(VC200/1000,2)+" км/с","√(μ/r)","спец."],
+ ["Аргон на выход",fmt(ARG_USED,2)+" т, остаток "+fmt(SP.ar-ARG_USED,2)+" т","m₀(1−e^(−Δv/v))","ttx: m₀ 90,74, аргон 25,12; Δv 9,3, 40 км/с в пустоте; по траектории больше (lander_ascent)"],
+ ["Время работы маршевых",fmt(T_ASC,0)+" с","m/ṁ, ṁ 22,5 кг/с","спец."],
+ ["Тяга чаши аварийно",fmt(SP.Fcup*15/11.5/1000,0)+" кН","F = 2P/v, v 11,5 км/с","P 1,5 ГВт — спец.; длительность — не определено"],
+ ["Т/В чаш",fmt(TW_CUP,2)+" (вход 71,91 т) / "+fmt(TW_CUP0,2)+" (старт)","6·200 кН/(m·g)","final.tw"],
+ ["Т/В при отказе чаши",fmt(TW_FAIL,2)+" (вход) / "+fmt(TW_FAIL0,2)+" (старт)","4·200 кН/(m·g)","final.tw; требование 1,15 не выполнено"],
+ ["Расход и время висения",fmt(MDOT_HOV,0)+" кг/с; "+T_HOV.map(x=>fmt(x,0)).join(" / ")+" с","ṁ = m·g/v; t = v/g·ln(m/(m−6,3))","Земля / Марс / Луна; m 71,91 т, v 15 км/с, 6,3 т аргона"],
+ ["Массы",fmt(SP.m0,2)+" / "+fmt(SP.dry,2)+" / "+fmt(SP.mEntry,2)+" т","взлётная / сухая / вход","lander_gran_final.json ttx"],
+ ["Скорость струи маршевых","40 км/с в пустоте","—","расчёт (propulsion_ru: 30–60); у грунта 15 км/с — допущение lander_ascent"],
+ ["β планирующий","513 — не опр. для Т1Б-Ф","—","Н2; по мешу 427 на массе сравнения, на 71,91 т не пересчитан"],
+ ["Не определено","—","—","дальность до полосы; T днища в планировании; температура катушек; длительность аварийного режима; расходимость струи θ; экран «Тантры»; ложемент; двигатели ориентации (в спец. нет)"]
+];
+(function(){const t=$("dtab");TAB.forEach(r=>{const tr=document.createElement("tr");r.forEach(c=>{const td=document.createElement("td");td.textContent=c;tr.appendChild(td);});t.appendChild(tr);});})();
+
+// ================= shared state =================
+const S={t:0,auto:2,ball:false,blow:false,emerg:false,emT:0,cupFail:-1,cups:[1,1,1,1,1,1],doors:0,man:false,
+ sys:{"ПОЛЕ 12,1 Тл":true,"МАРШ-1":true,"МАРШ-2":true,"РАМЫ ЧАШ":false,"АРГОН":true,"КРИО":true,"ЭЛЕВОНЫ":true,"КИЛИ 60°":true,"ШАССИ":false,"ДАТЧИКИ":true,"ТОЛКАТЕЛЬ":false},
+ argon:25.12,thr:1};
+const ck=$("ckeys");
+for(const k in S.sys){const b=document.createElement("span");b.className="k"+(S.sys[k]?" on":"");b.textContent=k;b.onclick=()=>{S.sys[k]=!S.sys[k];b.classList.toggle("on",S.sys[k]);};ck.appendChild(b);}
+function syncKeys(){[...ck.children].forEach(b=>b.classList.toggle("on",!!S.sys[b.textContent]));}
+const MODES=["СПУСК","ПОДЪЁМ","СТЫКОВКА / АНГАР","ДВИГАТЕЛИ","ПРИБОРЫ"];
+const NOTES=["Коридор входа h–V: нижняя граница — нагрев носа 2400 К и перегрузка 5,5 g (выведены), номинал — равновесное планирование через расчётную точку спецификации; α и крен; температуры по Саттону–Грейвсу; β; боковая ±1700 км. «БАЛЛИСТ. ДНИЩЕМ» и «ВДУВ В НОС» — аварийные режимы.",
+"Выход на орбиту 200 км: профиль (демо), апоцентр/перицентр из состояния, Δv 9,3 км/с, аргон по Циолковскому, Т/В, скорость струи, отсечка.",
+"Возврат в ангар «Тантры» через верхний проём 16,7 × 20 м: относительная скорость и положение, коридор, допуски захвата (выведены из геометрии), безопасные дистанции струй и дозы.",
+"Две маршевые (тяга, поле, УВТ ±15°), два ряда подъёмных чаш (створки, тяга каждой; касание чаши — имитация отказа: гасится противолежащая), аварийный режим чаш 11,5 км/с, расход аргона, мощность излучения χ.",
+"Авиагоризонт с директором, высота и вертикальная скорость (демо), режимы автомата; аналоговый ручной резерв (фотонно-аналоговый контур, без цифрового звена)."];
+
+// ================= MFD units =================
+const C={bg:"#03110a",fr:"#14402a",em:"#3fe07a",em2:"#4ef08a",dim:"#2f7a50",cy:"#5fd8ff",am:"#ffd05a",or:"#ffb040",rd:"#e04030",wh:"#e6fff0",un:"#ffd05a"};
+const FONT='"GOST 2.304 type A","GOST type A",Segoe UI,system-ui';
+const W=1100,H=700;
+let g,HIT,TIPL,CUR;
+function mkMFD(id,keysId,noteId,name,mode){
+ const cv=$(id),u={cv,ctx:cv.getContext("2d"),hit:[],tips:[],mode,name,keys:$(keysId),note:$(noteId)};
+ MODES.forEach((m,i)=>{const b=document.createElement("span");b.className="k";b.textContent=m;b.onclick=()=>setMode(u,i);u.keys.appendChild(b);});
+ const pos=e=>{const r=cv.getBoundingClientRect();return [(e.clientX-r.left)*W/r.width,(e.clientY-r.top)*H/r.height];};
+ cv.addEventListener("click",e=>{const [x,y]=pos(e);for(const h of u.hit)if(x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h){h.act();break;}});
+ const tt=$("tt");
+ cv.addEventListener("mousemove",e=>{const [x,y]=pos(e);let f=null;for(const h of u.tips)if(x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h){f=h;break;}
+  if(f){tt.textContent=f.s;tt.style.display="block";tt.style.left=Math.min(innerWidth-430,e.clientX+14)+"px";tt.style.top=(e.clientY+14)+"px";}else tt.style.display="none";});
+ cv.addEventListener("mouseleave",()=>{tt.style.display="none";});
+ setMode(u,mode);return u;}
+function setMode(u,i){u.mode=i;[...u.keys.children].forEach((b,j)=>b.classList.toggle("on",i===j));u.note.textContent=NOTES[i];}
+function T(s,x,y,c=C.em,sz=15,al="left",w="500"){g.fillStyle=c;g.font=`${w} ${sz}px ${FONT}`;g.textAlign=al;g.fillText(s,x,y);}
+// text with a tooltip region
+function TT(s,x,y,c,sz,al,w,tip){T(s,x,y,c,sz,al,w);g.font=`${w||"500"} ${sz||15}px ${FONT}`;const tw=g.measureText(s).width,x0=al==="center"?x-tw/2:al==="right"?x-tw:x;
+ TIPL.push({x:x0-2,y:y-(sz||15),w:tw+4,h:(sz||15)+6,s:tip});g.strokeStyle="rgba(95,216,255,.35)";g.setLineDash([2,3]);g.lineWidth=1;g.beginPath();g.moveTo(x0,y+3);g.lineTo(x0+tw,y+3);g.stroke();g.setLineDash([]);}
+function tipR(x,y,w,h,s){TIPL.push({x,y,w,h,s});}
+function frame(x,y,w,h,t){g.strokeStyle=C.fr;g.lineWidth=1.5;g.strokeRect(x,y,w,h);if(t){g.font=`700 12px ${FONT}`;const tw=g.measureText(t).width;g.fillStyle=C.bg;g.fillRect(x+8,y-8,tw+12,16);T(t,x+14,y+5,C.dim,12,"left","700");}}
+function btn(s,x,y,w,h,on,act,col=C.em){g.fillStyle=on?"rgba(63,224,122,.28)":"#06180f";g.fillRect(x,y,w,h);if(on){g.shadowColor=col;g.shadowBlur=12;}g.strokeStyle=on?col:C.dim;g.lineWidth=on?2:1;g.strokeRect(x,y,w,h);g.shadowBlur=0;T(s,x+w/2,y+h/2+5,on?C.wh:col,13,"center","600");HIT.push({x,y,w,h,act});}
+function lamp(s,x,y,w,h,col){g.strokeStyle=col;g.lineWidth=1.5;g.strokeRect(x,y,w,h);g.fillStyle="rgba(224,64,48,.10)";g.fillRect(x,y,w,h);T(s,x+10,y+h/2+5,col,13,"left","600");}
+function bar(x,y,w,h,v,max,col,lbl,val,warn,tip){g.fillStyle="#06180f";g.fillRect(x,y,w,h);const f=Math.max(0,Math.min(1,v/max));const gr=g.createLinearGradient(x,y+h,x,y);gr.addColorStop(0,col+"55");gr.addColorStop(1,col);g.fillStyle=gr;g.fillRect(x,y+h*(1-f),w,h*f);if(warn!=null){const wy=y+h*(1-warn/max);g.strokeStyle=C.rd;g.beginPath();g.moveTo(x-3,wy);g.lineTo(x+w+3,wy);g.stroke();}g.strokeStyle=C.fr;g.strokeRect(x,y,w,h);T(lbl,x+w/2,y+h+16,C.dim,11,"center");T(val,x+w/2,y-6,col,13,"center","600");if(tip)tipR(x-6,y-22,w+12,h+42,tip);}
+function undef(x,y,w,h,lbl,tip){g.strokeStyle=C.un;g.setLineDash([3,3]);g.strokeRect(x,y,w,h);g.setLineDash([]);T("не опр.",x+w/2,y+h/2+4,C.un,11,"center","600");T(lbl,x+w/2,y+h+16,C.dim,11,"center");if(tip)tipR(x-6,y-6,w+12,h+28,tip);}
+function glowLine(pts,col,w=2){g.strokeStyle=col;g.lineWidth=w;g.shadowColor=col;g.shadowBlur=8;g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.stroke();g.shadowBlur=0;}
+function header(u){g.fillStyle=C.bg;g.fillRect(0,0,W,H);
+ const rg=g.createRadialGradient(W/2,H/2,50,W/2,H/2,700);rg.addColorStop(0,"#06241a");rg.addColorStop(1,"#020a06");g.fillStyle=rg;g.fillRect(0,0,W,H);
+ T("«ГРАНЬ-Н2»  "+u.name+"  ·  "+MODES[u.mode],20,28,C.em,17,"left","700");
+ T("АВТОМАТ: "+["ВИСЕНИЕ","ПЕРЕХОД","ПОЛЁТ","ВХОД","ПОСАДКА"][S.auto],W-20,28,C.cy,15,"right","600");
+ g.strokeStyle=C.fr;g.beginPath();g.moveTo(14,40);g.lineTo(W-14,40);g.stroke();
+ MODES.forEach((m,i)=>btn(m,20+i*214,H-46,200,34,u.mode===i,()=>setMode(u,i)));}
+
+// ---------- 1 СПУСК
+function scrDescent(){
+ const ph=(S.t%220)/220, V=7800-7500*ph;            // demo playback: V from 7.8 to 0.3 km/s
+ const rho=S.ball?rhoBall(V):rhoLift(V), h=Math.min(125,hOf(rho));
+ const X=40,Y=60,Wc=560,Hc=400; frame(X,Y,Wc,Hc,"КОРИДОР ВХОДА  h–V");
+ const px=v=>X+40+(v/8)*(Wc-60), py=hh=>Y+Hc-30-(Math.max(0,Math.min(130,hh))/130)*(Hc-50);
+ g.strokeStyle="#0c2a1b";g.lineWidth=1;for(let v=0;v<=8;v++){g.beginPath();g.moveTo(px(v),Y+10);g.lineTo(px(v),Y+Hc-30);g.stroke();T(v+"",px(v),Y+Hc-12,C.dim,11,"center");}
+ for(let hh=0;hh<=120;hh+=20){g.beginPath();g.moveTo(X+40,py(hh));g.lineTo(X+Wc-20,py(hh));g.stroke();T(hh+"",X+34,py(hh)+4,C.dim,11,"right");}
+ T("V, км/с",X+Wc-24,Y+Hc-12,C.dim,11,"right");T("h, км",X+8,Y+22,C.dim,11);
+ const heat=[],gl=[],low=[],nom=[],bal=[];
+ for(let v=0.3;v<=7.85;v+=0.05){const vm=v*1000,hH=hOf(rhoHeat(vm)),hG=hOf(rhoG(vm));heat.push([px(v),py(hH)]);gl.push([px(v),py(hG)]);low.push([px(v),py(Math.max(hH,hG))]);
+  nom.push([px(v),py(Math.min(125,hOf(rhoLift(vm))))]);bal.push([px(v),py(Math.min(125,hOf(rhoBall(vm))))]);}
+ g.fillStyle="rgba(224,64,48,.10)";g.beginPath();g.moveTo(px(0.3),py(0));low.forEach(p=>g.lineTo(p[0],p[1]));g.lineTo(px(7.85),py(0));g.fill();
+ glowLine(heat,C.rd,2);glowLine(gl,C.or,1.5);
+ TT("нос 2400 К",px(6.6),py(hOf(rhoHeat(6600)))+18,C.rd,12,"left","500",TIPS.corr);
+ TT("5,5 g",px(1.2),py(hOf(rhoG(1200)))-8,C.or,12,"left","500",TIPS.corr);
+ g.setLineDash([5,4]);glowLine(bal,S.ball?C.am:"#6b5a20",1.2);g.setLineDash([]);
+ glowLine(nom,S.ball?C.dim:C.em2,1.5);
+ TT("номинал α 40°, крен "+fmt(BANK,0)+"°",px(4.3),py(hOf(rhoLift(4300)))-10,C.em,12,"left","500",TIPS.nom);
+ TT("баллист. θ "+fmt(Math.asin(SING)*180/Math.PI,1)+"°",px(5.2),py(hOf(rhoBall(5200)))-10,C.am,12,"left","500",TIPS.ball);
+ const tr=[];for(let q=0;q<=ph;q+=0.005){const vv=7800-7500*q;tr.push([px(vv/1000),py(Math.min(125,hOf(S.ball?rhoBall(vv):rhoLift(vv))))]);}
+ if(tr.length>1)glowLine(tr,C.cy,2.5);
+ g.fillStyle=C.wh;g.beginPath();g.arc(px(V/1000),py(h),6,0,7);g.fill();
+ const aoa=S.ball?90:40, bank=S.ball?0:BANK;
+ frame(620,60,220,170,"α  И  КРЕН");
+ const cx=730,cy=160;g.strokeStyle=C.dim;g.beginPath();g.arc(cx,cy,60,Math.PI,2*Math.PI);g.stroke();
+ g.save();g.translate(cx,cy);g.rotate(bank*Math.PI/180);glowLine([[-55,0],[-15,0],[0,-12],[15,0],[55,0]],C.cy,3);g.restore();
+ T("α "+fmt(aoa,0)+"°",640,215,C.am,16,"left","600");TT("γ "+fmt(bank,0)+"°",830,215,C.cy,16,"right","600",TIPS.bank);
+ const qn=qSG(rho,V,SP.RN), qe=qSG(rho,V,SP.RW)*cosk(SP.LW), qf=qSG(rho,V,SP.RF)*cosk(SP.LF), qb=qSG(rho,V,6);
+ frame(860,60,220,170,"ТЕМПЕРАТУРЫ, К");
+ if(!S.ball){const Tn=Tw(qn),Te=Tw(qe),Tf=Tw(qf);
+  bar(872,90,34,110,Tn,2600,Tn>2400?C.rd:C.or,"нос",fmt(Tn),2400,TIPS.Tn);
+  bar(924,90,34,110,Te,2600,C.or,"кромка",fmt(Te),2400,TIPS.Te);
+  bar(976,90,34,110,Tf,2600,C.or,"грани",fmt(Tf),2400,TIPS.Tf);
+  undef(1028,90,40,110,"днище",TIPS.Tb);}
+ else{const Tb=Tw(qb);
+  undef(872,90,34,110,"нос",S.blow?"Нос в тени потока при α 90°; при уходе носом вперёд — вдув (спец.: без вдува ~3200 К, с вдувом ≤ 2400 К). Модели нет — не определено.":"Нос в тени потока при α 90° — модели нет, не определено.");
+  bar(940,90,40,110,Tb,2600,C.am,"днище",fmt(Tb),2400,TIPS.Tball);}
+ frame(620,250,460,110,"β, ТОЧКА ПОСАДКИ");
+ T("β "+(S.ball?SP.betaB:SP.betaL)+" кг/м² (спец.)",640,282,C.em,16,"left","600");
+ TT("до полосы: не опр.",640,308,C.un,15,"left","500",TIPS.range);
+ TT("боковая ±1700 км (спец.)",640,334,C.cy,15,"left","500",TIPS.range);
+ g.strokeStyle=C.dim;g.beginPath();g.ellipse(980,305,80,30,0,0,7);g.stroke();T("след ±1700 км",980,346,C.dim,11,"center");
+ frame(620,380,460,180,"АВАРИЙНЫЕ");
+ btn("БАЛЛИСТ. ДНИЩЕМ  α 90°",640,400,210,40,S.ball,()=>{S.ball=!S.ball;},C.rd);
+ btn("ВДУВ АРГОНА В НОС",870,400,190,40,S.blow,()=>{S.blow=!S.blow;},C.rd);
+ T(S.ball?"днищем: β 213, пик 5,5 g грудь–спина, днище ≤1685 К, элевоны 25°":"штатно: планирующий вход, L/D 1,12 при α 40° (спец.)",640,465,S.ball?C.or:C.em,13);
+ T(S.blow?"вдув: резерв 0,5 т ≈ 100 с (спец.), нос ≤ 2400 К":"вдув закрыт; резерв 0,5 т аргона держится до конца спуска",640,490,S.blow?C.am:C.dim,13);
+ const n=rho*V*V/(2*(S.ball?SP.betaB:SP.betaL)*G0)*(S.ball?1:Math.hypot(1,SP.LD40));
+ T("q "+fmt(0.5*rho*V*V/1000,1)+" кПа   V "+fmt(V/1000,2)+" км/с   h "+fmt(h,1)+" км",640,535,C.wh,14,"left","600");
+ TT("n "+fmt(n,1)+" g",1000,535,n>5.5?C.rd:C.wh,14,"left","600",TIPS.n);
+}
+
+// ---------- 2 ПОДЪЁМ
+function scrAscent(){
+ const ph=(S.t%180)/180, hkm=SP.hOrb*(1-Math.pow(1-ph,2.2));
+ const vr=SP.hOrb*1e3*2.2*Math.pow(1-ph,1.2)/T_ASC, vh=VC200*Math.pow(ph,1.6), r=RE+hkm*1e3;
+ const en=(vh*vh+vr*vr)/2-MU/r, hm=r*vh, e=Math.sqrt(Math.max(0,1+2*en*hm*hm/(MU*MU))), a=-MU/(2*en);
+ const apo=(a*(1+e)-RE)/1000, peri=(a*(1-e)-RE)/1000;
+ const dv=SP.dv*ph, used=SP.m0*(1-Math.exp(-dv/(SP.vMarEff/1000))), arg=SP.ar-used;
+ frame(40,60,560,400,"ТРАЕКТОРИЯ ВЫХОДА (демо-профиль)");
+ g.save();g.beginPath();g.rect(42,62,556,396);g.clip();
+ const cx=320,cy=1340,R=900,A0=Math.PI*1.5;g.strokeStyle=C.dim;g.lineWidth=2;g.beginPath();g.arc(cx,cy,R,A0-0.32,A0+0.32);g.stroke();
+ g.strokeStyle="#1d5a3a";g.setLineDash([4,4]);g.beginPath();g.arc(cx,cy,R+250,A0-0.3,A0+0.3);g.stroke();g.setLineDash([]);T("орбита 200 км (спец.)",450,176,C.dim,11);
+ const pt=q=>{const hh=SP.hOrb*(1-Math.pow(1-q,2.2)),an=A0-0.26+q*0.5,rr=R+250*hh/SP.hOrb;return [cx+rr*Math.cos(an),cy+rr*Math.sin(an)];};
+ const tr=[];for(let q=0;q<=1.0001;q+=0.01)tr.push(pt(q));
+ g.setLineDash([6,5]);glowLine(tr,C.dim,1);g.setLineDash([]);
+ glowLine(tr.slice(0,Math.max(2,Math.floor(ph*100)+1)),C.cy,3);
+ const p=pt(ph);g.fillStyle=C.wh;g.beginPath();g.arc(p[0],p[1],6,0,7);g.fill();
+ T("старт с грунта: висение на чашах → маршевые",60,430,C.dim,12);
+ g.restore();
+ T("h "+fmt(hkm,1)+" км   V гор "+fmt(vh/1000,2)+"   V верт "+fmt(vr/1000,2)+" км/с",60,90,C.em,15,"left","600");
+ TT("t "+fmt(ph*T_ASC,0)+" / "+fmt(T_ASC,0)+" с (ускорено)",60,114,C.dim,13,"left","500",TIPS.tasc);
+ frame(620,60,460,150,"ОРБИТА");
+ TT("апоцентр  "+fmt(apo,0)+" км",640,98,C.em,17,"left","600",TIPS.apo);
+ TT("перицентр "+fmt(peri,0)+" км",640,128,peri<0?C.am:C.em,17,"left","600",TIPS.apo);
+ T("цель 200 × 200 км, отсечка по Δv и апоцентру",640,160,C.dim,13);
+ const cut=ph>0.995;TT(cut?"ОТСЕЧКА":"до отсечки Δv "+fmt(SP.dv-dv,2)+" км/с",640,192,cut?C.am:C.cy,16,"left","700",TIPS.dv);
+ frame(620,230,460,200,"Δv, АРГОН, Т/В, СТРУЯ");
+ bar(650,262,46,130,dv,SP.dv,C.cy,"Δv км/с",fmt(dv,2),null,TIPS.dv);
+ bar(730,262,46,130,arg,SP.ar,C.em,"аргон т",fmt(arg,1),6.3,TIPS.arg);
+ const tw=(2*SP.Fmar*S.thr)/((SP.m0-used)*1000*G0);bar(810,262,46,130,tw,2,C.am,"Т/В",fmt(tw,2),null,TIPS.tw);
+ undef(890,262,46,130,"струя",TIPS.vj);
+ T("чаши 15 км/с",960,290,C.dim,12);T("марш. 30–60",960,308,C.dim,12);T("в пустоте (спец.)",960,326,C.dim,12);T("профиль по h —",960,350,C.un,12);T("не определён",960,368,C.un,12);
+ frame(620,450,460,110,"ТЯГА МАРШЕВЫХ (касание шкалы)");
+ btn("−",640,480,50,40,false,()=>{S.thr=Math.max(0.2,Math.round((S.thr-0.1)*10)/10);});
+ btn("+",700,480,50,40,false,()=>{S.thr=Math.min(1,Math.round((S.thr+0.1)*10)/10);});
+ TT("2 × "+fmt(SP.Fmar/1000*S.thr,0)+" кН   ṁ "+fmt(MDOT_MAR*S.thr,1)+" кг/с",770,505,C.em,14,"left","500",TIPS.mdot);
+}
+
+// ---------- 3 СТЫКОВКА
+function scrDock(){
+ const ph=(S.t%120)/120, rng=Math.max(0,300*(1-ph)), lat=2.4*Math.sin(S.t*0.2)*(1-ph)+0.15*Math.sin(S.t), vrel=0.2+2.8*(1-ph);
+ frame(40,60,560,420,"КОРИДОР ПОДХОДА К ВЕРХНЕМУ ПРОЁМУ (вид сбоку, демо)");
+ g.fillStyle="#0c2a1b";g.fillRect(60,420,520,40);g.fillStyle=C.bg;g.fillRect(250,420,140,40);
+ TT("проём 16,7 × 20 м",320,452,C.am,13,"center","600",TIPS.lat);T("«Тантра»",80,445,C.dim,12);
+ g.fillStyle="rgba(63,224,122,.10)";g.beginPath();g.moveTo(255,420);g.lineTo(150,90);g.lineTo(490,90);g.lineTo(385,420);g.fill();
+ g.strokeStyle=C.em;g.setLineDash([6,4]);g.beginPath();g.moveTo(255,420);g.lineTo(150,90);g.moveTo(385,420);g.lineTo(490,90);g.stroke();g.setLineDash([]);
+ g.strokeStyle=C.cy;g.lineWidth=2;g.strokeRect(275,370,90,48);
+ T("захват толкателем",372,383,C.cy,12);TT("бок ±"+fmt(LATR,2)+"…"+fmt(LAT,2)+" м",372,399,C.cy,12,"left","500",TIPS.lat);TT("V ≤ "+fmt(VPUSH,1)+" м/с",372,415,C.cy,12,"left","500",TIPS.vcap);
+ const ly=90+330*ph, lx=320+lat*25;g.save();g.translate(lx,ly);g.fillStyle=C.wh;g.beginPath();g.moveTo(-32,0);g.lineTo(32,0);g.lineTo(24,-8);g.lineTo(-24,-8);g.fill();g.restore();
+ T("дальность "+fmt(rng,1)+" м",60,90,C.em,15,"left","600");
+ frame(620,60,460,200,"ОТНОСИТЕЛЬНО «ТАНТРЫ»");
+ const ok=ph>0.85&&Math.abs(lat)<=LATR&&vrel<=VPUSH&&LMARG>=0;
+ TT("V отн.  "+fmt(vrel,2)+" м/с  (≤ "+fmt(VPUSH,1)+")",640,98,vrel>VPUSH?C.am:C.em,17,"left","600",TIPS.vcap);
+ TT("бок     "+fmt(lat,2)+" м  (±"+fmt(LATR,2)+")",640,128,Math.abs(lat)>LATR?C.am:C.em,17,"left","600",TIPS.lat);
+ TT("крен любой · тангаж/рыск: не опр.",640,158,C.un,15,"left","500",TIPS.ang);
+ TT("по длине: зазор "+fmt(LMARG,4)+" м — НЕ ПРОХОДИТ",640,186,C.rd,14,"left","600",TIPS.lon);
+ T(ok?"В ЗОНЕ ЗАХВАТА (по боку и скорости)":"захват не готов",640,230,ok?C.cy:C.dim,18,"left","700");
+ frame(620,280,460,150,"БЕЗОПАСНЫЕ ДИСТАНЦИИ ДО «ТАНТРЫ»");
+ lamp("ЧАШИ (струя 9 ГВт): ≥ "+fmt(D.cup10/1000,1)+" км (θ 10°) / "+fmt(D.cup20/1000,1)+" (θ 20°)",640,298,420,30,C.rd);tipR(640,298,420,30,TIPS.cupD);
+ lamp("МАРШЕВЫЕ (27 ГВт): ≥ "+fmt(D.mar10/1000,1)+" км (θ 10°) / "+fmt(D.mar20/1000,1)+" (θ 20°)",640,334,420,30,C.rd);tipR(640,334,420,30,TIPS.marD);
+ TT("θ струи — не опр.; доза χ 0,1 %: "+fmt(D.doseCup/1000,0)+" / "+fmt(D.doseMar/1000,0)+" км без экрана",640,385,C.un,13,"left","500",TIPS.dose);
+ TT("малый ход у корабля: двигателей ориентации в спец. нет — не опр.",640,410,C.un,12,"left","500","В спецификации Н2: 8 моторов (2 маршевых + 6 чаш), двигателей ориентации нет. Чем лэндер подходит последние километры — не определено.");
+ frame(620,450,460,110,"ТОЛКАТЕЛЬ");
+ btn(S.sys["ТОЛКАТЕЛЬ"]?"ЗАХВАТ ВКЛЮЧЁН":"ЗАПРОСИТЬ ЗАХВАТ",640,475,240,40,S.sys["ТОЛКАТЕЛЬ"],()=>{S.sys["ТОЛКАТЕЛЬ"]=!S.sys["ТОЛКАТЕЛЬ"];syncKeys();},C.cy);
+ T("старт — тем же узлом вверх",900,490,C.dim,12);
+ T("кили сложить на 90° до входа",900,510,C.or,12);
+}
+
+// ---------- 4 ДВИГАТЕЛИ
+function scrEng(){
+ frame(40,60,520,240,"МАРШЕВЫЕ 2 × 450 кН");
+ for(let i=0;i<2;i++){const x=70+i*250,thr=S.thr,F=thr*SP.Fmar/1000;
+  bar(x,95,36,150,F,600,C.em,"тяга кН",fmt(F),null,"2 × 450 кН — спецификация; доля — касание шкалы на экране ПОДЪЁМ.");
+  bar(x+60,95,36,150,SP.B,16,C.cy,"поле Тл",fmt(SP.B,1),12.1,TIPS.Bf);
+  undef(x+120,95,36,150,"катушки",TIPS.coil);
+  const ux=15*Math.sin(S.t*0.4+i),uy=15*Math.cos(S.t*0.3+i)*0.6;const cx=x+200,cy=170;
+  g.strokeStyle=C.dim;g.strokeRect(cx-25,cy-25,50,50);g.beginPath();g.moveTo(cx-25,cy);g.lineTo(cx+25,cy);g.moveTo(cx,cy-25);g.lineTo(cx,cy+25);g.stroke();
+  g.fillStyle=C.cy;g.beginPath();g.arc(cx+ux/15*22,cy+uy/15*22,5,0,7);g.fill();T("УВТ ±15°",cx,cy+42,C.dim,11,"center");T(fmt(ux,0)+"/"+fmt(uy,0)+"°",cx,cy-32,C.cy,11,"center");
+  T("М-"+(i+1),x,288,C.em,13,"left","700");}
+ const Fc=S.emerg?SP.Fcup*15/11.5:SP.Fcup;
+ frame(580,60,500,240,"ПОДЪЁМНЫЕ ЧАШИ 6 × 200 кН (касание — отказ)");
+ btn(S.doors?"СТВОРКИ ОТКРЫТЫ":"СТВОРКИ ЗАКРЫТЫ",600,80,220,32,S.doors,()=>{S.doors=S.doors?0:1;S.sys["РАМЫ ЧАШ"]=!!S.doors;syncKeys();});
+ btn("СБРОС ОТКАЗОВ",840,80,220,32,false,()=>{S.cups=[1,1,1,1,1,1];S.cupFail=-1;});
+ for(let r=0;r<2;r++)for(let c=0;c<3;c++){const i=r*3+c,x=660+c*130,y=150+r*80,st=S.cups[i];
+  const col=!S.doors?C.dim:st===1?C.em:st===0?C.rd:C.am;g.strokeStyle=col;g.lineWidth=2;g.beginPath();g.arc(x,y,26,0,7);g.stroke();
+  if(S.doors&&st===1){g.fillStyle="rgba(63,224,122,.35)";g.shadowColor=C.em;g.shadowBlur=14;g.beginPath();g.arc(x,y,20,0,7);g.fill();g.shadowBlur=0;}
+  T(!S.doors?"убр.":st===1?fmt(Fc/1000,0):st===0?"ОТКАЗ":"ГАШ.",x,y+5,col,12,"center","600");
+  HIT.push({x:x-28,y:y-28,w:56,h:56,act:()=>{if(!S.doors||S.cupFail>=0)return;S.cups[i]=0;S.cups[5-i]=2;S.cupFail=i;}});
+  tipR(x-28,y-28,56,56,TIPS.cupT);}
+ TT(S.cupFail>=0?"гасится противолежащая, 4 × 200 кН, Т/В "+fmt(TW_FAIL,2)+" (вход), "+fmt(TW_FAIL0,2)+" (старт)":"Т/В "+fmt(TW_CUP,2)+" на массе входа, "+fmt(TW_CUP0,2)+" на старте",600,286,S.cupFail>=0?C.am:C.dim,13,"left","500",TIPS.cupFail);
+ frame(40,320,520,240,"АВАРИЙНЫЙ РЕЖИМ ЧАШ 11,5 км/с");
+ btn(S.emerg?"АВАРИЙНЫЙ — ВКЛ":"АВАРИЙНЫЙ РЕЖИМ",60,345,230,40,S.emerg,()=>{S.emerg=!S.emerg;S.emT=0;},C.rd);
+ TT("струя 11,5 км/с → "+fmt(SP.Fcup*15/11.5/1000,0)+" кН (+30 %)",310,370,C.or,13,"left","500",TIPS.cupT);
+ g.strokeStyle=C.fr;g.strokeRect(60,405,480,26);g.fillStyle=C.am;g.fillRect(60,405,Math.min(480,S.emT*4),26);
+ TT(S.emerg?"в режиме "+fmt(S.emT,0)+" с · предел — не опр.":"длительность режима — не опр.",60,460,S.emerg?C.am:C.un,15,"left","600",TIPS.emT);
+ const nCup=S.doors?S.cups.filter(v=>v===1).length:0;
+ const mdot=MDOT_MAR*S.thr+nCup*(S.emerg?SP.Fcup*15/11.5/11.5e3:SP.mdotCup);
+ TT("расход аргона "+fmt(mdot,1)+" кг/с    запас "+fmt(S.argon,2)+" т",60,495,C.em,15,"left","500",TIPS.mdot);
+ const Prad=CHI*(2*S.thr*PfMar(SP.vMarEff)+nCup*(S.emerg?PfCup:PfCup));
+ TT("излучение реакции χ 0,1 %: "+fmt(Prad/1e6,1)+" МВт",60,525,C.em,14,"left","500",TIPS.chiP);
+ frame(580,320,500,240,"ОРИЕНТАЦИЯ И ПИТАНИЕ");
+ T("крен и рыскание — дросселированием чаш,",600,360,C.em,13);T("тангаж — качанием передней рамы ±8° (спец.)",600,380,C.em,13);
+ T("на марше — УВТ ±15° и элевоны (спец.)",600,400,C.em,13);
+ TT("двигатели ориентации: в спец. нет — не опр.",600,435,C.un,13,"left","500","В спецификации Н2 8 моторов: 2 маршевых + 6 чаш; отдельных двигателей ориентации нет.");
+ T("1,5 ГВт на чашу · криокулеры 2/2 · ионные заряды 2 т",600,530,C.dim,13);
+}
+
+// ---------- 5 ПРИБОРЫ
+function scrInstr(){
+ const pitch=6*Math.sin(S.t*0.17),bank=14*Math.sin(S.t*0.11),alt=1200+400*Math.sin(S.t*0.03),vs=12*Math.cos(S.t*0.03),fdP=3,fdB=0;
+ const cx=330,cy=300,R=210;
+ g.save();g.beginPath();g.arc(cx,cy,R,0,7);g.clip();g.translate(cx,cy);g.rotate(-bank*Math.PI/180);const off=pitch*7;
+ g.fillStyle="#0b3a5a";g.fillRect(-400,-600+off,800,600);g.fillStyle="#3a2a12";g.fillRect(-400,off,800,600);
+ g.strokeStyle=C.wh;g.lineWidth=2;g.beginPath();g.moveTo(-400,off);g.lineTo(400,off);g.stroke();
+ for(let p=-30;p<=30;p+=5){if(!p)continue;const y=off-p*7,w=p%10?30:60;g.lineWidth=1;g.beginPath();g.moveTo(-w,y);g.lineTo(w,y);g.stroke();if(!(p%10)){T(p+"",w+18,y+5,C.wh,12,"center");}}
+ g.restore();
+ g.strokeStyle=C.fr;g.lineWidth=3;g.beginPath();g.arc(cx,cy,R,0,7);g.stroke();
+ glowLine([[cx-90,cy-(fdP-pitch)*7],[cx+90,cy-(fdP-pitch)*7]],C.cy,2);glowLine([[cx+(fdB-bank)*3,cy-90],[cx+(fdB-bank)*3,cy+90]],C.cy,2);
+ glowLine([[cx-120,cy],[cx-40,cy],[cx-25,cy+15],[cx,cy],[cx+25,cy+15],[cx+40,cy],[cx+120,cy]],C.am,4);
+ T("крен "+fmt(bank,0)+"°  тангаж "+fmt(pitch,1)+"°  (демо)",cx,cy+R+28,C.em,15,"center","600");
+ frame(600,60,140,480,"ВЫСОТА м");
+ g.save();g.beginPath();g.rect(602,62,136,476);g.clip();for(let a=Math.floor((alt-600)/100)*100;a<alt+600;a+=100){const y=300-(a-alt)*0.38;g.strokeStyle=C.dim;g.beginPath();g.moveTo(602,y);g.lineTo(620,y);g.stroke();T(fmt(a),630,y+5,C.em,13);}g.restore();
+ g.fillStyle="#000";g.fillRect(615,285,120,30);g.strokeStyle=C.em;g.strokeRect(615,285,120,30);T(fmt(alt,0),675,306,C.wh,18,"center","700");
+ frame(760,60,80,480,"Vy м/с");
+ const vy=300-vs*10;g.strokeStyle=C.dim;g.beginPath();g.moveTo(800,80);g.lineTo(800,520);g.stroke();glowLine([[780,300],[820,vy]],vs>0?C.em:C.am,3);T(fmt(vs,1),800,525,C.wh,14,"center","600");
+ frame(860,60,220,300,"РЕЖИМ АВТОМАТА");
+ ["ВИСЕНИЕ","ПЕРЕХОД","ПОЛЁТ","ВХОД","ПОСАДКА"].forEach((m,i)=>btn(m,880,80+i*52,180,40,S.auto===i,()=>{S.auto=i;},C.cy));
+ frame(860,380,220,180,"РУЧНОЙ РЕЗЕРВ");
+ btn(S.man?"АНАЛОГ. КОНТУР ВКЛ":"АНАЛОГ. КОНТУР",880,400,180,40,S.man,()=>{S.man=!S.man;},C.am);
+ T("фотонно-аналоговый,",880,465,C.dim,12);T("2–3 петли, без цифры;",880,483,C.dim,12);T("РУС → элевоны/УВТ",880,501,C.dim,12);T("напрямую",880,519,C.dim,12);
+}
+
+const SCR=[scrDescent,scrAscent,scrDock,scrEng,scrInstr];
+const U=[mkMFD("mfdL","keysL","noteL","МФД-Л КОМАНДИР",0),mkMFD("mfdR","keysR","noteR","МФД-П 2-Й ПИЛОТ",3)];
+let last=performance.now();
+function render(u){g=u.ctx;u.hit=[];u.tips=[];HIT=u.hit;TIPL=u.tips;CUR=u;header(u);SCR[u.mode]();}
+function loop(now){const dt=Math.min(0.1,(now-last)/1000);last=now;S.t+=dt;if(S.emerg)S.emT+=dt;
+ S.argon=Math.max(0,S.argon-dt*0.0005*(S.emerg?8:1));
+ U.forEach(render);requestAnimationFrame(loop);}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

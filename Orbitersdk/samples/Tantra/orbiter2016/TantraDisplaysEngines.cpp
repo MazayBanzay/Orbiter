@@ -27,6 +27,7 @@ void TantraDisplays::FillEngineView(es::View& v) const {
     v.mass = o.mass; v.massMode = t->plant_.MassMode(); v.plantRun = t->plant_.Running();
     // the plant's limiter keeps argon in the air (as Tantra::UpdatePlant tells the plant it is in the air)
     v.argonLock = t->plant_.Limiter() && t->GetAtmDensity() > 1e-5 && t->GetAltitude(ALTMODE_GROUND) < sp::kMarchArgonAlt;
+    v.sternPlan = t->sternPlan_;
     const bool anaMain = t->AnaIsMain();
     v.mSet = !anaMain ? t->GetThrusterGroupLevel(THGROUP_MAIN) : 0.0;
     v.mAct = t->march_ ? t->GetThrusterLevel(t->march_) : 0.0;
@@ -126,6 +127,7 @@ void TantraDisplays::EngineCommand(int cmd) {
         case es::kCmdIgnition: t->ActIgnitionTo(t->ignition_.Stage() == tantra::IgnStage::Off && t->ignition_.Target() == tantra::IgnStage::Off ? 3 : 0); break;
         case es::kCmdTrap: t->ActNextTrap(); break;
         case es::kCmdPhase1: case es::kCmdPhase2: case es::kCmdPhase3: t->ActIgnitionTo(cmd - es::kCmdPhase1 + 1); break;
+        case es::kCmdSternPlan: t->ActToggleSternPlan(); break;
         default: break;
     }
 }

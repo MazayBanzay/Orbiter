@@ -14,6 +14,7 @@ public:
         double wingIn = 0.0;      // inner wing panels: 0 deployed .. 1 folded up (kWingFoldDeg); the 30 deg mode in between
         double wingOut = 0.0;     // outer wing panels: 0 in line .. 1 folded back under the inner panel
         double podSwivel = 0.0;   // pods 0..1 (0 = cups aft, 1 = 180 deg)
+        double podCant = 0.0;     // hover lean of the pairs apart 0..1 (kPodHoverCantDeg)
         double podStow = 1.0;     // pods 1 = in the bays, covers shut .. 0 = out on the arms
         double elevon[2] = {tantra::mesh::kElevonUpDeg / (tantra::mesh::kElevonUpDeg + tantra::mesh::kElevonDownDeg),
                             tantra::mesh::kElevonUpDeg / (tantra::mesh::kElevonUpDeg + tantra::mesh::kElevonDownDeg)};

@@ -58,10 +58,12 @@ int RunErect(double sCG) {
     {
         const CarriagePose& p = c.Pose();
         check(p.tripod && p.nTouch == 6, "lying on blades + kangaroo (6 contacts)");
-        check(std::fabs(p.hipS - g.trackS0) < 1e-6, "trunnions parked at the track start while lying");
-        const double want = (sCG - g.trackS0) / (g.kangHipS + g.kangFootFwd - g.trackS0);
+        const double park = c.HipPark(sCG);
+        check(std::fabs(p.hipS - park) < 1e-6, "trunnions parked where the kangaroo takes kTripodShare (or at the track start) while lying");
+        const double want = (sCG - park) / (g.kangHipS + g.kangFootFwd - park);
+        std::printf("lying: park s %.1f, tripod top %.1f m\n", park, c.TripodTopH(sCG));
         std::printf("lying: kangaroo share %.3f (lever arms %.3f), blade hip->ankle %.1f m, knee %.2f ext %.2f\n", p.kangShare, want, p.mastLen, p.kangKnee, p.kangExt);
-        check(std::fabs(p.kangShare - want) < 1e-6, "kangaroo share = (sCG - sTrack) / (sFoot - sTrack)");
+        check(std::fabs(p.kangShare - want) < 1e-6, "kangaroo share = (sCG - sPark) / (sFoot - sPark)");
         check(p.kangExt >= 0.0 && p.kangExt <= 1.0 && p.kangKnee > 0.5 && p.kangKnee < 1.0, "kangaroo IK within the shin range, knee bent aft");
     }
     check(c.CommandErect(true, true), "erect command accepted");
@@ -77,6 +79,7 @@ int RunErect(double sCG) {
             t += dt;
             const CarriagePose& p = c.Pose();
             maxExt = std::fmax(maxExt, p.kangExt);
+            if (p.tripod && p.kangShare > 0.07 + 1e-9) { std::printf("t=%.1f P=%.3f kangaroo share %.3f\n", t, c.Progress(), p.kangShare); check(false, "kangaroo <= 7 %"); break; }
             maxMast = std::fmax(maxMast, p.mastLen);
             // "up" of the touchdown triangle must point away from the ground: world up in ship frame.
             const Vec3 up = {0, std::cos(p.theta), std::sin(p.theta)};
@@ -126,8 +129,9 @@ int RunErect(double sCG) {
 
 int main() {
     int fails = 0;
-    // T9 states (mass_t9): loaded 58.1, landing 58.6 / 64.7, empty 64.1; the track covers 53.4..71.6
-    for (double sCG : {58.1, 60.0, 64.7, 67.8}) fails += RunErect(sCG);
+    // T9 states (mass budget 2026-10-09): empty 67.3, on a planet with iron and argon 68.3, the Earth limit 70.0;
+    // older ones 58.1 .. 64.7; the track covers 53.4..71.6
+    for (double sCG : {58.1, 60.0, 64.7, 67.3, 68.3, 70.0}) fails += RunErect(sCG);
     {   // airborne stow half way through the erection: finishes to the nearer end, then stows
         Carriage a;
         a.SetGeometry(Geometry());

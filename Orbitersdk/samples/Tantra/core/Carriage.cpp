@@ -49,7 +49,26 @@ bool Carriage::CommandTo(double p, bool landed) {
 double Carriage::AxisHeightAt(double p) const {   // as BuildPose, phase 0-1
     const CarriageGeometry& g = geo_;
     const double hStand = std::min(sCG_ + (port_ ? 7.0 : g.standClear), g.legMax + g.footH - 0.2);
-    return Lerp(g.restAxisH, hStand, Ease((Clamp01(p) - 0.1) / 0.9));
+    return Lerp(g.restAxisH, std::min(hStand, TripodTopH(sCG_)), Ease((Clamp01(p) - 0.1) / 0.9));
+}
+// (2026-10-09) The trunnions lying and lifting on the tripod: where the kangaroo carries (sCG - park) / (foot - park)
+// = kTripodShare of the weight (~3 m behind the CG), inside the track.
+double Carriage::HipPark(double sCG) const {
+    const CarriageGeometry& g = geo_;
+    const double footS = g.kangHipS + g.kangFootFwd;
+    const double s = sCG - g.cgError + cgTrim_;                                       // the CG the ship knows
+    const double park = (s - kTripodShare * footS) / (1.0 - kTripodShare);
+    return std::min(g.trackS1, std::max(g.trackS0, park));
+}
+// The highest hull axis of the tripod: the kangaroo foot planted ahead of its hip by kangFootFwd plus the trunnions'
+// run forward to the CG (the hull slides back over the planted feet), its shin fully out (KangarooIK), 0.5 m spare.
+double Carriage::TripodTopH(double sCG) const {
+    const CarriageGeometry& g = geo_;
+    const double hipCG = std::min(g.trackS1, std::max(g.trackS0, sCG - g.cgError + cgTrim_));
+    const double e = std::min(g.kangKneeE, g.kangThigh * 0.9), shin = g.kangShinMax + 0.5;
+    const double reach = std::sqrt(g.kangThigh * g.kangThigh - e * e) + std::sqrt(shin * shin - e * e) - 0.5;
+    const double fwd = g.kangFootFwd + (hipCG - HipPark(sCG));
+    return g.kangFootH + std::sqrt(std::max(1.0, reach * reach - fwd * fwd)) - g.kangHipY;
 }
 double Carriage::LiftProgressFor(double axisH) const {
     if (axisH <= AxisHeightAt(0.1)) return 0.0;
@@ -139,13 +158,16 @@ void Carriage::BuildPose(double sCG) {
     const bool levelSet = p_ <= 0.0;
     // trunnions under the CG for the turn: under the computed CG (off by cgError), then where the drives find it
     const double hipCG = std::min(g.trackS1, std::max(g.trackS0, sCG - g.cgError + cgTrim_));
+    const double hipPark = HipPark(sCG);                                              // lying and on the tripod
+    const double hTri = std::min(hStand, TripodTopH(sCG));                            // the tripod's top
     const double restLen = g.restAxisH - g.footH;                                     // blade hip -> ankle, lying
 
     // --- erection: heights and pitch ---
     // the crests and the fin: folded on the ground and around a carriage move (Update, tuck_); in the air as the crew
     // set them - the fin is the stabiliser of the nose-first climb
     o.tuck = Ease(tuck_);
-    o.trunnionH = Lerp(g.restAxisH, hStand, Ease((ph(0) - 0.1) / 0.9));
+    o.trunnionH = Lerp(g.restAxisH, hTri, Ease((ph(0) - 0.1) / 0.9));
+    if (p_ >= 1.0) o.trunnionH = Lerp(hTri, hStand, Ease((ph(1) - 0.5) / 0.5));   // the rest on the blades, the kangaroo folding
     if (standingSet) o.trunnionH = hStand;
     o.theta = 0.5 * kPi * Ease(ph(2));
     if (standingSet) o.theta = 0.5 * kPi;
@@ -158,7 +180,7 @@ void Carriage::BuildPose(double sCG) {
         o.slideOut = Ease(t / 0.2);
         const double sw = Ease((t - 0.2) / 0.35);
         o.mastPitch = 0.5 * kPi * (1.0 - sw);
-        o.hipS = Lerp(g.stowS, g.trackS0, sw);
+        o.hipS = Lerp(g.stowS, hipPark, sw);
         o.footFold = 1.0 - Ease((t - 0.5) / 0.3);
     };
     // --- kangaroo: deploy (t 0..1): door, then the leg to its lying pose ---
@@ -199,7 +221,7 @@ void Carriage::BuildPose(double sCG) {
         o.slideOut = 1.0;
         o.footFold = 0.0;
         // trunnions: parked while lifting, then forward under the CG (1-2), then to the stow station (5-6)
-        o.hipS = Lerp(g.trackS0, hipCG, Ease(ph(1) / 0.5));
+        o.hipS = Lerp(hipPark, hipCG, Ease(ph(1) / 0.5));
         o.mastPitch = o.theta;
         // the hip may sit off the CG: its height follows the ship's pitch about the CG
         o.mastLen = o.trunnionH + (o.hipS - sCG) * std::sin(o.theta) - g.footH;
@@ -207,7 +229,7 @@ void Carriage::BuildPose(double sCG) {
         // the hull rides along the trunnions (the feet stay planted): the kangaroo foot keeps its place on the ground,
         // which is further ahead of its hip by the distance the hull has moved
         const double hipH = o.trunnionH + g.kangHipY;
-        const double fwd = g.kangFootFwd + (o.hipS - g.trackS0);
+        const double fwd = g.kangFootFwd + (o.hipS - hipPark);
         if (ph(1) < 0.5) {
             kangDeploy(1.0, hipH, fwd);
             o.tripod = true;
@@ -229,11 +251,8 @@ void Carriage::BuildPose(double sCG) {
 
     // --- load sharing: tripod while the trunnions are parked, blades alone on the turn, stern legs standing ---
     const double footS = g.kangHipS + g.kangFootFwd;
-    const double kangFull = Clamp01((sCG - g.trackS0) / (footS - g.trackS0));
-    o.kangShare = 0.0;
-    if (o.tripod) o.kangShare = kangFull;
-    else if (!levelSet && !standingSet && p_ >= 1.0 && ph(1) < 0.5)
-        o.kangShare = Clamp01((sCG - o.hipS) / (footS - o.hipS));
+    // both feet planted: the lever between them stays foot - park while the hull slides along the trunnions
+    o.kangShare = o.tripod ? Clamp01((sCG - o.hipS) / (footS - hipPark)) : 0.0;
     o.columnShare = 1.0;
     if (standingSet || p_ >= 5.0) o.columnShare = 0.0;
     if (!levelSet && !standingSet && ph(4) > 0.0) o.columnShare = 1.0 - Ease(ph(4));
@@ -250,7 +269,7 @@ void Carriage::BuildPose(double sCG) {
     };
     Vec3 col[4] = {pad(1, 1), pad(-1, 1), pad(1, -1), pad(-1, -1)};
     // kangaroo foot: fore and aft rim point ahead of its hip
-    const double kz = g.kangHipS + g.kangFootFwd + (o.tripod || (p_ >= 1.0 && ph(1) < 0.5) ? (o.hipS - g.trackS0) : 0.0) - sCG;
+    const double kz = g.kangHipS + g.kangFootFwd + (o.tripod || (p_ >= 1.0 && ph(1) < 0.5) ? (o.hipS - hipPark) : 0.0) - sCG;
     Vec3 kang[2] = {V(1.0, -h, kz + g.kangFootR), V(-1.0, -h, kz - g.kangFootR)};
     Vec3 rest[6] = {pad(1, 1), pad(-1, 1), kang[0], kang[1], pad(1, -1), pad(-1, -1)};
     Vec3 stand[4];

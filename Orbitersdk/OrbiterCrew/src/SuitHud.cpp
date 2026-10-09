@@ -11,6 +11,7 @@
 #include <sstream>
 #include <fstream>
 #include <map>
+#include <unordered_map>
 #include <cctype>
 #include <windows.h>
 
@@ -18,6 +19,478 @@ namespace ocrew
 {
 	namespace
 	{
+		// ---- the display's language: Russian or English (the user, 2026-10-08: English for the tests; one setting with the
+		// crew's menu - Config\OrbiterCrew\OrbiterCrew.cfg, LANGUAGE ru | en; not set - English). Every Russian text of the
+		// display goes through TR: a fragment, as it is joined with the numbers in the code ----
+		bool g_en = true;
+		const char* TR(const char* ru)
+		{
+			if (!g_en || !ru) return ru;
+			static const std::unordered_map<std::string, const char*> M = {
+			{ "   Shift+Пробел — полная   Shift+Ctrl — выкл   W/S — вектор   Q/E — вбок   A/D — поворот", "   Shift+Space — full   Shift+Ctrl — off   W/S — vector   Q/E — sideways   A/D — turn" },
+			{ "WASD — шаг   Shift — серво   B — ранец   Shift+V — щиток   L — фонари   K — скафандр", "WASD — walk   Shift — servo   B — jet pack   Shift+V — sun shade   L — lamps   K — suit" },
+			{ "W/S ход  A/D поворот  Q/E шаг  Shift бег  Пробел прыжок  K скафандр", "W/S walk  A/D turn  Q/E side step  Shift run  Space jump  K suit" },
+			{ "режим ещё раз — снова автоматически   ·   заголовок МФД — свернуть", "mode again — back to automatic   ·   MFD title — fold" },
+			{ "РСУ: цифровой блок   ·   цель и автопилот — мышью на правом МФД", "RCS: numpad   ·   target and autopilot — mouse on the right MFD" },
+			{ "ПНВ недоступен: включите CustomCamMode в D3D9Client.cfg", "NIGHT VISION unavailable: enable CustomCamMode in D3D9Client.cfg" },
+			{ "ПЕРЕЗАПУСК ПОСЛЕ ПЕРЕГРЕВА · сначала жизнеобеспечение", "RESTART AFTER OVERHEAT · life support first" },
+			{ "W/S ход · A/D руль · Shift полный · Пробел тормоз", "W/S drive · A/D steer · Shift full · Space brake" },
+			{ "касание ≤ 1,5 м/с · травма > 7 · гибель > 14", "touchdown ≤ 1.5 m/s · injury > 7 · death > 14" },
+			{ "круиз выключен · кнопка включит с текущими", "cruise off · the button engages at the present values" },
+			{ "Shift - полный вектор вручную, круиз ждёт", "Shift - full vector by hand, cruise waits" },
+			{ "КРУИЗ · ВЫСОТУ И СКОРОСТЬ ДЕРЖИТ ПОМОЩНИК", "CRUISE · THE ASSISTANT HOLDS HEIGHT AND SPEED" },
+			{ "тепло уходит насосом на радиатор (КПД 3)", "heat pumped to the radiator (COP 3)" },
+			{ "ЗОНА 30 м · СБЛИЖЕНИЕ БЫСТРЕЕ 0,25 м/с", "30 m ZONE · CLOSING FASTER THAN 0.25 m/s" },
+			{ "A / D - курс · пробел / Ctrl - высота", "A / D - heading · Space / Ctrl - height" },
+			{ "Caps Lock платформа · V вид на машину", "Caps Lock platform · V view of the machine" },
+			{ "круиз включён · снос вбок гасится сам", "cruise on · sideways drift cancelled" },
+			{ "Пробел / Ctrl — тяга больше / меньше", "Space / Ctrl — thrust up / down" },
+			{ " °C · поле и сервоприводы отключены", " °C · field and servos off" },
+			{ "основной белый, автопилот оранжевый", "white main, orange autopilot" },
+			{ "W / S - скорость, 3 м/с за секунду", "W / S - speed, 3 m/s per second" },
+			{ "основной оранжевый, автопилот циан", "orange main, cyan autopilot" },
+			{ "основной циан, автопилот оранжевый", "cyan main, orange autopilot" },
+			{ "ОБОЛОЧКА РАЗРУШЕНА · СРЕДА ВНУТРИ", "SHELL BREACHED · OUTSIDE GAS INSIDE" },
+			{ "ПНВ недоступен: нужен клиент D3D9", "NIGHT VISION unavailable: needs the D3D9 client" },
+			{ "ПРОФИЛЬ ПЕРЕЛЁТА · РЕЛЬЕФ ПО ПУТИ", "TRANSFER PROFILE · TERRAIN ALONG THE PATH" },
+			{ "ПНВ недоступен: нет поверхности", "NIGHT VISION unavailable: no surface" },
+			{ "на странице ЦЕЛИ или на карте", "on the TARGETS page or on the map" },
+			{ "Пробел / Ctrl — выше / ниже", "Space / Ctrl — up / down" },
+			{ "ПУТЬ %03.0f° · СНОС %+.0f°", "TRACK %03.0f° · DRIFT %+.0f°" },
+			{ "ОТНОСИТЕЛЬНОЕ ДВИЖЕНИЕ · ", "RELATIVE MOTION · " },
+			{ "ОХЛАЖДЕНИЕ НЕ СПРАВЛЯЕТСЯ", "COOLING CANNOT KEEP UP" },
+			{ "  ·  подтвердите щелчком", "  ·  click to acknowledge" },
+			{ " °C · отключение при +90", " °C · shutdown at +90" },
+			{ "У ЦЕЛИ НЕТ УЗЛОВ · ЦЕНТР", "TARGET HAS NO PORTS · CENTRE" },
+			{ " м/с · 2-я косм. здесь ", " m/s · escape here " },
+			{ "ПОД НОГАМИ · ВИД СВЕРХУ", "UNDERFOOT · FROM ABOVE" },
+			{ "АП · УДЕРЖАНИЕ ВЫСОТЫ ", "AP · HEIGHT HOLD " },
+			{ "В РАДИУСЕ 50 км НИКОГО", "NOBODY WITHIN 50 km" },
+			{ "НЕЗАМКНУТАЯ ТРАЕКТОРИЯ", "OPEN TRAJECTORY" },
+			{ "ОБОГРЕВ НЕ СПРАВЛЯЕТСЯ", "HEATING CANNOT KEEP UP" },
+			{ "ЦВЕТ — только для голо", "COLOUR — holo only" },
+			{ "к базе только ПЕРЕЛЁТ", "to a base TRANSFER only" },
+			{ "посадка рядом с целью", "landing next to the target" },
+			{ "   ▸   ПОЛНЫЙ ВЕКТОР", "   ▸   FULL VECTOR" },
+			{ " · урезан теплообмен", " · thermal control cut back" },
+			{ "ПЕРЕГРЕВ АППАРАТУРЫ ", "EQUIPMENT OVERHEAT " },
+			{ "заголовок — свернуть", "title — fold" },
+			{ "из воздуха · баллон ", "from the air · tank " },
+			{ "ОПТИКА: ПОТЕМНЕНИЕ ", "OPTICS: DARKENED " },
+			{ "аппарат · на грунте", "vessel · landed" },
+			{ "круто, ищите ровнее", "too steep, find flatter ground" },
+			{ "посадка на площадку", "landing on a pad" },
+			{ " °C · ВЫШЕ ДОПУСКА", " °C · ABOVE RATING" },
+			{ "ВЫСОТА НАД ГРУНТОМ", "HEIGHT ABOVE GROUND" },
+			{ "Охлаждение (насос)", "Cooling (pump)" },
+			{ "ПЕРЕГРУЗКА ПИТАНИЯ", "POWER OVERLOAD" },
+			{ "СРЕДА ВНЕ ДОПУСКА ", "ENVIRONMENT OUT OF RATING " },
+			{ "обогрев от батареи", "heating from the battery" },
+			{ " · НА ПОВЕРХНОСТИ", " · ON THE SURFACE" },
+			{ " кПа · у предела ", " kPa · near the limit " },
+			{ "БЫСТРОЕ СНИЖЕНИЕ ", "FAST DESCENT " },
+			{ "ДАВЛЕНИЕ СНАРУЖИ ", "OUTSIDE PRESSURE " },
+			{ "СНИЖЕНИЕ ↓ БЫСТРО", "DESCENT ↓ FAST" },
+			{ "Среда (излучение)", "Environment (radiant)" },
+			{ "вода в скафандре ", "water in the suit " },
+			{ "уклон под ногами ", "slope underfoot " },
+			{ " · ВКЛЮЧИТЕ ПОЛЕ", " · SWITCH THE FIELD ON" },
+			{ "АП · АВТОПОСАДКА", "AP · AUTO LANDING" },
+			{ "Жизнеобеспечение", "Life support" },
+			{ "КОРИДОР СКОРОСТИ", "SPEED CORRIDOR" },
+			{ "ПЛАН · ПО ХОДУ →", "PLAN · AHEAD →" },
+			{ "ТЕМПЕРАТУРА ТЕЛА", "BODY TEMPERATURE" },
+			{ "база · площадок ", "base · pads " },
+			{ "— моя   - - цель", "— mine   - - target" },
+			{ " °C · у предела", " °C · near the limit" },
+			{ "ПИТАНИЕ И ТЕПЛО", "POWER AND HEAT" },
+			{ "Поглотитель CO2", "CO2 scrubber" },
+			{ "СКОРОСТЬ ВПЕРЁД", "FORWARD SPEED" },
+			{ "ТЕПЛО · ДОПУСК ", "HEAT · RATING " },
+			{ "воздух пригоден", "air breathable" },
+			{ " · отключено: ", " · off: " },
+			{ " кПа · ПРЕДЕЛ ", " kPa · LIMIT " },
+			{ "2× СГЛАЖИВАНИЕ", "2× SMOOTHED" },
+			{ "ПУЛЬС · 10 мин", "PULSE · 10 min" },
+			{ "РАНЕЦ НЕ НАДЕТ", "NO JET PACK" },
+			{ "РЕЛЬЕФ ВПЕРЕДИ", "TERRAIN AHEAD" },
+			{ "СУТКИ (ЗВЁЗД.)", "DAY (SIDEREAL)" },
+			{ "ТОПЛИВО РАНЦА ", "JET PACK FUEL " },
+			{ "ТЯЖЁЛЫЕ ТРАВМЫ", "SEVERE INJURIES" },
+			{ "ЯРКОСТЬ ЭКРАНА", "DISPLAY BRIGHTNESS" },
+			{ "допуск снаружи", "outside rating" },
+			{ "обезвоживание ", "dehydration " },
+			{ "садиться можно", "landing possible" },
+			{ "%d ч %02d мин", "%d h %02d min" },
+			{ "БЕЛЫЙ + ОРАНЖ", "WHITE + ORANGE" },
+			{ "ВЫБЕРИТЕ ЦЕЛЬ", "SELECT A TARGET" },
+			{ "ДО ПЕРИЦЕНТРА", "TO PERIAPSIS" },
+			{ "ДОЗА ЗА ВЫХОД", "DOSE THIS EVA" },
+			{ "ИК · засветка", "IR · washed out" },
+			{ "ОТН. СКОРОСТЬ", "REL. SPEED" },
+			{ "ПОЛНЫЙ ВЕКТОР", "FULL VECTOR" },
+			{ "ТЕРМОКОНТРОЛЬ", "THERMAL CONTROL" },
+			{ "дышать нельзя", "not breathable" },
+			{ "у цели склон ", "slope at the target " },
+			{ "БЕЗ СОЗНАНИЯ", "UNCONSCIOUS" },
+			{ "В СКАФАНДРЕ ", "IN THE SUIT " },
+			{ "ДАВЛЕНИЕ O2 ", "O2 PRESSURE " },
+			{ "ДО АПОЦЕНТРА", "TO APOAPSIS" },
+			{ "ЗЕМЛЯ БЛИЗКО", "GROUND CLOSE" },
+			{ "КОМБИНЕЗОН ·", "COVERALL ·" },
+			{ "Мет. водород", "Met. hydrogen" },
+			{ "ОБЛИК ЭКРАНА", "DISPLAY LOOK" },
+			{ "ОРАНЖ + ЦИАН", "ORANGE + CYAN" },
+			{ "ПОГЛОТИТЕЛЬ ", "SCRUBBER " },
+			{ "Сервоприводы", "Servos" },
+			{ "УЗЕЛ ЦЕЛИ · ", "TARGET PORT · " },
+			{ "ЦИАН + ОРАНЖ", "CYAN + ORANGE" },
+			{ "до предела: ", "to the limit: " },
+			{ "свет вокруг ", "light around " },
+			{ "сервоприводы", "servos" },
+			{ " · «Тантра»", " · «Tantra»" },
+			{ " · висение ", " · hover " },
+			{ "АП: ПОСАДКА", "AP: LANDING" },
+			{ "АППАРАТУРА ", "EQUIPMENT " },
+			{ "В скафандре", "In the suit" },
+			{ "ЗАПАС ПОСЛЕ", "LEFT AFTER" },
+			{ "НЕТ ПИТАНИЯ", "NO POWER" },
+			{ "ОТ СРЕДН. R", "FROM MEAN R" },
+			{ "ОТН. НАКЛОН", "REL. PITCH" },
+			{ "ОХЛАЖДЕНИЕ ", "COOLING " },
+			{ "ПЛАТФОРМА ▲", "PLATFORM UP" },
+			{ "ПЛАТФОРМА ▼", "PLATFORM DOWN" },
+			{ "ЦЕЛЬ — БАЗА", "TARGET — BASE" },
+			{ "зазор мин. ", "min. clearance " },
+			{ "питания нет", "no power" },
+			{ "поглотитель", "scrubber" },
+			{ "прыжком до ", "hop to " },
+			{ "склон > 15°", "slope > 15°" },
+			{ "  ·  снято", "  ·  cleared" },
+			{ "+V по ходу", "+V ahead" },
+			{ "Аппаратура", "Equipment" },
+			{ "ЗАПАС ХОДА", "RANGE" },
+			{ "КОМБИНЕЗОН", "COVERALL" },
+			{ "ПОЛНЫЙ ХОД", "FULL SPEED" },
+			{ "СНИЖЕНИЕ ↓", "DESCENT ↓" },
+			{ "СТОЯНОЧНЫЙ", "PARKING" },
+			{ "СТЫК. УЗЛЫ", "DOCKING PORTS" },
+			{ "Теплообмен", "Heat exchange" },
+			{ "УГОЛ МЕСТА", "ELEVATION" },
+			{ "ранец снят", "jet pack off" },
+			{ "стояночный", "parking" },
+			{ "хватит на ", "lasts " },
+			{ " (тяжело)", " (hard)" },
+			{ " · вакуум", " · vacuum" },
+			{ " · орбита", " · orbit" },
+			{ " · солнце", " · sun" },
+			{ " · эконом", " · economy" },
+			{ " г/мин · ", " g/min · " },
+			{ " кВт·ч · ", " kWh · " },
+			{ " м/с · с ", " m/s · from " },
+			{ "1-Я КОСМ.", "ORBITAL V" },
+			{ "2-Я КОСМ.", "ESCAPE V" },
+			{ "M · КАРТА", "M · MAP" },
+			{ "АП: УДЕРЖ", "AP: HOLD" },
+			{ "ВЫБРАНО: ", "SELECTED: " },
+			{ "ГОРИЗ м/с", "HORIZ m/s" },
+			{ "ДАЛЬНОСТЬ", "RANGE" },
+			{ "КИСЛОРОД ", "OXYGEN " },
+			{ "НЕ ДЕРЖИТ", "NOT HOLDING" },
+			{ "ОПАСНОСТЬ", "WARNING" },
+			{ "ОРБИТА · ", "ORBIT · " },
+			{ "ОСЛАБЛЕНА", "WEAKENED" },
+			{ "ПЛАТФОРМА", "PLATFORM" },
+			{ "ПОЛНЫЙ · ", "FULL · " },
+			{ "РАДИАЦИЯ ", "RADIATION " },
+			{ "СБЛИЖ м/с", "CLOSING m/s" },
+			{ "СБЛИЖЕНИЕ", "RENDEZVOUS" },
+			{ "СОСТОЯНИЕ", "CONDITION" },
+			{ "УДЕРЖ ВЫС", "HOLD HGT" },
+			{ "атмосфера", "atmosphere" },
+			{ "до грунта", "to the ground" },
+			{ "нагрузка ", "load " },
+			{ "плывёт · ", "drifts · " },
+			{ " мЗв из ", " mSv of " },
+			{ "° · день", "° · day" },
+			{ "ΔV СИНХР", "ΔV MATCH" },
+			{ "Азот РСУ", "RCS nitrogen" },
+			{ "БАТАРЕЯ ", "BATTERY " },
+			{ "ВЕРТ м/с", "VERT m/s" },
+			{ "ВНИМАНИЕ", "CAUTION" },
+			{ "ВРАЩЕНИЕ", "ROTATION" },
+			{ "ВЫСОТА м", "HEIGHT m" },
+			{ "ГОРИЗОНТ", "HORIZON" },
+			{ "ЗАПАС Δv", "Δv LEFT" },
+			{ "ИСТОЩЕНА", "EXHAUSTED" },
+			{ "Кислород", "Oxygen" },
+			{ "МАКСИМУМ", "MAXIMUM" },
+			{ "МАСШТАБ ", "SCALE " },
+			{ "МОНОХРОМ", "MONOCHROME" },
+			{ "МОЩНОСТЬ", "POWER" },
+			{ "Меркурий", "Mercury" },
+			{ "ОБОГРЕВ ", "HEATING " },
+			{ "ОГРАНИЧ.", "LIMITER" },
+			{ "ОРГАНИЗМ", "BODY" },
+			{ "ПЛОЩАДКИ", "PADS" },
+			{ "ПОМОЩНИК", "ASSISTANT" },
+			{ "РАДИАЦИЯ", "RADIATION" },
+			{ "Радиация", "Radiation" },
+			{ "СКОРОСТЬ", "SPEED" },
+			{ "СТЫКОВКА", "DOCKING" },
+			{ "ФОТОНИКА", "PHOTONICS" },
+			{ "ЦЕЛИ НЕТ", "NO TARGET" },
+			{ "ЧЁТКОСТЬ", "SHARPNESS" },
+			{ "без еды ", "no food " },
+			{ "держится", "holding" },
+			{ "кислород", "oxygen" },
+			{ "крейсер ", "cruise " },
+			{ "лежит · ", "lying · " },
+			{ "на месте", "still" },
+			{ "топливо ", "fuel " },
+			{ " · день", " · day" },
+			{ " · ночь", " · night" },
+			{ " · поле", " · field" },
+			{ " · тень", " · shade" },
+			{ " г/с · ", " g/s · " },
+			{ " кПа · ", " kPa · " },
+			{ " м/с · ", " m/s · " },
+			{ " мкЗв/ч", " uSv/h" },
+			{ " уд/мин", " bpm" },
+			{ "888 кПа", "888 kPa" },
+			{ "8888 Вт", "8888 W" },
+			{ "V ГОРИЗ", "V HORIZ" },
+			{ "V СБЛИЖ", "V CLOSE" },
+			{ "БАТАРЕЯ", "BATTERY" },
+			{ "Батарея", "Battery" },
+			{ "В НОРМЕ", "NORMAL" },
+			{ "ВИСЕНИЕ", "HOVER" },
+			{ "ВРЕМЯ ≈", "TIME ≈" },
+			{ "ДАЛЬН м", "RANGE m" },
+			{ "ДО ЦЕЛИ", "TO TARGET" },
+			{ "ДОЛГОТА", "LONGITUDE" },
+			{ "ДЫХАНИЕ", "BREATHING" },
+			{ "КАСАНИЕ", "TOUCHDOWN" },
+			{ "НАБОР ↑", "CLIMB ↑" },
+			{ "Обогрев", "Heating" },
+			{ "ПЕРЕЛЁТ", "TRANSFER" },
+			{ "ПИТАНИЕ", "POWER" },
+			{ "ПОСАДКА", "LANDING" },
+			{ "ПОХОДКА", "GAIT" },
+			{ "Питание", "Power" },
+			{ "СИСТЕМЫ", "SYSTEMS" },
+			{ "Снаружи", "Outside" },
+			{ "аппарат", "vessel" },
+			{ "батарея", "battery" },
+			{ "вправо ", "right " },
+			{ "отдача ", "regen " },
+			{ "сейчас ", "now " },
+			{ "— круто", "— steep" },
+			{ " в мин", " per min" },
+			{ " кВт·ч", " kWh" },
+			{ " мЗв/ч", " mSv/h" },
+			{ "> 99 ч", "> 99 h" },
+			{ "V ВЕРТ", "V VERT" },
+			{ "ВЕТЕР ", "WIND " },
+			{ "ВСЕГДА", "ALWAYS" },
+			{ "ВЫСОТА", "HEIGHT" },
+			{ "Венера", "Venus" },
+			{ "Воздух", "Air" },
+			{ "ГИБЕЛЬ", "DEAD" },
+			{ "ГРУНТ ", "GROUND " },
+			{ "МАШИНА", "MACHINE" },
+			{ "НАКЛОН", "PITCH" },
+			{ "ОБЪЕКТ", "OBJECT" },
+			{ "ОРБИТА", "ORBIT" },
+			{ "ПЕЛЕНГ", "BEARING" },
+			{ "ПЕРИОД", "PERIOD" },
+			{ "ПРЕДЕЛ", "LIMIT" },
+			{ "РАДИАЦ", "RADIAT" },
+			{ "РАНЕЦ ", "JET PACK " },
+			{ "РАСХОД", "CONSUMPTION" },
+			{ "РЕЗЕРВ", "RESERVE" },
+			{ "СОЛНЦЕ", "SUN" },
+			{ "ТАНГАЖ", "PITCH" },
+			{ "ТОРМОЗ", "BRAKE" },
+			{ "ТРАВМЫ", "INJURIES" },
+			{ "ФОНАРИ", "LAMPS" },
+			{ "Фонари", "Lamps" },
+			{ "ХВАТИТ", "LASTS" },
+			{ "ЦЕЛЬ: ", "TARGET: " },
+			{ "ШИРОТА", "LATITUDE" },
+			{ "ЭКОНОМ", "ECONOMY" },
+			{ "вакуум", "vacuum" },
+			{ "ветер ", "wind " },
+			{ "влево ", "left " },
+			{ "вниз ↓", "down ↓" },
+			{ "воздух", "air" },
+			{ "гибель", "death" },
+			{ "голова", "head" },
+			{ "грунт ", "ground " },
+			{ "корпус", "torso" },
+			{ "курс ↑", "heading ↑" },
+			{ "назад ", "back " },
+			{ "опущен", "down" },
+			{ "падает", "falling" },
+			{ "поднят", "up" },
+			{ "растёт", "rising" },
+			{ "среда ", "env " },
+			{ "травма", "injury" },
+			{ "фонари", "lamps" },
+			{ "экипаж", "crew" },
+			{ " км/ч", " km/h" },
+			{ " м/с²", " m/s²" },
+			{ "V СБЛ", "V CLS" },
+			{ "АП · ", "AP · " },
+			{ "ГОРИЗ", "HORIZ" },
+			{ "ГРУНТ", "GROUND" },
+			{ "Грунт", "Ground" },
+			{ "ДАЛЬН", "RANGE" },
+			{ "ДОЗА ", "DOSE " },
+			{ "ЗАРЯД", "CHARGE" },
+			{ "ЗЕНИТ", "ZENITH" },
+			{ "Земля", "Earth" },
+			{ "ИТОГО", "TOTAL" },
+			{ "КАРТА", "MAP" },
+			{ "КУРС ", "HEADING " },
+			{ "МЕСТН", "LOCAL" },
+			{ "НАДИР", "NADIR" },
+			{ "НАЗАД", "BACK" },
+			{ "НОРМА", "NORMAL" },
+			{ "ОПЦИИ", "OPTIONS" },
+			{ "ПОЛЁТ", "FLIGHT" },
+			{ "ПУЛЬС", "PULSE" },
+			{ "РАНЕЦ", "JET PACK" },
+			{ "СБЛИЖ", "CLOSE" },
+			{ "СВЯЗЬ", "COMMS" },
+			{ "СЕРВО", "SERVO" },
+			{ "СИНХР", "MATCH" },
+			{ "СРЕДА", "ENV" },
+			{ "ТЕЛО ", "BODY " },
+			{ "ТЕПЛО", "HEAT" },
+			{ "Титан", "Titan" },
+			{ "УДЕРЖ", "HOLD" },
+			{ "ЩИТОК", "SHADE" },
+			{ "прямо", "straight" },
+			{ "серво", "servo" },
+			{ "снос ", "drift " },
+			{ "стоит", "standing" },
+			{ " кВт", " kW" },
+			{ " кПа", " kPa" },
+			{ " м/с", " m/s" },
+			{ " мЗв", " mSv" },
+			{ " мин", " min" },
+			{ " сут", " d" },
+			{ "1 км", "1 km" },
+			{ "30 м", "30 m" },
+			{ "° в.", "°E" },
+			{ "° з.", "°W" },
+			{ "° с.", "°N" },
+			{ "° ю.", "°S" },
+			{ "АВТО", "AUTO" },
+			{ "АП: ", "AP: " },
+			{ "ВЕРТ", "VERT" },
+			{ "ВЫКЛ", "OFF" },
+			{ "ГОЛО", "HOLO" },
+			{ "Д, м", "D, m" },
+			{ "ДАВЛ", "PRESS" },
+			{ "ДУГА", "ARC" },
+			{ "Луна", "Moon" },
+			{ "Марс", "Mars" },
+			{ "ПОЛЕ", "FIELD" },
+			{ "ПРИВ", "DRIVE" },
+			{ "РУЛЬ", "STEER" },
+			{ "РУЧН", "MAN" },
+			{ "РЫСК", "YAW" },
+			{ "СВЕТ", "LAMPS" },
+			{ "СВЯЗ", "COMM" },
+			{ "СТОП", "STOP" },
+			{ "СТЫК", "DOCK" },
+			{ "ТЕЛО", "BODY" },
+			{ "ТЕПЛ", "HEAT" },
+			{ "ТОПЛ", "FUEL" },
+			{ "ТЯГА", "THRUST" },
+			{ "Тело", "Body" },
+			{ "ЦВЕТ", "COLOUR" },
+			{ "ЦЕЛИ", "TARGETS" },
+			{ "ЦЕЛЬ", "TARGET" },
+			{ "база", "base" },
+			{ "выкл", "off" },
+			{ "ноги", "legs" },
+			{ "ночь", "night" },
+			{ "поле", "field" },
+			{ "руки", "arms" },
+			{ "снят", "off" },
+			{ " Вт", " W" },
+			{ " км", " km" },
+			{ "Ап ", "Ap " },
+			{ "БАТ", "BAT" },
+			{ "ВКД", "EVA" },
+			{ "ДЫХ", "BR" },
+			{ "ПНВ", "NV" },
+			{ "Пе ", "Pe " },
+			{ "РАД", "RAD" },
+			{ "РЕЗ", "RES" },
+			{ "ХОД", "SPEED" },
+			{ "бег", "run" },
+			{ "вкл", "on" },
+			{ "шаг", "walk" },
+			{ " л", " L" },
+			{ " м", " m" },
+			{ " с", " s" },
+			{ " ч", " h" },
+			{ "АП", "AP" },
+			{ "ЖО", "LS" },
+			{ "ИК", "IR" },
+			{ "Л ", "L " },
+			{ "П ", "R " },
+			{ "ЭЛ", "EL" },
+			{ "В", "E" },
+			{ "З", "W" },
+			{ "С", "N" },
+			{ "Ю", "S" },
+			{ "Я", "ME" }
+,
+			{ "нет цели · выберите на странице ЦЕЛИ", "no target · pick one on the TARGETS page" },
+			{ "цель — база · к ней только ПЕРЕЛЁТ", "target is a base · TRANSFER only" },
+			{ "СИНХР · скорость уравнена → УДЕРЖ", "MATCH · speeds matched → HOLD" },
+			{ "ПЕРЕЛЁТ · над точкой · посадка", "TRANSFER · over the point · landing" },
+			{ "только у поверхности с ранцем", "only near a surface, with the jet pack" },
+			{ "СБЛИЖ · на месте → УДЕРЖ", "CLOSE · arrived → HOLD" },
+			{ "она за плоскостью узла", "she is behind the port's plane" },
+			{ "СТЫК · у узла · держу", "DOCK · at the port · holding" },
+			{ "ранец в ручном режиме", "jet pack in manual" },
+			{ "топлива мало: нужно ", "fuel low: needs " },
+			{ "нет питания или сил", "no power, or she cannot act" },
+			{ "СБЛИЖ · до точки ", "CLOSE · to the point " },
+			{ "у цели нет узлов", "target has no ports" },
+			{ "только в космосе", "in space only" },
+			{ "нет поверхности", "no surface" },
+			{ "СТЫК · по оси ", "DOCK · on the axis " },
+			{ " на площадку ", " on pad " },
+			{ "УДЕРЖ · уход ", "HOLD · drift " },
+			{ "ЗАВИС · снос ", "HOVER · drift " },
+			{ "СИНХР · Vотн ", "MATCH · Vrel " },
+			{ "снят вручную", "taken over by hand" },
+			{ "цель исчезла", "target lost" },
+			{ "дальше 15 км", "beyond 15 km" },
+			{ " · выключен", " · off" },
+			{ " м/с, есть ", " m/s, have " },
+			{ "ПЕРЕЛЁТ · ", "TRANSFER · " },
+			{ " м · вбок ", " m · sideways " },
+			{ "торможение", "braking" },
+			{ " · включён", " · on" },
+			{ "выключен", "off" },
+			{ "посадка", "landing" },
+			{ "подъём", "climb" },
+			{ "разгон", "boost" },
+			{ "полёт", "coast" },
+			{ "ЗАВИС", "HOVER" },
+			{ " см", " cm" }
+			};
+			const auto it = M.find(ru);
+			return it != M.end() ? it->second : ru;
+		}
 		// ---- colours: three palettes over seven atlas colours ----
 		enum Col { CP, CA, CW, CD, CR, CK };   // primary, accent (autopilot, target, caution), white, dim, red, black
 		struct Palette { DWORD col[6]; int atlas[6]; };   // 0xAABBGGRR
@@ -125,7 +598,7 @@ namespace ocrew
 		{
 			char b[48]; snprintf(b, sizeof b, "%.*f", dec, v);
 			std::string s = b;
-			for (char& c : s) if (c == '.') c = ',';
+			if (!g_en) for (char& c : s) if (c == '.') c = ',';   // Russian: a decimal comma
 			if (s == "-0" || s == "-0,0" || s == "-0,00") s = s.substr(1);
 			if (!s.empty() && s[0] == '-') s = "−" + s.substr(1);
 			else if (plus && v > 0) s = "+" + s;
@@ -133,29 +606,37 @@ namespace ocrew
 		}
 		std::string Dist(double m)
 		{
-			if (m < 100) return Num(m, 1) + " м";
-			if (m < 1000) return Num(m, 0) + " м";
-			if (m < 100000) return Num(m / 1000, m < 10000 ? 2 : 1) + " км";
-			return Num(m / 1000, 0) + " км";
+			if (m < 100) return Num(m, 1) + TR(" м");
+			if (m < 1000) return Num(m, 0) + TR(" м");
+			if (m < 100000) return Num(m / 1000, m < 10000 ? 2 : 1) + TR(" км");
+			return Num(m / 1000, 0) + TR(" км");
 		}
 		std::string Clock(double s)
 		{
 			if (s < 0 || s > 359999) return "—";
 			char b[32];
 			if (s < 3600) snprintf(b, sizeof b, "%d:%02d", static_cast<int>(s) / 60, static_cast<int>(s) % 60);
-			else snprintf(b, sizeof b, "%d ч %02d мин", static_cast<int>(s) / 3600, (static_cast<int>(s) / 60) % 60);
+			else snprintf(b, sizeof b, TR("%d ч %02d мин"), static_cast<int>(s) / 3600, (static_cast<int>(s) / 60) % 60);
 			return b;
 		}
-		std::string Hours(double h) { return h > 99 ? "> 99 ч" : Num(h, h < 10 ? 1 : 0) + " ч"; }
+		std::string Hours(double h) { return h > 99 ? TR("> 99 ч") : Num(h, h < 10 ? 1 : 0) + TR(" ч"); }
 		const char* BodyRu(const std::string& n)
 		{
-			if (n == "Earth") return "Земля"; if (n == "Moon") return "Луна"; if (n == "Mars") return "Марс";
-			if (n == "Venus") return "Венера"; if (n == "Titan") return "Титан"; if (n == "Mercury") return "Меркурий";
+			if (n == "Earth") return TR("Земля"); if (n == "Moon") return TR("Луна"); if (n == "Mars") return TR("Марс");
+			if (n == "Venus") return TR("Венера"); if (n == "Titan") return TR("Титан"); if (n == "Mercury") return TR("Меркурий");
 			return nullptr;
 		}
 		double Wrap(double a) { while (a > PI) a -= PI2; while (a < -PI) a += PI2; return a; }
 		VECTOR3 Unit(const VECTOR3& v) { const double l = length(v); return l > 0 ? v / l : v; }
 	}
+
+	// the language's one state lives with the crew (CrewMember.cpp): read once from OrbiterCrew.cfg, set by the switch here
+	bool UiEnglish();
+	void SetUiLanguage(bool english);
+
+	// the suit computer's other files (the autopilot) speak the display's language through the same table
+	const char* SuitTr(const char* ru) { return TR(ru); }
+	bool SuitEnglish() { return g_en; }
 
 	std::string Ru(const std::string& utf8)
 	{
@@ -169,6 +650,13 @@ namespace ocrew
 	}
 
 	// ================= glyph atlas =================
+	HudText::~HudText() { Release(); }
+	void HudText::Release()
+	{
+		if (tex) oapiReleaseTexture(tex);
+		tex = nullptr; glyphs.clear(); index.clear();
+	}
+
 	bool HudText::Load()
 	{
 		FILE* f = fopen("Config\\Tantra\\HudFont.txt", "r");
@@ -438,13 +926,33 @@ namespace ocrew
 
 	void SuitHud::Detach()
 	{
-		if (nvCam) { Core()->DeleteCustomCamera(nvCam); nvCam = nullptr; }
+		// the body leaves the world (the session ends, or the person goes aboard): everything bound to it and to the graphics
+		// goes back now, while the client still runs - the person lives on, and a next session builds it all again
+		if (nvCam && Core()) Core()->DeleteCustomCamera(nvCam);
+		nvCam = nullptr;
+		if (nvSrf) { oapiDestroySurface(nvSrf); nvSrf = nullptr; }
+		if (modSrf) { oapiDestroySurface(modSrf); modSrf = nullptr; }
+		if (sunSrf) { oapiDestroySurface(sunSrf); sunSrf = nullptr; }
+		sunDm = nullptr; sunAmp = -1; modKeyed = false;
+		if (ipi && Core()) Core()->ReleaseIPInterface(static_cast<gcIPInterface*>(ipi));
+		ipi = nullptr; ipiTried = false;
+		if (lightSrc) { oapiDestroySurface(lightSrc); lightSrc = nullptr; }
+		if (lightOut) { oapiDestroySurface(lightOut); lightOut = nullptr; }
+		lightW = lightH = modW = modH = nvW = nvH = 0; lightLive = false; lightLogged = modLogged = false;
+		glyphs.Release(); glyphsTried = false;
+		for (auto& p : pens) if (p.second) oapiReleasePen(p.second);
+		for (auto& b : brushes) if (b.second) oapiReleaseBrush(b.second);
+		for (auto& f : fonts) if (f.second) oapiReleaseFont(f.second);
+		pens.clear(); brushes.clear(); fonts.clear();
+		// the plate was a mesh of the body that leaves: the next body adds its own (HelmetMesh). The index is kept: a new body
+		// may have been made before the old one went (standing up from a seat) and already holds its plate under it
+		plateOwner = nullptr; plateVis = nullptr; modDm = nullptr; lightDm = nullptr; onVisor = false;
 	}
 
 	void SuitHud::NightVision(oapi::Sketchpad* skp, VESSEL* v, double W, double H, double SW, double SH)
 	{
 		if (!gcTried) { gcTried = true; gcOk = Core() != nullptr; }
-		if (!gcOk || !Ext(skp)) { nvNote = "ПНВ недоступен: нужен клиент D3D9"; return; }
+		if (!gcOk || !Ext(skp)) { nvNote = TR("ПНВ недоступен: нужен клиент D3D9"); return; }
 		const int w = (std::max)(64, static_cast<int>(W) / 2), h = (std::max)(64, static_cast<int>(H) / 2);   // half resolution: grain hides it
 		if (!nvSrf || w != nvW || h != nvH)
 		{
@@ -454,7 +962,7 @@ namespace ocrew
 			nvW = w; nvH = h;
 			if (nvSrf) oapiClearSurface(nvSrf);
 		}
-		if (!nvSrf) { nvNote = "ПНВ недоступен: нет поверхности"; return; }
+		if (!nvSrf) { nvNote = TR("ПНВ недоступен: нет поверхности"); return; }
 		// the same eye as the main camera, in her own frame
 		VECTOR3 cg, cd; oapiCameraGlobalPos(&cg); oapiCameraGlobalDir(&cd);
 		MATRIX3 cr; oapiCameraRotationMatrix(&cr);
@@ -463,11 +971,11 @@ namespace ocrew
 		v->Global2Local(cg, pos);
 		up = up - dir * dotp(up, dir); { const double l = length(up); if (l > 1e-6) up = up / l; }
 		nvCam = Core()->SetupCustomCamera(nvCam, v->GetHandle(), pos, dir, up, oapiCameraAperture(), nvSrf, 0xFF);
-		if (!nvCam) { nvNote = "ПНВ недоступен: включите CustomCamMode в D3D9Client.cfg"; return; }
+		if (!nvCam) { nvNote = TR("ПНВ недоступен: включите CustomCamMode в D3D9Client.cfg"); return; }
 		Core()->CustomCameraOnOff(nvCam, true);
 		// the gain suits the night side; in daylight the tube is washed out and throttles itself
 		const double gain = sunElev > 0.05 && surface ? 1.2 : 4.0;
-		nvNote = gain > 2 ? "ИК" : "ИК · засветка";
+		nvNote = gain > 2 ? TR("ИК") : TR("ИК · засветка");
 		oapi::Sketchpad* s3 = skp;
 		// short-wave infrared, as cameras see it today: a neutral grey picture, mild gamma, fine grain - not the green tube of the last century
 		const oapi::FVECTOR4 bright(static_cast<float>(gain), static_cast<float>(gain), static_cast<float>(gain * 1.04), 1.0f);
@@ -527,6 +1035,7 @@ namespace ocrew
 
 	void SuitHud::Click(double x, double y)
 	{
+		++clickSeq;   // the display redraws at once, not at its next turn
 		struct SaveAfter { const SuitHud& h; const std::string before; ~SaveAfter() { if (h.prefsLoaded) { std::string now; char b[96]; snprintf(b, sizeof b, "%d %d %d %.2f %d %d %d", h.look, h.pal, h.brightAuto ? 1 : 0, h.brightManual, h.mapMono ? 1 : 0, h.hudScale, h.horizonMode); now = b; if (now != before) h.SavePrefs(); } } };
 		char b0[96]; snprintf(b0, sizeof b0, "%d %d %d %.2f %d %d %d", look, pal, brightAuto ? 1 : 0, brightManual, mapMono ? 1 : 0, hudScale, horizonMode);
 		SaveAfter saveAfter{ *this, b0 };
@@ -545,6 +1054,7 @@ namespace ocrew
 			case H_ZOOM: zoom = std::clamp(zoom + it->arg, 0, 9); grid.t = -1; break;
 			case H_MODE: if (!autoMode && it->arg == mode) autoMode = true; else SetMode(it->arg, true); break;
 			case H_MPU: if (const MpuCmdFn f = MpuCmd()) if (mpuPerson) f(mpuPerson, it->arg); break;
+			case H_LANG: g_en = it->arg == 1; SaveLanguage(g_en); SetUiLanguage(g_en); break;   // the file, and the crew's state at once
 			case H_RES: hudScale = std::clamp(it->arg, 1, 2); break;
 			case H_HORIZON: horizonMode = std::clamp(it->arg, 0, 2); break;
 			case H_SUIT: if (life) { if (it->arg == 0) life->drivesOn = !life->drivesOn; else life->econ = !life->econ; } break;
@@ -606,37 +1116,37 @@ namespace ocrew
 		if (d.suit)
 		{
 			if (d.o2Vent) {}   // breathing the air around: the tank is a reserve
-			else if (d.o2 < 0.10) now.push_back({ "o2", "O2", 2, "КИСЛОРОД " + Num(100 * d.o2, 0) + " % · " + Hours(d.o2Hours) });
-			else if (d.o2 < 0.25) now.push_back({ "o2", "O2", 1, "КИСЛОРОД " + Num(100 * d.o2, 0) + " % · " + Hours(d.o2Hours) });
+			else if (d.o2 < 0.10) now.push_back({ "o2", "O2", 2, TR("КИСЛОРОД ") + Num(100 * d.o2, 0) + " % · " + Hours(d.o2Hours) });
+			else if (d.o2 < 0.25) now.push_back({ "o2", "O2", 1, TR("КИСЛОРОД ") + Num(100 * d.o2, 0) + " % · " + Hours(d.o2Hours) });
 			const double pWarn = d.o2Vent ? 14 : 15, pCaut = d.o2Vent ? 17 : 25;   // in breathable air the helmet holds the air around (~21 kPa O2)
-			if (d.ppO2 < pWarn) now.push_back({ "p", "ДАВЛ", 2, "ДАВЛЕНИЕ O2 " + Num(d.ppO2, 1) + " кПа" });
-			else if (d.ppO2 < pCaut) now.push_back({ "p", "ДАВЛ", 1, "ДАВЛЕНИЕ O2 " + Num(d.ppO2, 1) + " кПа" });
-			if (d.ppCO2 > 5) now.push_back({ "co2", "CO2", 2, "CO2 " + Num(d.ppCO2, 2) + " кПа" });
-			else if (d.ppCO2 > 1) now.push_back({ "co2", "CO2", 1, "CO2 " + Num(d.ppCO2, 2) + " кПа" });
-			if (d.sorbent < 0.10) now.push_back({ "sorb", "CO2", 2, "ПОГЛОТИТЕЛЬ " + Num(100 * d.sorbent, 0) + " %" });
-			else if (d.sorbent < 0.25) now.push_back({ "sorb", "CO2", 1, "ПОГЛОТИТЕЛЬ " + Num(100 * d.sorbent, 0) + " %" });
-			if (!d.powered || d.batt < 0.10) now.push_back({ "batt", "БАТ", 2, "БАТАРЕЯ " + Num(100 * d.batt, 0) + " % · " + Hours(d.battHours) });
-			else if (d.batt < 0.25) now.push_back({ "batt", "БАТ", 1, "БАТАРЕЯ " + Num(100 * d.batt, 0) + " % · " + Hours(d.battHours) });
-			if (!d.inSpec) now.push_back({ "env", "ТЕПЛО", 2, "СРЕДА ВНЕ ДОПУСКА " + Num(d.envC, 0, true) + " °C" });
+			if (d.ppO2 < pWarn) now.push_back({ "p", TR("ДАВЛ"), 2, TR("ДАВЛЕНИЕ O2 ") + Num(d.ppO2, 1) + TR(" кПа") });
+			else if (d.ppO2 < pCaut) now.push_back({ "p", TR("ДАВЛ"), 1, TR("ДАВЛЕНИЕ O2 ") + Num(d.ppO2, 1) + TR(" кПа") });
+			if (d.ppCO2 > 5) now.push_back({ "co2", "CO2", 2, "CO2 " + Num(d.ppCO2, 2) + TR(" кПа") });
+			else if (d.ppCO2 > 1) now.push_back({ "co2", "CO2", 1, "CO2 " + Num(d.ppCO2, 2) + TR(" кПа") });
+			if (d.sorbent < 0.10) now.push_back({ "sorb", "CO2", 2, TR("ПОГЛОТИТЕЛЬ ") + Num(100 * d.sorbent, 0) + " %" });
+			else if (d.sorbent < 0.25) now.push_back({ "sorb", "CO2", 1, TR("ПОГЛОТИТЕЛЬ ") + Num(100 * d.sorbent, 0) + " %" });
+			if (!d.powered || d.batt < 0.10) now.push_back({ "batt", TR("БАТ"), 2, TR("БАТАРЕЯ ") + Num(100 * d.batt, 0) + " % · " + Hours(d.battHours) });
+			else if (d.batt < 0.25) now.push_back({ "batt", TR("БАТ"), 1, TR("БАТАРЕЯ ") + Num(100 * d.batt, 0) + " % · " + Hours(d.battHours) });
+			if (!d.inSpec) now.push_back({ "env", TR("ТЕПЛО"), 2, TR("СРЕДА ВНЕ ДОПУСКА ") + Num(d.envC, 0, true) + " °C" });
 			// the outside pressure against the shell's rating: amber from 75 %, red above; crushed - the shell is open
-			if (d.suitBreached) now.push_back({ "shell", "ДАВЛ", 2, "ОБОЛОЧКА РАЗРУШЕНА · СРЕДА ВНУТРИ" });
-			else if (!d.vacuum && d.airKPa > d.suitPMax) now.push_back({ "pout", "ДАВЛ", 2, "ДАВЛЕНИЕ СНАРУЖИ " + Num(d.airKPa, 0) + " кПа · ПРЕДЕЛ " + Num(d.suitPMax, 0) });
-			else if (!d.vacuum && d.airKPa > 0.75 * d.suitPMax) now.push_back({ "pout", "ДАВЛ", 1, "ДАВЛЕНИЕ СНАРУЖИ " + Num(d.airKPa, 0) + " кПа · у предела " + Num(d.suitPMax, 0) });
-			if (d.tInC > 30 || d.tInC < 12) now.push_back({ "tin", "ТЕПЛО", 2, "В СКАФАНДРЕ " + Num(d.tInC, 1) + " °C" });
-			else if (std::abs(d.residualW) > 30) now.push_back({ "heat", "ТЕПЛО", 1, d.residualW > 0 ? "ОХЛАЖДЕНИЕ НЕ СПРАВЛЯЕТСЯ" : "ОБОГРЕВ НЕ СПРАВЛЯЕТСЯ" });
-			if (d.coreC > 39.5 || d.coreC < 35) now.push_back({ "core", "ТЕПЛО", 2, "ТЕЛО " + Num(d.coreC, 1) + " °C" });
-			else if (d.coreC > 38.5 || d.coreC < 35.8) now.push_back({ "core", "ТЕПЛО", 1, "ТЕЛО " + Num(d.coreC, 1) + " °C" });
+			if (d.suitBreached) now.push_back({ "shell", TR("ДАВЛ"), 2, TR("ОБОЛОЧКА РАЗРУШЕНА · СРЕДА ВНУТРИ") });
+			else if (!d.vacuum && d.airKPa > d.suitPMax) now.push_back({ "pout", TR("ДАВЛ"), 2, TR("ДАВЛЕНИЕ СНАРУЖИ ") + Num(d.airKPa, 0) + TR(" кПа · ПРЕДЕЛ ") + Num(d.suitPMax, 0) });
+			else if (!d.vacuum && d.airKPa > 0.75 * d.suitPMax) now.push_back({ "pout", TR("ДАВЛ"), 1, TR("ДАВЛЕНИЕ СНАРУЖИ ") + Num(d.airKPa, 0) + TR(" кПа · у предела ") + Num(d.suitPMax, 0) });
+			if (d.tInC > 30 || d.tInC < 12) now.push_back({ "tin", TR("ТЕПЛО"), 2, TR("В СКАФАНДРЕ ") + Num(d.tInC, 1) + " °C" });
+			else if (std::abs(d.residualW) > 30) now.push_back({ "heat", TR("ТЕПЛО"), 1, d.residualW > 0 ? TR("ОХЛАЖДЕНИЕ НЕ СПРАВЛЯЕТСЯ") : TR("ОБОГРЕВ НЕ СПРАВЛЯЕТСЯ") });
+			if (d.coreC > 39.5 || d.coreC < 35) now.push_back({ "core", TR("ТЕПЛО"), 2, TR("ТЕЛО ") + Num(d.coreC, 1) + " °C" });
+			else if (d.coreC > 38.5 || d.coreC < 35.8) now.push_back({ "core", TR("ТЕПЛО"), 1, TR("ТЕЛО ") + Num(d.coreC, 1) + " °C" });
 			// the ground: a lunar day of +100..+120 C is normal for the suit; warn only near and above its rating
-			if (d.hasGround && d.landed && d.groundC > d.ratedMaxC) now.push_back({ "ground", "ТЕПЛО", 2, "ГРУНТ " + Num(d.groundC, 0, true) + " °C · ВЫШЕ ДОПУСКА" });
-			else if (d.hasGround && d.landed && d.groundC > d.ratedMaxC - 20) now.push_back({ "ground", "ТЕПЛО", 1, "ГРУНТ " + Num(d.groundC, 0, true) + " °C · у предела" });
+			if (d.hasGround && d.landed && d.groundC > d.ratedMaxC) now.push_back({ "ground", TR("ТЕПЛО"), 2, TR("ГРУНТ ") + Num(d.groundC, 0, true) + TR(" °C · ВЫШЕ ДОПУСКА") });
+			else if (d.hasGround && d.landed && d.groundC > d.ratedMaxC - 20) now.push_back({ "ground", TR("ТЕПЛО"), 1, TR("ГРУНТ ") + Num(d.groundC, 0, true) + TR(" °C · у предела") });
 			// rate: caution above 1 mSv/h, warning above 10 mSv/h (belts, flares); the dose of the outing: 100 / 500 mSv
-			const std::string hint = d.fieldOn ? "" : " · ВКЛЮЧИТЕ ПОЛЕ";
-			if (doseRate > 10000) now.push_back({ "rad", "РАДИАЦ", 2, "РАДИАЦИЯ " + Num(doseRate / 1000, 1) + " мЗв/ч" + hint });
-			else if (doseRate > 1000) now.push_back({ "rad", "РАДИАЦ", 1, "РАДИАЦИЯ " + Num(doseRate / 1000, 2) + " мЗв/ч" + hint });
-			if (dose > 2.5e5) now.push_back({ "dose", "РАДИАЦ", 2, "ДОЗА " + Num(dose / 1000, 0) + " мЗв" });
-			if (d.life && d.life->optDark > 0.4) now.push_back({ "optics", "РАДИАЦ", 2, "ОПТИКА: ПОТЕМНЕНИЕ " + Num(100 * d.life->optDark, 0) + " %" });
-			else if (d.life && d.life->optDark > 0.05) now.push_back({ "optics", "РАДИАЦ", 1, "ОПТИКА: ПОТЕМНЕНИЕ " + Num(100 * d.life->optDark, 0) + " %" });
-			else if (dose > 1e5) now.push_back({ "dose", "РАДИАЦ", 1, "ДОЗА " + Num(dose / 1000, 0) + " мЗв" });
+			const std::string hint = d.fieldOn ? "" : TR(" · ВКЛЮЧИТЕ ПОЛЕ");
+			if (doseRate > 10000) now.push_back({ "rad", TR("РАДИАЦ"), 2, TR("РАДИАЦИЯ ") + Num(doseRate / 1000, 1) + TR(" мЗв/ч") + hint });
+			else if (doseRate > 1000) now.push_back({ "rad", TR("РАДИАЦ"), 1, TR("РАДИАЦИЯ ") + Num(doseRate / 1000, 2) + TR(" мЗв/ч") + hint });
+			if (dose > 2.5e5) now.push_back({ "dose", TR("РАДИАЦ"), 2, TR("ДОЗА ") + Num(dose / 1000, 0) + TR(" мЗв") });
+			if (d.life && d.life->optDark > 0.4) now.push_back({ "optics", TR("РАДИАЦ"), 2, TR("ОПТИКА: ПОТЕМНЕНИЕ ") + Num(100 * d.life->optDark, 0) + " %" });
+			else if (d.life && d.life->optDark > 0.05) now.push_back({ "optics", TR("РАДИАЦ"), 1, TR("ОПТИКА: ПОТЕМНЕНИЕ ") + Num(100 * d.life->optDark, 0) + " %" });
+			else if (dose > 1e5) now.push_back({ "dose", TR("РАДИАЦ"), 1, TR("ДОЗА ") + Num(dose / 1000, 0) + TR(" мЗв") });
 			if (const Suit* s = d.life)
 			{
 				// the supply over its limit: what was shed, by the loops (task first)
@@ -644,23 +1154,23 @@ namespace ocrew
 				{
 					std::string off;
 					auto add = [&](bool b, const char* n) { if (b) off += (off.empty() ? "" : ", ") + std::string(n); };
-					add(s->shedField, "поле"); add(s->shedLamps, "фонари"); add(s->shedDrives, "сервоприводы");
-					now.push_back({ "over", "БАТ", 1, "ПЕРЕГРУЗКА ПИТАНИЯ" + (off.empty() ? std::string(" · урезан теплообмен") : " · отключено: " + off) });
+					add(s->shedField, TR("поле")); add(s->shedLamps, TR("фонари")); add(s->shedDrives, TR("сервоприводы"));
+					now.push_back({ "over", TR("БАТ"), 1, TR("ПЕРЕГРУЗКА ПИТАНИЯ") + (off.empty() ? std::string(TR(" · урезан теплообмен")) : TR(" · отключено: ") + off) });
 				}
 				const double te = s->tEq - 273.15;
-				if (s->tEq > Suit::EQ_LIMIT) now.push_back({ "eq", "ТЕПЛО", 2, "ПЕРЕГРЕВ АППАРАТУРЫ " + Num(te, 0, true) + " °C · поле и сервоприводы отключены" });
-				else if (s->tEq > Suit::EQ_WARN) now.push_back({ "eq", "ТЕПЛО", 1, "АППАРАТУРА " + Num(te, 0, true) + " °C · отключение при +90" });
-				if (s->restartT > 0) now.push_back({ "restart", "БАТ", 1, "ПЕРЕЗАПУСК ПОСЛЕ ПЕРЕГРЕВА · сначала жизнеобеспечение" });
+				if (s->tEq > Suit::EQ_LIMIT) now.push_back({ "eq", TR("ТЕПЛО"), 2, TR("ПЕРЕГРЕВ АППАРАТУРЫ ") + Num(te, 0, true) + TR(" °C · поле и сервоприводы отключены") });
+				else if (s->tEq > Suit::EQ_WARN) now.push_back({ "eq", TR("ТЕПЛО"), 1, TR("АППАРАТУРА ") + Num(te, 0, true) + TR(" °C · отключение при +90") });
+				if (s->restartT > 0) now.push_back({ "restart", TR("БАТ"), 1, TR("ПЕРЕЗАПУСК ПОСЛЕ ПЕРЕГРЕВА · сначала жизнеобеспечение") });
 			}
-			if (d.jet && d.jetFuel < 0.05) now.push_back({ "fuel", "РЕЗЕРВ", 2, "ТОПЛИВО РАНЦА " + Num(100 * d.jetFuel, 0) + " % · " + Num(d.jetDv, 0) + " м/с" });
-			else if (d.jet && d.jetFuel < 0.15) now.push_back({ "fuel", "РЕЗЕРВ", 1, "ТОПЛИВО РАНЦА " + Num(100 * d.jetFuel, 0) + " % · " + Num(d.jetDv, 0) + " м/с" });
+			if (d.jet && d.jetFuel < 0.05) now.push_back({ "fuel", TR("РЕЗЕРВ"), 2, TR("ТОПЛИВО РАНЦА ") + Num(100 * d.jetFuel, 0) + " % · " + Num(d.jetDv, 0) + TR(" м/с") });
+			else if (d.jet && d.jetFuel < 0.15) now.push_back({ "fuel", TR("РЕЗЕРВ"), 1, TR("ТОПЛИВО РАНЦА ") + Num(100 * d.jetFuel, 0) + " % · " + Num(d.jetDv, 0) + TR(" м/с") });
 			// coming down too fast for the height left (the pack's own guard line): a warning, not a hint
-			if (d.jet && d.jetFlying && d.alt < 25 && d.vs < -(1.0 + 0.8 * d.alt) - 1.5) now.push_back({ "sink", "", 2, "БЫСТРОЕ СНИЖЕНИЕ " + Num(-d.vs, 1) + " м/с" });
-			if (d.jet && d.jetProtect) now.push_back({ "near", "", 1, "ЗЕМЛЯ БЛИЗКО" });
-			if (d.jet && d.jetTerrain) now.push_back({ "terr", "", 1, "РЕЛЬЕФ ВПЕРЕДИ" });
-			if (const Target* s = Selected(); s && space && s->dist < 30 && -s->rate > 0.25) now.push_back({ "zone", "", 1, "ЗОНА 30 м · СБЛИЖЕНИЕ БЫСТРЕЕ 0,25 м/с" });
+			if (d.jet && d.jetFlying && d.alt < 25 && d.vs < -(1.0 + 0.8 * d.alt) - 1.5) now.push_back({ "sink", "", 2, TR("БЫСТРОЕ СНИЖЕНИЕ ") + Num(-d.vs, 1) + TR(" м/с") });
+			if (d.jet && d.jetProtect) now.push_back({ "near", "", 1, TR("ЗЕМЛЯ БЛИЗКО") });
+			if (d.jet && d.jetTerrain) now.push_back({ "terr", "", 1, TR("РЕЛЬЕФ ВПЕРЕДИ") });
+			if (const Target* s = Selected(); s && space && s->dist < 30 && -s->rate > 0.25) now.push_back({ "zone", "", 1, TR("ЗОНА 30 м · СБЛИЖЕНИЕ БЫСТРЕЕ 0,25 м/с") });
 		}
-		if (d.state == 2) now.push_back({ "dead", "", 2, "ГИБЕЛЬ" });
+		if (d.state == 2) now.push_back({ "dead", "", 2, TR("ГИБЕЛЬ") });
 		else if (!d.warning.empty()) now.push_back({ "bio", "", 2, d.warning });
 
 		const double mjd = oapiGetSimMJD(), day = (mjd - std::floor(mjd)) * 86400;
@@ -728,11 +1238,11 @@ namespace ocrew
 				tg.pack = true; ++packs;
 				double fuel = 0;
 				if (o->GetPropellantCount() > 0) { PROPELLANT_HANDLE ph = o->GetPropellantHandleByIndex(0); const double mx = o->GetPropellantMaxMass(ph); fuel = mx > 0 ? o->GetPropellantMass(ph) / mx : 0; }
-				tg.name = "РАНЕЦ";
-				tg.kind = std::string(tg.landed ? "лежит · " : "плывёт · ") + "топливо " + Num(100 * fuel, 0) + " %";
+				tg.name = TR("РАНЕЦ");
+				tg.kind = std::string(tg.landed ? TR("лежит · ") : TR("плывёт · ")) + TR("топливо ") + Num(100 * fuel, 0) + " %";
 			}
-			else if (!crew.empty()) { tg.crew = true; tg.name = Upper(crew); tg.kind = "экипаж"; }
-			else { tg.name = o->GetName(); tg.kind = tg.landed ? "аппарат · на грунте" : "аппарат"; }
+			else if (!crew.empty()) { tg.crew = true; tg.name = Upper(crew); tg.kind = TR("экипаж"); }
+			else { tg.name = o->GetName(); tg.kind = tg.landed ? TR("аппарат · на грунте") : TR("аппарат"); }
 			VECTOR3 og; oapiGetGlobalPos(h, &og);
 			double olng, olat, orad; oapiGlobalToEqu(hBody, og, &olng, &olat, &orad);
 			tg.north = (olat - lat) * bodyR; tg.east = Wrap(olng - lng) * bodyR * std::cos(lat); tg.up = orad - rad;
@@ -751,7 +1261,7 @@ namespace ocrew
 				tg.up = -(rad - bodyR);
 				char nm[256] = ""; oapiGetObjectName(hb, nm, 255);
 				tg.name = Upper(nm); tg.pads = static_cast<int>(oapiGetBasePadCount(hb));
-				tg.kind = tg.pads ? "база · площадок " + std::to_string(tg.pads) : "база";
+				tg.kind = tg.pads ? TR("база · площадок ") + std::to_string(tg.pads) : TR("база");
 				targets.push_back(tg);
 			}
 		std::sort(targets.begin(), targets.end(), [](const Target& a, const Target& b) { return a.dist < b.dist; });
@@ -759,7 +1269,7 @@ namespace ocrew
 		if (packs > 1)   // several packs: number them by distance
 		{
 			int k = 0;
-			for (Target& tg : targets) if (tg.pack) tg.name = "РАНЕЦ " + std::to_string(++k);
+			for (Target& tg : targets) if (tg.pack) tg.name = TR("РАНЕЦ ") + std::to_string(++k);
 		}
 		if (sel && !Selected()) { sel = nullptr; rrHist.clear(); }   // out of reach: let go (none is ever chosen for her)
 
@@ -997,7 +1507,7 @@ namespace ocrew
 				double far_ = 20;
 				for (const auto& t : h.targets) far_ = (std::max)(far_, (std::min)(t.dist, 2000.0));
 				const double s = 120 / (far_ * 1.1);
-				g.T(14, 18, "ПЛАН · ПО ХОДУ →", CD, 9.5); g.T(330, 18, "МАСШТАБ " + Dist(far_ * 1.1), CD, 9.5, 2);
+				g.T(14, 18, TR("ПЛАН · ПО ХОДУ →"), CD, 9.5); g.T(330, 18, TR("МАСШТАБ ") + Dist(far_ * 1.1), CD, 9.5, 2);
 				for (double f : { 0.5, 1.0 }) g.Circle(170, 160, 120 * f, CP, 1, 0.3, -1, 0, true);
 				for (const auto& t : h.targets)
 				{
@@ -1130,9 +1640,9 @@ namespace ocrew
 				const double gv = std::hypot(h.gsH.x, h.gsH.z);
 				if (gv > 0.1) { const double kk = (std::min)(14.0, 110 / gv); const V2 p = vec(h.gsH.z, h.gsH.x, kk); g.Arrow(170, 170, p.first, p.second, cW, 1.6); g.T(p.first + 6, p.second - 4, "V " + Num(gv, 1), cW, 9.5); }
 				const double wv = std::hypot(c.d.wind.x, c.d.wind.z);
-				if (!c.d.vacuum && wv > 0.1) { const double kk = (std::min)(14.0, 110 / wv); const V2 p = vec(c.d.wind.z, c.d.wind.x, kk); g.Arrow(170, 170, p.first, p.second, cP, 1.2, 0.8, true); g.T(p.first + 6, p.second + 10, "ветер " + Num(wv, 1), cP, 9.5); }
+				if (!c.d.vacuum && wv > 0.1) { const double kk = (std::min)(14.0, 110 / wv); const V2 p = vec(c.d.wind.z, c.d.wind.x, kk); g.Arrow(170, 170, p.first, p.second, cP, 1.2, 0.8, true); g.T(p.first + 6, p.second + 10, TR("ветер ") + Num(wv, 1), cP, 9.5); }
 				const double av = std::hypot(c.d.apCmd.x, c.d.apCmd.z);
-				if (c.d.apMode && av > 0.05) { const double kk = (std::min)(30.0, 90 / av); const V2 p = vec(c.d.apCmd.z, c.d.apCmd.x, kk); g.Arrow(170, 170, p.first, p.second, cA, 1.8); g.T(p.first + 6, p.second + 10, "АП", cA, 9.5); }
+				if (c.d.apMode && av > 0.05) { const double kk = (std::min)(30.0, 90 / av); const V2 p = vec(c.d.apCmd.z, c.d.apCmd.x, kk); g.Arrow(170, 170, p.first, p.second, cA, 1.8); g.T(p.first + 6, p.second + 10, TR("АП"), cA, 9.5); }
 			}
 			// what is around
 			for (const auto& t : h.targets)
@@ -1158,9 +1668,9 @@ namespace ocrew
 			g.Fill({ { 170, 161 }, { 177, 177 }, { 170, 173 }, { 163, 177 } }, cW, 1);
 			// north arrow, scale
 			const double nx = -std::sin(h.hdg), ny = -std::cos(h.hdg);
-			g.Line(24, 34, 24 + nx * 12, 34 + ny * 12, cP, 1.6); g.T(24 + nx * 20, 34 + ny * 20 + 4, "С", cP, 10, 1);
+			g.Line(24, 34, 24 + nx * 12, 34 + ny * 12, cP, 1.6); g.T(24 + nx * 20, 34 + ny * 20 + 4, TR("С"), cP, 10, 1);
 			char hd[16]; snprintf(hd, sizeof hd, "%03.0f°", std::fmod(h.hdg * DEG + 360, 360));
-			g.T(330, 18, std::string("КУРС ") + hd, CD, 9.5, 2);
+			g.T(330, 18, std::string(TR("КУРС ")) + hd, CD, 9.5, 2);
 			// heading arc: +-60 deg of the course, ticks every 10, numbers every 30, the course under the pointer
 			for (int dd = -60; dd <= 60; dd += 10)
 			{
@@ -1174,7 +1684,7 @@ namespace ocrew
 			g.Tri(170, 28, -5, -8, 5, -8, CW);
 			g.Line(14, 288, 78, 288, cP, 1.4); g.Line(14, 284, 14, 292, cP, 1); g.Line(78, 284, 78, 292, cP, 1);
 			g.T(46, 282, Dist(range / 2), CD, 9.5, 1);
-			g.Line(238, 285, 250, 285, cA, 1, 0.7); g.T(254, 289, "склон > 15°", cA, 9.5);
+			g.Line(238, 285, 250, 285, cA, 1, 0.7); g.T(254, 289, TR("склон > 15°"), cA, 9.5);
 			for (int zi = 0; zi < 2; ++zi)
 			{
 				const double bx = 296 + zi * 22, by = 244;
@@ -1202,10 +1712,10 @@ namespace ocrew
 				g.Circle(x, y, 4, CW, 1.5, 1, CW, 1); g.Circle(x, y, 9, CA, 1.2);
 				char bn[64] = ""; if (h.hBody) oapiGetObjectName(h.hBody, bn, 64);
 				const char* ru = BodyRu(bn);
-				g.T(14, 18, Upper(std::string(ru ? ru : bn)) + " · НА ПОВЕРХНОСТИ", CD, 9.5);
-				g.Cell(14, 214, "ШИРОТА", Num(std::abs(h.lat * DEG), 1) + (h.lat >= 0 ? "° с." : "° ю."));
-				g.Cell(120, 214, "ДОЛГОТА", Num(std::abs(h.lng * DEG), 1) + (h.lng >= 0 ? "° в." : "° з."));
-				g.Cell(226, 214, "СОЛНЦЕ", h.sunElev > 0 ? Num(h.sunElev * DEG, 0) + "° · день" : "ночь", h.sunElev > 0 ? CW : CA);
+				g.T(14, 18, Upper(std::string(ru ? ru : bn)) + TR(" · НА ПОВЕРХНОСТИ"), CD, 9.5);
+				g.Cell(14, 214, TR("ШИРОТА"), Num(std::abs(h.lat * DEG), 1) + (h.lat >= 0 ? TR("° с.") : TR("° ю.")));
+				g.Cell(120, 214, TR("ДОЛГОТА"), Num(std::abs(h.lng * DEG), 1) + (h.lng >= 0 ? TR("° в.") : TR("° з.")));
+				g.Cell(226, 214, TR("СОЛНЦЕ"), h.sunElev > 0 ? Num(h.sunElev * DEG, 0) + TR("° · день") : TR("ночь"), h.sunElev > 0 ? CW : CA);
 				// what the body asks of anyone who would leave it, and what it gives by turning
 				if (h.hBody)
 				{
@@ -1213,12 +1723,12 @@ namespace ocrew
 					const double vc = std::sqrt(GM / R), ve = vc * std::sqrt(2.0);
 					const double Tsid = std::abs(oapiGetPlanetPeriod(h.hBody)), vrot = Tsid > 0 ? PI2 * R * std::cos(h.lat) / Tsid : 0;
 					double lng_, lat_, rad_; c.v->GetEquPos(lng_, lat_, rad_);
-					g.Cell(14, 250, "g", Num(gs, 2) + " м/с²");
-					g.Cell(120, 250, "1-Я КОСМ.", Num(vc, 0) + " м/с");
-					g.Cell(226, 250, "2-Я КОСМ.", Num(ve, 0) + " м/с");
-					g.Cell(14, 286, "ВРАЩЕНИЕ", Num(vrot, 1) + " м/с");
-					g.Cell(120, 286, "СУТКИ (ЗВЁЗД.)", Tsid > 2 * 86400 ? Num(Tsid / 86400, 1) + " сут" : Num(Tsid / 3600, 1) + " ч");
-					g.Cell(226, 286, "ОТ СРЕДН. R", Num(oapiSurfaceElevation(h.hBody, lng_, lat_), 0, true) + " м");
+					g.Cell(14, 250, "g", Num(gs, 2) + TR(" м/с²"));
+					g.Cell(120, 250, TR("1-Я КОСМ."), Num(vc, 0) + TR(" м/с"));
+					g.Cell(226, 250, TR("2-Я КОСМ."), Num(ve, 0) + TR(" м/с"));
+					g.Cell(14, 286, TR("ВРАЩЕНИЕ"), Num(vrot, 1) + TR(" м/с"));
+					g.Cell(120, 286, TR("СУТКИ (ЗВЁЗД.)"), Tsid > 2 * 86400 ? Num(Tsid / 86400, 1) + TR(" сут") : Num(Tsid / 3600, 1) + TR(" ч"));
+					g.Cell(226, 286, TR("ОТ СРЕДН. R"), Num(oapiSurfaceElevation(h.hBody, lng_, lat_), 0, true) + TR(" м"));
 				}
 				return;
 			}
@@ -1227,7 +1737,7 @@ namespace ocrew
 				// open path (escape) or no elements: what there is
 				OBJHANDLE ref = c.v->GetGravityRef(); VECTOR3 rr, vv; c.v->GetRelativePos(ref, rr); c.v->GetRelativeVel(ref, vv);
 				const double GM = GGRAV * oapiGetMass(ref), r0 = length(rr), v0 = length(vv), ve = std::sqrt(2 * GM / r0);
-				Msg(g, "НЕЗАМКНУТАЯ ТРАЕКТОРИЯ", (Num(v0, 0) + " м/с · 2-я косм. здесь " + Num(ve, 0) + " м/с").c_str());
+				Msg(g, TR("НЕЗАМКНУТАЯ ТРАЕКТОРИЯ"), (Num(v0, 0) + TR(" м/с · 2-я косм. здесь ") + Num(ve, 0) + TR(" м/с")).c_str());
 				return;
 			}
 			char bn[64] = ""; oapiGetObjectName(c.v->GetGravityRef(), bn, 64);
@@ -1252,63 +1762,63 @@ namespace ocrew
 			ell(h.el, 0, CP, false);
 			double drot = 0;
 			if (h.tgtOrbitOk) { drot = Wrap(h.tel.omegab - h.el.omegab); ell(h.tel, drot, CA, true); const V2 q = at(h.tel, h.top.TrA, drot); g.Circle(q.first, q.second, 3.5, CA, 1.2, 1, CA, 1); }
-			const V2 me = at(h.el, h.op.TrA, 0); g.Circle(me.first, me.second, 4.5, CW, 1.5, 1, CW, 1); g.T(me.first + 8, me.second + 14, "Я", CW, 10);
+			const V2 me = at(h.el, h.op.TrA, 0); g.Circle(me.first, me.second, 4.5, CW, 1.5, 1, CW, 1); g.T(me.first + 8, me.second + 14, TR("Я"), CW, 10);
 			const V2 ap = at(h.el, PI, 0), pe = at(h.el, 0, 0);
-			g.Circle(ap.first, ap.second, 2.5, CP, 1, 1, CP, 1); g.T(ap.first - 6, ap.second - 6, "Ап " + Num((h.op.ApD - R) / 1000, 0), CP, 10, 2);
-			g.Circle(pe.first, pe.second, 2.5, CP, 1, 1, CP, 1); g.T(pe.first + 6, pe.second - 6, "Пе " + Num((h.op.PeD - R) / 1000, 0), CP, 10);
-			g.T(14, 18, "ОРБИТА · " + Upper(std::string(ru ? ru : bn)), CD, 9.5); g.T(330, 18, "— моя   - - цель", CD, 9.5, 2);
+			g.Circle(ap.first, ap.second, 2.5, CP, 1, 1, CP, 1); g.T(ap.first - 6, ap.second - 6, TR("Ап ") + Num((h.op.ApD - R) / 1000, 0), CP, 10, 2);
+			g.Circle(pe.first, pe.second, 2.5, CP, 1, 1, CP, 1); g.T(pe.first + 6, pe.second - 6, TR("Пе ") + Num((h.op.PeD - R) / 1000, 0), CP, 10);
+			g.T(14, 18, TR("ОРБИТА · ") + Upper(std::string(ru ? ru : bn)), CD, 9.5); g.T(330, 18, TR("— моя   - - цель"), CD, 9.5, 2);
 			const bool hitsGround = h.op.PeD < R;   // a ballistic arc: it meets the surface before the periapsis
-			g.Cell(14, 250, "ПЕРИОД", Num(h.op.T / 60, 1) + " мин");
-			g.Cell(120, 250, "НАКЛОН", Num(h.el.i * DEG, 2) + "°");
-			g.Cell(226, 250, "ОТН. НАКЛОН", h.tgtOrbitOk ? Num(h.relInc * DEG, 2) + "°" : "—", CA);
+			g.Cell(14, 250, TR("ПЕРИОД"), Num(h.op.T / 60, 1) + TR(" мин"));
+			g.Cell(120, 250, TR("НАКЛОН"), Num(h.el.i * DEG, 2) + "°");
+			g.Cell(226, 250, TR("ОТН. НАКЛОН"), h.tgtOrbitOk ? Num(h.relInc * DEG, 2) + "°" : "—", CA);
 			{
 				VECTOR3 vv; c.v->GetRelativeVel(c.v->GetGravityRef(), vv);
-				g.Cell(14, 286, "СКОРОСТЬ", Num(length(vv), 0) + " м/с");
-				g.Cell(120, 286, "ДО АПОЦЕНТРА", Clock(h.op.ApT));
-				g.Cell(226, 286, hitsGround ? "ДУГА" : "ДО ПЕРИЦЕНТРА", hitsGround ? std::string("до грунта") : Clock(h.op.PeT), hitsGround ? CA : CW);
+				g.Cell(14, 286, TR("СКОРОСТЬ"), Num(length(vv), 0) + TR(" м/с"));
+				g.Cell(120, 286, TR("ДО АПОЦЕНТРА"), Clock(h.op.ApT));
+				g.Cell(226, 286, hitsGround ? TR("ДУГА") : TR("ДО ПЕРИЦЕНТРА"), hitsGround ? std::string(TR("до грунта")) : Clock(h.op.PeT), hitsGround ? CA : CW);
 			}
 		}
 
 		void Power(Ctx& c)
 		{
 			Gfx& g = c.g; const HudData& d = c.d; Grid(g);
-			if (!d.suit) { Msg(g, "КОМБИНЕЗОН", "питания нет"); return; }
-			g.T(14, 22, "БАТАРЕЯ", CD, 9.5);
-			g.T(326, 22, Num(d.battKWh, 1) + " кВт·ч · " + Hours(d.battHours), CW, 11, 2);
+			if (!d.suit) { Msg(g, TR("КОМБИНЕЗОН"), TR("питания нет")); return; }
+			g.T(14, 22, TR("БАТАРЕЯ"), CD, 9.5);
+			g.T(326, 22, Num(d.battKWh, 1) + TR(" кВт·ч · ") + Hours(d.battHours), CW, 11, 2);
 			g.Bar(14, 30, 312, 16, d.batt, d.batt < 0.1 ? CR : d.batt < 0.25 ? CA : CP);
 			const bool cooling = d.heatW >= 0;
 			struct Row { const char* n; double w; } rows[] = {
-				{ "Жизнеобеспечение", d.lifeW }, { cooling ? "Охлаждение (насос)" : "Обогрев", d.thermalW }, { "Сервоприводы", d.driveW }, { "Фонари", d.lampW } };
+				{ TR("Жизнеобеспечение"), d.lifeW }, { cooling ? TR("Охлаждение (насос)") : TR("Обогрев"), d.thermalW }, { TR("Сервоприводы"), d.driveW }, { TR("Фонари"), d.lampW } };
 			for (int i = 0; i < 4; ++i)
 			{
 				const double y = 72 + i * 25, w = rows[i].w;
 				g.T(14, y + 9, rows[i].n, w > 0.5 ? CP : CD, 11);
 				g.Bar(150, y, 120, 11, w / 200, CP);
-				g.T(326, y + 9, w > 0.5 ? Num(w, 0) + " Вт" : "выкл", w > 0.5 ? CW : CD, 11, 2);
+				g.T(326, y + 9, w > 0.5 ? Num(w, 0) + TR(" Вт") : TR("выкл"), w > 0.5 ? CW : CD, 11, 2);
 			}
 			g.Line(14, 180, 326, 180, CD, 1, 0.5, false, false);
-			g.T(14, 196, "ИТОГО", CD, 9.5); g.T(326, 196, Num(d.powerW, 0) + " Вт", CW, 13, 2);
+			g.T(14, 196, TR("ИТОГО"), CD, 9.5); g.T(326, 196, Num(d.powerW, 0) + TR(" Вт"), CW, 13, 2);
 			const double x0 = 20, x1 = 320;
 			auto X = [&](double t) { return x0 + std::clamp((t - d.ratedMinC) / (d.ratedMaxC - d.ratedMinC), 0.0, 1.0) * (x1 - x0); };
-			g.T(14, 226, "ТЕПЛО · ДОПУСК " + Num(d.ratedMinC, 0) + "…" + Num(d.ratedMaxC, 0, true) + " °C", CD, 9.5);
+			g.T(14, 226, TR("ТЕПЛО · ДОПУСК ") + Num(d.ratedMinC, 0) + "…" + Num(d.ratedMaxC, 0, true) + " °C", CD, 9.5);
 			g.Line(x0, 252, x1, 252, CP, 3, 0.5); g.Line(x0, 244, x0, 260, CR, 2); g.Line(x1, 244, x1, 260, CR, 2);
-			g.Tri(X(d.envC), 248, -5, -8, 5, -8, d.inSpec ? CP : CR); g.T(X(d.envC), 238, "среда " + Num(d.envC, 0, true), d.inSpec ? CP : CR, 9.5, 1);
-			if (d.hasGround) { g.Tri(X(d.groundC), 256, -5, 8, 5, 8, CA); g.T(X(d.groundC), 278, "грунт " + Num(d.groundC, 0, true), CA, 9.5, 1); }
-			g.T(14, 296, cooling ? "тепло уходит насосом на радиатор (КПД 3)" : "обогрев от батареи", CD, 9.5);
+			g.Tri(X(d.envC), 248, -5, -8, 5, -8, d.inSpec ? CP : CR); g.T(X(d.envC), 238, TR("среда ") + Num(d.envC, 0, true), d.inSpec ? CP : CR, 9.5, 1);
+			if (d.hasGround) { g.Tri(X(d.groundC), 256, -5, 8, 5, 8, CA); g.T(X(d.groundC), 278, TR("грунт ") + Num(d.groundC, 0, true), CA, 9.5, 1); }
+			g.T(14, 296, cooling ? TR("тепло уходит насосом на радиатор (КПД 3)") : TR("обогрев от батареи"), CD, 9.5);
 		}
 
 		void Opts(Ctx& c)
 		{
 			Gfx& g = c.g; SuitHud& h = c.h; Grid(g);
-			g.T(14, 16, "ОБЛИК ЭКРАНА", CD, 9.5);
+			g.T(14, 16, TR("ОБЛИК ЭКРАНА"), CD, 9.5);
 			for (int i = 0; i < 3; ++i)
 			{
 				const double x = 10 + i * 108, w = 104; const bool on = i == h.look;
-				if (on) { g.Rect(x, 22, w, 22, -1, 0, 0, CA, 1); g.T(x + w / 2, 37, LOOK_NAME[i], CK, 11, 1); }
-				else { g.Rect(x, 22, w, 22, CP, 1, 0.7, CP, 0.08); g.T(x + w / 2, 37, LOOK_NAME[i], CP, 11, 1); }
+				if (on) { g.Rect(x, 22, w, 22, -1, 0, 0, CA, 1); g.T(x + w / 2, 37, TR(LOOK_NAME[i]), CK, 11, 1); }
+				else { g.Rect(x, 22, w, 22, CP, 1, 0.7, CP, 0.08); g.T(x + w / 2, 37, TR(LOOK_NAME[i]), CP, 11, 1); }
 				g.Hit(x, 22, w, 22, SuitHud::H_LOOK, i);
 			}
-			g.T(14, 62, h.look ? "ЦВЕТ — только для голо" : "ЦВЕТ", CD, 9.5);
+			g.T(14, 62, h.look ? TR("ЦВЕТ — только для голо") : TR("ЦВЕТ"), CD, 9.5);
 			for (int i = 0; i < 3; ++i)
 			{
 				const double y = 68 + i * 40; const bool on = i == h.pal;
@@ -1317,49 +1827,49 @@ namespace ocrew
 				// swatches: the palette's own colours
 				Gfx sw(g.skp, g.o, g.txt, i); sw.Frame(g.ox, g.oy, g.u); sw.kx = g.kx; sw.ky = g.ky;
 				sw.Rect(22, y + 7, 22, 22, -1, 0, 0, CP, 1); sw.Rect(48, y + 7, 22, 22, -1, 0, 0, CA, 1);
-				g.T(88, y + 16, std::string(on ? "▶ " : "") + PAL_NAME[i], on ? CA : CW, 12.5);
-				g.T(88, y + 30, PAL_NOTE[i], CD, 9.5);
+				g.T(88, y + 16, std::string(on ? "▶ " : "") + TR(PAL_NAME[i]), on ? CA : CW, 12.5);
+				g.T(88, y + 30, TR(PAL_NOTE[i]), CD, 9.5);
 			}
 			g.Line(14, 192, 326, 192, CD, 1, 0.5, false, false);
-			g.T(14, 207, "ЯРКОСТЬ ЭКРАНА", CD, 9.5);
-			g.T(326, 207, "свет вокруг " + Num(h.ambient, 2), CD, 9.5, 2);
+			g.T(14, 207, TR("ЯРКОСТЬ ЭКРАНА"), CD, 9.5);
+			g.T(326, 207, TR("свет вокруг ") + Num(h.ambient, 2), CD, 9.5, 2);
 			{
 				const double y = 213; const bool au = h.brightAuto;
-				if (au) { g.Rect(14, y, 62, 20, -1, 0, 0, CA, 1); g.T(45, y + 14, "АВТО", CK, 11, 1); }
-				else { g.Rect(14, y, 62, 20, CP, 1, 0.7, CP, 0.08); g.T(45, y + 14, "АВТО", CP, 11, 1); }
+				if (au) { g.Rect(14, y, 62, 20, -1, 0, 0, CA, 1); g.T(45, y + 14, TR("АВТО"), CK, 11, 1); }
+				else { g.Rect(14, y, 62, 20, CP, 1, 0.7, CP, 0.08); g.T(45, y + 14, TR("АВТО"), CP, 11, 1); }
 				g.Hit(14, y, 62, 20, SuitHud::H_BRIGHT, 0);
 				g.Rect(84, y, 20, 20, CP, 1, 0.7, CP, 0.08); g.T(94, y + 15, "−", CP, 13, 1); g.Hit(84, y, 20, 20, SuitHud::H_BRIGHT, -1);
 				g.Bar(110, y + 6, 180, 8, au ? h.ambient : h.brightManual / 1.5, au ? CD : h.brightManual > 1.05 ? CA : CP);
 				g.Line(110 + 180 / 1.5, y + 3, 110 + 180 / 1.5, y + 17, CD, 1, 0.8, false, false);   // 1.0; beyond it - the maximum
-				if (!au && h.brightManual > 1.05) g.T(200, y - 2, "МАКСИМУМ", CA, 8.5, 1);
+				if (!au && h.brightManual > 1.05) g.T(200, y - 2, TR("МАКСИМУМ"), CA, 8.5, 1);
 				g.Rect(296, y, 20, 20, CP, 1, 0.7, CP, 0.08); g.T(306, y + 15, "+", CP, 13, 1); g.Hit(296, y, 20, 20, SuitHud::H_BRIGHT, 1);
 			}
 			// the helmet display's resolution: 1:1 with the screen, or half (lighter)
-			g.T(14, 252, "ЧЁТКОСТЬ", CD, 9.5);
+			g.T(14, 252, TR("ЧЁТКОСТЬ"), CD, 9.5);
 			for (int i = 0; i < 2; ++i)
 			{
 				const bool on = h.hudScale == i + 1; const double x = 70 + i * 128;
 				if (on) g.Rect(x, 239, 120, 18, -1, 0, 0, CA, 1); else g.Rect(x, 239, 120, 18, CP, 1, 0.7, CP, 0.08);
-				g.T(x + 60, 252, i == 0 ? "1:1" : "2× СГЛАЖИВАНИЕ", on ? CK : CP, 10, 1);
+				g.T(x + 60, 252, i == 0 ? "1:1" : TR("2× СГЛАЖИВАНИЕ"), on ? CK : CP, 10, 1);
 				if (!on) g.Hit(x, 239, 120, 18, SuitHud::H_RES, i + 1);
 			}
 			// the pitch ladder: by itself (in flight and in space), always, or never
-			g.T(14, 276, "ГОРИЗОНТ", CD, 9.5);
+			g.T(14, 276, TR("ГОРИЗОНТ"), CD, 9.5);
 			for (int i = 0; i < 3; ++i)
 			{
-				static const char* HN[3] = { "АВТО", "ВСЕГДА", "ВЫКЛ" };
+				const char* HN[3] = { TR("АВТО"), TR("ВСЕГДА"), TR("ВЫКЛ") };
 				const bool on = h.horizonMode == i; const double x = 70 + i * 86;
 				if (on) g.Rect(x, 263, 80, 18, -1, 0, 0, CA, 1); else g.Rect(x, 263, 80, 18, CP, 1, 0.7, CP, 0.08);
 				g.T(x + 40, 276, HN[i], on ? CK : CP, 10, 1);
 				if (!on) g.Hit(x, 263, 80, 18, SuitHud::H_HORIZON, i);
 			}
 			// the local map: technical monochrome or with colour accents
-			g.T(14, 300, "КАРТА", CD, 9.5);
+			g.T(14, 300, TR("КАРТА"), CD, 9.5);
 			for (int i = 0; i < 2; ++i)
 			{
 				const bool on = (i == 0) == h.mapMono; const double x = 70 + i * 128;
 				if (on) g.Rect(x, 288, 120, 18, -1, 0, 0, CA, 1); else g.Rect(x, 288, 120, 18, CP, 1, 0.7, CP, 0.08);
-				g.T(x + 60, 301, i == 0 ? "МОНОХРОМ" : "ЦВЕТ", on ? CK : CP, 10, 1);
+				g.T(x + 60, 301, i == 0 ? TR("МОНОХРОМ") : TR("ЦВЕТ"), on ? CK : CP, 10, 1);
 				if (!on) g.Hit(x, 288, 120, 18, SuitHud::H_LOOK, 10);
 			}
 		}
@@ -1367,8 +1877,8 @@ namespace ocrew
 		void Targets(Ctx& c)
 		{
 			Gfx& g = c.g; SuitHud& h = c.h; Grid(g);
-			if (h.targets.empty()) { Msg(g, "В РАДИУСЕ 50 км НИКОГО"); return; }
-			g.T(14, 20, "ОБЪЕКТ", CD, 9.5); g.T(250, 20, "ДАЛЬН", CD, 9.5, 2); g.T(326, 20, "V СБЛ", CD, 9.5, 2);
+			if (h.targets.empty()) { Msg(g, TR("В РАДИУСЕ 50 км НИКОГО")); return; }
+			g.T(14, 20, TR("ОБЪЕКТ"), CD, 9.5); g.T(250, 20, TR("ДАЛЬН"), CD, 9.5, 2); g.T(326, 20, TR("V СБЛ"), CD, 9.5, 2);
 			const size_t rows = (std::min)(h.targets.size(), static_cast<size_t>(5));
 			for (size_t i = 0; i < rows; ++i)
 			{
@@ -1383,28 +1893,28 @@ namespace ocrew
 			const SuitHud::Target* s = h.Selected();
 			if (!s) return;
 			g.Line(14, 196, 326, 196, CD, 1, 0.5, false, false);
-			g.T(14, 212, "ВЫБРАНО: " + s->name, CA, 12);
+			g.T(14, 212, TR("ВЫБРАНО: ") + s->name, CA, 12);
 			double brg = std::atan2(s->east, s->north) * DEG; if (brg < 0) brg += 360;
 			const double elev = std::atan2(s->up, std::hypot(s->north, s->east)) * DEG;
 			char b[16]; snprintf(b, sizeof b, "%03.0f°", brg);
-			g.Cell(14, 228, "ПЕЛЕНГ", b); g.Cell(100, 228, "УГОЛ МЕСТА", Num(elev, 0, true) + "°");
-			g.Cell(14, 264, "ОТН. СКОРОСТЬ", Num(length(s->relV), 2) + " м/с");
-			if (s->base) g.Cell(130, 264, "ПЛОЩАДКИ", std::to_string(s->pads));
-			else g.Cell(130, 264, "СТЫК. УЗЛЫ", [&] { VESSEL* o = oapiGetVesselInterface(s->h); return o ? std::to_string(o->DockCount()) : std::string("—"); }());
+			g.Cell(14, 228, TR("ПЕЛЕНГ"), b); g.Cell(100, 228, TR("УГОЛ МЕСТА"), Num(elev, 0, true) + "°");
+			g.Cell(14, 264, TR("ОТН. СКОРОСТЬ"), Num(length(s->relV), 2) + TR(" м/с"));
+			if (s->base) g.Cell(130, 264, TR("ПЛОЩАДКИ"), std::to_string(s->pads));
+			else g.Cell(130, 264, TR("СТЫК. УЗЛЫ"), [&] { VESSEL* o = oapiGetVesselInterface(s->h); return o ? std::to_string(o->DockCount()) : std::string("—"); }());
 			// the target's bearing relative to her heading
 			const double rb = std::atan2(s->east, s->north) - h.hdg;
 			g.Circle(288, 250, 30, CP, 1, 0.6);
 			g.Line(288 + 22 * std::sin(rb), 250 - 22 * std::cos(rb), 288, 250, CA, 2);
 			g.Circle(288 + 22 * std::sin(rb), 250 - 22 * std::cos(rb), 3, CA, 1, 1, CA, 1);
-			g.T(288, 216, "курс ↑", CD, 9.5, 1);
+			g.T(288, 216, TR("курс ↑"), CD, 9.5, 1);
 		}
 
 		void Transfer(Ctx& c)
 		{
 			Gfx& g = c.g; SuitHud& h = c.h; const HudData& d = c.d; Grid(g);
 			const SuitHud::Target* s = h.Selected();
-			if (!s || h.prof.h.size() < 2) { Msg(g, "ВЫБЕРИТЕ ЦЕЛЬ", "на странице ЦЕЛИ или на карте"); return; }
-			g.T(14, 18, "ПРОФИЛЬ ПЕРЕЛЁТА · РЕЛЬЕФ ПО ПУТИ", CD, 9.5);
+			if (!s || h.prof.h.size() < 2) { Msg(g, TR("ВЫБЕРИТЕ ЦЕЛЬ"), TR("на странице ЦЕЛИ или на карте")); return; }
+			g.T(14, 18, TR("ПРОФИЛЬ ПЕРЕЛЁТА · РЕЛЬЕФ ПО ПУТИ"), CD, 9.5);
 			const double hereGround = h.prof.h.front();
 			const double cruise = d.apMode == 2 && d.jetMode == 1 ? d.jetAltHold : std::clamp(h.prof.dist / 40, 3.0, 60.0);
 			double top = (std::max)(cruise, d.alt) + 2, bot = 0;
@@ -1424,24 +1934,24 @@ namespace ocrew
 			g.Fill(area, CD, 0.25); g.Poly(ground, CD, 1, 0.8);
 			const double zEnd = h.prof.h.back() - hereGround;
 			g.Poly({ { X(0), Y(d.alt) }, { X(0.08), Y(cruise) }, { X(0.85), Y(cruise) }, { X(1), Y(zEnd) } }, CA, 1.6, 1, false, true);
-			g.Circle(X(0), Y(d.alt), 4, CW, 1.5, 1, CW, 1); g.T(X(0) + 6, Y(d.alt) - 6, "Я", CW, 10);
+			g.Circle(X(0), Y(d.alt), 4, CW, 1.5, 1, CW, 1); g.T(X(0) + 6, Y(d.alt) - 6, TR("Я"), CW, 10);
 			g.Line(X(1), Y(zEnd), X(1), Y(zEnd) - 22, CA, 1.4); g.Tri(X(1), Y(zEnd) - 22, 12, 4, 0, 8, CA);
 			g.T(X(1) - 4, Y(zEnd) - 26, s->name, CA, 9.5, 2);
-			g.T(160, 164, "зазор мин. " + Num(minClear, 1) + " м", minClear < 1.5 ? CR : CP, 9.5, 1);
+			g.T(160, 164, TR("зазор мин. ") + Num(minClear, 1) + TR(" м"), minClear < 1.5 ? CR : CP, 9.5, 1);
 			double brg = h.prof.brg * DEG; if (brg < 0) brg += 360; char b[16]; snprintf(b, sizeof b, "%03.0f°", brg);
 			const double g0 = h.hBody ? GGRAV * oapiGetMass(h.hBody) / (h.bodyR * h.bodyR) : 1.62;
 			const bool hop = h.hBody && !oapiPlanetHasAtmosphere(h.hBody) && D > 400;
 			const double vCruise = hop ? std::sqrt(D * g0 / std::sin(50 * RAD)) : std::clamp(std::sqrt(g0 * D / 2), 3.0, 40.0);
 			const double time = hop ? 2 * vCruise * std::sin(25 * RAD) / g0 + 20 : D / vCruise;
 			const double dv = hop ? 2.6 * std::sqrt(D * g0) + 80 : g0 * time + 2 * vCruise;
-			g.Cell(14, 180, "ДАЛЬНОСТЬ", Dist(D)); g.Cell(120, 180, "ПЕЛЕНГ", b); g.Cell(226, 180, "ВРЕМЯ ≈", Clock(time));
-			g.Cell(14, 216, "ВЫСОТА", Num(cruise, 1) + " м", CA); g.Cell(120, 216, "Δv ≈", Num(dv, 0) + " м/с");
-			g.Cell(226, 216, "ЗАПАС ПОСЛЕ", Num(d.jetDv - dv, 0) + " м/с", d.jetDv - dv < 20 ? CR : CW);
+			g.Cell(14, 180, TR("ДАЛЬНОСТЬ"), Dist(D)); g.Cell(120, 180, TR("ПЕЛЕНГ"), b); g.Cell(226, 180, TR("ВРЕМЯ ≈"), Clock(time));
+			g.Cell(14, 216, TR("ВЫСОТА"), Num(cruise, 1) + TR(" м"), CA); g.Cell(120, 216, "Δv ≈", Num(dv, 0) + TR(" м/с"));
+			g.Cell(226, 216, TR("ЗАПАС ПОСЛЕ"), Num(d.jetDv - dv, 0) + TR(" м/с"), d.jetDv - dv < 20 ? CR : CW);
 			const size_t n = h.prof.h.size();
 			const double slope = std::atan(std::abs(h.prof.h[n - 1] - h.prof.h[n - 2]) / (D / (n - 1))) * DEG;
 			g.Line(14, 254, 326, 254, CD, 1, 0.5, false, false);
-			g.T(14, 272, "у цели склон " + Num(slope, 0) + "° · " + (slope < 10 ? "садиться можно" : "круто, ищите ровнее"), slope < 10 ? CP : CA, 10.5);
-			g.T(14, 290, (hop ? "прыжком до " : "крейсер ") + Num(vCruise, 0) + " м/с · " + (s->base ? "посадка на площадку" : "посадка рядом с целью"), CD, 9.5);
+			g.T(14, 272, TR("у цели склон ") + Num(slope, 0) + "° · " + (slope < 10 ? TR("садиться можно") : TR("круто, ищите ровнее")), slope < 10 ? CP : CA, 10.5);
+			g.T(14, 290, (hop ? TR("прыжком до ") : TR("крейсер ")) + Num(vCruise, 0) + TR(" м/с · ") + (s->base ? TR("посадка на площадку") : TR("посадка рядом с целью")), CD, 9.5);
 		}
 
 		// МАШИНА: the platform she drives from its post - speed and its limit, the wheel, the platform's height, the brake,
@@ -1450,35 +1960,35 @@ namespace ocrew
 		{
 			Gfx& g = c.g; const SuitHud& h = c.h; const MpuState& m = h.mpu;
 			const double kmh = std::abs(m.speed) * 3.6, lim = m.speedMax * 3.6;
-			g.T(14, 22, "СКОРОСТЬ", CD, 9.5); g.T(326, 22, "ПРЕДЕЛ", CD, 9.5, 2);
-			g.T(14, 50, Num(kmh, kmh < 10 ? 1 : 0) + " км/ч", CW, 15);
-			if (m.speed < -0.1) g.T(150, 50, "НАЗАД", CA, 11);
-			g.T(326, 50, Num(lim, 0) + " км/ч", m.full ? CA : CW, 13, 2);
-			if (m.full) g.T(326, 66, "ПОЛНЫЙ ХОД", CA, 9.5, 2);
+			g.T(14, 22, TR("СКОРОСТЬ"), CD, 9.5); g.T(326, 22, TR("ПРЕДЕЛ"), CD, 9.5, 2);
+			g.T(14, 50, Num(kmh, kmh < 10 ? 1 : 0) + TR(" км/ч"), CW, 15);
+			if (m.speed < -0.1) g.T(150, 50, TR("НАЗАД"), CA, 11);
+			g.T(326, 50, Num(lim, 0) + TR(" км/ч"), m.full ? CA : CW, 13, 2);
+			if (m.full) g.T(326, 66, TR("ПОЛНЫЙ ХОД"), CA, 9.5, 2);
 			g.Bar(14, 74, 312, 8, lim > 0 ? kmh / lim : 0, m.full ? CA : CP);
 			// the wheel: the marker off the centre line
-			g.T(14, 104, "РУЛЬ", CD, 9.5);
+			g.T(14, 104, TR("РУЛЬ"), CD, 9.5);
 			g.Rect(70, 95, 256, 12, CD, 1, 0.6);
 			g.Line(198, 92, 198, 110, CD, 1, 0.7, false, false);
 			const double sx = 198 + std::clamp(m.steer, -1.0, 1.0) * 124;
 			g.Rect(sx - 3, 96, 6, 10, -1, 0, 0, CP, 1);
-			g.T(326, 124, std::abs(m.steer) < 0.05 ? std::string("прямо") : std::string(m.steer > 0 ? "вправо " : "влево ") + Num(100 * std::abs(m.steer), 0) + " %", CW, 10.5, 2);
+			g.T(326, 124, std::abs(m.steer) < 0.05 ? std::string(TR("прямо")) : std::string(m.steer > 0 ? TR("вправо ") : TR("влево ")) + Num(100 * std::abs(m.steer), 0) + " %", CW, 10.5, 2);
 			// the platform between its lowest and highest
-			g.T(14, 146, "ПЛАТФОРМА", CD, 9.5); g.T(326, 146, Num(m.deck, 2) + " м", CW, 11, 2);
+			g.T(14, 146, TR("ПЛАТФОРМА"), CD, 9.5); g.T(326, 146, Num(m.deck, 2) + TR(" м"), CW, 11, 2);
 			const double span = m.deckMax - m.deckMin;
 			g.Bar(14, 152, 312, 8, span > 1e-3 ? (m.deck - m.deckMin) / span : 0, CP);
 			g.Line(14, 174, 326, 174, CD, 1, 0.5, false, false);
 			// the energy
 			const int cc = m.charge < 0.15 ? CR : m.charge < 0.3 ? CA : CP;
-			g.T(14, 192, "ЗАРЯД", CD, 9.5);
-			g.T(326, 192, Num(100 * m.charge, 0) + " % · " + Num(m.energyKWh, 1) + " кВт·ч", cc == CP ? CW : cc, 11, 2);
+			g.T(14, 192, TR("ЗАРЯД"), CD, 9.5);
+			g.T(326, 192, Num(100 * m.charge, 0) + " % · " + Num(m.energyKWh, 1) + TR(" кВт·ч"), cc == CP ? CW : cc, 11, 2);
 			g.Bar(14, 198, 312, 8, m.charge, cc);
-			g.T(14, 226, "МОЩНОСТЬ", CD, 9.5);
-			g.T(326, 226, m.powerW < -50 ? "отдача " + Num(-m.powerW / 1000, 1) + " кВт" : Num((std::max)(0.0, m.powerW) / 1000, 1) + " кВт", m.powerW < -50 ? CA : CW, 11, 2);
-			g.T(14, 244, "ЗАПАС ХОДА", CD, 9.5);
-			g.T(326, 244, m.rangeKm < 0 ? std::string("стоит") : Num(m.rangeKm, m.rangeKm < 10 ? 1 : 0) + " км", m.rangeKm >= 0 && m.rangeKm < 2 ? CA : CW, 11, 2);
-			g.T(14, 262, "ТОРМОЗ", CD, 9.5);
-			g.T(326, 262, m.brake ? "стояночный" : "снят", m.brake ? CA : CW, 11, 2);
+			g.T(14, 226, TR("МОЩНОСТЬ"), CD, 9.5);
+			g.T(326, 226, m.powerW < -50 ? TR("отдача ") + Num(-m.powerW / 1000, 1) + TR(" кВт") : Num((std::max)(0.0, m.powerW) / 1000, 1) + TR(" кВт"), m.powerW < -50 ? CA : CW, 11, 2);
+			g.T(14, 244, TR("ЗАПАС ХОДА"), CD, 9.5);
+			g.T(326, 244, m.rangeKm < 0 ? std::string(TR("стоит")) : Num(m.rangeKm, m.rangeKm < 10 ? 1 : 0) + TR(" км"), m.rangeKm >= 0 && m.rangeKm < 2 ? CA : CW, 11, 2);
+			g.T(14, 262, TR("ТОРМОЗ"), CD, 9.5);
+			g.T(326, 262, m.brake ? TR("стояночный") : TR("снят"), m.brake ? CA : CW, 11, 2);
 			// the mouse: the parking brake and the platform (when the machine takes commands)
 			if (MpuCmd())
 			{
@@ -1488,24 +1998,24 @@ namespace ocrew
 					else { g.Rect(x, 278, w, 22, CP, 1, 0.7, CP, 0.08); g.T(x + w / 2, 293, n, CP, 10.5, 1); }
 					g.Hit(x, 278, w, 22, SuitHud::H_MPU, cmd);
 				};
-				button(14, 150, "СТОЯНОЧНЫЙ", m.brake != 0, 1);
-				button(176, 150, m.deck > 0.5 * (m.deckMin + m.deckMax) ? "ПЛАТФОРМА ▼" : "ПЛАТФОРМА ▲", false, 2);
+				button(14, 150, TR("СТОЯНОЧНЫЙ"), m.brake != 0, 1);
+				button(176, 150, m.deck > 0.5 * (m.deckMin + m.deckMax) ? TR("ПЛАТФОРМА ▼") : TR("ПЛАТФОРМА ▲"), false, 2);
 			}
-			g.T(14, 322, "W/S ход · A/D руль · Shift полный · Пробел тормоз", CD, 9.5);
-			g.T(14, 338, "Caps Lock платформа · V вид на машину", CD, 9.5);
+			g.T(14, 322, TR("W/S ход · A/D руль · Shift полный · Пробел тормоз"), CD, 9.5);
+			g.T(14, 338, TR("Caps Lock платформа · V вид на машину"), CD, 9.5);
 		}
 
 		void Flight(Ctx& c)
 		{
 			Gfx& g = c.g; const HudData& d = c.d; Grid(g);
-			if (!d.jet) { Msg(g, "РАНЕЦ НЕ НАДЕТ"); return; }
+			if (!d.jet) { Msg(g, TR("РАНЕЦ НЕ НАДЕТ")); return; }
 			const bool hold = d.jetMode == 1 && !d.apMode;
-			g.T(14, 18, "КРУИЗ · ВЫСОТУ И СКОРОСТЬ ДЕРЖИТ ПОМОЩНИК", CD, 9.5);
+			g.T(14, 18, TR("КРУИЗ · ВЫСОТУ И СКОРОСТЬ ДЕРЖИТ ПОМОЩНИК"), CD, 9.5);
 			auto block = [&](double y, const char* name, const std::string& set, const std::string& now, int req0, const std::vector<const char*>& lab)
 			{
 				g.T(14, y, name, CD, 9.5);
 				g.T(14, y + 28, set, hold ? CA : CD, 22);
-				g.T(326, y + 28, "сейчас " + now, CW, 12, 2);
+				g.T(326, y + 28, TR("сейчас ") + now, CW, 12, 2);
 				const double bw = 312.0 / lab.size() - 4;
 				for (size_t i = 0; i < lab.size(); ++i)
 				{
@@ -1515,27 +2025,27 @@ namespace ocrew
 					g.T(bx + bw / 2, by + 15, lab[i], CA, 10.5, 1);
 				}
 			};
-			block(42, "ВЫСОТА НАД ГРУНТОМ", Num(d.jetAltHold, 1) + " м", Num(d.alt, 1) + " м", SuitHud::AP_CRUISE, { "-10", "-1", "+1", "+10" });
-			block(130, "СКОРОСТЬ ВПЕРЁД", Num(hold ? d.jetSpd : d.jetVf, 1) + " м/с", Num(d.jetVf, 1) + " м/с", SuitHud::AP_CRUISE + 10, { "-5", "-1", "СТОП", "+1", "+5" });
+			block(42, TR("ВЫСОТА НАД ГРУНТОМ"), Num(d.jetAltHold, 1) + TR(" м"), Num(d.alt, 1) + TR(" м"), SuitHud::AP_CRUISE, { "-10", "-1", "+1", "+10" });
+			block(130, TR("СКОРОСТЬ ВПЕРЁД"), Num(hold ? d.jetSpd : d.jetVf, 1) + TR(" м/с"), Num(d.jetVf, 1) + TR(" м/с"), SuitHud::AP_CRUISE + 10, { "-5", "-1", TR("СТОП"), "+1", "+5" });
 			g.Line(14, 214, 326, 214, CD, 1, 0.5, false, false);
-			g.T(14, 232, hold ? "круиз включён · снос вбок гасится сам" : "круиз выключен · кнопка включит с текущими", hold ? CP : CD, 10.5);
-			g.T(14, 252, "W / S - скорость, 3 м/с за секунду", CD, 9.5);
-			g.T(14, 268, "A / D - курс · пробел / Ctrl - высота", CD, 9.5);
-			g.T(14, 284, "Shift - полный вектор вручную, круиз ждёт", CD, 9.5);
+			g.T(14, 232, hold ? TR("круиз включён · снос вбок гасится сам") : TR("круиз выключен · кнопка включит с текущими"), hold ? CP : CD, 10.5);
+			g.T(14, 252, TR("W / S - скорость, 3 м/с за секунду"), CD, 9.5);
+			g.T(14, 268, TR("A / D - курс · пробел / Ctrl - высота"), CD, 9.5);
+			g.T(14, 284, TR("Shift - полный вектор вручную, круиз ждёт"), CD, 9.5);
 		}
 
 		void Landing(Ctx& c)
 		{
 			Gfx& g = c.g; SuitHud& h = c.h; const HudData& d = c.d; Grid(g);
 			const double cx = 110, cy = 128;
-			g.T(14, 18, "ПОД НОГАМИ · ВИД СВЕРХУ", CD, 9.5);
+			g.T(14, 18, TR("ПОД НОГАМИ · ВИД СВЕРХУ"), CD, 9.5);
 			for (double r : { 20.0, 45.0, 70.0 }) g.Circle(cx, cy, r, CP, 1, 0.4, -1, 0, true);
 			g.Line(cx - 10, cy, cx + 10, cy, CA, 1.6); g.Line(cx, cy - 10, cx, cy + 10, CA, 1.6); g.Circle(cx, cy, 16, CA, 1.4);
 			// drift, heading-up: 1 m/s = 40 units
 			const V2 dv = MapXY(h.gsH.z, h.gsH.x, h.hdg, 40);
 			const double ex = cx + (dv.first - 170), ey = cy + (dv.second - 170);
 			g.Line(cx, cy, ex, ey, CW, 1.6); g.Circle(ex, ey, 3, CW, 1, 1, CW, 1);
-			g.T(cx, cy + 88, "снос " + Num(d.gs, 1) + " м/с", CW, 10, 1);
+			g.T(cx, cy + 88, TR("снос ") + Num(d.gs, 1) + TR(" м/с"), CW, 10, 1);
 			// vertical speed with the injury limits
 			auto Yv = [](double v) { return 30 + (2 - v) * 11.1; };
 			g.Rect(236, Yv(0), 18, Yv(-1.5) - Yv(0), -1, 0, 0, CP, 0.3);
@@ -1544,11 +2054,11 @@ namespace ocrew
 			g.Rect(236, Yv(-14), 18, Yv(-16) - Yv(-14), -1, 0, 0, CR, 0.6);
 			g.Rect(236, Yv(2), 18, Yv(-16) - Yv(2), CD, 1, 0.8);
 			for (double v : { 2.0, 0.0, -1.5, -7.0, -14.0 }) { g.Line(254, Yv(v), 262, Yv(v), CP, 1); g.T(266, Yv(v) + 4, Num(v, v == -1.5 ? 1 : 0, true), CD, 9.5); }
-			g.T(300, Yv(-10.5), "травма", CA, 9.5); g.T(300, Yv(-15) + 3, "гибель", CR, 9.5);
+			g.T(300, Yv(-10.5), TR("травма"), CA, 9.5); g.T(300, Yv(-15) + 3, TR("гибель"), CR, 9.5);
 			const double vs = std::clamp(d.vs, -16.0, 2.0);
-			g.Tri(232, Yv(vs), -10, -7, -10, 7, CW); g.T(245, 22, "ВЕРТ м/с", CD, 9.5, 1);
-			g.Cell(14, 214, "ВЫСОТА", Num(d.alt, 1) + " м"); g.Cell(84, 214, "ВЕРТ", Num(d.vs, 1, true) + " м/с", d.vs < -1.5 ? CA : CW);
-			g.Cell(160, 214, "КАСАНИЕ", d.vs < -0.05 ? "≈ " + Num(d.alt / -d.vs, 0) + " с" : "—");
+			g.Tri(232, Yv(vs), -10, -7, -10, 7, CW); g.T(245, 22, TR("ВЕРТ м/с"), CD, 9.5, 1);
+			g.Cell(14, 214, TR("ВЫСОТА"), Num(d.alt, 1) + TR(" м")); g.Cell(84, 214, TR("ВЕРТ"), Num(d.vs, 1, true) + TR(" м/с"), d.vs < -1.5 ? CA : CW);
+			g.Cell(160, 214, TR("КАСАНИЕ"), d.vs < -0.05 ? "≈ " + Num(d.alt / -d.vs, 0) + TR(" с") : "—");
 			// slope under her from the map grid
 			double slope = 0;
 			const auto& G = h.grid;
@@ -1558,35 +2068,35 @@ namespace ocrew
 				slope = std::atan(std::hypot(G.h[m * G.n + m + 1] - G.h[m * G.n + m - 1], G.h[(m + 1) * G.n + m] - G.h[(m - 1) * G.n + m]) / (2 * step)) * DEG;
 			}
 			g.Line(14, 252, 222, 252, CD, 1, 0.5, false, false);
-			g.T(14, 270, "уклон под ногами " + Num(slope, 0) + "° " + (slope < 10 ? "✓" : "— круто"), slope < 10 ? CP : CA, 10.5);
-			g.T(14, 288, "касание ≤ 1,5 м/с · травма > 7 · гибель > 14", CD, 9.5);
+			g.T(14, 270, TR("уклон под ногами ") + Num(slope, 0) + "° " + (slope < 10 ? "✓" : TR("— круто")), slope < 10 ? CP : CA, 10.5);
+			g.T(14, 288, TR("касание ≤ 1,5 м/с · травма > 7 · гибель > 14"), CD, 9.5);
 		}
 
 		void Approach(Ctx& c)
 		{
 			Gfx& g = c.g; SuitHud& h = c.h; Grid(g);
 			const SuitHud::Target* s = h.Selected();
-			if (!s) { Msg(g, "ВЫБЕРИТЕ ЦЕЛЬ", "на странице ЦЕЛИ или на карте"); return; }
-			if (s->base) { Msg(g, "ЦЕЛЬ — БАЗА", "к базе только ПЕРЕЛЁТ"); return; }
+			if (!s) { Msg(g, TR("ВЫБЕРИТЕ ЦЕЛЬ"), TR("на странице ЦЕЛИ или на карте")); return; }
+			if (s->base) { Msg(g, TR("ЦЕЛЬ — БАЗА"), TR("к базе только ПЕРЕЛЁТ")); return; }
 			VESSEL* o = oapiGetVesselInterface(s->h);
 			OBJHANDLE ref = c.v->GetGravityRef();
 			VECTOR3 rt, vt; o->GetRelativePos(ref, rt); o->GetRelativeVel(ref, vt);
 			const VECTOR3 rb = -Unit(rt), hb = Unit(crossp(rt, vt)), vb = Unit(crossp(hb, -rb));   // R-bar down, V-bar along the motion
 			const double x = dotp(s->rel, vb), z = dotp(s->rel, rb), vx = dotp(s->relV, vb), vz = dotp(s->relV, rb);
 			const double tx = 200, ty = 86, sc = 100 / (std::max)(10.0, s->dist * 1.3);
-			g.T(14, 18, "ОТНОСИТЕЛЬНОЕ ДВИЖЕНИЕ · " + s->name, CD, 9.5);
+			g.T(14, 18, TR("ОТНОСИТЕЛЬНОЕ ДВИЖЕНИЕ · ") + s->name, CD, 9.5);
 			g.Line(10, ty, 330, ty, CD, 1, 0.6, true); g.Line(tx, 26, tx, 150, CD, 1, 0.6, true);
-			g.T(326, ty - 5, "+V по ходу", CD, 9, 2); g.T(tx + 4, 148, "вниз ↓", CD, 9);
+			g.T(326, ty - 5, TR("+V по ходу"), CD, 9, 2); g.T(tx + 4, 148, TR("вниз ↓"), CD, 9);
 			const double side = x < 0 ? -1 : 1;
 			g.Line(tx, ty, tx + side * 180, ty - 48, CA, 1, 0.45, true); g.Line(tx, ty, tx + side * 180, ty + 48, CA, 1, 0.45, true);
-			if (30 * sc < 150) { g.Circle(tx, ty, 30 * sc, CR, 1, 0.7, -1, 0, true); g.T(tx + 30 * sc * 0.7 + 2, ty - 30 * sc * 0.7 - 2, "30 м", CR, 9); }
+			if (30 * sc < 150) { g.Circle(tx, ty, 30 * sc, CR, 1, 0.7, -1, 0, true); g.T(tx + 30 * sc * 0.7 + 2, ty - 30 * sc * 0.7 - 2, TR("30 м"), CR, 9); }
 			g.Rect(tx - 10, ty - 3, 20, 6, CW, 1.2, 1, CW, 0.2);
 			const double mx = tx + x * sc, my = ty + z * sc;
 			g.Line(mx, my, mx + vx * 60 * sc, my + vz * 60 * sc, CA, 1.6, 1, true);
 			g.Fill({ { mx, my - 8 }, { mx + 6, my + 6 }, { mx, my + 2 }, { mx - 6, my + 6 } }, CW, 1);
 			const double closing = -s->rate, tgo = closing > 0.01 ? s->dist / closing : -1;
-			g.Cell(14, 162, "ДАЛЬН", Dist(s->dist)); g.Cell(96, 162, "V СБЛИЖ", Num(s->rate, 2, true), CA);
-			g.Cell(186, 162, "ДО ЦЕЛИ", Clock(tgo)); g.Cell(262, 162, "ΔV СИНХР", Num(length(s->relV), 2));
+			g.Cell(14, 162, TR("ДАЛЬН"), Dist(s->dist)); g.Cell(96, 162, TR("V СБЛИЖ"), Num(s->rate, 2, true), CA);
+			g.Cell(186, 162, TR("ДО ЦЕЛИ"), Clock(tgo)); g.Cell(262, 162, TR("ΔV СИНХР"), Num(length(s->relV), 2));
 			// range - closing rate corridor (log range)
 			auto X = [](double r) { return 36 + 96 * std::log10(std::clamp(r, 1.0, 1000.0)); };
 			auto Y = [](double v) { return 288 - 88 * std::clamp(v, 0.0, 1.0); };
@@ -1598,17 +2108,17 @@ namespace ocrew
 			std::vector<V2> hist; for (const auto& p : h.rrHist) hist.push_back({ X(p.first), Y(p.second) });
 			g.Poly(hist, CW, 1.2, 0.7);
 			g.Circle(X(s->dist), Y(closing), 4, CA, 1.6, 1, CA, 1);
-			for (double r : { 1.0, 10.0, 100.0, 1000.0 }) { g.Line(X(r), 288, X(r), 292, CD, 1); g.T(X(r), 300, r >= 1000 ? "1 км" : Num(r, 0), CD, 8.5, 1); }
+			for (double r : { 1.0, 10.0, 100.0, 1000.0 }) { g.Line(X(r), 288, X(r), 292, CD, 1); g.T(X(r), 300, r >= 1000 ? TR("1 км") : Num(r, 0), CD, 8.5, 1); }
 			for (double v : { 0.0, 0.5, 1.0 }) g.T(32, Y(v) + 3, Num(v, v > 0 ? 1 : 0), CD, 8.5, 2);
-			g.T(326, 206, "КОРИДОР СКОРОСТИ", CP, 9.5, 2);
+			g.T(326, 206, TR("КОРИДОР СКОРОСТИ"), CP, 9.5, 2);
 		}
 
 		void Dock(Ctx& c)
 		{
 			Gfx& g = c.g; SuitHud& h = c.h; Grid(g);
 			const SuitHud::Target* s = h.Selected();
-			if (!s) { Msg(g, "ВЫБЕРИТЕ ЦЕЛЬ", "на странице ЦЕЛИ или на карте"); return; }
-			if (s->base) { Msg(g, "ЦЕЛЬ — БАЗА", "к базе только ПЕРЕЛЁТ"); return; }
+			if (!s) { Msg(g, TR("ВЫБЕРИТЕ ЦЕЛЬ"), TR("на странице ЦЕЛИ или на карте")); return; }
+			if (s->base) { Msg(g, TR("ЦЕЛЬ — БАЗА"), TR("к базе только ПЕРЕЛЁТ")); return; }
 			VESSEL* o = oapiGetVesselInterface(s->h);
 			VECTOR3 me; c.v->GetGlobalPos(me);
 			VECTOR3 lp; o->Global2Local(me, lp);
@@ -1630,7 +2140,7 @@ namespace ocrew
 			MATRIX3 R; o->GetRotationMatrix(R);
 			const VECTOR3 fl = tmul(R, fg);
 			const double yaw = std::atan2(dotp(fl, side), -dotp(fl, dir)) * DEG, pit = std::atan2(dotp(fl, upv), -dotp(fl, dir)) * DEG;
-			g.T(14, 18, port ? "УЗЕЛ ЦЕЛИ · " + s->name : "У ЦЕЛИ НЕТ УЗЛОВ · ЦЕНТР", port ? CA : CD, 9.5);
+			g.T(14, 18, port ? TR("УЗЕЛ ЦЕЛИ · ") + s->name : TR("У ЦЕЛИ НЕТ УЗЛОВ · ЦЕНТР"), port ? CA : CD, 9.5);
 			const double cx = 140, cy = 132, sc = 60 / (std::max)(1.0, (std::min)(10.0, std::hypot(dx, dy) * 1.5 + 0.5));
 			g.Circle(cx, cy, 100, CD, 1, 0.5); g.Circle(cx, cy, 60, CD, 1, 0.5); g.Circle(cx, cy, 20, CP, 1, 0.6, -1, 0, true);
 			g.Line(cx - 100, cy, cx - 24, cy, CP, 1); g.Line(cx + 24, cy, cx + 100, cy, CP, 1); g.Line(cx, cy - 100, cx, cy - 24, CP, 1); g.Line(cx, cy + 24, cx, cy + 100, CP, 1);
@@ -1643,10 +2153,10 @@ namespace ocrew
 			for (double r : { 100.0, 10.0, 1.0, 0.1 }) { g.Line(290, Yr(r), 298, Yr(r), CP, 1); g.T(302, Yr(r) + 4, Num(r, r < 1 ? 1 : 0), CD, 9); }
 			const double ax = std::abs(dz);
 			g.Tri(288, Yr(ax), -10, -7, -10, 7, CA); g.T(274, Yr(ax) + 4, Num(ax, ax < 10 ? 2 : 1), CW, 11, 2);
-			g.T(274, Yr(ax) + 20, Num(s->rate, 2, true) + " м/с", std::abs(s->rate) > 0.3 && ax < 5 ? CR : CA, 10, 2);
-			g.T(290, 26, "Д, м", CD, 9.5, 1);
-			g.Cell(14, 250, "ΔX", Num(dx, 2, true) + " м"); g.Cell(84, 250, "ΔY", Num(dy, 2, true) + " м");
-			g.Cell(154, 250, "ТАНГАЖ", Num(pit, 1, true) + "°"); g.Cell(224, 250, "РЫСК", Num(yaw, 1, true) + "°");
+			g.T(274, Yr(ax) + 20, Num(s->rate, 2, true) + TR(" м/с"), std::abs(s->rate) > 0.3 && ax < 5 ? CR : CA, 10, 2);
+			g.T(290, 26, TR("Д, м"), CD, 9.5, 1);
+			g.Cell(14, 250, "ΔX", Num(dx, 2, true) + TR(" м")); g.Cell(84, 250, "ΔY", Num(dy, 2, true) + TR(" м"));
+			g.Cell(154, 250, TR("ТАНГАЖ"), Num(pit, 1, true) + "°"); g.Cell(224, 250, TR("РЫСК"), Num(yaw, 1, true) + "°");
 		}
 
 		void Body(Ctx& c)
@@ -1662,9 +2172,9 @@ namespace ocrew
 				for (size_t i = 0; i < q.size(); ++i) pts.push_back({ 326 - (q.size() - 1 - i) * 5.2, Y(q[i]) });
 				g.Poly(pts, col, 1.4);
 			};
-			graph(18, "ПУЛЬС · 10 мин", Num(d.pulse, 0) + " уд/мин", h.trend.pulse, 40, 200, 55, 120, d.pulse > 170 ? CA : CP);
-			graph(64, "ДЫХАНИЕ", Num(d.breath, 0) + " в мин", h.trend.breath, 5, 50, 10, 25, CP);
-			graph(110, "ТЕМПЕРАТУРА ТЕЛА", Num(d.coreC, 1) + " °C", h.trend.core, 34, 41, 36.2, 37.8, d.coreC > 38.5 || d.coreC < 35.8 ? CA : CP);
+			graph(18, TR("ПУЛЬС · 10 мин"), Num(d.pulse, 0) + TR(" уд/мин"), h.trend.pulse, 40, 200, 55, 120, d.pulse > 170 ? CA : CP);
+			graph(64, TR("ДЫХАНИЕ"), Num(d.breath, 0) + TR(" в мин"), h.trend.breath, 5, 50, 10, 25, CP);
+			graph(110, TR("ТЕМПЕРАТУРА ТЕЛА"), Num(d.coreC, 1) + " °C", h.trend.core, 34, 41, 36.2, 37.8, d.coreC > 38.5 || d.coreC < 35.8 ? CA : CP);
 			// below the graphs: radiation, the state, what is wrong
 			g.Line(14, 160, 326, 160, CD, 1, 0.5, false, false);
 			{
@@ -1672,32 +2182,32 @@ namespace ocrew
 				// Colours by the same marks as the alerts: rate amber from 1 mSv/h, red from 10; dose amber from 100 mSv, red from 250
 				const double rate = d.radRate * 1000, dose = d.radDose * 1000, L30 = 250;   // mSv/h, mSv
 				const int rc = rate >= 10 ? CR : rate >= 1 ? CA : CW, dc = dose >= L30 ? CR : dose >= 100 ? CA : CW;
-				g.T(14, 176, "РАДИАЦИЯ", CD, 9.5);
-				g.T(326, 176, (rate < 1 ? Num(rate * 1000, 0) + " мкЗв/ч" : Num(rate, 2) + " мЗв/ч") + (d.fieldOn ? " · поле" : ""), rc, 11, 2);
-				g.T(14, 194, "ДОЗА ЗА ВЫХОД", CD, 9.5);
-				g.T(326, 194, Num(dose, dose < 10 ? 2 : 0) + " мЗв из " + Num(L30, 0), dc, 10.5, 2);
+				g.T(14, 176, TR("РАДИАЦИЯ"), CD, 9.5);
+				g.T(326, 176, (rate < 1 ? Num(rate * 1000, 0) + TR(" мкЗв/ч") : Num(rate, 2) + TR(" мЗв/ч")) + (d.fieldOn ? TR(" · поле") : ""), rc, 11, 2);
+				g.T(14, 194, TR("ДОЗА ЗА ВЫХОД"), CD, 9.5);
+				g.T(326, 194, Num(dose, dose < 10 ? 2 : 0) + TR(" мЗв из ") + Num(L30, 0), dc, 10.5, 2);
 				g.Bar(14, 200, 312, 7, dose / L30, dc == CW ? CP : dc);
 				const double left = rate > 1e-4 ? (L30 - dose) / rate : 1e9;
-				if (left < 1e5) g.T(14, 220, "до предела: " + (left > 48 ? Num(left / 24, 0) + " сут" : Num(left, 1) + " ч"), left < 2 ? CR : left < 24 ? CA : CD, 9.5);
+				if (left < 1e5) g.T(14, 220, TR("до предела: ") + (left > 48 ? Num(left / 24, 0) + TR(" сут") : Num(left, 1) + TR(" ч")), left < 2 ? CR : left < 24 ? CA : CD, 9.5);
 			}
 			{
 				// the state in words; injuries only if there are any; water and food only near their marks
-				static const char* PART[4] = { "голова", "корпус", "руки", "ноги" };
+				const char* PART[4] = { TR("голова"), TR("корпус"), TR("руки"), TR("ноги") };
 				std::string hurts; bool bad = false;
-				for (int i = 0; i < 4; ++i) if (d.hurt[i] > 0.05) { hurts += std::string(hurts.empty() ? "" : ", ") + PART[i] + (d.hurt[i] > 0.5 ? " (тяжело)" : ""); bad = bad || d.hurt[i] > 0.5; }
+				for (int i = 0; i < 4; ++i) if (d.hurt[i] > 0.05) { hurts += std::string(hurts.empty() ? "" : ", ") + PART[i] + (d.hurt[i] > 0.5 ? TR(" (тяжело)") : ""); bad = bad || d.hurt[i] > 0.5; }
 				const double dehyd = d.bodyMass > 0 ? d.waterDef / d.bodyMass : 0;
-				std::string st = d.state == 2 ? "ГИБЕЛЬ" : d.state == 1 ? "БЕЗ СОЗНАНИЯ" : !hurts.empty() ? (bad ? "ТЯЖЁЛЫЕ ТРАВМЫ" : "ТРАВМЫ") : d.stamina < 0.15 ? "ИСТОЩЕНА" : dehyd > 0.04 || d.fastDays > 3 ? "ОСЛАБЛЕНА" : "В НОРМЕ";
-				const int sc = d.state ? CR : bad ? CR : !hurts.empty() || st != "В НОРМЕ" ? CA : CP;
+				std::string st = d.state == 2 ? TR("ГИБЕЛЬ") : d.state == 1 ? TR("БЕЗ СОЗНАНИЯ") : !hurts.empty() ? (bad ? TR("ТЯЖЁЛЫЕ ТРАВМЫ") : TR("ТРАВМЫ")) : d.stamina < 0.15 ? TR("ИСТОЩЕНА") : dehyd > 0.04 || d.fastDays > 3 ? TR("ОСЛАБЛЕНА") : TR("В НОРМЕ");
+				const int sc = d.state ? CR : bad ? CR : !hurts.empty() || st != TR("В НОРМЕ") ? CA : CP;
 				const double keepR = g.clipR;
 				g.Line(14, 228, 326, 228, CD, 1, 0.4, false, false);
-				g.T(14, 240, "СОСТОЯНИЕ", CD, 9.5); g.T(326, 240, st, sc, 12, 2);
+				g.T(14, 240, TR("СОСТОЯНИЕ"), CD, 9.5); g.T(326, 240, st, sc, 12, 2);
 				double y = 258;
 				if (!hurts.empty()) { g.T(14, y, hurts, bad ? CR : CA, 10); y += 16; }
-				g.T(14, y, "нагрузка " + Num(100 * d.effort, 0) + " % · CO2 " + Num(d.ppCO2, 2) + " кПа", d.ppCO2 > 1 ? CA : CD, 9.5); y += 16;
+				g.T(14, y, TR("нагрузка ") + Num(100 * d.effort, 0) + " % · CO2 " + Num(d.ppCO2, 2) + TR(" кПа"), d.ppCO2 > 1 ? CA : CD, 9.5); y += 16;
 				std::string need;
-				if (d.suit && d.water < 0.3) need += "вода в скафандре " + Num(d.water, 1) + " л";
-				if (dehyd > 0.02) need += std::string(need.empty() ? "" : " · ") + "обезвоживание " + Num(100 * dehyd, 1) + " %";
-				if (d.fastDays > 2) need += std::string(need.empty() ? "" : " · ") + "без еды " + Num(d.fastDays, 1) + " сут";
+				if (d.suit && d.water < 0.3) need += TR("вода в скафандре ") + Num(d.water, 1) + TR(" л");
+				if (dehyd > 0.02) need += std::string(need.empty() ? "" : " · ") + TR("обезвоживание ") + Num(100 * dehyd, 1) + " %";
+				if (d.fastDays > 2) need += std::string(need.empty() ? "" : " · ") + TR("без еды ") + Num(d.fastDays, 1) + TR(" сут");
 				if (!need.empty()) g.T(14, y, need, dehyd > 0.04 || d.fastDays > 3 ? CA : CD, 9.5);
 				g.clipR = keepR;
 			}
@@ -1910,18 +2420,18 @@ namespace ocrew
 				}
 			};
 			arcLine(-1.925, -1.672); arcLine(-1.470, -1.217);
-			arcSlots(-1.798, { { "ПУЛЬС", Num(d.pulse, 0), "888", CW }, { "ДЫХ", Num(d.breath, 0), "88", CW },
-				{ "O2", Num(d.ppO2, 0) + " кПа", "888 кПа", d.ppO2 < 14 ? CR : d.ppO2 < 17 ? CA : CW }, { "ТЕЛО", Num(d.coreC, 1) + "°", "88,8°", d.coreC > 38.5 || d.coreC < 35.8 ? CA : CW } });
+			arcSlots(-1.798, { { TR("ПУЛЬС"), Num(d.pulse, 0), "888", CW }, { TR("ДЫХ"), Num(d.breath, 0), "88", CW },
+				{ "O2", Num(d.ppO2, 0) + TR(" кПа"), TR("888 кПа"), d.ppO2 < 14 ? CR : d.ppO2 < 17 ? CA : CW }, { TR("ТЕЛО"), Num(d.coreC, 1) + "°", "88,8°", d.coreC > 38.5 || d.coreC < 35.8 ? CA : CW } });
 			if (d.suit)
-				arcSlots(-1.344, { { "O2", Num(100 * d.o2, 0) + " %", "100 %", d.o2 < 0.25 ? CA : CW }, { "БАТ", Num(100 * d.batt, 0) + " %", "100 %", d.batt < 0.25 ? CA : CW },
-					{ "", Num(d.powerW, 0) + " Вт", "8888 Вт", CW }, { "СРЕДА", Num(d.envC, 0, true) + "°", "+888°", d.inSpec ? CW : CR } });
+				arcSlots(-1.344, { { "O2", Num(100 * d.o2, 0) + " %", "100 %", d.o2 < 0.25 ? CA : CW }, { TR("БАТ"), Num(100 * d.batt, 0) + " %", "100 %", d.batt < 0.25 ? CA : CW },
+					{ "", Num(d.powerW, 0) + TR(" Вт"), TR("8888 Вт"), CW }, { TR("СРЕДА"), Num(d.envC, 0, true) + "°", "+888°", d.inSpec ? CW : CR } });
 			else
-				arcSlots(-1.344, { { "КОМБИНЕЗОН ·", d.breathable ? "воздух пригоден" : "дышать нельзя", "воздух пригоден", d.breathable ? CW : CR } });
+				arcSlots(-1.344, { { TR("КОМБИНЕЗОН ·"), d.breathable ? TR("воздух пригоден") : TR("дышать нельзя"), TR("воздух пригоден"), d.breathable ? CW : CR } });
 		}
 
 		// ---- corners ----
 		g.Frame(L0, 0, k);
-		g.T(24, 32, Upper(d.name), CW, 15); g.T(24, 49, d.role + " · «Тантра»", CD, 9.5);
+		g.T(24, 32, Upper(d.name), CW, 15); g.T(24, 49, d.role + TR(" · «Тантра»"), CD, 9.5);
 		g.Frame(R0, 0, k);
 		{
 			const double mjd = oapiGetSimMJD(), day = (mjd - std::floor(mjd)) * 86400;
@@ -1929,15 +2439,15 @@ namespace ocrew
 			g.T(1256, 32, b, CW, 15, 2);
 			char bn[64] = ""; if (hBody) oapiGetObjectName(hBody, bn, 64);
 			const char* ru = BodyRu(bn);
-			std::string where = std::string(ru ? ru : bn) + (surface ? (sunElev > 0 ? " · день" : " · ночь") : " · орбита");
-			where += d.vacuum ? " · вакуум" : " · " + Num(d.airKPa, 0) + " кПа";
+			std::string where = std::string(ru ? ru : bn) + (surface ? (sunElev > 0 ? TR(" · день") : TR(" · ночь")) : TR(" · орбита"));
+			where += d.vacuum ? TR(" · вакуум") : " · " + Num(d.airKPa, 0) + TR(" кПа");
 			g.T(1256, 49, where, CD, 9.5, 2);
 			if (d.suit)
 			{
 				// the suit's switches on the right; the pack's control block (assistant, limiter) apart on their left, framed
 				struct Tg { const char* n; bool on; int kind, arg; };
-				const Tg suitTg[4] = { { "ПОЛЕ", d.fieldOn, H_AP, AP_FIELD }, { "СВЕТ", d.lampsOn, H_AP, AP_LAMP }, { "ЩИТОК", d.shadeDown, H_AP, AP_SHADE }, { "ПНВ", nvg, H_NVG, 0 } };
-				const Tg jetTg[2] = { { "ПОМОЩНИК", d.jetAssist, H_AP, AP_MANUAL }, { "ОГРАНИЧ.", d.jetFine, H_AP, AP_FINE } };
+				const Tg suitTg[4] = { { TR("ПОЛЕ"), d.fieldOn, H_AP, AP_FIELD }, { TR("СВЕТ"), d.lampsOn, H_AP, AP_LAMP }, { TR("ЩИТОК"), d.shadeDown, H_AP, AP_SHADE }, { TR("ПНВ"), nvg, H_NVG, 0 } };
+				const Tg jetTg[2] = { { TR("ПОМОЩНИК"), d.jetAssist, H_AP, AP_MANUAL }, { TR("ОГРАНИЧ."), d.jetFine, H_AP, AP_FINE } };
 				double bx = 1256;
 				auto button = [&](const Tg& t)
 				{
@@ -1962,18 +2472,18 @@ namespace ocrew
 					if (d.jet) { for (int i = 1; i >= 0; --i) button2(jetTg[i]); bx -= 12; }
 					if (d.life)
 					{
-						const Tg suit2[2] = { { "СЕРВО", d.life->drivesOn, H_SUIT, 0 }, { "ЭКОНОМ", d.life->econ, H_SUIT, 1 } };
+						const Tg suit2[2] = { { TR("СЕРВО"), d.life->drivesOn, H_SUIT, 0 }, { TR("ЭКОНОМ"), d.life->econ, H_SUIT, 1 } };
 						for (int i = 1; i >= 0; --i) button2(suit2[i]);
 					}
 				}
-				if (nvg && d.firstPerson && nvNote != "ПНВ") g.T(1256, 94, nvNote, CA, 10, 2);
+				if (nvg && d.firstPerson && nvNote != TR("ПНВ")) g.T(1256, 94, nvNote, CA, 10, 2);
 			}
 		}
 
 		// ---- modes and compass ----
 		g.Frame(C0, 0, k);
 		{
-			static const char* NAMES[4] = { "ВКД", "ПОЛЁТ", "СБЛИЖЕНИЕ", "СИСТЕМЫ" };
+			const char* NAMES[4] = { TR("ВКД"), TR("ПОЛЁТ"), TR("СБЛИЖЕНИЕ"), TR("СИСТЕМЫ") };
 			const double xs[4] = { 490, 580, 690, 800 };
 			for (int i = 0; i < 4; ++i)
 			{
@@ -1983,7 +2493,7 @@ namespace ocrew
 				g.T(xs[i] - w / 2 + 3, 10, std::to_string(i + 1), CD, 8.5);
 				g.Hit(xs[i] - w / 2, 8, w, 28, H_MODE, i);
 			}
-			g.T(868, 28, autoMode ? "АВТО" : "РУЧН", autoMode ? CD : CA, 9.5);
+			g.T(868, 28, autoMode ? TR("АВТО") : TR("РУЧН"), autoMode ? CD : CA, 9.5);
 			const double hd = std::fmod(hdg * DEG + 360, 360), y = 72;
 			for (int dd = static_cast<int>(std::ceil((hd - 30) / 5)) * 5; dd <= hd + 30; dd += 5)
 			{
@@ -1992,7 +2502,7 @@ namespace ocrew
 				if (big)
 				{
 					char b[8]; snprintf(b, sizeof b, "%03d", a);
-					g.T(x, y - 12, a == 0 ? "С" : a == 90 ? "В" : a == 180 ? "Ю" : a == 270 ? "З" : b, CD, 9.5, 1);
+					g.T(x, y - 12, a == 0 ? TR("С") : a == 90 ? TR("В") : a == 180 ? TR("Ю") : a == 270 ? TR("З") : b, CD, 9.5, 1);
 				}
 			}
 			g.Line(520, y, 760, y, CP, 1, 0.5, false, false);
@@ -2005,7 +2515,7 @@ namespace ocrew
 				const double wa = std::atan2(d.wind.x, d.wind.z) - hdg; double from = std::fmod((std::atan2(-d.wind.x, -d.wind.z)) * DEG + 360, 360);
 				g.Arrow(700 - 9 * std::sin(wa), y + 13 + 9 * std::cos(wa), 700 + 9 * std::sin(wa), y + 13 - 9 * std::cos(wa), CP, 1.4);
 				char wb[48]; snprintf(wb, sizeof wb, "%03.0f°", from);
-				g.T(714, y + 18, "ВЕТЕР " + Num(ws, 1) + " м/с · с " + wb, CD, 9.5);
+				g.T(714, y + 18, TR("ВЕТЕР ") + Num(ws, 1) + TR(" м/с · с ") + wb, CD, 9.5);
 			}
 		}
 
@@ -2025,8 +2535,8 @@ namespace ocrew
 			}
 			g.Frame(C0, 0, k);
 			size_t shown = 0;   // lines of the ribbon on show (the message goes under them)
-			static const char* TILE[8] = { "O2", "CO2", "ДАВЛ", "БАТ", "ТЕПЛО", "РАДИАЦ", "СВЯЗЬ", "РЕЗЕРВ" };
-			static const char* SHORT[8] = { "O2", "CO2", "ДАВЛ", "БАТ", "ТЕПЛ", "РАД", "СВЯЗ", "РЕЗ" };
+			const char* TILE[8] = { "O2", "CO2", TR("ДАВЛ"), TR("БАТ"), TR("ТЕПЛО"), TR("РАДИАЦ"), TR("СВЯЗЬ"), TR("РЕЗЕРВ") };
+			const char* SHORT[8] = { "O2", "CO2", TR("ДАВЛ"), TR("БАТ"), TR("ТЕПЛ"), TR("РАД"), TR("СВЯЗ"), TR("РЕЗ") };
 			if (d.suit)
 			{
 				for (int i = 0; i < 8; ++i)
@@ -2049,7 +2559,7 @@ namespace ocrew
 					const Alert& a = alerts[order[n]];
 					const double y = 148 + n * 15;
 					char tb[16]; snprintf(tb, sizeof tb, "%02d:%02d:%02d  ", static_cast<int>(a.t0) / 3600, (static_cast<int>(a.t0) / 60) % 60, static_cast<int>(a.t0) % 60);
-					const std::string line = tb + std::string(a.level == 2 ? "! " : "▲ ") + a.text + (a.active ? (a.ack ? "" : "  ·  подтвердите щелчком") : "  ·  снято");
+					const std::string line = tb + std::string(a.level == 2 ? "! " : "▲ ") + a.text + (a.active ? (a.ack ? "" : TR("  ·  подтвердите щелчком")) : TR("  ·  снято"));
 					const int col = !a.active ? CD : a.level == 2 ? CR : CA;
 					if (a.active && !a.ack && !c.blink) continue;
 					g.T(640, y, line, col, 10.5, 1);
@@ -2059,7 +2569,7 @@ namespace ocrew
 			if (d.suit && lit)
 			{
 				// the word itself, under the lamps: ОПАСНОСТЬ (red) / ВНИМАНИЕ (amber); blinks until acknowledged, a click acknowledges
-				const std::string word = anyW ? "ОПАСНОСТЬ" : "ВНИМАНИЕ";
+				const std::string word = anyW ? TR("ОПАСНОСТЬ") : TR("ВНИМАНИЕ");
 				if (!unacked || c.blink) { const double w = g.TW(word, 13) + 24; g.Rect(640 - w / 2, 112, w, 20, mc, 1.4, 1, mc, unacked ? 0.25 : 0.1); g.T(640, 127, word, mc, 13, 1); }
 				g.Hit(640 - 70, 110, 140, 24, H_ACK, -1);
 			}
@@ -2072,20 +2582,20 @@ namespace ocrew
 			g.Frame(L0, 0, k);
 			const double x = 24, y = 180, w = 230;
 			const bool holds = std::abs(d.residualW) < 30;
-			g.T(x, y, "ТЕРМОКОНТРОЛЬ", CP, 12.5); g.T(x + w, y, !d.powered ? "НЕТ ПИТАНИЯ" : holds ? "НОРМА" : "НЕ ДЕРЖИТ", holds && d.powered ? CP : CR, 11, 2);
+			g.T(x, y, TR("ТЕРМОКОНТРОЛЬ"), CP, 12.5); g.T(x + w, y, !d.powered ? TR("НЕТ ПИТАНИЯ") : holds ? TR("НОРМА") : TR("НЕ ДЕРЖИТ"), holds && d.powered ? CP : CR, 11, 2);
 			g.Line(x, y + 6, x + w, y + 6, CP, 1, 0.5, false, false);
 			struct R { std::string n, v; int c; };
 			std::vector<R> rows = {
-				{ "В скафандре", Num(d.tInC, 1) + " °C · " + (holds && d.powered ? "держится" : d.residualW > 0 ? "растёт" : "падает") + (Trend(4, 0.3) > 0 ? " ↑" : Trend(4, 0.3) < 0 ? " ↓" : ""), d.tInC > 30 || d.tInC < 12 ? CR : holds && d.powered ? CW : CA },
-				{ "Тело", Num(d.coreC, 1) + " °C", d.coreC > 38.5 || d.coreC < 35.8 ? CA : CW },
-				{ "Снаружи", d.vacuum ? std::string("вакуум") : Num(d.airKPa, d.airKPa < 10 ? 2 : 1) + " кПа · " + (d.breathable ? "воздух" : "атмосфера"),
+				{ TR("В скафандре"), Num(d.tInC, 1) + " °C · " + (holds && d.powered ? TR("держится") : d.residualW > 0 ? TR("растёт") : TR("падает")) + (Trend(4, 0.3) > 0 ? " ↑" : Trend(4, 0.3) < 0 ? " ↓" : ""), d.tInC > 30 || d.tInC < 12 ? CR : holds && d.powered ? CW : CA },
+				{ TR("Тело"), Num(d.coreC, 1) + " °C", d.coreC > 38.5 || d.coreC < 35.8 ? CA : CW },
+				{ TR("Снаружи"), d.vacuum ? std::string(TR("вакуум")) : Num(d.airKPa, d.airKPa < 10 ? 2 : 1) + TR(" кПа · ") + (d.breathable ? TR("воздух") : TR("атмосфера")),
 					d.suitBreached || d.airKPa > d.suitPMax ? CR : d.airKPa > 0.75 * d.suitPMax ? CA : CW },
-				{ d.vacuum ? "Среда (излучение)" : "Воздух", d.vacuum ? Num(d.envC, 0, true) + " °C" + (d.sunlit ? " · солнце" : " · тень") : Num(d.airC, 0, true) + " °C" + (d.sunlit ? " · солнце" : " · тень"), d.inSpec ? CW : CR } };
-			if (d.hasGround) rows.push_back({ "Грунт", Num(d.groundC, 0, true) + " °C", d.groundC > 80 || d.groundC < -100 ? CA : CW });
-			rows.push_back({ "Теплообмен", std::string(d.heatW >= 0 ? "ОХЛАЖДЕНИЕ " : "ОБОГРЕВ ") + Num(std::abs(d.heatW), 0) + " Вт" + (d.life && d.life->econ ? " · эконом" : ""), CP });
-			if (d.life) rows.push_back({ "Аппаратура", Num(d.life->tEq - 273.15, 0, true) + " °C", d.life->tEq > Suit::EQ_LIMIT ? CR : d.life->tEq > Suit::EQ_WARN ? CA : CW });
-			rows.push_back({ std::string("Радиация") + (d.fieldOn ? " · поле" : ""),
-				(doseRate >= 1000 ? Num(doseRate / 1000, 2) + " мЗв/ч" : Num(doseRate, doseRate < 1 ? 2 : 0) + " мкЗв/ч") + " · " + Num(dose / 1000, 2) + " мЗв",
+				{ d.vacuum ? TR("Среда (излучение)") : TR("Воздух"), d.vacuum ? Num(d.envC, 0, true) + " °C" + (d.sunlit ? TR(" · солнце") : TR(" · тень")) : Num(d.airC, 0, true) + " °C" + (d.sunlit ? TR(" · солнце") : TR(" · тень")), d.inSpec ? CW : CR } };
+			if (d.hasGround) rows.push_back({ TR("Грунт"), Num(d.groundC, 0, true) + " °C", d.groundC > 80 || d.groundC < -100 ? CA : CW });
+			rows.push_back({ TR("Теплообмен"), std::string(d.heatW >= 0 ? TR("ОХЛАЖДЕНИЕ ") : TR("ОБОГРЕВ ")) + Num(std::abs(d.heatW), 0) + TR(" Вт") + (d.life && d.life->econ ? TR(" · эконом") : ""), CP });
+			if (d.life) rows.push_back({ TR("Аппаратура"), Num(d.life->tEq - 273.15, 0, true) + " °C", d.life->tEq > Suit::EQ_LIMIT ? CR : d.life->tEq > Suit::EQ_WARN ? CA : CW });
+			rows.push_back({ std::string(TR("Радиация")) + (d.fieldOn ? TR(" · поле") : ""),
+				(doseRate >= 1000 ? Num(doseRate / 1000, 2) + TR(" мЗв/ч") : Num(doseRate, doseRate < 1 ? 2 : 0) + TR(" мкЗв/ч")) + " · " + Num(dose / 1000, 2) + TR(" мЗв"),
 				doseRate > 10000 ? CR : doseRate > 1000 ? CA : CW });
 			for (size_t i = 0; i < rows.size(); ++i) { g.T(x, y + 24 + i * 17, rows[i].n, CD, 11); g.T(x + w, y + 24 + i * 17, rows[i].v, rows[i].c, 11.5, 2); }
 			// the rated range with the environment and the ground on it
@@ -2094,16 +2604,16 @@ namespace ocrew
 			g.Line(x, yr + 3, x + w, yr + 3, CP, 2, 0.5); g.Line(x, yr - 3, x, yr + 9, CR, 2); g.Line(x + w, yr - 3, x + w, yr + 9, CR, 2);
 			g.Tri(X(d.envC), yr - 1, -4, -7, 4, -7, d.inSpec ? CP : CR);
 			if (d.hasGround) g.Tri(X(d.groundC), yr + 7, -4, 7, 4, 7, CA);
-			g.T(x, yr + 22, Num(d.ratedMinC, 0), CD, 9.5); g.T(x + w / 2, yr + 22, "допуск снаружи", CD, 9.5, 1); g.T(x + w, yr + 22, Num(d.ratedMaxC, 0, true), CD, 9.5, 2);
+			g.T(x, yr + 22, Num(d.ratedMinC, 0), CD, 9.5); g.T(x + w / 2, yr + 22, TR("допуск снаружи"), CD, 9.5, 1); g.T(x + w, yr + 22, Num(d.ratedMaxC, 0, true), CD, 9.5, 2);
 
 			g.Frame(R0, 0, k);
 			const double rx = 1256 - w;
 			const double lim = (std::min)({ d.battHours, d.o2Hours > 0 ? d.o2Hours : 1e9, d.sorbHours > 0 ? d.sorbHours : 1e9 });
-			const char* limName = lim == d.battHours ? "батарея" : lim == d.o2Hours ? "кислород" : "поглотитель";
-			g.T(rx, y, "РАСХОД", CP, 12.5); g.T(rx + w, y, "хватит на " + Hours(lim) + " · " + limName, lim < 1 ? CR : CA, 11, 2);
+			const char* limName = lim == d.battHours ? TR("батарея") : lim == d.o2Hours ? TR("кислород") : TR("поглотитель");
+			g.T(rx, y, TR("РАСХОД"), CP, 12.5); g.T(rx + w, y, TR("хватит на ") + Hours(lim) + " · " + limName, lim < 1 ? CR : CA, 11, 2);
 			g.Line(rx, y + 6, rx + w, y + 6, CP, 1, 0.5, false, false);
-			g.T(rx, y + 24, "Питание", CD, 11); g.T(rx + w, y + 24, Num(d.powerW, 0) + " Вт", CW, 11.5, 2);
-			struct Part { const char* n; double v; double a; } parts[] = { { "ЖО", d.lifeW, 1 }, { "ТЕПЛО", d.thermalW, 0.75 }, { "ПРИВ", d.driveW, 0.5 }, { "ПОЛЕ", d.fieldW, 0.4 }, { "СВЕТ", d.lampW, 0.3 } };
+			g.T(rx, y + 24, TR("Питание"), CD, 11); g.T(rx + w, y + 24, Num(d.powerW, 0) + TR(" Вт"), CW, 11.5, 2);
+			struct Part { const char* n; double v; double a; } parts[] = { { TR("ЖО"), d.lifeW, 1 }, { TR("ТЕПЛО"), d.thermalW, 0.75 }, { TR("ПРИВ"), d.driveW, 0.5 }, { TR("ПОЛЕ"), d.fieldW, 0.4 }, { TR("СВЕТ"), d.lampW, 0.3 } };
 			double px = rx;
 			for (const Part& p : parts)
 			{
@@ -2114,11 +2624,11 @@ namespace ocrew
 				px += pw;
 			}
 			struct Row { std::string n, v; double f; bool warn; } rows2[] = {
-				{ "Батарея", Num(100 * d.batt, 0) + " % · " + Hours(d.battHours) + (Trend(1, 0.003) < 0 ? " ↓" : ""), d.batt, lim == d.battHours || Trend(1, 0.003) < 0 },
-				{ "Кислород", d.o2Vent ? "из воздуха · баллон " + Num(100 * d.o2, 0) + " %" : Num(d.o2Flow * 60000, 2) + " г/мин · " + Hours(d.o2Hours) + (Trend(0, 0.003) < 0 ? " ↓" : ""), d.o2, lim == d.o2Hours || Trend(0, 0.003) < 0 },
-				{ "Поглотитель CO2", Num(100 * d.sorbent, 0) + " % · " + Hours(d.sorbHours) + (Trend(2, 0.003) < 0 ? " ↓" : ""), d.sorbent, lim == d.sorbHours || Trend(2, 0.003) < 0 },
-				{ "Мет. водород", d.jet ? (fly ? Num(d.jetFlow * 1000, 0) + " г/с · " : Num(100 * d.jetFuel, 0) + " % · ") + Num(d.jetDv, 0) + " м/с" + (d.jetHover > 0 ? " · висение " + Clock(d.jetHover) : "") : "ранец снят", d.jet ? d.jetFuel : 0, false },
-				{ "Азот РСУ", Num(100 * d.n2, 0) + " % · " + Num(d.n2Dv, 1) + " м/с", d.n2, false } };
+				{ TR("Батарея"), Num(100 * d.batt, 0) + " % · " + Hours(d.battHours) + (Trend(1, 0.003) < 0 ? " ↓" : ""), d.batt, lim == d.battHours || Trend(1, 0.003) < 0 },
+				{ TR("Кислород"), d.o2Vent ? TR("из воздуха · баллон ") + Num(100 * d.o2, 0) + " %" : Num(d.o2Flow * 60000, 2) + TR(" г/мин · ") + Hours(d.o2Hours) + (Trend(0, 0.003) < 0 ? " ↓" : ""), d.o2, lim == d.o2Hours || Trend(0, 0.003) < 0 },
+				{ TR("Поглотитель CO2"), Num(100 * d.sorbent, 0) + " % · " + Hours(d.sorbHours) + (Trend(2, 0.003) < 0 ? " ↓" : ""), d.sorbent, lim == d.sorbHours || Trend(2, 0.003) < 0 },
+				{ TR("Мет. водород"), d.jet ? (fly ? Num(d.jetFlow * 1000, 0) + TR(" г/с · ") : Num(100 * d.jetFuel, 0) + " % · ") + Num(d.jetDv, 0) + TR(" м/с") + (d.jetHover > 0 ? TR(" · висение ") + Clock(d.jetHover) : "") : TR("ранец снят"), d.jet ? d.jetFuel : 0, false },
+				{ TR("Азот РСУ"), Num(100 * d.n2, 0) + " % · " + Num(d.n2Dv, 1) + TR(" м/с"), d.n2, false } };
 			for (int i = 0; i < 5; ++i)
 			{
 				const double yy = y + 70 + i * 24; const Row& r = rows2[i];
@@ -2140,9 +2650,9 @@ namespace ocrew
 		if (d.suit)
 		{
 			g.Frame(L0, 0, k);
-			vscale(30, d.o2, lvl(d.o2), "O2", Num(100 * d.o2, 0)); vscale(58, d.sorbent, lvl(d.sorbent), "CO2", Num(100 * d.sorbent, 0)); vscale(86, d.batt, lvl(d.batt), "БАТ", Num(100 * d.batt, 0));
+			vscale(30, d.o2, lvl(d.o2), "O2", Num(100 * d.o2, 0)); vscale(58, d.sorbent, lvl(d.sorbent), "CO2", Num(100 * d.sorbent, 0)); vscale(86, d.batt, lvl(d.batt), TR("БАТ"), Num(100 * d.batt, 0));
 			g.Frame(R0, 0, k);
-			if (d.jet) { vscale(1212, d.jetFuel, lvl(d.jetFuel), "ТОПЛ", Num(100 * d.jetFuel, 0)); vscale(1240, d.jetThrottle, CA, "ТЯГА", Num(100 * d.jetThrottle, 0)); }
+			if (d.jet) { vscale(1212, d.jetFuel, lvl(d.jetFuel), TR("ТОПЛ"), Num(100 * d.jetFuel, 0)); vscale(1240, d.jetThrottle, CA, TR("ТЯГА"), Num(100 * d.jetThrottle, 0)); }
 			else vscale(1240, d.n2, lvl(d.n2), "N2", Num(100 * d.n2, 0));
 		}
 
@@ -2192,7 +2702,7 @@ namespace ocrew
 						if (!inWin(px, py)) continue;
 						g.Circle(px, py, 9, CP, 1.2, 1);
 						if (e == -90) { g.Line(px - 6, py - 6, px + 6, py + 6, CP, 1, 1, false, false); g.Line(px - 6, py + 6, px + 6, py - 6, CP, 1, 1, false, false); }
-						g.T(px + 14, py + 4, e > 0 ? "ЗЕНИТ" : "НАДИР", CD, 9.5);
+						g.T(px + 14, py + 4, e > 0 ? TR("ЗЕНИТ") : TR("НАДИР"), CD, 9.5);
 						continue;
 					}
 					const double a0 = e == 0 ? 28 : 24, a1 = e == 0 ? 130 : 56;   // the horizon long, the rungs short
@@ -2238,7 +2748,7 @@ namespace ocrew
 					if (put(c, x, y))
 					{
 						g.Circle(x, y, 7, CW, 1.6); g.Line(x - 20, y, x - 7, y, CW, 1.6); g.Line(x + 7, y, x + 20, y, CW, 1.6); g.Line(x, y - 7, x, y - 14, CW, 1.6);
-						g.T(x + 24, y + 4, Num(sp, sp < 10 ? 1 : 0) + " м/с", CW, 9.5);
+						g.T(x + 24, y + 4, Num(sp, sp < 10 ? 1 : 0) + TR(" м/с"), CW, 9.5);
 					}
 					else if (put(-c, x, y))
 					{
@@ -2270,8 +2780,8 @@ namespace ocrew
 			};
 			if (mode == FLIGHT && d.jet && surface)
 			{
-				tape(510, d.gs, 0.5, 2, 20, -1, 1, "ГОРИЗ м/с", false, 0);
-				tape(770, d.alt, d.alt > 30 ? 5 : 0.5, 2, d.alt > 30 ? 2 : 14, 1, 1, "ВЫСОТА м", d.jetMode == 1, d.jetAltHold);
+				tape(510, d.gs, 0.5, 2, 20, -1, 1, TR("ГОРИЗ м/с"), false, 0);
+				tape(770, d.alt, d.alt > 30 ? 5 : 0.5, 2, d.alt > 30 ? 2 : 14, 1, 1, TR("ВЫСОТА м"), d.jetMode == 1, d.jetAltHold);
 				// over the tapes: the two speeds that land her - horizontal (with the track and the drift) and vertical
 				auto box = [&](double x0, const std::string& title, const std::string& val, int vc, const std::string& sub, int sc)
 				{
@@ -2282,17 +2792,17 @@ namespace ocrew
 				};
 				double track = std::atan2(gsH.x, gsH.z) * DEG; if (track < 0) track += 360;
 				const double drift = Wrap(std::atan2(gsH.x, gsH.z) - hdg) * DEG;
-				char tb[48]; snprintf(tb, sizeof tb, "ПУТЬ %03.0f° · СНОС %+.0f°", track, d.gs > 0.3 ? drift : 0.0);
-				box(424, "V ГОРИЗ", Num(d.gs, 1) + " м/с", CW, d.gs > 0.3 ? std::string(tb) : std::string("на месте"), CD);
+				char tb[48]; snprintf(tb, sizeof tb, TR("ПУТЬ %03.0f° · СНОС %+.0f°"), track, d.gs > 0.3 ? drift : 0.0);
+				box(424, TR("V ГОРИЗ"), Num(d.gs, 1) + TR(" м/с"), CW, d.gs > 0.3 ? std::string(tb) : std::string(TR("на месте")), CD);
 				const bool sinkHard = d.vs < -(1.0 + 0.8 * d.alt) && d.alt < 25;   // the same limit as the pack's ground guard
-				box(716, "V ВЕРТ", Num(d.vs, 1, true) + " м/с", sinkHard ? CR : CW,
-					d.vs > 0.2 ? "НАБОР ↑" : d.vs < -0.2 ? (sinkHard ? "СНИЖЕНИЕ ↓ БЫСТРО" : "СНИЖЕНИЕ ↓") : "ВИСЕНИЕ", sinkHard ? CR : CD);
+				box(716, TR("V ВЕРТ"), Num(d.vs, 1, true) + TR(" м/с"), sinkHard ? CR : CW,
+					d.vs > 0.2 ? TR("НАБОР ↑") : d.vs < -0.2 ? (sinkHard ? TR("СНИЖЕНИЕ ↓ БЫСТРО") : TR("СНИЖЕНИЕ ↓")) : TR("ВИСЕНИЕ"), sinkHard ? CR : CD);
 			}
 			if (mode == RDV)
 				if (const Target* s = Selected())
 				{
-					tape(510, -s->rate, 0.05, 2, 220, -1, 2, "СБЛИЖ м/с", true, (std::min)(1.0, s->dist / 100));
-					tape(770, s->dist, s->dist > 200 ? 50 : 5, 2, s->dist > 200 ? 0.3 : 3, 1, 1, "ДАЛЬН м", false, 0);
+					tape(510, -s->rate, 0.05, 2, 220, -1, 2, TR("СБЛИЖ м/с"), true, (std::min)(1.0, s->dist / 100));
+					tape(770, s->dist, s->dist > 200 ? 50 : 5, 2, s->dist > 200 ? 0.3 : 3, 1, 1, TR("ДАЛЬН м"), false, 0);
 				}
 		}
 
@@ -2361,10 +2871,10 @@ namespace ocrew
 			for (int i = 0; i <= 24; ++i) { const double a = PI * (0.385 + 0.23 * i / 24); pts.push_back({ 640 + 1000 * std::cos(a), -260 + 1000 * std::sin(a) }); }
 			g.Poly(pts, CP, 1.2, 0.5);
 			std::string ann;
-			if (d.jet && d.jetMode == 1) ann = "АП · УДЕРЖАНИЕ ВЫСОТЫ " + Num(d.jetAltHold, 1) + " м";
-			else if (d.jet && d.jetMode == 2) ann = "АП · АВТОПОСАДКА";
-			if (d.apMode) ann = "АП · " + d.apStatus + (ann.empty() ? "" : "   ▸   " + ann.substr(ann.find("·") + 3));
-			if (d.jet && d.boost) ann += ann.empty() ? "ПОЛНЫЙ ВЕКТОР" : "   ▸   ПОЛНЫЙ ВЕКТОР";
+			if (d.jet && d.jetMode == 1) ann = TR("АП · УДЕРЖАНИЕ ВЫСОТЫ ") + Num(d.jetAltHold, 1) + TR(" м");
+			else if (d.jet && d.jetMode == 2) ann = TR("АП · АВТОПОСАДКА");
+			if (d.apMode) ann = TR("АП · ") + d.apStatus + (ann.empty() ? "" : "   ▸   " + ann.substr(ann.find("·") + 3));
+			if (d.jet && d.boost) ann += ann.empty() ? TR("ПОЛНЫЙ ВЕКТОР") : TR("   ▸   ПОЛНЫЙ ВЕКТОР");
 			if (!ann.empty()) { const double w = g.TW(ann, 12.5) + 24; g.Rect(640 - w / 2, 618, w, 22, CA, 1.2, 1, CA, 0.12); g.T(640, 634, ann, CA, 12.5, 1); }
 			std::vector<std::tuple<std::string, std::string, int>> cells;
 			const Target* s = Selected();
@@ -2372,26 +2882,26 @@ namespace ocrew
 			if (onMpu)   // at the post of a platform: the machine's numbers instead of her own
 			{
 				const double kmh = std::abs(ms.speed) * 3.6;
-				cells = { { "СКОРОСТЬ", (ms.speed < -0.1 ? "назад " : "") + Num(kmh, 0) + " км/ч", CW },
-				          { "ХОД", (ms.full ? std::string("ПОЛНЫЙ · ") : std::string("")) + Num(ms.speedMax * 3.6, 0) + " км/ч", ms.full ? CA : CW },
-				          { "РУЛЬ", std::abs(ms.steer) < 0.05 ? std::string("прямо") : std::string(ms.steer > 0 ? "вправо " : "влево ") + Num(100 * std::abs(ms.steer), 0) + " %", CW },
-				          { "ПЛАТФОРМА", Num(ms.deck, 2) + " м", CW },
-				          { "ТОРМОЗ", ms.brake ? "стояночный" : "снят", ms.brake ? CA : CW },
-				          { "ЗАРЯД", ms.charge < 0 ? std::string("—") : Num(100 * ms.charge, 0) + " %", ms.charge >= 0 && ms.charge < 0.15 ? CA : CW } };
+				cells = { { TR("СКОРОСТЬ"), (ms.speed < -0.1 ? TR("назад ") : "") + Num(kmh, 0) + TR(" км/ч"), CW },
+				          { TR("ХОД"), (ms.full ? std::string(TR("ПОЛНЫЙ · ")) : std::string("")) + Num(ms.speedMax * 3.6, 0) + TR(" км/ч"), ms.full ? CA : CW },
+				          { TR("РУЛЬ"), std::abs(ms.steer) < 0.05 ? std::string(TR("прямо")) : std::string(ms.steer > 0 ? TR("вправо ") : TR("влево ")) + Num(100 * std::abs(ms.steer), 0) + " %", CW },
+				          { TR("ПЛАТФОРМА"), Num(ms.deck, 2) + TR(" м"), CW },
+				          { TR("ТОРМОЗ"), ms.brake ? TR("стояночный") : TR("снят"), ms.brake ? CA : CW },
+				          { TR("ЗАРЯД"), ms.charge < 0 ? std::string("—") : Num(100 * ms.charge, 0) + " %", ms.charge >= 0 && ms.charge < 0.15 ? CA : CW } };
 			}
 			else if (mode == FLIGHT && d.jet)
-				cells = { { "ВЫСОТА", Num(d.alt, 1) + " м", CW }, { "ВЕРТ", Num(d.vs, 1, true) + " м/с", d.vs < -3 ? CA : CW }, { "ГОРИЗ", Num(d.gs, 1) + " м/с", CW },
-				          { "ТЯГА", Num(100 * d.jetThrottle, 0) + " %", CW }, { "ЗАПАС Δv", Num(d.jetDv, 0) + " м/с", d.jetDv < 30 ? CA : CW } };
+				cells = { { TR("ВЫСОТА"), Num(d.alt, 1) + TR(" м"), CW }, { TR("ВЕРТ"), Num(d.vs, 1, true) + TR(" м/с"), d.vs < -3 ? CA : CW }, { TR("ГОРИЗ"), Num(d.gs, 1) + TR(" м/с"), CW },
+				          { TR("ТЯГА"), Num(100 * d.jetThrottle, 0) + " %", CW }, { TR("ЗАПАС Δv"), Num(d.jetDv, 0) + TR(" м/с"), d.jetDv < 30 ? CA : CW } };
 			else if (mode == RDV && s)
-				cells = { { "ДАЛЬН", Dist(s->dist), CW }, { "СБЛИЖ", Num(s->rate, 2, true), CA }, { "ΔV СИНХР", Num(length(s->relV), 2), CW },
-				          { "ЦЕЛЬ", s->name, CA }, { "ЗАПАС Δv", Num(d.jet ? d.jetDv : d.n2Dv, d.jet ? 0 : 1) + " м/с", CW } };
+				cells = { { TR("ДАЛЬН"), Dist(s->dist), CW }, { TR("СБЛИЖ"), Num(s->rate, 2, true), CA }, { TR("ΔV СИНХР"), Num(length(s->relV), 2), CW },
+				          { TR("ЦЕЛЬ"), s->name, CA }, { TR("ЗАПАС Δv"), Num(d.jet ? d.jetDv : d.n2Dv, d.jet ? 0 : 1) + TR(" м/с"), CW } };
 			else if (mode == SYS)
-				cells = { { "БАТАРЕЯ", Num(100 * d.batt, 0) + " %", CW }, { "РАСХОД", Num(d.powerW, 0) + " Вт", CW }, { "ХВАТИТ", Hours(d.battHours), CW },
-				          { "O2", d.o2Vent ? std::string("воздух") : Hours(d.o2Hours), CW }, { "ТЕПЛО", Num(-d.heatW, 0, true) + " Вт", CW } };
+				cells = { { TR("БАТАРЕЯ"), Num(100 * d.batt, 0) + " %", CW }, { TR("РАСХОД"), Num(d.powerW, 0) + TR(" Вт"), CW }, { TR("ХВАТИТ"), Hours(d.battHours), CW },
+				          { "O2", d.o2Vent ? std::string(TR("воздух")) : Hours(d.o2Hours), CW }, { TR("ТЕПЛО"), Num(-d.heatW, 0, true) + TR(" Вт"), CW } };
 			else
-				cells = { { "СКОРОСТЬ", Num(surface ? d.speed : std::hypot(gsH.x, gsH.z), 1) + " м/с", CW }, { "ПОХОДКА", d.servo ? "серво" : d.speed > 2.2 ? "бег" : d.speed > 0.1 ? "шаг" : "стоит", d.servo ? CA : CW },
-				          { "ЩИТОК", d.shadeDown ? "опущен" : "поднят", CW }, { "ФОНАРИ", d.lampsOn ? "вкл" : "выкл", CW },
-				          { d.hasGround ? "ГРУНТ" : "СРЕДА", Num(d.hasGround ? d.groundC : d.envC, 0, true) + " °C", d.hasGround && d.groundC > 80 ? CA : CW } };
+				cells = { { TR("СКОРОСТЬ"), Num(surface ? d.speed : std::hypot(gsH.x, gsH.z), 1) + TR(" м/с"), CW }, { TR("ПОХОДКА"), d.servo ? TR("серво") : d.speed > 2.2 ? TR("бег") : d.speed > 0.1 ? TR("шаг") : TR("стоит"), d.servo ? CA : CW },
+				          { TR("ЩИТОК"), d.shadeDown ? TR("опущен") : TR("поднят"), CW }, { TR("ФОНАРИ"), d.lampsOn ? TR("вкл") : TR("выкл"), CW },
+				          { d.hasGround ? TR("ГРУНТ") : TR("СРЕДА"), Num(d.hasGround ? d.groundC : d.envC, 0, true) + " °C", d.hasGround && d.groundC > 80 ? CA : CW } };
 			const double x0 = 640 - (cells.size() - 1) * 85.0 / 2;   // centred: five cells as before, six for the machine
 			for (size_t i = 0; i < cells.size(); ++i) g.Cell(x0 + i * 85.0, 664, std::get<0>(cells[i]), std::get<1>(cells[i]), std::get<2>(cells[i]), 1);
 			// the pods, seen from her left side
@@ -2401,18 +2911,18 @@ namespace ocrew
 					const double x = i == 0 ? 425 : 855, y = 664, t = d.jetTilt[i];
 					g.Circle(x, y, 7, CP, 2);
 					g.Line(x, y, x - 22 * std::sin(t), y + 22 * std::cos(t), d.jetThrottle > 0.01 ? CA : CP, 2.5);
-					g.T(x, y + 40, std::string(i == 0 ? "П " : "Л ") + Num(t * DEG, 0, true) + "°", CW, 10, 1);
+					g.T(x, y + 40, std::string(i == 0 ? TR("П ") : TR("Л ")) + Num(t * DEG, 0, true) + "°", CW, 10, 1);
 				}
 		}
 
 		// ---- the keys ----
 		{
 			std::string keys;
-			if (!d.suit) keys = "W/S ход  A/D поворот  Q/E шаг  Shift бег  Пробел прыжок  K скафандр";
-			else if (mode == FLIGHT && d.jet) keys = std::string(d.jetAssist ? "Пробел / Ctrl — выше / ниже" : "Пробел / Ctrl — тяга больше / меньше") + "   Shift+Пробел — полная   Shift+Ctrl — выкл   W/S — вектор   Q/E — вбок   A/D — поворот";
-			else if (mode == RDV) keys = "РСУ: цифровой блок   ·   цель и автопилот — мышью на правом МФД";
-			else if (mode == SYS) keys = "режим ещё раз — снова автоматически   ·   заголовок МФД — свернуть";
-			else keys = "WASD — шаг   Shift — серво   B — ранец   Shift+V — щиток   L — фонари   K — скафандр";
+			if (!d.suit) keys = TR("W/S ход  A/D поворот  Q/E шаг  Shift бег  Пробел прыжок  K скафандр");
+			else if (mode == FLIGHT && d.jet) keys = std::string(d.jetAssist ? TR("Пробел / Ctrl — выше / ниже") : TR("Пробел / Ctrl — тяга больше / меньше")) + TR("   Shift+Пробел — полная   Shift+Ctrl — выкл   W/S — вектор   Q/E — вбок   A/D — поворот");
+			else if (mode == RDV) keys = TR("РСУ: цифровой блок   ·   цель и автопилот — мышью на правом МФД");
+			else if (mode == SYS) keys = TR("режим ещё раз — снова автоматически   ·   заголовок МФД — свернуть");
+			else keys = TR("WASD — шаг   Shift — серво   B — ранец   Shift+V — щиток   L — фонари   K — скафандр");
 			g.T(640, 712, keys, CD, 10.5, 1);
 		}
 		if (!d.suit) return;
@@ -2433,16 +2943,24 @@ namespace ocrew
 				const double bx = i & 1 ? 340 : 0, by = i & 2 ? ph : 0, dx = i & 1 ? -12 : 12, dy = i & 2 ? -12 : 12;
 				g.Line(bx, by, bx + dx, by, CP, 2); g.Line(bx, by, bx, by + dy, CP, 2);
 			}
-			static const char* LT[] = { "КАРТА", "ОРБИТА", "ПИТАНИЕ И ТЕПЛО", "ОПЦИИ" };
-			static const char* LTAB[] = { "МЕСТН", "ОРБИТА", "ПИТАНИЕ", "ОПЦИИ" };
-			static const char* RT[] = { "ЦЕЛИ", "ПЕРЕЛЁТ", "ПОСАДКА", "СБЛИЖЕНИЕ", "СТЫКОВКА", "ОРГАНИЗМ", "ПОЛЁТ", "МАШИНА" };
-			static const char* RTAB[] = { "ЦЕЛИ", "ПЕРЕЛЁТ", "ПОСАДКА", "СБЛИЖ", "СТЫК", "ОРГАНИЗМ", "ПОЛЁТ", "МАШИНА" };
+			const char* LT[] = { TR("КАРТА"), TR("ОРБИТА"), TR("ПИТАНИЕ И ТЕПЛО"), TR("ОПЦИИ") };
+			const char* LTAB[] = { TR("МЕСТН"), TR("ОРБИТА"), TR("ПИТАНИЕ"), TR("ОПЦИИ") };
+			const char* RT[] = { TR("ЦЕЛИ"), TR("ПЕРЕЛЁТ"), TR("ПОСАДКА"), TR("СБЛИЖЕНИЕ"), TR("СТЫКОВКА"), TR("ОРГАНИЗМ"), TR("ПОЛЁТ"), TR("МАШИНА") };
+			const char* RTAB[] = { TR("ЦЕЛИ"), TR("ПЕРЕЛЁТ"), TR("ПОСАДКА"), TR("СБЛИЖ"), TR("СТЫК"), TR("ОРГАНИЗМ"), TR("ПОЛЁТ"), TR("МАШИНА") };
 			const Target* s = Selected();
 			g.T(9, 17, left ? LT[lpage] : RT[rpage], CP, 13);
 			g.Hit(0, 0, 200, 20, left ? H_LFOLD : H_RFOLD);
 			g.Tri(200, 15, -4, -6, 4, -6, CD);   // fold mark
-			if (left && lpage == L_LOCAL && surface) g.T(331, 16, "МАСШТАБ " + Dist(ZOOM[zoom]), CA, 9.5, 2);
-			if (!left) { g.T(331, 16, s ? "ЦЕЛЬ: " + s->name + "  ▸" : "ЦЕЛИ НЕТ", CA, 9.5, 2); g.Hit(205, 0, 135, 20, H_NEXT); }
+			if (left && lpage == L_LOCAL && surface) g.T(331, 16, TR("МАСШТАБ ") + Dist(ZOOM[zoom]), CA, 9.5, 2);
+			if (left && lpage == L_OPTS)   // the language: one setting with the crew's menu
+				for (int i = 0; i < 2; ++i)
+				{
+					const bool on = (i == 1) == g_en; const double x = 262 + i * 38;
+					if (on) g.Rect(x, 3, 34, 15, -1, 0, 0, CA, 1); else g.Rect(x, 3, 34, 15, CP, 1, 0.7, CP, 0.08);
+					g.T(x + 17, 15, i == 0 ? "RU" : "EN", on ? CK : CP, 9.5, 1);
+					if (!on) g.Hit(x, 1, 34, 19, H_LANG, i);
+				}
+			if (!left) { g.T(331, 16, s ? TR("ЦЕЛЬ: ") + s->name + "  ▸" : TR("ЦЕЛИ НЕТ"), CA, 9.5, 2); g.Hit(205, 0, 135, 20, H_NEXT); }
 			double tx = 7;
 			const int nt = left ? L_COUNT : static_cast<int>(rp.size());
 			for (int i = 0; i < nt; ++i)
@@ -2474,17 +2992,17 @@ namespace ocrew
 				struct B { const char* n; int st; int req; };   // 0 off, 1 armed, 2 on, -1 not available
 				std::vector<B> b;
 				const bool hasSel = Selected() != nullptr, jetOk = d.jet && d.jetFuel > 0;
-				if (surface) b = { { "УДЕРЖ ВЫС", jetOk ? (d.jetMode == 1 && !d.apMode ? 2 : 0) : -1, AP_ALT },
-				                   { "ПЕРЕЛЁТ", jetOk && hasSel ? (d.apMode == 2 ? 2 : rpage == R_TRANSFER ? 1 : 0) : -1, 2 },
-				                   { "ПОСАДКА", jetOk ? (d.jetMode == 2 ? 2 : rpage == R_LANDING ? 1 : 0) : -1, AP_LAND },
-				                   { "СТОП", jetOk ? (d.jetBraking ? 2 : 0) : -1, AP_STOP } };
+				if (surface) b = { { TR("УДЕРЖ ВЫС"), jetOk ? (d.jetMode == 1 && !d.apMode ? 2 : 0) : -1, AP_ALT },
+				                   { TR("ПЕРЕЛЁТ"), jetOk && hasSel ? (d.apMode == 2 ? 2 : rpage == R_TRANSFER ? 1 : 0) : -1, 2 },
+				                   { TR("ПОСАДКА"), jetOk ? (d.jetMode == 2 ? 2 : rpage == R_LANDING ? 1 : 0) : -1, AP_LAND },
+				                   { TR("СТОП"), jetOk ? (d.jetBraking ? 2 : 0) : -1, AP_STOP } };
 				else
 				{
 					const bool rcsOk = d.rcs == 1;
-					b = { { "СБЛИЖ", rcsOk && hasSel ? (d.apMode == 5 ? 2 : rpage == R_APPROACH ? 1 : 0) : -1, 5 },
-					      { "СИНХР", rcsOk && hasSel ? (d.apMode == 3 ? 2 : 0) : -1, 3 },
-					      { "УДЕРЖ", rcsOk && hasSel ? (d.apMode == 4 ? 2 : 0) : -1, 4 },
-					      { "СТЫК", rcsOk && hasSel ? (d.apMode == 6 ? 2 : rpage == R_DOCK ? 1 : 0) : -1, 6 } };
+					b = { { TR("СБЛИЖ"), rcsOk && hasSel ? (d.apMode == 5 ? 2 : rpage == R_APPROACH ? 1 : 0) : -1, 5 },
+					      { TR("СИНХР"), rcsOk && hasSel ? (d.apMode == 3 ? 2 : 0) : -1, 3 },
+					      { TR("УДЕРЖ"), rcsOk && hasSel ? (d.apMode == 4 ? 2 : 0) : -1, 4 },
+					      { TR("СТЫК"), rcsOk && hasSel ? (d.apMode == 6 ? 2 : rpage == R_DOCK ? 1 : 0) : -1, 6 } };
 				}
 				if (!d.apStatus.empty()) g.T(9, 353, d.apStatus, d.apMode ? CA : CD, 9.5);
 				const double bw = (340 - 14 - 12) / 4.0;
@@ -2497,7 +3015,7 @@ namespace ocrew
 				}
 				fy = 394;
 			}
-			g.T(9, fy, "заголовок — свернуть", CD, 9, 0);
+			g.T(9, fy, TR("заголовок — свернуть"), CD, 9, 0);
 			g.clipL = -1e9; g.clipR = 1e9;
 		};
 		auto tab = [&](bool left)
@@ -2507,9 +3025,9 @@ namespace ocrew
 			g.Rect(0, 0, 252, 24, CP, 1, 0.4, CP, 0.08);
 			g.Hit(0, 0, 252, 24, left ? H_LFOLD : H_RFOLD);
 			const Target* s = Selected();
-			std::string t = left ? std::string("M · КАРТА") : std::string("N · ") + (s ? "ЦЕЛЬ: " + s->name : "ЦЕЛИ НЕТ");
+			std::string t = left ? std::string(TR("M · КАРТА")) : std::string("N · ") + (s ? TR("ЦЕЛЬ: ") + s->name : TR("ЦЕЛИ НЕТ"));
 			g.T(10, 16, t, CP, 11);
-			if (!left && (d.apMode || (d.jet && d.jetMode))) g.T(244, 16, d.apMode ? std::string("АП: ") + (d.apStatus.substr(0, d.apStatus.find(" "))) : d.jetMode == 1 ? "АП: УДЕРЖ" : "АП: ПОСАДКА", CA, 10, 2);
+			if (!left && (d.apMode || (d.jet && d.jetMode))) g.T(244, 16, d.apMode ? std::string(TR("АП: ")) + (d.apStatus.substr(0, d.apStatus.find(" "))) : d.jetMode == 1 ? TR("АП: УДЕРЖ") : TR("АП: ПОСАДКА"), CA, 10, 2);
 		};
 		if (openL) mfd(true); else tab(true);
 		if (openR) mfd(false); else tab(false);
@@ -2521,13 +3039,16 @@ namespace ocrew
 	// screen pixel. Built spanning a box round the eye so its bounds never cull it before the first move.
 	UINT SuitHud::HelmetMesh(VESSEL* v)
 	{
-		if (plateIdx != static_cast<UINT>(-1)) return plateIdx;
-		// Meshes\Tantra\VisorLayers.msh: group 0 the modulator (black, our texture's alpha), group 1 the HUD (FLAG 3, the
-		// client's VC HUD surface). The modulator first: the HUD's light is added over the dimmed view, never dimmed itself.
-		// The template must live on (the vessel copies it each time it builds its visual): global, never deleted
-		static MESHHANDLE tpl = oapiLoadMeshGlobal("Tantra\\VisorLayers");
+		if (plateOwner == v && plateIdx != static_cast<UINT>(-1)) return plateIdx;   // this body has its plate already
+		// Meshes\Tantra\VisorLayers.msh: group 0 the sun's spot (black, its texture's alpha, a little farther out), group 1
+		// the modulator (black, our texture's alpha), group 2 the HUD (FLAG 3, the client's VC HUD surface), group 3 the light
+		// layer. The dimming first: the HUD's light is added over the dimmed view, never dimmed itself.
+		// The template must live as long as the session (the vessel copies it each time it builds its visual): a global mesh.
+		// Taken again for every body - Orbiter frees its global meshes when a session ends, so a handle kept from an earlier
+		// session points at nothing (the plate then had no textures to bind, and the display was gone after a restart)
+		const MESHHANDLE tpl = oapiLoadMeshGlobal("Tantra\\VisorLayers");
 		if (!tpl) { oapiWriteLog(const_cast<char*>("OrbiterCrew: Meshes\\Tantra\\VisorLayers.msh missing - no helmet display")); return plateIdx; }
-		plateIdx = v->AddMesh(tpl);
+		plateIdx = v->AddMesh(tpl); plateOwner = v;
 		v->SetMeshVisibilityMode(plateIdx, MESHVIS_NEVER);
 		return plateIdx;
 	}
@@ -2536,7 +3057,7 @@ namespace ocrew
 	{
 		if (plateIdx == static_cast<UINT>(-1)) return;
 		VCHUDSPEC hs{};
-		hs.nmesh = plateIdx; hs.ngroup = 1; hs.hudcnt = _V(0, 0, 0.15); hs.size = 0.1;
+		hs.nmesh = plateIdx; hs.ngroup = 2; hs.hudcnt = _V(0, 0, 0.15); hs.size = 0.1;
 		oapiVCRegisterHUD(&hs);
 	}
 
@@ -2577,7 +3098,69 @@ namespace ocrew
 				static_cast<float>(-f.x), static_cast<float>(-f.y), static_cast<float>(-f.z), U[i], Vv[i] };
 		GROUPEDITSPEC ges{};
 		ges.flags = GRPEDIT_VTXCRD | GRPEDIT_VTXNML; ges.Vtx = vtx; ges.nVtx = 4;
-		oapiEditMeshGroup(dm, 0, &ges); oapiEditMeshGroup(dm, 1, &ges); oapiEditMeshGroup(dm, 2, &ges);
+		oapiEditMeshGroup(dm, 1, &ges); oapiEditMeshGroup(dm, 2, &ges); oapiEditMeshGroup(dm, 3, &ges);
+		SunSprite(v, dm, eye, r, up, f, dist);
+	}
+
+	// The sun's spot: dense over its disc (~1 deg core, a smooth fall-off over three times that), so the eye is not blinded
+	// and the signs stay readable. A sprite on the sun's line, on the plate's plane a little farther out (drawn first: the
+	// modulator and the light come over it whatever the depth test)
+	void SuitHud::SunSprite(VESSEL* v, DEVMESHHANDLE dm, const VECTOR3& eye, const VECTOR3& r, const VECTOR3& up, const VECTOR3& f, double dist)
+	{
+		if (!sunSrf)
+		{
+			sunSrf = oapiCreateSurfaceEx(256, 256, OAPISURFACE_TEXTURE | OAPISURFACE_RENDERTARGET | OAPISURFACE_SKETCHPAD | OAPISURFACE_ALPHA | OAPISURFACE_NOMIPMAPS);
+			sunDm = nullptr; sunAmp = -1;
+			if (!sunSrf) return;
+		}
+		if (dm != sunDm && oapiSetTexture(dm, 3, sunSrf)) sunDm = dm;
+		const double boost = brightAuto ? ambient : brightManual;
+		const double amp = 0.7 * (std::min)(1.0, 0.4 + boost);
+		if (std::abs(amp - sunAmp) > 1.0 / 255)
+		{
+			oapiClearSurface(sunSrf, 0);
+			if (oapi::Sketchpad* skp = oapiGetSketchpad(sunSrf))
+			{
+				if (Ext(skp))
+				{
+					skp->SetBlendState(oapi::Sketchpad::COPY);
+					const int NR = 64;   // fine steps: no visible rings
+					for (int i = NR - 1; i >= 0; --i)   // faint rim first, dense core last
+					{
+						const double t = static_cast<double>(i) / (NR - 1), fall = 1 - t * t * (3 - 2 * t);
+						const double rr = 128.0 / 3 * (1 + 2.0 * t), a = amp * fall;
+						if (a < 1.0 / 255) continue;   // (a zero colour would mean "no brush")
+						const DWORD c = static_cast<DWORD>(std::lround(a * 255)) << 24;
+						skp->QuickPen(c); skp->QuickBrush(c);   // the outline as the fill: under COPY a pen of another alpha leaves a rim
+						skp->Ellipse(static_cast<int>(128 - rr), static_cast<int>(128 - rr), static_cast<int>(128 + rr), static_cast<int>(128 + rr));
+					}
+					skp->QuickPen(0); skp->QuickBrush(0);
+					skp->SetBlendState();
+				}
+				oapiReleaseSketchpad(skp);
+			}
+			sunAmp = amp;
+		}
+		// where the sun is in the view (in her vessel's frame, as the plate)
+		VECTOR3 sg, sl; oapiGetGlobalPos(oapiGetGbodyByIndex(0), &sg); v->Global2Local(sg, sl);
+		const VECTOR3 q = sl - eye;
+		const double qx = dotp(q, r), qy = dotp(q, up), qz = dotp(q, f);
+		const double ds = dist * 1.003;
+		VECTOR3 c = eye + f * ds; double hs = 0;   // out of the view or in the shade: nothing (a point)
+		if (lastSunlit && qz > 0.05 * length(q))
+		{
+			c = c + r * (qx / qz * ds) + up * (qy / qz * ds);
+			hs = 3 * ds * std::tan(0.02);
+		}
+		const VECTOR3 P[4] = { c - r * hs + up * hs, c + r * hs + up * hs, c + r * hs - up * hs, c - r * hs - up * hs };
+		NTVERTEX vtx[4];
+		const float U[4] = { 0, 1, 1, 0 }, Vv[4] = { 0, 0, 1, 1 };
+		for (int i = 0; i < 4; ++i)
+			vtx[i] = { static_cast<float>(P[i].x), static_cast<float>(P[i].y), static_cast<float>(P[i].z),
+				static_cast<float>(-f.x), static_cast<float>(-f.y), static_cast<float>(-f.z), U[i], Vv[i] };
+		GROUPEDITSPEC ges{};
+		ges.flags = GRPEDIT_VTXCRD | GRPEDIT_VTXNML; ges.Vtx = vtx; ges.nVtx = 4;
+		oapiEditMeshGroup(dm, 0, &ges);
 	}
 
 	// The modulator's texture: black with the dimming as alpha, written straight (COPY: no blending, the alpha is set, not
@@ -2599,18 +3182,33 @@ namespace ocrew
 		if (dm != modDm)   // a new visual: bind again (retried until it takes)
 		{
 			const bool ok = oapiSetTexture(dm, 1, modSrf);
-			if (ok) modDm = dm;
+			if (ok) { modDm = dm; modKeyed = false; }
 			if (!modLogged || ok) { char b[96]; snprintf(b, sizeof b, "OrbiterCrew: visor modulator %dx%d, texture bound: %s", w, h, ok ? "yes" : "NO"); oapiWriteLog(b); modLogged = true; }
 		}
-		oapiClearSurface(modSrf, 0);   // transparent: last step's shapes must not stay (they smeared across the visor)
-		oapi::Sketchpad* skp = oapiGetSketchpad(modSrf);
-		if (!skp) return;
-		if (!Ext(skp)) { oapiReleaseSketchpad(skp); return; }
+		{
+			const double now = oapiGetSysTime();
+			if (modT >= 0 && now >= modT && now - modT < 1.0 / 15) return;   // soft and slow: 15 times a second is enough
+			modT = now;
+		}
 		const double sx = w / static_cast<double>(vw), sy = h / static_cast<double>(vh);
 		const double boost = brightAuto ? ambient : brightManual;
 		const double shade = 0.65 * std::clamp(lastShade, 0.0, 1.0) * (0.5 + 0.5 * (std::min)(1.0, boost));   // the shade: the whole view
 		const double glass = life ? 0.5 * life->optDark : 0;   // the browned glass dims the whole view
 		const double a0 = 0.10 + 0.45 * (std::min)(1.0, boost);                                   // bands and backings
+		{
+			// the same picture as last time: nothing to draw
+			const double key[7] = { static_cast<double>(w), static_cast<double>(h), shade, glass, a0, openL ? 1.0 : 0.0, openR ? 1.0 : 0.0 };
+			bool same = modKeyed;
+			for (int i = 0; i < 7 && same; ++i) same = std::abs(key[i] - modKey[i]) < 1.0 / 1024;
+			if (same) return;
+			std::copy(key, key + 7, modKey); modKeyed = true;
+		}
+		LARGE_INTEGER mq0, mqf; QueryPerformanceFrequency(&mqf); QueryPerformanceCounter(&mq0);
+		struct ModTime { LARGE_INTEGER& a; LARGE_INTEGER& f; SuitHud& h; ~ModTime() { LARGE_INTEGER e; QueryPerformanceCounter(&e); h.perfMod += 1000.0 * (e.QuadPart - a.QuadPart) / f.QuadPart; ++h.perfModN; } } modTime{ mq0, mqf, *this };
+		oapiClearSurface(modSrf, 0);   // transparent: last step's shapes must not stay (they smeared across the visor)
+		oapi::Sketchpad* skp = oapiGetSketchpad(modSrf);
+		if (!skp) { modKeyed = false; return; }
+		if (!Ext(skp)) { oapiReleaseSketchpad(skp); modKeyed = false; return; }
 		const double base = 1 - (1 - shade) * (1 - glass);   // the whole view: the shade and the glass
 		auto with = [&](double a) { return 1 - (1 - std::clamp(a, 0.0, 1.0)) * (1 - base); };
 		auto box = [&](double x0, double y0, double x1, double y1, double a)
@@ -2640,28 +3238,7 @@ namespace ocrew
 		const double R0 = vw - 1280 * k;
 		if (openL) soft(18 * k, 166 * k, 242 * k, 170 * k);
 		if (openR) soft(R0 + 1020 * k, 166 * k, 242 * k, 192 * k);
-		// the sun: a dense spot over its disc where it is in view, so the eye is not blinded and the signs stay readable
-		if (lastSunlit)
-		{
-			VECTOR3 cp, sp; oapiCameraGlobalPos(&cp); oapiGetGlobalPos(oapiGetGbodyByIndex(0), &sp);
-			MATRIX3 Rc; oapiCameraRotationMatrix(&Rc);
-			const VECTOR3 q = tmul(Rc, sp - cp);
-			if (q.z > 0)
-			{
-				const double fpx = (vh / 2.0) / std::tan((std::max)(0.1, oapiCameraAperture()));
-				const double cx = vw / 2.0 + q.x / q.z * fpx, cy = vh / 2.0 - q.y / q.z * fpx, r = fpx * std::tan(0.02);   // ~1 deg core
-				const int NR = 40;   // fine steps (each a few levels of alpha): no visible rings
-				for (int i = NR - 1; i >= 0; --i)   // faint rim first, dense core last; a smooth fall-off over three times the core
-				{
-					const double t = static_cast<double>(i) / (NR - 1), fall = 1 - t * t * (3 - 2 * t);
-					const double rr = r * (1 + 2.0 * t), a = 0.7 * (std::min)(1.0, 0.4 + boost) * fall;
-					if (with(a) < 1.0 / 255) continue;
-					const DWORD c = static_cast<DWORD>(std::lround(with(a) * 255)) << 24;
-					skp->QuickPen(c); skp->QuickBrush(c);
-					skp->Ellipse(static_cast<int>((cx - rr) * sx), static_cast<int>((cy - rr) * sy), static_cast<int>((cx + rr) * sx), static_cast<int>((cy + rr) * sy));
-				}
-			}
-		}
+		// (the sun's spot is a sprite of its own: SunSprite)
 		skp->QuickPen(0); skp->QuickBrush(0);
 		skp->SetBlendState();
 		oapiReleaseSketchpad(skp);
@@ -2673,6 +3250,7 @@ namespace ocrew
 	void SuitHud::LightLayer(VESSEL* v, const HudData* d)
 	{
 		auto logOnce = [&](const char* what) { if (!lightLogged) { lightLogged = true; char b[160]; snprintf(b, sizeof b, "OrbiterCrew: helmet light layer %dx%d: %s", lightW, lightH, what); oapiWriteLog(b); } };
+		const bool wasLive = lightLive;
 		lightLive = false;
 		gcCore2* core = Core();
 		if (!core || !d) return;
@@ -2705,13 +3283,18 @@ namespace ocrew
 			logOnce(ok ? "shader ok, texture bound" : "texture NOT bound");
 			if (!ok) return;
 		}
+		// the mouse every frame (no click is lost); the picture 30 times a second, or at once after a click
+		Mouse(vw, vh);
+		const double now = oapiGetSysTime();
+		if (wasLive && lightT >= 0 && now >= lightT && now - lightT < 1.0 / 30 && clickSeq == drawnSeq) { lightLive = true; return; }
+		lightT = now; drawnSeq = clickSeq;
+		LARGE_INTEGER q0, q1, q2, qf; QueryPerformanceFrequency(&qf); QueryPerformanceCounter(&q0);
 		oapiClearSurface(lightSrc, 0);
 		bool drawn = false;
 		if (oapi::Sketchpad* skp = oapiGetSketchpad(lightSrc))
 		{
 			if (Ext(skp))
 			{
-				Mouse(vw, vh);
 				drawingLight = true;
 				Draw(skp, lightW, lightH, *d, v);
 				drawingLight = false;
@@ -2719,17 +3302,31 @@ namespace ocrew
 			}
 			oapiReleaseSketchpad(skp);
 		}
+		QueryPerformanceCounter(&q1);
 		gcIPInterface* p = static_cast<gcIPInterface*>(ipi);
 		p->SetTexture("tSrc", lightSrc, IPF_CLAMP);
 		p->SetOutput(0, lightOut);
 		if (!p->Execute(false)) { logOnce("shader execute FAILED"); return; }
+		QueryPerformanceCounter(&q2);
 		lightLive = drawn;
+		// the cost, every 5 s
+		perfDraw += 1000.0 * (q1.QuadPart - q0.QuadPart) / qf.QuadPart; perfShader += 1000.0 * (q2.QuadPart - q1.QuadPart) / qf.QuadPart; ++perfN;
+		if (perfT0 < 0 || now < perfT0) perfT0 = now;
+		if (now - perfT0 >= 5)
+		{
+			char b[200];
+			snprintf(b, sizeof b, "OrbiterCrew: helmet display %dx%d: draw %.2f ms, shader %.2f ms (%.0f/s); modulator %.2f ms (%.0f/s)",
+				lightW, lightH, perfN ? perfDraw / perfN : 0, perfN ? perfShader / perfN : 0, perfN / (now - perfT0), perfModN ? perfMod / perfModN : 0, perfModN / (now - perfT0));
+			oapiWriteLog(b);
+			perfDraw = perfShader = perfMod = 0; perfN = perfModN = 0; perfT0 = now;
+		}
 	}
 
 	// ---- the display's settings, the user's for good ----
 	void SuitHud::LoadPrefs()
 	{
 		prefsLoaded = true;
+		g_en = UiEnglish();   // one state with the crew's menu and messages (OrbiterCrew.cfg; not set - English)
 		std::ifstream f("Config\\OrbiterCrew\\SuitDisplay.cfg");
 		if (!f) return;   // none yet: the scenario's or the defaults stand until the first change
 		std::string key;
@@ -2744,6 +3341,24 @@ namespace ocrew
 			else if (key == "HORIZON") { int x; if (f >> x) horizonMode = std::clamp(x, 0, 2); }
 			else std::getline(f, key);
 		}
+	}
+
+	void SuitHud::SaveLanguage(bool english) const
+	{
+		const char* path = "Config\\OrbiterCrew\\OrbiterCrew.cfg";
+		std::vector<std::string> lines; bool put = false;
+		{
+			std::ifstream f(path); std::string ln;
+			while (std::getline(f, ln))
+			{
+				std::istringstream ls(ln); std::string k; ls >> k;
+				if (k == "LANGUAGE") { ln = std::string("LANGUAGE ") + (english ? "en" : "ru") + "   ; the interface's language: ru or en"; put = true; }
+				lines.push_back(ln);
+			}
+		}
+		if (!put) lines.push_back(std::string("LANGUAGE ") + (english ? "en" : "ru") + "   ; the interface's language: ru or en");
+		std::ofstream f(path);
+		for (const auto& l : lines) f << l << "\n";
 	}
 
 	void SuitHud::SavePrefs() const

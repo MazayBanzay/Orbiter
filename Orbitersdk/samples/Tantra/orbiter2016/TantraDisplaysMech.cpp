@@ -41,8 +41,8 @@ void TantraDisplays::FillMechView(ms::View& v) const {
         v.petals += t->feet_.CellsAlive(l);
     }
     v.liftLowering = t->lift_.Lowering();
-    // Tantra::UpdatePods: the bays open only below Mach kPodMaxMach and with the wings out (the ship's and the carriage's fold)
-    v.podBlock = t->GetAtmDensity() > 1e-6 && t->GetMachNumber() > tantra::spec::kPodMaxMach ? 2 : (t->tuck_ >= 0.5 || p.tuck >= 0.5) ? 1 : 0;
+    // Tantra::UpdatePods: the bays open only below the dynamic pressure kPodMaxQ, and not while the carriage lies or moves
+    v.podBlock = t->GetDynPressure() > tantra::spec::kPodMaxQ ? 2 : p.tuck >= 0.5 ? 1 : 0;
     // the gear: each support out / going, on the ground, whole (the carriage's pose, the sensors, the damage model, the feet)
     namespace dm = tantra::damage;
     static const int kLegPart[7] = {dm::kLegPort, dm::kLegStbd, dm::kSternLeg0, dm::kSternLeg1, dm::kSternLeg2, dm::kSternLeg3, dm::kKangLeg};
@@ -128,8 +128,8 @@ void TantraDisplays::MechCommand(int cmd) {
         }
         case ms::kCmdPods:   // as the left console's pods key: stowing only with their thrust at 0
             if (t->podsWanted_) {
-                if (PodLevel() > 0.001) { t->Message("Уборка гондол: сначала их тяга 0", "Stowing the pods: their thrust to 0 first"); return; }
-                t->podsWanted_ = false; t->podTarget_ = 0.0; t->Message("Гондолы: чаши в 0°, в отсеки", "Pods: cups aft, into the bays");
+                if (PodLevel() > 0.001) { t->Message("Уборка выдвижных блоков: сначала их тяга 0", "Stowing the pods: their thrust to 0 first"); return; }
+                t->podsWanted_ = false; t->podTarget_ = 0.0; t->Message("Выдвижные блоки: чаши в 0°, в отсеки", "Pods: cups aft, into the bays");
             } else t->ActPods(false);
             break;
         case ms::kCmdLift: t->ActLift(); break;

@@ -3,14 +3,17 @@
 //
 // Three gear groups:
 //   * two blade legs («лопасти») hanging from trunnion carriages on a flank track. Lying and lifting, the
-//     carriages are PARKED at the aft end of the track (s 53.4), the CG is ahead of them and the ship stands as a
-//     statically determinate tripod on the blades and the kangaroo leg - the trunnion drives hold no pitch;
+//     carriages are PARKED just behind the CG, where the kangaroo takes kTripodShare of the weight (2026-10-09; at
+//     the aft end of the track, s 53.4, if the CG is further aft) and the ship stands as a statically determinate
+//     tripod on the blades and the kangaroo leg - the trunnion drives hold no pitch;
 //   * the kangaroo leg out of a belly pocket (hip s 99.4): thigh, fork knee bending aft, telescopic shin, ball
-//     ankle with an umbrella foot 12 m ahead of the hip. It takes (sCG - s_track) / (s_foot - s_track) of the weight;
-//   * four stern legs on the nacelles: four sections each, umbrella feet on R 36 m; they carry the standing ship.
+//     ankle with an umbrella foot 12 m ahead of the hip. It takes (sCG - s_hip) / (s_foot - s_park) of the weight:
+//     6 % (its limit 7 %; 11 % already overloads its shin up high);
+//   * four stern legs in body bays: five sections each, cup feet on R 33 m; they carry the standing ship.
 // Erection progress P runs 0 (lying) .. 6 (standing on the stern):
-//   0-1 lift on the blades to the standing height (kangaroo foot fixed on the ground);
-//   1-2 trunnions run forward under the CG (the kangaroo unloads), kangaroo folds into its pocket;
+//   0-1 lift on the tripod as high as the kangaroo reaches (TripodTopH, ~79 m axis, kangaroo foot fixed on the ground);
+//   1-2 trunnions run forward under the CG (the kangaroo unloads), kangaroo folds into its pocket while the blades
+//       lift the rest to the standing height;
 //   2-3 turn 90 deg about the trunnions (drive moment = weight x CG error only);
 //   3-4 stern legs swing out, run down to the ground, feet open;  4-5 load to the stern legs;
 //   5-6 blade feet fold flat, blades shorten, carriages run to the stow station and into the pockets.
@@ -96,6 +99,9 @@ public:
     // blades and the kangaroo foot at kTripodAxisH, no turn (the user, 2026-10-04: 30-40 m, not the 85-90 m top of the
     // lift, which only the turn to the stern needs) - lower: a lower CG, shorter columns, less sway, quicker
     static constexpr double kTripodAxisH = 32.0;
+    static constexpr double kTripodShare = 0.06; // the kangaroo's share on the tripod (limit 0.07; the CG error ~0.6 %)
+    double HipPark(double sCG) const;           // the trunnions' station lying and lifting on the tripod
+    double TripodTopH(double sCG) const;        // the highest hull axis the tripod reaches (the kangaroo's shin out)
     double AxisHeightAt(double p) const;
     double LiftProgressFor(double axisH) const;
     // T9: the lying height is the loading height - kept for the port code, always "already there".

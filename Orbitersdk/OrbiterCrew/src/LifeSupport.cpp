@@ -7,6 +7,7 @@
 
 namespace ocrew
 {
+	const char* Tr(const char* ru, const char* en);   // the interface's language (CrewMember.cpp)
 	namespace
 	{
 		const double RT = 8.314 * 305;   // J/mol at suit temperature
@@ -16,12 +17,12 @@ namespace ocrew
 	bool Air::Breathable(std::string* reason) const
 	{
 		auto no = [&](const char* r) { if (reason) *reason = r; return false; };
-		if (p < 6.3) return no("вакуум");
-		if (ppO2 < 16) return no("мало кислорода");
-		if (ppO2 > 60) return no("избыток кислорода");
-		if (ppCO2 > 1.0) return no("много CO2");
-		if (T < 243) return no("слишком холодно");
-		if (T > 323) return no("слишком жарко");
+		if (p < 6.3) return no(Tr("вакуум", "vacuum"));
+		if (ppO2 < 16) return no(Tr("мало кислорода", "too little oxygen"));
+		if (ppO2 > 60) return no(Tr("избыток кислорода", "too much oxygen"));
+		if (ppCO2 > 1.0) return no(Tr("много CO2", "too much CO2"));
+		if (T < 243) return no(Tr("слишком холодно", "too cold"));
+		if (T > 323) return no(Tr("слишком жарко", "too hot"));
 		return true;
 	}
 

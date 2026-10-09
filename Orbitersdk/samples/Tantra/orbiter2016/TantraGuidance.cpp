@@ -230,7 +230,7 @@ void SimStep(Sim& S, double dt) {
         s.mass = mass;
     }
     // the pods, as ascent(): below M 0.8 and 20 km; once retracted they stay in the bays
-    if (s.pods && s.lifted && !(k.mach < 0.8 && k.h < 20e3 && k.rho > 1e-4)) { s.pods = false; Ev(s, k, kEvPods, L"М 0,8 — гондолы убраны · " + Fmt(k.h / 1e3, 2) + L" км", kOk, nullptr); }
+    if (s.pods && s.lifted && !(k.mach < 0.8 && k.h < 20e3 && k.rho > 1e-4)) { s.pods = false; Ev(s, k, kEvPods, L"М 0,8 — выдв. блоки убраны · " + Fmt(k.h / 1e3, 2) + L" км", kOk, nullptr); }
     Guide(s, k, dt, nullptr);
     // attitude slews to the commands (near vertical a heading change is a roll)
     s.pitch += Clamp(1.2 * (s.pitchCmd - s.pitch), -kAttRate, kAttRate) * dt;
@@ -675,7 +675,7 @@ std::vector<Check> Ascent::BuildChecks() const {
     const double lat = std::fabs(SiteLat()), gS = st_.planet.mu / (st_.planet.R * st_.planet.R);
     const double tw = (CupOf(kAMarch, sm.B, kPfMarch * sm.power, false).F + PodsMax()) / (sm.m * gS);
     return {{L"Установка на режиме · поле " + Fmt(st_.field, 1) + L" Тл", st_.plantRun},
-            {L"Тяга/вес на столе " + Fmt(tw, 2) + L" (чаша + 4 гондолы)", tw > 1.2},
+            {L"Тяга/вес на столе " + Fmt(tw, 2) + L" (чаша + 4 выдвижных блока)", tw > 1.2},
             {L"Аргон " + Fmt(sm.argon / 1e6, 2) + L" кт · по плану " + Fmt(P.argon / 1e6, 2) + L" кт", P.argon < sm.argon},
             {L"Железо " + Fmt(sm.iron / 1e6, 2) + L" кт · по плану " + Fmt(P.iron / 1e6, 2) + L" кт", P.iron < sm.iron},
             {L"Курс " + Fmt(td.azR, 1) + L"° · i " + Fmt(tg_.inc, 1) + L"° не ниже широты " + Fmt(lat, 1) + L"°", tg_.inc >= lat - 1e-9},
@@ -725,7 +725,7 @@ void Ascent::Step(const AscentState& st, double now) {
     // off the table: the ship's contact
     if (!s.lifted && !st.contact) { s.lifted = true; s.tLift = s.t; Ev(s, k, kEvLiftoff, L"Отрыв от стола", kOk, &log_); }
     // the pods: below M 0.8 and 20 km; once retracted they stay in the bays
-    if (s.pods && s.lifted && !(k.mach < 0.8 && k.h < 20e3 && k.rho > 1e-4)) { s.pods = false; Ev(s, k, kEvPods, L"М 0,8 — гондолы убраны · " + Fmt(k.h / 1e3, 2) + L" км", kOk, &log_); }
+    if (s.pods && s.lifted && !(k.mach < 0.8 && k.h < 20e3 && k.rho > 1e-4)) { s.pods = false; Ev(s, k, kEvPods, L"М 0,8 — выдв. блоки убраны · " + Fmt(k.h / 1e3, 2) + L" км", kOk, &log_); }
     s.Favail = st.Fmarch + (s.pods ? st.Fpods : 0.0);
     Guide(s, k, dt, &log_);
     Steer(s, &cmd_.pitchRate, &cmd_.hdgRate, &s.tvcP, &s.tvcY);
@@ -927,7 +927,7 @@ std::vector<Check> Landing::BuildChecks() const {
     const LandPlan& P = plan_;
     const double W = (std::max)(1.0, s.m * s.g), tw = (MarchMax() + PodsMax()) / W;
     return {{L"Поле: АВТО — поле и темп капсул ведёт установка", s.fieldAuto},
-            {L"Тяга/вес " + Fmt(tw, 2) + L" (чаша " + Fmt(MarchMax() / W, 2) + L" + гондолы)", tw > 1.5},
+            {L"Тяга/вес " + Fmt(tw, 2) + L" (чаша " + Fmt(MarchMax() / W, 2) + L" + выдвижные блоки)", tw > 1.5},
             {L"Аргон " + Fmt(s.argon / 1e6, 2) + L" кт · по плану " + Fmt(P.used / 1e6, 2) + L" кт", P.used < s.argon},
             {L"Ноги убраны, приводы ног в норме", true},
             {P.ok ? L"План: касание Т+" + Clock(P.tTouch) + L" · " + Fmt(P.td.vz, 1) + L" м/с · пик " + Fmt(P.maxG, 1) + L" g" : std::wstring(L"План: посадка вне норм"), P.ok}};

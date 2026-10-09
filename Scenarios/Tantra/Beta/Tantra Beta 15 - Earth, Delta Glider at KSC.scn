@@ -1,0 +1,52 @@
+BEGIN_DESC
+TANTRA BETA 15 - Earth, a stock Delta Glider at KSC.
+The astronavigator in her coverall stands 16 m before the nose of a Delta Glider (stock, not changed) on the KSC runway.
+Walk up to the nose and look at it: the crew's menu shows its nose airlock (Alt: the places of actions, orange).
+"open the airlock" - the nose cone (K) and the outer door (O) open, as if pressed on the glider (about 20 s).
+"go in" (the airlock open) - she is aboard: the glider has the focus and the view, you fly it.
+To get out: F on the glider, standing on the ground with the airlock open - she steps out before the nose.
+The glider's airlock is described in Config\OrbiterCrew\Ships\DeltaGlider.cfg (every Delta Glider in any scenario).
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 58710.6
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+GL-01:DeltaGlider
+  STATUS Landed Earth
+  POS -80.6824940 28.5967940
+  HEADING 330.00
+  RCSMODE 0
+  AFCMODE 7
+  PRPLEVEL 0:0.995000 1:1.000000
+  NAVFREQ 94 524 84 114
+  XPDR 0
+  GEAR 1 1.0000
+  AAP 0:0 0:0 0:0
+END
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Earth
+  POS -80.6825759 28.5969186
+  HEADING 150.00
+  ALT 0.930
+  AFCMODE 7
+END
+END_SHIPS

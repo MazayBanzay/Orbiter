@@ -23,7 +23,7 @@ void Ignition::EmergencyCut() {
     beam_ = 0.0;
 }
 
-void Ignition::Update(double dt, bool powerOk) {
+void Ignition::Update(double dt, bool powerOk, bool beamOk) {
     if (!powerOk && target_ != IgnStage::Off) EmergencyCut();
 
     const bool wantField = target_ >= IgnStage::Field;
@@ -35,7 +35,7 @@ void Ignition::Update(double dt, bool powerOk) {
     else feed_ = Ramp(feed_, true, kFeedTime, kFeedTime, dt);
 
     if (field_ < 1.0) beam_ = Ramp(beam_, false, kBeamTime, kFeedTime, dt);
-    else beam_ = Ramp(beam_, wantBeam, kBeamTime, kFeedTime, dt);
+    else beam_ = Ramp(beam_, wantBeam && beamOk, kBeamTime, kFeedTime, dt);
 
     field_ = Ramp(field_, wantField, kFieldTime, kDecayTime, dt);
 

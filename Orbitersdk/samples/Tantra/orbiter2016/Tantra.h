@@ -87,6 +87,9 @@ private:
     void UpdatePods(double dt);
     void ActPods(bool hover);          // B: pods out and cups down / cups aft and pods in; Shift+B: out, cups aft
     void ActPodsTo(double deg);
+    static double PodVerticalDeg();    // pod swivel with the thrust vertical in the vessel frame (the hover angle)
+    double PodArgonExhaust();          // the pods' argon jet speed here (slower near the ground, in dense air)
+    bool PodHoverSet() const;          // the pods commanded to the hover angle
     void UpdateCG(bool force);         // shifts the vessel frame to the CG of the mass budget
     void AimThroughCG();               // stern cups: the magnetic nozzles steer the jet through the CG (<= 7 deg)
     void DefineControlSurfaces(bool on);
@@ -126,6 +129,8 @@ private:
     // Anamezon port and magnetic manipulator (TantraPort.cpp).
     enum class PortStep { Idle, Open, Down, Up, Engage, Place, Home, Close, Hold };
     void DefinePort();
+    void DefineHangar();              // hangar payload attachments: lander "TLANDER", MPU "TMPU" (2026-10-09)
+    void UpdateHangarAttach();        // MPU 1 and 2 ride the floor platform down to the ground
     void UpdatePort(double dt);
     void ActPortLoad();               // take the cassette under the door into the next free slot
     void ActPortDrop();               // hand a trap out through the port and set it down / release it
@@ -220,6 +225,13 @@ private:
     static constexpr int kMaxPads = 64;
     double touchMu_[kMaxPads] = {0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7};
     double touchMuLng_[kMaxPads] = {0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7};  // along the hull
+    // the hull's contact rings (kHullPts): only the points near the ground go to Orbiter - all 241 cost Orbiter a terrain
+    // query each per step while the ship moves or settles (the user, 2026-10-08: half the frame rate). Scanned in turn.
+    bool hullNear_[256] = {};
+    bool hullAll_ = true;                      // all of them (until the first full scan, or no surface)
+    int hullScan_ = 0;
+    bool hullDirty_ = false;                   // the near set changed since Orbiter last got the points
+    void ScanHullNear();                       // a part of the points each frame; hullDirty_ when the set changed
     tantra::foot::Feet feet_;                  // cells, ribs, ankles, stage joints
     double cellPen_[7][12] = {};               // each cell's compression from unloaded (its pad's depth) [m]
     double cellD_[7][12] = {};                 // its petal strut shown from the mesh pose [m] (+ out, - in)
@@ -304,13 +316,23 @@ private:
     bool ctrlOn_ = false;
     double elevon_[2] = {0.0, 0.0}, bodyFlap_ = 0.5;  // mesh states (port, starboard; flap 0..1 = 0..25 deg)
     EngineSet engineSet_ = EngineSet::Planetary;
-    double podAngle_ = 0.0, podTarget_ = 0.0;  // deg: 0 thrust forward, 90 thrust up
-    // the pods' own thrust set by their lever (the bridge's ГОНДОЛЫ) and УВТ: the yoke drives them differentially
+    double podAngle_ = 0.0, podTarget_ = 0.0;  // deg: 0 thrust forward, PodVerticalDeg() (~62) thrust up, 180 aft
+    double podCant_ = 0.0;                     // deg: hover lean of the pairs apart (aft pair -, fore pair +; mesh pod_cant)
+    // the pods' own thrust set by their lever (the bridge's ВЫДВ. БЛОКИ) and УВТ: the yoke drives them differentially
     // (TantraVectoring.cpp; the bridge session, agreed with the fork 2026-10-04)
     void PodVectoring(double simdt);
     double podCmd_ = 0.0;                      // the lever: 0..1 (locked at 0 until the pods are fully out)
     double podLv_[tantra::spec::kPodCups] = {};   // each cup's level as driven (it follows at 3 /s)
-    int planGroup_ = -1;                       // main throttle: 0 anamezon, 1 marching planetary cup
+    int planGroup_ = -1;                       // main throttle: 0 anamezon, 1 marching planetary cup, 2 + the stern blocks
+    // (2026-10-09) dual-mode stern blocks: on the ion charges with the marching cup (the take-off arc), then the anamezon with
+    // the thrust carried over (the hand-over waits for the guide beam, the beam for the marching cup home)
+    bool sternPlan_ = false;                   // the bridge key КОРМА: ЗАРЯДЫ
+    bool SternPlanActive() const { return sternPlan_ && engineSet_ == EngineSet::Planetary; }
+    bool AnaHot() const { return ignition_.Target() >= tantra::IgnStage::Beam || ignition_.BeamLevel() > 0.0; }
+    void ActToggleSternPlan();
+    void SternHandOver();
+    double handLevel_ = -1.0;                  // the anamezon level that carries the charges' thrust on (rebind)
+    bool handWarned_ = false;
     tantra::Ignition ignition_;
     tantra::Drive drive_;
     TantraExhaust* exhaust_ = nullptr;
@@ -362,6 +384,8 @@ private:
     double wingIn_ = 0.0, wingOut_ = 0.0;   // inner panels 0..1 (of kWingFoldDeg), outer panels 0..1 (folded under)
     double tuck_ = 0.0;               // crests/pods, flight mode part
     double hangar_ = 0.0, hangarT_ = 0.0, rovers_ = 0.0, roversT_ = 0.0;
+    ATTACHMENTHANDLE hangarAtt_[4] = {};   // 0 lander on the cradle, 1-3 MPU (1, 2 on the platform, 3 beside it)
+    double hangarAttRov_ = -1.0;           // platform state the MPU attachments were last placed for
     double irisAna_ = 0.0, irisMarch_ = 0.0, marchOut_ = 0.0, irisNose_ = 0.0, airlockUp_ = 0.0;
     bool marchHigh_ = false;          // marching cup and pods run on iron (above kMarchArgonAlt), else argon
 

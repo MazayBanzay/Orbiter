@@ -12,5 +12,6 @@ copy /y "build\TantraTrap.dll" "..\..\..\Modules\TantraTrap.dll" >nul
 copy /y "build\TantraDebris.dll" "..\..\..\Modules\TantraDebris.dll" >nul
 python tools\gen_mesh.py --install >nul || (echo MESH INSTALL FAILED & exit /b 1)
 python tools\make_lift_textures.py >nul
-echo Installed: Tantra.dll + meshes + lift textures
+python tools\make_hull_textures.py >nul
+echo Installed: Tantra.dll + meshes + lift and hull textures
 endlocal

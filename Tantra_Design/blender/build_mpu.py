@@ -327,15 +327,18 @@ def obox(pn, c, r, u, n, sx, sy, sz, mi):
 
 # the terminal (the user's variant 2, 2026-10-07): a rugged instrument box on the console, tilted 25 deg to the driver, a sun
 # hood, carrying handles, five hard keys each side of the screen; the screen set 6 cm in (MPU.cpp draws it, 512 x 384)
-TERM_C, TERM_A = Vector((0.0, -3.74, DE + 0.98)), 30.0   # low, under the driver's line of sight
-TERM_SW, TERM_SH = 0.52, 0.39
+TERM_A = 38.0                                             # the face laid back: the driver looks down on it, face on
+TERM_C = Vector((0.0, -3.60 - 0.28 * math.sin(math.radians(TERM_A)), DE + 0.805 + 0.28 * math.cos(math.radians(TERM_A))))   # its lower edge on the console's slope (y -3.66, 3 cm over it)
+TERM_RECESS = 0.025                                       # the screen set in 2.5 cm (a deeper recess hid the legends at the edges
+TERM_SW, TERM_SH = 0.56, 0.56                             # the size the user marked (2026-10-08): 512 x 512 px
+TERM_KEYS, TERM_KEY_DY = 6, 0.09                          # six hard keys each side, 0.09 m apart, centred on the screen
 def term_axes():
     a = math.radians(TERM_A)
     return Vector((-1, 0, 0)), Vector((0, -math.sin(a), math.cos(a))), Vector((0, math.cos(a), math.sin(a)))   # her right, up, out
 
 def e_terminal(pn):
     r, u, n = term_axes(); c = TERM_C
-    W, H, D = 0.78, 0.49, 0.16
+    W, H, D = 0.84, 0.62, 0.16                                                           # a 3 cm frame above and below the screen
     obox(pn, c - n * (D - 0.01), r, u, n, W, H, 0.02, MI["Hull"])                          # the back
     for sgn in (-1, 1):
         obox(pn, c + r * sgn * (W / 2 - 0.065) - n * D / 2, r, u, n, 0.13, H, D, MI["Hull"])   # the side cheeks (the keys)
@@ -343,17 +346,17 @@ def e_terminal(pn):
     for sgn in (-1, 1):                                                                         # carrying handles
         h0 = c + r * sgn * (W / 2 + 0.03); cyl(pn, h0 + u * 0.18, h0 - u * 0.18, 0.013, MI["Metal"], 10)
         for e in (-1, 1): cyl(pn, h0 + u * e * 0.18, h0 + u * e * 0.18 - r * sgn * 0.04, 0.013, MI["Metal"], 10)
-        for k in range(5):                                                                      # the hard keys
-            kc = c + r * sgn * (TERM_SW / 2 + 0.065) + u * (0.16 - k * 0.08) + n * 0.006
-            obox(pn, kc, r, u, n, 0.075, 0.05, 0.014, MI["Seat"])
+        for k in range(TERM_KEYS):                                                              # the hard keys
+            kc = c + r * sgn * (TERM_SW / 2 + 0.065) + u * ((TERM_KEYS - 1) / 2 * TERM_KEY_DY - k * TERM_KEY_DY) + n * 0.006
+            obox(pn, kc, r, u, n, 0.075, 0.06, 0.014, MI["Seat"])
     # the screen, recessed
-    sc = c - n * 0.06
+    sc = c - n * TERM_RECESS
     Q = [sc - r * TERM_SW / 2 - u * TERM_SH / 2, sc + r * TERM_SW / 2 - u * TERM_SH / 2, sc + r * TERM_SW / 2 + u * TERM_SH / 2, sc - r * TERM_SW / 2 + u * TERM_SH / 2]
     add_poly("TermScr", Q, MI["Term"])
     UVMAP["TermScr"] = lambda q: ((q - sc).dot(r) / TERM_SW + 0.5, 0.5 - (q - sc).dot(u) / TERM_SH)
     for sgn in (-1, 1):                                                                         # the recess' walls
-        obox(pn, sc + r * sgn * (TERM_SW / 2 + 0.005) + n * 0.03, r, u, n, 0.01, TERM_SH, 0.06, MI["Seat"])
-        obox(pn, sc + u * sgn * (TERM_SH / 2 + 0.005) + n * 0.03, r, u, n, TERM_SW + 0.02, 0.01, 0.06, MI["Seat"])
+        obox(pn, sc + r * sgn * (TERM_SW / 2 + 0.005) + n * TERM_RECESS / 2, r, u, n, 0.01, TERM_SH, TERM_RECESS, MI["Seat"])
+        obox(pn, sc + u * sgn * (TERM_SH / 2 + 0.005) + n * TERM_RECESS / 2, r, u, n, TERM_SW + 0.02, 0.01, TERM_RECESS, MI["Seat"])
     # the keyboard on its pulled-out tray
     box(pn, (-0.25, -3.60, DE + 0.76), (0.25, -3.40, DE + 0.79), MI["Hull"])
     box(pn, (-0.23, -3.585, DE + 0.79), (0.23, -3.415, DE + 0.81), MI["Seat"])
@@ -489,8 +492,8 @@ def empu_c():
     # the outer hatch, both faces: an octagonal coaming in warning yellow, the leaf with its bolt ring, the locking wheel,
     # the port, two heavy hinges (left from outside); a lamp and a small control box beside it outside
     e_outer_hatch(B, yd)
-    box(B, (-0.15, yd, DE + 1.86), (0.15, yd + 0.06, DE + 1.91), MI["Lamp"])
-    box(B, (-0.78, yd, DE + 0.95), (-0.60, yd + 0.07, DE + 1.25), MI["Hull"]); box(B, (-0.75, yd + 0.07, DE + 1.15), (-0.63, yd + 0.075, DE + 1.22), MI["Red"])
+    box(B, (-0.15, yd + 0.003, DE + 1.86), (0.15, yd + 0.06, DE + 1.91), MI["Lamp"])           # (off the wall: their backs
+    box(B, (-0.78, yd + 0.003, DE + 0.95), (-0.60, yd + 0.07, DE + 1.25), MI["Hull"])         # on it flickered inside); box(B, (-0.75, yd + 0.07, DE + 1.15), (-0.63, yd + 0.075, DE + 1.22), MI["Red"])
     for k in (range(5) if HSTYLE != 3 else ()):
         z = DE - 0.05 - k * 0.30; yy = yd + 0.10 + k * 0.27
         box("Ladder", (-0.45, yy, z - 0.04), (0.45, yy + 0.28, z), MI["Metal"])
@@ -579,7 +582,9 @@ try:
         box(B, (-1.40, y - 0.06, 1.47), (1.40, y + 0.06, 1.59), MI["Hull"])
         for sx in (-1, 1): cyl(B, (sx * 0.42, y, 1.25), (sx * 1.30, y, 1.47), 0.05, MI["Hull"], 10)
     for sx in (-1, 1): box(B, (sx * 1.40 - 0.07, -4.30, 1.45), (sx * 1.40 + 0.07, 4.30, 1.60), MI["Hull"])
-    for y0, y1 in ((-4.2, -2.55), (-2.35, -0.95), (-0.75, 0.75), (0.95, 2.35), (2.55, 4.2)):
+    # the deck plates: the open MPU's lie between the frame's cross tubes; the EMPU's cabin floor is one plate (the user,
+    # 2026-10-08: the 0.2 m slots over the tubes were holes in its floor)
+    for y0, y1 in (((-4.2, 4.2),) if VAR == "EMPU" else ((-4.2, -2.55), (-2.35, -0.95), (-0.75, 0.75), (0.95, 2.35), (2.55, 4.2))):
         box(B, (-1.30, y0, 1.60), (1.30, y1, 1.62), MI["Deck"])
     for sx in (-1, 1):
         for y in (-4.2, -2.45, 0.0, 2.45, 4.2): box(B, (sx * 1.40 - 0.09, y - 0.09, 1.60), (sx * 1.40 + 0.09, y + 0.09, 1.70), MI["Red"])   # twist-locks
@@ -732,7 +737,7 @@ try:
             tr, tu_, tn = term_axes(); to = lambda v: (-v.x, v.z, -v.y)
             f.write("constexpr double kTermC[3] = {%.4f, %.4f, %.4f}, kTermR[3] = {%.4f, %.4f, %.4f}, kTermU[3] = {%.4f, %.4f, %.4f}, kTermN[3] = {%.4f, %.4f, %.4f};\n" %
                     (*to_orb(TERM_C), *to(tr), *to(tu_), *to(tn)))
-            f.write("constexpr double kTermSW = %.3f, kTermSH = %.3f, kTermRecess = 0.06;   // the screen; the keys at +-(SW/2 + 0.065) across, 0.16 - k*0.08 up\n" % (TERM_SW, TERM_SH))
+            f.write("constexpr double kTermSW = %.3f, kTermSH = %.3f, kTermRecess = %.3f;   // the screen; the keys at +-(SW/2 + 0.065) across, 0.225 - k*0.09 up\n" % (TERM_SW, TERM_SH, TERM_RECESS))
             lg = gidx.get("Ladder", [])
             f.write("constexpr int kLadderGrp[4] = {%s};\nconstexpr int kLadderN = %d;\nconstexpr double kLadderHinge[3] = {0.0, %.3f, %.3f};   // folds about x\n" %
                     (", ".join(map(str, lg + [0] * (4 - len(lg)))), len(lg), DE - 0.03 - CG_H, -(4.25 + 0.05)))

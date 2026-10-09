@@ -180,19 +180,21 @@ private:
     enum { kItemCable = 1, kItemTakeCell = 2, kItemPutCell = 3 };
     static int cItem(void* c, int i, OcItem* out) {
         Station* s = static_cast<Station*>(c);
+        const bool en = s->api_.English();                                      // OrbiterCrew's language, asked each time
         *out = OcItem{};
         out->kind = OC_AIRLOCK; out->dir = _V(0, 0, -1); out->radius = 1.6;      // from outside OrbiterCrew offers the entrances only
         if (i == 0) {
             out->id = kItemCable; out->pos = _V(st::kHolder[0], st::kGround, st::kHolder[2] + 0.5);
-            std::snprintf(out->label, sizeof out->label, "%s", s->plugged_ ? "кабель подключён к машине" : s->cablePerson_ ? "вернуть кабель на катушку" : "взять кабель (15 м)");
+            std::snprintf(out->label, sizeof out->label, "%s", s->plugged_ ? (en ? "the cable is plugged into a vehicle" : "кабель подключён к машине")
+                                                              : s->cablePerson_ ? (en ? "put the cable back on the reel" : "вернуть кабель на катушку") : (en ? "take the cable (15 m)" : "взять кабель (15 м)"));
         } else if (i == 1) {
             const int k = s->Fullest();
             out->id = kItemTakeCell; out->pos = _V(-0.30, st::kGround, 0.95);
-            if (k < 0) std::snprintf(out->label, sizeof out->label, "%s", "ячеек нет");
-            else std::snprintf(out->label, sizeof out->label, "взять ячейку (%.0f %%)", s->cell_[k] / kCellJ * 100.0);
+            if (k < 0) std::snprintf(out->label, sizeof out->label, "%s", en ? "no cells" : "ячеек нет");
+            else std::snprintf(out->label, sizeof out->label, en ? "take a cell (%.0f %%)" : "взять ячейку (%.0f %%)", s->cell_[k] / kCellJ * 100.0);
         } else if (i == 2) {
             out->id = kItemPutCell; out->pos = _V(-0.30, st::kGround, 0.80); out->radius = 1.4;
-            std::snprintf(out->label, sizeof out->label, "%s", "поставить ячейку на зарядку");
+            std::snprintf(out->label, sizeof out->label, "%s", en ? "put the cell on charge" : "поставить ячейку на зарядку");
         } else return 0;
         return 1;
     }

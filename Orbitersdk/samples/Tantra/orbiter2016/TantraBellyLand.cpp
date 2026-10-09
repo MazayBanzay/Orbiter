@@ -6,7 +6,7 @@
 
 namespace tantra::guidance {
 
-const wchar_t* const kBPhases[kBPhaseCount] = {L"ГОТОВНОСТЬ: ГОНДОЛЫ", L"УДЕРЖАНИЕ", L"ТОРМОЖЕНИЕ · ШАССИ", L"СНИЖЕНИЕ 3 м/с",
+const wchar_t* const kBPhases[kBPhaseCount] = {L"ГОТОВНОСТЬ: ВЫДВ. БЛОКИ", L"УДЕРЖАНИЕ", L"ТОРМОЖЕНИЕ · ШАССИ", L"СНИЖЕНИЕ 3 м/с",
                                                L"СНИЖЕНИЕ 1 м/с", L"КАСАНИЕ", L"ОТСЕЧКА"};
 
 namespace {
@@ -79,20 +79,20 @@ std::vector<Check> BellyLand::BuildChecks(bool* ok) const {
     bool all = true;
     auto add = [&](const std::wstring& t, bool good, bool must = true) { c.push_back({t, good}); if (must && !good) all = false; };
     add(s.contact ? L"на грунте: ВКЛ только в воздухе" : L"в воздухе · " + Fmt(s.alt, 0) + L" м над грунтом", !s.contact);
-    add(s.wingsFolded ? L"крылья сложены: гондолы не выйдут" : L"крылья развёрнуты: гондолы могут выйти", !s.wingsFolded);
-    add(s.mach < 0.75 ? L"М " + Fmt(s.mach, 2) + L" < 0,75: створки гондол открыты" : L"М " + Fmt(s.mach, 2) + L": створки гондол закрыты выше М 0,8", s.mach < 0.75);
+    add(s.wingsFolded ? L"крылья сложены: выдвижные блоки не выйдут" : L"крылья развёрнуты: выдвижные блоки могут выйти", !s.wingsFolded);
+    add(s.mach < 0.75 ? L"М " + Fmt(s.mach, 2) + L" < 0,75: створки выдвижных блоков открыты" : L"М " + Fmt(s.mach, 2) + L": створки выдвижных блоков закрыты выше М 0,8", s.mach < 0.75);
     add(s.plantRun ? L"энергоустановка на режиме" : L"энергоустановка не на режиме", s.plantRun);
     const double W = Weight(), L = LiftMax();
-    add(L"тяга гондол вверх " + Force(L) + (s.podMaxEst ? L" (оценка)" : L"") + L" " + (L >= kBThrustMargin * W ? L"≥" : L"<") + L" 1,1 × вес " + Force(W)
+    add(L"тяга выдвижных блоков вверх " + Force(L) + (s.podMaxEst ? L" (оценка)" : L"") + L" " + (L >= kBThrustMargin * W ? L"≥" : L"<") + L" 1,1 × вес " + Force(W)
         + L" (×" + Fmt(W > 0 ? L / W : 0.0, 2) + L")", L >= kBThrustMargin * W);
     const double tp = PrepTime();
-    if (tp <= 0.0) add(L"гондолы выпущены, чаши на " + Fmt(s.podAngle, 0) + L"°", true);
-    else if (!std::isfinite(tp)) add(L"гондолы: тяга вверх недостижима ни при каком угле чаш", false);
+    if (tp <= 0.0) add(L"выдвижные блоки выпущены, чаши на " + Fmt(s.podAngle, 0) + L"°", true);
+    else if (!std::isfinite(tp)) add(L"выдвижные блоки: тяга вверх недостижима ни при каком угле чаш", false);
     else {
         // the fall while they come out, then the stop at the braking the laws allow (3 m/s^2, less if the lift is short)
         const double vEnd = (std::max)(0.0, -s.vz + s.g * tp), aStop = (std::min)(3.0, (L / (std::max)(W, 1.0) - 1.0) * s.g);
         const double drop = (std::max)(0.0, -s.vz * tp + 0.5 * s.g * tp * tp) + (aStop > 0.1 ? vEnd * vEnd / (2 * aStop) : kInf);
-        add(L"гондолы выйдут за " + Fmt(tp, 0) + L" с · просадка до " + Fmt(drop, 0) + L" м", s.alt - drop > 100.0);
+        add(L"выдвижные блоки выйдут за " + Fmt(tp, 0) + L" с · просадка до " + Fmt(drop, 0) + L" м", s.alt - drop > 100.0);
     }
     add(L"тангаж " + Fmt(s.pitch, 0) + L"°, крен " + Fmt(s.bank, 0) + L"° (≤ 30°)", std::fabs(s.pitch) <= 30.0 && std::fabs(s.bank) <= 30.0);
     add(s.marchMax > 0.0 ? L"маршевая чаша: " + Force(s.marchMax) + L" (разгон)" : L"маршевая чаша не на ходу: скорость только наклоном чаш", true, false);
@@ -119,7 +119,7 @@ void BellyLand::Engage(double) {
     cupCmd_ = PodsReady(s) ? s.podAngle : (std::isfinite(VertAngle()) ? VertAngle() : 90.0);
     tdVz_ = tdVh_ = kNaN;
     Note(L"ВКЛ: держу " + Fmt(altT_, 0) + L" м · " + Fmt(spdT_, 0) + L" м/с · курс " + Fmt(hdgT_, 0) + L"°", kOk);
-    if (phase_ == 0) Note(L"гондолы выходят: " + Fmt(PrepTime(), 0) + L" с без подъёмной тяги", kWarn);
+    if (phase_ == 0) Note(L"выдвижные блоки выходят: " + Fmt(PrepTime(), 0) + L" с без подъёмной тяги", kWarn);
 }
 
 void BellyLand::StepAlt(int dir, bool coarse) {
@@ -237,7 +237,7 @@ void BellyLand::Laws() {
     // the integrals (not wound up against a ceiling, nor while the pods come out)
     if (ready && !(c.satUp && ez > 0)) iVz_ = Cl(iVz_ + 0.08 * ez * dt, -1.5, 1.5);
     if (ready) iAx_ = Cl(iAx_ + 0.02 * ex * dt, -0.5, 0.5);
-    if (c.satUp && ez > 0.5 && ready) { if (!warnLift_) { warnLift_ = true; Note(L"тяга гондол на пределе: " + Force(LiftMax()) + L" при весе " + Force(W), kBad); } }
+    if (c.satUp && ez > 0.5 && ready) { if (!warnLift_) { warnLift_ = true; Note(L"тяга выдвижных блоков на пределе: " + Force(LiftMax()) + L" при весе " + Force(W), kBad); } }
     else if (!c.satUp) warnLift_ = false;
 }
 

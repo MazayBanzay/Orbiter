@@ -30,6 +30,10 @@ constexpr int kEngH = 428;
 const int kH[8] = {704, 704, tantra::front::kDesignH, 1000, 1000, 276, 440, 400};   // 2: the front glass, 611 (refine/front_v3.html)
 int gW[8] = {1024, 1024, 2430, 494, 537, 520, 486, 613};
 double kSc[8] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};                          // 2: design px = surface px (~2365 x 611)
+// supersampling: the side panels and the front glass had ~1200 px/m, about one texel per pixel of the view from the seat -
+// filtered, they blurred (the user, 2026-10-08: «очень нечеткие... не должны зависеть от глобальной настройки мфд»); drawn at
+// twice that, the mipmaps take them down sharp. The touches stay in the design px (kSc); the surface is kSS times bigger.
+const double kSS[8] = {2.0, 2.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0};
 
 // colours: Sketchpad 0xBBGGRR; atlas colours 0 cyan, 1 orange, 2 white, 3 red, 4 dim blue, 5 brown, 6 grey
 // the suit's theme (the user's reference: the suit HUD): a dark neutral field, thin orange lines, orange text, cyan values
@@ -115,7 +119,7 @@ private:
 // ---- the elbow displays: the mode keys along the bottom, the MFD blocks, the system pages (sections of panel.dds) ----
 const char* const kModeName[TantraDisplays::M_COUNT] = {"MFD", "РАБ. ТЕЛО", "ЭНЕРГОУСТ.", "ЭКИПАЖ", "ЛИФТЫ", "МЕХАНИЗАЦИЯ", "КОРПУС", "НАСТР.", "ВЫКЛ"};
 const char* const kModeTitle[TantraDisplays::M_COUNT] = {"MFD", "РАБОЧЕЕ ТЕЛО: АНАМЕЗОН, ЛОВУШКИ", "ЭНЕРГОУСТАНОВКА И КОМПЕНСАТОР",
-                                                         "ЭКИПАЖ", "ЛИФТЫ: АНГАР, ПОРТ, ШЛЮЗ", "МЕХАНИЗАЦИЯ: ПОЛОЖЕНИЕ, ЛАФЕТ, ШАССИ, ГРЕБНИ, КИЛЬ, ГОНДОЛЫ", "КОРПУС", "НАСТРОЙКИ: MFD И HUD", ""};
+                                                         "ЭКИПАЖ", "ЛИФТЫ: АНГАР, ПОРТ, ШЛЮЗ", "МЕХАНИЗАЦИЯ: ПОЛОЖЕНИЕ, ЛАФЕТ, ШАССИ, ГРЕБНИ, КИЛЬ, ВЫДВ. БЛОКИ", "КОРПУС", "НАСТРОЙКИ: MFD И HUD", ""};
 R4 ModeKey(int i) { return {8 + i * 126, 622, 8 + i * 126 + 118, 696}; }   // 8 mode keys
 // the settings page: rows (label, value, - / +), the palette keys
 R4 SetKey(int row, int plus) { return {640 + plus * 150, 80 + row * 110, 640 + plus * 150 + 130, 80 + row * 110 + 80}; }
@@ -302,7 +306,7 @@ void TantraDisplays::OnVisual(VISHANDLE vis) {
 #else
         const DWORD fk = f;
 #endif
-        if (!s_[k]) s_[k] = oapiCreateSurfaceEx(int(gW[k] * kSc[k] + .5), int(kH[k] * kSc[k] + .5), fk);
+        if (!s_[k]) s_[k] = oapiCreateSurfaceEx(int(gW[k] * kSc[k] * kSS[k] + .5), int(kH[k] * kSc[k] * kSS[k] + .5), fk);
         if (dm && s_[k] && oapiSetTexture(dm, kTouch[k].slot, s_[k])) bound++;
     }
     if (!eng_) {                                                          // (the old riser's engine console: not shown on variant 7)
@@ -325,8 +329,13 @@ void TantraDisplays::Step(double dt) {
     riserDt_ += dt;
     const double rdt = oapiGetSysStep() / (oapiGetTimeAcceleration() > 10.0 ? 4.0 : 1.0);   // the redraw timers on real time (at x100+ a frame is
                                                                           // seconds); over x10 the screens 4 times rarer (the user)
-    if ((tRiser_ -= rdt) <= 0.0 || t_redraw_ - rdt <= 0.0) {                // the plant's flows move (the right panel); the spot over it
-        tRiser_ = 0.1; if (t_->interior_.ViewerInBridge()) { DrawPanel(kRight); SpotRedrawn(kRight); } riserDt_ = 0.0;   // (10 a second, only seen)
+    // the right panel on its own timer only (it also went at every turn of the others: 21 times a second, two big draws in one
+    // frame - the hitches, «Tantra screens» 2026-10-08)
+    bool heavy = false;                                                   // a side panel drawn this frame: the turn waits a frame
+    if ((tRiser_ -= rdt) <= 0.0) {                                        // the plant's flows move (the right panel); the spot over it
+        tRiser_ = 0.1;                                                    // (10 a second, only seen: in the bridge and in the view)
+        if (t_->interior_.ViewerInBridge() && t_->interior_.ScreenInView(kRight)) { DrawTimer tm(7); DrawPanel(kRight); SpotRedrawn(kRight); heavy = true; }
+        riserDt_ = 0.0;
         int ss = -1; double su = 0.0, sv = 0.0;
         if (t_->interior_.SpotScreen(ss, su, sv) && ss == kRight) PaintSpot(ss, su, sv);
     }
@@ -334,21 +343,50 @@ void TantraDisplays::Step(double dt) {
     const bool spot = t_->interior_.SpotScreen(ss, su, sv);
     if (spot && (tSpot_ -= rdt) <= 0.0 && t_redraw_ - rdt > 0.0) {          // its screen 20 times a second (the others as usual)
         tSpot_ = 0.02;                                                    // (cheap now: up to 50 times a second)
-        if (ss != kRight) MoveSpot(ss, su, sv);                           // (the right panel redraws itself 20 times a second)
+        MoveSpot(ss, su, sv);                                             // (the right panel too: it redraws only 10 times a second now)
     }
     // The screens: one at a time in turn (seven of them, ~0.04 s apart: each about 3.5 times a second) - not all in one frame (at
     // a slow frame the whole set fell into every frame); none while nobody looks from the bridge (the person's eyes / the VC).
     if (!t_->interior_.ViewerInBridge()) return;
     if ((t_redraw_ -= rdt) > 0.0) return;
+    if (heavy) return;                                                    // (the right panel took this frame: no two big draws in one)
     t_redraw_ = 0.04;
-    const int k = drawTurn_++ % 7;
+    // the screens out of the view are passed over (the user, 2026-10-08: «зачем рисовать экраны, которых не видно»); they are
+    // drawn again at their next turn once in the view (~0.3 s at most)
     const int scr[7] = {kLeft, kCentre, kKeys, kRiserR, kRiserL, kWingL, kWingR};
+    int k = -1;
+    for (int i = 0; i < 7 && k < 0; ++i) { const int c = drawTurn_++ % 7; if (t_->interior_.ScreenInView(scr[c])) k = c; }
+    if (k < 0) return;
     if (spotScr_ == scr[k]) spotScr_ = -1;                                // its picture new (the spot's saved patch is stale)
+    DrawTimer tm(k);
     switch (k) {
         case 0: DrawPanel(kLeft); break; case 1: DrawFront(); break; case 2: DrawKeys(); break; case 3: DrawConsoleR(); break;
         case 4: DrawConsoleL(); break; case 5: DrawMachine(); break; default: DrawPods(); break;
     }
     if (spot && ss == scr[k]) PaintSpot(ss, su, sv);
+}
+
+// A check of the hitches (the user, 2026-10-08: «внутри Тантры движение рваное при высоком фпс»; Tantra perf: the interior's
+// frames up to 14-23 ms): each screen's redraw timed, every 5 s one line «Tantra screens» to Orbiter.log - ms per redraw,
+// the mean and the worst, and the redraws in the period. Slot 7: the right panel's own 10-a-second redraw.
+namespace {
+const char* const kDrawName[8] = {"panelL", "front", "keys", "riserR", "riserL", "machine", "pods", "panelR"};
+double gDrawAcc[8] = {}, gDrawMax[8] = {}; int gDrawN[8] = {}; double gDrawSince = -1.0;
+}
+TantraDisplays::DrawTimer::DrawTimer(int slot) : slot_(slot) { QueryPerformanceCounter(&t0_); }
+TantraDisplays::DrawTimer::~DrawTimer() {
+    LARGE_INTEGER t, f; QueryPerformanceCounter(&t); QueryPerformanceFrequency(&f);
+    const double ms = double(t.QuadPart - t0_.QuadPart) * 1000.0 / double(f.QuadPart);
+    gDrawAcc[slot_] += ms; gDrawN[slot_]++; if (ms > gDrawMax[slot_]) gDrawMax[slot_] = ms;
+    const double now = oapiGetSysTime();
+    if (gDrawSince < 0.0) { gDrawSince = now; return; }
+    if (now - gDrawSince < 5.0) return;
+    char b[700]; int n = std::snprintf(b, sizeof b, "Tantra screens (ms per redraw: mean / max, count):");
+    for (int i = 0; i < 8; ++i)
+        if (gDrawN[i]) n += std::snprintf(b + n, sizeof b - n, " %s %.1f/%.1f x%d", kDrawName[i], gDrawAcc[i] / gDrawN[i], gDrawMax[i], gDrawN[i]);
+    oapiWriteLog(b);
+    for (int i = 0; i < 8; ++i) { gDrawAcc[i] = gDrawMax[i] = 0.0; gDrawN[i] = 0; }
+    gDrawSince = now;
 }
 
 // The light spot («солнечный зайчик») over a screen's picture: an orange disc with a bright core and a ring (the user: orange).
@@ -388,7 +426,7 @@ bool TantraDisplays::Touch(int screen, double u, double v) {
         if (u < 0.5) PressMfd(selMfd_, 14);
         else if (u < 1.5) { for (int i = 0; i < 6; ++i) if (mfdMenu_[i]) PressMfd(i, 14); }   // the menus opened from here shut
         else if (u > 2.5) {                                               // 3: the cups' wheel on the pods' lever: 0 -> 90 -> 180 -> 0
-            if (t_->podOut_ < 0.99) t_->Message("Гондолы в отсеках: колёсико чаш заперто", "The pods are in their bays: the cups' wheel is locked");
+            if (t_->podOut_ < 0.99) t_->Message("Выдвижные блоки в отсеках: колёсико чаш заперто", "The pods are in their bays: the cups' wheel is locked");
             else t_->ActPodsTo(t_->podTarget_ < 45.0 ? 90.0 : t_->podTarget_ < 135.0 ? 180.0 : 0.0);
         }
         t_redraw_ = 0.0;
@@ -399,7 +437,7 @@ bool TantraDisplays::Touch(int screen, double u, double v) {
     bool r = false;
     switch (screen) {
         case kLeft: case kRight: r = TouchPanel(screen, x * kSc[screen], y * kSc[screen]); break;
-        case kCentre: r = TouchFront(x * kSc[kCentre], y * kSc[kCentre]) || (frontTab_ == 0 && TouchCentre(x, y)); break;
+        case kCentre: r = TouchFront(x * kSc[kCentre] * kSS[kCentre], y * kSc[kCentre] * kSS[kCentre]) || (frontTab_ == 0 && TouchCentre(x, y)); break;
         case kRiserR: r = TouchConsoleR(x * kSc[screen], y * kSc[screen]); break;   // the side consoles (variant 7)
         case kRiserL: r = TouchConsoleL(x * kSc[screen], y * kSc[screen]); break;
         case kWingL: r = false; break;                                    // the computing machine's screen: no touch
@@ -408,6 +446,7 @@ bool TantraDisplays::Touch(int screen, double u, double v) {
         default: r = TouchWing(screen, x, y); break;
     }
     t_redraw_ = 0.0;                                                      // show the result at once
+    if (screen == kRight) tRiser_ = 0.0;                                  // (the right panel on its own timer)
     return r;
 }
 
@@ -524,7 +563,7 @@ void TantraDisplays::PlantCommand(int cmd, double along) {
         case ps::kCmdPowerUp: t->PlantKey(3); break;
         case ps::kCmdLimiter: t->PlantKey(4); break;
         case ps::kCmdPods:                                               // out with the cups aft (to help the march) / back into the bays
-            if (t->podsWanted_) { t->podsWanted_ = false; t->podTarget_ = 0.0; t->Message("Гондолы: в отсеки", "Pods: into the bays"); }
+            if (t->podsWanted_) { t->podsWanted_ = false; t->podTarget_ = 0.0; t->Message("Выдвижные блоки: в отсеки", "Pods: into the bays"); }
             else t->ActPods(false);
             break;
         case ps::kCmdThrottle: if (!t->AnaIsMain()) t->SetThrusterGroupLevel(THGROUP_MAIN, along); break;
@@ -1168,11 +1207,11 @@ void TantraDisplays::DrawEngines() {
         std::snprintf(b, sizeof b, "рабочее тело: %s", t->marchHigh_ ? "железо (выше 30 км)" : "аргон"); P.Text(26, 116, b, 12, cGrey);
         // the pods
         double lp = 0.0; int n = 0; for (THRUSTER_HANDLE h : t->pod_) if (h) { lp += t->GetThrusterLevel(h); n++; } if (n) lp /= n;
-        P.Text(300, 60, "ГОНДОЛЫ", 14, cCyan);
+        P.Text(300, 60, "ВЫДВ. БЛОКИ", 14, cCyan);
         std::snprintf(b, sizeof b, "%3.0f %%", lp * 100); P.Text(560, 60, b, 14, cWhite, 2);
         P.Bar(kPodBar, lp, kCyanF);
         std::snprintf(b, sizeof b, "выпуск %.0f %%   сопла %.0f° (цель %.0f°)", t->podOut_ * 100, t->podAngle_, t->podTarget_); P.Text(300, 116, b, 12, cGrey);
-        P.Text(600, 210, "ГОНДОЛЫ: СОПЛА", 13, cCyan);
+        P.Text(600, 210, "ВЫДВ. БЛОКИ: СОПЛА", 13, cCyan);
         P.Text(26, 140, "тяга: касание шкалы", 11, cGrey);
         P.Key(kPodsAft, "НАЗАД (ТЯГА ВПЕРЁД)", t->podTarget_ < 45);
         P.Key(kPodsDown, "ВНИЗ (ЗАВИСАНИЕ)", t->podTarget_ >= 45);
@@ -1181,7 +1220,7 @@ void TantraDisplays::DrawEngines() {
         const double fe = t->iron_ ? t->GetPropellantMass(t->iron_) : 0.0, feM = t->iron_ ? t->GetPropellantMaxMass(t->iron_) : 1.0;
         P.Text(600, 60, "АРГОН", 13, cCyan); P.Bar({700, 62, 990, 76}, arM > 0 ? ar / arM : 0, kGreenF);
         P.Text(600, 90, "ЖЕЛЕЗО", 13, cCyan); P.Bar({700, 92, 990, 106}, feM > 0 ? fe / feM : 0, kGreenF);
-        std::snprintf(b, sizeof b, "УВТ: магнитные сопла ±%.0f°, гондолы ±%.0f° — автоматически", tantra::spec::kTvcMaxDeg, tantra::spec::kPodTvcDeg);
+        std::snprintf(b, sizeof b, "УВТ: магнитные сопла ±%.0f°, выдвижные блоки ±%.0f° — автоматически", tantra::spec::kTvcMaxDeg, tantra::spec::kPodTvcDeg);
         P.Text(26, 160, b, 12, cGrey);
     }
     // the system keys

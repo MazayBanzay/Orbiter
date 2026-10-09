@@ -78,4 +78,106 @@ n = int(SR * 0.4); tt = np.arange(n) / SR
 save("knock.wav", (np.sin(2 * np.pi * 48 * tt) + 0.4 * rng.normal(size=n) * np.exp(-tt * 50)) * np.exp(-tt * 10), 0.95)
 # the platform's lift drive: a geared servo, low
 save("lift.wav", motor(N, 75.0, 0.02, 0.10) * 0.8, 0.6)
+
+# ================= the rest of the machine's sounds (2026-10-08): heavy, steel and gravel =================
+def nz(n, lo, hi, tilt=0.0):
+    x = loop_noise(n, lo, hi, tilt); return x / (np.max(np.abs(x)) + 1e-9)
+
+def ringing(n, freqs, taus, amps, t0=0.0):
+    """struck metal: damped sinusoids (a body's modes), starting at t0 seconds, in a buffer of n samples"""
+    out = np.zeros(n); k0 = int(t0 * SR)
+    if k0 >= n: return out
+    tt = np.arange(n - k0) / SR
+    for f, tau, a_ in zip(freqs, taus, amps):
+        out[k0:] += a_ * np.sin(2 * np.pi * f * tt + rng.uniform(0, 2 * np.pi)) * np.exp(-tt / tau)
+    return out
+
+def burst(n, t0, dur, lo, hi, tau):
+    """a short burst of band noise (a grating, a seal, a splash of gravel)"""
+    out = np.zeros(n); k0 = int(t0 * SR); m = min(int(dur * SR), n - k0)
+    if m <= 0: return out
+    out[k0:k0 + m] = nz(m, lo, hi) * np.exp(-np.arange(m) / SR / tau)
+    return out
+
+# ---- the brake on the ground: the pads and the wheels on the regolith - a deep drone with its beat (the stick-slip of
+# heavy shoes), a gravel crackle, a load of low noise; looped, the module plays it at the speed's rate (slower = heavier)
+n3 = SR * 3; t3 = np.arange(n3) / SR
+stick = 0.5 * (1.0 + np.sin(2 * np.pi * snap(6.0, n3) * t3))
+drone = (np.sin(2 * np.pi * snap(46.0, n3) * t3) * (0.7 + 0.3 * np.sin(2 * np.pi * snap(2.0, n3) * t3)) + 0.5 * np.sin(2 * np.pi * snap(92.0, n3) * t3 + 1.0))
+grind = nz(n3, 90, 1000, 0.8) * (0.5 + 0.5 * stick)
+imp = np.zeros(n3); imp[rng.integers(0, n3, size=2400)] = rng.uniform(0.3, 1.0, size=2400)
+kern = np.zeros(n3); kk = int(0.006 * SR); kern[:kk] = nz(kk, 400, 4500) * np.exp(-np.arange(kk) / SR / 0.0018)
+crackle = np.fft.irfft(np.fft.rfft(imp) * np.fft.rfft(kern), n3)
+brake = 0.9 * nz(n3, 28, 200, 1.0) + 0.8 * grind + 0.7 * drone + 0.9 * crackle / (np.max(np.abs(crackle)) + 1e-9) + 0.12 * nz(n3, 1500, 5000, 0.3)
+save("brake.wav", np.tanh(1.1 * brake / np.max(np.abs(brake))), 0.9)
+
+# ---- the ladder: a geared servo (a rising whine, a deep gear rumble, the chain's ratchet) and the stop's heavy clunk
+def ladder(up):
+    n = int(2.1 * SR); tt = np.arange(n) / SR
+    f = (650.0 - 300.0 * tt / 1.5) if up else (350.0 + 300.0 * tt / 1.5)
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    on = ((tt > 0.05) & (tt < 1.5)).astype(float) * np.minimum(1.0, (tt - 0.05) / 0.1) * np.minimum(1.0, (1.5 - tt) / 0.12)
+    x = on * 0.75 * nz(n, 30, 190, 1.0)                                       # the gear's rumble only - no whistling tone
+    for k in np.arange(0.1, 1.45, 1.0 / 26.0):                               # the ratchet's clicks
+        x += ringing(n, [1500.0, 3400.0], [0.007, 0.005], [0.35 * rng.uniform(0.6, 1.0), 0.15], k)
+    clunk = ringing(n, [92.0, 240.0, 610.0, 1450.0], [0.22, 0.12, 0.08, 0.05], [1.0, 0.55, 0.35, 0.2], 1.52)
+    x += (0.7 if up else 1.0) * clunk + burst(n, 1.52, 0.25, 80, 900, 0.05) * 0.6
+    return x
+save("ladder_dn.wav", ladder(False), 0.9); save("ladder_up.wav", ladder(True), 0.85)
+
+# ---- the airlock's cycle: the outer hatch's latches, the seal's hiss, the swing's thud, the pump spooling up and the
+# pressure hissing out, the valve, the inner latch
+n = int(6.2 * SR); tt = np.arange(n) / SR
+x = ringing(n, [210.0, 540.0, 1300.0, 2900.0], [0.18, 0.12, 0.08, 0.05], [1.0, 0.6, 0.4, 0.2], 0.0)
+x += 0.55 * burst(n, 0.35, 1.3, 1500, 7000, 0.45)
+x += ringing(n, [66.0, 140.0, 330.0], [0.32, 0.2, 0.12], [1.0, 0.6, 0.3], 1.25) + 0.5 * burst(n, 1.25, 0.4, 40, 400, 0.12)
+pump = np.zeros(n); m = (tt > 1.9) & (tt < 4.2)
+fp = 55.0 + 40.0 * np.clip((tt - 1.9) / 1.2, 0, 1)
+php = 2 * np.pi * np.cumsum(fp) / SR
+ramp = np.clip((tt - 1.9) / 0.8, 0, 1) * np.clip((4.2 - tt) / 0.5, 0, 1)
+pump = ramp * (0.5 * np.sin(php) + 0.25 * np.sin(2 * php) + 0.18 * np.sin(3 * php))
+x += 0.9 * pump + 0.35 * ramp * nz(n, 600, 4200, 0.4)
+x += ringing(n, [150.0, 420.0, 980.0], [0.1, 0.07, 0.05], [0.8, 0.5, 0.3], 4.25)          # the valve
+x += ringing(n, [190.0, 500.0, 1250.0, 2700.0], [0.16, 0.1, 0.07, 0.04], [1.0, 0.6, 0.4, 0.2], 4.55) + 0.5 * burst(n, 4.6, 0.9, 1500, 6000, 0.3)
+x += ringing(n, [60.0, 130.0], [0.3, 0.18], [1.0, 0.55], 5.1)
+save("airlock.wav", x, 0.9)
+
+# ---- switches: a heavy industrial toggle (the click's high ring over a low thump), and a keypad's soft tick
+n = int(0.22 * SR); c = ringing(n, [1900.0, 3700.0, 5200.0], [0.012, 0.008, 0.005], [1.0, 0.5, 0.3]) + 1.2 * ringing(n, [140.0, 260.0], [0.045, 0.03], [1.0, 0.4]) + 0.6 * burst(n, 0.0, 0.02, 800, 6000, 0.004)
+save("click.wav", c, 0.8)
+n = int(0.09 * SR); save("tick.wav", ringing(n, [3000.0, 5600.0], [0.006, 0.004], [1.0, 0.4]) + 0.3 * ringing(n, [400.0], [0.012], [1.0]), 0.55)
+
+# ---- a crash: the boom, the sheet metal's clang, the debris
+n = int(2.6 * SR); tt = np.arange(n) / SR
+x = 1.3 * np.sin(2 * np.pi * 46.0 * tt) * np.exp(-tt / 0.45) + 1.0 * nz(n, 35, 260, 1.0) * np.exp(-tt / 0.22)
+x += ringing(n, [183.0, 340.0, 780.0, 1250.0, 2100.0, 3300.0], [0.7, 0.5, 0.45, 0.3, 0.2, 0.12], [0.55, 0.5, 0.4, 0.3, 0.2, 0.12], 0.01)
+for k in np.sort(rng.uniform(0.04, 1.2, size=45)):
+    x += rng.uniform(0.15, 0.5) * burst(n, k, 0.05, 300, 5000, 0.012)
+save("crash.wav", np.tanh(1.2 * x / np.max(np.abs(x))), 0.95)
+
+# ---- the coupling: the pin driven into the jaw (a thud, the steel's long ring), the latch's click; the pin drawn out
+n = int(1.6 * SR); tt = np.arange(n) / SR
+x = ringing(n, [85.0, 190.0], [0.12, 0.08], [1.0, 0.6]) + ringing(n, [620.0, 1710.0, 3200.0], [0.55, 0.3, 0.15], [0.7, 0.45, 0.25], 0.0) + 0.5 * burst(n, 0.0, 0.04, 500, 6000, 0.008)
+x += ringing(n, [2400.0, 4100.0], [0.02, 0.012], [0.5, 0.3], 0.14)
+save("couple.wav", x, 0.9)
+n = int(1.3 * SR); tt = np.arange(n) / SR
+slide = burst(n, 0.0, 0.35, 400, 3200, 0.2) * np.clip(tt / 0.1, 0, 1)
+x = 0.6 * slide + ringing(n, [150.0, 520.0, 1450.0], [0.2, 0.15, 0.09], [0.8, 0.5, 0.3], 0.36) + 0.4 * burst(n, 0.36, 0.1, 500, 4000, 0.02)
+save("uncouple.wav", x, 0.8)
+
+# ---- the warning (three firm tones) and the reverse beeper
+n = int(1.1 * SR); tt = np.arange(n) / SR; x = np.zeros(n)
+for k in range(3):
+    seg = (tt >= k * 0.3) & (tt < k * 0.3 + 0.18)
+    tone = np.sin(2 * np.pi * 880.0 * tt) + 0.4 * np.sin(2 * np.pi * 2640.0 * tt)
+    env = np.minimum(1.0, (tt - k * 0.3) / 0.01) * np.minimum(1.0, (k * 0.3 + 0.18 - tt) / 0.02)
+    x += seg * tone * env
+save("alarm.wav", np.tanh(1.4 * x), 0.75)
+n = int(0.30 * SR); tt = np.arange(n) / SR
+save("beep.wav", (np.sin(2 * np.pi * 1000.0 * tt) + 0.3 * np.sin(2 * np.pi * 3000.0 * tt)) * np.minimum(1.0, tt / 0.01) * np.minimum(1.0, (0.22 - tt).clip(0) / 0.02) * (tt < 0.22), 0.65)
+
+# ---- the wind round the body, looped: a gusting low band over a hiss
+n4 = SR * 4; t4 = np.arange(n4) / SR
+gust = 1.0 + 0.35 * np.sin(2 * np.pi * snap(0.5, n4) * t4) + 0.2 * np.sin(2 * np.pi * snap(1.25, n4) * t4 + 1.0)
+save("wind.wav", (nz(n4, 60, 900, 1.0) * gust + 0.3 * nz(n4, 900, 3600, 0.5) * gust))
 print("written to", os.path.abspath(OUT), sorted(os.listdir(OUT)))

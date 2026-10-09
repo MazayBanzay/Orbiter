@@ -13,7 +13,7 @@ namespace ocrew
 		double Wrap(double a) { while (a > PI) a -= PI2; while (a < -PI) a += PI2; return a; }
 		VECTOR3 Unit(const VECTOR3& v) { const double l = length(v); return l > 1e-9 ? v / l : v; }
 		VECTOR3 Clamp(const VECTOR3& v, double m) { const double l = length(v); return l > m ? v * (m / l) : v; }
-		std::string N(double x, int dec = 1) { char b[32]; snprintf(b, sizeof b, "%.*f", dec, x); std::string s = b; for (char& c : s) if (c == '.') c = ','; return s; }
+		std::string N(double x, int dec = 1) { char b[32]; snprintf(b, sizeof b, "%.*f", dec, x); std::string s = b; if (!SuitEnglish()) for (char& c : s) if (c == '.') c = ','; return s; }
 		bool IsBase(OBJHANDLE h) { return h && oapiGetObjectType(h) == OBJTP_SURFBASE; }
 		bool IsPack(OBJHANDLE h)
 		{
@@ -47,27 +47,27 @@ namespace ocrew
 
 	const char* Autopilot::Name(int m)
 	{
-		static const char* N[] = { "", "ЗАВИС", "ПЕРЕЛЁТ", "СИНХР", "УДЕРЖ", "СБЛИЖ", "СТЫК" };
+		static const char* N[] = { "", SuitTr("ЗАВИС"), SuitTr("ПЕРЕЛЁТ"), SuitTr("СИНХР"), SuitTr("УДЕРЖ"), SuitTr("СБЛИЖ"), SuitTr("СТЫК") };
 		return m >= 0 && m <= DOCK ? N[m] : "";
 	}
 
 	void Autopilot::Engage(Mode m, OBJHANDLE target, VESSEL* v)
 	{
-		if (m == mode && (m == HOVER || target == tgt)) { Off(v, "выключен"); return; }
-		if (m != HOVER && !target) { status = "нет цели · выберите на странице ЦЕЛИ"; return; }
-		if (IsBase(target) && m != TRANSFER) { status = "цель — база · к ней только ПЕРЕЛЁТ"; return; }
+		if (m == mode && (m == HOVER || target == tgt)) { Off(v, SuitTr("выключен")); return; }
+		if (m != HOVER && !target) { status = SuitTr("нет цели · выберите на странице ЦЕЛИ"); return; }
+		if (IsBase(target) && m != TRANSFER) { status = SuitTr("цель — база · к ней только ПЕРЕЛЁТ"); return; }
 		pad = -1; checked = false; phase = CRUISE;
 		Zero(v);
 		mode = m; tgt = target; prevOk = false;
 		if (m == HOLD && target) v->GetRelativePos(target, holdRel);
-		status = std::string(Name(m)) + " · включён";
+		status = std::string(Name(m)) + SuitTr(" · включён");
 	}
 
 	void Autopilot::Off(VESSEL* v, const char* why)
 	{
 		if (mode == OFF) return;
 		Zero(v);
-		status = std::string(Name(mode)) + (why ? std::string(" · ") + why : " · выключен");
+		status = std::string(Name(mode)) + (why ? std::string(" · ") + why : SuitTr(" · выключен"));
 		mode = OFF; cmdH = _V(0, 0, 0);
 	}
 
@@ -113,21 +113,21 @@ namespace ocrew
 	void Autopilot::Step(VESSEL* v, JetPack& jet, double dt, double g, bool landed, bool canFly, bool manual, FlightInput& in)
 	{
 		if (mode == OFF || dt <= 0) return;
-		if (tgt && !oapiIsVessel(tgt) && !IsBase(tgt)) { Off(v, "цель исчезла"); return; }
-		if (!canFly) { Off(v, "нет питания или сил"); return; }
+		if (tgt && !oapiIsVessel(tgt) && !IsBase(tgt)) { Off(v, SuitTr("цель исчезла")); return; }
+		if (!canFly) { Off(v, SuitTr("нет питания или сил")); return; }
 		const bool surfaceAp = mode == HOVER || mode == TRANSFER;
 		if (surfaceAp)
 		{
 			const bool hopping = mode == TRANSFER && phase != CRUISE;
-			if (!jet.Worn() || (!jet.SurfaceMode() && !hopping)) { Off(v, "только у поверхности с ранцем"); return; }
-			if (!jet.Assist()) { Off(v, "ранец в ручном режиме"); return; }
-			if (jet.ModeId() == 2 && mode == HOVER) { Off(v, "посадка"); return; }   // C: the landing wins over the hover
-			if (manual) { Off(v, "снят вручную"); return; }
+			if (!jet.Worn() || (!jet.SurfaceMode() && !hopping)) { Off(v, SuitTr("только у поверхности с ранцем")); return; }
+			if (!jet.Assist()) { Off(v, SuitTr("ранец в ручном режиме")); return; }
+			if (jet.ModeId() == 2 && mode == HOVER) { Off(v, SuitTr("посадка")); return; }   // C: the landing wins over the hover
+			if (manual) { Off(v, SuitTr("снят вручную")); return; }
 			Surface(v, jet, dt, g, in);
 		}
 		else
 		{
-			if (landed || (jet.Worn() && jet.SurfaceMode())) { Off(v, "только в космосе"); return; }
+			if (landed || (jet.Worn() && jet.SurfaceMode())) { Off(v, SuitTr("только в космосе")); return; }
 			Space(v, dt);
 		}
 	}
@@ -189,7 +189,7 @@ namespace ocrew
 		if (mode == TRANSFER)
 		{
 			double glat, glng, left, north, east;
-			if (!Goal(v, glat, glng, left, north, east)) { Off(v, "нет поверхности"); return; }
+			if (!Goal(v, glat, glng, left, north, east)) { Off(v, SuitTr("нет поверхности")); return; }
 			const double gs = std::hypot(vf, vr);
 			// cruise: the cheapest steady speed for the distance (hovering costs g per second, speeding up and braking 2v),
 			// at most 40 m/s; braking on ~half of what the pods' tilt can give; higher over the ground the farther it goes
@@ -198,14 +198,14 @@ namespace ocrew
 			if (!checked)
 			{
 				checked = true;
-				if (left > RANGE) { Off(v, "дальше 15 км"); return; }
+				if (left > RANGE) { Off(v, SuitTr("дальше 15 км")); return; }
 				const bool airless = !oapiPlanetHasAtmosphere(v->GetSurfaceRef());
 				const double gg = (std::max)(0.5, g), aMax = jet.MaxAccel();
 				const double cruiseDv = gg * left / vCruise + 2 * vCruise + 40;   // + the landing
 				const double hopDv = 2.6 * std::sqrt(left * gg) + 80;              // boost + brake + losses + the landing
 				if (airless && left > 400 && aMax > 1.5 * gg && hopDv < cruiseDv) phase = CLIMB;
 				const double need = phase == CLIMB ? hopDv : cruiseDv;
-				if (need > jet.DeltaV()) { Off(v, ("топлива мало: нужно " + N(need, 0) + " м/с, есть " + N(jet.DeltaV(), 0)).c_str()); return; }
+				if (need > jet.DeltaV()) { Off(v, (SuitTr("топлива мало: нужно ") + N(need, 0) + SuitTr(" м/с, есть ") + N(jet.DeltaV(), 0)).c_str()); return; }
 			}
 			if (phase != CRUISE && Hop(v, jet, dt, g, left, north, east, in)) return;
 			const double herr = Wrap(std::atan2(east, north) - hdg);
@@ -220,16 +220,16 @@ namespace ocrew
 			const double vdF = vdes * (uN * ch_ + uE * sh_), vdR = vdes * (uE * ch_ - uN * sh_);
 			aF = 0.8 * (vdF - vf); aR = 0.8 * (vdR - vr);
 			jet.SetHold(left > 10 ? std::clamp(left / 40, 3.0, 60.0) : 3.0);   // the hold still rises over the ground ahead
-			status = "ПЕРЕЛЁТ · " + std::string(left > 2000 ? N(left / 1000, 1) + " км" : N(left, 0) + " м") + " · " + N(gs, 0) + " м/с";
+			status = SuitTr("ПЕРЕЛЁТ · ") + std::string(left > 2000 ? N(left / 1000, 1) + SuitTr(" км") : N(left, 0) + SuitTr(" м")) + " · " + N(gs, 0) + SuitTr(" м/с");
 			if (left < 2.5 && gs < 0.8)
 			{
 				jet.SetDescentAt(glat, glng); mode = OFF; in.yaw = 0; in.pitch = in.strafe = 0;
-				status = std::string("ПЕРЕЛЁТ · над точкой · посадка") + (IsBase(tgt) && pad < 1000 ? " на площадку " + std::to_string(pad + 1) : "");
+				status = std::string(SuitTr("ПЕРЕЛЁТ · над точкой · посадка")) + (IsBase(tgt) && pad < 1000 ? SuitTr(" на площадку ") + std::to_string(pad + 1) : "");
 				cmdH = _V(0, 0, 0); return;
 			}
 			aF = std::clamp(aF, -4.0, 4.0); aR = std::clamp(aR, -4.0, 4.0);
 		}
-		else status = "ЗАВИС · снос " + N(std::hypot(vf, vr)) + " м/с";
+		else status = SuitTr("ЗАВИС · снос ") + N(std::hypot(vf, vr)) + SuitTr(" м/с");
 		if (mode != TRANSFER) { aF = std::clamp(aF, -2.0, 2.0); aR = std::clamp(aR, -2.0, 2.0); }
 		// the pods' tilt gives g * tan(tilt) sideways while the height hold keeps the lift; the pack's own limits
 		const double maxT = (std::max)(5 * RAD, jet.MaxTilt()), maxS = (std::min)(20 * RAD, maxT);
@@ -277,7 +277,7 @@ namespace ocrew
 		{
 		case CLIMB:   // clear of the ground first
 			jet.SetHold(20);
-			what = "подъём";
+			what = SuitTr("подъём");
 			if (jet.AltNow() > 12) phase = BOOST;
 			break;
 		case BOOST:
@@ -287,7 +287,7 @@ namespace ocrew
 			jet.SetThrustVector(uh * (aMax * std::cos(th)) + _V(0, aMax * std::sin(th), 0));
 			const double H = -P.y, vA = dotp(hv, uh);
 			const double tImp = (hv.y + std::sqrt((std::max)(0.0, hv.y * hv.y + 2 * gg * (std::max)(0.0, H)))) / gg;
-			what = "разгон";
+			what = SuitTr("разгон");
 			if (vA * tImp > left * 1.05 || length(hv) * 1.4 + 60 > jet.DeltaV()) phase = COAST;
 			break;
 		}
@@ -295,7 +295,7 @@ namespace ocrew
 		{
 			jet.SetThrustVector(_V(0, 0, 0));   // pods idle, the small ports keep her upright
 			double fmin; const double t = bestTime(fmin);
-			what = "полёт";
+			what = SuitTr("полёт");
 			if (fmin > 0.75 * aMax || -P.y < 0) { phase = BRAKE; tgo = t; }
 			break;
 		}
@@ -305,14 +305,14 @@ namespace ocrew
 			VECTOR3 a = guide((std::max)(1.0, tgo));
 			if (length(a) > aMax) a = a * (aMax / length(a));
 			jet.SetThrustVector(a);
-			what = "торможение";
+			what = SuitTr("торможение");
 			if (tgo < 4 || (d < 80 && length(hv) < 6)) { phase = CRUISE; jet.SetHold((std::max)(3.0, jet.AltNow())); return false; }
 			break;
 		}
 		default: return false;
 		}
 		in.pitch = in.strafe = 0;
-		status = std::string("ПЕРЕЛЁТ · ") + what + " · " + (left > 2000 ? N(left / 1000, 1) + " км" : N(left, 0) + " м") + " · " + N(length(hv), 0) + " м/с";
+		status = std::string(SuitTr("ПЕРЕЛЁТ · ")) + what + " · " + (left > 2000 ? N(left / 1000, 1) + SuitTr(" км") : N(left, 0) + SuitTr(" м")) + " · " + N(length(hv), 0) + SuitTr(" м/с");
 		cmdH = _V(0, 0, 0);
 		return true;
 	}
@@ -330,12 +330,12 @@ namespace ocrew
 		{
 		case SYNC:
 			aG = Clamp(-relV * 0.5, 0.3);
-			status = "СИНХР · Vотн " + N(length(relV), 2) + " м/с";
-			if (length(relV) < 0.02) { mode = HOLD; holdRel = rel; status = "СИНХР · скорость уравнена → УДЕРЖ"; }
+			status = SuitTr("СИНХР · Vотн ") + N(length(relV), 2) + SuitTr(" м/с");
+			if (length(relV) < 0.02) { mode = HOLD; holdRel = rel; status = SuitTr("СИНХР · скорость уравнена → УДЕРЖ"); }
 			break;
 		case HOLD:
 			aG = Clamp(-(rel - holdRel) * 0.05 - relV * 0.5, 0.3);
-			status = "УДЕРЖ · уход " + N(length(rel - holdRel), 2) + " м";
+			status = SuitTr("УДЕРЖ · уход ") + N(length(rel - holdRel), 2) + SuitTr(" м");
 			break;
 		case APPROACH:
 		{
@@ -346,17 +346,17 @@ namespace ocrew
 			const VECTOR3 to = goal - me; const double d = length(to);
 			double vc = std::clamp(d / 60, 0.05, 1.0); if (d < 30) vc = (std::min)(vc, 0.25);
 			aG = Clamp((Unit(to) * vc - relV) * 0.6, 0.3);
-			status = "СБЛИЖ · до точки " + N(d, d < 10 ? 1 : 0) + " м";
-			if (d < 0.5 && length(relV) < 0.05) { mode = HOLD; holdRel = rel; status = "СБЛИЖ · на месте → УДЕРЖ"; }
+			status = SuitTr("СБЛИЖ · до точки ") + N(d, d < 10 ? 1 : 0) + SuitTr(" м");
+			if (d < 0.5 && length(relV) < 0.05) { mode = HOLD; holdRel = rel; status = SuitTr("СБЛИЖ · на месте → УДЕРЖ"); }
 			break;
 		}
 		case DOCK:
 		{
 			VECTOR3 P, D, U;
-			if (!o || !NearestPort(v, o, P, D, U)) { Off(v, "у цели нет узлов"); return; }
+			if (!o || !NearestPort(v, o, P, D, U)) { Off(v, SuitTr("у цели нет узлов")); return; }
 			VECTOR3 me; v->GetGlobalPos(me);
 			const VECTOR3 rp = me - P; const double ax = dotp(rp, D); const VECTOR3 lat = rp - D * ax;
-			if (ax < 0) { Off(v, "она за плоскостью узла"); return; }
+			if (ax < 0) { Off(v, SuitTr("она за плоскостью узла")); return; }
 			const double lw = length(lat);
 			double vax = 0;
 			if (lw < 0.2 + 0.1 * ax) vax = -std::clamp(0.02 * ax + 0.03, 0.03, 0.25);
@@ -364,8 +364,8 @@ namespace ocrew
 			const VECTOR3 vdes = Clamp(-lat * 0.3, 0.3) + D * vax;
 			aG = Clamp((vdes - relV) * 0.8, 0.3);
 			look = -D; upRef = U;
-			status = "СТЫК · по оси " + N(ax, 1) + " м · вбок " + N(lw * 100, 0) + " см";
-			if (ax < 0.6 && lw < 0.15) { mode = HOLD; holdRel = rel; status = "СТЫК · у узла · держу"; }
+			status = SuitTr("СТЫК · по оси ") + N(ax, 1) + SuitTr(" м · вбок ") + N(lw * 100, 0) + SuitTr(" см");
+			if (ax < 0.6 && lw < 0.15) { mode = HOLD; holdRel = rel; status = SuitTr("СТЫК · у узла · держу"); }
 			break;
 		}
 		default: break;

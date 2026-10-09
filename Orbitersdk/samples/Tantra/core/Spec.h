@@ -26,9 +26,10 @@ constexpr double kTvcMaxDeg = 10.0;             // magnetic nozzles: jet deflect
 
 // Undercarriage (core/Carriage, orbiter2016/MeshLayout.h).
 constexpr double kColumnX = 19.0;                // hips of the blade legs (deployed)
-constexpr double kStandR = 36.0;                 // stern feet circle (legs at +-30 deg off the horizontal)
+// (2026-10-09) the stern legs stow in body bays (s 18.4-50, hinges at s 49.6, the feet aft); standing feet on
+// MeshLayout kStandR = 33 m: friction 0.38 at the feet, tip-over 13.1 deg empty
 constexpr double kStandClear = 22.5;             // stern plane above ground standing: marching cup lip 16 m up
-constexpr double kStandInradius = 18.0;          // stern feet polygon (R 36 at +-30 deg), from the CG line [m]
+constexpr double kStandInradius = 20.3;          // stern feet polygon (R 33, legs on the body diagonals), from the CG line [m]
 
 // Stations (after the insert).
 constexpr double kHangarS0 = 99.6, kHangarS1 = 120.6;     // closed port: XR2 / DG-IV class craft
@@ -37,25 +38,38 @@ constexpr double kControlPostS = 137.0;
 constexpr double kShoulderS0 = 144.0, kShoulderS1 = 152.0;  // water/charges screen, deflector coil at the nose root
 
 // Engines.
-constexpr int kTrapCount = 4;                   // traps D 8 x 66.6 m, 2x2 columns, s 21..87.6
+constexpr int kTrapCount = 4;                   // traps: cassettes 8.1 m square, 2x2 columns, s 53..87.6 (2026-10-09)
 constexpr int kAnaCount = 4;                    // fixed anamezon cups in the stern clover
 constexpr double kAnaCupY[kAnaCount] = {4.8 + kWellCentreY, 4.8 + kWellCentreY, -4.8 + kWellCentreY, -4.8 + kWellCentreY};
 constexpr double kAnaCupX[kAnaCount] = {-4.8, 4.8, -4.8, 4.8};
 // Cup (gen_mesh: rim s -2, aperture R 3.0, depth 1.5): focus f = R^2/(4 depth) = 1.5 m in front of the vertex,
 // i.e. in the rim plane - every ray from the reaction forward hits the cup: the ship stands in its shadow.
 constexpr double kAnaFocusS = -2.0;
+// (2026-10-09) the stern blocks are dual-mode: on the ion charges in the air (the plant's cascade fusion in the cup, its field
+// cap at 12.1 T x pi 3.0^2 = 1.65 GN a block), on the anamezon above. The cup area over the marching cup's:
+constexpr double kSternPlanAreaRatio = (3.0 * 3.0) / (2.2 * 2.2);
 constexpr int kRetroCount = 2;                  // nose retro anamezon cups (MeshLayout kNoseCup*), jets forward
 constexpr double kRetroAreaFrac = 0.54;         // (2.2 / 3.0)^2 of a stern cup
 // Marching planetary cup (MeshLayout kMarch*): one cup R 2.2 in the central well, 12.1 T, run out past the rims to
 // thrust. Reaction mass: argon below kMarchArgonAlt (jet ~30 km/s, no burning in air), iron above (300 km/s).
-constexpr double kMarchArgonAlt = 30.0e3;       // m
-// Four planetary pods x 3 cups R 0.8 in the flank bays at CG height (MeshLayout kPods): telescopic arm out, the
-// pod turns about the arm axis (0 cups aft .. 90 down .. 180 forward). Jets splay out / down away from the hull.
+constexpr double kMarchArgonAlt = 30.0e3;       // m (the plant's air mode)
+// (2026-10-09) the cups' reaction mass by the air, not the height: iron only in air thinner than kIronMaxRho and over
+// kArgonGroundAlt (on airless bodies argon too near the ground); the pods' argon jet is slower near the ground and in
+// dense air (ShipParams argonGroundExhaust, argonDenseExhaust): its power on the ground 400 -> ~90 GW on the Moon.
+constexpr double kIronMaxRho = 2.0e-5;          // kg/m^3
+constexpr double kArgonGroundAlt = 1.0e3;       // m over the ground
+constexpr double kArgonDenseAlt = 10.0e3, kDenseRho = 0.1;   // m over the ground, kg/m^3 (Titan, Earth)
+// Four planetary pods x 3 cups in the flank bays at CG height (MeshLayout kPods): arm out, the pod turns about the arm
+// axis, the cups going down (0 cups aft .. ~62 thrust vertical .. 180 forward; Tantra::PodVerticalDeg). Jets splay
+// out / down away from the hull.
 constexpr int kPodCount = 4, kCupsPerPod = 3, kPodCups = kPodCount * kCupsPerPod;
 constexpr double kPodSwivelMaxDeg = 180.0;
 constexpr double kPodSwivelRate = 15.0;         // deg/s
 constexpr double kPodSwingTime = 12.0;          // s, arm out / in
-constexpr double kPodMaxMach = 0.8;             // bays stay shut above: the pods would be torn off
+constexpr double kPodMaxQ = 45.0e3;             // Pa: the bays open below this dynamic pressure (doors and arms rated x kSafety),
+                                                // the wings folded or not (stern-first descent)
+constexpr double kPodHoverCantDeg = 15.0;       // hover: the aft pair leans its thrust forward, the fore pair aft - the jets
+                                                // keep ~7 m off the blade feet (3.4 % of the lift)
 constexpr double kPodSplayOutDeg = 15.0, kPodSplayDownDeg = 25.0;
 constexpr bool kPodAssistOn = false;            // pods help the legs stand the ship up: off (the legs do it alone)
 constexpr double kPodAssistShare = 0.5;
@@ -88,12 +102,16 @@ constexpr double kCntE = 0.6e12, kCntSigma = 1.0e9, kSafety = 1.5;
 // Telescopes as STEPPED columns (FE Euler, pinned ends): I = the uniform column with the same critical force at the
 // reference length, A = the smallest section (strength).
 constexpr double kBladeA = 1.86, kBladeI = 1.433;          // 6 stages 6.7x2.8 .. 5.2x1.3, walls 0.15 (Pcr 1346 MN at 79.4 m)
-constexpr double kSternShinA = 0.782, kSternShinI = 0.548; // 4 sections 3.0x2.5 .. 1.91x1.59, walls 0.12 (Pcr 917 MN at 59.5 m)
-constexpr double kSternLegL = 59.5;                       // hinge -> ankle, standing
+constexpr double kSternShinA = 1.052, kSternShinI = 0.744; // 5 sections 3.0x2.5 .. 1.97x1.64, walls 0.16 (Pcr 857 MN at 71.7 m)
+constexpr double kSternLegL = 71.7;                       // hinge -> ankle, standing (2026-10-09: hinge at s 49.6)
 constexpr double kKangShinA = 0.245, kKangShinI = 0.129;  // shin 9 sections 2.2 .. 1.08, walls 0.06 (Pcr 175 MN at 66 m)
 // Design case of every support (2026-10-02): launch mass on a 2.5 g planet, load x kSafety within the strength and
 // the buckling force; the stern legs land with the MR struts adding up to kStrutExtraG over the weight.
-constexpr double kDesignG = 2.5, kLaunchMass = 52.34e6, kStrutExtraG = 1.5;
+constexpr double kDesignG = 2.5, kLaunchMass = 54.2e6, kStrutExtraG = 1.5;   // the supports AS BUILT (4 x 9.37 kt, morning 2026-10-09)
+// (2026-10-09, canon) the full ship: 217.3 kt (4 x 45.2 kt anamezon, 4 x 641 t traps, 23.9 kt charges, 4 kt iron) + up to
+// 13 kt for the heavy rovers (Transport) = the design mass of the supports' redesign (Tantra_Design/DESIGN_LOCAL.md). Until it
+// is in the mesh the legs' sensors read over their rating above kLaunchMass at 2.5 g.
+constexpr double kFullMass = 230.0e6;
 constexpr double kBladeColumnL = 79.4, kKangColumnL = 66.0;   // standing / lifted column lengths [m]
 // Cup feet («чаша опоры», mesh: tools/gen_mesh.py FOOT_KINDS): R for loose sand at touchdown (2.5 g x1.5, 0.9 m skirt),
 // 12 box ribs 0.5 x depth (walls 60 mm), two struts per rib (0.5 L and the tip) from a mast on the hub, CNT canopy.
@@ -101,13 +119,24 @@ constexpr double kFootRStern = 11.25, kFootRBlade = 12.2, kFootRKang = 6.35, kFo
 constexpr double kFootRibDepthStern = 0.68, kFootRibDepthBlade = 0.84, kFootRibDepthKang = 0.30;
 constexpr double kFootStrutDStern = 0.58, kFootStrutDBlade = 0.69, kFootStrutDKang = 0.29;   // outer struts (to the rib tips)
 
-// Mass budget (T9, Tantra_Design mass_t9): dry ship 4 203 t (stern frame 400 at s 9, structure 263 over s 18..121,
-// hangar 200, crew and systems 486, nose shield 200, nose cups 120, blades 1 014 at s 64, pods 480, stern legs 440 at
-// s 18, planetary installation 600 at s 8) with its CG at s 65.6; traps and their anamezon at s 54.3; iron charges in
-// the slit between the columns at s 53.9; argon in the body at s 60.8 and in the insert at s 92.5. Launch 52.3 kt at
-// s 58.1; empty 4.9 kt at s 64.1 - always inside the trunnion track (53.4..71.6).
-constexpr double kDryCGS = 65.6, kTrapCGS = 54.3, kIronCGS = 53.9, kArgonBodyCGS = 60.8, kArgonInsertCGS = 92.5;
-constexpr double kArgonBodyShare = 0.44;        // of the argon: body tanks (2.73 of 6.2 kt), the rest in the insert
+// Mass budget (2026-10-09, Tantra_Design refactor_T9_concept §3, ±430 t): structure and systems 5 832 t at s 65.4 -
+// stern frame 400 (s 9), planetary installation 600 (s 8), gyros 270, ВЭУ 150, field store 100, radiators 30 and iron
+// racks 115 (s 24-30), hull 338, hangar kit 200, blades 1 014 (s 64), pods 400, stern legs 760 (in their bays, s 37),
+// argon tanks 190, nose cups 120, nose 200, screen 223, coil 60, armour 60, feed lines 50, crew zone, bridge drum and
+// systems 416, front support 80; with the hangar cargo (not the lander and the MPU), crew and consumables 5 992 t at
+// s 67.1. Traps: 4 x 133 t, cassettes s 53-87.6 (the stern-leg bays end at s 50), CG s 70.3. The legs and the
+// cassettes moved the CG forward; it comes back by the layout (2026-10-09): the iron charges on a rack s 39-47 and an
+// aft argon tank (1.5 kt) s 30-38, both in the free middle between the stern-leg bays; the body argon tanks at s 60.8,
+// the insert's at s 92.5. Argon drains insert first, then the body tanks, the aft tank last.
+// Launch 54.2 kt (4 x 9.37 kt) at s 67.3; on a planet with iron and argon 16.7 kt at s 60.4; iron spent, argon full
+// 12.7 kt at s 65.9; argon down to 3 kt s 61.1; empty 6.5 kt at s 67.3 - every state inside the trunnion track
+// (53.4..71.6, >= 4 m to spare) and in the blades' reach (stand at the nominal height, marching cup lip 16 m up).
+constexpr double kDryCGS = 67.1, kTrapCGS = 70.3, kIronCGS = 43.0, kArgonBodyCGS = 60.8, kArgonInsertCGS = 92.5;
+constexpr double kArgonAftCGS = 34.0;
+// (2026-10-09) the ion charges are dense now (23.9 kt): body tanks 15.4 kt, aft tank 8.5 kt; the insert holds none (it
+// is free for the heavy rover's modules - Transport). Drain order unchanged: (insert,) body, aft last.
+constexpr double kArgonBodyShare = 0.644;       // of the charges: body tanks (15.4 of 23.9 kt)
+constexpr double kArgonAftShare = 0.356;        // aft tank (8.5 of 23.9 kt); the insert 0
 
 // Attitude micro-motor blocks.
 constexpr double kAttNoseS = 164.0, kAttNoseR = 6.0;

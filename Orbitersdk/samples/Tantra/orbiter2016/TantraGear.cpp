@@ -69,6 +69,7 @@ void TantraGear::Apply(const tantra::CarriagePose& p, double sCG, const Extras& 
     Set(m::ANIM_ELEVON_STARBOARD, ex.elevon[1]);
     Set(m::ANIM_BODY_FLAP, ex.bodyFlap);
     Set(m::ANIM_POD_SWIVEL, ex.podSwivel);
+    Set(m::ANIM_POD_CANT, ex.podCant);
     Set(m::ANIM_IRIS_ANA, ex.irisAna);
     Set(m::ANIM_IRIS_MARCH, ex.irisMarch);
     Set(m::ANIM_MARCH_SLIDE, ex.marchOut);
@@ -118,7 +119,8 @@ void TantraGear::Apply(const tantra::CarriagePose& p, double sCG, const Extras& 
     Set(m::ANIM_LIFT0, (m::kLiftY0 - ex.liftY[0]) / m::kLiftTravel);
     Set(m::ANIM_LIFT1, (m::kLiftY0 - ex.liftY[1]) / m::kLiftTravel);
 
-    // Stern legs: swing to the standing pose, sections run out over the last part of the swing (shorter by the
+    // Stern legs (2026-10-09: from their body bays, the door first, the swing done half way): swing to the standing pose,
+    // sections run out after it (shorter by the
     // standing drop when the blades could not lift an empty ship to the nominal height), the foot hub rides its
     // rail down to the ankle and the umbrella opens; the foot turns to the ground in the last quarter.
     static const int kSwing[4] = {m::ANIM_LEG0_SWING, m::ANIM_LEG1_SWING, m::ANIM_LEG2_SWING, m::ANIM_LEG3_SWING};
@@ -132,7 +134,7 @@ void TantraGear::Apply(const tantra::CarriagePose& p, double sCG, const Extras& 
         const double ws = p.legStand;
         Set(kSwing[i], ws * L.phiStand / L.phiMax);
         const double run = Clamp01((ws - m::kLegExtDelay) / (1.0 - m::kLegExtDelay));
-        const double extStand = (std::max)(0.0, L.extStand - p.standDrop / std::cos(16.0 * RAD));
+        const double extStand = (std::max)(0.0, L.extStand - p.standDrop / std::cos(L.phiStand));   // phiStand: off the ship's axis
         Set(kExt[i], run * extStand / m::kLegExtMax);
         Set(kStand[i], ws);
         Set(kRail[i], p.legRail);

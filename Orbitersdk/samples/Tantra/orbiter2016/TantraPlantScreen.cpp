@@ -273,7 +273,7 @@ void Screen::Draw(oapi::Sketchpad* skp, int ox, int oy, int w, int h, const View
     g.Fill(0, 0, W, H, cBg);
     g.Stroke(5, 5, W - 10, H - 10, cFr, 2);
     // ---- title bar ----
-    g.T(L"СИЛОВАЯ УСТАНОВКА · ИОННО-ТРИГГЕРНАЯ · МАРШЕВАЯ ЧАША + 4 ГОНДОЛЫ", 22, 36, cTx, 20, 0, 700);
+    g.T(L"СИЛОВАЯ УСТАНОВКА · ИОННО-ТРИГГЕРНАЯ · МАРШЕВАЯ ЧАША + 4 ВЫДВ. БЛОКИ", 22, 36, cTx, 20, 0, 700);
     static const wchar_t* const kStage[8] = {L"ВЫКЛЮЧЕНА", L"ПРОВЕРКА КРИОГЕНИКИ", L"ПОДЪЁМ ПОЛЯ", L"ЗАРЯД ТРИГГЕРА", L"ПОДАЧА КАПСУЛ", L"НА РЕЖИМЕ",
                                              L"СРЫВ ПОЛЯ · ОХЛАЖДЕНИЕ", L"КОРАБЛЬ ПОТЕРЯН"};
     std::wstring stTxt = kStage[(std::max)(0, (std::min)(7, stage))];
@@ -436,10 +436,10 @@ void Screen::Draw(oapi::Sketchpad* skp, int ox, int oy, int w, int h, const View
     for (int i = 0; i < 4; ++i) {
         const bool on = v.pods == 2;
         const double px = 640 + i * 90, py = 74;
-        Node(g, px, py, 84, 46, L"ГОНДОЛА " + std::to_wstring(i + 1), on ? cOr : cFr);
+        Node(g, px, py, 84, 46, L"ВЫДВ. БЛОК " + std::to_wstring(i + 1), on ? cOr : cFr);
         g.T(on ? L"3 × " + Fmt(v.podCup / 1e6, 0) + L" МН" : v.pods == 1 ? L"готова" : L"в отсеке", px + 42, py + 39, on ? cOr : cDim, 12, 1, 600);
     }
-    g.T(L"гондолы — до М 0,8", 1000, 133, cDim, 11, 2);
+    g.T(L"выдвижные блоки — до М 0,8", 1000, 133, cDim, 11, 2);
 
     // ---- right: calculations ----
     Frame(g, 1025, 62, 560, mH, L"РАСЧЁТ");
@@ -556,7 +556,7 @@ void Screen::Draw(oapi::Sketchpad* skp, int ox, int oy, int w, int h, const View
     } else g.T(env == 0 ? (v.onGround ? L"на грунте: обшивка в покое" : L"в атмосфере: обшивка в потоке") : L"в космосе: обшивка остывает излучением", 30, Y2(580), cDim, 12);
     // the zones table
     g.T(L"ОБШИВКА", 350, Y2(580), cDim, 12, 0, 700); g.T(L"К / предел", 545, Y2(580), cDim, 11, 2);
-    static const wchar_t* const kZone[7] = {L"нос (иридий)", L"днище", L"кромки крыльев", L"перо", L"корма", L"ноги", L"гондолы"};
+    static const wchar_t* const kZone[7] = {L"нос (иридий)", L"днище", L"кромки крыльев", L"перо", L"корма", L"ноги", L"выдвижные блоки"};
     for (int i = 0; i < 7; ++i) {
         const double y = Y2(600 + i * 24), lim = v.skinLim[i] > 0 ? v.skinLim[i] : 2000;
         const unsigned c = Zc(skin[i], lim);
@@ -570,7 +570,7 @@ void Screen::Draw(oapi::Sketchpad* skp, int ox, int oy, int w, int h, const View
         const unsigned jc = ValCol(c.jacket), wc = c.margin < 0.15 ? cRd : c.margin < 0.3 ? cYe : cGr;
         const struct { const wchar_t* t; double v; int dec; double bar; unsigned col; } eng[6] = {
             {L"чаша маршевая, стенка", -1, 0, -1, cDim}, {L"рубашка, выход", mass == pl::kProducts ? -1 : c.tOut, 0, -1, jc},
-            {L"обмотка", c.coilT, 1, c.Ic > 0 ? c.I / c.Ic : 1.0, wc}, {L"гондолы 1–4, чаши", -1, 0, -1, cDim},
+            {L"обмотка", c.coilT, 1, c.Ic > 0 ? c.I / c.Ic : 1.0, wc}, {L"выдвижные блоки 1–4, чаши", -1, 0, -1, cDim},
             {L"камеры анамезона К1–К4", -1, 0, -1, cDim}, {L"ретро-чаши носа Н1–Н2", -1, 0, -1, cDim}};
         g.T(L"ДВИГАТЕЛИ", 565, Y2(580), cDim, 12, 0, 700);
         for (int i = 0; i < 6; ++i) {
@@ -627,7 +627,7 @@ void Screen::Draw(oapi::Sketchpad* skp, int ox, int oy, int w, int h, const View
         btn(L"МОЩН +", 1150, r2, 100, bh, false, kCmdPowerUp, cOr);
         g.T(lim ? L"АВТОМАТ" : L"РУЧНОЙ", 1310, r2 + bh / 2 + 6, lim ? cGr : cRd, 15, 1, 700);
         g.T(L"мощность " + Fmt(p.PowerPct(), 0) + L" % ном.", 1570, r2 + bh / 2 + 6, p.PowerPct() > 100 ? cYe : cTx, 14, 2, 700);
-        btn(L"ГОНДОЛЫ", 1040, r3, 100, bh, v.pods > 0, kCmdPods, cOr);
+        btn(L"ВЫДВ. БЛОКИ", 1040, r3, 100, bh, v.pods > 0, kCmdPods, cOr);
         static const wchar_t* const kEnvK[4] = {L"ГРУНТ", L"КОСМОС", L"ПЕРЕЛЁТ", L"ВХОД"};
         for (int i = 0; i < 4; ++i) btn(kEnvK[i], 1150 + i * 80, r3, 74, bh, env == i, -1, cEnv);   // lamps: the computer's own reading
         const double yb = Y2(758);

@@ -1,0 +1,3189 @@
+{
+"method": "по граням: пересечение = отрезок-ребро одного треугольника пробивает другой (в обе стороны); зазор = min расстояние вершина–грань в обе стороны (ребро–ребро не считается — зазор может быть завышен не более чем на половину длины ребра у почти параллельных рёбер); корпус = korpus+dnische+nos+krylo; «вне проёмов» — точки пересечения не в контуре ниш/проёмов/среза кормы x < −8,85",
+"rows": [
+{
+"pos": "hover",
+"part": "концевая часть Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "hover",
+"part": "концевая часть П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "hover",
+"part": "элевон Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "hover",
+"part": "элевон П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "hover",
+"part": "УВТ маршевого L",
+"deg": 0,
+"x_all": 176,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover",
+"part": "УВТ маршевого R",
+"deg": 0,
+"x_all": 180,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover",
+"part": "ряд чаш P",
+"deg": 0,
+"x_all": 432,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.029
+},
+{
+"pos": "hover",
+"part": "ряд чаш Z",
+"deg": 0,
+"x_all": 436,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.011
+},
+{
+"pos": "hover",
+"part": "створка ряда P",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "hover",
+"part": "створка ряда Z",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.009
+},
+{
+"pos": "hover",
+"part": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"deg": 0,
+"x_all": 120,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.002
+},
+{
+"pos": "hover",
+"part": "ПО, уборка вперёд",
+"deg": 0,
+"x_all": 68,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.249
+},
+{
+"pos": "hover",
+"part": "основная L, уборка вперёд",
+"deg": 0,
+"x_all": 140,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.038
+},
+{
+"pos": "hover",
+"part": "основная R, уборка вперёд",
+"deg": 0,
+"x_all": 140,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.038
+},
+{
+"pos": "hover",
+"part": "створка-полоз ПО",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.006
+},
+{
+"pos": "hover",
+"part": "створка-полоз L",
+"deg": 90,
+"x_all": 184,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover",
+"part": "створка-полоз R",
+"deg": -90,
+"x_all": 184,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover",
+"part": "люк, открыт в ангаре",
+"deg": 0,
+"x_all": 60,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.004
+},
+{
+"pos": "transition",
+"part": "концевая часть Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition",
+"part": "концевая часть П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition",
+"part": "элевон Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "transition",
+"part": "элевон П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "transition",
+"part": "УВТ маршевого L",
+"deg": 10,
+"x_all": 168,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition",
+"part": "УВТ маршевого R",
+"deg": 10,
+"x_all": 172,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition",
+"part": "ряд чаш P",
+"deg": 0,
+"x_all": 432,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.029
+},
+{
+"pos": "transition",
+"part": "ряд чаш Z",
+"deg": 0,
+"x_all": 436,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.011
+},
+{
+"pos": "transition",
+"part": "створка ряда P",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "transition",
+"part": "створка ряда Z",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.009
+},
+{
+"pos": "transition",
+"part": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"deg": 0,
+"x_all": 120,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.002
+},
+{
+"pos": "transition",
+"part": "ПО, уборка вперёд",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.13
+},
+{
+"pos": "transition",
+"part": "основная L, уборка вперёд",
+"deg": 90,
+"x_all": 266,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition",
+"part": "основная R, уборка вперёд",
+"deg": 90,
+"x_all": 268,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition",
+"part": "створка-полоз ПО",
+"deg": 0,
+"x_all": 136,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "transition",
+"part": "створка-полоз L",
+"deg": 0,
+"x_all": 350,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "transition",
+"part": "створка-полоз R",
+"deg": 0,
+"x_all": 378,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition",
+"part": "люк, открыт в ангаре",
+"deg": 0,
+"x_all": 60,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.004
+},
+{
+"pos": "cruise",
+"part": "концевая часть Л",
+"deg": 60,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "cruise",
+"part": "концевая часть П",
+"deg": 60,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "cruise",
+"part": "элевон Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "cruise",
+"part": "элевон П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "cruise",
+"part": "УВТ маршевого L",
+"deg": 0,
+"x_all": 176,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "cruise",
+"part": "УВТ маршевого R",
+"deg": 0,
+"x_all": 180,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "cruise",
+"part": "ряд чаш P",
+"deg": 180,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": null
+},
+{
+"pos": "cruise",
+"part": "ряд чаш Z",
+"deg": 180,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": null
+},
+{
+"pos": "cruise",
+"part": "створка ряда P",
+"deg": 0,
+"x_all": 80,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "cruise",
+"part": "створка ряда Z",
+"deg": 0,
+"x_all": 88,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "cruise",
+"part": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"deg": 0,
+"x_all": 120,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.002
+},
+{
+"pos": "cruise",
+"part": "ПО, уборка вперёд",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.13
+},
+{
+"pos": "cruise",
+"part": "основная L, уборка вперёд",
+"deg": 90,
+"x_all": 266,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "cruise",
+"part": "основная R, уборка вперёд",
+"deg": 90,
+"x_all": 268,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "cruise",
+"part": "створка-полоз ПО",
+"deg": 0,
+"x_all": 136,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "cruise",
+"part": "створка-полоз L",
+"deg": 0,
+"x_all": 350,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "cruise",
+"part": "створка-полоз R",
+"deg": 0,
+"x_all": 378,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "cruise",
+"part": "люк, открыт в ангаре",
+"deg": 0,
+"x_all": 60,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.004
+},
+{
+"pos": "entry",
+"part": "концевая часть Л",
+"deg": 60,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "entry",
+"part": "концевая часть П",
+"deg": 60,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "entry",
+"part": "элевон Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "entry",
+"part": "элевон П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "entry",
+"part": "УВТ маршевого L",
+"deg": 0,
+"x_all": 176,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "entry",
+"part": "УВТ маршевого R",
+"deg": 0,
+"x_all": 180,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "entry",
+"part": "ряд чаш P",
+"deg": 180,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": null
+},
+{
+"pos": "entry",
+"part": "ряд чаш Z",
+"deg": 180,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": null
+},
+{
+"pos": "entry",
+"part": "створка ряда P",
+"deg": 0,
+"x_all": 80,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "entry",
+"part": "створка ряда Z",
+"deg": 0,
+"x_all": 88,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "entry",
+"part": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"deg": 15,
+"x_all": 20,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "entry",
+"part": "ПО, уборка вперёд",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.13
+},
+{
+"pos": "entry",
+"part": "основная L, уборка вперёд",
+"deg": 90,
+"x_all": 266,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "entry",
+"part": "основная R, уборка вперёд",
+"deg": 90,
+"x_all": 268,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "entry",
+"part": "створка-полоз ПО",
+"deg": 0,
+"x_all": 136,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "entry",
+"part": "створка-полоз L",
+"deg": 0,
+"x_all": 350,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "entry",
+"part": "створка-полоз R",
+"deg": 0,
+"x_all": 378,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "entry",
+"part": "люк, открыт в ангаре",
+"deg": 0,
+"x_all": 60,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.004
+},
+{
+"pos": "ballistic",
+"part": "концевая часть Л",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "ballistic",
+"part": "концевая часть П",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "ballistic",
+"part": "элевон Л",
+"deg": -25,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.009
+},
+{
+"pos": "ballistic",
+"part": "элевон П",
+"deg": -25,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.009
+},
+{
+"pos": "ballistic",
+"part": "УВТ маршевого L",
+"deg": 0,
+"x_all": 176,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "ballistic",
+"part": "УВТ маршевого R",
+"deg": 0,
+"x_all": 180,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "ballistic",
+"part": "ряд чаш P",
+"deg": 180,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": null
+},
+{
+"pos": "ballistic",
+"part": "ряд чаш Z",
+"deg": 180,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": null
+},
+{
+"pos": "ballistic",
+"part": "створка ряда P",
+"deg": 0,
+"x_all": 80,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "ballistic",
+"part": "створка ряда Z",
+"deg": 0,
+"x_all": 88,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "ballistic",
+"part": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"deg": 0,
+"x_all": 120,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.002
+},
+{
+"pos": "ballistic",
+"part": "ПО, уборка вперёд",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.13
+},
+{
+"pos": "ballistic",
+"part": "основная L, уборка вперёд",
+"deg": 90,
+"x_all": 266,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "ballistic",
+"part": "основная R, уборка вперёд",
+"deg": 90,
+"x_all": 268,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "ballistic",
+"part": "створка-полоз ПО",
+"deg": 0,
+"x_all": 136,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "ballistic",
+"part": "створка-полоз L",
+"deg": 0,
+"x_all": 350,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "ballistic",
+"part": "створка-полоз R",
+"deg": 0,
+"x_all": 378,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "ballistic",
+"part": "люк, открыт в ангаре",
+"deg": 0,
+"x_all": 60,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.004
+},
+{
+"pos": "glide",
+"part": "концевая часть Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "glide",
+"part": "концевая часть П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "glide",
+"part": "элевон Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "glide",
+"part": "элевон П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "glide",
+"part": "УВТ маршевого L",
+"deg": 0,
+"x_all": 176,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "glide",
+"part": "УВТ маршевого R",
+"deg": 0,
+"x_all": 180,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "glide",
+"part": "ряд чаш P",
+"deg": 180,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": null
+},
+{
+"pos": "glide",
+"part": "ряд чаш Z",
+"deg": 180,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": null
+},
+{
+"pos": "glide",
+"part": "створка ряда P",
+"deg": 0,
+"x_all": 80,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "glide",
+"part": "створка ряда Z",
+"deg": 0,
+"x_all": 88,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "glide",
+"part": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"deg": 10,
+"x_all": 20,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "glide",
+"part": "ПО, уборка вперёд",
+"deg": 0,
+"x_all": 68,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.249
+},
+{
+"pos": "glide",
+"part": "основная L, уборка вперёд",
+"deg": 0,
+"x_all": 140,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.038
+},
+{
+"pos": "glide",
+"part": "основная R, уборка вперёд",
+"deg": 0,
+"x_all": 140,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.038
+},
+{
+"pos": "glide",
+"part": "створка-полоз ПО",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.006
+},
+{
+"pos": "glide",
+"part": "створка-полоз L",
+"deg": 90,
+"x_all": 184,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "glide",
+"part": "створка-полоз R",
+"deg": -90,
+"x_all": 184,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "glide",
+"part": "люк, открыт в ангаре",
+"deg": 0,
+"x_all": 60,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.004
+},
+{
+"pos": "stowed",
+"part": "концевая часть Л",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "stowed",
+"part": "концевая часть П",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "stowed",
+"part": "элевон Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "stowed",
+"part": "элевон П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "stowed",
+"part": "УВТ маршевого L",
+"deg": 0,
+"x_all": 176,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "stowed",
+"part": "УВТ маршевого R",
+"deg": 0,
+"x_all": 180,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "stowed",
+"part": "ряд чаш P",
+"deg": 180,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": null
+},
+{
+"pos": "stowed",
+"part": "ряд чаш Z",
+"deg": 180,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": null
+},
+{
+"pos": "stowed",
+"part": "створка ряда P",
+"deg": 0,
+"x_all": 80,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "stowed",
+"part": "створка ряда Z",
+"deg": 0,
+"x_all": 88,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "stowed",
+"part": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"deg": 0,
+"x_all": 120,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.002
+},
+{
+"pos": "stowed",
+"part": "ПО, уборка вперёд",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.13
+},
+{
+"pos": "stowed",
+"part": "основная L, уборка вперёд",
+"deg": 90,
+"x_all": 266,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "stowed",
+"part": "основная R, уборка вперёд",
+"deg": 90,
+"x_all": 268,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "stowed",
+"part": "створка-полоз ПО",
+"deg": 0,
+"x_all": 136,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "stowed",
+"part": "створка-полоз L",
+"deg": 0,
+"x_all": 350,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "stowed",
+"part": "створка-полоз R",
+"deg": 0,
+"x_all": 378,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "stowed",
+"part": "люк, открыт в ангаре",
+"deg": 100,
+"x_all": 14,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.014
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "концевая часть Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "концевая часть П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "элевон Л",
+"deg": 25,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "элевон П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "УВТ маршевого L",
+"deg": 0,
+"x_all": 176,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "УВТ маршевого R",
+"deg": 0,
+"x_all": 180,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "ряд чаш P",
+"deg": 0,
+"x_all": 432,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.029
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "ряд чаш Z",
+"deg": 0,
+"x_all": 436,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.011
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "створка ряда P",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "створка ряда Z",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.009
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"deg": 0,
+"x_all": 120,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.002
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "ПО, уборка вперёд",
+"deg": 0,
+"x_all": 68,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.249
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "основная L, уборка вперёд",
+"deg": 0,
+"x_all": 140,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.038
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "основная R, уборка вперёд",
+"deg": 0,
+"x_all": 140,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.038
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "створка-полоз ПО",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.006
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "створка-полоз L",
+"deg": 90,
+"x_all": 184,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "створка-полоз R",
+"deg": -90,
+"x_all": 184,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, элевон Л +25°",
+"part": "люк, открыт в ангаре",
+"deg": 0,
+"x_all": 60,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.004
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "концевая часть Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "концевая часть П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "элевон Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "элевон П",
+"deg": 25,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "УВТ маршевого L",
+"deg": 0,
+"x_all": 176,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "УВТ маршевого R",
+"deg": 0,
+"x_all": 180,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "ряд чаш P",
+"deg": 0,
+"x_all": 432,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.029
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "ряд чаш Z",
+"deg": 0,
+"x_all": 436,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.011
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "створка ряда P",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "створка ряда Z",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.009
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"deg": 0,
+"x_all": 120,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.002
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "ПО, уборка вперёд",
+"deg": 0,
+"x_all": 68,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.249
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "основная L, уборка вперёд",
+"deg": 0,
+"x_all": 140,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.038
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "основная R, уборка вперёд",
+"deg": 0,
+"x_all": 140,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.038
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "створка-полоз ПО",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.006
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "створка-полоз L",
+"deg": 90,
+"x_all": 184,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "створка-полоз R",
+"deg": -90,
+"x_all": 184,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, элевон П +25°",
+"part": "люк, открыт в ангаре",
+"deg": 0,
+"x_all": 60,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.004
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "концевая часть Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "концевая часть П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "элевон Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "элевон П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "УВТ маршевого L",
+"deg": -15,
+"x_all": 172,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.002
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "УВТ маршевого R",
+"deg": 0,
+"x_all": 180,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "ряд чаш P",
+"deg": 0,
+"x_all": 432,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.029
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "ряд чаш Z",
+"deg": 0,
+"x_all": 436,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.011
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "створка ряда P",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "створка ряда Z",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.009
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"deg": 0,
+"x_all": 120,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.002
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "ПО, уборка вперёд",
+"deg": 0,
+"x_all": 68,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.249
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "основная L, уборка вперёд",
+"deg": 0,
+"x_all": 140,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.038
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "основная R, уборка вперёд",
+"deg": 0,
+"x_all": 140,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.038
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "створка-полоз ПО",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.006
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "створка-полоз L",
+"deg": 90,
+"x_all": 184,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "створка-полоз R",
+"deg": -90,
+"x_all": 184,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"part": "люк, открыт в ангаре",
+"deg": 0,
+"x_all": 60,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.004
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "концевая часть Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "концевая часть П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "элевон Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "элевон П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "УВТ маршевого L",
+"deg": 15,
+"x_all": 160,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "УВТ маршевого R",
+"deg": 10,
+"x_all": 172,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "ряд чаш P",
+"deg": 0,
+"x_all": 432,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.029
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "ряд чаш Z",
+"deg": 0,
+"x_all": 436,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.011
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "створка ряда P",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "створка ряда Z",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.009
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"deg": 0,
+"x_all": 120,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.002
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "ПО, уборка вперёд",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.13
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "основная L, уборка вперёд",
+"deg": 90,
+"x_all": 266,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "основная R, уборка вперёд",
+"deg": 90,
+"x_all": 268,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "створка-полоз ПО",
+"deg": 0,
+"x_all": 136,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "створка-полоз L",
+"deg": 0,
+"x_all": 350,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "створка-полоз R",
+"deg": 0,
+"x_all": 378,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"part": "люк, открыт в ангаре",
+"deg": 0,
+"x_all": 60,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.004
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "концевая часть Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "концевая часть П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "элевон Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "элевон П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "УВТ маршевого L",
+"deg": 0,
+"x_all": 176,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "УВТ маршевого R",
+"deg": -15,
+"x_all": 180,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.002
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "ряд чаш P",
+"deg": 0,
+"x_all": 432,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.029
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "ряд чаш Z",
+"deg": 0,
+"x_all": 436,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.011
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "створка ряда P",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "створка ряда Z",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.009
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"deg": 0,
+"x_all": 120,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.002
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "ПО, уборка вперёд",
+"deg": 0,
+"x_all": 68,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.249
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "основная L, уборка вперёд",
+"deg": 0,
+"x_all": 140,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.038
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "основная R, уборка вперёд",
+"deg": 0,
+"x_all": 140,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.038
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "створка-полоз ПО",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.006
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "створка-полоз L",
+"deg": 90,
+"x_all": 184,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "створка-полоз R",
+"deg": -90,
+"x_all": 184,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"part": "люк, открыт в ангаре",
+"deg": 0,
+"x_all": 60,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.004
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "концевая часть Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "концевая часть П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "элевон Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "элевон П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "УВТ маршевого L",
+"deg": 10,
+"x_all": 168,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "УВТ маршевого R",
+"deg": 15,
+"x_all": 164,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "ряд чаш P",
+"deg": 0,
+"x_all": 432,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.029
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "ряд чаш Z",
+"deg": 0,
+"x_all": 436,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.011
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "створка ряда P",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "створка ряда Z",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.009
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"deg": 0,
+"x_all": 120,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.002
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "ПО, уборка вперёд",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.13
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "основная L, уборка вперёд",
+"deg": 90,
+"x_all": 266,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "основная R, уборка вперёд",
+"deg": 90,
+"x_all": 268,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "створка-полоз ПО",
+"deg": 0,
+"x_all": 136,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "створка-полоз L",
+"deg": 0,
+"x_all": 350,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "створка-полоз R",
+"deg": 0,
+"x_all": 378,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"part": "люк, открыт в ангаре",
+"deg": 0,
+"x_all": 60,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.004
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "концевая часть Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "концевая часть П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "элевон Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "элевон П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "УВТ маршевого L",
+"deg": 0,
+"x_all": 176,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "УВТ маршевого R",
+"deg": 0,
+"x_all": 180,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "ряд чаш P",
+"deg": -8,
+"x_all": 374,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "ряд чаш Z",
+"deg": 0,
+"x_all": 436,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.011
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "створка ряда P",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "створка ряда Z",
+"deg": -95,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.009
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"deg": 0,
+"x_all": 120,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.002
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "ПО, уборка вперёд",
+"deg": 0,
+"x_all": 68,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.249
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "основная L, уборка вперёд",
+"deg": 0,
+"x_all": 140,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.038
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "основная R, уборка вперёд",
+"deg": 0,
+"x_all": 140,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.038
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "створка-полоз ПО",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.006
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "створка-полоз L",
+"deg": 90,
+"x_all": 184,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "створка-полоз R",
+"deg": -90,
+"x_all": 184,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"part": "люк, открыт в ангаре",
+"deg": 0,
+"x_all": 60,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.004
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "концевая часть Л",
+"deg": 60,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "концевая часть П",
+"deg": 60,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "элевон Л",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "элевон П",
+"deg": 0,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.01
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "УВТ маршевого L",
+"deg": 0,
+"x_all": 176,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "УВТ маршевого R",
+"deg": 0,
+"x_all": 180,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "ряд чаш P",
+"deg": 180,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": null
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "ряд чаш Z",
+"deg": 180,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": null
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "створка ряда P",
+"deg": 0,
+"x_all": 80,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "створка ряда Z",
+"deg": 0,
+"x_all": 88,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"deg": 35,
+"x_all": 20,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "ПО, уборка вперёд",
+"deg": 90,
+"x_all": 0,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.13
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "основная L, уборка вперёд",
+"deg": 90,
+"x_all": 266,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "основная R, уборка вперёд",
+"deg": 90,
+"x_all": 268,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "створка-полоз ПО",
+"deg": 0,
+"x_all": 136,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.008
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "створка-полоз L",
+"deg": 0,
+"x_all": 350,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.001
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "створка-полоз R",
+"deg": 0,
+"x_all": 378,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.0
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"part": "люк, открыт в ангаре",
+"deg": 0,
+"x_all": 60,
+"x_outside_openings": 0,
+"gap_to_hull_m": 0.004
+}
+],
+"pairs": [
+{
+"pos": "hover",
+"a": "УВТ маршевого L",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "hover",
+"a": "УВТ маршевого R",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "hover",
+"a": "ряд чаш P",
+"b": "створка ряда P",
+"x": 0,
+"gap_m": 0.158
+},
+{
+"pos": "hover",
+"a": "ряд чаш Z",
+"b": "створка ряда Z",
+"x": 0,
+"gap_m": 0.146
+},
+{
+"pos": "hover",
+"a": "створка ряда Z",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.14
+},
+{
+"pos": "hover",
+"a": "ПО, уборка вперёд",
+"b": "створка-полоз ПО",
+"x": 0,
+"gap_m": 0.177
+},
+{
+"pos": "hover",
+"a": "основная L, уборка вперёд",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.204
+},
+{
+"pos": "hover",
+"a": "основная R, уборка вперёд",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.204
+},
+{
+"pos": "transition",
+"a": "УВТ маршевого L",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.109
+},
+{
+"pos": "transition",
+"a": "УВТ маршевого R",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.109
+},
+{
+"pos": "transition",
+"a": "ряд чаш P",
+"b": "створка ряда P",
+"x": 0,
+"gap_m": 0.158
+},
+{
+"pos": "transition",
+"a": "ряд чаш P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.232
+},
+{
+"pos": "transition",
+"a": "ряд чаш P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.232
+},
+{
+"pos": "transition",
+"a": "ряд чаш Z",
+"b": "створка ряда Z",
+"x": 0,
+"gap_m": 0.146
+},
+{
+"pos": "transition",
+"a": "створка ряда P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "transition",
+"a": "створка ряда P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "transition",
+"a": "створка ряда Z",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.14
+},
+{
+"pos": "transition",
+"a": "ПО, уборка вперёд",
+"b": "створка-полоз ПО",
+"x": 0,
+"gap_m": 0.094
+},
+{
+"pos": "transition",
+"a": "основная L, уборка вперёд",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.105
+},
+{
+"pos": "transition",
+"a": "основная R, уборка вперёд",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.105
+},
+{
+"pos": "cruise",
+"a": "УВТ маршевого L",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "cruise",
+"a": "УВТ маршевого R",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "cruise",
+"a": "ряд чаш P",
+"b": "створка ряда P",
+"x": 0,
+"gap_m": 0.092
+},
+{
+"pos": "cruise",
+"a": "ряд чаш P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.28
+},
+{
+"pos": "cruise",
+"a": "ряд чаш P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.28
+},
+{
+"pos": "cruise",
+"a": "ряд чаш Z",
+"b": "створка ряда Z",
+"x": 0,
+"gap_m": 0.089
+},
+{
+"pos": "cruise",
+"a": "створка ряда P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "cruise",
+"a": "створка ряда P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "cruise",
+"a": "створка ряда Z",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.14
+},
+{
+"pos": "cruise",
+"a": "ПО, уборка вперёд",
+"b": "створка-полоз ПО",
+"x": 0,
+"gap_m": 0.094
+},
+{
+"pos": "cruise",
+"a": "основная L, уборка вперёд",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.105
+},
+{
+"pos": "cruise",
+"a": "основная R, уборка вперёд",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.105
+},
+{
+"pos": "entry",
+"a": "ряд чаш P",
+"b": "створка ряда P",
+"x": 0,
+"gap_m": 0.092
+},
+{
+"pos": "entry",
+"a": "ряд чаш P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.28
+},
+{
+"pos": "entry",
+"a": "ряд чаш P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.28
+},
+{
+"pos": "entry",
+"a": "ряд чаш Z",
+"b": "створка ряда Z",
+"x": 0,
+"gap_m": 0.089
+},
+{
+"pos": "entry",
+"a": "створка ряда P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "entry",
+"a": "створка ряда P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "entry",
+"a": "створка ряда Z",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.14
+},
+{
+"pos": "entry",
+"a": "ПО, уборка вперёд",
+"b": "створка-полоз ПО",
+"x": 0,
+"gap_m": 0.094
+},
+{
+"pos": "entry",
+"a": "основная L, уборка вперёд",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.105
+},
+{
+"pos": "entry",
+"a": "основная R, уборка вперёд",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.105
+},
+{
+"pos": "ballistic",
+"a": "УВТ маршевого L",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "ballistic",
+"a": "УВТ маршевого R",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "ballistic",
+"a": "ряд чаш P",
+"b": "створка ряда P",
+"x": 0,
+"gap_m": 0.092
+},
+{
+"pos": "ballistic",
+"a": "ряд чаш P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.28
+},
+{
+"pos": "ballistic",
+"a": "ряд чаш P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.28
+},
+{
+"pos": "ballistic",
+"a": "ряд чаш Z",
+"b": "створка ряда Z",
+"x": 0,
+"gap_m": 0.089
+},
+{
+"pos": "ballistic",
+"a": "створка ряда P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "ballistic",
+"a": "створка ряда P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "ballistic",
+"a": "створка ряда Z",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.14
+},
+{
+"pos": "ballistic",
+"a": "ПО, уборка вперёд",
+"b": "створка-полоз ПО",
+"x": 0,
+"gap_m": 0.094
+},
+{
+"pos": "ballistic",
+"a": "основная L, уборка вперёд",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.105
+},
+{
+"pos": "ballistic",
+"a": "основная R, уборка вперёд",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.105
+},
+{
+"pos": "glide",
+"a": "ряд чаш P",
+"b": "створка ряда P",
+"x": 0,
+"gap_m": 0.092
+},
+{
+"pos": "glide",
+"a": "ряд чаш Z",
+"b": "створка ряда Z",
+"x": 0,
+"gap_m": 0.089
+},
+{
+"pos": "glide",
+"a": "створка ряда Z",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.14
+},
+{
+"pos": "glide",
+"a": "ПО, уборка вперёд",
+"b": "створка-полоз ПО",
+"x": 0,
+"gap_m": 0.177
+},
+{
+"pos": "glide",
+"a": "основная L, уборка вперёд",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.204
+},
+{
+"pos": "glide",
+"a": "основная R, уборка вперёд",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.204
+},
+{
+"pos": "stowed",
+"a": "УВТ маршевого L",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "stowed",
+"a": "УВТ маршевого R",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "stowed",
+"a": "ряд чаш P",
+"b": "створка ряда P",
+"x": 0,
+"gap_m": 0.092
+},
+{
+"pos": "stowed",
+"a": "ряд чаш P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.28
+},
+{
+"pos": "stowed",
+"a": "ряд чаш P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.28
+},
+{
+"pos": "stowed",
+"a": "ряд чаш Z",
+"b": "створка ряда Z",
+"x": 0,
+"gap_m": 0.089
+},
+{
+"pos": "stowed",
+"a": "створка ряда P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "stowed",
+"a": "створка ряда P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "stowed",
+"a": "створка ряда Z",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.14
+},
+{
+"pos": "stowed",
+"a": "ПО, уборка вперёд",
+"b": "створка-полоз ПО",
+"x": 0,
+"gap_m": 0.094
+},
+{
+"pos": "stowed",
+"a": "основная L, уборка вперёд",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.105
+},
+{
+"pos": "stowed",
+"a": "основная R, уборка вперёд",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.105
+},
+{
+"pos": "hover, элевон Л +25°",
+"a": "УВТ маршевого L",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "hover, элевон Л +25°",
+"a": "УВТ маршевого R",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "hover, элевон Л +25°",
+"a": "ряд чаш P",
+"b": "створка ряда P",
+"x": 0,
+"gap_m": 0.158
+},
+{
+"pos": "hover, элевон Л +25°",
+"a": "ряд чаш Z",
+"b": "створка ряда Z",
+"x": 0,
+"gap_m": 0.146
+},
+{
+"pos": "hover, элевон Л +25°",
+"a": "створка ряда Z",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.14
+},
+{
+"pos": "hover, элевон Л +25°",
+"a": "ПО, уборка вперёд",
+"b": "створка-полоз ПО",
+"x": 0,
+"gap_m": 0.177
+},
+{
+"pos": "hover, элевон Л +25°",
+"a": "основная L, уборка вперёд",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.204
+},
+{
+"pos": "hover, элевон Л +25°",
+"a": "основная R, уборка вперёд",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.204
+},
+{
+"pos": "hover, элевон П +25°",
+"a": "УВТ маршевого L",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "hover, элевон П +25°",
+"a": "УВТ маршевого R",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "hover, элевон П +25°",
+"a": "ряд чаш P",
+"b": "створка ряда P",
+"x": 0,
+"gap_m": 0.158
+},
+{
+"pos": "hover, элевон П +25°",
+"a": "ряд чаш Z",
+"b": "створка ряда Z",
+"x": 0,
+"gap_m": 0.146
+},
+{
+"pos": "hover, элевон П +25°",
+"a": "створка ряда Z",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.14
+},
+{
+"pos": "hover, элевон П +25°",
+"a": "ПО, уборка вперёд",
+"b": "створка-полоз ПО",
+"x": 0,
+"gap_m": 0.177
+},
+{
+"pos": "hover, элевон П +25°",
+"a": "основная L, уборка вперёд",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.204
+},
+{
+"pos": "hover, элевон П +25°",
+"a": "основная R, уборка вперёд",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.204
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"a": "УВТ маршевого L",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.092
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"a": "УВТ маршевого R",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"a": "ряд чаш P",
+"b": "створка ряда P",
+"x": 0,
+"gap_m": 0.158
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"a": "ряд чаш Z",
+"b": "створка ряда Z",
+"x": 0,
+"gap_m": 0.146
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"a": "створка ряда Z",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.14
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"a": "ПО, уборка вперёд",
+"b": "створка-полоз ПО",
+"x": 0,
+"gap_m": 0.177
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"a": "основная L, уборка вперёд",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.204
+},
+{
+"pos": "hover, УВТ маршевого L -15°",
+"a": "основная R, уборка вперёд",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.204
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"a": "УВТ маршевого L",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.102
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"a": "УВТ маршевого R",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.109
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"a": "ряд чаш P",
+"b": "створка ряда P",
+"x": 0,
+"gap_m": 0.158
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"a": "ряд чаш P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.232
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"a": "ряд чаш P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.232
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"a": "ряд чаш Z",
+"b": "створка ряда Z",
+"x": 0,
+"gap_m": 0.146
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"a": "створка ряда P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"a": "створка ряда P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"a": "створка ряда Z",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.14
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"a": "ПО, уборка вперёд",
+"b": "створка-полоз ПО",
+"x": 0,
+"gap_m": 0.094
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"a": "основная L, уборка вперёд",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.105
+},
+{
+"pos": "transition, УВТ маршевого L +15°",
+"a": "основная R, уборка вперёд",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.105
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"a": "УВТ маршевого L",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"a": "УВТ маршевого R",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.092
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"a": "ряд чаш P",
+"b": "створка ряда P",
+"x": 0,
+"gap_m": 0.158
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"a": "ряд чаш Z",
+"b": "створка ряда Z",
+"x": 0,
+"gap_m": 0.146
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"a": "створка ряда Z",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.14
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"a": "ПО, уборка вперёд",
+"b": "створка-полоз ПО",
+"x": 0,
+"gap_m": 0.177
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"a": "основная L, уборка вперёд",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.204
+},
+{
+"pos": "hover, УВТ маршевого R -15°",
+"a": "основная R, уборка вперёд",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.204
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"a": "УВТ маршевого L",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.109
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"a": "УВТ маршевого R",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.102
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"a": "ряд чаш P",
+"b": "створка ряда P",
+"x": 0,
+"gap_m": 0.158
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"a": "ряд чаш P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.232
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"a": "ряд чаш P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.232
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"a": "ряд чаш Z",
+"b": "створка ряда Z",
+"x": 0,
+"gap_m": 0.146
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"a": "створка ряда P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"a": "створка ряда P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"a": "створка ряда Z",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.14
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"a": "ПО, уборка вперёд",
+"b": "створка-полоз ПО",
+"x": 0,
+"gap_m": 0.094
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"a": "основная L, уборка вперёд",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.105
+},
+{
+"pos": "transition, УВТ маршевого R +15°",
+"a": "основная R, уборка вперёд",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.105
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"a": "УВТ маршевого L",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"a": "УВТ маршевого R",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.123
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"a": "ряд чаш P",
+"b": "створка ряда P",
+"x": 0,
+"gap_m": 0.107
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"a": "ряд чаш Z",
+"b": "створка ряда Z",
+"x": 0,
+"gap_m": 0.146
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"a": "створка ряда Z",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.14
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"a": "ПО, уборка вперёд",
+"b": "створка-полоз ПО",
+"x": 0,
+"gap_m": 0.177
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"a": "основная L, уборка вперёд",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.204
+},
+{
+"pos": "hover, ряд чаш P -8°",
+"a": "основная R, уборка вперёд",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.204
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"a": "ряд чаш P",
+"b": "створка ряда P",
+"x": 0,
+"gap_m": 0.092
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"a": "ряд чаш P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.28
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"a": "ряд чаш P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.28
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"a": "ряд чаш Z",
+"b": "створка ряда Z",
+"x": 0,
+"gap_m": 0.089
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"a": "створка ряда P",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"a": "створка ряда P",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.05
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"a": "створка ряда Z",
+"b": "щиток днища, вниз (плюс — задняя кромка вниз)",
+"x": 0,
+"gap_m": 0.14
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"a": "ПО, уборка вперёд",
+"b": "створка-полоз ПО",
+"x": 0,
+"gap_m": 0.094
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"a": "основная L, уборка вперёд",
+"b": "створка-полоз L",
+"x": 0,
+"gap_m": 0.105
+},
+{
+"pos": "entry, щиток днища, вниз (плюс — задняя кромка вниз) +35°",
+"a": "основная R, уборка вперёд",
+"b": "створка-полоз R",
+"x": 0,
+"gap_m": 0.105
+}
+]
+}

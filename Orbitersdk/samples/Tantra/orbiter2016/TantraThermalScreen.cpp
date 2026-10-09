@@ -24,8 +24,8 @@ constexpr double kAmbient = 250.0;                // the corridor's ambient temp
 constexpr double kVMax = 12000.0, kHMax = 125e3;  // the corridor's axes
 constexpr unsigned cEdge = 0x6a8090;              // the hull's outline
 
-const wchar_t* const kZoneName[kZones] = {L"нос (иридий)", L"днище", L"кромки крыльев", L"перо · гребни", L"корма", L"ноги (створки)", L"гондолы"};
-const wchar_t* const kZoneShort[kZones] = {L"нос", L"днище", L"кромки", L"перо", L"корма", L"ноги", L"гондолы"};   // the callouts: the first word
+const wchar_t* const kZoneName[kZones] = {L"нос (иридий)", L"днище", L"кромки крыльев", L"перо · гребни", L"корма", L"ноги (створки)", L"выдвижные блоки"};
+const wchar_t* const kZoneShort[kZones] = {L"нос", L"днище", L"кромки", L"перо", L"корма", L"ноги", L"выдвижные блоки"};   // the callouts: the first word
 const wchar_t* const kWingTxt[3] = {L"90°", L"30°", L"сложены"};
 
 double Lim(const View& v, int z) { return v.lim[z] > 0.0 ? v.lim[z] : 2000.0; }
@@ -288,7 +288,7 @@ void Screen::Track(const View& v) {
         track_.clear();
         std::wstring how;
         if (v.thr > 0.0) how = v.reactMass == 0 ? L"маршевый на аргоне" : v.reactMass == 1 ? L"маршевый на железе" : L"маршевый";
-        if (v.pods == 2) how += how.empty() ? L"гондолы" : L", гондолы";
+        if (v.pods == 2) how += how.empty() ? L"выдвижные блоки" : L", выдвижные блоки";
         if (!how.empty()) log_.Add(v.t, L"Старт: " + how, 0);
     }
     last_ = v;
@@ -564,7 +564,7 @@ void Screen::EngineBox(Canvas& g, const View& v, const double* sk, double W, dou
         {L"чаша маршевая, стенка", e.cup, 2000, e.cupHot ? L"в работе" : L"холодная"},
         {L"рубашка, выход", e.jacket, 1100, e.flow ? (v.reactMass == 0 ? L"аргон 87 К на входе" : L"железо 300 К на входе") : L"нет протока"},
         {L"обмотка поля", v.coilT, 26, L"REBCO, 20 К номинал"},
-        {L"гондолы 1–4", e.pods, 1300, v.pods == 2 ? L"в работе" : L"выключены"},
+        {L"выдвижные блоки 1–4", e.pods, 1300, v.pods == 2 ? L"в работе" : L"выключены"},
         {L"радиаторы: гребни, перо", e.rad, 1500, L"излучают"}};
     for (int i = 0; i < 6; ++i) {
         const Row& r = rows[i];

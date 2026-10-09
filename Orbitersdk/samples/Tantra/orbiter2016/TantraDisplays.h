@@ -170,6 +170,12 @@ private:
     void DrawFrontTabs(SURFHANDLE s);
     bool TouchFront(double px, double py);        // the front surface's pixels
     std::vector<tantra::scr::Hit> panelHits_[2];
+    double panelSS_ = 1.0;                     // the side panels' surface px per mockup px (supersampled)
+    struct DrawTimer {                         // a screen's redraw timed (TantraDisplays.cpp: «Tantra screens» in Orbiter.log)
+        explicit DrawTimer(int slot);
+        ~DrawTimer();
+        int slot_; LARGE_INTEGER t0_;
+    };
     // the front glass (TantraFrontScreen, refine/front_v3.html): laid out in design px, frontW_ x kDesignH; the surface is frontK_
     // times that (set at each draw); the tabs' touch areas in design px; the ПОЛЁТ page; the ship's attitude for the pages
     std::vector<tantra::front::Hit> frontHits_;

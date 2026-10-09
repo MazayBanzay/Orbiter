@@ -1,14 +1,5 @@
 BEGIN_DESC
-MPU. Mars, next to the Olympus base: the charging station, the electric platform (EMPU) facing it 12 m away, an MPU 12 m behind (ready to couple: 3 m between the pins). Both machines start half empty. A full jet pack lies beside her (B).
-МПУ. Марс, рядом с базой Olympus: зарядная станция, Э.МПУ в 12 м перед ней, МПУ в 12 м позади (можно сцепить: 3 м между пальцами). Обе машины полупустые. Рядом лежит полный ранец (B).
-LOOK at a thing within arm's reach - its actions show beside the aim; the mouse wheel picks one, F does it. Alt: the cursor.
-CHARGING: F at the station - take the cable; walk to a machine's power socket (front bumper, right) - F plugs it in.
-CELLS: F at a cell's hatch on the machine - out into the hands; F at the station's rack - on charge, or a charged one; F at an empty bay - in.
-DRIVING: F climbs on, F at the post or seat. W/S/A/D, Shift full power, S brake, Space emergency brake, B parking brake, Caps Lock deck up/down, V outside view.
-Посмотрите на предмет рядом - его действия у прицела; колесо мыши выбирает, F выполняет. Alt - курсор.
-ЗАРЯДКА: F у станции - взять кабель; подойти к разъёму машины (передний бампер справа) - F подключить.
-ЯЧЕЙКИ: F у люка ячейки на машине - в руки; F у стеллажа станции - на зарядку или взять заряженную; F у пустого гнезда - вставить.
-ВОЖДЕНИЕ: F подняться, F за пульт или в кресло. W/S/A/D, Shift полная мощность, S тормоз, Пробел экстренный тормоз, B стояночный, Caps Lock палуба вверх/вниз, V вид снаружи.
+MPU / EMPU. Mars, next to the Olympus base: charging station, EMPU (driver at the wheel) and an open MPU. Controls: see the KSC scenario.
 END_DESC
 
 BEGIN_ENVIRONMENT
@@ -22,10 +13,8 @@ END_FOCUS
 
 BEGIN_CAMERA
   TARGET NizaKrit
-  MODE Extern
-  POS 4.0 -20.0 10.0
-  TRACKMODE TargetRelative
-  FOV 40.00
+  MODE Cockpit
+  FOV 90.00
 END_CAMERA
 
 BEGIN_HUD
@@ -58,21 +47,41 @@ MPU-1:MPU
 END
 NizaKrit:OrbiterCrew\Astronavigator
   STATUS Landed Mars
-  POS -135.4300347 12.7441014
-  HEADING 180.00
-  ALT 0.930
+  POS -135.4300000 12.7440000
+  HEADING 90.00
+  ALT 2.645
+  ATTACHED 0:0,EMPU-1
+  RCSMODE 0
   AFCMODE 7
   PRPLEVEL 0:1.000000
   NAME Niza Krit
   ROLE astronavigator
   SEX female
-  SUIT 1
+  PHYS 0.0 1.740 62.00 48.00 60.0
+  CLASS OrbiterCrew\Astronavigator
+  STAMINA 1.000000
+  DOSE 0.00000 0.00000
+  NOURISH 0.0000 8000000 12.000 0.000
+  HURT 0.000 0.000 0.000 0.000
+  RESERVE 1.000000
+  CORE 310.155
+  INJURY 0.000000
+  BODY 0
+  VIEW 0 1.40
+  SUIT 0
   SUIT_O2 1.0
   SUIT_WATER 2.0
   SUIT_SORBENT 0.0
   SUIT_BATTERY 6.0
   SUIT_N2 1.5
   SUIT_SERVO 1
+  FIELD 0
+  HUD 1 0 1 0 5 1 1 1 1 0.60 2 0 3 0
+  JETPACK 0
+  SHADE 0.0
+  LAMP 0
+  INTERIOR -0.650 0.835 3.150 0.0000 EMPU-1
+  SEAT 30
 END
 JetPack1:OrbiterCrew\JetPack
   STATUS Landed Mars

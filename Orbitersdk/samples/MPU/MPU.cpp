@@ -4,7 +4,7 @@
 #include "TVChassis.h"
 #include "EmpuGeo.h"
 #include "TVThermal.h"
-#include "TantraGlyphs.h"   // the glyph atlas (Cyrillic): D3D9 system fonts draw only the Western charset on a surface
+#include "MpuGlyphs.h"   // the glyph atlas (Cyrillic): D3D9 system fonts draw only the Western charset on a surface
 
 namespace {
 
@@ -49,20 +49,22 @@ protected:
             ++people_; activity_ += Clamp(in.pulse > 1.0 ? in.pulse / 70.0 : 1.0, 0.6, 3.0);
         }
     }
+    double qGain_ = 0.0, qHull_ = 0.0, skinLast_ = 0.0, sinLast_ = 0.0;     // the last step's inside gains, hull flow, outside skin temperature, Sun
     double SkinT() {                                                        // what the hull's insulation faces outside
         OBJHANDLE sun = oapiGetGbodyByIndex(0), ref = GetSurfaceRef(); VECTOR3 sp, me, upG;
         oapiGetGlobalPos(sun, &sp); GetGlobalPos(me); GlobalRot(_V(0, 1, 0), upG);
         const VECTOR3 toSun = sp - me; const double dist = length(toSun);
         const double sinE = dotp(toSun / dist, unit(upG));
+        sinLast_ = sinE;
         char nm[64] = ""; if (ref) oapiGetObjectName(ref, nm, sizeof nm);
         const tvthermal::Temps tt = tvthermal::SurfaceTemps(nm, sinE);                // the bodies' day / night table
-        if (GetAtmPressure() > 100.0) return tt.known ? tt.airT : GetAtmTemperature();
+        if (GetAtmPressure() > 100.0) return skinLast_ = tt.known ? tt.airT : GetAtmTemperature();
         // vacuum: the white hull's radiative balance (absorbs 0.2 of the sunlight on a third of its surface, radiates at 0.85),
         // the ground below it (half the sky) and the black sky (the rest)
         const double SIG = 5.670e-8, flux = 3.828e26 / (4.0 * PI * dist * dist);
         const double tg = tt.known ? tt.ground : 100.0 + 290.0 * std::pow((std::max)(0.0, sinE), 0.5);
         const double q = (sinE > 0.0 ? 0.2 * flux * 0.3 : 0.0) + 0.5 * 0.95 * SIG * std::pow(tg, 4) + 0.5 * SIG * std::pow(2.7, 4);
-        return std::pow(q / (0.85 * SIG), 0.25);
+        return skinLast_ = std::pow(q / (0.85 * SIG), 0.25);
     }
     double ModuleLoadW(double dt) override {
         if (!cab_ || dt <= 0.0) return 0.0;
@@ -117,6 +119,7 @@ protected:
                 if (K * (Tc - kTset - 0.5) > 6000.0) Teq = (q - 6000.0) / UA; else { Teq = Tc; tau = C / (UA + K); }
             }
         }
+        qGain_ = activity_ * 100.0 + 600.0 + lamps; qHull_ = UA * (skin - cabT_);   // the heat in (W) and through the hull (negative: out)
         cabT_ = Teq + (cabT_ - Teq) * std::exp(-dt / tau);
         heatW_ = power ? Clamp(K * (kTset - 0.5 - cabT_), 0.0, 4000.0) : 0.0;
         coolW_ = power ? Clamp(K * (cabT_ - kTset - 0.5), 0.0, 6000.0) : 0.0;
@@ -172,11 +175,13 @@ protected:
         if (vol > 0.01) snd_->PlayWav(kSndHvac, true, (float)vol);
         else if (snd_->IsWavPlaying(kSndHvac)) snd_->StopWav(kSndHvac);
     }
-    void AirlockPass() {                                                    // through the outer hatch: the airlock cycled, 10 % of its air lost
+    void AirlockPass() {
+        Sfx(kSndAirlock, 1.0);                                                    // through the outer hatch: the airlock cycled, 10 % of its air lost
         const double k = 1.0 - 0.1 * 9.0 / kCabV;
         nO2_ *= k; nN2_ *= k; nCO2_ *= k; nH2O_ *= k;
     }
     bool ModuleLoad(const char* line) override {
+        if (!std::strncmp(line, "LANG", 4)) { ru_ = std::strstr(line + 4, "ru") != nullptr; return true; }     // the terminal's language
         if (std::strncmp(line, "CABIN", 5)) return false;
         std::sscanf(line + 5, "%lf %lf %lf %lf %lf %lf %lf %lf", &nO2_, &nN2_, &nCO2_, &nH2O_, &cabT_, &o2Tank_, &n2Tank_, &absorb_);
         return true;
@@ -185,6 +190,7 @@ protected:
         if (!cab_) return;
         char b[200]; std::snprintf(b, sizeof b, "%.2f %.2f %.3f %.2f %.2f %.1f %.1f %.1f", nO2_, nN2_, nCO2_, nH2O_, cabT_, o2Tank_, n2Tank_, absorb_);
         oapiWriteScenario_string(scn, const_cast<char*>("CABIN"), b);
+        oapiWriteScenario_string(scn, const_cast<char*>("LANG"), const_cast<char*>(ru_ ? "ru" : "en"));
     }
 
     // ---------------- Э.МПУ: the cabin's lights - off, standby (dim red, the default), full (white) ----------------
@@ -259,6 +265,7 @@ protected:
     int BeginE(int node, int act, int person) {
         if (node == kNodeKit) return hullLeak_ > 0.0 ? 1 : 0;
         if (node != kNodeLight) return ChassisBegin(node, act, person);
+        Sfx(kSndClick, 1.0);
         if (act == kActBrighter || act == kActDimmer) { lightLvl_ = Clamp(lightLvl_ + (act == kActBrighter ? 1 : -1), 1, 5); return 1; }
         light_ = act == kActLightFull ? kLightFull : act == kActLightOff ? kLightOff : kLightStandby;
         return 1;
@@ -342,13 +349,13 @@ protected:
             // anywhere round it: OrbiterCrew measures from her feet to this point, so the three points (front, middle,
             // rear) sit deep under the platform - from the ground each reaches ~4.2 m round, from the deck not at all
             out->pos = _V(0.0, -8.0, i == 0 ? 2.6 : i == 1 ? 0.0 : -2.6); out->radius = 8.25;
-            std::snprintf(out->label, sizeof out->label, "%s", "подняться на МПУ");
+            std::snprintf(out->label, sizeof out->label, "%s", m->L("подняться на МПУ", "climb onto the MPU"));
         } else if (i == 3) {
             out->id = kItemPost; out->kind = OC_TERMINAL; out->pos = _V(0.0, kDeckY + 1.0, 3.6); out->dir = _V(0, 0, 1); out->radius = 1.0;
-            std::snprintf(out->label, sizeof out->label, "%s", m->driver_ ? "отойти от пульта" : "встать за пульт МПУ");
+            std::snprintf(out->label, sizeof out->label, "%s", m->driver_ ? m->L("отойти от пульта", "step back from the post") : m->L("встать за пульт МПУ", "take the MPU's post"));
         } else if (i == 4) {
             out->id = kItemDown; out->kind = OC_EXIT; out->pos = _V(-1.7, kDeckY + 1.0, 2.5); out->dir = _V(-1, 0, 0); out->radius = 0.9;
-            std::snprintf(out->label, sizeof out->label, "%s", "сойти с МПУ");
+            std::snprintf(out->label, sizeof out->label, "%s", m->L("сойти с МПУ", "step off the MPU"));
         } else return 0;
         return 1;
     }
@@ -405,9 +412,9 @@ protected:
         {0.78, 1.38, -4.05, -2.90}};                                 // the two suits on their stands along the airlock's right wall
     static constexpr double kSolidTop[] = {1.32, 1.32, 1.42, 0.48, 0.48, 0.76, 1.80, 1.75};   // their tops above the floor, m
     // seats: hips (x, z), their height above the floor, facing along z; the driver's first
-    struct SeatE { double x, z, hips, fz; const char* label; };
-    static constexpr SeatE kSeatsE[] = {{-0.65, 3.15, 0.72, 1.0, "кресло водителя"}, {0.65, 3.15, 0.72, 1.0, "кресло штурмана"},
-                                        {-1.06, 1.80, 0.57, -1.0, "скамья у стола"}, {-1.06, -0.10, 0.57, 1.0, "скамья у стола"}};
+    struct SeatE { double x, z, hips, fz; const char* label; const char* labelEn; };
+    static constexpr SeatE kSeatsE[] = {{-0.65, 3.15, 0.72, 1.0, "кресло водителя", "driver's seat"}, {0.65, 3.15, 0.72, 1.0, "кресло штурмана", "navigator's seat"},
+                                        {-1.06, 1.80, 0.57, -1.0, "скамья у стола", "bench at the table"}, {-1.06, -0.10, 0.57, 1.0, "скамья у стола", "bench at the table"}};
     static constexpr int kSeatsN = 4;
     static bool In(const Box& b, double x, double z, double r) { return x > b.x0 + r && x < b.x1 - r && z > b.z0 + r && z < b.z1 - r; }
     static bool Free(double x, double z, double r, double y = -1e9) {        // inside a room or the doorway, outside the furniture
@@ -501,15 +508,15 @@ protected:
         *out = OcItem{};
         if (i == 0) {                                            // from outside: the stern door, at the foot of its stairs
             out->id = kItemHatchOut; out->kind = OC_AIRLOCK; out->pos = _V(0.0, -0.9, -5.40); out->dir = _V(0, 0, 1); out->radius = 2.0;
-            std::snprintf(out->label, sizeof out->label, "%s", "войти в шлюз Э.МПУ");
+            std::snprintf(out->label, sizeof out->label, "%s", m->L("войти в шлюз Э.МПУ", "enter the EMPU's airlock"));
         } else if (i == 1) {                                     // inside the airlock: out through the stern door
             out->id = kItemHatchIn; out->kind = OC_EXIT; out->pos = _V(0.0, kDeckY + 1.0, -4.00); out->dir = _V(0, 0, -1); out->radius = 0.8;
-            std::snprintf(out->label, sizeof out->label, "%s", "выйти наружу");
+            std::snprintf(out->label, sizeof out->label, "%s", m->L("выйти наружу", "go outside"));
         } else if (i >= 2 && i < 2 + kSeatsN) {
             const SeatE& se = kSeatsE[i - 2];
             out->id = kItemSeat0 + i - 2; out->kind = i == 2 ? OC_HELM : OC_SEAT;
             out->pos = _V(se.x, kDeckY, se.z); out->dir = _V(0, 0, se.fz); out->radius = 0.95;
-            std::snprintf(out->label, sizeof out->label, "%s", se.label);
+            std::snprintf(out->label, sizeof out->label, "%s", m->L(se.label, se.labelEn));
         } else return 0;
         return 1;
     }
@@ -538,10 +545,16 @@ protected:
     double YokeAngle() const { return yokeA_; }
     // the stern ladder: down on the parking brake, folded up against the hatch (132 deg about its top hinge) otherwise
     static constexpr double kLadderFold = 132.0 * RAD, kLadderRate = 90.0 * RAD;
-    double ladderA_ = 0.0, ladderDrawn_ = 1e9;
+    double ladderA_ = 0.0, ladderDrawn_ = 1e9; int ladderDir_ = 0;
     std::vector<std::vector<NTVERTEX>> ladderRest_;
     void Ladder() {
         const double want = park_ && ladderWant_ ? 0.0 : kLadderFold, st = kLadderRate * oapiGetSysStep();
+        const int dir = std::fabs(want - ladderA_) < 0.002 ? 0 : want > ladderA_ ? 1 : -1;     // 1 folding up, -1 down
+        if (dir != ladderDir_) {                                                                   // the servo starts, reverses, stops
+            if (dir == 1) Sfx(kSndLadderUp, 1.0);
+            else if (dir == -1) Sfx(kSndLadderDn, 1.0);
+            ladderDir_ = dir;
+        }
         ladderA_ += Clamp(want - ladderA_, -st, st);
         if (!dev_ || !mesh_ || std::fabs(ladderA_ - ladderDrawn_) < 0.002) return;
         if (ladderRest_.empty())
@@ -573,16 +586,16 @@ protected:
     // (navigation, energy, life support, running gear, coupling); right: light, colour, route on the glass, the projection,
     // brightness. The projection (e_projection): the heading and the speed; the route to the target chosen on the
     // navigation page - a ribbon on the ground to it, its name and distance.
-    static constexpr int kTW = 512, kTH = 384, kYW = 256, kYH = 160;
-    enum { kPgNav = 0, kPgEnergy, kPgLife, kPgGear, kPgTow };
+    static constexpr int kTW = 512, kTH = 512, kYW = 256, kYH = 160;
+    enum { kPgNav = 0, kPgEnergy, kPgLife, kPgGear, kPgMot, kPgSetup };
     SURFHANDLE term_ = nullptr, yokeScr_ = nullptr;
     oapi::Font *tfBig_ = nullptr, *tfMid_ = nullptr, *tfSm_ = nullptr;
-    int page_ = kPgNav, colour_ = 0, bright_ = 2;
+    int page_ = kPgNav, colour_ = 0, bright_ = 2, lifeSub_ = 0;                // lifeSub_ 1: the outside environment (LIFE pressed again)
     bool ru_ = false;                                                       // the screens' language: Russian, else English
     const char* Tl(const char* ru, const char* en) const { return ru_ ? ru : en; }
     bool route_ = false, heads_ = false, ladderWant_ = true;
     double dispT_ = 1.0, navT_ = 9.0;
-    bool warpTested_ = false;
+    double limConfirmT_ = 0.0;                                              // the second tap's window, s
     int dispLog_ = 0;                                                       // the first draws logged (a sketchpad got or not)
     struct Target { std::string name; double lng, lat; };
     std::vector<Target> targets_;
@@ -622,6 +635,7 @@ protected:
     void Displays() {
         if (!dev_ || !term_) return;
         if ((navT_ += oapiGetSysStep()) > 3.0) { navT_ = 0.0; Targets(); }
+        if (limConfirmT_ > 0.0) limConfirmT_ -= oapiGetSysStep();
         if ((dispT_ += oapiGetSysStep()) < 0.1) return;
         dispT_ = 0.0;
         DrawTerminal();
@@ -671,10 +685,10 @@ protected:
         rel = std::remainder(brg - hdg, PI2); name = targets_[target_].name;
         return true;
     }
-    TantraGlyphs glyphs_;
+    MpuGlyphs glyphs_;
     int tSz_ = 1, tCol_ = 0, tH_ = 0, tV_ = 0;                             // the text state: size 0..2, atlas colour, align
     void TF(int sz) { tSz_ = sz; }
-    void TC(DWORD c) { tCol_ = TantraGlyphs::Colour(c); }
+    void TC(DWORD c) { tCol_ = MpuGlyphs::Colour(c); }
     void TA(oapi::Sketchpad::TAlign_horizontal h, oapi::Sketchpad::TAlign_vertical v) {
         tH_ = h == oapi::Sketchpad::LEFT ? 0 : h == oapi::Sketchpad::CENTER ? 1 : 2; tV_ = v == oapi::Sketchpad::TOP ? 0 : 1;
     }
@@ -689,8 +703,17 @@ protected:
         const int fw = (int)std::lround((w - 4) * Clamp(f, 0.0, 1.0));
         if (fw > 0) { k->SetBrush(br); k->Rectangle(x + 2, y + 2, x + 2 + fw, y + h - 2); k->SetBrush(nullptr); }
     }
-    // The terminal, 512 x 384. The bezel's recess hides the edges at a glance from the seat: everything is kept inside
-    // x 36..476, y 14..352. Two languages (Tl), the common font atlas
+    // The terminal, 512 x 512 (0.56 m square, as the user marked it), with six hard keys each side: their legends stand at the
+    // screen's edges level with the keys (row i at y = 50 + 82.3 i). Left: the pages; right: the quick actions. A tap on a
+    // legend works as its key. Two languages (Tl), the common font atlas
+    static int LegendY(int i) { return 50 + (int)std::lround(82.3 * i); }
+    void LimiterTap() {                                                        // off needs two taps (the window is 4 s)
+        Sfx(kSndClick, 1.0);
+        if (limOff_) { limOff_ = false; limConfirmT_ = 0.0; oapiWriteLogV("EMPU %s: the limiter on", GetName()); }
+        else if (limConfirmT_ > 0.0) { limOff_ = true; limConfirmT_ = 0.0; oapiWriteLogV("EMPU %s: the limiter OFF", GetName()); }
+        else limConfirmT_ = 4.0;
+        dispT_ = 1.0;
+    }
     void DrawTerminal() {
         oapi::Sketchpad* k = oapiGetSketchpad(term_);
         if (dispLog_ > 0) { --dispLog_; oapiWriteLogV("EMPU %s: terminal sketchpad %s", GetName(), k ? "got" : "NOT GOT"); }
@@ -702,108 +725,183 @@ protected:
         const DWORD warn = Rgb(255, 180, 60), alarm = Rgb(255, 70, 60);
         k->SetPen(nullptr); k->SetBrush(bg); k->Rectangle(0, 0, kTW, kTH);
         k->SetBackgroundMode(oapi::Sketchpad::BK_TRANSPARENT); TC(Ink()); k->SetPen(pen); k->SetBrush(nullptr);
-        // the soft legends of the hard keys, at the screen's edges
-        const char* L[5] = {Tl("НАВ", "NAV"), Tl("ЭНЕРГ", "POWER"), Tl("СЖО", "LIFE"), Tl("ХОД", "GEAR"), Tl("СЦЕП", "TOW")};
-        const char* Rr[5] = {Tl("СВЕТ", "LIGHT"), Tl("ЦВЕТ", "COLOR"), Tl("МАРШ", "ROUTE"), Tl("ФАРЫ", "HEADL"), Tl("ЯРК", "BRIGHT")};
+        // the legends of the hard keys, level with them at the screen's edges
+        const char* L[6] = {Tl("НАВ", "NAV"), Tl("ЭНЕРГ", "POWER"), lifeSub_ ? Tl("СРЕДА", "ENV") : Tl("СЖО", "LIFE"), Tl("ХОД", "GEAR"), Tl("МОТОР", "MOTOR"), Tl("НАСТР", "SETUP")};
+        const char* Rr[6] = {Tl("СВЕТ", "LIGHT"), Tl("ЦВЕТ", "COLOR"), Tl("МАРШ", "ROUTE"), Tl("ФАРЫ", "HEADL"), Tl("ЯРК", "BRIGHT"), Tl("ОГР", "LIMIT")};
         TF(0);
-        for (int i = 0; i < 5; ++i) {
-            const int y = 22 + i * 66;
-            TC(Ink(i == page_ ? 1.0 : 0.6)); TA(oapi::Sketchpad::LEFT, oapi::Sketchpad::TOP); Txt(k, 40, y, L[i]);
-            if (i == page_) k->Rectangle(34, y - 3, 104, y + 22);
-            TC(Ink(0.6)); TA(oapi::Sketchpad::RIGHT, oapi::Sketchpad::TOP); Txt(k, kTW - 40, y, Rr[i]);
+        for (int i = 0; i < 6; ++i) {
+            const int y = LegendY(i) - 8;
+            TC(Ink(i == page_ ? 1.0 : 0.6)); TA(oapi::Sketchpad::LEFT, oapi::Sketchpad::TOP); Txt(k, 22, y, L[i]);
+            if (i == page_) k->Rectangle(16, y - 4, 98, y + 21);
+            TC(i == 5 && limOff_ ? alarm : i == 5 && limConfirmT_ > 0.0 ? warn : Ink(0.6)); TA(oapi::Sketchpad::RIGHT, oapi::Sketchpad::TOP); Txt(k, kTW - 22, y, Rr[i]);
         }
-        k->SetPen(thin); k->Line(110, 14, 110, kTH - 14); k->Line(kTW - 110, 14, kTW - 110, kTH - 14); k->SetPen(pen);
+        k->SetPen(thin); k->Line(100, 10, 100, kTH - 10); k->Line(kTW - 100, 10, kTW - 100, kTH - 10); k->SetPen(pen);
         TA(oapi::Sketchpad::LEFT, oapi::Sketchpad::TOP); TC(Ink());
-        const int x0 = 120, x1 = kTW - 118;
+        const int x0 = 112, x1 = kTW - 112;                                       // the content: 288 px wide
         char b[96];
         TF(1);
         if (page_ == kPgNav) {
-            Txt(k, x0, 14, Tl("НАВИГАЦИЯ", "NAVIGATION"));
+            Txt(k, x0, 12, Tl("НАВИГАЦИЯ", "NAVIGATION"));
             double hdg; oapiGetHeading(GetHandle(), &hdg);
             TF(0);
-            std::snprintf(b, sizeof b, Tl("курс %03.0f°   %.0f км/ч", "hdg %03.0f   %.0f km/h"), hdg * DEG, std::fabs(speed_) * 3.6); Txt(k, x0, 44, b);
-            Txt(k, x0, 66, Tl("цель (нажать):", "target (tap):"));
+            std::snprintf(b, sizeof b, Tl("курс %03.0f°   %.0f км/ч", "hdg %03.0f   %.0f km/h"), hdg * DEG, std::fabs(speed_) * 3.6); Txt(k, x0, 46, b);
+            Txt(k, x0, 72, Tl("цель (нажать):", "target (tap):"));
             double lng, lat, R; HereEqu(lng, lat, R);
-            for (size_t i = 0; i < targets_.size() && i < 7; ++i) {
+            for (size_t i = 0; i < targets_.size() && i < 8; ++i) {
                 double d, br; Course(lng, lat, targets_[i].lng, targets_[i].lat, R, d, br);
-                const int y = 90 + (int)i * 30;
-                if ((int)i == target_) { k->SetBrush(fill); k->SetPen(nullptr); k->Rectangle(x0 - 4, y - 3, x1 + 4, y + 25); k->SetBrush(nullptr); k->SetPen(pen); TC(Rgb(6, 14, 10)); }
+                const int y = 100 + (int)i * 40;
+                TF(1);
+                if ((int)i == target_) { k->SetBrush(fill); k->SetPen(nullptr); k->Rectangle(x0 - 4, y - 4, x1 + 4, y + 32); k->SetBrush(nullptr); k->SetPen(pen); TC(Rgb(6, 14, 10)); }
                 else TC(Ink(0.85));
-                std::snprintf(b, sizeof b, "%-.16s", targets_[i].name.c_str()); Txt(k, x0, y, b);
+                std::snprintf(b, sizeof b, "%-.13s", targets_[i].name.c_str()); Txt(k, x0, y, b);
+                TF(0);
                 std::snprintf(b, sizeof b, d < 1e4 ? Tl("%.2f км %03.0f°", "%.2f km %03.0f") : Tl("%.0f км %03.0f°", "%.0f km %03.0f"), d * 1e-3, br * DEG);
-                TA(oapi::Sketchpad::RIGHT, oapi::Sketchpad::TOP); Txt(k, x1, y, b); TA(oapi::Sketchpad::LEFT, oapi::Sketchpad::TOP);
+                TA(oapi::Sketchpad::RIGHT, oapi::Sketchpad::TOP); Txt(k, x1, y + 6, b); TA(oapi::Sketchpad::LEFT, oapi::Sketchpad::TOP);
             }
             TC(Ink());
-            Txt(k, x0, 310, route_ ? Tl("маршрут на руле: ВКЛ", "route on the yoke: ON") : Tl("маршрут на руле: выкл", "route on the yoke: off"));
+            Txt(k, x0, 440, route_ ? Tl("маршрут на руле: ВКЛ", "route on the yoke: ON") : Tl("маршрут на руле: выкл", "route on the yoke: off"));
         } else if (page_ == kPgEnergy) {
-            Txt(k, x0, 14, Tl("ЭНЕРГИЯ", "POWER"));
+            Txt(k, x0, 12, Tl("ЭНЕРГИЯ", "POWER"));
             TF(0);
             for (int c = 0; c < kCellsN; ++c) {
-                const int x = x0 + c * 68;
-                std::snprintf(b, sizeof b, Tl("яч %d", "cell %d"), c + 1); Txt(k, x, 46, b);
-                if (cell_[c] < 0) Txt(k, x, 70, Tl("нет", "none"));
-                else { std::snprintf(b, sizeof b, "%.0f %%", cell_[c] / kCellJ * 100.0); Txt(k, x, 70, b); Bar(k, x, 94, 56, 14, cell_[c] / kCellJ, fill); }
+                const int x = x0 + c * 72;
+                std::snprintf(b, sizeof b, Tl("яч %d", "cell %d"), c + 1); Txt(k, x, 48, b);
+                if (cell_[c] < 0) Txt(k, x, 74, Tl("нет", "none"));
+                else { std::snprintf(b, sizeof b, "%.0f %%", cell_[c] / kCellJ * 100.0); Txt(k, x, 74, b); Bar(k, x, 100, 62, 14, cell_[c] / kCellJ, fill); }
             }
-            std::snprintf(b, sizeof b, Tl("всего %.0f кВт·ч (%.0f %%)", "total %.0f kWh (%.0f %%)"), CellsSum() / 3.6e6, batt_ * 100.0); Txt(k, x0, 126, b);
-            std::snprintf(b, sizeof b, Tl("отбор %+.0f кВт", "draw %+.0f kW"), powerW_ * 1e-3); Txt(k, x0, 154, b);
-            std::snprintf(b, sizeof b, Tl("  в т.ч. СЖО и обогрев %.1f кВт", "  of it life support, heating %.1f kW"), moduleW_ * 1e-3); Txt(k, x0, 178, b);
-            std::snprintf(b, sizeof b, Tl("зарядка %.0f кВт", "charging %.0f kW"), chargeW_ * 1e-3); Txt(k, x0, 206, b);
+            std::snprintf(b, sizeof b, Tl("всего %.0f кВт·ч (%.0f %%)", "total %.0f kWh (%.0f %%)"), CellsSum() / 3.6e6, batt_ * 100.0); Txt(k, x0, 140, b);
+            std::snprintf(b, sizeof b, Tl("отбор %+.0f кВт", "draw %+.0f kW"), powerW_ * 1e-3); Txt(k, x0, 172, b);
+            std::snprintf(b, sizeof b, Tl("  СЖО и обогрев %.1f кВт", "  life support %.1f kW"), moduleW_ * 1e-3); Txt(k, x0, 198, b);
+            std::snprintf(b, sizeof b, Tl("зарядка %.0f кВт", "charging %.0f kW"), chargeW_ * 1e-3); Txt(k, x0, 230, b);
             const double rk = RangeKm();
             if (rk >= 0) std::snprintf(b, sizeof b, Tl("запас хода %.0f км", "range %.0f km"), rk); else std::snprintf(b, sizeof b, "%s", Tl("запас хода —", "range -"));
-            Txt(k, x0, 234, b);
-            std::snprintf(b, sizeof b, Tl("фары %s   свет %s", "headlights %s   cabin light %s"), heads_ ? Tl("вкл", "on") : Tl("выкл", "off"),
-                          light_ == kLightFull ? Tl("полный", "full") : light_ == kLightStandby ? Tl("дежурный", "standby") : Tl("выкл", "off")); Txt(k, x0, 262, b);
+            Txt(k, x0, 262, b);
+            if (towBy_) std::snprintf(b, sizeof b, Tl("сцепка: нас ведёт %s", "coupling: towed by %s"), towBy_->GetName());
+            else if (towing_) std::snprintf(b, sizeof b, Tl("сцепка: ведём %s, %.1f м", "coupling: towing %s, %.1f m"), towing_->GetName(), towL_);
+            else std::snprintf(b, sizeof b, "%s", Tl("сцепка: нет (дышло 3 м)", "coupling: none (3 m bar)"));
+            Txt(k, x0, 300, b);
+        } else if (page_ == kPgLife && lifeSub_) {                                          // the outside environment and the heat's account
+            char bn[64] = ""; if (OBJHANDLE rf = GetSurfaceRef()) oapiGetObjectName(rf, bn, sizeof bn);
+            const double sinE = sinLast_, elev = std::asin(Clamp(sinE, -1.0, 1.0)) * DEG;
+            const tvthermal::Temps tt = tvthermal::SurfaceTemps(bn, sinE);
+            Txt(k, x0, 12, Tl("ВНЕШНЯЯ СРЕДА", "ENVIRONMENT"));
+            TF(0);
+            std::snprintf(b, sizeof b, Tl("%s   Солнце %+.0f° %s", "%s   Sun %+.0f deg %s"), bn[0] ? bn : "?", elev, sinE > 0.0 ? Tl("день", "day") : Tl("ночь", "night")); Txt(k, x0, 48, b);
+            const double pa = GetAtmPressure();
+            if (pa > 100.0) std::snprintf(b, sizeof b, Tl("воздух %.1f °C  %.2f кПа", "air %.1f C  %.2f kPa"), (tt.known ? tt.airT : GetAtmTemperature()) - 273.15, pa * 1e-3);
+            else if (pa > 1.0) std::snprintf(b, sizeof b, Tl("воздух %.2f кПа (разреж.)", "air %.2f kPa (thin)"), pa * 1e-3);
+            else std::snprintf(b, sizeof b, "%s", Tl("воздуха нет (вакуум)", "no air (vacuum)"));
+            Txt(k, x0, 76, b);
+            if (tt.known) { std::snprintf(b, sizeof b, Tl("грунт %.0f °C", "ground %.0f C"), tt.ground - 273.15); Txt(k, x0, 104, b); }
+            std::snprintf(b, sizeof b, Tl("корпус снаружи %.0f °C", "hull outside %.0f C"), skinLast_ - 273.15); Txt(k, x0, 132, b);
+            std::snprintf(b, sizeof b, Tl("тяжесть %.2f g", "gravity %.2f g"), LocalG() / 9.81); Txt(k, x0, 160, b);
+            Txt(k, x0, 200, Tl("тепло кабины:", "cabin heat:"));
+            std::snprintf(b, sizeof b, Tl("внутри +%.2f кВт", "inside +%.2f kW"), qGain_ * 1e-3); Txt(k, x0, 228, b);
+            std::snprintf(b, sizeof b, Tl("через корпус %+.2f кВт", "through hull %+.2f kW"), qHull_ * 1e-3); Txt(k, x0, 254, b);
+            std::snprintf(b, sizeof b, Tl("обогрев %.2f кВт  охлажд. %.2f", "heater %.2f kW  cooling %.2f"), heatW_ * 1e-3, coolW_ * 1e-3); Txt(k, x0, 280, b);
+            std::snprintf(b, sizeof b, Tl("обогрев %.0f кВт·ч/сут", "heating %.0f kWh/day"), heatW_ * 24.0 * 1e-3); Txt(k, x0, 316, b);
+            std::snprintf(b, sizeof b, Tl("вся СЖО %.2f кВт, %.0f кВт·ч/сут", "all life support %.2f kW, %.0f kWh/day"), lifeW_ * 1e-3, lifeW_ * 24.0 * 1e-3); Txt(k, x0, 342, b);
+            if (lifeW_ > 100.0) { std::snprintf(b, sizeof b, Tl("ячеек хватит на %.0f ч", "cells last %.0f h"), CellsSum() / lifeW_ / 3600.0); Txt(k, x0, 378, b); }
+            Txt(k, x0, 440, Tl("СРЕДА: нажмите СЖО ещё раз", "ENV: press LIFE again"));
         } else if (page_ == kPgLife) {
-            Txt(k, x0, 14, Tl("ЖИЗНЕОБЕСПЕЧЕНИЕ", "LIFE SUPPORT"));
+            Txt(k, x0, 12, Tl("ЖИЗНЕОБЕСПЕЧЕНИЕ", "LIFE SUPPORT"));
             TF(0);
             OcCabin cab{}; cCabinE(this, nullptr, &cab);
-            std::snprintf(b, sizeof b, Tl("давление %.1f кПа", "pressure %.1f kPa"), cab.p); TC(cab.p < 90 ? warn : Ink()); Txt(k, x0, 44, b);
-            std::snprintf(b, sizeof b, "O2 %.1f kPa", cab.ppO2); if (ru_) std::snprintf(b, sizeof b, "O2 %.1f кПа", cab.ppO2);
-            TC(cab.ppO2 < 19 ? warn : Ink()); Txt(k, x0, 68, b);
-            std::snprintf(b, sizeof b, Tl("CO2 %.2f кПа", "CO2 %.2f kPa"), cab.ppCO2); TC(cab.ppCO2 > 0.7 ? warn : Ink()); Txt(k, x0 + 150, 68, b);
-            std::snprintf(b, sizeof b, Tl("темп. %.1f °C   влажн. %.0f %%", "temp %.1f C   humidity %.0f %%"), cab.T - 273.15, PP(nH2O_) / (611.0 * std::exp(17.27 * (cabT_ - 273.15) / (cabT_ - 35.85))) * 100.0);
-            TC(std::fabs(cab.T - kTset) > 4 ? warn : Ink()); Txt(k, x0, 92, b); TC(Ink());
-            std::snprintf(b, sizeof b, Tl("запас O2 %.0f %%   N2 %.0f %%", "O2 tank %.0f %%   N2 %.0f %%"), o2Tank_ / kO2TankMol * 100, n2Tank_ / kN2TankMol * 100); Txt(k, x0, 120, b);
-            std::snprintf(b, sizeof b, Tl("поглотитель CO2 %.0f %%", "CO2 absorber %.0f %%"), absorb_ / kAbsorbMol * 100); Txt(k, x0, 144, b);
-            std::snprintf(b, sizeof b, Tl("людей %d   обогрев %.1f   охлажд. %.1f кВт", "people %d   heating %.1f   cooling %.1f kW"), people_, heatW_ * 1e-3, coolW_ * 1e-3); Txt(k, x0, 172, b);
-            std::snprintf(b, sizeof b, Tl("СЖО берёт %.2f кВт", "life support draws %.2f kW"), lifeW_ * 1e-3); Txt(k, x0, 196, b);
-            if (o2Tank_ > 1 && people_ > 0) { std::snprintf(b, sizeof b, Tl("O2 хватит на %.0f чел·сут", "O2 for %.0f person-days"), o2Tank_ / 26.25); Txt(k, x0, 220, b); }
+            std::snprintf(b, sizeof b, Tl("давление %.1f кПа", "pressure %.1f kPa"), cab.p); TC(cab.p < 90 ? warn : Ink()); Txt(k, x0, 48, b);
+            std::snprintf(b, sizeof b, Tl("O2 %.1f кПа", "O2 %.1f kPa"), cab.ppO2); TC(cab.ppO2 < 19 ? warn : Ink()); Txt(k, x0, 76, b);
+            std::snprintf(b, sizeof b, Tl("CO2 %.2f кПа", "CO2 %.2f kPa"), cab.ppCO2); TC(cab.ppCO2 > 0.7 ? warn : Ink()); Txt(k, x0 + 150, 76, b);
+            std::snprintf(b, sizeof b, Tl("темп. %.1f °C", "temp %.1f C"), cab.T - 273.15); TC(std::fabs(cab.T - kTset) > 4 ? warn : Ink()); Txt(k, x0, 104, b);
+            std::snprintf(b, sizeof b, Tl("влажн. %.0f %%", "humidity %.0f %%"), PP(nH2O_) / (611.0 * std::exp(17.27 * (cabT_ - 273.15) / (cabT_ - 35.85))) * 100.0); Txt(k, x0 + 150, 104, b);
+            TC(Ink());
+            std::snprintf(b, sizeof b, Tl("запас O2 %.0f %%   N2 %.0f %%", "O2 tank %.0f %%   N2 %.0f %%"), o2Tank_ / kO2TankMol * 100, n2Tank_ / kN2TankMol * 100); Txt(k, x0, 140, b);
+            std::snprintf(b, sizeof b, Tl("поглотитель CO2 %.0f %%", "CO2 absorber %.0f %%"), absorb_ / kAbsorbMol * 100); Txt(k, x0, 168, b);
+            std::snprintf(b, sizeof b, Tl("людей %d", "people %d"), people_); Txt(k, x0, 204, b);
+            std::snprintf(b, sizeof b, Tl("обогрев %.1f   охлажд. %.1f кВт", "heating %.1f   cooling %.1f kW"), heatW_ * 1e-3, coolW_ * 1e-3); Txt(k, x0, 232, b);
+            std::snprintf(b, sizeof b, Tl("СЖО берёт %.2f кВт", "life support draws %.2f kW"), lifeW_ * 1e-3); Txt(k, x0, 260, b);
+            if (o2Tank_ > 1 && people_ > 0) { std::snprintf(b, sizeof b, Tl("O2 хватит на %.0f чел·сут", "O2 for %.0f person-days"), o2Tank_ / 26.25); Txt(k, x0, 296, b); }
             if (hullLeak_ > 0.0) {
                 TC(alarm);
-                std::snprintf(b, sizeof b, Tl("ТЕЧЬ %.1f см² — комплект у двери", "LEAK %.1f cm2 - kit by the door"), hullLeak_ * 1e4); Txt(k, x0, 246, b);
+                std::snprintf(b, sizeof b, Tl("ТЕЧЬ %.1f см² — комплект у двери", "LEAK %.1f cm2 - kit by the door"), hullLeak_ * 1e4); Txt(k, x0, 332, b);
                 TC(Ink());
             }
-            k->SetPen(pen); k->SetBrush(nullptr); k->Rectangle(x0 - 4, 284, x1 + 4, 314);   // a touch line: the dimmer
-            std::snprintf(b, sizeof b, Tl("яркость света %d из 5 (нажать)", "cabin light %d of 5 (tap)"), lightLvl_); TC(Ink()); Txt(k, x0 + 4, 290, b);
+            k->SetPen(pen); k->SetBrush(nullptr); k->Rectangle(x0 - 4, 388, x1 + 4, 424);                // a touch line: the dimmer
+            std::snprintf(b, sizeof b, Tl("яркость света %d из 5 (нажать)", "cabin light %d of 5 (tap)"), lightLvl_); TC(Ink()); Txt(k, x0 + 4, 396, b);
         } else if (page_ == kPgGear) {
-            Txt(k, x0, 14, Tl("ХОДОВАЯ", "RUNNING GEAR"));
+            Txt(k, x0, 12, Tl("ХОДОВАЯ", "RUNNING GEAR"));
             TF(0);
             static const char* Wr[8] = {"ПЛ1", "ПП1", "ПЛ2", "ПП2", "ЗЛ1", "ЗП1", "ЗЛ2", "ЗП2"};
             static const char* We[8] = {"FL1", "FR1", "FL2", "FR2", "RL1", "RR1", "RL2", "RR2"};
             for (int i = 0; i < mpu::kWheels; ++i) {
-                const int x = x0 + (i % 2) * 140, y = 44 + (i / 2) * 46;
-                const bool slips = slip_[i] > 0.25;
-                TC(slips ? warn : Ink());
-                std::snprintf(b, sizeof b, Tl("%s  букс %.0f %%", "%s  slip %.0f %%"), (ru_ ? Wr : We)[i], slip_[i] * 100.0); Txt(k, x, y, b);
+                const int x = x0 + (i % 2) * 150, y = 46 + (i / 2) * 62;
+                TC(slip_[i] > 0.25 ? warn : Ink());
+                std::snprintf(b, sizeof b, Tl("%s букс %.0f%%", "%s slip %.0f%%"), (ru_ ? Wr : We)[i], std::fabs(slip_[i]) * 100.0); Txt(k, x, y, b);
                 TC(wheelHp_[i] < 0.15 ? alarm : wheelHp_[i] < 0.7 ? warn : Ink());
-                std::snprintf(b, sizeof b, Tl("осадка %.0f см  цел %.0f %%", "sink %.0f cm  ok %.0f %%"), sink_[i] * 100.0, wheelHp_[i] * 100.0); Txt(k, x, y + 20, b);
+                std::snprintf(b, sizeof b, Tl("%.0f см  цел %.0f%%", "%.0f cm  ok %.0f%%"), sink_[i] * 100.0, wheelHp_[i] * 100.0); Txt(k, x, y + 24, b);
             }
             TC(Ink());
-            std::snprintf(b, sizeof b, Tl("сцепл. с грунтом %.2f   клиренс %+.2f м", "grip %.2f   ride height %+.2f m"), muEff_, ride_); Txt(k, x0, 236, b);
-            std::snprintf(b, sizeof b, Tl("крен %+.1f°  тангаж %+.1f°", "roll %+.1f  pitch %+.1f"), GetBank() * DEG, GetPitch() * DEG); Txt(k, x0, 260, b);
-            std::snprintf(b, sizeof b, Tl("стояночный %s   трап %s", "parking brake %s   ladder %s"), park_ ? Tl("вкл", "on") : Tl("выкл", "off"), ladderWant_ ? Tl("на стоянке", "when parked") : Tl("убран", "stowed")); Txt(k, x0, 284, b);
-        } else {
-            Txt(k, x0, 14, Tl("СЦЕПКА", "COUPLING"));
+            std::snprintf(b, sizeof b, Tl("сцепл. с грунтом %.2f", "grip %.2f"), muEff_); Txt(k, x0, 300, b);
+            std::snprintf(b, sizeof b, Tl("клиренс %+.2f м", "ride height %+.2f m"), ride_); Txt(k, x0, 326, b);
+            std::snprintf(b, sizeof b, Tl("крен %+.1f°  тангаж %+.1f°", "roll %+.1f  pitch %+.1f"), GetBank() * DEG, GetPitch() * DEG); Txt(k, x0, 352, b);
+            std::snprintf(b, sizeof b, Tl("стояночный %s   трап %s", "parking %s   ladder %s"), park_ ? Tl("вкл", "on") : Tl("выкл", "off"), ladderWant_ ? Tl("на стоянке", "when parked") : Tl("убран", "stowed")); Txt(k, x0, 378, b);
+        } else if (page_ == kPgMot) {                                                      // the traction motors
+            Txt(k, x0, 12, Tl("МОТОРЫ ТЯГИ", "TRACTION MOTORS"));
             TF(0);
-            if (towBy_) { std::snprintf(b, sizeof b, Tl("нас ведёт %s", "towed by %s"), towBy_->GetName()); Txt(k, x0, 50, b); }
-            if (towing_) { std::snprintf(b, sizeof b, Tl("ведём %s, дышло %.2f м", "towing %s, bar %.2f m"), towing_->GetName(), towL_); Txt(k, x0, 80, b); }
-            if (!towBy_ && !towing_) { Txt(k, x0, 50, Tl("не сцеплены", "not coupled")); Txt(k, x0, 76, Tl("дышло 3 м, встать в 2–4 м", "3 m bar: stand 2-4 m off")); }
+            static const char* Wr[8] = {"ПЛ1", "ПП1", "ПЛ2", "ПП2", "ЗЛ1", "ЗП1", "ЗЛ2", "ЗП2"};
+            static const char* We[8] = {"FL1", "FR1", "FL2", "FR2", "RL1", "RR1", "RL2", "RR2"};
+            double mech = 0.0;
+            for (int i = 0; i < mpu::kWheels; ++i) {
+                const int x = x0 + (i % 2) * 150, y = 44 + (i / 2) * 66;
+                const double tc = motTi_[i] - 273.15;
+                const DWORD col = tripI_[i] || tc > 190 ? alarm : tc > 150 ? warn : Ink();
+                TC(col);
+                std::snprintf(b, sizeof b, "%s %3.0f%s", (ru_ ? Wr : We)[i], tc, ru_ ? "°" : "C"); Txt(k, x, y, b);
+                k->SetPen(pen); k->SetBrush(nullptr); k->Rectangle(x, y + 22, x + 134, y + 34);
+                const double hf = Clamp((tc - 20.0) / 180.0, 0.0, 1.0);
+                if (hf > 0.0) { oapi::Brush* hb = oapiCreateBrush(col); k->SetBrush(hb); k->Rectangle(x + 2, y + 24, x + 2 + (int)(130 * hf), y + 32); k->SetBrush(nullptr); oapiReleaseBrush(hb); }
+                TC(Ink(0.85));
+                std::snprintf(b, sizeof b, Tl("%.0f%%  %+.0f кВт", "%.0f%%  %+.0f kW"), Clamp(fI_[i] / (kFmotor / 8.0) * 100.0, 0.0, 999.0), pI_[i] * 1e-3); Txt(k, x, y + 38, b);
+                mech += pI_[i];
+            }
+            TC(Ink());
+            const double v = std::fabs(speed_), wrpm = v / (2.0 * PI * 0.8) * 60.0;
+            std::snprintf(b, sizeof b, Tl("тяга %+.0f кВт  потери %.0f кВт", "traction %+.0f kW  losses %.0f kW"), mech * 1e-3, lossW_ * 1e-3); Txt(k, x0, 316, b);
+            std::snprintf(b, sizeof b, Tl("колесо %.0f  мотор %.0f об/мин", "wheel %.0f  motor %.0f rpm"), wrpm, wrpm * 12.0); Txt(k, x0, 342, b);
+            if (motTrip_) { TC(alarm); Txt(k, x0, 378, Tl("МОТОР ОТКЛЮЧЁН ПО ПЕРЕГРЕВУ", "MOTOR TRIPPED ON HEAT")); }
+            else if (motDerate_ < 1.0) { TC(warn); std::snprintf(b, sizeof b, Tl("перегрев: мощность %.0f %%", "overheating: power %.0f %%"), motDerate_ * 100.0); Txt(k, x0, 378, b); }
+            else { TC(limOff_ ? alarm : Ink(0.7)); Txt(k, x0, 378, limOff_ ? Tl("ограничитель отключён", "limiter OFF") : Tl("ограничитель: вкл", "limiter: on")); }
+            TC(Ink());
+        } else {                                                                            // the settings: each row a tap
+            Txt(k, x0, 12, Tl("НАСТРОЙКИ", "SETUP"));
+            TF(0);
+            auto row = [&](int y, const char* t, bool alert) {
+                k->SetPen(pen); k->SetBrush(nullptr); k->Rectangle(x0 - 4, y, x1 + 4, y + 38);
+                TC(alert ? alarm : Ink()); Txt(k, x0 + 6, y + 10, t);
+            };
+            // the language: two boxes
+            Txt(k, x0, 50, Tl("язык", "language"));
+            for (int l = 0; l < 2; ++l) {
+                const bool on = (l == 0) == ru_;
+                k->SetPen(pen); k->SetBrush(on ? fill : nullptr); k->Rectangle(x0 + l * 100, 72, x0 + l * 100 + 90, 108);
+                TC(on ? Rgb(6, 14, 10) : Ink()); TA(oapi::Sketchpad::CENTER, oapi::Sketchpad::TOP); Txt(k, x0 + l * 100 + 45, 82, l == 0 ? "RUS" : "ENG"); TA(oapi::Sketchpad::LEFT, oapi::Sketchpad::TOP);
+                k->SetBrush(nullptr);
+            }
+            std::snprintf(b, sizeof b, "%s", limOff_ ? Tl("огранич. скорости: ОТКЛ", "speed limiter: OFF") : limConfirmT_ > 0.0 ? Tl("нажать ещё: пережог, разряд!", "tap again: overheat, drain!") : Tl("огранич. скорости: вкл", "speed limiter: on"));
+            row(132, b, limOff_);
+            std::snprintf(b, sizeof b, Tl("цвет: %s", "colour: %s"), ColourName(colour_)); row(184, b, false);
+            std::snprintf(b, sizeof b, Tl("яркость экрана: %d из 3", "screen brightness: %d of 3"), bright_ + 1); row(236, b, false);
+            std::snprintf(b, sizeof b, Tl("свет кабины: %s", "cabin light: %s"), light_ == kLightFull ? Tl("полный", "full") : light_ == kLightStandby ? Tl("дежурный", "standby") : Tl("выкл", "off")); row(288, b, false);
+            std::snprintf(b, sizeof b, Tl("яркость света: %d из 5", "light level: %d of 5"), lightLvl_); row(340, b, false);
+            std::snprintf(b, sizeof b, Tl("фары: %s", "headlights: %s"), heads_ ? Tl("вкл", "on") : Tl("выкл", "off")); row(392, b, false);
         }
-        // the status line: light, colour, the language (a tap switches it)
-        TF(0); TC(Ink(0.55)); TA(oapi::Sketchpad::LEFT, oapi::Sketchpad::BOTTOM);
-        std::snprintf(b, sizeof b, Tl("свет %s · %s · ярк %d · RU/EN", "light %s · %s · bright %d · EN/RU"),
-                      light_ == kLightFull ? Tl("полн", "full") : light_ == kLightStandby ? Tl("дежур", "standby") : Tl("выкл", "off"), ColourName(colour_), bright_ + 1);
-        Txt(k, x0, kTH - 16, b);
+        // the status line: the arming message, or the light, the colour
+        TF(0); TA(oapi::Sketchpad::LEFT, oapi::Sketchpad::BOTTOM);
+        if (limConfirmT_ > 0.0) { TC(warn); Txt(k, x0, kTH - 18, Tl("ОГР ещё раз: пережог и разряд!", "LIMIT again: overheating, drain!")); }
+        else {
+            TC(Ink(0.55));
+            std::snprintf(b, sizeof b, Tl("свет %s · %s", "light %s · %s"),
+                          light_ == kLightFull ? Tl("полн", "full") : light_ == kLightStandby ? Tl("дежур", "standby") : Tl("выкл", "off"), ColourName(colour_));
+            Txt(k, x0, kTH - 18, b);
+        }
         oapiReleaseSketchpad(k);
         oapiReleaseBrush(bg); oapiReleaseBrush(fill); oapiReleasePen(pen); oapiReleasePen(thin);
     }
@@ -845,6 +943,11 @@ protected:
             std::snprintf(b, sizeof b, dist < 1e4 ? Tl("%.2f км", "%.2f km") : Tl("%.0f км", "%.0f km"), dist * 1e-3); TA(oapi::Sketchpad::CENTER, oapi::Sketchpad::TOP); Txt(k, cx, 96, b);
         }
         if (hullLeak_ > 0.0) { TC(alarm); TA(oapi::Sketchpad::LEFT, oapi::Sketchpad::TOP); Txt(k, 8, 96, Tl("ТЕЧЬ", "LEAK")); }
+        { const double mc = motT_ - 273.15;                                                 // the motors' heat, when it matters
+          if (limOff_ || mc > 110.0 || motTrip_) {
+              std::snprintf(b, sizeof b, Tl("МОТ %.0f°%s", "MOT %.0f%s"), mc, limOff_ ? Tl(" БЕЗ ОГР", " NO LIM") : "");
+              TC(motTrip_ || mc > 190 ? alarm : mc > 150 || limOff_ ? warn : Ink()); TA(oapi::Sketchpad::RIGHT, oapi::Sketchpad::TOP); Txt(k, 248, 96, b);
+          } }
         // the buttons' legends at the bottom (over the buttons: headlights, platform, ladder, brake)
         const char* L4[4] = {Tl("ФАРЫ", "LIGHTS"), Tl("ПЛАТФ", "RIDE"), Tl("ТРАП", "LADDER"), Tl("ТОРМ", "BRAKE")};
         const bool on4[4] = {heads_, rideTarget_ > 0.5 * kRideMax, ladderWant_, park_};
@@ -884,9 +987,9 @@ protected:
         double a, b;
         if (hit(0.013, a, b)) {                                             // the hard keys
             for (int sgn = -1; sgn <= 1; sgn += 2)
-                for (int i = 0; i < 5; ++i) {
-                    const double ka = sgn * (empu::kTermSW / 2 + 0.065), kb = 0.16 - i * 0.08;
-                    if (std::fabs(a - ka) < 0.04 && std::fabs(b - kb) < 0.028) { m->Key(sgn < 0 ? i : 5 + i); return 1; }
+                for (int i = 0; i < 6; ++i) {
+                    const double ka = sgn * (empu::kTermSW / 2 + 0.065), kb = 0.225 - i * 0.09;
+                    if (std::fabs(a - ka) < 0.04 && std::fabs(b - kb) < 0.03) { m->Key(sgn < 0 ? i : 6 + i); return 1; }
                 }
         }
         if (hit(-empu::kTermRecess, a, b) && std::fabs(a) < empu::kTermSW / 2 && std::fabs(b) < empu::kTermSH / 2) {   // the screen
@@ -896,34 +999,58 @@ protected:
         }
         return 0;
     }
+    int alarmBits_ = 0; double alarmT_ = 0.0;
+    void Warnings() {
+        alarmT_ -= oapiGetSysStep();
+        OcCabin cab{}; cCabinE(this, nullptr, &cab);
+        const int bits = (motTrip_ ? 1 : 0) | (hullLeak_ > 0.0 ? 2 : 0) | (batt_ < 0.15 ? 4 : 0) | (motDerate_ < 0.9 ? 8 : 0) | (cab.ppO2 < 18.0 ? 16 : 0) | (cab.ppCO2 > 1.0 ? 32 : 0);
+        if ((bits & ~alarmBits_) && alarmT_ <= 0.0 && driver_) { Sfx(kSndAlarm, 1.0); alarmT_ = 8.0; }
+        alarmBits_ = bits;
+    }
     void YokeButton(int i) {
+        Sfx(kSndClick, 1.0);
         if (i == 0) heads_ = !heads_;
         else if (i == 1) rideTarget_ = rideTarget_ > 0.5 * kRideMax ? kRideMin : kRideMax;
         else if (i == 2) ladderWant_ = !ladderWant_;
         else park_ = !park_;
         dispT_ = 1.0;
     }
+    // the hard keys / the legends: 0..5 the pages (left), 6..11 light, colour, route, headlights, brightness, limiter (right);
+    // 12: the cabin light's dimmer (the life support page's tap line)
     void Key(int k) {
-        if (k < 5) page_ = k;
-        else if (k == 5) light_ = light_ == kLightStandby ? kLightFull : light_ == kLightFull ? kLightOff : kLightStandby;
-        else if (k == 10) lightLvl_ = lightLvl_ % 5 + 1;                   // the cabin light's dimmer (the life support page)
-        else if (k == 6) colour_ = (colour_ + 1) % 3;
-        else if (k == 7) route_ = !route_ && target_ >= 0;
-        else if (k == 8) heads_ = !heads_;
-        else bright_ = (bright_ + 1) % 3;
+        Sfx(kSndTick, 1.0);
+        if (k < 6) { if (k == 2 && page_ == kPgLife) lifeSub_ ^= 1; page_ = k; }
+        else if (k == 6) light_ = light_ == kLightStandby ? kLightFull : light_ == kLightFull ? kLightOff : kLightStandby;
+        else if (k == 7) colour_ = (colour_ + 1) % 3;
+        else if (k == 8) route_ = !route_ && target_ >= 0;
+        else if (k == 9) heads_ = !heads_;
+        else if (k == 10) bright_ = (bright_ + 1) % 3;
+        else if (k == 11) { LimiterTap(); return; }
+        else if (k == 12) lightLvl_ = lightLvl_ % 5 + 1;
         dispT_ = 1.0;
     }
     void Touch(int px, int py) {
-        if (py > kTH - 40) { ru_ = !ru_; dispT_ = 1.0; return; }       // the status line: the language
-        if (px < 110 || px > kTW - 110) {
-            const int i = Clamp((py - 10) / 66, 0, 4);
-            Key(px < 110 ? i : 5 + i);
+        if (px < 100 || px > kTW - 100) {                                       // a legend: as its key
+            const int i = Clamp((int)std::lround((py - 50) / 82.3), 0, 5);
+            Key(px < 100 ? i : 6 + i);
             return;
         }
-        if (page_ == kPgLife && py >= 280 && py <= 318) { Key(10); return; }
-        if (page_ == kPgNav && px > 110 && px < kTW - 110) {
-            const int i = (py - 88) / 30;
-            if (py >= 88 && i >= 0 && i < (int)targets_.size()) { target_ = (target_ == i) ? -1 : i; route_ = target_ >= 0; }
+        if (page_ == kPgLife && py >= 388 && py <= 424) { Key(12); return; }
+        if (page_ == kPgSetup) {
+            Sfx(kSndTick, 1.0);
+            if (py >= 72 && py <= 108) { if (px >= 112 && px < 202) ru_ = true; else if (px >= 212 && px < 302) ru_ = false; }
+            else if (py >= 132 && py < 170) LimiterTap();
+            else if (py >= 184 && py < 222) colour_ = (colour_ + 1) % 3;
+            else if (py >= 236 && py < 274) bright_ = (bright_ + 1) % 3;
+            else if (py >= 288 && py < 326) light_ = light_ == kLightStandby ? kLightFull : light_ == kLightFull ? kLightOff : kLightStandby;
+            else if (py >= 340 && py < 378) lightLvl_ = lightLvl_ % 5 + 1;
+            else if (py >= 392 && py < 430) heads_ = !heads_;
+            dispT_ = 1.0; return;
+        }
+        if (page_ == kPgNav && px > 100 && px < kTW - 100) {
+            const int i = (py - 96) / 40;
+            Sfx(kSndTick, 1.0);
+            if (py >= 96 && i >= 0 && i < (int)targets_.size()) { target_ = (target_ == i) ? -1 : i; route_ = target_ >= 0; }
         }
         dispT_ = 1.0;
     }
@@ -934,15 +1061,8 @@ public:
     void clbkPostStep(double simt, double simdt, double mjd) override {
         (void)simt; (void)simdt; (void)mjd;
         if (!cab_) return;
-        if (std::getenv("EMPU_WARP") && !warpTested_) {                       // WARPTEST (temporary)
-            warpTested_ = true;
-            for (double stepS : {600.0, 3000.0, 86400.0, 86400.0, 86400.0}) {
-                const double w = ModuleLoadW(stepS);
-                oapiWriteLogV("WARPTEST step %.0f s: T %.2f K, p %.2f kPa, O2 %.2f, CO2 %.3f kPa, heat %.0f cool %.0f W, draw %.0f W", stepS, cabT_, CabP() * 1e-3,
-                              PP(nO2_) * 1e-3, PP(nCO2_) * 1e-3, heatW_, coolW_, w);
-            }
-        }
         LightsApply();
+        Warnings();
         Displays();
         Hvac();
         Ladder();
@@ -971,7 +1091,7 @@ public:
     }
 
 protected:
-    // the driver's hands on the yoke's horns, as on the Tantra's bridge: the grip through the fist, the thumb on top
+    // the driver's hands on the yoke's horns, the grip through the fist, the thumb on top
     static void cSeatHandsE(void* c, int seatId, int, OcHand* left, OcHand* right) {
         if (seatId != kItemSeat0 || !left || !right || left->size < int(sizeof(OcHand)) || right->size < int(sizeof(OcHand))) return;
         const VECTOR3 hub = kHubE;

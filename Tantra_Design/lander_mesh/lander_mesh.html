@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Грань Т1Б-Ф: меш и расчёты</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--ink:#1d1f24;--mut:#6a6e78;--line:#dcdad4;--acc:#1f6fb2}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif}
+main{max-width:1200px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:4px 0 2px}h2{font-size:17px;margin:22px 0 8px}
+.sub{color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px}
+#view{width:100%;height:520px;border-radius:8px;background:#e9e8e4;display:block}
+.bar{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:6px 10px;cursor:pointer;font:inherit}
+button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+label{margin-left:8px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+td,th{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}
+th{background:#f0efeb}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+canvas.ch{width:100%;height:260px;display:block}
+.bad{color:#b23a1f;font-weight:600}.ok{color:#2b7a3d}
+.tw{overflow-x:auto}
+</style></head><body><main>
+<h1>«Грань» (Т1Б-Ф) — итоговый меш и аэродинамика по мешу</h1>
+<div class="sub" id="stats"></div>
+<h2>Модель</h2>
+<div class="card">
+<div class="bar" id="modes"></div>
+<div class="bar">
+<button id="cut">Разрез по плоскости симметрии</button>
+<button id="lay">Компоновка (в разрезе)</button>
+<button id="tex" class="on">Текстуры</button>
+<button id="grid" class="on">Сетка 1 м</button>
+</div>
+<canvas id="view"></canvas>
+<div class="sub">Мышь: вращение, колесо: масштаб, правая кнопка: сдвиг. Свечение апертур — только при работе (висение/переход/полёт).</div><div class="sub" id="laylist"></div>
+</div>
+<h2>Г: подвижные части — проверка по граням (было → стало)</h2><div class="card tw" id="g_chk"><div class="sub">Загрузка…</div></div>
+<h2>Г: материалы и текстуры</h2><div class="card tw" id="g_tex"></div>
+<h2>Ф: балансировка с перекачкой аргона</h2><div class="card tw" id="f_bal"></div>
+<h2>Ф: ЦМ по режимам и Т/В</h2><div class="card tw" id="f_cg"></div>
+<h2>Ф: шасси при новых ЦМ</h2><div class="card tw" id="f_gear"></div>
+<h2>Ф: массы по мешу</h2><div class="card tw" id="f_mass"></div>
+<h2>Ф: проверки меша, подвижные части, ангар</h2><div class="card tw" id="f_chk"></div>
+<h2>Аэродинамика</h2>
+<div class="card">
+<div class="bar">Гиперзвук (ньютон. теория, Cp<sub>max</sub> 1,84): концевые
+<select id="tip"><option>0</option><option selected>60</option><option>90</option></select>
+элевоны <select id="el"><option>-25</option><option>-10</option><option selected>0</option><option>10</option><option>25</option></select>°</div>
+<div class="grid2">
+<div><b>CL, CD (гиперзвук; пунктир — дозвук, Полхамус)</b><canvas class="ch" id="c1"></canvas></div>
+<div><b>Качество L/D</b><canvas class="ch" id="c2"></canvas></div>
+<div><b>Cm относительно ЦМ (L<sub>ref</sub> 20 м, S<sub>ref</sub> 168 м²), α −20…180°</b><canvas class="ch" id="c3"></canvas></div>
+<div><b>Сверхзвук, линейная теория: CL(α) при M 1,5 / 2 / 3</b><canvas class="ch" id="c4"></canvas></div>
+</div>
+<div id="trimtxt" style="margin-top:8px"></div>
+</div>
+<h2>Н3: крыло, щиток днища, ЦМ</h2>
+<div class="card" id="n3box">
+<b>Профиль крыла: плоский наветренный низ, выпуклый верх (масштаб по высоте ×4)</b><div id="n3sec"></div>
+<b>Нагрев передней кромки (Саттон–Грейвс, ρ 8,3·10⁻⁵ кг/м³, V 7 км/с, ×cos<sup>1,2</sup>Λ, ε 0,85, предел 2400 K)</b><table id="n3heat"></table>
+<b>Низ крыла (Таубер 1989, плоская пластина, x от кромки)</b><table id="n3low"></table>
+<b>Прочность корневого сечения z 3,0 м (кессон 0,15–0,65 хорды), нагрузки ×1,5</b><div id="n3root"></div><table id="n3str"></table>
+<b>Материалы — источники</b><table id="n3mat"></table>
+<b>Cm со щитком (концевые 60°, элевоны 0, ЦМ входа)</b><canvas class="ch" id="c5"></canvas><div id="n3trim"></div>
+<b>Массы и ЦМ</b><table id="n3mass"></table><table id="n3cg"></table>
+</div>
+<h2>Спецификация и меш</h2>
+<div class="card tw"><table id="cmp"></table></div>
+<h2>Группы меша</h2>
+<div class="card tw"><table id="grp"></table></div>
+<h2>Шасси — тяжёлое трёхопорное (GEAR.md)</h2>
+<div class="card tw"><div class="sub">Выпущено в режиме «висение» (посадка), убрано вперёд во всех остальных, в том числе в ангаре. Закрытые створки ниш — аварийные полозья. Сетка 1 м — уровень грунта под колёсами (y −2,35).</div><table id="gear"></table></div>
+<h2>Шасси — отказы</h2>
+<div class="card tw"><table id="gearfail"></table></div>
+<h2>Шасси — проверка меша</h2>
+<div class="card tw"><table id="gearchk"></table></div>
+<h2>Двигатели ориентации (аргон, апертуры заподлицо)</h2>
+<div class="card tw"><table id="rcs"></table></div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const MODE_RU={hover:"Висение",transition:"Переход",cruise:"Полёт",entry:"Вход",ballistic:"Баллистика",stowed:"В ангаре"};
+const GLOW_ON={hover:1,transition:1,cruise:1,entry:0,ballistic:0,stowed:0};
+let D, scene, cam, ren, ctl, root, pivots={}, mats={}, clip, gridH, layG, cur={}, target={}, mode="cruise";
+fetch("out/lander_mesh.json").then(r=>r.json()).then(d=>{D=d;init();charts();tables();n3();fin();gtex();});
+Promise.all(["out/face_check_before.json","out/face_check.json"].map(u=>fetch(u).then(r=>r.json()))).then(([B,A])=>gchk(B,A)).catch(e=>{document.getElementById("g_chk").innerHTML="<span class=bad>Нет файлов проверки: "+e+"</span>";});
+function gchk(B,A){
+  const key=r=>r.pos+"|"+r.part, bm={}; B.rows.forEach(r=>bm[key(r)]=r);
+  const f=v=>v==null?"—":v.toFixed(3), MM=["hover","transition","cruise","entry","ballistic","stowed"];
+  const rows=A.rows.filter(r=>{const b=bm[key(r)]||{}; return b.x_outside_openings||r.x_outside_openings||(MM.includes(r.pos)&&(b.gap_to_hull_m!==r.gap_to_hull_m||b.x_all!==r.x_all));});
+  let h=`<div class="sub">${A.method}</div><table><tr><th>Положение</th><th>Часть</th><th>Угол</th><th>Пересечений вне проёмов: было → стало</th><th>Пересечений всего (в проёмах; ниши не вырезаны): было → стало</th><th>Мин. зазор до корпуса, м: было → стало</th></tr>`;
+  rows.forEach(r=>{const b=bm[key(r)]||{}; h+=`<tr><td>${r.pos}</td><td>${r.part}</td><td>${r.deg}°</td><td class="${r.x_outside_openings?"bad":"ok"}">${b.x_outside_openings??"—"} → ${r.x_outside_openings}</td><td>${b.x_all??"—"} → ${r.x_all}</td><td>${f(b.gap_to_hull_m)} → ${f(r.gap_to_hull_m)}</td></tr>`;});
+  h+=`</table><b>Пары подвижных частей (было — с зазором < 6 см; стало — < 30 см)</b><table><tr><th>Положение</th><th>Часть A</th><th>Часть B</th><th>Было: пересечений / зазор, м</th><th>Стало: пересечений / зазор, м</th></tr>`;
+  const pk=p=>p.pos+"|"+p.a+"|"+p.b, pb={}, pa={}; B.pairs.forEach(p=>pb[pk(p)]=p); A.pairs.forEach(p=>pa[pk(p)]=p);
+  const keys=[...new Set([...Object.keys(pb),...Object.keys(pa)])].filter(k=>pb[k]||(pa[k]&&(pa[k].x||pa[k].gap_m<0.10)));
+  keys.forEach(k=>{const b=pb[k],a=pa[k],s=k.split("|"); const bad=a&&(a.x||a.gap_m<0.05); h+=`<tr><td>${s[0]}</td><td>${s[1]}</td><td>${s[2]}</td><td>${b?b.x+" / "+b.gap_m.toFixed(3):"—"}</td><td class="${bad?"bad":"ok"}">${a?a.x+" / "+a.gap_m.toFixed(3):"≥ 0,30 или положение не проверялось"}</td></tr>`;});
+  document.getElementById("g_chk").innerHTML=h+"</table>";
+}
+function gtex(){
+  const desc={lak_korpus:"Боразоно-циркониевый лак — корпус, верх, крылья, концевые части, элевоны, люк",bor_dnische:"Борная керамика днища и низа крыла — темнее, плитки 0,25 м с тёмным швом; щиток и створки",
+    boraz_nos:"Пористый боразон носа (аварийный вдув аргона через поры)",metall:"Бериллиевая бронза с боразонным покрытием — рамы чаш, опоры шасси, обрамления маршевых, баки",katushka:"Катушки (сверхпроводящие) — плотная намотка под покрытием",
+    vnutr:"Внутренность апертур и колёса — без текстуры, тёмный",svechenie:"Свечение срезов и чаш — только при работе (в .msh погашено, включает модуль)",svechenie_dat:"Фотонная полоса датчиков — светится всегда"};
+  let h=`<div class="sub">Процедурные PNG 1024² (gen_textures.py), рядом .dds без сжатия для Orbiter (Textures\\Tantra\\Lander\\). Масштаб 2 × 2 м на текстуру, UV — кубическая проекция по нормали грани.</div><div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px">`;
+  Object.entries(D.materials).forEach(([k,m])=>{h+=`<div style="width:180px"><div style="width:180px;height:120px;border-radius:6px;border:1px solid var(--line);background:${m.tex?`url(out/textures/${m.tex}.png) 0 0/180px`:(k.startsWith("svech")?m.emissive:m.color)}"></div><b>${k}</b><div class="sub">${desc[k]||""}</div></div>`;});
+  document.getElementById("g_tex").innerHTML=h+"</div>";
+}
+function init(){
+  const s=D.stats; document.getElementById("stats").textContent=`Треугольников: ${s.triangles} · групп: ${s.groups} · открытых рёбер корпуса+крыльев: ${s.open_edges["korpus+nos+dnische+krylya"][0]}`;
+  const cv=document.getElementById("view");
+  ren=new THREE.WebGLRenderer({canvas:cv,antialias:true}); ren.setPixelRatio(devicePixelRatio); ren.localClippingEnabled=true;
+  scene=new THREE.Scene(); scene.background=new THREE.Color(0xe9e8e4);
+  cam=new THREE.PerspectiveCamera(35,1,0.1,500); cam.position.set(-22,14,26);
+  ctl=new THREE.OrbitControls(cam,cv); ctl.target.set(0,0,0); ctl.enableDamping=true;
+  scene.add(new THREE.HemisphereLight(0xffffff,0x8a8070,0.75));
+  const dl=new THREE.DirectionalLight(0xffffff,0.9); dl.position.set(10,20,15); scene.add(dl);
+  const dl2=new THREE.DirectionalLight(0xffffff,0.35); dl2.position.set(-10,-6,-12); scene.add(dl2);
+  clip=new THREE.Plane(new THREE.Vector3(0,0,1),0); const texL=new THREE.TextureLoader();
+  for(const [k,m] of Object.entries(D.materials)){
+    const glow=k==="svechenie";
+    const glowD=k==="svechenie_dat";
+    mats[k]=new THREE.MeshStandardMaterial({color:(glow||glowD)?0x22343c:m.color,emissive:(glow||glowD)?m.emissive:0x000000,emissiveIntensity:glowD?1:0,
+      metalness:k==="metall"||k==="katushka"?0.6:0.15,roughness:k==="bor_dnische"||k==="boraz_nos"?0.9:(k.startsWith("lak")?0.45:0.4),side:THREE.DoubleSide});
+    if(m.tex){const t=texL.load("out/textures/"+m.tex+".png"); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=4; mats[k].userData.map=t; mats[k].userData.col=m.color; mats[k].map=t; mats[k].color.set(0xffffff);}
+  }
+  root=new THREE.Group(); scene.add(root);
+  const owner={}; D.anim.forEach((a,i)=>a.groups.forEach(g=>owner[g]=i));
+  D.anim.forEach((a,i)=>{const p=new THREE.Group(); p.position.set(...a.pivot); const inner=new THREE.Group(); inner.position.set(-a.pivot[0],-a.pivot[1],-a.pivot[2]); p.add(inner); root.add(p); pivots[i]={p,inner,a,axis:new THREE.Vector3(...a.axis).normalize()}; cur[i]=a.modes[mode]||0;});
+  D.groups.forEach(g=>{
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute("position",new THREE.Float32BufferAttribute(g.v,3));
+    geo.setAttribute("normal",new THREE.Float32BufferAttribute(g.n,3));
+    if(g.uv&&g.uv.length) geo.setAttribute("uv",new THREE.Float32BufferAttribute(g.uv,2));
+    geo.setIndex(g.i);
+    const m=new THREE.Mesh(geo,mats[g.mat]); m.name=g.name;
+    (owner[g.name]!==undefined?pivots[owner[g.name]].inner:root).add(m);
+  });
+  gridH=new THREE.GridHelper(40,40,0x999999,0xc8c6c0); gridH.position.y=-2.35; scene.add(gridH);
+  layG=new THREE.Group(); layG.visible=false; scene.add(layG);
+  D.layout.forEach(p=>{let geo; if(p.kind==="cylinder"){geo=new THREE.CylinderGeometry(p.dims[0]/2,p.dims[0]/2,p.dims[1],20); geo.rotateZ(Math.PI/2);} else geo=new THREE.BoxGeometry(...p.dims);
+    const col={cabin:0x6aa0d8,tank:0x7fbf7f,shield:0xd8a060,charges:0xd86a6a,other:0xb0a0d0}[p.role]||0xaaaaaa;
+    const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:col,transparent:true,opacity:0.55})); m.position.set(...p.center); layG.add(m);});
+  const mb=document.getElementById("modes");
+  D.modes.forEach(k=>{const b=document.createElement("button"); b.textContent=MODE_RU[k]; b.dataset.m=k; b.onclick=()=>setMode(k); mb.appendChild(b);});
+  document.getElementById("cut").onclick=e=>{const on=e.target.classList.toggle("on"); Object.values(mats).forEach(m=>{m.clippingPlanes=on?[clip]:[];m.needsUpdate=true;}); if(on){cam.position.set(0,2,-30);} /* Г: камера со стороны разреза */ };
+  document.getElementById("lay").onclick=e=>{layG.visible=e.target.classList.toggle("on");};
+  document.getElementById("tex").onclick=e=>{const on=e.target.classList.toggle("on"); Object.values(mats).forEach(m=>{if(m.userData.map){m.map=on?m.userData.map:null; m.color.set(on?0xffffff:m.userData.col); m.needsUpdate=true;}});};
+  document.getElementById("laylist").innerHTML="Компоновка (кнопка «Компоновка»): "+D.layout.map(p=>`<b>${p.id}</b>${p.label?" — "+p.label:""}`).join(" · ");
+  document.getElementById("grid").onclick=e=>{gridH.visible=e.target.classList.toggle("on");};
+  setMode("cruise",true); resize(); addEventListener("resize",resize); loop();
+}
+function setMode(k,inst){mode=k; document.querySelectorAll("#modes button").forEach(b=>b.classList.toggle("on",b.dataset.m===k));
+  Object.entries(pivots).forEach(([i,P])=>{target[i]=P.a.modes[k]||0; if(inst)cur[i]=target[i];});
+  mats.svechenie.emissiveIntensity=GLOW_ON[k]?1:0; mats.svechenie.color.set(GLOW_ON[k]?0x5fd4ff:0x22343c);
+  // фотонная полоса — свой материал svechenie_dat (светится всегда); апертуры — только при работе
+  if(mats.svechenie_dat){mats.svechenie_dat.emissiveIntensity=1; mats.svechenie_dat.color.set(0x5fd4ff);}
+}
+function resize(){const cv=ren.domElement,w=cv.clientWidth,h=cv.clientHeight; ren.setSize(w,h,false); cam.aspect=w/h; cam.updateProjectionMatrix();}
+function loop(){requestAnimationFrame(loop);
+  Object.entries(pivots).forEach(([i,P])=>{const d=target[i]-cur[i]; cur[i]+=Math.sign(d)*Math.min(Math.abs(d),1.5); P.p.quaternion.setFromAxisAngle(P.axis,cur[i]*Math.PI/180);});
+  ctl.update(); ren.render(scene,cam);}
+// ---------------- графики
+function plot(id,series,xr,yr,xlab){const c=document.getElementById(id),dpr=devicePixelRatio,W=c.clientWidth,H=c.clientHeight; c.width=W*dpr;c.height=H*dpr; const g=c.getContext("2d"); g.scale(dpr,dpr);
+  const L=40,R=8,T=8,B=24,X=x=>L+(x-xr[0])/(xr[1]-xr[0])*(W-L-R),Y=y=>T+(yr[1]-y)/(yr[1]-yr[0])*(H-T-B);
+  g.font="11px system-ui"; g.strokeStyle="#e2e0da"; g.fillStyle="#6a6e78";
+  const sx=(xr[1]-xr[0])>100?30:10; for(let x=Math.ceil(xr[0]/sx)*sx;x<=xr[1];x+=sx){g.beginPath();g.moveTo(X(x),T);g.lineTo(X(x),H-B);g.stroke();g.fillText(x+"°",X(x)-8,H-8);}
+  const sy=niceStep(yr[1]-yr[0]); for(let y=Math.ceil(yr[0]/sy)*sy;y<=yr[1]+1e-9;y+=sy){g.beginPath();g.moveTo(L,Y(y));g.lineTo(W-R,Y(y));g.stroke();g.fillText(+y.toFixed(3),2,Y(y)+4);}
+  g.strokeStyle="#999";g.beginPath();g.moveTo(L,Y(0));g.lineTo(W-R,Y(0));g.stroke();
+  let ly=T+12; series.forEach(s=>{g.strokeStyle=s.c;g.lineWidth=2;g.setLineDash(s.dash||[]);g.beginPath();s.x.forEach((x,i)=>{const y=Math.max(yr[0],Math.min(yr[1],s.y[i]));i?g.lineTo(X(x),Y(y)):g.moveTo(X(x),Y(y));});g.stroke();g.setLineDash([]);g.lineWidth=1;
+    g.fillStyle=s.c;g.fillText(s.n,W-R-150,ly);ly+=13;});}
+function niceStep(r){const p=Math.pow(10,Math.floor(Math.log10(r/5)));return [1,2,5,10].map(m=>m*p).find(s=>r/s<=7);}
+function charts(){const A=D.aero,a=A.alphas,t=document.getElementById("tip").value,e=document.getElementById("el").value,k=`t${t}_e${e}`,h=A.hyp[k],sub=A.sub.rounded;
+  plot("c1",[{n:"CL гиперзвук",c:"#1f6fb2",x:a,y:h.map(r=>r[0])},{n:"CD гиперзвук",c:"#c0392b",x:a,y:h.map(r=>r[1])},
+    {n:"CL дозвук (Полхамус)",c:"#1f6fb2",dash:[5,4],x:a.filter(x=>x<=40),y:sub.slice(0,21).map(r=>r[0])},{n:"CD дозвук",c:"#c0392b",dash:[5,4],x:a.filter(x=>x<=40),y:sub.slice(0,21).map(r=>r[1])}],[0,90],[-0.2,2.2]);
+  plot("c2",[{n:"L/D гиперзвук",c:"#2b7a3d",x:a.slice(1),y:h.slice(1).map(r=>r[0]/r[1])},{n:"L/D дозвук",c:"#8e44ad",dash:[5,4],x:a.slice(1,21),y:sub.slice(1,21).map(r=>r[0]/r[1])}],[0,90],[-0.5,6]);
+  const ea=A.ext_alphas; plot("c3",[{n:"концевые 60°, элевоны 0°",c:"#1f6fb2",x:ea,y:A.ext["t60_e0"].map(r=>r[2])},{n:"баллист.: 90° / −25°",c:"#c0392b",x:ea,y:A.ext["t90_e-25"].map(r=>r[2])},
+    {n:`выбрано: ${t}° / ${e}°`,c:"#2b7a3d",dash:[5,4],x:a,y:h.map(r=>r[2])}],[-20,180],[-0.3,0.05]);
+  plot("c4",Object.entries(A.sup).map(([M,v],i)=>({n:"M "+M,c:["#1f6fb2","#2b7a3d","#c0392b"][i],x:a.slice(0,16),y:v.slice(0,16).map(r=>r[0])})),[0,30],[0,1.6]);
+  const tr=A.trim[k]; document.getElementById("trimtxt").innerHTML="<b>Балансировка (гиперзвук, "+t+"° / "+e+"°):</b> "+(tr.length?tr.map(x=>`α ${x.alpha}° (${x.stable?'<span class=ok>устойчиво</span>':'<span class=bad>неустойчиво</span>'}, dCm/dα ${x.dCm_dalpha_per_deg})`).join("; "):"<span class=bad>нет — Cm < 0 на всём диапазоне (ЦД позади ЦМ)</span>")+
+   ". ЦД по нормальной силе (60°/0°), м от ЦМ: "+Object.entries(A.xcp).map(([q,v])=>`α ${q}°: ${v}`).join(", ");}
+document.getElementById("tip").onchange=charts; document.getElementById("el").onchange=charts; addEventListener("resize",()=>D&&charts());
+function tables(){
+  document.getElementById("cmp").innerHTML="<tr><th>Параметр</th><th>Спецификация</th><th>Меш</th></tr>"+D.aero.compare.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join("");
+  const an={}; D.anim.forEach(a=>a.groups.forEach(g=>an[g]=a));
+  document.getElementById("grp").innerHTML="<tr><th>Группа</th><th>Треуг.</th><th>Материал</th><th>Назначение</th><th>Ось / шарнир</th><th>Пределы, °</th><th>Режимы, °</th></tr>"+
+   D.groups.map(g=>{const a=an[g.name];return `<tr><td>${g.name}</td><td>${g.ntri}</td><td>${g.mat}</td><td>${g.purpose}</td><td>${a?`[${a.axis}] через [${a.pivot.map(v=>(+v).toFixed(2))}]`:"неподвижна"}</td><td>${a?a.limits.join("…"):""}</td><td>${a?Object.entries(a.modes).map(([m,v])=>MODE_RU[m]+" "+v).join(", "):""}</td></tr>`}).join("");
+  if(D.gear){document.getElementById("gear").innerHTML="<tr><th>Параметр</th><th>Значение</th></tr>"+D.gear.ttx.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("");
+   document.getElementById("gearfail").innerHTML="<tr><th>Отказ</th><th>Действие / резерв</th></tr>"+D.gear.fail.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("");
+   document.getElementById("gearchk").innerHTML="<tr><th>Опора</th><th>Убрано: вершин вне контура</th><th>Убрано: в контуре створки</th><th>Выпущено: колёса ниже корпуса</th><th>До открытой створки, м</th><th>Грунт y, м</th></tr>"+Object.entries(D.gear.check).map(([k,c])=>`<tr><td>${k==="N"?"ПО":k}</td><td>${c.retracted_outside_vertices===0?'<span class=ok>0</span>':'<span class=bad>'+c.retracted_outside_vertices+'</span>'}</td><td>${c.retracted_within_door_outline?'<span class=ok>да</span>':'<span class=bad>нет</span>'}</td><td>${c.extended_wheels_below_hull?'<span class=ok>да</span>':'<span class=bad>нет</span>'}</td><td>${c.wheel_to_open_door_plane_m}</td><td>${c.ground_y_m}</td></tr>`).join("");}
+  document.getElementById("rcs").innerHTML="<tr><th>Сопло</th><th>Место (x, y, z), м</th><th>Направление струи</th></tr>"+D.rcs.map(r=>`<tr><td>${r.id}</td><td>${r.pos.join(", ")}</td><td>${r.exhaust_dir.join(", ")}</td></tr>`).join("");
+}
+
+function n3(){const N=D.aero.n3; if(!N)return; const T=(id,h,rows)=>{document.getElementById(id).innerHTML="<tr>"+h.map(x=>`<th>${x}</th>`).join("")+"</tr>"+rows.map(r=>"<tr>"+r.map(x=>`<td>${x}</td>`).join("")+"</tr>").join("");};
+ let sv=`<svg viewBox="-0.3 -3.3 11.4 ${N.sections.length*3.9}" style="width:100%;max-width:900px;background:transparent">`;
+ N.sections.forEach((q,i)=>{const y0=i*3.9; const pts=q.pts.map(p=>`${p[0].toFixed(3)},${(y0-4*p[1]).toFixed(3)}`).join(" ");
+  sv+=`<polygon points="${pts}" fill="#2a2f3a" stroke="#5fd4ff" stroke-width="0.02"/><text x="0" y="${y0+0.35}" font-size="0.28" fill="currentColor">z ${q.z} м: хорда ${q.chord} м, t ${q.t} м (${q.tc_pct} %), R ${q.R_le} м</text>`;});
+ document.getElementById("n3sec").innerHTML=sv+"</svg>";
+ T("n3heat",["Место","R, м","q, МВт/м²","T, K","запас, K","T при α 30° (проверка)","T при α 40°","запас α 40°"],N.heat.map(h=>[h.place,h.R,h.q_MW,h.T,h.margin,h.T_a30,h.T_a40,h.margin_a40]));
+ T("n3low",["α°","x, м","T ламинар, K","T турбулент, K"],N.heat_low.map(h=>[h.alpha,h.x,h.T_lam,h.T_turb]));
+ const r=N.root; document.getElementById("n3root").innerHTML=`хорда ${r.chord} м, t ${r.t} м (${r.tc_pct} %), обшивка ${r.t_skin_mm} мм, стенки ${r.t_web_mm} мм, полки 4 × ${r.A_cap_cm2} см², I ${r.I_m4} м⁴; масса крыла за корнем ${N.m_wing_t} т/сторона; критическое напряжение обшивки (панель ${r.b_panel_m} м) ${r.sig_cr_MPa} МПа. Объём крыльев ${N.V_wing_m3} м³, кессонов ${N.V_box_m3} м³ (≈${N.argon_in_box_t} т жидкого аргона).`;
+ T("n3str",["Режим","Q, кН","M, кН·м","σ, МПа","τ, МПа","запас σ","запас τ"],N.cases.map(c=>[c.case,c.V_kN,c.M_kNm,c.sig_MPa,c.tau_MPa,c.MS_sig,c.MS_tau]));
+ T("n3mat",["Величина","Значение","Источник"],Object.entries(N.mat).map(([k,v])=>[k,v[0],v[1]]));
+ const cv=document.getElementById("c5"),ctx=cv.getContext("2d"),W=cv.width=cv.clientWidth*2,H=cv.height=cv.clientHeight*2,al=D.aero.alphas;
+ const css=getComputedStyle(document.body).color; ctx.strokeStyle=css; ctx.fillStyle=css; ctx.font="22px sans-serif";
+ const X=a=>40+(W-60)*a/90,Y=v=>H/2-v*H*4; ctx.beginPath();ctx.moveTo(40,Y(0));ctx.lineTo(W-20,Y(0));ctx.stroke();
+ const cols=["#5fd4ff","#9be38a","#f2c14e","#f08a5d","#c38df0"];
+ Object.entries(N.flap).forEach(([k,v],i)=>{ctx.strokeStyle=cols[i];ctx.lineWidth=3;ctx.beginPath();v.Cm.forEach((c,j)=>j?ctx.lineTo(X(al[j]),Y(c)):ctx.moveTo(X(al[j]),Y(c)));ctx.stroke();ctx.fillStyle=cols[i];ctx.fillText("щиток "+k.slice(2)+"°",W-200,30+26*i);});
+ ctx.fillStyle=css; [0,30,60,90].forEach(a=>ctx.fillText(a+"°",X(a)-10,H-8));
+ document.getElementById("n3trim").innerHTML="Балансировка: "+Object.entries(N.flap).map(([k,v])=>`щиток ${k.slice(2)}° — `+(v.trim.map(t=>`α ${t.alpha}° (${t.stable?"устойчиво":"неустойчиво"})`).join(", ")||"нет")).join("; ");
+ T("n3mass",["Статья","т","x, м","Примечание"],N.mass);
+ T("n3cg",["Фаза","x ЦМ, м","масса, т","Т/В","Т/В отказ 1 чаши"],N.hover.map(h=>[h.phase,h.x_cg,h.m_t,h.TW,h.TW_fail1]));}
+
+function fin(){const F=D.final; if(!F)return; const tb=(h,rows)=>"<table><tr>"+h.map(x=>`<th>${x}</th>`).join("")+"</tr>"+rows.map(r=>"<tr>"+r.map(x=>`<td>${x}</td>`).join("")+"</tr>").join("")+"</table>";
+ const t=F.transfer,d=F.drain;
+ document.getElementById("f_bal").innerHTML=tb(["Величина","Значение"],[["Носовой бак x / ёмкость",`${t.x_tank_f} м / ${t.cap_f_t} т`],["Кормовой бак x / ёмкость",`${t.x_tank_a} м / ${t.cap_a_t} т`],
+  ["Перекачка перед входом",`${t.m_tr_t} т (0,5 т резерва вдува остаётся в кормовом)`],["Производительность",`${t.mdot_kg_s} кг/с — ${t.mdot_src}`],["Время перекачки 2 / 1 насос",`${t.t_s_2pumps} / ${t.t_s_1pump} с`],
+  ["ЦМ планирование / баллистика",`${t.x_glide} / ${t.x_ball} м (масса входа ${t.m_entry_t} т)`],["Для ЦМ −1,6 нужно перекачать",`<span class=bad>${t["need_for_-1.6_t"]} т — больше носового бака; −1,6 не достигнуто</span>`],
+  ["Аргон нужен / помещается",`<span class=bad>${t.argon_needed_t} / ${t.cap_total_t} т (не хватает ${t.argon_shortfall_t} т)</span>`],
+  ["Без питания: слив назад",`Δp ${d.dp_MPa} МПа; напор против — планирование ${d.head_glide_kPa} кПа, баллистика ${d.head_ball_kPa} кПа; расход ${d.q_glide_kg_s} / ${d.q_ball_kg_s} кг/с; время ${d.t_glide_s} / ${d.t_ball_s} с. ${d.basis}`]])+
+  "<b>Планирующий вход, ЦМ "+t.x_glide+" м (концевые 60°)</b>"+tb(["Щиток°","Элевоны°","α бал.","устойчиво","запас, м (% L)","L/D"],F.glide.flatMap(g=>g.trims.filter(q=>q.stable).map(q=>[g.flap,g.elev,q.alpha,"да",`${q.margin_m} (${q.margin_pct} %)`,q.LD])))+
+  "<b>Баллистика днищем, ЦМ "+t.x_ball+" м, элевоны заморожены (β "+F.ballistic_beta+" кг/м², CD "+F.ballistic_CD+")</b>"+tb(["Концевые°","Элевоны°","α бал.","устойчиво","запас, м"],F.ballistic.flatMap(b=>b.trims.map(q=>[b.tip,b.elev,q.alpha,q.stable?"да":"нет",q.margin_m])))+
+  "<b>Пассивный переход при сливе (60°/0°/щиток 0)</b>"+tb(["x ЦМ","устойчивая балансировка α"],F.transition.map(r=>[r.x_cg,r.trims.filter(q=>q[1]).map(q=>q[0]).join(", ")]))+
+  "<b>Кромки при рабочем α (≤ 30°)</b>"+tb(["Место","R","T α30","запас","T α35","запас","T α40","запас"],F.heat_work.map(h=>[h.place,h.R,h.T_a30,h.margin_a30,h.T_a35,h.margin_a35,h.T_a40,h.margin_a40]));
+ document.getElementById("f_cg").innerHTML=tb(["Режим","x ЦМ, м","масса, т"],F.cg_modes.map(r=>[r.mode,r.x,r.m_t]))+tb(["Режим","Т/В чаши Земля","отказ 1 чаши","Т/В маршевые","чаши Марс","чаши Луна"],F.tw.map(r=>[r.mode,r.TW_cups,r.TW_fail1,r.TW_mains,r.TW_mars,r.TW_moon]))+
+  `<div class=sub>Посадка без тяги (Полхамус, S ${F.v_land.S_plan} м², m ${F.v_land.m_t} т): α 14° — ${F.v_land.v_a14} м/с, α 18° — ${F.v_land.v_a18} м/с (при старой массе ${F.v_land.m_old_t} т было ${F.v_land.v_a14_old_mass}).</div>`;
+ document.getElementById("f_gear").innerHTML=`<div class=sub>${F.gear.basis}; n при 7 м/с ${F.gear.n_7ms}. Высота ЦМ ±0,3 м: угол опрокидывания назад ${F.gear.sens_h["h_2.65"]}…${F.gear.sens_h["h_2.05"]}°.</div>`+tb(["Режим","x","т","доля ПО %","опрок. назад°","опрок. вбок°","боковой уклон max°","уклон 10° (x эфф.)","колесо осн. стат./7 м/с, кН","колесо ПО, кН"],F.gear.rows.map(r=>[r.mode,r.x,r.m_t,r.nose_share_pct,r.tipback_deg,r.turnover_deg,r.lat_slope_max_deg,`${r.slope10_x_eff} ${r.slope10_ok?"ок":"опрокид."}`,`${r.main_wheel_static_kN} / ${r.main_wheel_7ms_kN}`,r.nose_wheel_static_kN]));
+ const ms=F.mass_sum; document.getElementById("f_mass").innerHTML=tb(["Статья","т","x, м","Основание"],F.mass)+`<div class=sub>Сухая ${ms.dry_t} т · ПН ${ms.payload_t} · аргон ${ms.argon_t} (замкнуто: Δv 9,3 км/с при 40 км/с + 6,3 т на вход) · взлётная ${ms.m0_t} · вход ${ms.m_entry_t} · посадка ${ms.m_land_t}. Площади меша: корпус ${ms.areas_m2.hull}, крылья ${ms.areas_m2.wings}, концевые ${ms.areas_m2.tips}, элевоны ${ms.areas_m2.elevons} м². Крыло ${ms.wing_per_side_t} т/сторона, конструкция корпуса ${ms.hull_struct_t} т.</div>`+tb(["Величина","Значение","Источник"],Object.entries(F.mass_src).map(([k,v])=>[k,v[0],v[1]]));
+ const H=F.hangar,M=F.movers; document.getElementById("f_chk").innerHTML=`<div class=sub>Открытых рёбер корпуса+крыльев: ${D.stats.open_edges["korpus+nos+dnische+krylya"][0]}. Фаски R 4 см — полоски 2×4 см на 8 рёбрах граней со сглаженными нормалями. ${M.method}</div>`+
+  tb(["Режим","Часть","вершин внутри","снаружи","пересекает обшивку вне проёма"],M.by_mode.filter(r=>r.cross_outside_openings).map(r=>[r.mode,r.part,r.in,r.out,`<span class=bad>${r.cross_outside_openings}</span>`]))+
+  tb(["Режим","Пара","мин. расстояние, м"],M.close_pairs.map(r=>[r.mode,r.a+" — "+r.b,r.d_min_m]))+
+  `<b>Ангар: проём ${H.opening_m} м, помещение ${H.room_m} м</b>`+tb(["Режим","Длина, м"],Object.entries(H.L_by_mode).map(([k,v])=>[MODE_RU[k],v]))+
+  tb(["Вариант","Число"],[["Укоротить при зазоре 0,10 м с каждой стороны",H["shorten_clear_0.10_each_side"]+" м"],["Укоротить при зазоре 0,05 м",H["shorten_clear_0.05_each_side"]+" м"],["Проём при зазоре 0,10 / 0,25 м",H["opening_clear_0.10"]+" / "+H["opening_clear_0.25"]+" м"]])+
+  tb(["Наклон по тангажу°","проекция на длину проёма, м"],H.tilt.map(r=>[r.deg,r.proj_L]))+`<div class=sub>${H.note}</div>`;}
+</script></body></html>

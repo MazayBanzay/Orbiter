@@ -24,12 +24,13 @@ double AxialNoseFirst(double M) {
     return 0.20 + 0.42 / M;
 }
 
-// Stern first: the 23 m well and the stern face meet the flow. Subsonic like a blunt cylinder face (0.9),
-// Newtonian stagnation of a flat face towards 1.8 at hypersonic speed.
+// Stern first: the stern face (the clover of the four blocks and the well, ~57 % of the frontal area) meets the flow
+// head-on, the rest of the section behind it slopes back. Subsonic like a blunt face (0.8), Newtonian stagnation
+// 2.0 on the face and ~0.3 on the slopes: 1.2 on the frontal area at hypersonic speed (2026-10-09, was 1.8).
 double AxialSternFirst(double M) {
-    if (M < 0.8) return 0.9;
-    if (M < 1.2) return Lerp(0.9, 1.5, Smooth((M - 0.8) / 0.4));
-    return Lerp(1.5, 1.8, Smooth((M - 1.2) / 4.0));
+    if (M < 0.8) return 0.8;
+    if (M < 1.2) return Lerp(0.8, 1.05, Smooth((M - 0.8) / 0.4));
+    return Lerp(1.05, 1.2, Smooth((M - 1.2) / 4.0));
 }
 
 // Cross-flow drag of the hull section (flat bottom, sharp chines): 1.2 subsonic, 1.5 by M 2,

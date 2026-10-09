@@ -34,7 +34,11 @@ void TantraDisplays::DrawPanel(int k) {
     oapiClearSurface(s, 0xFF000000 | 0x0a1311);
     std::vector<Hit>& hits = panelHits_[k];
     hits.clear();
+    int sw = 0, sh = 0; oapiGetSurfaceSize(s, &sw, &sh);
+    const double S = sw > 0 ? sw / double(kPanelW) : 1.0;               // the surface's px per mockup px (supersampled: TantraDisplays kSS)
+    panelSS_ = S;
     if (oapi::Sketchpad* skp = oapiGetSketchpad(s)) {
+        tantra::scr::CanvasScaleScope scale(S);
         {
             Canvas g(skp, font_, 0, 0);
             g.Fill(0, 0, kPanelW, kMfdBand, 0x0a1311);
@@ -68,7 +72,7 @@ void TantraDisplays::DrawPanel(int k) {
             thermScr_.Draw(skp, font_, 0, kMfdBand, kPanelW, kZoneH, v);
         } else if (k == kLeft) {
             tantra::mechscreen::View v; FillMechView(v);
-            mechScr_.DrawTop(skp, font_, 0, kMfdBand, kPanelW, kZoneH, v);
+            mechScr_.DrawTop(skp, font_, 0, int(kMfdBand * S + .5), int(kPanelW * S + .5), int(kZoneH * S + .5), v);   // (its own pad: the surface's px)
         } else {
             tantra::plantscreen::View v; FillPlantView(v);
             plantScr_.Draw(skp, 0, kMfdBand, kPanelW, kZoneH, v, riserDt_);
@@ -94,7 +98,7 @@ void TantraDisplays::DrawPanel(int k) {
     const double gG = MfdGain(), gM = MfdGamma();
     if (s3) { const FVECTOR4 br(float(gG), float(gG), float(gG * 1.04), 1.0f), gm(float(gM), float(gM), float(gM), 1.0f); s3->SetBrightness(&br); s3->SetRenderParam(tantra::kSkpGamma, &gm); }
     RECT dst[3];
-    for (int b = 0; b < 3; ++b) { const Tile T = TileOf(b); dst[b] = {LONG(T.dx), LONG(T.dy), LONG(T.dx + T.ds), LONG(T.dy + T.ds)}; }
+    for (int b = 0; b < 3; ++b) { const Tile T = TileOf(b); dst[b] = {LONG(T.dx * S), LONG(T.dy * S), LONG((T.dx + T.ds) * S), LONG((T.dy + T.ds) * S)}; }
     for (int b = 0; b < 3; ++b) if (src[b] && s3) { RECT r = msr; s3->StretchRect(src[b], &r, &dst[b]); }
     if (s3) { s3->SetBrightness(nullptr); s3->SetRenderParam(tantra::kSkpGamma, nullptr); }
     if (sk) oapiReleaseSketchpad(sk);
@@ -115,7 +119,7 @@ bool TantraDisplays::TouchPanel(int k, double x, double y) {
             if (cmd == tantra::thermalscreen::kCmdTabMech) { leftTab_ = 0; return true; }
             return cmd >= 0;
         }
-        if (k == kLeft) { const int cmd = mechScr_.HitTop(x, sy); if (cmd < 0) return false; MechCommand(cmd); return true; }
+        if (k == kLeft) { const int cmd = mechScr_.HitTop(x * panelSS_, sy * panelSS_); if (cmd < 0) return false; MechCommand(cmd); return true; }
         double along = 0.0; const int cmd = plantScr_.Hit(x, sy, &along);
         if (cmd < 0) return false;
         PlantCommand(cmd, along); tRiser_ = 0.0; return true;

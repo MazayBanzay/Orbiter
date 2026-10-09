@@ -65,19 +65,20 @@ void TantraInterior::Init(VESSEL* ship, UINT vcMeshIdx, double (*meshDZ)(void*),
         if (na) v_->AddAnimationComponent(doorBAnim_, 0.0, 1.0, new MGROUP_TRANSLATE(vcMesh_, la, na, _V(0, 0, kDoorBTravel)));
         if (nb) v_->AddAnimationComponent(doorBAnim_, 0.0, 1.0, new MGROUP_TRANSLATE(vcMesh_, lb, nb, _V(0, 0, -kDoorBTravel)));
     }
-    {   // the inner lift's cab: 0 = the lower stop, 1 = the technical level
-        static UINT ig[5]; UINT n = 0;
+    {   // the inner lift's cab: 0 = the lower stop, 1 = the technical level (the top stop)
+        static_assert(kILiftStopN <= kILiftMax, "the inner lift has more stops than its arrays hold");
+        static UINT ig[2 + kILiftMax]; UINT n = 0;
         for (int k = 0; k < 2; k++) if (kILiftGroups[k] >= 0) ig[n++] = UINT(kILiftGroups[k]);
-        for (int k = 0; k < 3; k++) if (kILiftSend[k] >= 0) ig[n++] = UINT(kILiftSend[k]);
-        static UINT dg[3], dn[3];
-        for (int k = 0; k < 3; k++) {                                    // the shaft doors: two leaves slide apart over the wall
+        for (int k = 0; k < kILiftStopN; k++) if (kILiftSend[k] >= 0) ig[n++] = UINT(kILiftSend[k]);
+        static UINT dg[kILiftMax], dn[kILiftMax];
+        for (int k = 0; k < kILiftStopN; k++) {                          // the shaft doors: two leaves slide apart over the wall
             iliftDoorAnim_[k] = v_->CreateAnimation(0.0);
             if (kILiftDoor[k] >= 0) { dg[k] = UINT(kILiftDoor[k]); v_->AddAnimationComponent(iliftDoorAnim_[k], 0.0, 1.0, new MGROUP_TRANSLATE(vcMesh_, &dg[k], 1, _V(0, 0, -kILiftDoorHw))); }
             if (kILiftDoorN[k] >= 0) { dn[k] = UINT(kILiftDoorN[k]); v_->AddAnimationComponent(iliftDoorAnim_[k], 0.0, 1.0, new MGROUP_TRANSLATE(vcMesh_, &dn[k], 1, _V(0, 0, kILiftDoorHw))); }
         }
         iliftAnim_ = v_->CreateAnimation(0.0);
-        if (n) v_->AddAnimationComponent(iliftAnim_, 0.0, 1.0, new MGROUP_TRANSLATE(vcMesh_, ig, n, _V(0, kILiftStop[2] - kILiftStop[0], 0)));
-        iliftY_ = iliftTarget_ = kILiftStop[1];                          // waiting at the living deck
+        if (n) v_->AddAnimationComponent(iliftAnim_, 0.0, 1.0, new MGROUP_TRANSLATE(vcMesh_, ig, n, _V(0, kILiftStop[kILiftStopN - 1] - kILiftStop[0], 0)));
+        iliftY_ = iliftTarget_ = kILiftStop[kILiftHome];                 // waiting at the living deck
         iliftInit_ = true;
     }
     mfds_.Init(v_, vcMesh_);
@@ -223,14 +224,14 @@ void TantraInterior::cWalls(void* c, const VECTOR3* from, VECTOR3* to, double ra
     to->x = nx; to->z = nz;
 }
 
-int TantraInterior::cCount(void* c) { return kSeatN + (Self(c)->crew_ ? Self(c)->crew_->CrewItemCount() : 0) + (Self(c)->panel_.Press ? 6 : 0) + (Self(c)->panel_.Press ? 1 : 0) + 6; }   // + the inner lift's 6 items (before the cabin's way out, which is last)   // (the screens are touch: cClick)
+int TantraInterior::cCount(void* c) { return kSeatN + (Self(c)->crew_ ? Self(c)->crew_->CrewItemCount() : 0) + (Self(c)->panel_.Press ? 6 : 0) + (Self(c)->panel_.Press ? 1 : 0) + 2 * kILiftStopN; }   // + the inner lift's items: a call and a send per stop (before the cabin's way out, which is last)   // (the screens are touch: cClick)
 
 int TantraInterior::cItem(void* c, int i, OcItem* out) {
     const TantraInterior* t = Self(c);
     if (t->panel_.Press && i == cCount(c) - 1) return t->CabExitItem(out);   // the last item: the way out of the cabin
     {
-        const int b0 = cCount(c) - (t->panel_.Press ? 1 : 0) - 6;
-        if (i >= b0 && i < b0 + 6) return t->ILiftItem(i - b0, out);     // the inner lift
+        const int b0 = cCount(c) - (t->panel_.Press ? 1 : 0) - 2 * kILiftStopN;
+        if (i >= b0 && i < b0 + 2 * kILiftStopN) return t->ILiftItem(i - b0, out);     // the inner lift
     }
     const int nCrew = t->crew_ ? t->crew_->CrewItemCount() : 0;
     const int nPanel = t->panel_.Press ? 6 : 0;
@@ -256,8 +257,8 @@ int TantraInterior::cItem(void* c, int i, OcItem* out) {
 void TantraInterior::cUse(void* c, int id, int personId) {
     TantraInterior* t = Self(c);
     oapiWriteLogV("Tantra interior: person %d uses item %d", personId, id);
-    if (id >= 300 && id < 306) {                                         // the inner lift: call (300..302) or send (303..305)
-        const int st = (id - 300) % 3;
+    if (id >= 300 && id < 300 + 2 * kILiftStopN) {                      // the inner lift: call (300..) or send (300 + N..)
+        const int st = (id - 300) % kILiftStopN;
         if (std::fabs(t->iliftTarget_ - kILiftStop[st]) > 0.01 && t->iliftV_ == 0.0) {
             t->iliftTarget_ = kILiftStop[st];
             oapiWriteLogV("Tantra interior: inner lift to stop %d", st);
@@ -307,6 +308,27 @@ bool TantraInterior::ViewerInBridge() const {
     oapiCameraGlobalPos(&g);
     v_->Global2Local(g, p);
     return InCapsule(p.x, p.y, p.z - DZ());   // the drum turns about its axis: the test does not depend on its turn
+}
+
+// A screen in the view: the angle from the camera's axis to the screen's centre within the view's half diagonal (the window
+// wider than 16:9 allowed) plus the screen's own angular radius and 5 deg - a screen at the edge still counts. The side glasses
+// sunk (ЛЕНТА / ВНИЗ) are taken where they are.
+bool TantraInterior::ScreenInView(int k) const {
+    if (!v_ || k < 0 || k >= kTouchCount) return true;
+    VECTOR3 g, o; oapiCameraGlobalPos(&g); v_->Global2Local(g, o); o.z -= DZ();
+    MATRIX3 Rc, Rs; oapiCameraRotationMatrix(&Rc); v_->GetRotationMatrix(Rs);
+    const VECTOR3 fwd = tmul(Rs, mul(Rc, _V(0, 0, 1)));                 // the camera's axis in the interior frame
+    const TouchPlace& q = kTouch[k];
+    VECTOR3 c = _V(q.c[0], q.c[1], q.c[2]);
+    if (k < 2) { const double* r = kSideRise[k]; c += _V(r[0], r[1], r[2]) * sidePos_[k]; }
+    const VECTOR3 to = c - o;
+    const double dist = length(to);
+    if (dist < 0.05) return true;
+    const double ap = std::tan((std::max)(0.05, oapiCameraAperture()));
+    const double half = std::atan(ap * std::sqrt(1.0 + 2.4 * 2.4));      // the half diagonal (up to a 2.4 : 1 window)
+    const double rad = std::atan(0.5 * std::hypot(q.w, q.h) / dist);
+    const double ang = std::acos((std::max)(-1.0, (std::min)(1.0, dotp(to, fwd) / dist)));
+    return ang < half + rad + 5.0 * RAD;
 }
 
 void TantraInterior::cOrigin(void* c, VECTOR3* o) { *o = _V(0, 0, Self(c)->DZ()); }
@@ -827,15 +849,16 @@ void TantraInterior::PanelLights() {
 double TantraInterior::kILiftStopY(int k) { return kILiftStop[k]; }
 
 int TantraInterior::ILiftItem(int k, OcItem* out) const {
-    if (!out || k < 0 || k > 5) return 0;
-    static const char* const kStop[3] = {"нижняя палуба (каюты)", "жилая палуба", "технический уровень"};
-    const int st = k % 3;
+    if (!out || k < 0 || k >= 2 * kILiftStopN) return 0;
+    static const char* const kStop[4] = {"нижний уровень", "средний уровень (каюты)", "жилая палуба", "технический уровень"};
+    static_assert(kILiftStopN == 4, "name the inner lift's stops");
+    const int st = k % kILiftStopN;
     *out = OcItem{};
     out->id = 300 + k;
     out->kind = OC_BUTTON;                                               // pressed with the mouse
     out->dir = _V(1, 0, 0);                                              // the cab's buttons face east
     out->radius = 0.09;
-    if (k < 3) {                                                         // outside, on the forward end of the shaft: call the cab to stop st
+    if (k < kILiftStopN) {                                               // outside, on the forward end of the shaft: call the cab to stop st
         out->dir = _V(0, 0, 1);
         out->pos = _V(kILiftCallPos[st][0], kILiftCallPos[st][1], kILiftCallPos[st][2]);
         snprintf(out->label, sizeof out->label, "вызвать лифт");
@@ -847,7 +870,7 @@ int TantraInterior::ILiftItem(int k, OcItem* out) const {
 }
 
 void TantraInterior::ILiftWalls(double& x, double& z, double feet, double radius, double height) const {
-    for (int st = 0; st < 3; st++) {                                     // a shut door: the opening in the east wall of the shaft
+    for (int st = 0; st < kILiftStopN; st++) {                           // a shut door: the opening in the east wall of the shaft
         if (ILiftOpen(st)) continue;
         if (x < kILiftDoorX - 0.05) continue;                            // from inside the shaft one always gets out (never trapped)
         const double y0 = kILiftStop[st], y1 = y0 + 2.1;
@@ -863,7 +886,7 @@ void TantraInterior::ILiftWalls(double& x, double& z, double feet, double radius
 void TantraInterior::ILiftStep(double dt) {
     if (!iliftInit_ || dt <= 0.0) return;
     bool shut = true;
-    for (int k = 0; k < 3; k++) {                                        // a door opens where the cab stands still, otherwise shuts (1 s)
+    for (int k = 0; k < kILiftStopN; k++) {                              // a door opens where the cab stands still, otherwise shuts (1 s)
         const double want = (ILiftAt(k) && std::fabs(iliftTarget_ - kILiftStop[k]) < 0.01) ? 1.0 : 0.0;
         const double d = want - iliftDoor_[k];
         if (d != 0.0) { iliftDoor_[k] += d > 0 ? (std::min)(d, dt) : (std::max)(d, -dt); v_->SetAnimation(iliftDoorAnim_[k], iliftDoor_[k]); }
@@ -897,7 +920,7 @@ void TantraInterior::ILiftStep(double dt) {
         }
         if (iliftV_ == 0.0) nIRiders_ = 0;
     }
-    v_->SetAnimation(iliftAnim_, (iliftY_ - kILiftStop[0]) / (kILiftStop[2] - kILiftStop[0]));
+    v_->SetAnimation(iliftAnim_, (iliftY_ - kILiftStop[0]) / (kILiftStop[kILiftStopN - 1] - kILiftStop[0]));
 }
 
 void TantraInterior::Step(double dt) {

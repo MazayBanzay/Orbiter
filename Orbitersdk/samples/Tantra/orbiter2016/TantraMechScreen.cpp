@@ -473,9 +473,9 @@ void Screen::DrawTop(oapi::Sketchpad* skp, ScreenFont& font, int ox, int oy, int
         const double kx = 40, kw = 84, ky1 = 630, ky2 = 696;
         auto X = [&](int i) { return kx + i * (kw + 10); };
         const bool podHeld = v.podBlock != 0 && v.podOut < 0.99;
-        const std::wstring podSub = podHeld && v.podsWanted ? (v.podBlock == 1 ? L"ждёт крылья" : L"М > 0,8")   // the reason in full in the warnings
+        const std::wstring podSub = podHeld && v.podsWanted ? (v.podBlock == 1 ? L"ждёт опоры" : L"q > 45 кПа")   // the reason in full in the warnings
                                     : v.podOut > 0.99 ? L"вышли" : v.podOut < 0.01 ? L"в отсеках" : L"выход " + Pct(v.podOut);
-        Key(g, hitsTop_, L"ГОНДОЛЫ", X(0), ky1, kw, 56, podHeld && v.podsWanted ? kWarn : v.podsWanted ? kOn : kOff, kCmdPods, podHeld && v.podsWanted ? kRd : kOr, podSub);
+        Key(g, hitsTop_, L"ВЫДВ. БЛОКИ", X(0), ky1, kw, 56, podHeld && v.podsWanted ? kWarn : v.podsWanted ? kOn : kOff, kCmdPods, podHeld && v.podsWanted ? kRd : kOr, podSub);
         Key(g, hitsTop_, L"НАЗАД", X(1), ky1, kw, 56, v.podsWanted && v.podTarget < 45 ? kOn : kOff, kCmdPodsAft, kOr, L"сопла 0°");
         Key(g, hitsTop_, L"ВНИЗ", X(2), ky1, kw, 56, v.podsWanted && v.podTarget >= 45 ? kOn : kOff, kCmdPodsDown, kOr, L"сопла " + fr::Num(v.podAngle, 0) + L"°");
         Key(g, hitsTop_, L"АНГАР", X(3), ky1, kw, 56, v.hangarT > 0.5 ? kOn : kOff, kCmdHangar, kOr, v.hangar > 0.99 ? L"открыт" : v.hangar < 0.01 ? L"закрыт" : Pct(v.hangar));
@@ -507,8 +507,8 @@ void Screen::DrawTop(oapi::Sketchpad* skp, ScreenFont& font, int ox, int oy, int
         if (v.radHealth <= 0.0) warn.push_back({L"радиаторы потеряны", kRd});
         if (!v.radOut && v.sternT > v.tSafe) warn.push_back({L"радиаторы сложены, корма " + fr::Num(v.sternT, 0) + L" К", v.sternT > v.tBoil ? kRd : kYe});
         if (v.P != v.PT && v.wingFold < 0.999 && !v.held) warn.push_back({L"крылья и перо складываются — лафет ждёт", kYe});
-        if (v.podsWanted && v.podOut < 0.99 && v.podBlock == 1) warn.push_back({L"гондолы: крылья сложены — выпуск невозможен", kYe});
-        if (v.podsWanted && v.podOut < 0.99 && v.podBlock == 2) warn.push_back({L"гондолы: выше М 0,8 — створки закрыты", kYe});
+        if (v.podsWanted && v.podOut < 0.99 && v.podBlock == 1) warn.push_back({L"выдвижные блоки: корабль лежит или поднимается на опорах — выпуск невозможен", kYe});
+        if (v.podsWanted && v.podOut < 0.99 && v.podBlock == 2) warn.push_back({L"выдвижные блоки: скоростной напор выше 45 кПа — створки закрыты", kYe});
         if (v.hangar > 0.01) warn.push_back({L"ангар открыт — положения заперты", kYe});
         if (!v.liftStowed) warn.push_back({L"лифт шлюза не сложен — положения заперты", kYe});
         if (v.gear < 1 && v.grounded) warn.push_back({L"шасси не выпущено — положения недоступны", kYe});
@@ -585,10 +585,10 @@ void Screen::DrawPult(oapi::Sketchpad* skp, ScreenFont& font, int ox, int oy, in
     Frame(g, 500, gy, 560, gh, L"КОРПУС");
     const int wm = (std::max)(0, (std::min)(2, v.wingMode));
     Btn(g, hitsPult_, L"КРЫЛЬЯ", 515, r1, 170, rh, wm == 0, kCmdWings, cOr, v.wingFold >= 0.99 && wm != 2 ? L"сложены: грунт" : kWingTxt[wm]);
-    Btn(g, hitsPult_, L"ГОНДОЛЫ", 695, r1, 170, rh, v.podsWanted, kCmdPods, cOr, v.podOut > 0.99 ? L"выдвинуты" : v.podOut < 0.01 ? L"в отсеках" : L"…");
+    Btn(g, hitsPult_, L"ВЫДВ. БЛОКИ", 695, r1, 170, rh, v.podsWanted, kCmdPods, cOr, v.podOut > 0.99 ? L"выдвинуты" : v.podOut < 0.01 ? L"в отсеках" : L"…");
     Btn(g, hitsPult_, L"ВЕЗДЕХОДЫ", 875, r1, 170, rh, v.rovers > 0.5, kCmdRovers, cOr, v.rovers > 0.99 ? L"выдвинуты" : v.rovers < 0.01 ? L"убраны" : L"…");
-    Btn(g, hitsPult_, L"НАЗАД", 515, r2, 262, rh, v.podTarget < 45, kCmdPodsAft, cOr, L"сопла гондол 0° · тяга вперёд");
-    Btn(g, hitsPult_, L"ВНИЗ", 783, r2, 262, rh, v.podTarget >= 45, kCmdPodsDown, cOr, L"сопла гондол 90° · висение");
+    Btn(g, hitsPult_, L"НАЗАД", 515, r2, 262, rh, v.podTarget < 45, kCmdPodsAft, cOr, L"сопла выдвижных блоков 0° · тяга вперёд");
+    Btn(g, hitsPult_, L"ВНИЗ", 783, r2, 262, rh, v.podTarget >= 45, kCmdPodsDown, cOr, L"сопла выдвижных блоков 90° · висение");
     Frame(g, 1075, gy, W - 1090, gh, L"АНГАР · ПОРТ · ШЛЮЗ");
     Btn(g, hitsPult_, L"АНГАР", 1090, r1, 155, rh, v.hangarT > 0.5, kCmdHangar, cOr, v.hangar > 0.99 ? L"открыт" : v.hangar < 0.01 ? L"закрыт" : L"…");
     Btn(g, hitsPult_, L"ПОРТ", 1253, r1, 155, rh, v.port, kCmdPort, cOr, v.port ? L"на столе" : L"грунт");

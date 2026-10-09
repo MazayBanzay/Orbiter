@@ -59,20 +59,29 @@ inline std::wstring W1251(const char* s) {   // the ship's strings are in the pr
 
 struct Pt { double x, y; };
 
+// the surface's px per mockup px for the canvases made while it is set (the side panels are drawn supersampled, so they stay
+// sharp whatever the MFD resolution: the user, 2026-10-08); set and put back by CanvasScaleScope
+inline double& CanvasScale() { static double k = 1.0; return k; }
+struct CanvasScaleScope {
+    explicit CanvasScaleScope(double k) : was_(CanvasScale()) { CanvasScale() = k; }
+    ~CanvasScaleScope() { CanvasScale() = was_; }
+    double was_;
+};
+
 // the canvas: the mockup's pixels at an offset on the surface. Orbiter 2024's D3D9 client draws only with pen / brush / font
 // objects on these surfaces (no QuickPen / QuickBrush, no alpha): the objects come from the ScreenFont, a translucent colour
 // is mixed over the screen's ground.
 class Canvas {
 public:
-    Canvas(oapi::Sketchpad* s, ScreenFont& f, int ox, int oy) : s_(s), f_(f), ox_(ox), oy_(oy) { f_.BeginPass(); }
+    Canvas(oapi::Sketchpad* s, ScreenFont& f, int ox, int oy) : s_(s), f_(f), ox_(ox), oy_(oy), k_(CanvasScale()) { f_.BeginPass(); }
     ~Canvas() { s_->SetPen(nullptr); s_->SetBrush(nullptr); }
-    int X(double x) const { return int(std::lround(x)) + ox_; }
-    int Y(double y) const { return int(std::lround(y)) + oy_; }
+    int X(double x) const { return int(std::lround((x + ox_) * k_)); }
+    int Y(double y) const { return int(std::lround((y + oy_) * k_)); }
     oapi::Sketchpad* Skp() const { return s_; }
     static unsigned A(unsigned c, double a) { return a >= 0.999 ? c : Mix(c, cBg, a); }
     void Brush(unsigned c, double a) { s_->SetBrush(f_.Brush(A(c, a))); }
     void NoBrush() { s_->SetBrush(nullptr); }
-    void Pen(unsigned c, double lw, double a = 1.0) { s_->SetPen(f_.Pen(A(c, a), (std::max)(1, int(std::lround(lw))))); }
+    void Pen(unsigned c, double lw, double a = 1.0) { s_->SetPen(f_.Pen(A(c, a), (std::max)(1, int(std::lround(lw * k_))))); }
     void NoPen() { s_->SetPen(nullptr); }
     void Fill(double x, double y, double w, double h, unsigned c, double a = 1.0) {
         if (w < 0) { x += w; w = -w; }
@@ -151,7 +160,7 @@ public:
     // text as the mockup's T(): (x, baseline y), align 0 left / 1 centre / 2 right
     double T(const std::wstring& s, double x, double y, unsigned col, int size = 15, int align = 0, int weight = 500, double a = 1.0) {
         if (s.empty()) return 0.0;
-        f_.Text(s_, X(x), Y(y), s, size, weight, A(col, a), align);
+        f_.Text(s_, X(x), Y(y), s, int(std::lround(size * k_)), weight, A(col, a), align);
         return Width(s, size, weight);
     }
     // the longest head of s that fits w (with an ellipsis when cut)
@@ -167,6 +176,7 @@ private:
     oapi::Sketchpad* s_;
     ScreenFont& f_;
     int ox_, oy_;
+    double k_;
 };
 
 // a touch area of a screen (its own pixels) and the command it gives; along: where along the area (0 at the bottom / left)

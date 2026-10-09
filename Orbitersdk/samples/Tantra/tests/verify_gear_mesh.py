@@ -89,11 +89,12 @@ def in_opening(u, s, names, margin=0.12):
 
 
 STOW = dict(gm.stowed_states())
-# Parts that stow inside the skin; the stern legs (on the nacelles) and the folded wings stow outside it, in the
-# shadow of the body (checked separately).
-MOVING = [n for n in gm.GROUPS if n.startswith(("fin", "door_", "pod_", "arm_pod", "hip_", "blade_", "ankle_", "foot_", "bay_door",
+# Parts that stow inside the skin (since 2026-10-09 the stern legs too, in their body bays); the folded wings stow
+# outside it, in the shadow of the body (checked separately).
+MOVING = [n for n in gm.GROUPS if n.startswith(("fin", "door_", "pod_", "arm_pod", "hip_", "blade_", "ankle_", "foot_", "bay_door", "sleg_door", "sfoot",
                                                  "kang_", "kfoot_"))]
-OUTSIDE = [n for n in gm.GROUPS if n.startswith(("crest_", "wing_outer_", "elevon_", "sfoot")) or (n.startswith("leg") and n != "leg_hinges")]
+MOVING += [n for n in gm.GROUPS if n.startswith("leg") and n != "leg_hinges"]
+OUTSIDE = [n for n in gm.GROUPS if n.startswith(("crest_", "wing_outer_", "elevon_"))]   # (2026-10-09) the stern legs stow in body bays
 RIBS = lambda pre: [n for n in gm.foot_groups(pre) if "_slat_" in n]   # the petals' plates lie on the ground
 
 
@@ -110,14 +111,15 @@ for n in MOVING:
     worst.append((np.nanmax(d), n))
 worst.sort(reverse=True)
 check(worst[0][0] <= 0.03, "stowed: nothing proud of the skin (worst " + ", ".join(f"{n} {w:+.3f}" for w, n in worst[:4]) + ")")
-for n, lim in (("door_pod_0", 0.03), ("door_top_port", 0.03), ("bay_door_starboard", 0.03), ("kang_door", 0.03), ("iris_nose_0", 0.03)):
+for n, lim in (("door_pod_0", 0.03), ("door_top_port", 0.03), ("bay_door_starboard", 0.03), ("kang_door", 0.03), ("iris_nose_0", 0.03),
+               ("sleg_door_0", 0.03), ("sleg_door_2", 0.03), ("pocket_door_port_up", 0.03), ("pocket_door_starboard_low", 0.03)):
     m = np.nanmax(outs(V[n]))
     check(-lim <= m <= 0.03, f"stowed {n}: outer face flush ({m:+.3f} m)")
 for side in gm.SIDES:                                      # blades 0.55 m under the skin, the fan of ribs flush over them
     m = np.nanmax(outs(samples(G[f"blade_{side}_0"], V[f"blade_{side}_0"])))
-    check(-0.8 <= m <= -0.4, f"stowed blade {side}: outer face {m:+.2f} m under the skin (ribs over it)")
+    check(-0.8 <= m <= -0.4, f"stowed blade {side}: outer face {m:+.2f} m under the skin (doors over it)")
     r = max(np.nanmax(outs(samples(G[n], V[n]))) for n in gm.foot_groups(f"foot_{side}"))
-    check(r <= 0.03, f"stowed blade foot {side}: folded in the pocket, outermost {r:+.2f} m")
+    check(r <= -(gm.POCKET_DOOR_T + 0.05), f"stowed blade foot {side}: folded in the pocket under its doors, outermost {r:+.2f} m")
 # sub-light: everything outside the skin lies in the shadow of the widest/tallest body sections
 W_MAX, Y_TOP, Y_BOT = gm.wh_at(60.0)[0], (1 - gm.FL) * gm.wh_at(60.0)[1], -gm.FL * gm.wh_at(60.0)[1]
 for n in OUTSIDE:
@@ -185,7 +187,7 @@ for side in gm.SIDES:
 for i, L in enumerate(legs):
     ph, ex = L["phi_stand"] / L["phi_max"], L["e_stand"] / gm.LEG_EXT_MAX
     parts = [f"leg{i}_sec{k}" for k in range(gm.LEG_SEC_N)] + [f"leg{i}_ankle"] + gm.foot_groups(f"sfoot{i}")
-    sweep(f"stern leg {i} to stand", parts, [],
+    sweep(f"stern leg {i} to stand", parts + [f"sleg_door_{i}"], [f"sleg_{i}"],
           lambda t, i=i, ph=ph, ex=ex: dict(STOW, **{f"leg{i}_swing": ph * t, f"leg{i}_ext": ex * min(1, max(0, (t - gm.LEG_EXT_DELAY) / (1 - gm.LEG_EXT_DELAY))),
                                                     f"leg{i}_foot_stand": t, f"leg{i}_rail": 1 - min(1, 2 * t), f"leg{i}_fold": 1 - max(0, 2 * t - 1)}))
 for i in range(4):
@@ -242,6 +244,10 @@ check(podlow > gy + 0.8, f"pods out, cups down: lowest {podlow:.2f} m ({podlow -
 for i in range(4):
     d = np.nanmax(-outs(samples(G[f"pod_{i}"], V[f"pod_{i}"])))
     check(d < 0.03, f"pod {i} deployed clear of the skin (max penetration {d:.2f})")
+VH = gm.apply_pose(groups, comps, dict(st, pod_retract=0, pod_swivel=61.8 / 180.0, pod_cant=1.0))   # hover: thrust vertical, pairs apart
+for i in range(4):
+    d = np.nanmax(-outs(samples(G[f"pod_{i}"], VH[f"pod_{i}"])))
+    check(d < 0.03 and VH[f"pod_{i}"][:, 1].min() > gy + 0.8, f"pod {i} at hover (61.8 deg, pairs 15 deg apart) clear of the skin ({d:.2f}) and the ground")
 px = max(abs(V[f"pod_{i}"][:, 0]).max() for i in range(4))
 check(px > gm.POD_X_OUT, f"pods out to x {px:.1f} (centre {gm.POD_X_OUT})")
 

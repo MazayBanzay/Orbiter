@@ -238,7 +238,7 @@ void Screen::Trajectory(Canvas& g, const View& v) {
     struct Lbl { const wchar_t* t; double dx, dy; int al; };
     auto lbl = [](int key, Lbl* l) {
         switch (key) {
-            case gd::kEvPods: *l = {L"М 0,8 · гондолы убраны", 10, -3, 0}; return true;
+            case gd::kEvPods: *l = {L"М 0,8 · выдв. блоки убраны", 10, -3, 0}; return true;
             case gd::kEvSwitch: *l = {L"30 км · аргон → железо", 10, 4, 0}; return true;
             case gd::kEvMeco: *l = {L"отсечка", 0, 16, 1}; return true;
             case gd::kEvCirc: *l = {L"скругление", -8, -8, 2}; return true;
@@ -418,7 +418,7 @@ void Screen::Commands(Canvas& g, const View& v, unsigned lc) {
     row(88, L"МАРШЕВАЯ ЧАША · тяга", run ? Fmt(thrM * 100, 0) + L" % · " + gd::Force(st.FmNow) : L"0 %", cWh);
     Bar(g, bx, 95, bw, 9, run ? thrM : 0.0, cBarG); g.Fill(bx + bw * Clamp(cmdThr, 0, 1) - 1.5, 92, 3, 15, cOr);
     // the game's pods swing out of their bays in 12 s: until then "в отсеках" (the mockup's stand has them out already)
-    row(122, L"ГОНДОЛЫ 4 × 3 ЧАШИ", !s.pods ? std::wstring(L"УБРАНЫ (М 0,8)") : st.Fpods <= 0 ? std::wstring(L"в отсеках")
+    row(122, L"ВЫДВ. БЛОКИ 4 × 3 ЧАШИ", !s.pods ? std::wstring(L"УБРАНЫ (М 0,8)") : st.Fpods <= 0 ? std::wstring(L"в отсеках")
         : run ? Fmt(thrP * 100, 0) + L" % · " + gd::Force(st.FpNow) : std::wstring(L"выпущены · 0 %"), s.pods && st.Fpods > 0 ? cWh : cDim);
     Bar(g, bx, 129, bw, 9, s.pods && run ? thrP : 0.0, cBarG);
     row(156, L"УВТ ТАНГАЖ (±10°)", gd::FmtS(s.tvcP, 1) + L"°", std::fabs(s.tvcP) > 8 ? cYe : cWh); CBar(g, bx, 163, bw, 9, s.tvcP / gd::kTvcMax, cTvc);
@@ -591,7 +591,7 @@ void Screen::LSide(Canvas& g, const View& v) {
                        {L"гориз. скорость", gd::FmtS(a.vx, 2) + L" м/с", std::fabs(a.vx) <= gd::kNormVx ? cGr : cTx},
                        {L"боковая сила ветра", Fmt(a.Dx / 1e3, 0) + L" кН", cTx},
                        {L"наклон: команда / факт", gd::FmtS(a.thCmd, 2) + L"° / " + gd::FmtS(a.th, 2) + L"°", std::fabs(a.th) <= gd::kNormTilt ? cWh : cYe},
-                       {L"УВТ марш / гондолы", gd::FmtS(a.dM, 1) + L"° / " + gd::FmtS(a.dP, 1) + L"°", cTx}};
+                       {L"УВТ марш / выдв. блоки", gd::FmtS(a.dM, 1) + L"° / " + gd::FmtS(a.dP, 1) + L"°", cTx}};
     for (int i = 0; i < 5; ++i) { const double y = 446 + i * 22.0; g.T(rows[i].n, 360, y, cDim, 12); g.T(rows[i].val, 645, y, rows[i].c, 13, 2, 700); }
 }
 
@@ -656,7 +656,7 @@ void Screen::LCommands(Canvas& g, const View& v, unsigned lc) {
     g.T(L"вес", bx + bw * Wt / Fmax + 4, 117, cWh, 10);
     row(132, L"МАРШЕВАЯ ЧАША (20 %/с)", gd::Force(s.Fm) + L" · " + Fmt(s.Fm / Lm * 100, 0) + L" %", cWh);
     Bar(g, bx, 139, bw, 9, s.Fm / Lm, cBarG); tick(bx + bw * Clamp(s.FmC / Lm, 0, 1), 139, 9, cOr);
-    row(166, L"ГОНДОЛЫ 4 × 3 (25 %/с)", gd::Force(s.Fp) + L" · " + Fmt(s.Fp / Lp * 100, 0) + L" %", cWh);
+    row(166, L"ВЫДВ. БЛОКИ 4 × 3 (25 %/с)", gd::Force(s.Fp) + L" · " + Fmt(s.Fp / Lp * 100, 0) + L" %", cWh);
     Bar(g, bx, 173, bw, 9, s.Fp / Lp, cBarG); tick(bx + bw * Clamp(s.FpC / Lp, 0, 1), 173, 9, cOr);
     // the field bar: actual B, needed B, the 6 T floor and the 12.1 T limiter
     auto BX = [&](double B) { return bx + bw * B / 14; };
@@ -793,7 +793,7 @@ void Screen::PageBelly(Canvas& g, const View& v, double W, double H) {
                        {L"курс", Fmt(s.hdg, 1) + L"°", cWh}, {L"тангаж / крен", gd::FmtS(s.pitch, 1) + L"° / " + gd::FmtS(s.bank, 1) + L"°", cTx},
                        {L"число Маха", L"М " + Fmt(s.mach, 2), s.mach >= 0.7 ? cYe : cTx}};
     const R col2[7] = {{L"масса", Fmt(s.mass / 1e6, 3) + L" кт", cTx}, {L"вес", gd::Force(B.Weight()), cTx},
-                       {L"гондолы", podTxt, s.podOut >= 1 && s.podAimed ? cGr : cYe},
+                       {L"выдв. блоки", podTxt, s.podOut >= 1 && s.podAimed ? cGr : cYe},
                        {L"шасси лёжа", gearTxt, s.gearLying && s.gear >= 1 ? cGr : s.gearLying ? cTx : cYe},
                        {L"крылья", s.wingsFolded ? L"сложены" : L"развёрнуты", s.wingsFolded ? cRd : cTx},
                        {L"установка", s.plantRun ? L"на режиме" : L"не на режиме", s.plantRun ? cTx : cRd},
@@ -813,17 +813,17 @@ void Screen::PageBelly(Canvas& g, const View& v, double W, double H) {
     double pf = 0, pu = 0; gd::BellyLand::PodDir(s, s.podAngle, pf, pu);
     const double liftNow = s.podAimed ? s.podLv * s.podMax * pu : 0.0;
     const double scale = (std::max)({Lmax, Wt * 1.2, 1.0});
-    row(90, L"подъём гондол / вес", gd::Force(liftNow) + L" / " + gd::Force(Wt), cWh);
+    row(90, L"подъём выдв. блоков / вес", gd::Force(liftNow) + L" / " + gd::Force(Wt), cWh);
     Bar(g, bx, 100, bw, 12, liftNow / scale, cBarG); tick(bx + bw * Clamp(Wt / scale, 0, 1), 100, 12, cWh); tick(bx + bw * Clamp(Lmax / scale, 0, 1), 100, 12, cRd);
     row(136, L"запас: наибольший / вес", (Wt > 0 ? L"×" + Fmt(Lmax / Wt, 2) : std::wstring(L"—")) + (s.podMaxEst ? L" (оценка)" : L""), Lmax >= gd::kBThrustMargin * Wt ? cGr : cRd);
-    row(170, L"рычаг гондол · команда / факт", Fmt(c.podLv * 100, 0) + L" / " + Fmt(s.podLv * 100, 0) + L" %", c.satUp ? cRd : cWh);
+    row(170, L"рычаг выдв. блоков · команда / факт", Fmt(c.podLv * 100, 0) + L" / " + Fmt(s.podLv * 100, 0) + L" %", c.satUp ? cRd : cWh);
     Bar(g, bx, 180, bw, 10, s.podLv, cBarG); tick(bx + bw * Clamp(c.podLv, 0, 1), 180, 10, cOr);
     const double va = B.VertAngle();
     row(216, L"чаши · команда / факт", Fmt(c.podAngle, 1) + L"° / " + Fmt(s.podAngle, 1) + L"°", s.podAimed ? cWh : cYe);
     row(244, L"вертикальная тяга при", std::isfinite(va) ? Fmt(va, 1) + L"°" : std::wstring(L"недостижима"), std::isfinite(va) ? cTx : cRd);
     // the tilt of the pods' thrust off the vertical: + forward (the speed), - aft (the braking)
     const double tilt = c.FpUp > 1 ? std::atan2(c.FpFwd, c.FpUp) * gd::kR2D : 0.0;
-    row(276, L"наклон тяги гондол (вперёд +)", gd::FmtS(tilt, 1) + L"°", cWh);
+    row(276, L"наклон тяги выдв. блоков (вперёд +)", gd::FmtS(tilt, 1) + L"°", cWh);
     CBar(g, bx, 286, bw, 10, tilt / gd::kBTiltAft, cTvc);
     const double mLv = s.marchMax > 0 ? s.marchLv : 0.0;
     row(322, L"маршевая чаша", s.marchMax > 0 ? gd::Force(mLv * s.marchMax) + L" · " + Fmt(mLv * 100, 0) + L" %" : std::wstring(L"не на ходу"), s.marchMax > 0 ? cWh : cDim);
@@ -1048,7 +1048,7 @@ void Screen::PageReentry(Canvas& g, const View& v, double W, double H) {
         row(L"ближе к пределу", std::wstring(rn::kZoneRu[hn]) + L" " + Fmt(s.skinT[hn], 0) + L" / " + Fmt(s.skinLim[hn], 0) + L" К", mn >= rn::kMarginK ? cTx : cYe);
         row(L"корма установки", Fmt(s.sternT, 0) + L" / " + Fmt(s.tSafe, 0) + L" К", s.sternT < s.tSafe - 50 ? cTx : cYe);
         sep();
-        row(L"тяга маршевой · гондол", on && c.thrust ? Fmt(c.march * 100, 0) + L" % · " + Fmt(c.pods * 100, 0) + L" %" : std::wstring(L"—"), cOr);
+        row(L"тяга маршевой · выдв. блоков", on && c.thrust ? Fmt(c.march * 100, 0) + L" % · " + Fmt(c.pods * 100, 0) + L" %" : std::wstring(L"—"), cOr);
         row(L"ограничивает", rn::kLimRu[(std::max)(0, (std::min)(5, c.lim))], c.lim == rn::kRLimG || c.lim == rn::kRLimStern ? cYe : cTx);
         static const wchar_t* const kAttRu[5] = {L"пилот", L"нос против скорости", L"кормой вперёд", L"носом, атака 40°", L"по тяге, кормой вниз"};
         row(L"ориентация", on && c.attitude ? std::wstring(kAttRu[(std::max)(0, (std::min)(4, c.att))]) + L" · " + Fmt(c.pitch, 0) + L"°/" + Fmt(c.hdg, 0) + L"°" : std::wstring(L"пилот"), cTx);

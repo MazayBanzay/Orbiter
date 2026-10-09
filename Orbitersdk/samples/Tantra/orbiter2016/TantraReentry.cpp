@@ -23,7 +23,7 @@ const wchar_t* const kRPhases[kRPhaseCount] = {L"ГОТОВНОСТЬ", L"ОЖИ
                                                L"РАЗВОРОТ НА ВХОД", L"ВХОД", L"РАЗВОРОТ КОРМОЙ ВНИЗ", L"ТОРМОЖЕНИЕ", L"ВХОД ПОСАДКИ"};
 const wchar_t* const kRegimes[kRegimeCount] = {L"КОРМОЙ · ТЯГА", L"КОРМОЙ · БАЛЛИСТИКА", L"НОСОМ · КРЫЛЬЯ"};
 const wchar_t* const kWingSel[kWingSelCount] = {L"АВТО", L"90°", L"30°", L"СЛОЖЕНЫ"};
-const wchar_t* const kZoneRu[kZones] = {L"нос", L"днище", L"кромки крыльев", L"перо", L"корма", L"ноги", L"гондолы"};
+const wchar_t* const kZoneRu[kZones] = {L"нос", L"днище", L"кромки крыльев", L"перо", L"корма", L"ноги", L"выдвижные блоки"};
 const wchar_t* const kLimRu[6] = {L"—", L"перегрузка", L"нагрев", L"корма установки", L"торможение", L"рабочая масса"};
 
 namespace {
@@ -361,7 +361,7 @@ void SimStep(Sim& S, double dt) {
         if (S.phase == 6) aoaDeg = kAoaNose + (180.0 - kAoaNose) * Clamp((S.t - S.flipT0) / kFlipT, 0, 1);
         if (S.phase == 5 && S.in.regime == kRNose) bankDeg = S.reg.bank;
         // the pods: out when slow and low enough (their q rating), 12 s
-        if (S.phase == 7 && !S.podCmd && wing != 2 && q < kPodQ && h < kPodH && mach < kPodMach) { S.podCmd = true; PEv(S, kEvPods, L"Гондолы на выпуск · " + Km(h), kOk, h, dr); }
+        if (S.phase == 7 && !S.podCmd && wing != 2 && q < kPodQ && h < kPodH && mach < kPodMach) { S.podCmd = true; PEv(S, kEvPods, L"Выдвижные блоки на выпуск · " + Km(h), kOk, h, dr); }
         if (S.podCmd) S.pod = (std::min)(1.0, S.pod + dt / kPodT);
         const double aFull = in.aMarch + in.aPods;
         if (S.reg.level > 0 && aFull > 0) {
@@ -765,7 +765,7 @@ void Reentry::Step(const ReentryState& st, double now) {
             c.pitch = std::asin(Clamp(c.nose.z, -1, 1)) * kR2D; c.hdg = guidance::N360(std::atan2(c.nose.x, c.nose.y) * kR2D); c.bank = 0.0;
         } else setAtt(kAttStern, 0, 0);
         if (phase_ >= 6 && st.wingMode != 2 && st.fold < 0.5 && st.q < kPodQ && st.alt < kPodH && mach < kPodMach) c.podsOut = true;   // the last braking on the pods too (wings out only)
-        if (c.podsOut && podT_ <= 0.0) { podT_ = st.simt; Note(L"Гондолы на выпуск · " + Km(st.alt), kOk); }
+        if (c.podsOut && podT_ <= 0.0) { podT_ = st.simt; Note(L"Выдвижные блоки на выпуск · " + Km(st.alt), kOk); }
         if (phase_ == 5 && regime_ == kRNose) c.wingMode = wings_ == kWAuto ? reg_.wing : ShipWing(wings_);
         // the level: of the usable acceleration -> of the thrust available
         const double aFull = in.aMarch + in.aPods, use = AUse(in);

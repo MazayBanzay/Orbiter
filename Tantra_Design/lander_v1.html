@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Лэндер Тантры V1</title>
+<style>
+:root{--bg:#eef1f4;--panel:#ffffff;--ink:#1d2430;--muted:#5d6878;--line:#d5dbe3;--ok:#1f8a4c;--warn:#b7791f;--bad:#c53030;--acc:#2b6cb0}
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+#wrap{display:grid;grid-template-columns:1fr 430px;min-height:100vh}
+#main{padding:10px 14px;min-width:0}
+#side{background:var(--panel);border-left:1px solid var(--line);padding:12px 14px;overflow:auto;max-height:100vh}
+h1{font-size:16px;margin:0 0 4px}
+h2{font-size:13px;margin:14px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+h3{font-size:14px;margin:6px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:10px;overflow-x:auto}
+button{font:inherit;padding:5px 9px;border:1px solid var(--line);border-radius:6px;background:#f7f9fb;color:var(--ink);cursor:pointer}
+button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.btns{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
+.chk{display:inline-flex;gap:5px;align-items:center;margin:2px 10px 2px 0;font-size:13px}
+select{font:inherit;padding:3px 5px;border:1px solid var(--line);border-radius:6px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:3px 5px;border-bottom:1px solid #eef1f4;vertical-align:top;text-align:left}
+th{color:var(--muted);font-weight:600}
+td.v{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.note{font-size:12px;color:var(--muted)}
+.big{font-size:15px;font-weight:600}
+.tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:9px;background:#fdf1d8;color:#8a5a00;border:1px solid #f0d49a;margin-left:6px}
+ul{margin:4px 0 4px 18px;padding:0}
+li{margin:2px 0}
+p{margin:4px 0}
+#view3d{position:relative;height:560px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:#000}
+#view3d canvas{display:block}
+#vhud{position:absolute;left:10px;top:10px;color:#fff;font-size:12px;background:rgba(0,0,0,.5);padding:6px 9px;border-radius:6px;max-width:62%;pointer-events:none}
+#vbar{position:absolute;left:10px;bottom:10px;display:flex;gap:6px;flex-wrap:wrap}
+#vbar button{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.3);font-size:12px;padding:3px 8px}
+#legend{position:absolute;right:10px;top:10px;color:#ddd;font-size:11px;background:rgba(0,0,0,.5);padding:6px 8px;border-radius:6px;max-height:70%;overflow:auto}
+#legend div{display:flex;align-items:center;gap:6px;margin:1px 0}
+#legend i{display:inline-block;width:11px;height:11px;border-radius:2px;border:1px solid rgba(255,255,255,.3)}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.lbl{position:absolute;transform:translate(-50%,-100%);color:#fff;font-size:10.5px;background:rgba(10,14,22,.72);border:1px solid rgba(255,255,255,.25);padding:1px 5px;border-radius:4px;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+#fail{position:absolute;inset:0;color:#eee;padding:20px;display:none;overflow:auto}
+#wide{display:none}
+.cmp th:first-child,.cmp td:first-child{min-width:150px;font-weight:600}
+.cmp td{min-width:150px;font-size:12.5px}
+.rec{border-left:4px solid var(--acc);background:#f2f7fd}
+@media (max-width:900px){#wrap{grid-template-columns:1fr}#side{border-left:0;border-top:1px solid var(--line);max-height:none}#view3d{height:420px}#legend{display:none}}
+</style>
+</head>
+<body>
+<div id="wrap">
+<div id="main">
+  <h1>Лэндер «Тантры» V1 — отказоустойчивость и облики</h1>
+  <div class="note">Оси: x — вперёд (нос +x), y — вверх, z — вправо; начало — ЦМ; метры. Модель схематическая, по данным расчётов.</div>
+  <div class="btns" id="tabs"></div>
+  <div id="ctl3d">
+    <div class="btns" id="modes"></div>
+    <div class="btns" id="fails" style="margin-top:4px"><span class="note" style="margin-right:6px">Отказы:</span></div>
+    <div class="note" id="failInfo" style="margin:4px 0"></div>
+    <div style="margin:4px 0">
+      <label class="chk">Обшивка <select id="shell"><option value="solid">сплошная</option><option value="glass" selected>полупрозрачная</option><option value="none">скрыта</option></select></label>
+      <label class="chk"><input type="checkbox" id="cHangar">Ангар</label>
+      <label class="chk"><input type="checkbox" id="cThrust" checked>Векторы тяги</label>
+      <label class="chk"><input type="checkbox" id="cLabels">Подписи ролей</label>
+      <label class="chk"><input type="checkbox" id="cGrid" checked>Масштаб (сетка 1 м)</label>
+      
+    </div>
+    <div id="view3d">
+      <div id="labels"></div>
+      <div id="vhud">Загрузка…</div>
+      <div id="legend"></div>
+      <div id="vbar"><button data-cam="side">сбоку</button><button data-cam="top">сверху</button><button data-cam="front">спереди</button><button data-cam="iso">3/4</button></div>
+      <div id="fail"></div>
+    </div>
+    <div class="note" id="hangarNote" style="margin-top:6px"></div>
+  </div>
+  <div id="wide"></div>
+</div>
+<div id="side"></div>
+</div>
+
+<script type="application/json" id="data">{"title":"Лэндер «Тантры» V1 — отказоустойчивость и варианты облика","core":{"name_ru":"V1-ОЯ «Четыре поворотные гондолы — отказоустойчивое ядро»","summary_ru":"Ядро V1 с отказоустойчивостью, добавлено 11 деталей (+0,65 т). Тяговую часть не удваивали: одна чаша на гондолу. Резерв тяги — аварийный режим 0 деталей: мощность +10 %, струя 11,5 км/с вместо 15, это 306 кН на чашу при том же поле 12,1 Тл. Крыло увеличено: 2 × 24,1 = 48,2 м² плюс наплыв 16,8 м². Посадка без тяги 88 м/с при 37,7 т (CL 1,2). Взлётная масса 59,75 т, Т/В 1,45. Без одной гондолы: 1,04 в аварийном режиме на взлёте, 1,13 штатной мощностью на посадочной массе. Численная рамка stowed 19,0 × 15,78 × 3,65 м (было 14,25 при правилe правой руки; 17,37 возникает при обратном знаке поворота крыла).","criterion_ru":"Один любой отказ: задача продолжается либо безопасно завершается (посадка на 3 гондолы или на крыло ≤90 м/с). Два отказа: экипаж жив — за исключением потери двух гондол в висении выше ~20 м. Это остаточный риск, его закрывает профиль: висение ниже 20 м ≤15 с, переход идёт с поступательной скоростью, кресла с поглотителем инерции.","changes_ru":["Крыло: консоль 5,6 м, хорды 6,0/2,6 м, 24,1 м² ×2 (было 14,9 ×2). Корень ПК x +2,8, шарнир (0; −1,42; ±3,9), толщина 0,22 м","Наплыв-перчатка 6,0 × 1,4 м ×2 = 16,8 м² (было 4 × 1,4). Крыло опущено к брюху (y −1,42): при стреловидности корневая часть уходит в щель между брюхом и баками","Баки аргона подняты: y −0,6 → −0,52 (низ −1,27, над крылом в щели)","Знак поворота задан явно: Родригес, правая рука вокруг axis. R −50° и L +50° = стреловидность назад. Численная рамка stowed 19,0 × 15,78 × 3,65","Аварийный режим чаши: P 1,76 ГВт, v 11,5 км/с → 306 кН, 30–60 с. Поле не поднимается, форсаж 16 Тл отвергнут","Привод шарнира: вторая независимая обмотка статора в том же корпусе (+4)","Перекрёстная подача: бак L → гондолы 2 и 3, бак R → 1 и 4, клапан-перемычка (+1)","Второй инжектор зарядов в том же блоке (+1); второй криокулер ВТСП (+1)","Синхровал крыльев через брюхо с редуктором (+2)","Ручной аналоговый резерв: ручка → дифференциал мощности чаш (+1); аварийный O₂-коллектор на 14 мест (+1)"],"fmea":[{"component_ru":"Камера (чаша) в висении у грунта","failure_ru":"Погасание синтеза/повреждение чаши","effect_before_ru":"V1: при 55,9 т двум оставшимся нужно 274 кН — форсаж или сброс","mitigation_ru":"Три оставшиеся берут W/2 (передняя противоположная) и 0,34/0,16 W (задние). Аварийный режим 306 кН/чаша без новых деталей","effect_after_ru":"Взлёт 59,75 т: Т/В 1,04 → посадка обратно; посадка 37,7 т: нужно 185 кН (87 % штатной), висение сохранено","detection_ru":"Датчик тока катушки и нейтронов, 15 мс","added_parts":0,"added_mass_t":0,"sim":"chamber_out"},{"component_ru":"Гондола целиком","failure_ru":"Потеря гондолы (пилон, вал, пожар)","effect_before_ru":"Как отказ чаши плюс несимметрия массы","mitigation_ru":"Тот же аварийный режим; Т/В без гондолы 1,04/1,13; в марше −25 % тяги, Δv сохраняется","effect_after_ru":"Посадка вертикально или на крыло 88 м/с","detection_ru":"Датчики положения вала, тяги","added_parts":0,"added_mass_t":0,"sim":"pod_out"},{"component_ru":"Шарнир гондолы","failure_ru":"Заклинивание привода/вала","effect_before_ru":"Один привод: гондола застревает в любом угле","mitigation_ru":"Вторая обмотка статора в том же моторе (отказ обмотки/питания). При заклинивании подшипника гондолу гасят → случай «минус гондола»","effect_after_ru":"Застряла в −90°: посадка на 3 чаши или на крыло; в 0° в полёте — гасят, полёт на 3","detection_ru":"Рассогласование задатчик–угол >2°","added_parts":4,"added_mass_t":0.12,"sim":"pod_jam"},{"component_ru":"Поле чаши","failure_ru":"Срыв поля (квенч) на высоте 50 м","effect_before_ru":"Тяга чаши 0 за ~1 с, перезапуск 10–30 мин","mitigation_ru":"Остальные три переходят в аварийный режим за 0,2 с; провал высоты <1 м","effect_after_ru":"Снижение и посадка на 3 чаши (посадочная масса — штатной мощностью)","detection_ru":"dB/dt катушки","added_parts":0,"added_mass_t":0,"sim":"quench"},{"component_ru":"Подача аргона и зарядов","failure_ru":"Отказ бака/насоса/инжектора","effect_before_ru":"Один инжектор — общий отказ всех чаш","mitigation_ru":"Баки накрест (L→2,3; R→1,4) с перемычкой; второй инжектор в блоке зарядов","effect_after_ru":"Любой одиночный отказ подачи — все 4 чаши работают","detection_ru":"Давление/расход","added_parts":2,"added_mass_t":0.15,"sim":"feed"},{"component_ru":"Питание и криостат катушек","failure_ru":"Отказ энергоузла/криокулера","effect_before_ru":"Общий узел — отказ всех катушек","mitigation_ru":"Каждая чаша сама питается от индуктивной рекуперации импульса (как Helion). Энергоузел нужен только для пуска. Второй криокулер; тепловой запас ВТСП-катушки ≥5 мин","effect_after_ru":"Полёт продолжается; без обоих кулеров — 5 мин на посадку","detection_ru":"Температура катушек","added_parts":1,"added_mass_t":0.15,"sim":"power_off_glide"},{"component_ru":"Магнитное отклонение струи","failure_ru":"Отказ секций выходной катушки","effect_before_ru":"Потеря ±8° по второй оси","mitigation_ru":"Рыскание — встречный наклон гондол; крен/тангаж — дифференциал тяги","effect_after_ru":"Без ограничений, кроме точности висения","detection_ru":"Ток секций","added_parts":0,"added_mass_t":0,"sim":"control"},{"component_ru":"Крыло (поворот)","failure_ru":"Заклинивание одной консоли","effect_before_ru":"Несимметрия стреловидности","mitigation_ru":"Синхровал: консоли только вместе. Заклинило обе — посадка вертикально (штатный режим)","effect_after_ru":"Двойной (крыло 70° + нет тяги): посадка ~105 м/с на ВПП, выживаемо","detection_ru":"Угол консолей","added_parts":2,"added_mass_t":0.15,"sim":"wing_jam"},{"component_ru":"Тяга полностью","failure_ru":"Потеря всех чаш в полёте","effect_before_ru":"Посадка без тяги ~110–125 м/с","mitigation_ru":"Крыло 48,2 + наплыв 16,8 = 65 м², CL 1,2, 37,7 т (без аргона висения)","effect_after_ru":"Планирование, посадка 88 м/с, ВПП ~2,5 км","detection_ru":"—","added_parts":0,"added_mass_t":1.77,"sim":"power_off_glide"},{"component_ru":"Управление","failure_ru":"Отказ фотонного автомата/привода","effect_before_ru":"3 канала 2 из 3, ручного нет","mitigation_ru":"Механика (обмотки вала) → аналоговый контур → фотонный автомат; ручная аналоговая ручка — прямо на дифференциал мощности","effect_after_ru":"Висение вручную на посадочной массе","detection_ru":"Голосование каналов","added_parts":1,"added_mass_t":0.03,"sim":"control"},{"component_ru":"Шасси","failure_ru":"Не вышла опора","effect_before_ru":"Опрокидывание","mitigation_ru":"Вертикальная посадка на киль с убранными опорами, 0,5 м/с. Чаши гасят при касании (горловина над брюхом 0,4 м)","effect_after_ru":"Аппарат повреждён, экипаж цел","detection_ru":"Концевики","added_parts":0,"added_mass_t":0,"sim":"gear"},{"component_ru":"Гермокабина","failure_ru":"Разгерметизация","effect_before_ru":"Нет аварийного кислорода","mitigation_ru":"Тамбур с люком делит кабину на 2 отсека; O₂-маски у 14 кресел; экстренное снижение ниже 4 км","effect_after_ru":"Экипаж жив, посадка","detection_ru":"Датчик давления","added_parts":1,"added_mass_t":0.05,"sim":"none"}],"engine_out_ru":"Одна чаша на гондолу, поэтому «минус камера» = «минус гондола». Три чаши: противоположная передняя/задняя берёт W/2, две другие — 0,34 и 0,16 W (из моментов при плечах 4,6/3,5/5,0 м). Аварийный режим: 1,76 ГВт при 11,5 км/с дают 306 кН (+44 %), расход 27 кг/с, 30–60 с. Поле 12,1 Тл, давление на чаше 0,3 МПа ≪ 58 МПа, 16 Тл не нужны. Т/В: 1,45 штатно / 1,04 без одной (взлёт 59,75 т) / 1,13 штатной мощностью на посадочной массе 37,7 т.","pod_out_ru":"Как отказ камеры: висение на 3 гондолах, Т/В 1,04 при MTOM (только посадка обратно), 1,13 при 37,7 т. В марше тяга −25 %, Δv прежнее. Застрявшую гондолу гасят. Две гондолы в висении удержать нельзя (несимметрия z 3,5/5,0) — профиль ограничивает висение ниже 20 м до 15 с.","quench_ru":"Срыв поля на 50 м: тяга чаши 0 за ~1 с. Три другие выходят в аварийный режим за 0,2 с, провал высоты <1 м. Перезапуск 10–30 мин не ждём — садимся на 3 чаши. Форсаж 16 Тл не применяется (риск второго срыва).","power_off_ru":"Полная потеря тяги в полёте: планирование при стреловидности 20°. Несущая площадь 65 м² (крыло 48,2 + наплыв 16,8), CL 1,2, масса 37,7 т → 88 м/с (было 109–125). ВПП ~2,5 км. Вход с орбиты и так без тяги. Если крыло заклинило в 70°, посадка ~105 м/с.","mass":{"mtom_t":59.75,"dry_t":27.35,"payload_t":10,"reaction_mass_t":22.4,"tw_earth":1.45,"tw_one_chamber_out":1.04,"tw_one_pod_out":1.04,"mass_table_ru":"Сухая масса V1 24,8 т. Плюс крыло, наплыв и ТЗП +1,77 т (крыло 4,37 т). Плюс отказоустойчивость +0,65 т (обмотки 0,12, подача 0,15, криокулер 0,15, синхровал 0,15, ручной резерв 0,03, O₂ 0,05). Плюс баки +0,13 т. Сухая 27,35 т. Нагрузка 10 т. Аргон 22,4 т (R 1,589 + 0,4). Взлётная 59,75 т. Посадочная (без тяги) 37,7 т. Т/В 0,852 МН / 0,586 МН = 1,45."},"propulsion":{"pods":4,"chambers_per_pod":1,"thrust_per_chamber_MN":0.213,"total_thrust_MN":0.852,"cup_radius_m":0.55,"field_T":12.1,"jet_power_liftoff_GW":6.4,"ve_ground_kms":15,"ve_vac_kms":40,"tvc_ru":"Шарнир z −90…+10° (две обмотки статора на валу), магнитное отклонение ±8°, дифференциал ±25 %. Аварийно 306 кН/чаша (11,5 км/с). Без чаш — 16 газовых сопел на аргоне. Ручной аналоговый резерв"},"wings":{"area_m2":48.2,"span_open_m":18.4,"span_stowed_m":15.78,"landing_speed_power_off_ms":88,"sweep_min_deg":20,"sweep_max_deg":70,"scheme_ru":"Низкое поворотное крыло у брюха (y −1,42). Консоль 5,6 м, хорды 6,0/2,6, ПК 20°. Шарнир (0; −1,42; ±3,9), синхровал. Наплыв 6 × 1,4 м. Хранение 70° (поворот 50°) → 15,78 м"},"stowed_bbox_m":[19,15.78,3.65],"parts":{"total_moving":13,"added_vs_v1":11,"list_ru":"Подвижные: 4 шарнира гондол, 2 консоли, синхровал (+1), 3 опоры, грузовой люк, люк входа, клапан-перемычка (+1). Неподвижные добавленные: 4 вторые обмотки статора, второй инжектор, второй криокулер, редуктор синхровала, ручная ручка, O₂-коллектор. Всего +11 деталей, +0,65 т"},"fixed_core_ru":"Неизменно для всех обликов (ЦМ = 0). Кокпит (8,6; 0,2; 0), кресла командиров x 8,45, z ±0,6. Тамбур с люком x 7,65 (люк z −2,15). Салон 12 мест x 4,1/5,4/6,7, z ±0,55/±1,2. Грузовой отсек (−0,3; 0,85; 0) 4,6 × 1,3 × 3,4 с верхним люком. Баки аргона (−0,3; −0,52; ±1,1) r 0,75, L 4,7. Заряды (−6; 0,4; 0), энергоузел (−6; −0,7; 0). Шарниры гондол: передние (4,6; 1,3; ±3,5), задние (−4,6; 0,2; ±5,0), ось z. Шарниры крыла (0; −1,42; ±3,9), ось y. Экраны W у передних валов. Опоры: основные (−3,4; −1,3; ±1,8), передняя (8; −0,95; 0). Облик может менять: грани и сечения корпуса в пределах 19 × 5,0 × 3,7 м, форму наплыва, носа и пилонов, обтекатели гондол (r ≤ 0,75 м), форму консоли при площади ≥48 м² и stowed-полуразмахе ≤8,0 м, рисунок люков (восьмигранные), лак и текстуру. Знак поворота: правая рука вокруг axis.","geometry":{"hull_sections":[{"x":-9,"hw":1.6,"yt":0.9,"yb":-0.9,"ch":0.5},{"x":-6.5,"hw":2.3,"yt":1.4,"yb":-1.4,"ch":0.7},{"x":-3,"hw":2.5,"yt":1.6,"yb":-1.6,"ch":0.8},{"x":1,"hw":2.5,"yt":1.6,"yb":-1.6,"ch":0.8},{"x":4,"hw":2.4,"yt":1.7,"yb":-1.5,"ch":0.8},{"x":7,"hw":2.2,"yt":1.8,"yb":-1.3,"ch":0.8},{"x":8.8,"hw":1.9,"yt":1.6,"yb":-1.1,"ch":0.7},{"x":10,"hw":0.7,"yt":0.6,"yb":-0.5,"ch":0.25}],"primitives":[{"id":"cabin","kind":"box","role":"cabin","group":"body","center":[5.4,0.3,0],"dims":[4,2.3,3.6],"note_ru":"салон 12 мест"},{"id":"vestibule","kind":"box","role":"cabin","group":"body","center":[7.65,0.3,0],"dims":[0.5,2.1,3.4],"note_ru":"тамбур, гермоперегородка"},{"id":"cockpit","kind":"box","role":"cabin","group":"body","center":[8.6,0.2,0],"dims":[1.4,1.9,2.6],"note_ru":"кокпит 2 места"},{"id":"seat_c1","kind":"box","role":"seat","group":"body","center":[8.45,-0.3,-0.6],"dims":[1.1,1,0.7]},{"id":"seat_c2","kind":"box","role":"seat","group":"body","center":[8.45,-0.3,0.6],"dims":[1.1,1,0.7]},{"id":"seat_01","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,-1.2],"dims":[1.2,1,0.6]},{"id":"seat_02","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,-0.55],"dims":[1.2,1,0.6]},{"id":"seat_03","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,0.55],"dims":[1.2,1,0.6]},{"id":"seat_04","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,1.2],"dims":[1.2,1,0.6]},{"id":"seat_05","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,-1.2],"dims":[1.2,1,0.6]},{"id":"seat_06","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,-0.55],"dims":[1.2,1,0.6]},{"id":"seat_07","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,0.55],"dims":[1.2,1,0.6]},{"id":"seat_08","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,1.2],"dims":[1.2,1,0.6]},{"id":"seat_09","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,-1.2],"dims":[1.2,1,0.6]},{"id":"seat_10","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,-0.55],"dims":[1.2,1,0.6]},{"id":"seat_11","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,0.55],"dims":[1.2,1,0.6]},{"id":"seat_12","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,1.2],"dims":[1.2,1,0.6]},{"id":"console","kind":"box","role":"console","group":"body","center":[9.2,0,0],"dims":[0.2,0.5,2],"note_ru":"фотонный пульт + ручной аналоговый резерв"},{"id":"door_L","kind":"box","role":"door","group":"body","center":[7.65,0.3,-2.15],"dims":[0.9,1.3,0.12],"note_ru":"восьмигранный люк"},{"id":"cargo_bay","kind":"box","role":"other","group":"body","center":[-0.3,0.85,0],"dims":[4.6,1.3,3.4],"note_ru":"груз 10 т"},{"id":"tank_L","kind":"cylinder","role":"tank","group":"body","axis":"x","center":[-0.3,-0.52,-1.1],"dims":[0.75,4.7],"note_ru":"аргон → гондолы 2, 3; перемычка"},{"id":"tank_R","kind":"cylinder","role":"tank","group":"body","axis":"x","center":[-0.3,-0.52,1.1],"dims":[0.75,4.7],"note_ru":"аргон → гондолы 1, 4"},{"id":"charges","kind":"box","role":"charges","group":"body","center":[-6,0.4,0],"dims":[1.2,0.8,1.2],"note_ru":"заряды, 2 инжектора"},{"id":"power_unit","kind":"box","role":"other","group":"body","center":[-6,-0.7,0],"dims":[2.5,1,2.6],"note_ru":"пуск, 2 криокулера"},{"id":"glove_L","kind":"box","role":"structure","group":"body","center":[0,-1.42,-3.2],"dims":[6,0.3,1.4],"note_ru":"наплыв 8,4 м², синхровал"},{"id":"glove_R","kind":"box","role":"structure","group":"body","center":[0,-1.42,3.2],"dims":[6,0.3,1.4]},{"id":"pylon_3","kind":"box","role":"structure","group":"body","center":[-4.6,0.2,3.32],"dims":[0.7,0.45,1.85]},{"id":"pylon_4","kind":"box","role":"structure","group":"body","center":[-4.6,0.2,-3.32],"dims":[0.7,0.45,1.85]},{"id":"rcs_1","kind":"box","role":"other","group":"body","center":[4.6,1.9,2.65],"dims":[0.3,0.25,0.3]},{"id":"rcs_2","kind":"box","role":"other","group":"body","center":[4.6,1.9,-2.65],"dims":[0.3,0.25,0.3]},{"id":"shield_1","kind":"box","role":"shield","group":"body","center":[5.2,0.85,2.65],"dims":[2.4,1.4,0.013]},{"id":"shield_2","kind":"box","role":"shield","group":"body","center":[5.2,0.85,-2.65],"dims":[2.4,1.4,0.013]},{"id":"shield_3","kind":"box","role":"shield","group":"body","center":[-3.75,0.2,4.45],"dims":[0.013,0.6,0.8]},{"id":"shield_4","kind":"box","role":"shield","group":"body","center":[-3.75,0.2,-4.45],"dims":[0.013,0.6,0.8]},{"id":"cargo_hatch","kind":"box","role":"door","group":"cargo_hatch","center":[-0.3,1.55,0],"dims":[4.6,0.08,2.5]},{"id":"pod_1_shell","kind":"cylinder","role":"pod","group":"pod_1","axis":"y","center":[4.6,0.8,3.5],"dims":[0.75,1.8]},{"id":"pod_1_coil","kind":"torus","role":"coil","group":"pod_1","axis":"y","center":[4.6,1.3,3.5],"dims":[0.55,0.15]},{"id":"pod_1_cup","kind":"cone","role":"cup","group":"pod_1","axis":"y","center":[4.6,0.8500000000000001,3.5],"dims":[0.55,0.9]},{"id":"pod_2_shell","kind":"cylinder","role":"pod","group":"pod_2","axis":"y","center":[4.6,0.8,-3.5],"dims":[0.75,1.8]},{"id":"pod_2_coil","kind":"torus","role":"coil","group":"pod_2","axis":"y","center":[4.6,1.3,-3.5],"dims":[0.55,0.15]},{"id":"pod_2_cup","kind":"cone","role":"cup","group":"pod_2","axis":"y","center":[4.6,0.8500000000000001,-3.5],"dims":[0.55,0.9]},{"id":"pod_3_shell","kind":"cylinder","role":"pod","group":"pod_3","axis":"y","center":[-4.6,-0.3,5],"dims":[0.75,1.8]},{"id":"pod_3_coil","kind":"torus","role":"coil","group":"pod_3","axis":"y","center":[-4.6,0.2,5],"dims":[0.55,0.15]},{"id":"pod_3_cup","kind":"cone","role":"cup","group":"pod_3","axis":"y","center":[-4.6,-0.25,5],"dims":[0.55,0.9]},{"id":"pod_4_shell","kind":"cylinder","role":"pod","group":"pod_4","axis":"y","center":[-4.6,-0.3,-5],"dims":[0.75,1.8]},{"id":"pod_4_coil","kind":"torus","role":"coil","group":"pod_4","axis":"y","center":[-4.6,0.2,-5],"dims":[0.55,0.15]},{"id":"pod_4_cup","kind":"cone","role":"cup","group":"pod_4","axis":"y","center":[-4.6,-0.25,-5],"dims":[0.55,0.9]},{"id":"gear_main_L","kind":"cylinder","role":"gear","group":"gear_main","axis":"y","center":[-3.4,-2.15,-1.8],"dims":[0.12,1.7]},{"id":"gear_main_R","kind":"cylinder","role":"gear","group":"gear_main","axis":"y","center":[-3.4,-2.15,1.8],"dims":[0.12,1.7]},{"id":"gear_nose","kind":"cylinder","role":"gear","group":"gear_nose","axis":"y","center":[8,-1.975,0],"dims":[0.1,2.05]}],"wings":[{"side":"R","group":"wing_R","root_le":[2.8,-1.42,3.6],"span":5.6,"root_chord":6,"tip_chord":2.6,"le_sweep_deg":20,"dihedral_deg":0,"thickness":0.22},{"side":"L","group":"wing_L","root_le":[2.8,-1.42,-3.6],"span":5.6,"root_chord":6,"tip_chord":2.6,"le_sweep_deg":20,"dihedral_deg":0,"thickness":0.22}],"movers":[{"group":"pod_1","pivot":[4.6,1.3,3.5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10,"note_ru":"правая рука; −90° струя назад; 2 обмотки"},{"group":"pod_2","pivot":[4.6,1.3,-3.5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10},{"group":"pod_3","pivot":[-4.6,0.2,5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10},{"group":"pod_4","pivot":[-4.6,0.2,-5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10},{"group":"wing_R","pivot":[0,-1.42,3.9],"axis":[0,1,0],"hover_deg":0,"transition_deg":0,"cruise_deg":-25,"stowed_deg":-50,"entry_deg":-50,"min_deg":-50,"max_deg":0,"note_ru":"правая рука вокруг +y: −50° = стреловидность назад 70°, z max 7,89"},{"group":"wing_L","pivot":[0,-1.42,-3.9],"axis":[0,1,0],"hover_deg":0,"transition_deg":0,"cruise_deg":25,"stowed_deg":50,"entry_deg":50,"min_deg":0,"max_deg":50,"note_ru":"синхровал с wing_R"},{"group":"gear_main","pivot":[-3.4,-1.3,0],"axis":[0,0,1],"hover_deg":0,"transition_deg":0,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":0},{"group":"gear_nose","pivot":[8,-0.95,0],"axis":[0,0,1],"hover_deg":0,"transition_deg":0,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":0},{"group":"cargo_hatch","pivot":[-0.3,1.6,-1.25],"axis":[1,0,0],"hover_deg":0,"transition_deg":0,"cruise_deg":0,"stowed_deg":0,"entry_deg":0,"min_deg":0,"max_deg":110}],"thrusters":[{"id":"cup_1","group":"pod_1","origin":[4.6,-0.1,3.5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8},{"id":"cup_2","group":"pod_2","origin":[4.6,-0.1,-3.5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8},{"id":"cup_3","group":"pod_3","origin":[-4.6,-1.2,5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8},{"id":"cup_4","group":"pod_4","origin":[-4.6,-1.2,-5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8}]}},"looks":[{"id":"A","name_ru":"A «Кристалл»","tagline_ru":"Гранёный восьмигранник с многогранным носом, как у «Тантры». Ядро V1-ОЯ без изменений, новых деталей 0","idea_ru":"Корпус из 9 восьмиугольных сечений (x −9…10 м) с плоскими гранями. Нос — «кристалл»: две добавочные ступени граней (x 9,5 и 10,0 м), как иридиевый нос «Тантры». Каждая грань — плоская панель ТЗП. Плоских типоразмеров ~40 вместо гнутых листов. Панель меняется по месту, отдельно, без оснастки. Обтекатели гондол восьмигранные (вписаны в r 0,75 м, без изменения габарита). Наплыв сделан гранёным клином 6,2 × 1,4 м. Ядро (кабина, кресла, баки, гондолы, шарниры, тяги, movers) скопировано без изменений.","aero_ru":"Размах 18,4 м, крыло 2 × 24,08 = 48,2 м², наплыв 2 × 8,68 = 17,4 м², несущая площадь 65,5 м². Удлинение 5,2. Качество на дозвуке ~8 (оценка по профилю 10, минус потери на рёбрах граней 15–20 %). Посадка без тяги: 37,7 т, CL 1,2 → 87,6 м/с (численно). Гиперзвук: стреловидность 70°, корпус с плоским брюхом работает как клин. L/D ~1,5 при угле атаки 35–40°. Рёбра скруглены r ≥ 5 см: вдоль рёбер нет пиков нагрева.","hypersonic_ru":"Вход носом и брюхом, α 35–40°, стреловидность 70°. Многогранный нос даёт отсоединённую ударную волну; плоское брюхо — равномерное давление. Рёбра граней скруглены r 5 см (на остром ребре тепловой поток был бы ×3). Гондолы повёрнуты на −90° и стоят в тени корпуса.","thermal_ru":"Нос и передние кромки — до ~1700 °C: плитки C/SiC с иридиевым покрытием (родство с носом «Тантры»). Брюхо — плоские плитки ТЗП ~1300 °C, одного типоразмера на грань. Верх ≤ 600 °C, матовый керамический лак. Плоские грани упрощают ремонт: плитку меняют без подгонки по кривизне.","materials_ru":"Каркас — Ti/Al-Li шпангоуты по восьмиугольнику. Грани — сотовые панели C/SiC. Нос — C/SiC с Ir-покрытием. Крыло — C/C кессон с ТЗП. Лак — матовая керамика, тёмный текстурный вид. Свечение только функциональное: чаши, кромки люков, бортовые огни.","kinship_ru":"Прямое родство с «Тантрой»: гранёный восьмигранный корпус, многогранный иридиевый нос, восьмигранные люки, тёмный матовый лак. Это корабль в малом масштабе.","mass_delta_t":0.05,"wing_area_m2":48.16,"landing_speed_power_off_ms":87.6,"stowed_bbox_m":[19,15.44,3.65],"fits_hangar":true,"growth_ru":"Ангар не растёт. Габарит stowed посчитан численно (Родригес, movers применены к примитивам и трапециям): 19,0 × 15,44 × 3,65 м при пределе 20,2 × 16,0 × 5,4 м. Запас по ширине 0,56 м, по высоте 1,75 м.","pros_ru":["Добавлено деталей 0, масса +0,05 т (две ступени носа)","Посадка без тяги 87,6 м/с ≤ 90","Stowed 15,44 м ≤ 16,0 (было 15,78)","Плоские панели ТЗП: ~40 типоразмеров, замена по месту","Прямое визуальное родство с «Тантрой»"],"cons_ru":["Рёбра граней: потери качества ~15–20 % (L/D ~8 вместо ~10)","Скругление рёбер r 5 см обязательно, иначе тепловой поток на ребре ×3","Иридиевое покрытие носа дорогое"],"palette":{"hull":"#2B2D30","dark_metal":"#17181A","accent":"#8A8F96","glow":"#5FD4FF"},"geometry":{"hull_sections":[{"x":-9,"hw":1.6,"yt":0.9,"yb":-0.9,"ch":0.5},{"x":-6.5,"hw":2.3,"yt":1.4,"yb":-1.4,"ch":0.7},{"x":-3,"hw":2.5,"yt":1.6,"yb":-1.6,"ch":0.8},{"x":1,"hw":2.5,"yt":1.6,"yb":-1.6,"ch":0.8},{"x":4,"hw":2.4,"yt":1.7,"yb":-1.5,"ch":0.8},{"x":7,"hw":2.2,"yt":1.8,"yb":-1.3,"ch":0.8},{"x":8.8,"hw":1.9,"yt":1.6,"yb":-1.1,"ch":0.75},{"x":9.5,"hw":1.15,"yt":1.15,"yb":-0.85,"ch":0.5},{"x":10,"hw":0.35,"yt":0.4,"yb":-0.4,"ch":0.15}],"primitives":[{"id":"cabin","kind":"box","role":"cabin","group":"body","center":[5.4,0.3,0],"dims":[4,2.3,3.6],"note_ru":"салон 12 мест"},{"id":"vestibule","kind":"box","role":"cabin","group":"body","center":[7.65,0.3,0],"dims":[0.5,2.1,3.4],"note_ru":"тамбур, гермоперегородка"},{"id":"cockpit","kind":"box","role":"cabin","group":"body","center":[8.6,0.2,0],"dims":[1.4,1.9,2.6],"note_ru":"кокпит 2 места"},{"id":"seat_c1","kind":"box","role":"seat","group":"body","center":[8.45,-0.3,-0.6],"dims":[1.1,1,0.7]},{"id":"seat_c2","kind":"box","role":"seat","group":"body","center":[8.45,-0.3,0.6],"dims":[1.1,1,0.7]},{"id":"seat_01","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,-1.2],"dims":[1.2,1,0.6]},{"id":"seat_02","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,-0.55],"dims":[1.2,1,0.6]},{"id":"seat_03","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,0.55],"dims":[1.2,1,0.6]},{"id":"seat_04","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,1.2],"dims":[1.2,1,0.6]},{"id":"seat_05","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,-1.2],"dims":[1.2,1,0.6]},{"id":"seat_06","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,-0.55],"dims":[1.2,1,0.6]},{"id":"seat_07","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,0.55],"dims":[1.2,1,0.6]},{"id":"seat_08","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,1.2],"dims":[1.2,1,0.6]},{"id":"seat_09","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,-1.2],"dims":[1.2,1,0.6]},{"id":"seat_10","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,-0.55],"dims":[1.2,1,0.6]},{"id":"seat_11","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,0.55],"dims":[1.2,1,0.6]},{"id":"seat_12","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,1.2],"dims":[1.2,1,0.6]},{"id":"console","kind":"box","role":"console","group":"body","center":[9.2,0,0],"dims":[0.2,0.5,2],"note_ru":"фотонный пульт + ручной аналоговый резерв"},{"id":"door_L","kind":"box","role":"door","group":"body","center":[7.65,0.3,-2.15],"dims":[0.9,1.3,0.12],"note_ru":"восьмигранный люк"},{"id":"cargo_bay","kind":"box","role":"other","group":"body","center":[-0.3,0.85,0],"dims":[4.6,1.3,3.4],"note_ru":"груз 10 т"},{"id":"tank_L","kind":"cylinder","role":"tank","group":"body","axis":"x","center":[-0.3,-0.52,-1.1],"dims":[0.75,4.7],"note_ru":"аргон → гондолы 2, 3; перемычка"},{"id":"tank_R","kind":"cylinder","role":"tank","group":"body","axis":"x","center":[-0.3,-0.52,1.1],"dims":[0.75,4.7],"note_ru":"аргон → гондолы 1, 4"},{"id":"charges","kind":"box","role":"charges","group":"body","center":[-6,0.4,0],"dims":[1.2,0.8,1.2],"note_ru":"заряды, 2 инжектора"},{"id":"power_unit","kind":"box","role":"other","group":"body","center":[-6,-0.7,0],"dims":[2.5,1,2.6],"note_ru":"пуск, 2 криокулера"},{"id":"glove_L","kind":"box","role":"structure","group":"body","center":[0,-1.42,-3.2],"dims":[6.2,0.3,1.4],"note_ru":"гранёный наплыв 8,68 м², синхровал"},{"id":"glove_R","kind":"box","role":"structure","group":"body","center":[0,-1.42,3.2],"dims":[6.2,0.3,1.4],"note_ru":"гранёный наплыв 8,68 м²"},{"id":"pylon_3","kind":"box","role":"structure","group":"body","center":[-4.6,0.2,3.32],"dims":[0.7,0.45,1.85]},{"id":"pylon_4","kind":"box","role":"structure","group":"body","center":[-4.6,0.2,-3.32],"dims":[0.7,0.45,1.85]},{"id":"rcs_1","kind":"box","role":"other","group":"body","center":[4.6,1.9,2.65],"dims":[0.3,0.25,0.3]},{"id":"rcs_2","kind":"box","role":"other","group":"body","center":[4.6,1.9,-2.65],"dims":[0.3,0.25,0.3]},{"id":"shield_1","kind":"box","role":"shield","group":"body","center":[5.2,0.85,2.65],"dims":[2.4,1.4,0.013]},{"id":"shield_2","kind":"box","role":"shield","group":"body","center":[5.2,0.85,-2.65],"dims":[2.4,1.4,0.013]},{"id":"shield_3","kind":"box","role":"shield","group":"body","center":[-3.75,0.2,4.45],"dims":[0.013,0.6,0.8]},{"id":"shield_4","kind":"box","role":"shield","group":"body","center":[-3.75,0.2,-4.45],"dims":[0.013,0.6,0.8]},{"id":"cargo_hatch","kind":"box","role":"door","group":"cargo_hatch","center":[-0.3,1.55,0],"dims":[4.6,0.08,2.5]},{"id":"pod_1_shell","kind":"cylinder","role":"pod","group":"pod_1","axis":"y","center":[4.6,0.8,3.5],"dims":[0.75,1.8],"note_ru":"восьмигранный обтекатель"},{"id":"pod_1_coil","kind":"torus","role":"coil","group":"pod_1","axis":"y","center":[4.6,1.3,3.5],"dims":[0.55,0.15]},{"id":"pod_1_cup","kind":"cone","role":"cup","group":"pod_1","axis":"y","center":[4.6,0.8500000000000001,3.5],"dims":[0.55,0.9]},{"id":"pod_2_shell","kind":"cylinder","role":"pod","group":"pod_2","axis":"y","center":[4.6,0.8,-3.5],"dims":[0.75,1.8],"note_ru":"восьмигранный обтекатель"},{"id":"pod_2_coil","kind":"torus","role":"coil","group":"pod_2","axis":"y","center":[4.6,1.3,-3.5],"dims":[0.55,0.15]},{"id":"pod_2_cup","kind":"cone","role":"cup","group":"pod_2","axis":"y","center":[4.6,0.8500000000000001,-3.5],"dims":[0.55,0.9]},{"id":"pod_3_shell","kind":"cylinder","role":"pod","group":"pod_3","axis":"y","center":[-4.6,-0.3,5],"dims":[0.75,1.8],"note_ru":"восьмигранный обтекатель"},{"id":"pod_3_coil","kind":"torus","role":"coil","group":"pod_3","axis":"y","center":[-4.6,0.2,5],"dims":[0.55,0.15]},{"id":"pod_3_cup","kind":"cone","role":"cup","group":"pod_3","axis":"y","center":[-4.6,-0.25,5],"dims":[0.55,0.9]},{"id":"pod_4_shell","kind":"cylinder","role":"pod","group":"pod_4","axis":"y","center":[-4.6,-0.3,-5],"dims":[0.75,1.8],"note_ru":"восьмигранный обтекатель"},{"id":"pod_4_coil","kind":"torus","role":"coil","group":"pod_4","axis":"y","center":[-4.6,0.2,-5],"dims":[0.55,0.15]},{"id":"pod_4_cup","kind":"cone","role":"cup","group":"pod_4","axis":"y","center":[-4.6,-0.25,-5],"dims":[0.55,0.9]},{"id":"gear_main_L","kind":"cylinder","role":"gear","group":"gear_main","axis":"y","center":[-3.4,-2.15,-1.8],"dims":[0.12,1.7]},{"id":"gear_main_R","kind":"cylinder","role":"gear","group":"gear_main","axis":"y","center":[-3.4,-2.15,1.8],"dims":[0.12,1.7]},{"id":"gear_nose","kind":"cylinder","role":"gear","group":"gear_nose","axis":"y","center":[8,-1.975,0],"dims":[0.1,2.05]}],"wings":[{"side":"R","group":"wing_R","root_le":[2.8,-1.42,3.6],"span":5.6,"root_chord":6.2,"tip_chord":2.4,"le_sweep_deg":22,"dihedral_deg":0,"thickness":0.22},{"side":"L","group":"wing_L","root_le":[2.8,-1.42,-3.6],"span":5.6,"root_chord":6.2,"tip_chord":2.4,"le_sweep_deg":22,"dihedral_deg":0,"thickness":0.22}],"movers":[{"group":"pod_1","pivot":[4.6,1.3,3.5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10,"note_ru":"правая рука; −90° струя назад; 2 обмотки"},{"group":"pod_2","pivot":[4.6,1.3,-3.5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10},{"group":"pod_3","pivot":[-4.6,0.2,5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10},{"group":"pod_4","pivot":[-4.6,0.2,-5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10},{"group":"wing_R","pivot":[0,-1.42,3.9],"axis":[0,1,0],"hover_deg":0,"transition_deg":0,"cruise_deg":-25,"stowed_deg":-50,"entry_deg":-50,"min_deg":-50,"max_deg":0,"note_ru":"правая рука вокруг +y: −50° = ПК 72°, z max 7,72"},{"group":"wing_L","pivot":[0,-1.42,-3.9],"axis":[0,1,0],"hover_deg":0,"transition_deg":0,"cruise_deg":25,"stowed_deg":50,"entry_deg":50,"min_deg":0,"max_deg":50,"note_ru":"синхровал с wing_R"},{"group":"gear_main","pivot":[-3.4,-1.3,0],"axis":[0,0,1],"hover_deg":0,"transition_deg":0,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":0},{"group":"gear_nose","pivot":[8,-0.95,0],"axis":[0,0,1],"hover_deg":0,"transition_deg":0,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":0},{"group":"cargo_hatch","pivot":[-0.3,1.6,-1.25],"axis":[1,0,0],"hover_deg":0,"transition_deg":0,"cruise_deg":0,"stowed_deg":0,"entry_deg":0,"min_deg":0,"max_deg":110}],"thrusters":[{"id":"cup_1","group":"pod_1","origin":[4.6,-0.1,3.5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8},{"id":"cup_2","group":"pod_2","origin":[4.6,-0.1,-3.5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8},{"id":"cup_3","group":"pod_3","origin":[-4.6,-1.2,5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8},{"id":"cup_4","group":"pod_4","origin":[-4.6,-1.2,-5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8}]}},{"id":"B","name_ru":"B «Скат» — несущий корпус на ядре V1-ОЯ","tagline_ru":"Плоский гранёный корпус и широкие плечи несут ~35 % подъёмной силы. Консоли уменьшены до 2 × 20,5 м², посадка без тяги 78 м/с","idea_ru":"Корпус сплющен и расширен до 5,0 м по всей длине (hw 2,5 от x −6,5 до +4, нос лопаточный hw 2,1). Наплыв заменён «плечами» 7,0 × 1,6 м ×2 = 22,4 м² у брюха (y −1,42). Это полые обтекатели, корень консоли при стреловидности уходит в щель плеча. Пилоны задних гондол заменены плечевыми обтекателями 2,4 × 1,7 м: гондолы 3 и 4 утоплены в них. Консоли 5,0 м, хорды 5,4/2,8, ПК 20°, 2 × 20,5 = 41 м² (было 48,2). Ядро V1-ОЯ (кабина, кресла, баки, гондолы, шарниры, тяги, movers) скопировано без изменений. Новых деталей 0: плечи заменили наплывы, обтекатели заменили пилоны.","aero_ru":"Несущая площадь: консоли 41 + плечи 22,4 = 63,4 м² (CL 1,2) плюс плоское брюхо ~72 м² (вихревая подъёмная сила кромок, CL ≈ 0,35 при α 15°). ΣCL·S = 101 м² против 78 у ядра (65 × 1,2). Посадка без тяги 78 м/с при 38,25 т (ядро 88 м/с). Нагрузка на всю несущую поверхность 276 кг/м². Качество на дозвуке ≈ 6,5: у ядра ~7,5, у чистого несущего корпуса 4. Планирование с 10 км ≈ 65 км. Гиперзвук: L/D 1,4 при α 30–40° (у ядра ~1,1), боковая манёвренность ±600 км. Плоское брюхо с гранями-кромками работает как волнорез, балансировка по тангажу без щитков: гондолы −90° сзади и сверху дают стабилизирующий момент. Размах раскрытый 17,2 м (ПК 20°), в марше −25° (ПК 45°).","hypersonic_ru":"Вход при α 40°, вся планформа ~135 м² работает как щит. Баллистический коэффициент β ≈ 280 кг/м² против ~315 у ядра. Торможение идёт выше на ~3 км, пиковый тепловой поток ∝ √β, это примерно −6 %. Радиус притупления носа и кромок плеч 0,45 м (у ядра 0,3), отсюда ещё −20 % по Фэю–Риддлу. Пик ~1350 °C на носу и кромках плеч, ~1100 °C на брюхе. Консоли при входе в 70° прячутся в тень плеч, кромка консоли ≤1000 °C. Сход с орбиты без тяги, перегрузка ≤1,6 g.","thermal_ru":"Нагрев сосредоточен на гранях: нос и передние кромки плеч — C/SiC; брюхо — плитки из пенокерамики SiO₂–Al₂O₃ 50 мм под матовым чёрным боросиликатным лаком; верх ≤600 °C — гибкая керамическая ткань под тёмным лаком. Струя гондол в висении не задевает плечи: передние чаши на x 3,85–5,35 вне плеч (плечо x −3,2…+3,8). Задние гондолы на z ±5, обтекатель доходит до z 4,2, зазор 0,05 м по радиусу поворота. Аргон в баках получает ~15 % меньше тепла через брюхо: пик ниже, а плечи экранируют бока.","materials_ru":"Каркас — Ti-6Al-4V и Al-Li 2195. Нос и кромки плеч — C/SiC. Брюхо — керамическая плитка 50 мм. Консоли — титановый кессон с C/SiC кромкой. Обтекатели гондол — композит SiC/SiC. Покрытие — матовый керамический лак, тёмный текстурный (графит/базальт), грани подчёркнуты фасками. Свечение только функциональное: срез чаш (рабочий), навигационные огни на концах консолей, подсветка восьмигранных люков при открытии.","kinship_ru":"Как у «Тантры»: гранёный восьмиугольный корпус с крупными фасками (ch 0,9–0,95), тёмный матовый лак, восьмигранные люки (вход L и грузовой), поворотные гондолы с чашами — масштабная копия её планетарных моторов. Силуэт сверху — ромб-скат с утопленными гондолами, перекликается с кормовыми плечами звездолёта.","mass_delta_t":0.55,"wing_area_m2":63.4,"landing_speed_power_off_ms":78,"stowed_bbox_m":[19.01,15.34,3.64],"fits_hangar":true,"growth_ru":"Масса +0,55 т: консоли −0,65 т (41 вместо 48,2 м², 0,09 т/м²), плечи вместо наплыва +0,5 т (22,4 вместо 16,8 м²), расширенный корпус и ТЗП брюха +0,4 т, обтекатели задних гондол вместо пилонов +0,3 т. Сухая 27,9 т, взлётная 60,3 т, Т/В 1,44 (0,852 МН / 0,592 МН), без одной гондолы в аварийном режиме 1,03. Посадочная 38,25 т. Объём корпуса +3,5 м³ (ширина 5,0 м по всей длине): это резерв под аргон, +4,9 т, или под груз. Новых деталей 0. Численный stowed 19,01 × 15,34 × 3,64 м ≤ 20,2 × 16,0 × 5,4. В висении размах 17,2 м, высота с опорами 5,03 м.","pros_ru":["Посадка без тяги 78 м/с (ядро 88), запас 12 м/с до предела 90","Крыло заклинено в 70°: ΣCL·S ≈ 80 м², посадка ~88 м/с (ядро ~105)","β 280 вместо 315 кг/м², пик нагрева ниже на ~25 %, гиперзвуковое L/D 1,4","Stowed по ширине 15,34 м: запас 0,66 м до цели 16,0","+3,5 м³ внутреннего объёма под аргон или груз","0 новых деталей: плечи и обтекатели заменили наплыв и пилоны"],"cons_ru":["Качество на дозвуке 6,5 вместо ~7,5: планирование короче на ~13 %","Консоли 41 м², это меньше правила ядра ≥48 м². Площадь добирают плечи: несущая 63,4 м²","Масса +0,55 т, Т/В 1,44 (без гондолы 1,03 в аварийном режиме)","Корень консоли идёт в щель плеча: нужна герметизация щели при входе","Высота в висении с опорами 5,03 м (у ядра столько же)"],"palette":{"hull":"#2B2E31","dark_metal":"#1A1C1E","accent":"#7A6A52","glow":"#5FD3E8"},"geometry":{"hull_sections":[{"x":-9,"hw":1.7,"yt":0.9,"yb":-1.1,"ch":0.6},{"x":-6.5,"hw":2.5,"yt":1.35,"yb":-1.45,"ch":0.9},{"x":-3,"hw":2.5,"yt":1.62,"yb":-1.5,"ch":0.95},{"x":1,"hw":2.5,"yt":1.62,"yb":-1.5,"ch":0.95},{"x":4,"hw":2.5,"yt":1.68,"yb":-1.45,"ch":0.95},{"x":7,"hw":2.45,"yt":1.75,"yb":-1.3,"ch":0.9},{"x":8.8,"hw":2.1,"yt":1.55,"yb":-1.1,"ch":0.8},{"x":10,"hw":0.9,"yt":0.5,"yb":-0.45,"ch":0.3}],"primitives":[{"id":"cabin","kind":"box","role":"cabin","group":"body","center":[5.4,0.3,0],"dims":[4,2.3,3.6],"note_ru":"салон 12 мест"},{"id":"vestibule","kind":"box","role":"cabin","group":"body","center":[7.65,0.3,0],"dims":[0.5,2.1,3.4],"note_ru":"тамбур, гермоперегородка"},{"id":"cockpit","kind":"box","role":"cabin","group":"body","center":[8.6,0.2,0],"dims":[1.4,1.9,2.6],"note_ru":"кокпит 2 места"},{"id":"seat_c1","kind":"box","role":"seat","group":"body","center":[8.45,-0.3,-0.6],"dims":[1.1,1,0.7]},{"id":"seat_c2","kind":"box","role":"seat","group":"body","center":[8.45,-0.3,0.6],"dims":[1.1,1,0.7]},{"id":"seat_01","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,-1.2],"dims":[1.2,1,0.6]},{"id":"seat_02","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,-0.55],"dims":[1.2,1,0.6]},{"id":"seat_03","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,0.55],"dims":[1.2,1,0.6]},{"id":"seat_04","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,1.2],"dims":[1.2,1,0.6]},{"id":"seat_05","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,-1.2],"dims":[1.2,1,0.6]},{"id":"seat_06","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,-0.55],"dims":[1.2,1,0.6]},{"id":"seat_07","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,0.55],"dims":[1.2,1,0.6]},{"id":"seat_08","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,1.2],"dims":[1.2,1,0.6]},{"id":"seat_09","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,-1.2],"dims":[1.2,1,0.6]},{"id":"seat_10","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,-0.55],"dims":[1.2,1,0.6]},{"id":"seat_11","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,0.55],"dims":[1.2,1,0.6]},{"id":"seat_12","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,1.2],"dims":[1.2,1,0.6]},{"id":"console","kind":"box","role":"console","group":"body","center":[9.2,0,0],"dims":[0.2,0.5,2],"note_ru":"фотонный пульт + ручной аналоговый резерв"},{"id":"door_L","kind":"box","role":"door","group":"body","center":[7.65,0.3,-2.15],"dims":[0.9,1.3,0.12],"note_ru":"восьмигранный люк"},{"id":"cargo_bay","kind":"box","role":"other","group":"body","center":[-0.3,0.85,0],"dims":[4.6,1.3,3.4],"note_ru":"груз 10 т"},{"id":"tank_L","kind":"cylinder","role":"tank","group":"body","axis":"x","center":[-0.3,-0.52,-1.1],"dims":[0.75,4.7],"note_ru":"аргон → гондолы 2, 3; перемычка"},{"id":"tank_R","kind":"cylinder","role":"tank","group":"body","axis":"x","center":[-0.3,-0.52,1.1],"dims":[0.75,4.7],"note_ru":"аргон → гондолы 1, 4"},{"id":"charges","kind":"box","role":"charges","group":"body","center":[-6,0.4,0],"dims":[1.2,0.8,1.2],"note_ru":"заряды, 2 инжектора"},{"id":"power_unit","kind":"box","role":"other","group":"body","center":[-6,-0.7,0],"dims":[2.5,1,2.6],"note_ru":"пуск, 2 криокулера"},{"id":"shoulder_L","kind":"box","role":"structure","group":"body","center":[0.3,-1.42,-3.3],"dims":[7,0.35,1.6],"note_ru":"плечо 11,2 м², полое: щель консоли, синхровал; вместо наплыва"},{"id":"shoulder_R","kind":"box","role":"structure","group":"body","center":[0.3,-1.42,3.3],"dims":[7,0.35,1.6],"note_ru":"плечо 11,2 м²"},{"id":"fairing_3","kind":"box","role":"structure","group":"body","center":[-4.6,0,3.35],"dims":[2.4,0.5,1.7],"note_ru":"плечевой обтекатель гондолы 3 вместо пилона"},{"id":"fairing_4","kind":"box","role":"structure","group":"body","center":[-4.6,0,-3.35],"dims":[2.4,0.5,1.7],"note_ru":"плечевой обтекатель гондолы 4 вместо пилона"},{"id":"rcs_1","kind":"box","role":"other","group":"body","center":[4.6,1.9,2.65],"dims":[0.3,0.25,0.3]},{"id":"rcs_2","kind":"box","role":"other","group":"body","center":[4.6,1.9,-2.65],"dims":[0.3,0.25,0.3]},{"id":"shield_1","kind":"box","role":"shield","group":"body","center":[5.2,0.85,2.65],"dims":[2.4,1.4,0.013]},{"id":"shield_2","kind":"box","role":"shield","group":"body","center":[5.2,0.85,-2.65],"dims":[2.4,1.4,0.013]},{"id":"shield_3","kind":"box","role":"shield","group":"body","center":[-3.75,0.2,4.45],"dims":[0.013,0.6,0.8]},{"id":"shield_4","kind":"box","role":"shield","group":"body","center":[-3.75,0.2,-4.45],"dims":[0.013,0.6,0.8]},{"id":"cargo_hatch","kind":"box","role":"door","group":"cargo_hatch","center":[-0.3,1.55,0],"dims":[4.6,0.08,2.5]},{"id":"pod_1_shell","kind":"cylinder","role":"pod","group":"pod_1","axis":"y","center":[4.6,0.8,3.5],"dims":[0.75,1.8]},{"id":"pod_1_coil","kind":"torus","role":"coil","group":"pod_1","axis":"y","center":[4.6,1.3,3.5],"dims":[0.55,0.15]},{"id":"pod_1_cup","kind":"cone","role":"cup","group":"pod_1","axis":"y","center":[4.6,0.8500000000000001,3.5],"dims":[0.55,0.9]},{"id":"pod_2_shell","kind":"cylinder","role":"pod","group":"pod_2","axis":"y","center":[4.6,0.8,-3.5],"dims":[0.75,1.8]},{"id":"pod_2_coil","kind":"torus","role":"coil","group":"pod_2","axis":"y","center":[4.6,1.3,-3.5],"dims":[0.55,0.15]},{"id":"pod_2_cup","kind":"cone","role":"cup","group":"pod_2","axis":"y","center":[4.6,0.8500000000000001,-3.5],"dims":[0.55,0.9]},{"id":"pod_3_shell","kind":"cylinder","role":"pod","group":"pod_3","axis":"y","center":[-4.6,-0.3,5],"dims":[0.75,1.8]},{"id":"pod_3_coil","kind":"torus","role":"coil","group":"pod_3","axis":"y","center":[-4.6,0.2,5],"dims":[0.55,0.15]},{"id":"pod_3_cup","kind":"cone","role":"cup","group":"pod_3","axis":"y","center":[-4.6,-0.25,5],"dims":[0.55,0.9]},{"id":"pod_4_shell","kind":"cylinder","role":"pod","group":"pod_4","axis":"y","center":[-4.6,-0.3,-5],"dims":[0.75,1.8]},{"id":"pod_4_coil","kind":"torus","role":"coil","group":"pod_4","axis":"y","center":[-4.6,0.2,-5],"dims":[0.55,0.15]},{"id":"pod_4_cup","kind":"cone","role":"cup","group":"pod_4","axis":"y","center":[-4.6,-0.25,-5],"dims":[0.55,0.9]},{"id":"gear_main_L","kind":"cylinder","role":"gear","group":"gear_main","axis":"y","center":[-3.4,-2.15,-1.8],"dims":[0.12,1.7]},{"id":"gear_main_R","kind":"cylinder","role":"gear","group":"gear_main","axis":"y","center":[-3.4,-2.15,1.8],"dims":[0.12,1.7]},{"id":"gear_nose","kind":"cylinder","role":"gear","group":"gear_nose","axis":"y","center":[8,-1.975,0],"dims":[0.1,2.05]}],"wings":[{"side":"R","group":"wing_R","root_le":[2.8,-1.42,3.6],"span":5,"root_chord":5.4,"tip_chord":2.8,"le_sweep_deg":20,"dihedral_deg":0,"thickness":0.22},{"side":"L","group":"wing_L","root_le":[2.8,-1.42,-3.6],"span":5,"root_chord":5.4,"tip_chord":2.8,"le_sweep_deg":20,"dihedral_deg":0,"thickness":0.22}],"movers":[{"group":"pod_1","pivot":[4.6,1.3,3.5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10,"note_ru":"правая рука; −90° струя назад; 2 обмотки"},{"group":"pod_2","pivot":[4.6,1.3,-3.5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10},{"group":"pod_3","pivot":[-4.6,0.2,5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10},{"group":"pod_4","pivot":[-4.6,0.2,-5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10},{"group":"wing_R","pivot":[0,-1.42,3.9],"axis":[0,1,0],"hover_deg":0,"transition_deg":0,"cruise_deg":-25,"stowed_deg":-50,"entry_deg":-50,"min_deg":-50,"max_deg":0,"note_ru":"правая рука вокруг +y: −50° = ПК 70°, корень в щели плеча; z max 7,67"},{"group":"wing_L","pivot":[0,-1.42,-3.9],"axis":[0,1,0],"hover_deg":0,"transition_deg":0,"cruise_deg":25,"stowed_deg":50,"entry_deg":50,"min_deg":0,"max_deg":50,"note_ru":"синхровал с wing_R"},{"group":"gear_main","pivot":[-3.4,-1.3,0],"axis":[0,0,1],"hover_deg":0,"transition_deg":0,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":0},{"group":"gear_nose","pivot":[8,-0.95,0],"axis":[0,0,1],"hover_deg":0,"transition_deg":0,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":0},{"group":"cargo_hatch","pivot":[-0.3,1.6,-1.25],"axis":[1,0,0],"hover_deg":0,"transition_deg":0,"cruise_deg":0,"stowed_deg":0,"entry_deg":0,"min_deg":0,"max_deg":110}],"thrusters":[{"id":"cup_1","group":"pod_1","origin":[4.6,-0.1,3.5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8},{"id":"cup_2","group":"pod_2","origin":[4.6,-0.1,-3.5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8},{"id":"cup_3","group":"pod_3","origin":[-4.6,-1.2,5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8},{"id":"cup_4","group":"pod_4","origin":[-4.6,-1.2,-5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8}]}},{"id":"C","name_ru":"C «Стрела»","tagline_ru":"Стройный гранёный корпус 20,1 м, острый нос, двойная дельта 30°→75°; качество 11,5, посадка без тяги 86 м/с","idea_ru":"Ядро V1-ОЯ без изменений (кабина, 14 кресел, баки, 4 гондолы, шарниры, тяги). Меняется оболочка: корпус удлинён до 20,1 м (было 19,0), сужен до 4,6 м (было 5,0), нос заострён на 1,4 м перед кокпитом (сечение 0,24 м). Наплыв-перчатка вытянут до 7,5 × 1,4 м и вместе с консолью образует двойную дельту. Консоль 5,4 м, хорды 7,0/2,0 м, ПК 30° на посадке, 45° на крейсере, 75° на входе и в ангаре. Новых деталей нет: те же 2 консоли, синхровал, 2 наплыва.","aero_ru":"S = 48,6 (консоли) + 21,0 (наплыв) = 69,6 м², размах 18,0 м, λ 4,66. Дозвук: Cx0 ≈ 0,022 (тоньше корпус: миделевое сечение −8 %, нос-оживало), e 0,8 → K max ≈ 11,5 (ядро ≈ 9,5). Сверхзвук M 2 при ПК 75°: K ≈ 4,5 (ядро ≈ 3,8, т.к. крыло прячется в конус Маха μ = 30°). Запас хода: в атмосферном крейсере на тяге расход аргона ∝ 1/K → дальность +21 %; дальность планирования с 15 км: 11,5 × 15 = 170 км (ядро 140 км). Посадка без тяги: V = √(2·38,15 т·g /(1,225·69,6·1,2)) = 86 м/с (ядро 88); ВПП ~2,3 км. Двойная дельта даёт вихревую подъёмную силу наплыва при α 15–20°, CL 1,2 достижим без закрылков.","hypersonic_ru":"Вход при ПК 75° и α 35–40°: консоли в тени корпуса и наплыва, нагружено брюхо. K гиперзвук ≈ 2,1 (ядро 1,9) → боковая манёвренность ~ ±900 км. Баллистический коэффициент m/(CxS) ≈ 38 т/(1,3·69,6) ≈ 420 кг/м², пик нагрева ниже по высоте ~70 км.","thermal_ru":"Острый нос r 0,12 м → тепловой поток в точке торможения ~1,4 МВт/м² (q ∝ 1/√r), пик T ≈ 1900 °C — нос и передние кромки наплыва из УУКМ C/C-SiC. Брюхо при α 40°: 0,25–0,4 МВт/м², T ≈ 1250 °C — керамическая плитка. Кромки консолей при ПК 75° в тени: ≤ 900 °C.","materials_ru":"Нос и кромки наплыва: C/C-SiC (0,35 т). Брюхо: плитка SiC/Al₂O₃ 25 мм. Верх и консоли: титановый сплав под матовым керамическим лаком (тёмный графит). Силовой набор корпуса: Ti + композит C/эпокси вне зоны нагрева.","kinship_ru":"Гранёный восьмигранный корпус и тёмный матовый лак — как у «Тантры»; люки восьмигранные; свечение только у срезов чаш (сине-фиолетовое) и навигационных огней. Вытянутый острый силуэт — «стрела», уходящая из ангара вверх.","mass_delta_t":0.45,"wing_area_m2":69.6,"landing_speed_power_off_ms":86,"stowed_bbox_m":[20.1,15.69,3.62],"fits_hangar":true,"growth_ru":"Масса +0,45 т к ядру: наплыв +4,2 м² (+0,3 т), удлинение носа +1,1 м и ТЗП носа (+0,3 т), сужение корпуса −0,15 т. Взлётная 60,2 т, Т/В 0,852/0,59 = 1,44 (≥1,35). Посадочная 38,15 т. Ангар не растёт: численно stowed 20,1 × 15,69 × 3,62 м ≤ 20,2 × 16,0 × 5,4 (пример: 1 python, movers гондол −90°, крыла ∓45°). Деталей добавлено: 0.","pros_ru":["K дозвук 11,5 против 9,5 у ядра (+21 % дальности на аргоне)","Посадка без тяги 86 м/с (ядро 88), ВПП ~2,3 км","Сверхзвук K 4,5 при ПК 75°","Длина ангара 20,1 м ≤ 20,2, ширина 15,69 ≤ 16,0","0 новых деталей, +0,45 т"],"cons_ru":["Запас по длине ангара 0,1 м","Острый нос: 1900 °C, нужен C/C-SiC","λ 4,66 ниже, чем у ядра (5,2) — индуктивное сопротивление на взлёте выше","Обзор из кокпита вниз хуже (нос 1,4 м)"],"palette":{"hull":"#2B2E33","dark_metal":"#16181C","accent":"#8A7A5C","glow":"#6F7BFF"},"geometry":{"hull_sections":[{"x":-9.4,"hw":1.5,"yt":0.8,"yb":-0.8,"ch":0.45},{"x":-7,"hw":2.1,"yt":1.35,"yb":-1.35,"ch":0.65},{"x":-3.5,"hw":2.3,"yt":1.65,"yb":-1.5,"ch":0.75},{"x":1.5,"hw":2.3,"yt":1.65,"yb":-1.5,"ch":0.75},{"x":5,"hw":2.2,"yt":1.65,"yb":-1.45,"ch":0.75},{"x":7.6,"hw":2,"yt":1.6,"yb":-1.35,"ch":0.7},{"x":9.3,"hw":1.5,"yt":1.2,"yb":-1.1,"ch":0.55},{"x":10.2,"hw":0.6,"yt":0.5,"yb":-0.55,"ch":0.2},{"x":10.7,"hw":0.12,"yt":0.05,"yb":-0.1,"ch":0.04}],"primitives":[{"id":"cabin","kind":"box","role":"cabin","group":"body","center":[5.4,0.3,0],"dims":[4,2.3,3.6],"note_ru":"салон 12 мест"},{"id":"vestibule","kind":"box","role":"cabin","group":"body","center":[7.65,0.3,0],"dims":[0.5,2.1,3.4],"note_ru":"тамбур, гермоперегородка"},{"id":"cockpit","kind":"box","role":"cabin","group":"body","center":[8.6,0.2,0],"dims":[1.4,1.9,2.6],"note_ru":"кокпит 2 места"},{"id":"seat_c1","kind":"box","role":"seat","group":"body","center":[8.45,-0.3,-0.6],"dims":[1.1,1,0.7]},{"id":"seat_c2","kind":"box","role":"seat","group":"body","center":[8.45,-0.3,0.6],"dims":[1.1,1,0.7]},{"id":"seat_01","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,-1.2],"dims":[1.2,1,0.6]},{"id":"seat_02","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,-0.55],"dims":[1.2,1,0.6]},{"id":"seat_03","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,0.55],"dims":[1.2,1,0.6]},{"id":"seat_04","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,1.2],"dims":[1.2,1,0.6]},{"id":"seat_05","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,-1.2],"dims":[1.2,1,0.6]},{"id":"seat_06","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,-0.55],"dims":[1.2,1,0.6]},{"id":"seat_07","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,0.55],"dims":[1.2,1,0.6]},{"id":"seat_08","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,1.2],"dims":[1.2,1,0.6]},{"id":"seat_09","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,-1.2],"dims":[1.2,1,0.6]},{"id":"seat_10","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,-0.55],"dims":[1.2,1,0.6]},{"id":"seat_11","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,0.55],"dims":[1.2,1,0.6]},{"id":"seat_12","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,1.2],"dims":[1.2,1,0.6]},{"id":"console","kind":"box","role":"console","group":"body","center":[9.2,0,0],"dims":[0.2,0.5,2],"note_ru":"фотонный пульт + ручной аналоговый резерв"},{"id":"door_L","kind":"box","role":"door","group":"body","center":[7.65,0.3,-2.15],"dims":[0.9,1.3,0.12],"note_ru":"восьмигранный люк"},{"id":"cargo_bay","kind":"box","role":"other","group":"body","center":[-0.3,0.85,0],"dims":[4.6,1.3,3.4],"note_ru":"груз 10 т"},{"id":"tank_L","kind":"cylinder","role":"tank","group":"body","axis":"x","center":[-0.3,-0.52,-1.1],"dims":[0.75,4.7],"note_ru":"аргон → гондолы 2, 3; перемычка"},{"id":"tank_R","kind":"cylinder","role":"tank","group":"body","axis":"x","center":[-0.3,-0.52,1.1],"dims":[0.75,4.7],"note_ru":"аргон → гондолы 1, 4"},{"id":"charges","kind":"box","role":"charges","group":"body","center":[-6,0.4,0],"dims":[1.2,0.8,1.2],"note_ru":"заряды, 2 инжектора"},{"id":"power_unit","kind":"box","role":"other","group":"body","center":[-6,-0.7,0],"dims":[2.5,1,2.6],"note_ru":"пуск, 2 криокулера"},{"id":"glove_L","kind":"box","role":"structure","group":"body","center":[0.3,-1.42,-3],"dims":[7.5,0.3,1.4],"note_ru":"наплыв 10,5 м², кромка C/C-SiC, синхровал"},{"id":"glove_R","kind":"box","role":"structure","group":"body","center":[0.3,-1.42,3],"dims":[7.5,0.3,1.4],"note_ru":"наплыв 10,5 м²"},{"id":"pylon_3","kind":"box","role":"structure","group":"body","center":[-4.6,0.2,3.32],"dims":[0.7,0.45,1.85]},{"id":"pylon_4","kind":"box","role":"structure","group":"body","center":[-4.6,0.2,-3.32],"dims":[0.7,0.45,1.85]},{"id":"rcs_1","kind":"box","role":"other","group":"body","center":[4.6,1.9,2.65],"dims":[0.3,0.25,0.3]},{"id":"rcs_2","kind":"box","role":"other","group":"body","center":[4.6,1.9,-2.65],"dims":[0.3,0.25,0.3]},{"id":"shield_1","kind":"box","role":"shield","group":"body","center":[5.2,0.85,2.65],"dims":[2.4,1.4,0.013]},{"id":"shield_2","kind":"box","role":"shield","group":"body","center":[5.2,0.85,-2.65],"dims":[2.4,1.4,0.013]},{"id":"shield_3","kind":"box","role":"shield","group":"body","center":[-3.75,0.2,4.45],"dims":[0.013,0.6,0.8]},{"id":"shield_4","kind":"box","role":"shield","group":"body","center":[-3.75,0.2,-4.45],"dims":[0.013,0.6,0.8]},{"id":"cargo_hatch","kind":"box","role":"door","group":"cargo_hatch","center":[-0.3,1.55,0],"dims":[4.6,0.08,2.5]},{"id":"pod_1_shell","kind":"cylinder","role":"pod","group":"pod_1","axis":"y","center":[4.6,0.8,3.5],"dims":[0.75,1.8]},{"id":"pod_1_coil","kind":"torus","role":"coil","group":"pod_1","axis":"y","center":[4.6,1.3,3.5],"dims":[0.55,0.15]},{"id":"pod_1_cup","kind":"cone","role":"cup","group":"pod_1","axis":"y","center":[4.6,0.8500000000000001,3.5],"dims":[0.55,0.9]},{"id":"pod_2_shell","kind":"cylinder","role":"pod","group":"pod_2","axis":"y","center":[4.6,0.8,-3.5],"dims":[0.75,1.8]},{"id":"pod_2_coil","kind":"torus","role":"coil","group":"pod_2","axis":"y","center":[4.6,1.3,-3.5],"dims":[0.55,0.15]},{"id":"pod_2_cup","kind":"cone","role":"cup","group":"pod_2","axis":"y","center":[4.6,0.8500000000000001,-3.5],"dims":[0.55,0.9]},{"id":"pod_3_shell","kind":"cylinder","role":"pod","group":"pod_3","axis":"y","center":[-4.6,-0.3,5],"dims":[0.75,1.8]},{"id":"pod_3_coil","kind":"torus","role":"coil","group":"pod_3","axis":"y","center":[-4.6,0.2,5],"dims":[0.55,0.15]},{"id":"pod_3_cup","kind":"cone","role":"cup","group":"pod_3","axis":"y","center":[-4.6,-0.25,5],"dims":[0.55,0.9]},{"id":"pod_4_shell","kind":"cylinder","role":"pod","group":"pod_4","axis":"y","center":[-4.6,-0.3,-5],"dims":[0.75,1.8]},{"id":"pod_4_coil","kind":"torus","role":"coil","group":"pod_4","axis":"y","center":[-4.6,0.2,-5],"dims":[0.55,0.15]},{"id":"pod_4_cup","kind":"cone","role":"cup","group":"pod_4","axis":"y","center":[-4.6,-0.25,-5],"dims":[0.55,0.9]},{"id":"gear_main_L","kind":"cylinder","role":"gear","group":"gear_main","axis":"y","center":[-3.4,-2.15,-1.8],"dims":[0.12,1.7]},{"id":"gear_main_R","kind":"cylinder","role":"gear","group":"gear_main","axis":"y","center":[-3.4,-2.15,1.8],"dims":[0.12,1.7]},{"id":"gear_nose","kind":"cylinder","role":"gear","group":"gear_nose","axis":"y","center":[8,-1.975,0],"dims":[0.1,2.05]}],"wings":[{"side":"R","group":"wing_R","root_le":[3.6,-1.42,3.6],"span":5.4,"root_chord":7,"tip_chord":2,"le_sweep_deg":30,"dihedral_deg":0,"thickness":0.24},{"side":"L","group":"wing_L","root_le":[3.6,-1.42,-3.6],"span":5.4,"root_chord":7,"tip_chord":2,"le_sweep_deg":30,"dihedral_deg":0,"thickness":0.24}],"movers":[{"group":"pod_1","pivot":[4.6,1.3,3.5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10,"note_ru":"правая рука; −90° струя назад; 2 обмотки"},{"group":"pod_2","pivot":[4.6,1.3,-3.5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10},{"group":"pod_3","pivot":[-4.6,0.2,5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10},{"group":"pod_4","pivot":[-4.6,0.2,-5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10},{"group":"wing_R","pivot":[0,-1.42,3.9],"axis":[0,1,0],"hover_deg":0,"transition_deg":0,"cruise_deg":-15,"stowed_deg":-45,"entry_deg":-45,"min_deg":-45,"max_deg":0,"note_ru":"правая рука вокруг +y: ПК 30° посадка, 45° крейсер, 75° вход/ангар; z max 7,85"},{"group":"wing_L","pivot":[0,-1.42,-3.9],"axis":[0,1,0],"hover_deg":0,"transition_deg":0,"cruise_deg":15,"stowed_deg":45,"entry_deg":45,"min_deg":0,"max_deg":45,"note_ru":"синхровал с wing_R"},{"group":"gear_main","pivot":[-3.4,-1.3,0],"axis":[0,0,1],"hover_deg":0,"transition_deg":0,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":0},{"group":"gear_nose","pivot":[8,-0.95,0],"axis":[0,0,1],"hover_deg":0,"transition_deg":0,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":0},{"group":"cargo_hatch","pivot":[-0.3,1.6,-1.25],"axis":[1,0,0],"hover_deg":0,"transition_deg":0,"cruise_deg":0,"stowed_deg":0,"entry_deg":0,"min_deg":0,"max_deg":110}],"thrusters":[{"id":"cup_1","group":"pod_1","origin":[4.6,-0.1,3.5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8},{"id":"cup_2","group":"pod_2","origin":[4.6,-0.1,-3.5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8},{"id":"cup_3","group":"pod_3","origin":[-4.6,-1.2,5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8},{"id":"cup_4","group":"pod_4","origin":[-4.6,-1.2,-5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8}]}},{"id":"D","name_ru":"D «Клин»","tagline_ru":"Плоское днище и острые скулы: на гиперзвуке качество 2,2 вместо 1,3, боковой манёвр ~2500 км, посадка без тяги 88 м/с.","idea_ru":"Ядро V1-ОЯ без изменений (кабина, кресла, баки, гондолы, шарниры, чаши). Меняются только корпус, наплыв и консоли. Днище плоское: y −1,3 от кормы до x 8,8. Боковые скулы острые, радиус 0,15 м (по нагреву). Нос — клин 1,0 × 1,3 м. Верх гранёный, 8 граней. Наплыв стал скуловым рёбром 6,5 × 1,2 м: у каждого борта плоское днище продолжается до шарнира крыла. Новых деталей 0: скулы и рёбра — это обшивка существующего корпуса.","aero_ru":"Волнолёт («waverider»): на гиперзвуке скачок уплотнения сидит на скулах, давление под днищем не перетекает наверх. При α 15–20° и M 6–20 качество ≈2,2 (у V1 ≈1,3). Боковая дальность при входе ~2500 км (у V1 ~1000). На дозвуке ПК 22°: крыло 50,4 м² + рёбра 15,6 м² = 66 м², размах 18,4 м, λ≈4,5, качество ≈6,5 (у V1 ≈6). Минусы: скулы дают ранний отрыв вихря, поэтому на посадке α ≤14°. CL 1,2 даёт только совместная работа вихря скул и закрылков; при 38,5 т посадка 88 м/с.","hypersonic_ru":"Вход: α 35° до M 12, затем α 18° и полёт на качестве 2,2. Плоское днище принимает 85 % нагрева. Пик на днище ~45 Вт/см² (на 30 % ниже, чем у V1: днище шире, нагрузка на площадь меньше). Пик на скулах при радиусе 0,15 м ≈150 Вт/см²; это расчётная точка всего облика. Острее 0,15 м делать нельзя: при 0,05 м нагрев был бы ×1,7 и выше 250 Вт/см². В гиперзвуке крыло стоит в 70° и прячется в тени скул.","thermal_ru":"Носовой клин и скулы: C/SiC с подслоем ZrB₂, равновесная температура 1650–1750 °C, без абляции. Днище: плитки SiC-волокна, ≤1250 °C. Верхние грани: гибкая ТЗП, ≤600 °C. Консоли в 70° закрыты скулой; кромка консоли C/SiC, ≤1300 °C. Над передними гондолами (−90°) стоит экран ядра W, он не меняется.","materials_ru":"Каркас: Ti-6Al-4V и Al-Li. Кромки и нос: C/SiC + ZrB₂ (+0,35 т против V1). Днище: SiC-плитки на 32 м² большей площади. Верх: матовый керамический лак, тёмный графит, фактура «шагрень». Восьмигранные люки окантованы тёмной бронзой. Свечение только функциональное: срез чаш и навигационные огни.","kinship_ru":"С «Тантрой» роднит гранёный верх с теми же углами фасок, тёмный текстурный лак, восьмигранные люк входа и грузовой люк, бронзовые кромки. Клин носа повторяет нос «Тантры», только сплющен по высоте.","mass_delta_t":0.8,"wing_area_m2":50.4,"landing_speed_power_off_ms":88,"ld_subsonic":6.5,"stowed_bbox_m":[19,15.9,3.58],"fits_hangar":true,"growth_ru":"Масса +0,8 т: ТЗП скул и носа +0,35 т, площадь днища +0,25 т, крыло 50,4 вместо 48,2 м² +0,2 т. Взлётная 60,55 т, Т/В 0,852 / 0,594 = 1,43 (≥1,35). Посадочная без тяги 38,5 т. Stowed посчитан численно (movers применены к вершинам): 19,0 × 15,90 × 3,58 м ≤ 20,2 × 16,0 × 5,4. Запас по ширине всего 0,1 м: консоль с ПК 22° при повороте 50° доходит до z ±7,95. Деталей добавлено 0.","pros_ru":["Гиперзвуковое качество 2,2 против 1,3: боковой манёвр ~2500 км, больше окон посадки","Нагрев днища на 30 % ниже, перегрузка входа ≤1,5 g","Посадка без тяги 88 м/с при 38,5 т","0 новых деталей, ядро V1-ОЯ нетронуто","Плоское днище — ровная опора при аварийной посадке на брюхо"],"cons_ru":["Скулы — самое горячее место: ~150 Вт/см², нужны C/SiC + ZrB₂","Посадка: α ≤14° из-за вихря скул, ВПП ~2,6 км","Ширина stowed 15,90 м — запас до цели 16,0 всего 0,1 м","Масса +0,8 т, Т/В 1,43 (было 1,45)","Плоское днище у струи задних чаш: при висении у грунта нужна ТЗП и на корме"],"palette":{"hull":"#2B2D30","dark_metal":"#16171A","accent":"#8A6A3E","glow":"#7FD8FF"},"geometry":{"hull_sections":[{"x":-9,"hw":2,"yt":0.9,"yb":-1.3,"ch":0.3},{"x":-6.5,"hw":2.6,"yt":1.4,"yb":-1.3,"ch":0.4},{"x":-3,"hw":2.8,"yt":1.6,"yb":-1.3,"ch":0.45},{"x":1,"hw":2.8,"yt":1.7,"yb":-1.3,"ch":0.45},{"x":4,"hw":2.7,"yt":1.8,"yb":-1.3,"ch":0.45},{"x":7,"hw":2.4,"yt":1.85,"yb":-1.25,"ch":0.45},{"x":8.8,"hw":1.9,"yt":1.6,"yb":-1.15,"ch":0.35},{"x":10,"hw":0.5,"yt":0.45,"yb":-0.85,"ch":0.15}],"primitives":[{"id":"cabin","kind":"box","role":"cabin","group":"body","center":[5.4,0.3,0],"dims":[4,2.3,3.6],"note_ru":"салон 12 мест"},{"id":"vestibule","kind":"box","role":"cabin","group":"body","center":[7.65,0.3,0],"dims":[0.5,2.1,3.4],"note_ru":"тамбур, гермоперегородка"},{"id":"cockpit","kind":"box","role":"cabin","group":"body","center":[8.6,0.2,0],"dims":[1.4,1.9,2.6],"note_ru":"кокпит 2 места"},{"id":"seat_c1","kind":"box","role":"seat","group":"body","center":[8.45,-0.3,-0.6],"dims":[1.1,1,0.7]},{"id":"seat_c2","kind":"box","role":"seat","group":"body","center":[8.45,-0.3,0.6],"dims":[1.1,1,0.7]},{"id":"seat_01","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,-1.2],"dims":[1.2,1,0.6]},{"id":"seat_02","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,-0.55],"dims":[1.2,1,0.6]},{"id":"seat_03","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,0.55],"dims":[1.2,1,0.6]},{"id":"seat_04","kind":"box","role":"seat","group":"body","center":[4.1,-0.35,1.2],"dims":[1.2,1,0.6]},{"id":"seat_05","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,-1.2],"dims":[1.2,1,0.6]},{"id":"seat_06","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,-0.55],"dims":[1.2,1,0.6]},{"id":"seat_07","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,0.55],"dims":[1.2,1,0.6]},{"id":"seat_08","kind":"box","role":"seat","group":"body","center":[5.4,-0.35,1.2],"dims":[1.2,1,0.6]},{"id":"seat_09","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,-1.2],"dims":[1.2,1,0.6]},{"id":"seat_10","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,-0.55],"dims":[1.2,1,0.6]},{"id":"seat_11","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,0.55],"dims":[1.2,1,0.6]},{"id":"seat_12","kind":"box","role":"seat","group":"body","center":[6.7,-0.35,1.2],"dims":[1.2,1,0.6]},{"id":"console","kind":"box","role":"console","group":"body","center":[9.2,0,0],"dims":[0.2,0.5,2],"note_ru":"фотонный пульт + ручной аналоговый резерв"},{"id":"door_L","kind":"box","role":"door","group":"body","center":[7.65,0.3,-2.15],"dims":[0.9,1.3,0.12],"note_ru":"восьмигранный люк"},{"id":"cargo_bay","kind":"box","role":"other","group":"body","center":[-0.3,0.85,0],"dims":[4.6,1.3,3.4],"note_ru":"груз 10 т"},{"id":"tank_L","kind":"cylinder","role":"tank","group":"body","axis":"x","center":[-0.3,-0.52,-1.1],"dims":[0.75,4.7],"note_ru":"аргон → гондолы 2, 3; перемычка"},{"id":"tank_R","kind":"cylinder","role":"tank","group":"body","axis":"x","center":[-0.3,-0.52,1.1],"dims":[0.75,4.7],"note_ru":"аргон → гондолы 1, 4"},{"id":"charges","kind":"box","role":"charges","group":"body","center":[-6,0.4,0],"dims":[1.2,0.8,1.2],"note_ru":"заряды, 2 инжектора"},{"id":"power_unit","kind":"box","role":"other","group":"body","center":[-6,-0.7,0],"dims":[2.5,1,2.6],"note_ru":"пуск, 2 криокулера"},{"id":"glove_L","kind":"box","role":"structure","group":"body","center":[0.25,-1.42,-3.4],"dims":[6.5,0.3,1.2],"note_ru":"скуловое ребро 7,8 м², кромка R0,15 C/SiC, синхровал"},{"id":"glove_R","kind":"box","role":"structure","group":"body","center":[0.25,-1.42,3.4],"dims":[6.5,0.3,1.2],"note_ru":"скуловое ребро 7,8 м²"},{"id":"pylon_3","kind":"box","role":"structure","group":"body","center":[-4.6,0.2,3.32],"dims":[0.7,0.45,1.85]},{"id":"pylon_4","kind":"box","role":"structure","group":"body","center":[-4.6,0.2,-3.32],"dims":[0.7,0.45,1.85]},{"id":"rcs_1","kind":"box","role":"other","group":"body","center":[4.6,1.9,2.65],"dims":[0.3,0.25,0.3]},{"id":"rcs_2","kind":"box","role":"other","group":"body","center":[4.6,1.9,-2.65],"dims":[0.3,0.25,0.3]},{"id":"shield_1","kind":"box","role":"shield","group":"body","center":[5.2,0.85,2.65],"dims":[2.4,1.4,0.013]},{"id":"shield_2","kind":"box","role":"shield","group":"body","center":[5.2,0.85,-2.65],"dims":[2.4,1.4,0.013]},{"id":"shield_3","kind":"box","role":"shield","group":"body","center":[-3.75,0.2,4.45],"dims":[0.013,0.6,0.8]},{"id":"shield_4","kind":"box","role":"shield","group":"body","center":[-3.75,0.2,-4.45],"dims":[0.013,0.6,0.8]},{"id":"cargo_hatch","kind":"box","role":"door","group":"cargo_hatch","center":[-0.3,1.55,0],"dims":[4.6,0.08,2.5]},{"id":"pod_1_shell","kind":"cylinder","role":"pod","group":"pod_1","axis":"y","center":[4.6,0.8,3.5],"dims":[0.75,1.8]},{"id":"pod_1_coil","kind":"torus","role":"coil","group":"pod_1","axis":"y","center":[4.6,1.3,3.5],"dims":[0.55,0.15]},{"id":"pod_1_cup","kind":"cone","role":"cup","group":"pod_1","axis":"y","center":[4.6,0.8500000000000001,3.5],"dims":[0.55,0.9]},{"id":"pod_2_shell","kind":"cylinder","role":"pod","group":"pod_2","axis":"y","center":[4.6,0.8,-3.5],"dims":[0.75,1.8]},{"id":"pod_2_coil","kind":"torus","role":"coil","group":"pod_2","axis":"y","center":[4.6,1.3,-3.5],"dims":[0.55,0.15]},{"id":"pod_2_cup","kind":"cone","role":"cup","group":"pod_2","axis":"y","center":[4.6,0.8500000000000001,-3.5],"dims":[0.55,0.9]},{"id":"pod_3_shell","kind":"cylinder","role":"pod","group":"pod_3","axis":"y","center":[-4.6,-0.3,5],"dims":[0.75,1.8]},{"id":"pod_3_coil","kind":"torus","role":"coil","group":"pod_3","axis":"y","center":[-4.6,0.2,5],"dims":[0.55,0.15]},{"id":"pod_3_cup","kind":"cone","role":"cup","group":"pod_3","axis":"y","center":[-4.6,-0.25,5],"dims":[0.55,0.9]},{"id":"pod_4_shell","kind":"cylinder","role":"pod","group":"pod_4","axis":"y","center":[-4.6,-0.3,-5],"dims":[0.75,1.8]},{"id":"pod_4_coil","kind":"torus","role":"coil","group":"pod_4","axis":"y","center":[-4.6,0.2,-5],"dims":[0.55,0.15]},{"id":"pod_4_cup","kind":"cone","role":"cup","group":"pod_4","axis":"y","center":[-4.6,-0.25,-5],"dims":[0.55,0.9]},{"id":"gear_main_L","kind":"cylinder","role":"gear","group":"gear_main","axis":"y","center":[-3.4,-2.15,-1.8],"dims":[0.12,1.7]},{"id":"gear_main_R","kind":"cylinder","role":"gear","group":"gear_main","axis":"y","center":[-3.4,-2.15,1.8],"dims":[0.12,1.7]},{"id":"gear_nose","kind":"cylinder","role":"gear","group":"gear_nose","axis":"y","center":[8,-1.975,0],"dims":[0.1,2.05]}],"wings":[{"side":"R","group":"wing_R","root_le":[3.1,-1.42,3.6],"span":5.6,"root_chord":6.6,"tip_chord":2.4,"le_sweep_deg":22,"dihedral_deg":0,"thickness":0.22},{"side":"L","group":"wing_L","root_le":[3.1,-1.42,-3.6],"span":5.6,"root_chord":6.6,"tip_chord":2.4,"le_sweep_deg":22,"dihedral_deg":0,"thickness":0.22}],"movers":[{"group":"pod_1","pivot":[4.6,1.3,3.5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10,"note_ru":"правая рука; −90° струя назад; 2 обмотки"},{"group":"pod_2","pivot":[4.6,1.3,-3.5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10},{"group":"pod_3","pivot":[-4.6,0.2,5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10},{"group":"pod_4","pivot":[-4.6,0.2,-5],"axis":[0,0,1],"hover_deg":0,"transition_deg":-45,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":10},{"group":"wing_R","pivot":[0,-1.42,3.9],"axis":[0,1,0],"hover_deg":0,"transition_deg":0,"cruise_deg":-25,"stowed_deg":-50,"entry_deg":-50,"min_deg":-50,"max_deg":0,"note_ru":"правая рука вокруг +y: −50° = ПК 72°, z max 7,95 (численно)"},{"group":"wing_L","pivot":[0,-1.42,-3.9],"axis":[0,1,0],"hover_deg":0,"transition_deg":0,"cruise_deg":25,"stowed_deg":50,"entry_deg":50,"min_deg":0,"max_deg":50,"note_ru":"синхровал с wing_R"},{"group":"gear_main","pivot":[-3.4,-1.3,0],"axis":[0,0,1],"hover_deg":0,"transition_deg":0,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":0},{"group":"gear_nose","pivot":[8,-0.95,0],"axis":[0,0,1],"hover_deg":0,"transition_deg":0,"cruise_deg":-90,"stowed_deg":-90,"entry_deg":-90,"min_deg":-90,"max_deg":0},{"group":"cargo_hatch","pivot":[-0.3,1.6,-1.25],"axis":[1,0,0],"hover_deg":0,"transition_deg":0,"cruise_deg":0,"stowed_deg":0,"entry_deg":0,"min_deg":0,"max_deg":110}],"thrusters":[{"id":"cup_1","group":"pod_1","origin":[4.6,-0.1,3.5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8},{"id":"cup_2","group":"pod_2","origin":[4.6,-0.1,-3.5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8},{"id":"cup_3","group":"pod_3","origin":[-4.6,-1.2,5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8},{"id":"cup_4","group":"pod_4","origin":[-4.6,-1.2,-5],"dir":[0,-1,0],"thrust_MN":0.213,"vector_cone_deg":8}]}}]}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+'use strict';
+var DATA = {core:{},looks:[]};
+try { DATA = JSON.parse(document.getElementById('data').textContent); } catch(e){ console.warn('JSON', e); }
+var CORE = DATA.core || {};
+var G_ACC=9.80665, THR_TOT=+g0(CORE,'propulsion.total_thrust_MN',0.852), MTOM0=+g0(CORE,'mass.mtom_t',59.75);
+function g0(o,path,def){ try{ var p=path.split('.'),c=o; for(var i=0;i<p.length;i++){ if(c==null) return def; c=c[p[i]]; } return c==null?def:c; }catch(e){ return def; } }
+var VARS = (Array.isArray(DATA.looks) ? DATA.looks : []).map(function(v){
+  var mt=MTOM0+(+v.mass_delta_t||0); v.mass={mtom_t:mt,tw_earth:THR_TOT/(mt*G_ACC/1000)}; return v; });
+var CORE_V = {id:'V1-ОЯ', name_ru:CORE.name_ru, geometry:CORE.geometry||{}, stowed_bbox_m:CORE.stowed_bbox_m, palette:null, core:true,
+  mass:{mtom_t:MTOM0, tw_earth:g0(CORE,'mass.tw_earth',1.45)}};
+var FAILS=[{k:'chamber_out',n:'Отказ камеры',sim:'chamber_out'},{k:'pod_out',n:'Потеря гондолы',sim:'pod_out'},{k:'pod_jam',n:'Заклинило гондолу',sim:'pod_jam'},{k:'quench',n:'Срыв поля',sim:'quench'},{k:'glide',n:'Без тяги — планирование',sim:'power_off_glide'}];
+function fmeaFor(f){ var a=Array.isArray(CORE.fmea)?CORE.fmea:[]; if(f.k==='glide') return a.filter(function(x){return x.sim==='power_off_glide'&&/Тяга/.test(x.component_ru||'');})[0]||null; return a.filter(function(x){return x.sim===f.sim;})[0]||null; }
+
+/* ---------- helpers ---------- */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function txt(s){ // multi-line text -> html (lines "- " -> list)
+  if(s==null||s==='') return '<p class="note">нет данных</p>';
+  var lines=String(s).split('\n'), out='', inList=false;
+  lines.forEach(function(l){
+    if(/^\s*-\s+/.test(l)){ if(!inList){out+='<ul>';inList=true;} out+='<li>'+esc(l.replace(/^\s*-\s+/,''))+'</li>'; }
+    else { if(inList){out+='</ul>';inList=false;} if(l.trim()) out+='<p>'+esc(l)+'</p>'; }
+  });
+  if(inList) out+='</ul>';
+  return out;
+}
+function list(a){ if(!Array.isArray(a)||!a.length) return '<p class="note">нет данных</p>'; return '<ul>'+a.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>'; }
+function num(v,d){ if(typeof v!=='number'||!isFinite(v)) return '—'; var s=v.toFixed(d==null?2:d); if(s.indexOf('.')>=0) s=s.replace(/0+$/,'').replace(/\.$/,''); return s.replace('.',','); }
+function g(o,path,def){ try{ var p=path.split('.'),c=o; for(var i=0;i<p.length;i++){ if(c==null) return def; c=c[p[i]]; } return c==null?def:c; }catch(e){ return def; } }
+function sec(t,body){ return '<h2>'+esc(t)+'</h2>'+body; }
+
+/* ---------- roles ---------- */
+var ROLES = {
+  hull:{c:0x3a3e44,n:'корпус'}, cup:{c:0x2b2e33,n:'магнитная чаша'}, coil:{c:0x9a6a35,n:'катушка / камера'},
+  shield:{c:0x4c5f7d,n:'экран W'}, tank:{c:0x8cc4e8,n:'аргон'}, charges:{c:0xe3a526,n:'ионные заряды'},
+  cabin:{c:0xdfe4ea,n:'кабина'}, seat:{c:0xe8761e,n:'кресла'}, gear:{c:0x8d9299,n:'шасси / опоры'},
+  door:{c:0xf2cf3a,n:'люк (восьмигранный)'}, pod:{c:0x4b5058,n:'гондола'}, structure:{c:0x5b6068,n:'силовой набор'},
+  console:{c:0x7fb0d8,n:'пульт / дисплеи'}, duct:{c:0xa070e0,n:'магнитный канал'}, wing:{c:0x464b52,n:'крыло'},
+  other:{c:0x6e737c,n:'прочее'}
+};
+function roleOf(r){ return ROLES[r] ? r : 'other'; }
+
+var MODES=[{k:'hover',n:'Висение'},{k:'transition',n:'Переход'},{k:'cruise',n:'Полёт'},{k:'entry',n:'Вход в атмосферу'},{k:'stowed',n:'В ангаре'}];
+var state={tab:0, mode:'hover', shell:'glass', hangar:false, thrust:true, labels:false, grid:true, six:false, fail:null};
+
+/* ---------- tabs & side ---------- */
+var tabsEl=document.getElementById('tabs');
+var TABS=[{k:'rel',n:'Надёжность'}].concat(VARS.map(function(v,i){return {k:'v',i:i,n:v.name_ru?String(v.name_ru).split('—')[0].trim():v.id};})).concat([{k:'cmp',n:'Сравнение обликов'}]);
+function tabVar(t){ return t.k==='rel'? CORE_V : (t.k==='v'? VARS[t.i] : null); }
+var failsEl=document.getElementById('fails');
+FAILS.forEach(function(f){ var b=document.createElement('button'); b.textContent=f.n; b.dataset.f=f.k; b.onclick=function(){ setFail(state.fail===f.k?null:f.k); }; failsEl.appendChild(b); });
+(function(){ var b=document.createElement('button'); b.textContent='Норма'; b.dataset.f=''; b.onclick=function(){ setFail(null); }; failsEl.appendChild(b); })();
+TABS.forEach(function(t,i){ var b=document.createElement('button'); b.textContent=t.n; b.onclick=function(){ selectTab(i); }; tabsEl.appendChild(b); });
+var modesEl=document.getElementById('modes');
+MODES.forEach(function(m){ var b=document.createElement('button'); b.textContent=m.n; b.dataset.m=m.k; b.onclick=function(){ setMode(m.k); }; modesEl.appendChild(b); });
+
+function bboxLine(decl,calc){
+  var h='<table><tr><th></th><th>Длина</th><th>Ширина</th><th>Высота</th></tr>';
+  h+='<tr><td>Заявлено</td>'+[0,1,2].map(function(i){return '<td class="v">'+num(decl&&decl[i],2)+'</td>';}).join('')+'</tr>';
+  if(calc){ var diff=[0,1,2].map(function(i){ return decl? Math.abs(calc[i]-(+decl[i]||0)) : 0; });
+    h+='<tr><td>По модели</td>'+[0,1,2].map(function(i){return '<td class="v '+(diff[i]>0.2?'bad':'')+'">'+num(calc[i],2)+'</td>';}).join('')+'</tr>';
+    var fit=calc[0]<=20.205&&calc[1]<=16.005&&calc[2]<=5.405;
+    h+='</table><p class="big '+(fit?'ok':'bad')+'">'+(fit?'Вписывается в 20,2 × 16,0 × 5,4 м':'Не вписывается в 20,2 × 16,0 × 5,4 м')+' (по модели)</p>';
+    var mx=Math.max.apply(null,diff); if(mx>0.2) h+='<p class="bad"><b>Предупреждение:</b> модель расходится с заявленной рамкой на '+num(mx,2)+' м (&gt; 0,2 м).</p>';
+    else h+='<p class="note">Расхождение модели и заявленной рамки ≤ '+num(mx,2)+' м.</p>';
+  } else h+='</table><p class="note">3D недоступно — рамка по модели не посчитана.</p>';
+  return h;
+}
+function lookSide(v){
+  var h='<h3>'+esc(v.name_ru||v.id)+'</h3><p class="big" style="font-weight:500">'+esc(v.tagline_ru||'')+'</p>';
+  var pal=v.palette||{};
+  h+='<p class="note">Окраска: '+['hull','dark_metal','accent','glow'].map(function(k){return '<span style="display:inline-block;width:12px;height:12px;vertical-align:middle;border:1px solid #555;background:'+esc(pal[k]||'#000')+'"></span> '+k;}).join(' · ')+'</p>';
+  h+=sec('Идея',txt(v.idea_ru));
+  h+=sec('Аэродинамика',txt(v.aero_ru));
+  h+=sec('Гиперзвук и вход',txt(v.hypersonic_ru));
+  h+=sec('Нагрев',txt(v.thermal_ru));
+  h+=sec('Материалы',txt(v.materials_ru));
+  h+=sec('Родство с «Тантрой»',txt(v.kinship_ru));
+  h+=sec('Числа','<table><tr><td>Масса к ядру</td><td class="v">+'+num(v.mass_delta_t,2)+' т</td></tr><tr><td>Взлётная (ядро + Δ)</td><td class="v">'+num(v.mass.mtom_t,2)+' т</td></tr><tr><td>Т/В</td><td class="v">'+num(v.mass.tw_earth,2)+'</td></tr><tr><td>Крыло (несущая)</td><td class="v">'+num(v.wing_area_m2,1)+' м²</td></tr><tr><td>Посадка без тяги</td><td class="v '+((+v.landing_speed_power_off_ms||0)<=90?'ok':'bad')+'">'+num(v.landing_speed_power_off_ms,1)+' м/с</td></tr>'+(v.ld_subsonic?'<tr><td>K дозвук</td><td class="v">'+num(v.ld_subsonic,1)+'</td></tr>':'')+'</table>');
+  h+=sec('Рамка stowed, м',bboxLine(v.stowed_bbox_m,stowCalc(v))+txt(v.growth_ru));
+  h+=sec('Плюсы','<div class="ok">'+list(v.pros_ru)+'</div>');
+  h+=sec('Минусы','<div class="warn">'+list(v.cons_ru)+'</div>');
+  return h;
+}
+function relSide(){
+  var c=CORE, m=c.mass||{}, p=c.propulsion||{}, w=c.wings||{};
+  var h='<h3>'+esc(c.name_ru||'Ядро')+'</h3>'+txt(c.summary_ru);
+  h+=sec('Т/В','<table><tr><td>Норма (взлёт '+num(m.mtom_t,2)+' т)</td><td class="v ok">'+num(m.tw_earth,2)+'</td></tr><tr><td>Минус камера</td><td class="v warn">'+num(m.tw_one_chamber_out,2)+'</td></tr><tr><td>Минус гондола</td><td class="v warn">'+num(m.tw_one_pod_out,2)+'</td></tr></table>'+txt(m.mass_table_ru));
+  h+=sec('Двигатель','<table><tr><td>Гондол × чаш</td><td class="v">'+num(p.pods,0)+' × '+num(p.chambers_per_pod,0)+'</td></tr><tr><td>Тяга чаши</td><td class="v">'+num(p.thrust_per_chamber_MN,3)+' МН</td></tr><tr><td>Всего</td><td class="v">'+num(p.total_thrust_MN,3)+' МН</td></tr><tr><td>Поле</td><td class="v">'+num(p.field_T,1)+' Тл</td></tr><tr><td>vₑ грунт / пустота</td><td class="v">'+num(p.ve_ground_kms,1)+' / '+num(p.ve_vac_kms,0)+' км/с</td></tr></table>'+txt(p.tvc_ru));
+  h+=sec('Крыло','<table><tr><td>Площадь</td><td class="v">'+num(w.area_m2,1)+' м²</td></tr><tr><td>Размах раскрыт / stowed</td><td class="v">'+num(w.span_open_m,2)+' / '+num(w.span_stowed_m,2)+' м</td></tr><tr><td>Посадка без тяги</td><td class="v">'+num(w.landing_speed_power_off_ms,0)+' м/с</td></tr></table>'+txt(w.scheme_ru));
+  h+=sec('Рамка stowed, м',bboxLine(c.stowed_bbox_m,stowCalc(CORE_V)));
+  h+=sec('Неизменное ядро',txt(c.fixed_core_ru));
+  return h;
+}
+function relWide(){
+  var c=CORE, a=Array.isArray(c.fmea)?c.fmea:[];
+  var h='<div class="card"><h3>Критерий</h3>'+txt(c.criterion_ru)+'</div>';
+  var sp=0,sm=0; a.forEach(function(r){ sp+=+r.added_parts||0; sm+=+r.added_mass_t||0; });
+  h+='<div class="card"><h3>FMEA</h3><table class="cmp"><tr><th>Узел</th><th>Отказ</th><th>Было</th><th>Решение</th><th>Стало</th><th>Обнаружение</th><th>+деталей</th><th>+т</th></tr>'+
+    a.map(function(r){ return '<tr><td><b>'+esc(r.component_ru)+'</b></td><td>'+esc(r.failure_ru)+'</td><td class="warn">'+esc(r.effect_before_ru)+'</td><td>'+esc(r.mitigation_ru)+'</td><td class="ok">'+esc(r.effect_after_ru)+'</td><td>'+esc(r.detection_ru)+'</td><td class="v">'+num(r.added_parts,0)+'</td><td class="v">'+num(r.added_mass_t,2)+'</td></tr>'; }).join('')+
+    '<tr><td colspan="6"><b>Сумма по строкам</b> (в строке «Тяга полностью» +1,77 т — это крыло, наплыв и ТЗП, не отказоустойчивость)</td><td class="v"><b>'+num(sp,0)+'</b></td><td class="v"><b>'+num(sm,2)+'</b></td></tr></table></div>';
+  var m=c.mass||{};
+  h+='<div class="card"><h3>Т/В</h3><table class="cmp"><tr><th>Норма</th><th>Минус камера</th><th>Минус гондола</th></tr><tr><td class="v ok">'+num(m.tw_earth,2)+'</td><td class="v warn">'+num(m.tw_one_chamber_out,2)+'</td><td class="v warn">'+num(m.tw_one_pod_out,2)+'</td></tr></table>'+
+    '<p><b>Минус камера.</b></p>'+txt(c.engine_out_ru)+'<p><b>Минус гондола.</b></p>'+txt(c.pod_out_ru)+'<p><b>Срыв поля.</b></p>'+txt(c.quench_ru)+'</div>';
+  h+='<div class="card"><h3>Посадка без тяги</h3>'+txt(c.power_off_ru)+'</div>';
+  h+='<div class="card"><h3>Изменения</h3>'+list(c.changes_ru)+'</div>';
+  var pt=c.parts||{};
+  h+='<div class="card"><h3>Детали</h3><table><tr><td>Подвижных всего</td><td class="v">'+num(pt.total_moving,0)+'</td></tr><tr><td>Добавлено к V1</td><td class="v">'+num(pt.added_vs_v1,0)+'</td></tr></table>'+txt(pt.list_ru)+'</div>';
+  return h;
+}
+function compareHTML(){
+  var rows=[['Масса к ядру, т',function(v){return '+'+num(v.mass_delta_t,2);}],['Взлётная, т',function(v){return num(v.mass.mtom_t,2);}],['Т/В',function(v){return num(v.mass.tw_earth,2);}],
+    ['Несущая площадь, м²',function(v){return num(v.wing_area_m2,1);}],['Посадка без тяги, м/с',function(v){var s=+v.landing_speed_power_off_ms; return '<span class="'+(s<=90?'ok':'bad')+'">'+num(s,1)+'</span>';}],
+    ['Stowed заявлено, м',function(v){var b=v.stowed_bbox_m||[]; return num(b[0],2)+' × '+num(b[1],2)+' × '+num(b[2],2);}],
+    ['Stowed по модели, м',function(v){var b=stowCalc(v); if(!b) return '—'; var d=v.stowed_bbox_m||[], mx=Math.max(Math.abs(b[0]-d[0]),Math.abs(b[1]-d[1]),Math.abs(b[2]-d[2])); return '<span class="'+(mx>0.2?'bad':'')+'">'+num(b[0],2)+' × '+num(b[1],2)+' × '+num(b[2],2)+'</span>'+(mx>0.2?' <span class="bad">расхождение '+num(mx,2)+' м</span>':'');}],
+    ['Вписывание (модель)',function(v){var b=stowCalc(v); var f=b? (b[0]<=20.205&&b[1]<=16.005&&b[2]<=5.405) : v.fits_hangar===true; return '<span class="'+(f?'ok':'bad')+'">'+(f?'да':'нет')+'</span>';}],
+    ['Запас по ширине до 16,0 м',function(v){var b=stowCalc(v)||v.stowed_bbox_m||[]; return num(16-b[1],2)+' м';}],
+    ['Слоган',function(v){return esc(v.tagline_ru);}]];
+  var h='<div class="card"><h3>Сравнение обликов (ядро V1-ОЯ общее)</h3><table class="cmp"><tr><th>Параметр</th>'+VARS.map(function(v){return '<th>'+esc(v.name_ru)+'</th>';}).join('')+'</tr>';
+  rows.forEach(function(r){ h+='<tr><td>'+r[0]+'</td>'+VARS.map(function(v){ var s='—'; try{ s=r[1](v); }catch(e){} return '<td>'+s+'</td>'; }).join('')+'</tr>'; });
+  h+='</table><p class="note">Выбор облика — за пользователем. Все четыре облика — в 3D рядом.</p></div>';
+  return h;
+}
+
+function selectTab(i){
+  state.tab=i;
+  Array.prototype.forEach.call(tabsEl.children,function(b,j){ b.classList.toggle('on',j===i); });
+  var t=TABS[i]||{}, side=document.getElementById('side'), wide=document.getElementById('wide'), c3=document.getElementById('ctl3d');
+  try{
+    c3.style.display='';
+    state.six = (t.k==='cmp'); state._refit=true;
+    if(t.k==='v'){ wide.style.display='none'; side.innerHTML=lookSide(VARS[t.i]||{}); }
+    else if(t.k==='rel'){ wide.style.display='block'; wide.innerHTML=relWide(); side.innerHTML=relSide(); }
+    else { wide.style.display='block'; wide.innerHTML=compareHTML(); side.innerHTML='<h3>Сравнение обликов</h3><p class="note">В 3D — все четыре облика рядом, на ядре V1-ОЯ. Числа — в таблице.</p>'+sec('Критерий надёжности',txt(CORE.criterion_ru)); }
+    rebuild();
+  }catch(e){ console.warn(e); side.innerHTML='<p class="bad">Ошибка отображения: '+esc(e.message)+'</p>'; }
+  side.scrollTop=0;
+}
+
+/* ---------- 3D ---------- */
+var view=document.getElementById('view3d'), hud=document.getElementById('vhud'), labelsEl=document.getElementById('labels');
+var has3D = typeof window.THREE!=='undefined';
+var renderer,scene,camera,controls,world,grid,models=[],extras=[];
+function fail(msg){
+  var f=document.getElementById('fail'); f.style.display='block';
+  f.innerHTML='<h3>3D недоступно</h3><p>'+esc(msg)+'</p><p>Текстовые данные доступны в боковой панели и на вкладках «Сравнение» и «Общее».</p>';
+  hud.style.display='none'; document.getElementById('vbar').style.display='none';
+}
+if(has3D){
+  try{
+    renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+    view.insertBefore(renderer.domElement,view.firstChild);
+    scene=new THREE.Scene(); scene.background=new THREE.Color(0x000000);
+    camera=new THREE.PerspectiveCamera(40,1,0.1,2000);
+    if(THREE.OrbitControls){ controls=new THREE.OrbitControls(camera,renderer.domElement); controls.enableDamping=true; }
+    scene.add(new THREE.HemisphereLight(0xdfe8ff,0x202428,0.75));
+    var dl=new THREE.DirectionalLight(0xffffff,0.9); dl.position.set(20,30,15); scene.add(dl);
+    var dl2=new THREE.DirectionalLight(0x8899bb,0.35); dl2.position.set(-20,-10,-25); scene.add(dl2);
+    world=new THREE.Group(); scene.add(world);
+  }catch(e){ has3D=false; fail('WebGL не инициализирован: '+e.message); }
+} else { fail('Библиотека three.js не загрузилась (нет сети или CDN недоступен).'); }
+
+var matCache={};
+function mat(role,opt){
+  var key=role+'|'+(opt||'');
+  if(matCache[key]) return matCache[key];
+  var r=ROLES[role]||ROLES.other, p={color:r.c,roughness:0.75,metalness:0.15,flatShading:true};
+  if(role==='cup'){ p.metalness=0.6; p.roughness=0.4; p.side=THREE.DoubleSide; }
+  if(role==='coil'){ p.metalness=0.7; p.roughness=0.35; }
+  if(role==='shield'){ p.metalness=0.5; p.roughness=0.45; }
+  if(role==='tank'){ p.transparent=true; p.opacity=0.55; p.emissive=new THREE.Color(0x0d2a3c); }
+  if(role==='charges'){ p.emissive=new THREE.Color(0x4a2c00); }
+  if(role==='console'){ p.emissive=new THREE.Color(0x0f2c44); }
+  if(role==='door'){ p.emissive=new THREE.Color(0x3a2c00); }
+  if(role==='duct'){ p.emissive=new THREE.Color(0x200840); }
+  if(role==='cabin'){ p.transparent=true; p.opacity=0.35; p.depthWrite=false; }
+  if(role==='hull'){ p.roughness=0.9; p.metalness=0.1; p.side=THREE.DoubleSide; }
+  if(opt&&String(opt).charAt(0)==='#'){ p.color=new THREE.Color(opt); }
+  return matCache[key]=new THREE.MeshStandardMaterial(p);
+}
+var CUR_PAL=null;
+function palC(k){ return (CUR_PAL&&CUR_PAL[k])? CUR_PAL[k] : ''; }
+function hullMat(){
+  var m=mat('hull',palC('hull'));
+  if(state.shell==='glass'){ m.transparent=true; m.opacity=0.22; m.depthWrite=false; }
+  else { m.transparent=false; m.opacity=1; m.depthWrite=true; }
+  m.needsUpdate=true; return m;
+}
+function v3(a,d){ return (Array.isArray(a)&&a.length>=3)? new THREE.Vector3(+a[0]||0,+a[1]||0,+a[2]||0) : (d||new THREE.Vector3()); }
+function orientAxis(geo,axis){ // geometry built along +y
+  if(axis==='x') geo.rotateZ(-Math.PI/2);
+  else if(axis==='z') geo.rotateX(Math.PI/2);
+}
+
+function buildHull(secs){
+  if(!Array.isArray(secs)||secs.length<2) return null;
+  secs=secs.slice().sort(function(a,b){return a.x-b.x;});
+  var rings=secs.map(function(s){
+    var hw=Math.max(0.05,+s.hw||0.5), yt=+s.yt, yb=+s.yb; if(!(yt>yb)){ yt=0.5; yb=-0.5; }
+    var hh=(yt-yb)/2, ch=(typeof s.ch==='number')? s.ch : 0.22*Math.min(hw,hh);
+    ch=Math.max(0,Math.min(ch,hw*0.98,hh*0.98));
+    var x=+s.x||0;
+    return [[yt,-hw+ch],[yt,hw-ch],[yt-ch,hw],[yb+ch,hw],[yb,hw-ch],[yb,-hw+ch],[yb+ch,-hw],[yt-ch,-hw]].map(function(p){ return new THREE.Vector3(x,p[0],p[1]); });
+  });
+  var pos=[];
+  function tri(a,b,c){ pos.push(a.x,a.y,a.z,b.x,b.y,b.z,c.x,c.y,c.z); }
+  for(var i=0;i<rings.length-1;i++){
+    var A=rings[i],B=rings[i+1];
+    for(var k=0;k<8;k++){ var k2=(k+1)%8; tri(A[k],B[k],B[k2]); tri(A[k],B[k2],A[k2]); }
+  }
+  [rings[0],rings[rings.length-1]].forEach(function(R,ci){
+    var c=new THREE.Vector3(); R.forEach(function(p){c.add(p);}); c.multiplyScalar(1/8);
+    for(var k=0;k<8;k++){ var k2=(k+1)%8; if(ci===0) tri(c,R[k2],R[k]); else tri(c,R[k],R[k2]); }
+  });
+  var geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); geo.computeVertexNormals();
+  var mesh=new THREE.Mesh(geo,hullMat()); mesh.userData.hull=true; mesh.renderOrder=5;
+  return mesh;
+}
+
+function buildPrim(p){
+  var d=Array.isArray(p.dims)?p.dims.map(Number):[], geo=null, axis=p.axis||'y', role=roleOf(p.role);
+  if(p.kind==='box'){
+    var lx=d[0]||0.3,ly=d[1]||0.3,lz=d[2]||0.3;
+    if(role==='door'){ // octagonal plate along thinnest axis
+      var t=Math.min(lx,ly,lz), ax= t===lx?'x':(t===lz?'z':'y'), others= ax==='x'?[ly,lz]:(ax==='z'?[lx,ly]:[lx,lz]);
+      geo=new THREE.CylinderGeometry(Math.min(others[0],others[1])/2/Math.cos(Math.PI/8),Math.min(others[0],others[1])/2/Math.cos(Math.PI/8),Math.max(t,0.04),8);
+      geo.rotateY(Math.PI/8); orientAxis(geo,ax);
+    } else geo=new THREE.BoxGeometry(Math.max(lx,0.01),Math.max(ly,0.01),Math.max(lz,0.01));
+  } else if(p.kind==='cylinder'){
+    var segs = role==='door'?8:20;
+    geo=new THREE.CylinderGeometry(d[0]||0.2,d[0]||0.2,Math.max(d[1]||0.5,0.02),segs); orientAxis(geo,axis);
+  } else if(p.kind==='cone'){
+    var r1,r2,L;
+    if(d.length>=3){ r1=Math.max(d[0],d[1]); r2=Math.min(d[0],d[1]); L=d[2]; } else { r1=d[0]||0.5; r2=0; L=d[1]||1; }
+    var open = role==='cup'||role==='shield';
+    geo=new THREE.CylinderGeometry(r2,r1,Math.max(L,0.02),24,1,open); orientAxis(geo,axis);
+  } else if(p.kind==='sphere'){
+    geo=new THREE.SphereGeometry(d[0]||0.5,20,14);
+  } else if(p.kind==='torus'){
+    geo=new THREE.TorusGeometry(d[0]||0.5,Math.max(d[1]||0.05,0.01),10,32);
+    if(axis==='y') geo.rotateX(Math.PI/2); else if(axis==='x') geo.rotateY(Math.PI/2);
+  }
+  if(!geo) return null;
+  var m=new THREE.Mesh(geo,mat(role,(role==='pod'?palC('dark_metal'):(role==='structure'?palC('hull'):'')))); var c=v3(p.center); m.position.copy(c);
+  m.userData={role:role,id:p.id,note:p.note_ru||''};
+  if(role==='shield'&&p.kind==='cone'){ m.material=mat('shield'); }
+  return m;
+}
+
+function buildWing(w){
+  var s=(w.side==='L')?-1:1, rl=v3(w.root_le), span=+w.span||1, rc=+w.root_chord||1, tc=(typeof w.tip_chord==='number')?w.tip_chord:rc*0.5;
+  var sw=(+w.le_sweep_deg||0)*Math.PI/180, dh=(+w.dihedral_deg||0)*Math.PI/180, th=(typeof w.thickness==='number')?w.thickness:0.25;
+  var sdir=new THREE.Vector3(0,Math.sin(dh),s*Math.abs(Math.cos(dh))); // span direction; >90° = outward cant
+  var nrm=new THREE.Vector3(0,-sdir.z,sdir.y); if(nrm.y<0||(Math.abs(nrm.y)<1e-6&&nrm.z<0)) nrm.multiplyScalar(-1); nrm.normalize();
+  var tipLE=rl.clone().add(sdir.clone().multiplyScalar(span)); tipLE.x-=span*Math.tan(sw);
+  var rootTE=rl.clone(); rootTE.x-=rc; var tipTE=tipLE.clone(); tipTE.x-=tc;
+  var P=[rl,tipLE,tipTE,rootTE], ht=th/2, htt=th/2*0.6;
+  var top=P.map(function(p,i){ return p.clone().add(nrm.clone().multiplyScalar(i===1||i===2?htt:ht)); });
+  var bot=P.map(function(p,i){ return p.clone().add(nrm.clone().multiplyScalar(-(i===1||i===2?htt:ht))); });
+  var pos=[]; function tri(a,b,c){ pos.push(a.x,a.y,a.z,b.x,b.y,b.z,c.x,c.y,c.z); }
+  tri(top[0],top[1],top[2]); tri(top[0],top[2],top[3]); tri(bot[0],bot[2],bot[1]); tri(bot[0],bot[3],bot[2]);
+  for(var k=0;k<4;k++){ var k2=(k+1)%4; tri(top[k],bot[k],bot[k2]); tri(top[k],bot[k2],top[k2]); }
+  var geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); geo.computeVertexNormals();
+  var m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:palC('hull')?new THREE.Color(palC('hull')):ROLES.wing.c,roughness:0.8,metalness:0.15,flatShading:true,side:THREE.DoubleSide}));
+  m.userData={role:'wing',id:w.group,note:''}; return m;
+}
+
+var glowTex=null;
+function getGlow(){
+  if(glowTex) return glowTex;
+  var c=document.createElement('canvas'); c.width=c.height=64; var x=c.getContext('2d');
+  var gr=x.createRadialGradient(32,32,0,32,32,32); gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(0.3,'rgba(150,200,255,.8)'); gr.addColorStop(1,'rgba(60,110,255,0)');
+  x.fillStyle=gr; x.fillRect(0,0,64,64); glowTex=new THREE.CanvasTexture(c); return glowTex;
+}
+function buildThruster(t){
+  var o=v3(t.origin), dir=v3(t.dir,new THREE.Vector3(0,-1,0)); if(dir.lengthSq()<1e-6) dir.set(0,-1,0); dir.normalize();
+  var F=+t.thrust_MN||0.1, L=Math.max(1.5,F*28), cone=(+t.vector_cone_deg||5)*Math.PI/180;
+  var grp=new THREE.Group(); grp.position.copy(o);
+  grp.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir);
+  var jg=new THREE.CylinderGeometry(0.12+F*0.6,0.06,L,16,1,true); jg.translate(0,L/2,0);
+  var jet=new THREE.Mesh(jg,new THREE.MeshBasicMaterial({color:palC('glow')?new THREE.Color(palC('glow')):0x7fb8ff,transparent:true,opacity:0.55,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+  var cL=L*0.85, cg=new THREE.CylinderGeometry(cL*Math.tan(cone),0.001,cL,24,1,true); cg.translate(0,cL/2,0);
+  var cm=new THREE.Mesh(cg,new THREE.MeshBasicMaterial({color:0xffe08a,transparent:true,opacity:0.12,depthWrite:false,side:THREE.DoubleSide}));
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:getGlow(),color:0xaad4ff,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
+  sp.scale.set(1.4,1.4,1.4);
+  grp.add(jet); grp.add(cm); grp.add(sp);
+  grp.userData={thruster:true,id:t.id,F:F,localDir:dir.clone()};
+  return grp;
+}
+
+function ease(t){ return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2; }
+function modeAngle(mv,mode){ if(state.fail==='pod_jam'&&!state._calc&&mv.group==='pod_1') return -45; var a=mv[mode+'_deg']; return (typeof a==='number')?a:0; }
+
+function buildModel(v,opt){
+  CUR_PAL=v.palette||null;
+  var G=v.geometry||{}, root=new THREE.Group(), groups={}, model={v:v,root:root,movers:[],thr:[],labelObjs:[]};
+  function grp(name){
+    if(!name||name==='body') return root;
+    if(groups[name]) return groups[name].inner;
+    var mv=(Array.isArray(G.movers)?G.movers:[]).filter(function(m){return m.group===name;})[0];
+    var outer=new THREE.Group(), inner=new THREE.Group();
+    if(mv){
+      var pv=v3(mv.pivot); outer.position.copy(pv); inner.position.copy(pv).multiplyScalar(-1);
+      var ax=v3(mv.axis,new THREE.Vector3(0,0,1)); if(ax.lengthSq()<1e-9) ax.set(0,0,1); ax.normalize();
+      var a0=modeAngle(mv,state.mode);
+      var rec={outer:outer,axis:ax,mv:mv,cur:a0,from:a0,to:a0,t0:0};
+      outer.quaternion.setFromAxisAngle(ax,a0*Math.PI/180);
+      model.movers.push(rec);
+    }
+    outer.add(inner); root.add(outer); groups[name]={outer:outer,inner:inner};
+    return inner;
+  }
+  var hull=buildHull(G.hull_sections); if(hull){ root.add(hull); model.hull=hull; }
+  (Array.isArray(G.primitives)?G.primitives:[]).forEach(function(p){
+    try{ var m=buildPrim(p); if(m){ grp(p.group).add(m); if(p.note_ru||p.id) model.labelObjs.push(m); } }catch(e){ console.warn('prim',p&&p.id,e); }
+  });
+  (Array.isArray(G.wings)?G.wings:[]).forEach(function(w){ try{ grp(w.group).add(buildWing(w)); }catch(e){ console.warn('wing',e); } });
+  (Array.isArray(G.thrusters)?G.thrusters:[]).forEach(function(t){ try{ var th=buildThruster(t); grp(t.group).add(th); model.thr.push(th); }catch(e){ console.warn('thr',e); } });
+  return model;
+}
+
+function clearWorld(){
+  while(world.children.length){ var c=world.children[0]; world.remove(c); c.traverse(function(o){ if(o.geometry) o.geometry.dispose(); }); }
+  models=[]; extras=[]; labelsEl.innerHTML='';
+}
+function modelBox(m){
+  var b=new THREE.Box3(); m.root.updateMatrixWorld(true);
+  m.root.traverse(function(o){
+    if(!o.isMesh) return; var p=o.parent, skip=false; while(p){ if(p.userData&&p.userData.thruster){skip=true;break;} p=p.parent; }
+    if(skip) return; var pa=o.geometry.attributes&&o.geometry.attributes.position; if(!pa) return;
+    var vv=new THREE.Vector3(); for(var i=0;i<pa.count;i++){ vv.fromBufferAttribute(pa,i).applyMatrix4(o.matrixWorld); b.expandByPoint(vv); }
+  });
+  return b;
+}
+
+var hangarObjs=[];
+function lineBox(sx,sy,sz,color,dashed){
+  var geo=new THREE.EdgesGeometry(new THREE.BoxGeometry(sx,sy,sz));
+  var m=dashed? new THREE.LineDashedMaterial({color:color,dashSize:0.6,gapSize:0.4}) : new THREE.LineBasicMaterial({color:color});
+  var l=new THREE.LineSegments(geo,m); if(dashed) l.computeLineDistances(); return l;
+}
+function makeHangar(m){
+  var H=new THREE.Group(); H.userData.hangar=true;
+  var frame=lineBox(20.2,5.4,16.0,0x66ccff); frame.position.y=2.7; H.add(frame);
+  var cradle=new THREE.Mesh(new THREE.BoxGeometry(8,0.08,3),new THREE.MeshStandardMaterial({color:0x445566})); cradle.position.y=-0.04; H.add(cradle);
+  var bad=lineBox(1,1,1,0xff3030); bad.visible=false; H.add(bad); H.userData.bad=bad;
+  m.hangar=H; world.add(H); return H;
+}
+function updateHangar(m){
+  if(!m.hangar) return null;
+  var b=modelBox(m), sz=new THREE.Vector3(), c=new THREE.Vector3(); b.getSize(sz); b.getCenter(c);
+  m.hangar.position.set(c.x+m.root.position.x - m.root.position.x, b.min.y, m.root.position.z + 0);
+  m.hangar.position.x=c.x; m.hangar.position.z=c.z;
+  var ex={L:sz.x-20.2,W:sz.z-16.0,Wd:-1,H:sz.y-5.4}, bad=m.hangar.userData.bad;
+  var over=ex.L>0.005||ex.W>0.005||ex.H>0.005;
+  bad.visible=over; if(over){ bad.scale.set(Math.max(sz.x,0.1),Math.max(sz.y,0.1),Math.max(sz.z,0.1)); bad.position.set(0,sz.y/2,0); bad.position.x=c.x-m.hangar.position.x; bad.position.z=c.z-m.hangar.position.z; }
+  return {sz:sz,ex:ex};
+}
+
+function rebuild(){
+  if(!has3D) { updateHud(); return; }
+  try{
+    clearWorld();
+    var t=TABS[state.tab]; if(!t) return;
+    var six=!!state.six;
+    var list= six? VARS : [tabVar(t)];
+    list.forEach(function(v,i){
+      if(!v) return;
+      var m=buildModel(v); if(six){ m.root.position.z=(i-(list.length-1)/2)*22; }
+      world.add(m.root); models.push(m);
+      if(state.hangar){ var H=makeHangar(m); H.position.z=m.root.position.z; }
+      if(six){ var d=document.createElement('div'); d.className='lbl'; d.textContent=v.name_ru||v.id; d.style.fontSize='12px'; labelsEl.appendChild(d); m.nameLbl=d; }
+    });
+    // grid
+    var gb=new THREE.Box3(); models.forEach(function(m){ gb.union(modelBox(m)); });
+    if(state.grid){
+      var span=Math.ceil(Math.max(gb.max.x-gb.min.x, gb.max.z-gb.min.z, 20)+8); if(span%2) span++;
+      grid=new THREE.GridHelper(span,span,0x3a4a60,0x1c2430); grid.position.y=(isFinite(gb.min.y)?gb.min.y:-2)-0.02;
+      grid.position.x=isFinite(gb.min.x)?(gb.min.x+gb.max.x)/2:0; grid.position.z=isFinite(gb.min.z)?(gb.min.z+gb.max.z)/2:0;
+      world.add(grid);
+    }
+    if(!six&&state.labels) buildLabels();
+    addFailMarks();
+    applyShell(); applyThrust();
+    if(!camera.userData.placed||state._refit){ fitCamera('iso'); camera.userData.placed=true; state._refit=false; }
+    updateHud();
+  }catch(e){ console.warn(e); hud.textContent='Ошибка построения: '+e.message; }
+}
+function buildLabels(){
+  labelsEl.innerHTML='';
+  models.forEach(function(m){
+    var seen={};
+    m.labelObjs.forEach(function(o){
+      var r=o.userData.role, key=r+'|'+(o.userData.note||'');
+      if(!o.userData.note && seen[r]) return; if(seen[key]) return; seen[key]=1; seen[r]=1;
+      var d=document.createElement('div'); d.className='lbl';
+      var nm=(ROLES[r]||ROLES.other).n; d.textContent=nm+(o.userData.note?': '+o.userData.note:'');
+      d.style.borderColor='#'+(ROLES[r]||ROLES.other).c.toString(16).padStart(6,'0');
+      labelsEl.appendChild(d); o.userData.lbl=d;
+    });
+  });
+}
+function applyShell(){
+  models.forEach(function(m){ if(m.hull){ CUR_PAL=m.v.palette||null; m.hull.visible=state.shell!=='none'; m.hull.material=hullMat(); } });
+}
+/* ---------- failures (core V1-OYa) ---------- */
+var FAIL_ID='cup_1';
+function failedIds(){ var f=state.fail; if(!f) return []; if(f==='glide') return ['cup_1','cup_2','cup_3','cup_4']; return [FAIL_ID]; }
+function thrustScale(id){ // jet length ~ thrust; 1 = 0.213 MN
+  var F0=+g0(CORE,'propulsion.thrust_per_chamber_MN',0.213), f=state.fail;
+  if(!f) return 1; if(failedIds().indexOf(id)>=0) return 0;
+  // one chamber out: opposite front W/2, rear 0.34/0.16 W; front capped by emergency 306 kN => T/W 1.04
+  var Fe=0.306, share={cup_2:0.5,cup_3:0.34,cup_4:0.16}[id]||0;
+  return (Fe*share/0.5)/F0;
+}
+function addFailMarks(){
+  var ids=failedIds(); if(!ids.length) return;
+  models.forEach(function(m){ m.thr.forEach(function(th){
+    if(ids.indexOf(th.userData.id)<0) return;
+    var mk=new THREE.Mesh(new THREE.OctahedronGeometry(0.45),new THREE.MeshBasicMaterial({color:0xff2a2a}));
+    mk.position.copy(th.position); th.parent.add(mk);
+    var d=document.createElement('div'); d.className='lbl'; d.style.borderColor='#ff3030'; d.style.color='#ff6b6b'; d.textContent='ОТКАЗ '+th.userData.id;
+    labelsEl.appendChild(d); mk.userData={lbl:d,role:'other'}; m.labelObjs.push(mk);
+  }); });
+}
+function setFail(k){
+  state.fail=k;
+  Array.prototype.forEach.call(failsEl.querySelectorAll("button"),function(b){ b.classList.toggle('on',(b.dataset.f||null)===(k||null)); });
+  var info=document.getElementById('failInfo'), f=FAILS.filter(function(x){return x.k===k;})[0];
+  if(f){ var r=fmeaFor(f), tw=(k==='glide')?'тяга 0 — планирование, посадка '+num(g0(CORE,'wings.landing_speed_power_off_ms'),0)+' м/с':'Т/В '+num(g0(CORE,'mass.tw_one_chamber_out'),2)+' (аварийный режим 306 кН, взлётная масса); факелы: чаша 2 — 0,306 МН, 3 — 0,208, 4 — 0,098';
+    info.innerHTML='<b style="color:#ff6b6b">'+esc(f.n)+'</b> ('+esc(r?r.component_ru:'')+'): '+tw+'.<br><b>Стало:</b> '+esc(r?r.effect_after_ru:'—')+(r?'<br><span class="note">Решение: '+esc(r.mitigation_ru)+'</span>':'');
+  } else info.innerHTML='Отказов нет: 4 чаши по 0,213 МН, Т/В '+num(g0(CORE,'mass.tw_earth'),2)+'.';
+  rebuild();
+}
+var STOW={};
+function stowCalc(v){
+  if(!has3D||!v) return null; var key=v.id||'x'; if(STOW[key]) return STOW[key];
+  var pm=state.mode; state.mode='stowed'; state._calc=true;
+  try{ var m=buildModel(v), b=modelBox(m), s=new THREE.Vector3(); b.getSize(s); STOW[key]=[s.x,s.z,s.y];
+    m.root.traverse(function(o){ if(o.geometry) o.geometry.dispose(); }); }
+  catch(e){ console.warn('stow',e); STOW[key]=null; }
+  state.mode=pm; state._calc=false; return STOW[key];
+}
+function thrustActive(m,th){
+  if(!state.thrust) return false;
+  if(thrustScale(th.userData.id)<=0) return false;
+  if(state.mode==='stowed'||state.mode==='entry') return false;
+  if(state.mode==='cruise'){
+    // в полёте подъёмные (вниз, в корпусе) молчат, если есть маршевые
+    var wd=new THREE.Vector3(); th.updateMatrixWorld(true);
+    wd.copy(new THREE.Vector3(0,1,0)).applyQuaternion(th.getWorldQuaternion(new THREE.Quaternion()));
+    var anyMarch=m.thr.some(function(o){ var q=o.getWorldQuaternion(new THREE.Quaternion()); return new THREE.Vector3(0,1,0).applyQuaternion(q).y>-0.9; });
+    if(wd.y<-0.9 && anyMarch) return false;
+  }
+  return true;
+}
+function applyThrust(){
+  models.forEach(function(m){ m.root.updateMatrixWorld(true); m.thr.forEach(function(th){ th.visible=thrustActive(m,th); var k=thrustScale(th.userData.id); th.scale.set(1,Math.max(k,0.01),1); }); });
+}
+function setMode(k){
+  var prevSix=false;
+  state.mode=k;
+  Array.prototype.forEach.call(modesEl.children,function(b){ b.classList.toggle('on',b.dataset.m===k); });
+  var nowSix=false;
+  if(prevSix!==nowSix){ state._refit=true; rebuild(); return; }
+  var now=performance.now();
+  models.forEach(function(m){ m.movers.forEach(function(r){ r.from=r.cur; r.to=modeAngle(r.mv,k); r.t0=now; }); });
+  updateHud();
+}
+
+function tvcAngle(v){
+  var m=models[0]; if(!m) return '—';
+  var thrGroups=(g(v,'geometry.thrusters',[])||[]).map(function(t){return t.group;});
+  var r=m.movers.filter(function(x){ return thrGroups.indexOf(x.mv.group)>=0; })[0];
+  if(r) return num(r.cur,0)+'° ('+esc(r.mv.group)+')';
+  return 'чаши неподвижны';
+}
+var lastHud=0;
+function updateHud(){
+  var t=TABS[state.tab]; if(!t){ return; }
+  var v=(t.k==='cmp'?{id:'A–D',name_ru:'Облики A–D рядом',geometry:CORE.geometry,mass:CORE_V.mass}:tabVar(t))||{}, mname=(MODES.filter(function(x){return x.k===state.mode;})[0]||{}).n;
+  var tc=g(v,'tvc.range_deg'), cone=(g(v,'geometry.thrusters',[])||[]).map(function(x){return x.vector_cone_deg||0;});
+  var h='<b>'+esc(v.name_ru||v.id)+'</b><br>Режим: '+esc(mname)+'<br>Взлётная масса: '+num(g(v,'mass.mtom_t'),1)+' т · Т/В '+num(g(v,'mass.tw_earth'),2)+
+    '<br>Угол УВТ: '+tvcAngle(v)+(cone.length?' · магнит ±'+num(Math.max.apply(null,cone),0)+'°':'')+(typeof tc==='number'?' · ход '+num(tc,0)+'°':'');
+  var note='';
+  if(has3D&&models.length){
+    var fitTxt=[];
+    models.forEach(function(m){
+      var r=m.hangar?updateHangar(m):null; if(!r){ var b=modelBox(m),s=new THREE.Vector3(); b.getSize(s); r={sz:s,ex:{L:s.x-20.2,W:s.z-16.0,Wd:-1,H:s.y-5.4}}; }
+      var e=r.ex, bad=[]; if(e.L>0.005) bad.push('длина +'+num(e.L,2)+' м'); if(e.W>0.005) bad.push('ширина +'+num(e.W,2)+' м'); if(e.H>0.005) bad.push('высота +'+num(e.H,2)+' м');
+      var dw=e.Wd>0.005?' <span class="warn">(шире проёма 16,7 м на '+num(e.Wd,2)+' м)</span>':'';
+      fitTxt.push('<b>'+esc(m.v.id)+'</b> модель '+num(r.sz.x,2)+' × '+num(r.sz.z,2)+' × '+num(r.sz.y,2)+' м: '+(bad.length?'<span class="bad">выход за ангар — '+bad.join(', ')+'</span>':'<span class="ok">в объёме ангара</span>')+dw);
+    });
+    if(state.hangar||state.mode==='stowed'){ h+='<br>'+fitTxt.map(function(s){return s.replace(/class="(ok|bad|warn)"/g,function(_,k){return 'style="color:'+(k==='ok'?'#6fe39a':k==='bad'?'#ff6b6b':'#ffcc66')+'"';});}).join('<br>'); }
+    note='Габарит модели в текущем режиме (без факелов): '+fitTxt.join(' · ')+'. Рамка stowed по модели и заявленная — в боковой панели.';
+  }
+  if(state.fail){ var ff=FAILS.filter(function(x){return x.k===state.fail;})[0]; h+='<br><span style="color:#ff6b6b">Отказ: '+esc(ff?ff.n:'')+'</span>'; }
+  hud.innerHTML=h;
+  document.getElementById('hangarNote').innerHTML=note;
+}
+
+function fitCamera(kind){
+  if(!has3D) return;
+  var b=new THREE.Box3(); models.forEach(function(m){ b.union(modelBox(m)); });
+  var c=new THREE.Vector3(), s=new THREE.Vector3(); if(b.isEmpty()){ c.set(0,0,0); s.set(20,5,10);} else { b.getCenter(c); b.getSize(s); }
+  var R=Math.max(s.x,s.y,s.z)*0.5, D=R/Math.sin(camera.fov*Math.PI/360)*1.05+4;
+  var p={side:[0,0,D],top:[0,D,0.001],front:[D,0,0],iso:[D*0.62,D*0.45,D*0.62]}[kind]||[D*0.62,D*0.45,D*0.62];
+  camera.position.set(c.x+p[0],c.y+p[1],c.z+p[2]); camera.up.set(0,1,0);
+  if(controls){ controls.target.copy(c); controls.update(); } else camera.lookAt(c);
+}
+Array.prototype.forEach.call(document.querySelectorAll('#vbar button'),function(b){ b.onclick=function(){ fitCamera(b.dataset.cam); }; });
+
+function resize(){
+  if(!has3D) return; var w=view.clientWidth||600, h=view.clientHeight||400;
+  renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize',resize);
+
+function placeLabels(){
+  var w=view.clientWidth,h=view.clientHeight,p=new THREE.Vector3();
+  models.forEach(function(m){
+    if(m.nameLbl){ var b=modelBox(m); p.set((b.min.x+b.max.x)/2,b.max.y+1,(b.min.z+b.max.z)/2).project(camera); m.nameLbl.style.left=((p.x+1)/2*w)+'px'; m.nameLbl.style.top=((1-p.y)/2*h)+'px'; m.nameLbl.style.display=p.z<1?'':'none'; }
+    m.labelObjs.forEach(function(o){ var d=o.userData.lbl; if(!d) return; o.getWorldPosition(p); p.project(camera);
+      d.style.display=(p.z<1&&o.visible)?'':'none'; d.style.left=((p.x+1)/2*w)+'px'; d.style.top=((1-p.y)/2*h)+'px'; });
+  });
+}
+var frame=0;
+function loop(now){
+  requestAnimationFrame(loop);
+  var moving=false;
+  models.forEach(function(m){ m.movers.forEach(function(r){
+    if(r.cur!==r.to){ var k=Math.min(1,(now-r.t0)/1300); r.cur= r.from+(r.to-r.from)*ease(k); if(k>=1) r.cur=r.to; moving=true;
+      r.outer.quaternion.setFromAxisAngle(r.axis,r.cur*Math.PI/180); }
+  }); });
+  if(moving){ applyThrust(); if(frame%6===0) updateHud(); }
+  else if(state._dirtyHud){ state._dirtyHud=false; updateHud(); }
+  if(moving) state._dirtyHud=true;
+  frame++;
+  if(controls) controls.update();
+  renderer.render(scene,camera);
+  if(labelsEl.children.length) placeLabels();
+}
+
+/* ---------- controls ---------- */
+document.getElementById('shell').onchange=function(e){ state.shell=e.target.value; applyShell(); };
+document.getElementById('cHangar').onchange=function(e){ state.hangar=e.target.checked; rebuild(); };
+document.getElementById('cThrust').onchange=function(e){ state.thrust=e.target.checked; applyThrust(); };
+document.getElementById('cLabels').onchange=function(e){ state.labels=e.target.checked; rebuild(); };
+document.getElementById('cGrid').onchange=function(e){ state.grid=e.target.checked; rebuild(); };
+
+
+/* legend */
+(function(){ var L=document.getElementById('legend'), h='';
+  ['hull','wing','pod','cup','coil','shield','tank','charges','cabin','seat','console','door','gear','structure','other'].forEach(function(k){ var r=ROLES[k]; h+='<div><i style="background:#'+r.c.toString(16).padStart(6,'0')+'"></i>'+esc(r.n)+'</div>'; });
+  h+='<div><i style="background:#ff2a2a"></i>погашенная камера</div><div><i style="background:#7fb8ff"></i>факел (∝ тяге)</div><div><i style="background:#ffe08a"></i>конус УВТ</div>';
+  L.innerHTML=h; })();
+
+Array.prototype.forEach.call(modesEl.children,function(b){ b.classList.toggle('on',b.dataset.m===state.mode); });
+if(has3D){ resize(); }
+setFail(null); selectTab(0);
+if(has3D){ resize(); requestAnimationFrame(loop); }
+})();
+</script>
+</body>
+</html>

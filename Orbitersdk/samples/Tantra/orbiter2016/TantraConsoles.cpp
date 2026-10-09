@@ -6,7 +6,7 @@
 //     the computing machine's 0..9 , = + - × ÷ C ЗАП ВЫЗ;
 //   screen 6, the machine's phosphor screen at the right console's front (the register, the operation, the journal, the cells);
 //   screen 4, the left console's top (0.29 x 0.54 m): 3 x 5 keys of the screens (the left glass's page, the front glass's tab,
-//     the ship's HUD, the side glasses), the throttle quadrant's two slots (МАРШ, ГОНДОЛЫ: where the thrust is set - a touch on
+//     the ship's HUD, the side glasses), the throttle quadrant's two slots (МАРШ, ВЫДВ. БЛОКИ: where the thrust is set - a touch on
 //     a slot sets it, as the bars of the screens do) and the pods' ВЫПУСК / УБОРКА key under its red guard cover.
 // The layout is the mockup's in metres (the keys 56 x 42 mm at 64 x 52 mm), drawn at the console's own scale.
 #include "TantraDisplays.h"
@@ -66,7 +66,7 @@ Rc KeyL(int i, double S) {                                               // 4 ke
     const double w = kRowL[r] > 4 ? 0.050 : 0.056, pitch = kRowL[r] > 4 ? 0.057 : 0.064, x0 = kRowL[r] > 4 ? 0.006 : 0.018;
     return {(x0 + i * pitch) * S, (0.27 + r * 0.052) * S, w * S, 0.042 * S};
 }
-Rc SlotL(int k, double S) { const double cx = k == 0 ? 0.19 : 0.105; return {(cx - 0.025) * S, 0.03 * S, 0.05 * S, 0.20 * S}; }   // 0 МАРШ, 1 ГОНДОЛЫ
+Rc SlotL(int k, double S) { const double cx = k == 0 ? 0.19 : 0.105; return {(cx - 0.025) * S, 0.03 * S, 0.05 * S, 0.20 * S}; }   // 0 МАРШ, 1 ВЫДВ. БЛОКИ
 Rc PodKey(double S) { return {(0.04 - 0.023) * S, (0.118 - 0.018) * S, 0.046 * S, 0.036 * S}; }   // outboard of the levers (gen_mesh BR_POD_KEY)
 enum { kHitSlot = 100, kHitPods = 110 };
 
@@ -278,7 +278,7 @@ void TantraDisplays::DrawConsoleL() {
             // the throttle quadrant's slots: the scale (0 at the back, МАКС at the front), the thrust set; the pods' locked in the bays
             const double lv[2] = {t->GetThrusterGroupLevel(THGROUP_MAIN), PodLevel()};
             const bool locked[2] = {false, t->podOut_ < 0.99};
-            static const wchar_t* const kSlot[2] = {L"МАРШ", L"ГОНДОЛЫ"};
+            static const wchar_t* const kSlot[2] = {L"МАРШ", L"ВЫДВ. БЛОКИ"};
             for (int j = 0; j < 2; ++j) {
                 const Rc r = SlotL(j, S);
                 g.Fill(r.x, r.y, r.w, r.h, 0x040a0d); g.Stroke(r.x, r.y, r.w, r.h, Mix(kDimB, kPlate, 0.4), 1.5);
@@ -300,7 +300,7 @@ void TantraDisplays::DrawConsoleL() {
             const Rc pk = PodKey(S);
             const bool open = now - podCoverT_ < 6.0;
             const wchar_t* st = t->podsWanted_ ? (t->podOut_ >= 0.99 ? L"ВЫП." : L"ВЫХОД") : (t->podOut_ <= 0.01 ? L"УБР." : L"УБОРКА");
-            GlassKey(g, gost_, pk, L"ГОНДОЛЫ", t->podOut_ > 0.01, kMain, st);
+            GlassKey(g, gost_, pk, L"ВЫДВ. БЛОКИ", t->podOut_ > 0.01, kMain, st);
             (void)open;                                                   // (its red guard cover: a mesh over the key, TantraYoke.cpp)
             hits.push_back({pk.x - 4, pk.y - 0.014 * S, pk.w + 8, pk.h + 0.018 * S, kHitPods});
         }
@@ -316,17 +316,17 @@ bool TantraDisplays::TouchConsoleL(double x, double y) {
     const double now = oapiGetSysTime();
     if (i == kHitSlot) { SetMainLevel(along); return true; }
     if (i == kHitSlot + 1) {
-        if (t->podOut_ < 0.99) { t->Message("Гондолы в отсеках: рукоять заперта", "The pods are in their bays: the lever is locked"); return true; }
+        if (t->podOut_ < 0.99) { t->Message("Выдвижные блоки в отсеках: рукоять заперта", "The pods are in their bays: the lever is locked"); return true; }
         SetPodLevel(along); return true;
     }
     if (i == kHitPods) {
         if (now - podCoverT_ >= 6.0) { podCoverT_ = now; return true; }  // the first touch lifts the cover
         podCoverT_ = now;
         if (t->podsWanted_) {                                             // stowing: only with their thrust at 0
-            if (PodLevel() > 0.001) { t->Message("Уборка гондол: сначала их тяга 0", "Stowing the pods: their thrust to 0 first"); return true; }
-            t->podsWanted_ = false; t->podTarget_ = 0.0; t->Message("Гондолы: чаши в 0°, в отсеки", "Pods: cups aft, into the bays");
+            if (PodLevel() > 0.001) { t->Message("Уборка выдвижных блоков: сначала их тяга 0", "Stowing the pods: their thrust to 0 first"); return true; }
+            t->podsWanted_ = false; t->podTarget_ = 0.0; t->Message("Выдвижные блоки: чаши в 0°, в отсеки", "Pods: cups aft, into the bays");
         } else if ((std::max)(t->tuck_, t->carriage_.Pose().tuck) >= 0.5) {   // the bays open only with the wings out (Tantra::UpdatePods)
-            t->Message("Гондолы: крылья сложены — выпуск невозможен (на грунте лёжа крылья сложены)", "Pods: the wings are folded - they cannot come out");
+            t->Message("Выдвижные блоки: крылья сложены — выпуск невозможен (на грунте лёжа крылья сложены)", "Pods: the wings are folded - they cannot come out");
         } else t->ActPods(false);
         return true;
     }
@@ -499,7 +499,7 @@ void TantraDisplays::DrawPods() {
             const wchar_t* st = t->podsWanted_ ? (full ? L"ВЫПУЩЕНЫ" : L"ВЫПУСК…") : (t->podOut_ <= 0.01 ? L"УБРАНЫ" : t->podAngle_ > 1.0 ? L"ЧАШИ В 0°…" : L"УБОРКА…");
             const bool moving = (t->podsWanted_ && !full) || (!t->podsWanted_ && out), blink = std::fmod(now, 0.32) < 0.16;
             const double tx = 214 * k;
-            gost_.Text(skp, int(tx), int(26 * k), L"ГОНДОЛЫ", int(22 * k), kDimB, 0);
+            gost_.Text(skp, int(tx), int(26 * k), L"ВЫДВ. БЛОКИ", int(22 * k), kDimB, 0);
             gost_.Text(skp, int(tx), int(58 * k), st, int(26 * k), !out && !t->podsWanted_ ? kDimB : moving ? (blink ? kAcc : kDimB) : kMain, 0);
             wchar_t b[48];
             std::swprintf(b, 48, L"ТЯГА %.0f %%", sum / sp::kPodCount * 100); gost_.Text(skp, int(tx), int(96 * k), b, int(22 * k), kMain, 0);

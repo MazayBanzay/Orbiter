@@ -70,6 +70,16 @@ VECTOR3 RotateAbout(const VECTOR3& p, const VECTOR3& axis, double ang) {
 }
 VECTOR3 V3(const tantra::mesh::V& a) { return _V(a.x, a.y, a.z); }
 
+// A pod turns about its arm axis so that its cups go DOWN (the mesh rig: pod_swivel about -axis * side): the axis of
+// that turn in the vessel frame.
+VECTOR3 PodTurnAxis(const tantra::mesh::PodRig& r) { return V3(r.axis) * (r.pivot.x >= 0.0 ? -1.0 : 1.0); }
+// Thrust of a pod on the ship at swivel 0: forward, leaning inboard and up - the jet splays out and down from the hull.
+VECTOR3 PodBaseThrust(const tantra::mesh::PodRig& r) {
+    const double sgn = r.pivot.x >= 0.0 ? 1.0 : -1.0;
+    const double so = sp::kPodSplayOutDeg * RAD, sd = sp::kPodSplayDownDeg * RAD;
+    return _V(-sgn * std::sin(so) * std::cos(sd), std::sin(sd), std::cos(so) * std::cos(sd));
+}
+
 // Hull stations of the airfoil references (T8): body (Newtonian centre of pressure near the planform / side
 // centroids), telescopic dorsal fin (726 m2, centre of pressure s 30, 9.7 m up the fin), wings (2 x 240 m2,
 // centre s 14 on the hinge line), gear and pods (under the fairings).
@@ -180,6 +190,7 @@ void Tantra::clbkSetClassCaps(FILEHANDLE cfg) {
     screen_.SetPages([](void* c, int z, SURFHANDLE s, int w, int h) { static_cast<TantraDisplays*>(c)->DrawDataPage(z, s, w, h); }, &disp_);   // the data band
     DefineGear();
     DefinePort();
+    DefineHangar();
 }
 
 // Carriage columns + stern legs, all mesh animations (TantraGear builds the rig from MeshLayout.h).
@@ -253,6 +264,10 @@ void Tantra::LoadParams(FILEHANDLE cfg) {
         {"AttAxialAccel", &prm_.attAxialAccel},
         {"GLimitDefault", &prm_.gLimitDefault},
     };
+    // the speed model first (0 Efremov, 1 Sapiga: drive power and anamezon load), then every single key over it
+    int model = prm_.speedModel;
+    if (cfg && oapiReadItem_int(cfg, const_cast<char*>("SpeedModel"), model)) prm_.speedModel = model;
+    prm_.ApplySpeedModel();
     if (cfg) {
         for (const Item& it : items) {
             double v;
@@ -318,8 +333,8 @@ void Tantra::DefinePropulsion() {
             es.level = nullptr;
             es.lpos = &podExhPos_[k];
             es.ldir = &podExhDir_[k];
-            es.lsize = 24.0;
-            es.wsize = 1.4;
+            es.lsize = 18.0;   // cups R 0.55, 55 MN each (2026-10-09)
+            es.wsize = 1.0;
             es.lofs = 0.0;
             es.modulate = 0.1;
             es.tex = nullptr;
@@ -507,6 +522,7 @@ void Tantra::clbkSaveState(FILEHANDLE scn) {
     std::snprintf(buf, sizeof buf, "%d %.2f", gLimitOn_ ? 1 : 0, gLimit_);
     oapiWriteScenario_string(scn, const_cast<char*>("GLIMIT"), buf);
     oapiWriteScenario_int(scn, const_cast<char*>("HOTSTART_OVERRIDE"), hotStartOverride_ ? 1 : 0);
+    if (sternPlan_) oapiWriteScenario_int(scn, const_cast<char*>("STERNPLAN"), 1);
     oapiWriteScenario_float(scn, const_cast<char*>("SHIPTIME"), properTime_);
     {
         char dmg[400];
@@ -557,10 +573,14 @@ void Tantra::clbkLoadStateEx(FILEHANDLE scn, void* status) {
             gLimit_ = d;
         } else if (!_strnicmp(line, "HOTSTART_OVERRIDE", 17) && std::sscanf(line + 17, "%d", &i) == 1) {
             hotStartOverride_ = i != 0;
+        } else if (!_strnicmp(line, "STERNPLAN", 9) && std::sscanf(line + 9, "%d", &i) == 1) {
+            sternPlan_ = i != 0;
         } else if (!_strnicmp(line, "SHIPTIME", 8) && std::sscanf(line + 8, "%lf", &d) == 1) {
             properTime_ = d;
         } else if (!_strnicmp(line, "PODS", 4) && std::sscanf(line + 4, "%lf %lf", &d, &podTarget_) >= 1) {
             podAngle_ = d;
+            if (std::fabs(podTarget_ - 90.0) < 0.05) podTarget_ = PodVerticalDeg();   // scenarios before 2026-10-09: 90 was the hover key
+            if (std::fabs(podAngle_ - 90.0) < 0.05) podAngle_ = PodVerticalDeg();
             double out = 0.0;
             int want = 0;
             if (std::sscanf(line + 4, "%*lf %*lf %lf %d", &out, &want) == 2) {
@@ -570,6 +590,7 @@ void Tantra::clbkLoadStateEx(FILEHANDLE scn, void* status) {
                 podOut_ = podAngle_ > 1.0 ? 1.0 : 0.0;  // older scenarios: swivelled pods are out
                 podsWanted_ = podOut_ > 0.5;
             }
+            podCant_ = podOut_ >= 1.0 && PodHoverSet() ? sp::kPodHoverCantDeg : 0.0;   // hovering: the pairs already apart
         } else if (!_strnicmp(line, "LIFT", 4) && (line[4] == ' ' || line[4] == '\t')) {
             lift_.Load(line + 4);
         } else if (!_strnicmp(line, "SCREENBAND", 10)) {
@@ -636,7 +657,8 @@ bool Tantra::AnaIsMain() const { return engineSet_ == EngineSet::Anamezon && ign
 
 void Tantra::RebindGroups() {
     const bool anaMain = AnaIsMain();
-    const int want = anaMain ? 0 : 1;
+    const bool stern = !anaMain && SternPlanActive();   // the take-off: the marching cup and the stern blocks on the charges
+    const int want = anaMain ? 0 : stern ? 2 : 1;
     const bool hover = podOut_ >= 1.0 && podAngle_ >= 45.0 && podAngle_ <= 135.0 && !podAssist_ && podAimed_;
     const bool mainIsAna = GetGroupThrusterCount(THGROUP_MAIN) == sp::kAnaCount;
     if (want != planGroup_ || anaMain != mainIsAna) {
@@ -644,7 +666,13 @@ void Tantra::RebindGroups() {
         for (THRUSTER_HANDLE th : ana_) SetThrusterLevel(th, 0.0);  // (re)start from zero feed
         SetThrusterLevel(march_, 0.0);
         if (anaMain) CreateThrusterGroup(ana_, sp::kAnaCount, THGROUP_MAIN);
-        else CreateThrusterGroup(&march_, 1, THGROUP_MAIN);
+        else if (stern) {
+            THRUSTER_HANDLE five[1 + sp::kAnaCount] = {march_};
+            for (int i = 0; i < sp::kAnaCount; ++i) five[1 + i] = ana_[i];
+            CreateThrusterGroup(five, 1 + sp::kAnaCount, THGROUP_MAIN);
+        } else CreateThrusterGroup(&march_, 1, THGROUP_MAIN);
+        if (anaMain && handLevel_ >= 0.0) SetThrusterGroupLevel(THGROUP_MAIN, handLevel_);   // the charges' thrust goes on
+        handLevel_ = -1.0;
         // the nose retro cups brake only while the anamezon drive feeds
         DelThrusterGroup(THGROUP_RETRO);
         for (THRUSTER_HANDLE th : retro_) SetThrusterLevel(th, 0.0);
@@ -665,46 +693,53 @@ void Tantra::RebindGroups() {
 // splay 15 deg out and 25 deg down away from the hull.
 void Tantra::UpdatePods(double dt) {
     namespace m = tantra::mesh;
-    const bool fast = GetAtmDensity() > 1e-6 && GetMachNumber() > sp::kPodMaxMach;
+    const bool fast = GetDynPressure() > sp::kPodMaxQ;   // doors and arms rated for kPodMaxQ x kSafety
     // Standing up / laying down: the pods come out and hold their thrust world-vertical (cups swivel by 90 deg
     // minus the ship's pitch); the crests fold, the pods stay out (tantra_c148.html, «Подъём на корму»).
     const double P = carriage_.Progress();
     // Only while the carriage actually lifts, turns or lowers the ship (not while the crests fold, not once
     // it stands on the stern legs).
     // Out and aimed already while the crests fold (P 0..1), thrust only while the carriage lifts / turns.
-    const bool assistPrep = sp::kPodAssistOn && !fast && tuck_ < 0.5 && GroundContact() && carriage_.Busy() && P > 0.0 && P < 4.9;
+    const bool assistPrep = sp::kPodAssistOn && !fast && GroundContact() && carriage_.Busy() && P > 0.0 && P < 4.9;
     podAssist_ = assistPrep && P > 1.0;
-    const bool allowed = !fast && tuck_ < 0.5 && (assistPrep || carriage_.Pose().tuck < 0.5);
+    // the folded wings do not block the bays (2026-10-09: in a stern-first descent the wings are folded and the pods
+    // must come out); the carriage holds them in while the ship lies on the ground or moves on its supports
+    const bool allowed = !fast && (assistPrep || carriage_.Pose().tuck < 0.5);
     if (podsWanted_ && fast && podOut_ < 1.0 && !podMachWarned_) {
-        Message("Гондолы: створки откроются ниже М %.1f", "Pods: the doors open below Mach %.1f", sp::kPodMaxMach);
+        Message("Выдвижные блоки: створки откроются при скоростном напоре ниже %.0f кПа", "Pods: the doors open below %.0f kPa dynamic pressure",
+                sp::kPodMaxQ / 1e3);
         podMachWarned_ = true;
     }
     if (!fast) podMachWarned_ = false;
     const bool out = (podsWanted_ || assistPrep) && allowed;
-    const double assistSwivel = (std::max)(0.0, (std::min)(sp::kPodSwivelMaxDeg, 90.0 - carriage_.Pose().theta * DEG));
+    const double vdeg = PodVerticalDeg();
+    const double assistSwivel = (std::max)(0.0, (std::min)(sp::kPodSwivelMaxDeg, vdeg - carriage_.Pose().theta * DEG));
     const double swivelTarget = out && podOut_ >= 1.0 ? (assistPrep ? assistSwivel : podTarget_) : 0.0;
-    podAimed_ = podOut_ >= 1.0 && std::fabs(podAngle_ - swivelTarget) < 3.0;  // doors out, cups on their angle
+    // hover (the cups on the vertical): the pairs lean apart, their jets off the blade feet
+    const double cantTarget = out && podOut_ >= 1.0 && !assistPrep && PodHoverSet() ? sp::kPodHoverCantDeg : 0.0;
+    podAimed_ = podOut_ >= 1.0 && std::fabs(podAngle_ - swivelTarget) < 3.0 && std::fabs(podCant_ - cantTarget) < 3.0;  // doors out, cups on their angle
     const double step = sp::kPodSwivelRate * dt;
     if (podAngle_ < swivelTarget) podAngle_ = (std::min)(swivelTarget, podAngle_ + step);
     else if (podAngle_ > swivelTarget) podAngle_ = (std::max)(swivelTarget, podAngle_ - step);
+    if (podCant_ < cantTarget) podCant_ = (std::min)(cantTarget, podCant_ + step);
+    else if (podCant_ > cantTarget) podCant_ = (std::max)(cantTarget, podCant_ - step);
     const double sw = dt / sp::kPodSwingTime;
     if (out) podOut_ = (std::min)(1.0, podOut_ + sw);
     else if (podAngle_ < 0.5) podOut_ = (std::max)(0.0, podOut_ - sw);
 
     const VECTOR3 dz = _V(0, 0, MeshDZ());
-    const double swivel = podAngle_ / sp::kPodSwivelMaxDeg * m::kPodSwivelMax;
+    const double midS = 0.5 * (m::kPods[0].s + m::kPods[sp::kPodCount - 1].s);
     for (int p = 0; p < sp::kPodCount; ++p) {
         const m::PodRig& r = m::kPods[p];
-        const VECTOR3 pivot = V3(r.pivot), ax = V3(r.axis);
-        const double sgn = pivot.x >= 0.0 ? 1.0 : -1.0;
+        const VECTOR3 pivot = V3(r.pivot), ax = V3(r.axis), turn = PodTurnAxis(r);
         const VECTOR3 out = ax * (r.travel * podOut_);
-        // thrust (on the ship) at 0: forward, leaning inboard and up - the jet splays out and down from the hull
-        const double so = sp::kPodSplayOutDeg * RAD, sd = sp::kPodSplayDownDeg * RAD;
-        const VECTOR3 base = _V(-sgn * std::sin(so) * std::cos(sd), std::sin(sd), std::cos(so) * std::cos(sd));
-        const VECTOR3 dir = RotateAbout(base, ax * sgn, swivel);
+        // the aft pair turns less (thrust leaning forward), the fore pair more (aft) - the mesh's pod_cant
+        const double deg = podAngle_ + (r.s < midS ? -podCant_ : podCant_);
+        const double swivel = deg / sp::kPodSwivelMaxDeg * m::kPodSwivelMax;
+        const VECTOR3 dir = RotateAbout(PodBaseThrust(r), turn, swivel);
         for (int c = 0; c < sp::kCupsPerPod; ++c) {
             const int k = p * sp::kCupsPerPod + c;
-            podExhPos_[k] = RotateAbout(V3(r.cup[c]) - pivot, ax * sgn, swivel) + pivot + out + dz;
+            podExhPos_[k] = RotateAbout(V3(r.cup[c]) - pivot, turn, swivel) + pivot + out + dz;
             podExhDir_[k] = dir;
             SetThrusterRef(pod_[k], podExhPos_[k]);
             SetThrusterDir(pod_[k], dir);
@@ -724,19 +759,40 @@ void Tantra::ActPods(bool hover) {
     if (hover && outNow) {  // B again: cups aft, then in
         podsWanted_ = false;
         podTarget_ = 0.0;
-        Message("Гондолы: чаши назад, в отсеки", "Pods: cups aft, into the bays");
+        Message("Выдвижные блоки: чаши назад, в отсеки", "Pods: cups aft, into the bays");
         return;
     }
     podsWanted_ = true;
-    podTarget_ = hover ? 90.0 : 0.0;
-    Message(hover ? "Гондолы: наружу, чаши вниз (висение)" : "Гондолы: наружу, чаши назад (тяга вперёд)",
+    podTarget_ = hover ? PodVerticalDeg() : 0.0;
+    Message(hover ? "Выдвижные блоки: наружу, чаши вниз (висение)" : "Выдвижные блоки: наружу, чаши назад (тяга вперёд)",
             hover ? "Pods: out, cups down (hover)" : "Pods: out, cups aft (forward thrust)");
 }
 
+// The pods' argon jet speed (2026-10-09): slower near the ground and in dense air, blended over a band as high again
+// above each limit (the flow does not jump).
+double Tantra::PodArgonExhaust() {
+    const double h = GetAltitude(ALTMODE_GROUND), rho = GetAtmDensity(), hi = prm_.argonExhaust;
+    auto band = [h, hi](double h0, double lo) { const double t = (std::max)(0.0, (std::min)(1.0, (h - h0) / h0)); return lo + (hi - lo) * t; };
+    double v = band(sp::kArgonGroundAlt, prm_.argonGroundExhaust);
+    if (rho > sp::kDenseRho) v = (std::min)(v, band(sp::kArgonDenseAlt, prm_.argonDenseExhaust));
+    return v;
+}
+
+// The swivel at which a pod's thrust stands vertical in the vessel frame (no fore/aft part): f_z(psi) = b_z cos psi +
+// c_z sin psi with c = turn x b (the turn axis has no z part) - ~62 deg with the 15 / 25 deg jet splay.
+double Tantra::PodVerticalDeg() {
+    const tantra::mesh::PodRig& r = tantra::mesh::kPods[0];
+    const VECTOR3 b = PodBaseThrust(r), c = crossp(PodTurnAxis(r), b);
+    return std::atan2(b.z, -c.z) * DEG;
+}
+
+bool Tantra::PodHoverSet() const { return podsWanted_ && std::fabs(podTarget_ - PodVerticalDeg()) < 1.0; }
+
 void Tantra::ActPodsTo(double deg) {
+    if (std::fabs(deg - 90.0) < 1e-9) deg = PodVerticalDeg();   // the «ВНИЗ (ЗАВИСАНИЕ)» keys: the thrust vertical
     podTarget_ = (std::max)(0.0, (std::min)(sp::kPodSwivelMaxDeg, deg));
     if (podTarget_ > 0.0) podsWanted_ = true;
-    Message("Гондолы планетарных: поворот на %.0f°", "Planetary pods: swivel to %.0f deg", podTarget_);
+    Message("Выдвижные блоки планетарных: поворот на %.0f°", "Planetary pods: swivel to %.0f deg", podTarget_);
 }
 
 // Wind near the ground. The ship measures it (air data: groundspeed - airspeed); with Orbiter's wind on, its
@@ -994,9 +1050,10 @@ void Tantra::UpdateCG(bool force) {
     const double iron = GetPropellantMass(iron_), argon = GetPropellantMass(argon_);
     m += iron + argon;
     ms += iron * sp::kIronCGS;
-    // the body tanks (aft) drain first: the insert keeps its share until the body is empty
-    const double body = (std::min)(argon, sp::kArgonBodyShare * prm_.argonMass);
-    ms += body * sp::kArgonBodyCGS + (argon - body) * sp::kArgonInsertCGS;
+    // the insert (forward) drains first, then the body tanks, the aft tank between the stern-leg bays last (the CG)
+    const double aft = (std::min)(argon, sp::kArgonAftShare * prm_.argonMass);
+    const double body = (std::min)(argon - aft, sp::kArgonBodyShare * prm_.argonMass);
+    ms += aft * sp::kArgonAftCGS + body * sp::kArgonBodyCGS + (argon - aft - body) * sp::kArgonInsertCGS;
     const double s = ms / m, d = s - frameS_;
     if (!force && std::fabs(d) < 0.2) return;
     if (std::fabs(d) < 1e-6) return;
@@ -1012,10 +1069,11 @@ void Tantra::UpdateCG(bool force) {
     nTouch_ = -1;  // touchdown points are rebuilt for the new frame
 }
 
-// Reaction mass of the planetary cups: argon below kMarchArgonAlt (inert, the jet/air mixing layer stays cool), iron
-// above it and between the planets. The thrust stays; the Isp (and so the flow) follows the mass.
+// Reaction mass of the planetary cups: argon in air and near the ground (inert, the jet/air mixing layer stays cool),
+// iron in space and in air thinner than kIronMaxRho over kArgonGroundAlt. The thrust stays; the Isp (and so the flow)
+// follows the mass.
 void Tantra::UpdateReactionMass() {
-    const bool high = GetAtmDensity() < 1e-6 || GetAltitude(ALTMODE_GROUND) > sp::kMarchArgonAlt;
+    const bool high = GetAtmDensity() < sp::kIronMaxRho && GetAltitude(ALTMODE_GROUND) > sp::kArgonGroundAlt;   // (2026-10-09)
     const bool argonLeft = GetPropellantMass(argon_) > 1.0, ironLeft = GetPropellantMass(iron_) > 1.0;
     const bool useIron = (high && ironLeft) || !argonLeft;
     if (useIron == marchHigh_ && GetThrusterResource(march_) != nullptr) return;
@@ -1049,6 +1107,7 @@ void Tantra::AimThroughCG() {
 
 void Tantra::SelectActiveTrap() {
     if (activeTrap_ < 0 || activeTrap_ >= sp::kTrapCount) activeTrap_ = 0;
+    if (SternPlanActive()) return;   // the stern blocks burn the charges now (UpdatePlant)
     if (GetPropellantMass(trap_[activeTrap_]) > 0.0) {
         for (THRUSTER_HANDLE th : ana_) SetThrusterResource(th, trap_[activeTrap_]);
         return;
@@ -1087,7 +1146,7 @@ void Tantra::ApplyThrottleLimits() {
         safetyWarned_ = false;
         return;
     }
-    if (!AnaIsMain() && planGroup_ != 1) return;
+    if (!AnaIsMain() && planGroup_ != 1 && planGroup_ != 2) return;
     const double f = RocketFactor(beta_);
     double maxThrust;
     if (AnaIsMain()) {
@@ -1129,6 +1188,11 @@ void Tantra::ApplyThrottleLimits() {
         return;
     }
     maxThrust = prm_.marchThrust * f;
+    if (planGroup_ == 2) {   // with the stern blocks: what the group gives now (while it gives nothing, the march's rating)
+        double sum = GetThrusterMax0(march_);
+        for (THRUSTER_HANDLE th : ana_) sum += GetThrusterMax0(th);
+        if (sum > 0.0) maxThrust = sum;
+    }
     if (gLimitOn_) {
         const double cap = GLimitLevel(gLimit_ * G0, GetMass(), maxThrust);
         if (level > cap) SetThrusterGroupLevel(THGROUP_MAIN, cap);
@@ -1353,13 +1417,14 @@ void Tantra::clbkPreStep(double, double simdt, double) {
     beta_ = length(v) / C_LIGHT;
 
     const double f = RocketFactor(beta_);
-    for (THRUSTER_HANDLE th : ana_) {
-        SetThrusterMax0(th, prm_.anaThrust * f);
-        SetThrusterIsp(th, prm_.AnaExhaust() * f);
-    }
+    if (!SternPlanActive())   // (on the charges the plant sets them: UpdatePlant)
+        for (THRUSTER_HANDLE th : ana_) {
+            SetThrusterMax0(th, prm_.anaThrust * f);
+            SetThrusterIsp(th, prm_.AnaExhaust() * f);
+        }
     UpdateReactionMass();
     TANTRA_PERF("reaction");
-    const double isp = (marchHigh_ ? prm_.ironExhaust : prm_.argonExhaust) * f;
+    const double isp = (marchHigh_ ? prm_.ironExhaust : PodArgonExhaust()) * f;
     // the marching cup: its thrust and exhaust speed from the power plant (field, power, limiter, damage); it thrusts
     // only run out past the anamezon rims (interlock: never with the anamezon irises open)
     UpdatePlant(simdt, f);
@@ -1406,7 +1471,8 @@ void Tantra::clbkPreStep(double, double simdt, double) {
     const IgnStage prev = ignition_.Stage();
     // The chamber field is fed from the field store; an empty store cannot hold it up.
     const bool fieldPowerOk = ignition_.FieldLevel() >= 1.0 || drive_.StoreEnergy() > 0.0;
-    ignition_.Update(simdt, fieldPowerOk);
+    ignition_.Update(simdt, fieldPowerOk, marchOut_ <= 0.0 && irisMarch_ <= 0.0);   // the beam only with the marching cup home
+    SternHandOver();
     RebindGroups();  // feed on/off moves the main throttle between anamezon and pods
     if (!fieldPowerOk && prev != IgnStage::Off)
         Message("Накопитель поля пуст: аварийный останов камер", "Field store empty: chamber emergency stop");
@@ -2011,9 +2077,10 @@ void Tantra::UpdateDamageVisual(bool force) {
         for (int k = 0; k < n; ++k) oapiEditMeshGroup(mesh, static_cast<DWORD>(g[k]), &ges);
         shownLost_[part] = lost;
     }
-    // --- heat glow: iridium nose/shoulder (material 1) by the nose, crests and fin (material 2) by the edges
+    // --- heat glow: borazon armour of the nose and shoulders (material 1, amber; was iridium) by the nose, crests and fin
+    //     (material 2) by the edges. The base colours must match gen_mesh.py MATERIALS.
     struct Mat { float dr, dg, db, sr, sg, sb, pow; };
-    static const Mat kMat[2] = {{0.78f, 0.76f, 0.70f, 0.95f, 0.95f, 0.95f, 80.0f}, {0.46f, 0.26f, 0.18f, 0.15f, 0.15f, 0.15f, 10.0f}};
+    static const Mat kMat[2] = {{0.72f, 0.48f, 0.18f, 0.95f, 0.85f, 0.60f, 80.0f}, {0.13f, 0.13f, 0.14f, 0.15f, 0.15f, 0.15f, 10.0f}};
     const double temps[2] = {damage_.Temperature(dm::kZoneNose), damage_.Temperature(dm::kZoneCrestEdge)};
     for (int i = 0; i < 2; ++i) {
         const double T = temps[i];
@@ -2328,7 +2395,7 @@ void Tantra::ActSelectEngine(bool anamezon) {
     if (anamezon) {
         Message("Анамезон выбран: тяга на рукояти только после ПОДАЧИ (J)", "Anamezon selected: throttle only after FEED (J)");
     } else if (podAngle_ >= 45.0 || podTarget_ >= 45.0) {
-        Message("Маршевые: ПЛАНЕТАРНЫЕ (кольцо кормы), гондолы на висении", "Main: PLANETARY stern ring, pods on hover");
+        Message("Маршевые: ПЛАНЕТАРНЫЕ (кольцо кормы), выдвижные блоки на висении", "Main: PLANETARY stern ring, pods on hover");
     } else {
         Message("Маршевые: ПЛАНЕТАРНЫЕ", "Main: PLANETARY");
     }
@@ -2353,6 +2420,44 @@ void Tantra::ActIgnitionTo(int stage) {
 }
 
 void Tantra::ActIgnitionStep() { ActIgnitionTo(static_cast<int>(ignition_.Target()) + 1); }
+
+// (2026-10-09) the stern blocks on the ion charges: the take-off mode of the canon's arc (the dark planet, full, 2.5 g)
+void Tantra::ActToggleSternPlan() {
+    sternPlan_ = !sternPlan_;
+    handWarned_ = false;
+    if (sternPlan_)
+        Message("Кормовые блоки НА ЗАРЯДАХ: маршевая тяга - центральная чаша и 4 кормовых блока (взлёт по дуге)",
+                "Stern blocks ON CHARGES: main thrust - the marching cup and the 4 stern blocks (take-off arc)");
+    else Message("Кормовые блоки: анамезонный режим", "Stern blocks: anamezon mode");
+    planGroup_ = -1;   // rebind
+}
+
+// The hand-over at the top of the arc: field (raised early, the cups keep burning charges), the guide beam once the marching
+// cup is home, the feed - then the anamezon takes the charges' thrust at once, no gap. Under the hot-start or radiation
+// interlock the blocks stay on the charges (the commander's ОБХОД БЛОК. is the canon's decision).
+void Tantra::SternHandOver() {
+    if (!SternPlanActive() || !ignition_.FeedAvailable()) { handWarned_ = false; return; }
+    double F = 0.0;
+    for (THRUSTER_HANDLE th : ana_) F += GetThrusterLevel(th) * GetThrusterMax0(th);
+    if (march_) F += GetThrusterLevel(march_) * GetThrusterMax0(march_);
+    const double f = RocketFactor(beta_), Fana = sp::kAnaCount * prm_.anaThrust * f;
+    const double need = Fana > 0.0 ? (std::min)(1.0, F / Fana) : 0.0;
+    if (need > (std::min)(HotStartLevelCap(), SafetyLevelCap())) {
+        if (!handWarned_)
+            Message("Переход на анамезон задержан: блокировка высоты/радиации - кормовые блоки на зарядах (ОБХОД БЛОК. - решение начальника)",
+                    "Anamezon hand-over held: altitude/radiation interlock - the stern blocks stay on charges (override is the commander's call)");
+        handWarned_ = true;
+        return;
+    }
+    engineSet_ = EngineSet::Anamezon;
+    for (THRUSTER_HANDLE th : ana_) {   // this step already: the anamezon's rating, the active trap
+        SetThrusterMax0(th, prm_.anaThrust * f);
+        SetThrusterIsp(th, prm_.AnaExhaust() * f);
+    }
+    handLevel_ = need;
+    planGroup_ = -1;
+    Message("Переход на анамезон: тяга %.2f ГН подхвачена камерами", "Hand-over to the anamezon: %.2f GN taken by the chambers", F / 1e9);
+}
 
 // One override for both interlocks (altitude and radiation): the commander's decision.
 void Tantra::ActToggleOverride() {
@@ -2665,14 +2770,18 @@ void Tantra::UpdateGear(double simdt) {
     }
     hangar_ = step(hangar_, hangarT_, 0.08);
     rovers_ = step(rovers_, hangar_ > 0.97 ? roversT_ : 0.0, 0.05);
+    UpdateHangarAttach();             // MPU 1 and 2 ride the platform
     // Stern interlocks. A: the anamezon irises open only with the marching cup home and its iris shut; B: the well
     // iris opens and the cup runs out only with the anamezon irises shut. The cup wants out whenever the planetary
     // set is selected and the ship is not standing on the legs with the engines idle.
+    // (2026-10-09) The stern blocks on the charges (SternPlanActive): the irises open with the cup out; the cup goes home only
+    // for the guide beam (AnaHot) - the field alone does not chase it in; the irises stay open through the hand-over.
     const bool anaActive = ignition_.Target() != IgnStage::Off || ignition_.FieldLevel() > 0.0;
-    const bool wantMarch = !anaActive && engineSet_ == EngineSet::Planetary;
-    const bool anaAllowed = marchOut_ <= 0.0 && irisMarch_ <= 0.0;
-    irisAna_ = step(irisAna_, anaActive && anaAllowed ? 1.0 : 0.0, 0.25);
-    const bool marchAllowed = irisAna_ <= 0.0;
+    const bool sternPlan = SternPlanActive();
+    const bool wantMarch = engineSet_ == EngineSet::Planetary && (sternPlan ? !AnaHot() : !anaActive);
+    const bool anaAllowed = (marchOut_ <= 0.0 && irisMarch_ <= 0.0) || sternPlan;
+    irisAna_ = step(irisAna_, (anaActive || sternPlan) && anaAllowed ? 1.0 : 0.0, 0.25);
+    const bool marchAllowed = irisAna_ <= 0.0 || (sternPlan && !AnaHot());
     if (wantMarch && marchAllowed) {
         irisMarch_ = step(irisMarch_, 1.0, 0.5);
         if (irisMarch_ >= 1.0) marchOut_ = step(marchOut_, 1.0, 0.1);
@@ -2716,6 +2825,7 @@ void Tantra::UpdateGear(double simdt) {
     ex.wingIn = wingIn_;
     ex.wingOut = wingOut_;
     ex.podSwivel = podAngle_ / sp::kPodSwivelMaxDeg;
+    ex.podCant = podCant_ / sp::kPodHoverCantDeg;
     ex.podStow = 1.0 - podOut_;
     ex.elevon[0] = elevon_[0];
     ex.elevon[1] = elevon_[1];
@@ -2998,6 +3108,7 @@ void Tantra::UpdateGear(double simdt) {
     }
     // at rest (landed): the struts' small settling must not hand it back to the springs every step
     if ((restLock_ || frozen_) && !carriage_.Busy() && nt == nTouch_) changed = false;
+    else if (simdt > 0.0) { ScanHullNear(); if (hullDirty_) changed = true; }   // the hull points near the ground (not while resting)
     if (changed) {
         for (int i = 0; i < nt; ++i) {
             touchMu_[i] = mu[i];
@@ -3581,10 +3692,43 @@ void Tantra::SetSuspension(const VECTOR3* t, int n) {
     int nv = n;
     for (const VECTOR3& h : hull) v[nv++] = {h + touchOfs_, kHull, cHull, 0.5, 0.5};
     for (int i = 0; i < m_::kHullPtN; ++i)
-        v[nv++] = {_V(m_::kHullPts[i][0], m_::kHullPts[i][1], Zf(m_::kHullPts[i][2])) + touchOfs_, kHull, cHull, 0.5, 0.5};
+        if (hullAll_ || hullNear_[i])                                      // (only those near the ground: ScanHullNear)
+            v[nv++] = {_V(m_::kHullPts[i][0], m_::kHullPts[i][1], Zf(m_::kHullPts[i][2])) + touchOfs_, kHull, cHull, 0.5, 0.5};
     SetTouchdownPoints(v, nv);
+    hullDirty_ = false;
     suspFrame_ = frame_;
     touchMass_ = m;
+}
+
+// The hull's contact points near the ground: 32 a frame (all 241 in ~8 frames), each by its own terrain height. Near below
+// 8 m (plus 2 s of the sink rate), off again over 12 m. No surface: all of them stay (as before).
+void Tantra::ScanHullNear() {
+    namespace m_ = tantra::mesh;
+    static_assert(m_::kHullPtN <= 256, "hullNear_ too small");
+    const OBJHANDLE ref = GetSurfaceRef();
+    if (!ref) { if (!hullAll_) { hullAll_ = true; hullDirty_ = true; } hullScan_ = 0; return; }
+    const double R0 = oapiGetSize(ref);
+    VECTOR3 gs; GetGroundspeedVector(FRAME_HORIZON, gs);
+    const double ahead = 2.0 * (std::max)(0.0, -gs.y);
+    if (GetAltitude(ALTMODE_GROUND) > 1500.0 + ahead) {                    // high up: none near, no queries (the ship is < 300 m long)
+        bool any = false;
+        for (int i = 0; i < m_::kHullPtN; ++i) { any = any || hullNear_[i]; hullNear_[i] = false; }
+        if (hullAll_ || any) { hullAll_ = false; hullDirty_ = true; }
+        hullScan_ = 0;
+        return;
+    }
+    for (int k = 0; k < 32; ++k) {
+        const int i = hullScan_;
+        VECTOR3 g; Local2Global(_V(m_::kHullPts[i][0], m_::kHullPts[i][1], Zf(m_::kHullPts[i][2])) + touchOfs_, g);
+        double lg, lt, rd; oapiGlobalToEqu(ref, g, &lg, &lt, &rd);
+        const double h = rd - (R0 + oapiSurfaceElevation(ref, lg, lt));
+        const bool nearNow = hullNear_[i] ? h < 12.0 + ahead : h < 8.0 + ahead;
+        if (nearNow != hullNear_[i]) { hullNear_[i] = nearNow; if (!hullAll_) hullDirty_ = true; }
+        if (++hullScan_ >= m_::kHullPtN) {                                // a full round: from now on only the near ones
+            hullScan_ = 0;
+            if (hullAll_) { hullAll_ = false; hullDirty_ = true; }
+        }
+    }
 }
 
 void Tantra::ActErect() {
@@ -3670,7 +3814,7 @@ void Tantra::ActCrests() {
     if (wingMode_ == 1 && carriage_.Set() == tantra::Carriage::FlightSet::Standing && carriage_.Gear() > 0.0) wingMode_ = 2;
     crestsFolded_ = wingMode_ == 2;
     static const char* ru[3] = {"Крылья 90°: развёрнуты, перо выдвинуто", "Крылья 30°: подняты (вход), перо выдвинуто",
-                                "Крылья сложены, перо убрано, гондолы в отсеках (субсвет)"};
+                                "Крылья сложены, перо убрано, выдвижные блоки в отсеках (субсвет)"};
     static const char* en[3] = {"Wings 90: deployed, fin up", "Wings 30: raised (entry), fin up", "Wings folded, fin down, pods in (sub-light)"};
     Message(ru[wingMode_], en[wingMode_]);
 }
@@ -3812,11 +3956,21 @@ void Tantra::UpdatePlant(double simdt, double f) {
     e.crestsOut = (std::max)(tuck_, carriage_.Pose().tuck) < 0.5;
     e.noseT = damage_.Temperature(tantra::damage::kZoneNose);
     plantOut_ = plant_.Step(simdt > 0.0 ? simdt : 0.0, e, simdt > 0.0 ? &PlantRnd : nullptr);
-    const bool cupOut = marchOut_ >= 0.99 && irisAna_ <= 0.01;
+    const bool sternPlan = SternPlanActive();
+    const bool cupOut = marchOut_ >= 0.99 && (irisAna_ <= 0.01 || (sternPlan && !AnaHot()));
     SetThrusterMax0(march_, cupOut ? plantOut_.maxThrust * f : 0.0);
     SetThrusterIsp(march_, plantOut_.exhaust * f);
     PROPELLANT_HANDLE ph = plantOut_.mass == pl::kArgon ? argon_ : iron_;   // the bare products: from the iron store for now
     if (GetThrusterResource(march_) != ph && GetPropellantMass(ph) > 1.0) SetThrusterResource(march_, ph);
+    // the stern blocks on the charges: the same cascade fusion and field cap per cup area, with their irises open; they keep
+    // the thrust while the guide beam comes up and hand it to the anamezon at the feed (SternHandOver). The blocks' own heat
+    // is not modelled yet (the plant's stern temperature is the marching cup's).
+    if (sternPlan)
+        for (THRUSTER_HANDLE th : ana_) {
+            SetThrusterMax0(th, irisAna_ >= 0.99 ? plantOut_.maxThrust * sp::kSternPlanAreaRatio * f : 0.0);
+            SetThrusterIsp(th, plantOut_.exhaust * f);
+            if (GetThrusterResource(th) != ph && GetPropellantMass(ph) > 1.0) SetThrusterResource(th, ph);
+        }
     for (const pl::Event& ev : plant_.TakeEvents()) Message("%s", "%s", ev.ru.c_str(), ev.en.c_str());
     if (plantStage_ == pl::kStRun && plant_.StageNow() != pl::kStRun && march_) SetThrusterLevel(march_, 0.0);   // off the run: the lever to zero
     plantStage_ = plant_.StageNow();
@@ -3897,7 +4051,7 @@ bool Tantra::clbkDrawHUD(int mode, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp
     }
     line(L("Рукоять тяги: %s", "Main throttle: %s"),
          AnaIsMain() ? L("АНАМЕЗОН", "ANAMEZON")
-                     : planGroup_ == 1 ? L("МАРШЕВАЯ ПЛАНЕТАРНАЯ", "MARCHING PLANETARY") : L("нет (гондолы на висении)", "none (pods in hover)"));
+                     : planGroup_ == 1 ? L("МАРШЕВАЯ ПЛАНЕТАРНАЯ", "MARCHING PLANETARY") : L("нет (выдвижные блоки на висении)", "none (pods in hover)"));
     double pct[sp::kTrapCount];
     for (int i = 0; i < sp::kTrapCount; ++i) pct[i] = 100.0 * GetPropellantMass(trap_[i]) / prm_.trapFuelMass;
     line(L("Ловушки: %.0f%% %.0f%% %.0f%% %.0f%%  подача из %d", "Traps: %.0f%% %.0f%% %.0f%% %.0f%%  feed %d"), pct[0],
@@ -3908,26 +4062,26 @@ bool Tantra::clbkDrawHUD(int mode, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp
     line(L("Маршевая чаша: %s  носовые тормозные: %s", "Marching cup: %s  nose retro cups: %s"),
          marchOut_ >= 0.99 ? L("ВЫДВИНУТА", "OUT") : marchOut_ > 0.0 || irisMarch_ > 0.0 ? L("выдвигается...", "moving...") : L("в колодце", "home"),
          irisNose_ >= 0.99 ? L("ОТКРЫТЫ", "OPEN") : irisNose_ > 0.0 ? L("...", "...") : L("закрыты", "shut"));
-    line(L("Гондолы: %s  поворот %.0f°  %s", "Pods: %s  swivel %.0f deg  %s"),
+    line(L("Выдвижные блоки: %s  поворот %.0f°  %s", "Pods: %s  swivel %.0f deg  %s"),
          podOut_ <= 0.0 ? L("в отсеках", "in the bays") : podOut_ < 1.0 ? L("выход...", "swinging...") : L("снаружи", "out"),
          podAngle_,
          podOut_ >= 1.0 && !podAimed_ ? L("наведение чаш...", "aiming the cups...")
          : podAssist_ ? L("ПОМОЩЬ ЛАФЕТУ", "ASSISTING THE CARRIAGE") : podHover_ ? L("висение", "HOVER") : "");
     if (podAssist_ || windForce_ != 0.0)
-        line(L("Ветер %.0f м/с [%s] %.1f МН  раскачка ЦМ %.2f м (пик %.2f)  гондолы: %.0f%% веса, момент %.0f МН·м",
+        line(L("Ветер %.0f м/с [%s] %.1f МН  раскачка ЦМ %.2f м (пик %.2f)  выдвижные блоки: %.0f%% веса, момент %.0f МН·м",
                "Wind %.0f m/s [%s] %.1f MN  CG sway %.2f m (peak %.2f)  pods: %.0f%% of weight, moment %.0f MN m"),
              windSpeed_, orbiterWind_ ? L("Орбитер", "Orbiter") : L("модель", "model"), windForce_ / 1e6, sway_, swayMax_,
              100.0 * [&] { double t = 0; for (THRUSTER_HANDLE th : pod_) t += GetThrusterLevel(th) * GetThrusterMax0(th); return t; }() /
                  (GetMass() * LocalG()),
              podCouple_ / 1e6);
     if (podAssist_ && podBalanceLost_)
-        line(L("Гондолы: баланс вокруг ЦМ невозможен в этом положении - тяга снимается, держат ноги",
+        line(L("Выдвижные блоки: баланс вокруг ЦМ невозможен в этом положении - тяга снимается, держат ноги",
                "Pods: no balance about the CG in this attitude - thrust fades, the legs carry the ship"));
     {
         namespace dm = tantra::damage;
         const double hot = (std::max)(damage_.Temperature(dm::kZoneNose), damage_.Temperature(dm::kZoneCrestEdge));
         if (GetAtmDensity() > 1e-7 || hot > 500.0)
-            line(L("Нагрев: нос %.0f/%.0f K  днище %.0f/%.0f  кромки %.0f/%.0f  шасси %.0f  гондолы %.0f  q %.1f кПа  %.1f g  гребни %.0f%%",
+            line(L("Нагрев: нос %.0f/%.0f K  днище %.0f/%.0f  кромки %.0f/%.0f  шасси %.0f  выдв. блоки %.0f  q %.1f кПа  %.1f g  гребни %.0f%%",
                    "Heat: nose %.0f/%.0f K  belly %.0f/%.0f  edges %.0f/%.0f  gear %.0f  pods %.0f  q %.1f kPa  %.1f g  crests %.0f%%"),
                  damage_.Temperature(dm::kZoneNose), damage_.Limit(dm::kZoneNose), damage_.Temperature(dm::kZoneBelly),
                  damage_.Limit(dm::kZoneBelly), damage_.Temperature(dm::kZoneCrestEdge), damage_.Limit(dm::kZoneCrestEdge),

@@ -223,13 +223,14 @@ void Screen::Scale(Pad& g, const ScaleDef& o) {
         g.AddHit(d);
     }
 }
-// the bottom row, under the hand: ОТСЕЧКА, ОБХОД БЛОК. (two presses), ПРЕДЕЛ g
+// the bottom row, under the hand: ОТСЕЧКА, ОБХОД БЛОК. (two presses), ПРЕДЕЛ g, КОРМА (the stern blocks on the charges)
 void Screen::KeyRow2(Pad& g, const View& v, double x, double w) {
-    const double kw = std::floor((w - 20) / 3 / 10) * 10, y = kLY1 - 8 - 48;
+    const double kw = std::floor((w - 30) / 4 / 10) * 10, y = kLY1 - 8 - 48;
     g.Key(x, y, kw, 48, L"ОТСЕЧКА", kKeyWarn, kCmdCut);
     g.Key(x + kw + 10, y, kw, 48, v.bypass ? L"БЛОК. СНЯТЫ" : v.bypassArmed ? L"ПОДТВЕРДИТЬ" : L"ОБХОД БЛОК.",
           v.bypass ? kKeyWarnOn : v.bypassArmed ? (v.blink ? kKeyWarnOn : kKeyWarn) : kKeyOff, kCmdBypass);
     g.Key(x + 2 * (kw + 10), y, kw, 48, v.gLimOn ? L"ПРЕДЕЛ g ВКЛ" : L"ПРЕДЕЛ g ВЫКЛ", v.gLimOn ? kKeyOn : kKeyOff, kCmdGLimOnOff);
+    g.Key(x + 3 * (kw + 10), y, kw, 48, v.sternPlan ? L"КОРМА НА ЗАРЯДАХ" : L"КОРМА: ЗАРЯДЫ", v.sternPlan ? kKeyOn : kKeyOff, kCmdSternPlan);
 }
 
 // ================= the page =================
@@ -328,7 +329,7 @@ void Screen::Planetary(Pad& g, const View& v, double W) {
     }
     // ---- ВЫХОД ЧАШ: the march, a pod (each), the total ----
     {
-        static const wchar_t* const kHead[3] = {L"МАРШ.", L"ГОНДОЛА", L"ИТОГО"};
+        static const wchar_t* const kHead[3] = {L"МАРШ.", L"ВЫДВ. БЛОК", L"ИТОГО"};
         const double capTot = v.FmField + v.nPods * v.podFCap;
         std::vector<Row> rows = {
             {L"тяга", {C(fFu(v.Fm)), C(fFu(Fp)), C(fFu(F), kYe)}},
@@ -345,7 +346,7 @@ void Screen::Planetary(Pad& g, const View& v, double W) {
         Grid(g, kM, kLY0, L.rcW, kLY1 - kLY0, L"РАСЧЁТ", {
             {L"тяга / вес", v.g > 0 ? Num(tw, 2) : L"—", v.g > 0 && tw < 1 && F > 0 ? kYe : kWh},
             {L"ускорение", Num(a, 2) + L" м/с²"},
-            {L"висение (сопла вниз): гондолы", v.g > 0 ? Num(v.hoverPods * 100) + L" %" : L"—", v.hoverPods > 1 ? kRd : kWh},
+            {L"висение (сопла вниз): выдвижные блоки", v.g > 0 ? Num(v.hoverPods * 100) + L" %" : L"—", v.hoverPods > 1 ? kRd : kWh},
             {L"запас УВТ маршевой", Num(100 * (1 - std::fabs(v.tvc) / (std::max)(0.1, v.tvcMax))) + L" %", std::fabs(v.tvc) >= v.tvcMax - 0.1 ? kRd : kWh},
             {L"аргон / железо", Num(v.argon / 1e6, 2) + L" / " + Num(v.iron / 1e6, 2) + L" кт"},
             {L"хватит на этой тяге", mdTot > 0 ? fT(res / mdTot) : L"—"},
@@ -358,7 +359,7 @@ void Screen::Planetary(Pad& g, const View& v, double W) {
         g.Block(x, y, w, h, L"УПРАВЛЕНИЕ");
         Scale(g, {kBarMarch, ix, sw, L"МАРШ", kOr, 0, 1, 0.05, 0.01, v.mSet, v.mAct, 0, Pct(v.mAct), L"уст. " + Pct(v.mSet),
                   !v.plantRun ? L"УСТ" : limG && v.mSet > v.mAct + 0.005 ? L"ОГР g" : L"", true});
-        Scale(g, {kBarPods, ix + sw, sw, L"ГОНДОЛЫ", kOr, 0, 1, 0.05, 0.01, v.pSet, v.podsOk ? v.pAct : 0.0, 0, Pct(v.podsOk ? v.pAct : 0.0), L"уст. " + Pct(v.pSet),
+        Scale(g, {kBarPods, ix + sw, sw, L"ВЫДВ. БЛОКИ", kOr, 0, 1, 0.05, 0.01, v.pSet, v.podsOk ? v.pAct : 0.0, 0, Pct(v.podsOk ? v.pAct : 0.0), L"уст. " + Pct(v.pSet),
                   !v.podsOk ? L"ЗАКР" : limG && v.pSet > v.pAct + 0.005 ? L"ОГР g" : L"", true});
         Scale(g, {kBarNozzle, ix + 2 * sw, sw, L"СОПЛА", kBl, 0, 180, 5, 1, v.nozSet, v.nozAct, 0, Num(v.nozAct) + L"°",
                   v.nozAct < 45 ? L"тяга вперёд" : v.nozAct < 135 ? L"тяга вверх" : L"торможение", L"", true});

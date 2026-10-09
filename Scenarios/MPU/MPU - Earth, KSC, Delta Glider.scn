@@ -1,0 +1,72 @@
+BEGIN_DESC
+MPU / EMPU and a stock Delta Glider. The KSC runway: the charging station, the EMPU and the open MPU as in "MPU - Earth, KSC", and a Delta Glider 35 m to their south, its nose towards them. The astronavigator stands before the glider's nose.
+Boarding a ship that is not ours: look at the glider's nose within reach - "nose airlock" shows in the menu (Alt: the places of actions, orange). "open the airlock": the nose cone and the outer door open (as if K and O were pressed on the glider, ~20 s). "go in": she is aboard, the glider has the focus and the view - fly it.
+Getting out: F on the glider, standing on the ground with the airlock open - she steps out before the nose.
+Any Delta Glider in any scenario works the same (Config\OrbiterCrew\Ships\DeltaGlider.cfg); see Doc\OrbiterCrew_MPU\SHIPS.md to add other ships.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 58710.6
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Station-1:TVehicles\Station
+  STATUS Landed Earth
+  POS -80.6943771 28.6150000
+  HEADING 270.00
+  ALT 1.000
+  CELLS 1.000 1.000 1.000 0.500 1.000 -1.000
+END
+EMPU-1:EMPU
+  STATUS Landed Earth
+  POS -80.6945000 28.6150000
+  HEADING 90.00
+  ALT 0.880
+  BATT 0.45
+  PARK 1
+END
+MPU-1:MPU
+  STATUS Landed Earth
+  POS -80.6946240 28.6150000
+  HEADING 90.00
+  ALT 0.880
+  CELLS 0.350 0.400 0.200 -1.000
+  PARK 1
+END
+GL-01:DeltaGlider
+  STATUS Landed Earth
+  POS -80.6950000 28.6147000
+  HEADING 0.00
+  RCSMODE 0
+  AFCMODE 7
+  PRPLEVEL 0:0.995000 1:1.000000
+  NAVFREQ 94 524 84 114
+  XPDR 0
+  GEAR 1 1.0000
+  AAP 0:0 0:0 0:0
+END
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Earth
+  POS -80.6950000 28.6148437
+  HEADING 180.00
+  ALT 0.930
+  AFCMODE 7
+END
+END_SHIPS

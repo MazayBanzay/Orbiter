@@ -73,6 +73,7 @@ public:
     bool StandUp(int seat);
     OBJHANDLE ViewerBody() const;
     bool ViewerInBridge() const;              // the camera is inside the bridge capsule (internal view: the person's eyes or the VC)
+    bool ScreenInView(int k) const;           // touch screen k (kTouch) inside the camera's view cone (screens out of it are not redrawn)
     void SetLiftPanel(const LiftPanelHooks& hk) { panel_ = hk; }
     // the lift: the people standing in the cabin now (ids), whether a person wears the suit (1 / 0 / -1 unknown), a person's name
     int CabinPeople(int* ids, int maxN) const;
@@ -112,9 +113,11 @@ private:
     LiftPanelHooks panel_{};
     int PanelItem(int k, OcItem* out) const;
     int CabExitItem(OcItem* out) const;
-    // the inner lift (lobby shaft, three stops: the lower deck, the living deck, the technical level): F at its door calls it,
-    // F at a stop lamp inside sends it; the cab carries the people standing in it
-    int ILiftItem(int k, OcItem* out) const;  // k 0..2 call at stop k (outside), 3..5 go to stop k-3 (inside)
+    // the inner lift (lobby shaft, four stops since 2026-10-09: the lower level, the middle level with the cabins, the living
+    // deck, the technical level - kILiftStopN): F at its door calls it, F at a stop lamp inside sends it; the cab carries the
+    // people standing in it
+    static constexpr int kILiftMax = 8;     // capacity of the per-stop arrays (InteriorLayout.h: kILiftStopN <= this)
+    int ILiftItem(int k, OcItem* out) const;  // k 0..N-1 call at stop k (outside), N..2N-1 go to stop k-N (inside)
     void ILiftStep(double dt);
     void ILiftWalls(double& x, double& z, double feet, double radius, double height) const;
     bool ILiftAt(int stop) const { return std::fabs(iliftY_ - kILiftStopY(stop)) < 0.01 && iliftV_ == 0.0; }
@@ -122,8 +125,8 @@ private:
     static double kILiftStopY(int k);
     double iliftY_ = 0.0, iliftTarget_ = 0.0, iliftV_ = 0.0;
     bool iliftInit_ = false;
-    UINT iliftAnim_ = 0, iliftDoorAnim_[3] = {0, 0, 0};
-    double iliftDoor_[3] = {0, 0, 0};          // 0 shut .. 1 open
+    UINT iliftAnim_ = 0, iliftDoorAnim_[kILiftMax] = {};
+    double iliftDoor_[kILiftMax] = {};         // 0 shut .. 1 open
     struct IRider { int id; double x, z; VECTOR3 dir; };
     IRider irider_[8] = {};
     int nIRiders_ = 0;     // F at the cabin's door when it stands on the ground: out to the ground (as F at the lift brings one in)
@@ -216,7 +219,7 @@ private:
     void QuadStep(double dt);
     std::vector<YokeGrp> quadRef_;
     double qMainT_ = 0.0, qPodT_ = 0.0, qWheelT_ = 0.0, qCoverT_ = 0.0, qMain_ = 0.5, qPod_ = 0.5, qWheel_ = 0.0, qCover_ = 0.0;
-    int leverDrag_ = -1; double leverSent_ = -1.0;   // a lever held by its grip (the mouse button down): 0 МАРШ, 1 ГОНДОЛЫ
+    int leverDrag_ = -1; double leverSent_ = -1.0;   // a lever held by its grip (the mouse button down): 0 МАРШ, 1 ВЫДВ. БЛОКИ
     VECTOR3 LeverGrip(int k) const;                  // its grip's centre now (interior frame)
     void LeverDrag();                                // while held: the cursor's ray sets its lean = the thrust
     double quadKey_[4] = {-1e9, 0, 0, 0};

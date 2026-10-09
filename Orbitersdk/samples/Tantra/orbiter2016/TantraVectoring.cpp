@@ -1,6 +1,6 @@
 // Tantra - the pods' own thrust and УВТ (управление вектором тяги), the bridge's throttle quadrant (variant 7 of the bridge mockup,
-// Tantra_Design/bridge_variants/v7.js; the user, 2026-10-04: «4 гондолы с УВТ», the yoke mixes the pods; the bridge session, agreed
-// with the fork). The ГОНДОЛЫ lever sets the pods' common thrust (podCmd_, locked at 0 until they are fully out); every cup follows
+// Tantra_Design/bridge_variants/v7.js; the user, 2026-10-04: «4 выдвижных блока с УВТ», the yoke mixes the pods; the bridge session, agreed
+// with the fork). The ВЫДВ. БЛОКИ lever sets the pods' common thrust (podCmd_, locked at 0 until they are fully out); every cup follows
 // it at 3 /s, in the hover (cups 45..135 deg, THGROUP_HOVER) and with the cups aft alike. Not while the pods help the carriage
 // (PodAssistLevels sets every cup then). With УВТ on (the button on the yoke's right horn) the common thrust is held to 85 % (the
 // reserve for the control) and the pilot's input adds the difference between the pods - the roll (the ailerons, Num 1 / 3): the

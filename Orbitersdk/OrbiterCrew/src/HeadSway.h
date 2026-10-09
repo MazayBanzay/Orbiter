@@ -5,6 +5,8 @@
 // damping 0.45, the seat's headrest takes the steady part - so only the changes of the load move the head).
 // Vibration: the engines buzz through the structure (12 Hz, ~1.5 mm per g of thrust); the air buffets the hull with
 // the dynamic pressure (4 Hz, up to ~12 mm at 15 kPa), most at the sound barrier - an atmospheric entry shakes hardest.
+// On the ground (a rover: its wheels and the ground push it, not thrust) the load is the cabin's measured acceleration,
+// and the road shakes it lightly with the speed (9 Hz, mostly up and down; the caller gives its size, a few mm).
 #include "OrbiterAPI.h"
 #include <algorithm>
 #include <cmath>
@@ -16,7 +18,7 @@ class HeadSway {
 public:
 	// dt: step; f: specific force at the eyes in the person frame [m/s^2];
 	// engineG: thrust acceleration [g]; q: dynamic pressure [Pa]; mach. Returns the eye offset in the person frame [m].
-	VECTOR3 Step(double dt, const VECTOR3& f, double engineG, double q, double mach)
+	VECTOR3 Step(double dt, const VECTOR3& f, double engineG, double q, double mach, double road = 0)
 	{
 		if (dt <= 0) return off;
 		dt = (std::min)(dt, 0.05);
@@ -38,13 +40,15 @@ public:
 		const double buf = 0.012 * std::clamp(q / 15e3, 0.0, 1.5) * trans;
 		Noise(nE, 12.0, dt);
 		Noise(nB, 4.0, dt);
-		off = x + nE * (2.5 * eng) + nB * (2.5 * buf);
+		Noise(nR, 9.0, dt);
+		const VECTOR3 r = _V(nR.x * 0.4, nR.y, nR.z * 0.25) * (2.5 * road);   // the road: up and down, a little aside
+		off = x + nE * (2.5 * eng) + nB * (2.5 * buf) + r;
 		return off;
 	}
-	void Reset() { x = v = off = nE = nB = _V(0, 0, 0); primed = false; }
+	void Reset() { x = v = off = nE = nB = nR = _V(0, 0, 0); primed = false; }
 
 private:
-	VECTOR3 x{}, v{}, slow{}, off{}, nE{}, nB{};
+	VECTOR3 x{}, v{}, slow{}, off{}, nE{}, nB{}, nR{};
 	bool primed = false;
 	uint32_t seed = 0x2545F491u;
 	double Rand() { seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5; return (seed & 0xFFFFFF) / double(0x800000) - 1.0; }

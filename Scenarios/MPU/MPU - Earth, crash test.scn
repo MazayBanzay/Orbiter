@@ -1,0 +1,80 @@
+BEGIN_DESC
+Crash test. EMPU, speed limiter off, driver at the wheel, the charging station 700 m ahead on the runway. Hold Shift+W (about 130 km/h after 450 m) and steer with A/D into it; the platform drifts a little to the left on its own.
+Check: wheel health (GEAR page), hull leak (LIFE page), the driver's injuries. The impact is logged in Orbiter.log.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 58710.6
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Cockpit
+  FOV 90.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Station-1:TVehicles\Station
+  STATUS Landed Earth
+  POS -80.6724100 28.5539470
+  HEADING 60.10
+  ALT 1.000
+  CELLS 1.000 1.000 1.000 0.500 1.000 -1.000
+END
+EMPU-1:EMPU
+  STATUS Landed Earth
+  POS -80.6660880 28.5571360
+  HEADING 240.10
+  ALT 0.880
+  BATT 1.00
+  PARK 0
+  LIMITER 0
+END
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Earth
+  POS -80.6660880 28.5571360
+  HEADING 240.10
+  ALT 2.645
+  ATTACHED 0:0,EMPU-1
+  RCSMODE 0
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+  NAME Niza Krit
+  ROLE astronavigator
+  SEX female
+  PHYS 0.0 1.740 62.00 48.00 60.0
+  CLASS OrbiterCrew\Astronavigator
+  STAMINA 1.000000
+  DOSE 0.00000 0.00000
+  NOURISH 0.0000 8000000 12.000 0.000
+  HURT 0.000 0.000 0.000 0.000
+  RESERVE 1.000000
+  CORE 310.155
+  INJURY 0.000000
+  BODY 0
+  VIEW 0 1.40
+  SUIT 0
+  SUIT_O2 1.0
+  SUIT_WATER 2.0
+  SUIT_SORBENT 0.0
+  SUIT_BATTERY 6.0
+  SUIT_N2 1.5
+  SUIT_SERVO 1
+  FIELD 0
+  HUD 1 0 1 0 5 1 1 1 1 0.60 2 0 3 0
+  JETPACK 0
+  SHADE 0.0
+  LAMP 0
+  INTERIOR -0.650 0.835 3.150 0.0000 EMPU-1
+  SEAT 30
+END
+END_SHIPS

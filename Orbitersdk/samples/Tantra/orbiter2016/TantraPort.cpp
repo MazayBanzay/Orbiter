@@ -45,6 +45,25 @@ void Tantra::DefinePort() {
     }
 }
 
+// Hangar payloads: the lander lies on the cradle (its magnetic pusher puts it out through the top doors), three MPU stand
+// on the floor platform and beside it. A child vessel attaches with the ID "TLANDER" or "TMPU". MPU 1 and 2 ride the
+// platform down to the ground (Shift+O); MPU 3 waits beside it for the second run.
+void Tantra::DefineHangar() {
+    hangarAtt_[0] = CreateAttachment(false, _V(0, m::kCradleTopY, Zf(m::kHangarMidS)), _V(0, 1, 0), _V(0, 0, 1), "TLANDER");
+    for (int i = 0; i < 3; ++i)
+        hangarAtt_[1 + i] = CreateAttachment(false, _V(m::kMpuX[i], m::kHangarDeckY, Zf(m::kHangarMidS)), _V(0, 1, 0), _V(0, 0, 1), "TMPU");
+    hangarAttRov_ = -1.0;
+    UpdateHangarAttach();
+}
+
+void Tantra::UpdateHangarAttach() {
+    if (std::fabs(rovers_ - hangarAttRov_) < 1e-4) return;
+    hangarAttRov_ = rovers_;
+    const double y = m::kHangarDeckY + rovers_ * m::kRoverDrop;
+    for (int i = 0; i < 2; ++i)
+        if (hangarAtt_[1 + i]) SetAttachmentParams(hangarAtt_[1 + i], _V(m::kMpuX[i], y, Zf(m::kHangarMidS)), _V(0, 1, 0), _V(0, 0, 1));
+}
+
 void Tantra::UpdateEmptyMass() {
     int n = 0;
     for (bool p : trapPresent_) n += p ? 1 : 0;

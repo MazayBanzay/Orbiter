@@ -130,7 +130,7 @@ void TantraInterior::YokeStep(double dt) {
 // THE THROTTLE QUADRANT: the levers stand where their thrust is set (upright = half, leaning ±kLeverSwing: back at 0, forward at
 // МАКС), the cups' wheel on the pods' lever turns with the cups' angle set (geared: 0.05 rad per degree), the guard cover over the
 // pods' key flips up toward him while it is open. Rigid parts moved by their vertices, as the yoke's.
-// A lever's grip now: the arm leans about its pivot (as QuadStep draws it); МАРШ's palm head higher than ГОНДОЛЫ's bar.
+// A lever's grip now: the arm leans about its pivot (as QuadStep draws it); МАРШ's palm head higher than ВЫДВ. БЛОКИ's bar.
 VECTOR3 TantraInterior::LeverGrip(int k) const {
     const double a = ((k == 0 ? qMain_ : qPod_) - 0.5) * 2 * kLeverSwing, h = k == 0 ? 0.15 : 0.145;
     return V(kLeverPivot[k]) + _V(0, std::cos(a) * h, std::sin(a) * h);

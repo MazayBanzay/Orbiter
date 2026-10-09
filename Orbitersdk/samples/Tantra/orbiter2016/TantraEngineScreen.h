@@ -18,8 +18,8 @@ namespace tantra::enginescreen {
 enum Bar { kBarMarch, kBarPods, kBarNozzle, kBarTvc, kBarGLim, kBarFeed, kBarRetro, kBarResid, kBarCount };
 enum Cmd {
     kCmdTabAna = 0, kCmdTabPlan, kCmdMassAuto, kCmdMassArgon, kCmdMassIron, kCmdCut, kCmdBypass, kCmdGLimOnOff,
-    kCmdIgnition, kCmdTrap, kCmdPhase1, kCmdPhase2, kCmdPhase3,
-    kCmdBar = 100,       // + bar: a tap on the scale or its ▲ ▼ - Hit's value is the scale's new set-point
+    kCmdIgnition, kCmdTrap, kCmdPhase1, kCmdPhase2, kCmdPhase3, kCmdSternPlan,
+    kCmdBar = 100,      // + bar: a tap on the scale or its ▲ ▼ - Hit's value is the scale's new set-point
 };
 
 struct View {
@@ -33,6 +33,7 @@ struct View {
     int mass = 0, massMode = -1;         // reaction mass in use: 0 argon, 1 iron, 2 products; mode -1 auto
     bool plantRun = false;
     bool argonLock = false;              // the plant's limiter holds argon (in the air)
+    bool sternPlan = false;              // the stern blocks on the charges with the marching cup (the take-off arc)
     double mSet = 0.0, mAct = 0.0;       // march lever and what it gives (level)
     double Fm = 0.0, FmField = 0.0, vM = 3e4, mdotM = 0.0, PjetM = 0.0;
     double pSet = 0.0, pAct = 0.0;       // pods

@@ -68,7 +68,18 @@ constexpr double kSlipTC = 0.30;
 constexpr double kSlipABS = 0.15;            // the service brake's slip (ABS): near the soil's best braking, still steerable             // traction control: the slip the motors keep on W
 constexpr double kFmotor = 2.85e5;           // N, the hub motors' total force at low speed (8 x 25 kN m over the 0.70 m wheel)
 constexpr double kVmax = 22.2;               // m/s, 80 km/h (Shift)
-constexpr double kVcruise = 11.1;            // m/s, 40 km/h (W alone)
+// W alone and Shift reach the same top speed (80 km/h); they differ in the drive's power: W is the cruise drive (calm: the
+// throttle eased in, a fifth of the power, the force limited, the wheels held to 8 % slip - no spinning), Shift the full one
+constexpr double kPcruise = 6.0e5, kFcruise = 8.0e4;   // W, N: the cruise drive's power and force
+// The limiter (the terminal's «speed limiter», on by default). Off: the drive runs past its rating - 4.5 MW, 380 kN, up to
+// 36 m/s (130 km/h: the hub motors' 6000 rpm and the airless tyres' rating) - and pays for it in heat: the iron losses grow
+// with the speed (rpm^1.6), past the base speed (22 m/s) the field weakening adds its currents, the copper loses with the
+// square of the force. The motors' heat (below): 3e5 J/K of iron, copper and coolant, cooled by a 20 m2 radiator loop and
+// in air by the airflow; hot above 160 C the power drops, above 200 C the drive trips until it is below 147 C
+constexpr double kPover = 4.5e6, kFover = 3.8e5, kVunl = 36.0;
+constexpr double kMotC = 3.0e5, kIronW = 1.5e3, kFwW = 4.0e4, kCuW = 1.2e4;   // J/K; W per motor at 22 m/s; W at 10 m/s over base; W at 285 kN
+constexpr double kMotDerate0 = 433.0, kMotTrip = 473.0, kMotReset = 420.0, kRadA = 20.0;   // K, K, K, m2
+constexpr double kSlipCruise = 0.08;         // the slip the cruise drive holds the wheels to: they roll, they do not spin
 constexpr double kVreverse = 4.2;            // m/s, 15 km/h backwards
 constexpr double kWheelBaseHalf = 3.3;       // m, centre to the outer axles (all-wheel steer: the turning lever)
 constexpr double kEjectV = 30.0 / 3.6;      // m/s: a stop harder than this throws the people off
@@ -205,6 +216,8 @@ public:
             snd_->LoadWav(kSndRoll, "XRSound\\MPU\\roll.wav", PT::Global);
             snd_->LoadWav(kSndKnock, "XRSound\\MPU\\knock.wav", PT::Global);
             snd_->LoadWav(kSndLift, "XRSound\\MPU\\lift.wav", PT::Global);
+            static const char* sfx[] = {"brake", "ladder_dn", "ladder_up", "airlock", "click", "tick", "crash", "couple", "uncouple", "alarm", "beep", "wind"};
+            for (int k = 0; k < 12; ++k) { char f[64]; std::snprintf(f, sizeof f, "XRSound\\MPU\\%s.wav", sfx[k]); snd_->LoadWav(kSndBrake + k, f, PT::Global); }
         }
     }
 
@@ -222,6 +235,7 @@ public:
                 batt_ = CellsSum() / kBattJ;
             }
             else if (!std::strncmp(line, "PARK", 4)) { int p = 1; std::sscanf(line + 4, "%d", &p); park_ = p != 0; }
+            else if (!std::strncmp(line, "LIMITER", 7)) { int p = 1; std::sscanf(line + 7, "%d", &p); limOff_ = p == 0; }     // LIMITER 0: the speed limiter is off
             else if (!std::strncmp(line, "DAMAGE", 6)) {
                 std::sscanf(line + 6, "%lf %lf %lf %lf %lf %lf %lf %lf %lf", &hullLeak_, &wheelHp_[0], &wheelHp_[1], &wheelHp_[2], &wheelHp_[3],
                             &wheelHp_[4], &wheelHp_[5], &wheelHp_[6], &wheelHp_[7]);
@@ -239,6 +253,7 @@ public:
         oapiWriteScenario_string(scn, const_cast<char*>("CELLS"), cb);
         if (towing_) { char tb[160]; std::snprintf(tb, sizeof tb, "%s %.2f", towing_->GetName(), towL_); oapiWriteScenario_string(scn, const_cast<char*>("TOWING"), tb); }
         oapiWriteScenario_int(scn, const_cast<char*>("PARK"), park_ ? 1 : 0);
+        if (limOff_) oapiWriteScenario_int(scn, const_cast<char*>("LIMITER"), 0);
         bool hurt = hullLeak_ > 0.0; for (double h : wheelHp_) hurt |= h < 1.0;
         if (hurt) {
             char db[160]; std::snprintf(db, sizeof db, "%.2f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f", hullLeak_ * 1e4, wheelHp_[0], wheelHp_[1], wheelHp_[2],
@@ -314,7 +329,7 @@ public:
         TVChassis* lead = towBy_;
         const bool following = lead && !driverBody;
         if (following) {
-            driveIn = lead->drive_; full = lead->vCap_ >= kVmax; park_ = lead->park_;
+            driveIn = lead->drive_; full = !lead->cruise_; park_ = lead->park_;
             VECTOR3 pg, pl;
             lead->Local2Global(_V(mpu::kHitchR[0], mpu::kHitchR[1], mpu::kHitchR[2]), pg);
             Global2Local(pg, pl);                                                 // the leader's rear pin, in our frame
@@ -327,16 +342,16 @@ public:
         ride_ += Clamp(rideTarget_ - ride_, -0.15 * simdt, 0.15 * simdt);       // the platform moves to where Caps Lock set it
         rideMoving_ = ride_ != ride0;
         if (std::fabs(ride_ - rideSet_) > 0.01) Contacts(g);
-        vCap_ = full ? kVmax : kVcruise;
+        vCap_ = vTop(); cruise_ = !full;
         if (selftest_ == 2) park_ = false;
         if (selftest_ == 3) { testT_ += simdt; }
         else if (selftest_ == 4) {                                                // =4: every platform full speed straight ahead
             testT_ += simdt;
-            if (testT_ > 1.0) { driveIn = 1.0; full = true; vCap_ = kVmax; }
+            if (testT_ > 1.0) { driveIn = 1.0; full = true; vCap_ = kVmax; cruise_ = false; }
         }
         else if (selftest_ == 5) {                                                // =5: as 4 for 10 s, then hands off: it must stand still
             testT_ += simdt;
-            if (testT_ > 1.0 && testT_ < 10.0) { driveIn = 1.0; full = true; vCap_ = kVmax; }
+            if (testT_ > 1.0 && testT_ < 10.0) { driveIn = 1.0; full = true; vCap_ = kVmax; cruise_ = false; }
         }
         else if (selftest_ == 1) {                                                     // MPU_SELFTEST=1: drive a fixed course, log
             testT_ += simdt;
@@ -356,13 +371,17 @@ public:
             }
             VECTOR3 tl;
             if (testT_ > 3.0 && NearestLeg(tl)) {
-                driveIn = 1.0; full = true; vCap_ = kVmax;
+                driveIn = 1.0; full = true; vCap_ = kVmax; cruise_ = false;
                 steerIn = Clamp(std::atan2(tl.x, tl.z) * 1.5, -1.0, 1.0);
                 if (std::fabs(std::atan2(tl.x, tl.z)) > 0.5 && std::fabs(speed_) > 4.0) driveIn = -1.0;   // slow down to turn
             }
         }
         steer_ += Clamp(steerIn - steer_, -4.0 * simdt, 4.0 * simdt);          // the steering: quick (a quarter second lock to lock)
-        drive_ = driveIn;
+        // the throttle: eased in on the cruise drive (0.35 per second - a smooth start), at once with Shift and on the way down
+        if (full || driveIn <= drive_) driveSm_ = driveIn;
+        else driveSm_ += (std::min)(driveIn - driveSm_, 0.35 * simdt);
+        if (std::fabs(driveIn) < 0.05) driveSm_ = 0.0;
+        drive_ = driveSm_;
         absBrake_ = drive_ < 0.0 && speed_ > 0.5;                                  // S while going forward: the service brake (ABS)
         if (drive_ > 0.0 && speed_ < -0.5) absBrake_ = true;                       // W while rolling back: the same
         if (absBrake_) drive_ = 0.0;
@@ -417,6 +436,8 @@ public:
 
         moduleW_ = ModuleLoadW(simdt);
         double powerW = kBaseW + moduleW_;
+        double mechW = 0.0;
+        for (int i = 0; i < mpu::kWheels; ++i) pI_[i] = fI_[i] = 0.0;
         for (double& x : vf_) x = 0.0;
         if (st.status != 1) {
             const double vAbs = std::fabs(v.z);
@@ -436,16 +457,27 @@ public:
             const double sMax = Clamp(2.5 * kWheelBaseHalf * (std::max)(0.1, muEff_) * g / (std::max)(vAbs * vAbs, 1.0), 0.16, kSteerMax);
             const double rearK = -0.6 * (1.0 - Clamp(vAbs / 12.0, 0.0, 1.0));   // rear axles counter-steer at low speed
             // the motors' force wanted in total: power limited, nothing past the top speed (the ground decides what it gives)
-            double fCmd = drive_ * kPmax / (std::max)(vAbs, 2.0);
-            fCmd = Clamp(fCmd, -kFmotor, kFmotor);
+            const bool cruise = cruise_;
+            // stuck (the throttle open, hardly moving): the cruise drive's power, force and slip limits lift to the full drive over
+            // ~3 s - a soft bank, a rut, a slope: it climbs out; moving off, the slip allowed is wider at low speed (a start)
+            if (cruise && drive_ > 0.5 && vAbs < 1.0) stuckT_ += simdt; else stuckT_ = (std::max)(0.0, stuckT_ - 2.0 * simdt);
+            const double boost = Clamp(stuckT_ / 2.0 - 0.5, 0.0, 1.0);
+            if (boost > 0.0 && !boostWas_) oapiWriteLogV("TVChassis %s: stuck - the drive's full power lifted", GetName());
+            boostWas_ = boost > 0.0;
+            slipCruise_ = kSlipCruise + 0.10 * Clamp(1.0 - vAbs / 3.0, 0.0, 1.0) + 0.27 * boost;
+            const double pDrv = cruise ? kPcruise + (kPmax - kPcruise) * boost : limOff_ ? kPover : kPmax,
+                         fDrv = cruise ? kFcruise + (kFmotor - kFcruise) * boost : limOff_ ? kFover : kFmotor;
+            double fCmd = drive_ * pDrv / (std::max)(vAbs, 2.0);
+            fCmd = Clamp(fCmd, -fDrv, fDrv);
+
             // the speed limit holds both ways, downhill too: above it the motors brake (and give the energy back). Forward:
-            // 40 km/h on W, 80 with Shift, 80 rolling free; backwards: 15 on S, 80 rolling free
+            // 55 km/h on W, 80 with Shift, 80 rolling free; backwards: 15 on S, 80 rolling free
             {
                 const double m = GetMass();
-                const double capF = drive_ > 0.05 ? vCap_ : kVmax, capR = drive_ < -0.05 ? kVreverse : kVmax;
+                const double capF = drive_ > 0.05 ? vCap_ : vTop(), capR = drive_ < -0.05 ? kVreverse : kVmax;
                 if (v.z > capF) fCmd = -Clamp(m * 1.5 * (v.z - capF), 0.0, kFmotor);
                 else if (v.z < -capR) fCmd = Clamp(m * 1.5 * (-capR - v.z), 0.0, kFmotor);
-                else if (fCmd > 0.0 && v.z > capF - 0.3) fCmd *= Clamp((capF - v.z) / 0.3, 0.0, 1.0);
+                else if (fCmd > 0.0 && v.z > capF - (cruise ? 1.5 : 0.3)) fCmd *= Clamp((capF - v.z) / (cruise ? 1.5 : 0.3), 0.0, 1.0);   // the top speed, eased into
                 else if (fCmd < 0.0 && v.z < -capR + 0.3) fCmd *= Clamp((capR + v.z) / 0.3, 0.0, 1.0);
             }
             const bool brake = park_ || brakeHeld_ || (std::fabs(drive_) < 0.05 && vAbs < 0.4);
@@ -473,9 +505,9 @@ public:
                     sl = -kSlipABS;                                               // no lock, the wheels still steer
                     ff = -ShearAt(S, w, kSlipABS) * std::tanh(vf / 0.3);
                 } else if (fCmd != 0.0) {
-                    double want = std::fabs(fCmd) * n_[i] / (std::max)(wSum, 1.0) * wheelHp_[i] + w.Rc;   // a damaged hub gives less
-                    // traction control on W: no more than the soil gives at 30 % slip (no digging); Shift: none - it spins
-                    if (vCap_ < kVmax && fCmd * vf >= 0.0) want = (std::min)(want, ShearAt(S, w, kSlipTC));
+                    double want = std::fabs(fCmd) * n_[i] / (std::max)(wSum, 1.0) * wheelHp_[i] * (fCmd > 0.0 ? motDer_[i] : 1.0) + w.Rc;   // a damaged or hot motor gives less
+                    // traction control on W: no more than the soil gives at 8 % slip (rolling, no spinning, no digging); Shift: none
+                    if (cruise_ && fCmd * vf >= 0.0) want = (std::min)(want, ShearAt(S, w, slipCruise_));
                     sl = SlipFor(S, w, want);
                     ff = (fCmd > 0 ? 1.0 : -1.0) * (std::min)(want, ShearAt(S, w, 1.0));
                     if (fCmd * vf < 0.0) sl = -sl;                                  // the motors against the motion: braking slip
@@ -500,6 +532,7 @@ public:
                 if (!brake) {                                                     // driving or ABS braking by the motors
                     const double p = ff * rim;                                    // the motors' power through the slip
                     powerW += p > 0.0 ? p / 0.92 : p * 0.6;
+                    mechW += p; pI_[i] = p; fI_[i] = std::fabs(ff);
                 }
                 spin_[i] = std::fmod(spin_[i] + rim * simdt / mpu::kWheelR, PI2);
                 vf_[i] = vf;
@@ -518,6 +551,7 @@ public:
             Contacts(g);
             for (double& q : xPrev_) q = -1e9;                                    // no damper kick on the first step
         }
+        MotorThermal(simdt);
         powerW_ = powerW;
         powerAvg_ += (powerW - powerAvg_) * Clamp(simdt / 30.0, 0.0, 1.0);    // the draw over the last half minute
         CellsUse(powerW * simdt);                                                // from the cells (the motors' regeneration back in)
@@ -643,11 +677,13 @@ protected:
         return best;
     }
     void Couple(TVChassis* follower, double gap) {
+        Sfx(kSndCouple, 1.0);
         towing_ = follower; follower->towBy_ = this;
         towL_ = follower->towL_ = Clamp(gap, kBarMin, kBarMax);
         oapiWriteLogV("TVChassis: %s coupled to %s, bar %.2f m", follower->GetName(), GetName(), towL_);
     }
     void Uncouple() {
+        Sfx(kSndUncouple, 1.0);
         if (towing_) { oapiWriteLogV("TVChassis: %s uncoupled from %s", towing_->GetName(), GetName()); towing_->towBy_ = nullptr; towing_ = nullptr; }
         barDrawn_ = -1;
     }
@@ -729,6 +765,7 @@ protected:
             const double d = std::hypot(cp.x - mpu::kWheel[i].hub[0], cp.z - mpu::kWheel[i].hub[2]);
             if (d < wd) { wd = d; wi = i; }
         }
+        Sfx(kSndCrash, Clamp(dv / 12.0, 0.25, 1.0));
         if (wi >= 0 && dv > 3.0) {
             const double hit = Clamp(std::pow((dv - 3.0) / 9.0, 2.0), 0.0, 1.0);
             wheelHp_[wi] = (std::max)(0.0, wheelHp_[wi] - hit);
@@ -835,8 +872,8 @@ protected:
         if (i == 0) {
             out->id = kItemSocket; out->pos = kSocket; out->dir = _V(0, 0, -1); out->radius = 1.8;
             if (tv_.Ok() && tv_.PluggedTo(GetHandle()))
-                std::snprintf(out->label, sizeof out->label, "отключить кабель (заряд %.0f %%, %.0f кВт)", batt_ * 100.0, chargeW_ * 1e-3);
-            else std::snprintf(out->label, sizeof out->label, "подключить кабель (заряд %.0f %%)", batt_ * 100.0);
+                std::snprintf(out->label, sizeof out->label, L("отключить кабель (заряд %.0f %%, %.0f кВт)", "unplug the cable (charge %.0f %%, %.0f kW)"), batt_ * 100.0, chargeW_ * 1e-3);
+            else std::snprintf(out->label, sizeof out->label, L("подключить кабель (заряд %.0f %%)", "plug the cable in (charge %.0f %%)"), batt_ * 100.0);
             return true;
         }
         if (i == 1 + kCellsN || i == 2 + kCellsN) {                    // the couplings
@@ -845,16 +882,17 @@ protected:
             out->pos = _V(0.0, 0.06, rear ? -4.95 : 4.95); out->dir = _V(0, 0, rear ? 1 : -1);
             TVChassis* linked = rear ? towing_ : towBy_;
             double gap = 0; TVChassis* cand = linked ? nullptr : Candidate(rear, &gap);
-            if (linked) std::snprintf(out->label, sizeof out->label, "расцепить с %s", linked->GetName());
-            else if (cand) std::snprintf(out->label, sizeof out->label, "сцепить с %s (%.1f м)", cand->GetName(), gap);
-            else std::snprintf(out->label, sizeof out->label, "%s", rear ? "сцепка: сзади никого (встать в 2–4 м)" : "сцепка: спереди никого (встать в 2–4 м)");
+            if (linked) std::snprintf(out->label, sizeof out->label, L("расцепить с %s", "uncouple from %s"), linked->GetName());
+            else if (cand) std::snprintf(out->label, sizeof out->label, L("сцепить с %s (%.1f м)", "couple to %s (%.1f m)"), cand->GetName(), gap);
+            else std::snprintf(out->label, sizeof out->label, "%s", rear ? L("сцепка: сзади никого (встать в 2–4 м)", "coupling: nobody behind (stop 2-4 m off)")
+                                                                          : L("сцепка: спереди никого (встать в 2–4 м)", "coupling: nobody ahead (stop 2-4 m off)"));
             return true;
         }
         const int k = i - 1;
         if (k < 0 || k >= kCellsN) return false;
         out->id = kItemCell0 + k; out->pos = _V(1.30, -0.05, kCellZ[k]);
-        if (cell_[k] >= 0) std::snprintf(out->label, sizeof out->label, "вынуть ячейку %d (%.0f %%)", k + 1, cell_[k] / kCellJ * 100.0);
-        else std::snprintf(out->label, sizeof out->label, "вставить ячейку в гнездо %d", k + 1);
+        if (cell_[k] >= 0) std::snprintf(out->label, sizeof out->label, L("вынуть ячейку %d (%.0f %%)", "take cell %d out (%.0f %%)"), k + 1, cell_[k] / kCellJ * 100.0);
+        else std::snprintf(out->label, sizeof out->label, L("вставить ячейку в гнездо %d", "put a cell into bay %d"), k + 1);
         return true;
     }
     void ChassisUse(int id, int person) {
@@ -1105,19 +1143,39 @@ protected:
             VECTOR3 op;
             o->GetGlobalPos(op);
             if (length(op - me) > 15.0) continue;
+            RectHit(o, 0.0, cz, hx, hz, o->GetMass(), dt);
+        }
+        // the charging station: a fixed block (its cabinet and the cell rack) - an immovable wall for the platform
+        for (DWORD i = 0; i < oapiGetVesselCount(); ++i) {
+            OBJHANDLE h = oapiGetVesselByIndex(i);
+            if (h == GetHandle()) continue;
+            VECTOR3 op;
+            oapiGetGlobalPos(h, &op);
+            if (length(op - me) > 20.0) continue;
+            VESSEL* v = oapiGetVesselInterface(h);
+            const char* cn = v ? v->GetClassName() : nullptr;
+            if (!cn || std::strcmp(cn, "TVehicles\\Station")) continue;
+            RectHit(v, 0.0, 0.245, 0.82, 0.655, 1.0e9, dt);                 // x +-0.82, z -0.41..0.90 (the cabinet and the rack in front)
+        }
+        carHitT_ -= dt;
+    }
+    // One rectangle (the other's, in its frame: centre ocx/ocz, half sizes ohx/ohz) against mine: the least overlap along the four
+    // axes is the normal, the platform pushes ITSELF out (the other, if a vehicle, does the same from its side). m2: its mass
+    void RectHit(VESSEL* o, double ocx, double ocz, double ohx, double ohz, double m2, double dt) {
+        const double hx = kBodyX, hz = 0.5 * (bz1_ - bz0_), cz = 0.5 * (bz1_ + bz0_);
+        {
             // the other's corners and axes in my frame
             VECTOR3 oc[4], ax, az, oo, g;
-            const double cx[4] = {-hx, hx, hx, -hx}, czs[4] = {-hz, -hz, hz, hz};
-            for (int k = 0; k < 4; ++k) { o->Local2Global(_V(cx[k], 0, cz + czs[k]), g); Global2Local(g, oc[k]); }
-            o->Local2Global(_V(0, 0, cz), g); Global2Local(g, oo);
-            if (std::fabs(oo.y) > 2.0) continue;
+            const double cx[4] = {-ohx, ohx, ohx, -ohx}, czs[4] = {-ohz, -ohz, ohz, ohz};
+            for (int k = 0; k < 4; ++k) { o->Local2Global(_V(ocx + cx[k], 0, ocz + czs[k]), g); Global2Local(g, oc[k]); }
+            o->Local2Global(_V(ocx, 0, ocz), g); Global2Local(g, oo);
+            if (std::fabs(oo.y) > 2.5) return;
             o->GlobalRot(_V(1, 0, 0), g); { MATRIX3 Rm; GetRotationMatrix(Rm); ax = tmul(Rm, g); }
             o->GlobalRot(_V(0, 0, 1), g); { MATRIX3 Rm; GetRotationMatrix(Rm); az = tmul(Rm, g); }
             ax.y = 0; ax = ax / length(ax); az.y = 0; az = az / length(az);
             const VECTOR3 mc[4] = {_V(-hx, 0, cz - hz), _V(hx, 0, cz - hz), _V(hx, 0, cz + hz), _V(-hx, 0, cz + hz)};
             const VECTOR3 axes[4] = {_V(1, 0, 0), _V(0, 0, 1), ax, az};
             double best = 1e9; VECTOR3 nrm = _V(0, 0, 0);
-            bool sep = false;
             for (const VECTOR3& a : axes) {
                 double a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
                 for (int k = 0; k < 4; ++k) {
@@ -1125,18 +1183,22 @@ protected:
                     a0 = (std::min)(a0, pa); a1 = (std::max)(a1, pa); b0 = (std::min)(b0, pb); b1 = (std::max)(b1, pb);
                 }
                 const double ov = (std::min)(a1, b1) - (std::max)(a0, b0);
-                if (ov <= 0.0) { sep = true; break; }
+                if (ov <= 0.0) return;                                         // a separating axis: no contact
                 if (ov < best) {
                     best = ov;
                     const double toOther = (oo.x - 0.0) * a.x + (oo.z - cz) * a.z;
                     nrm = toOther > 0 ? _V(-a.x, 0, -a.z) : _V(a.x, 0, a.z);       // from the other towards me
                 }
             }
-            if (sep) continue;
             // where they touch: the corners of each inside the other, else the middle between the centres
             VECTOR3 cp = _V(0, 0, 0); int nc = 0;
             for (int k = 0; k < 4; ++k)
                 if (std::fabs(oc[k].x) <= hx && std::fabs(oc[k].z - cz) <= hz) { cp = cp + oc[k]; ++nc; }
+            if (!nc)                                                               // none of its corners in me: mine in it
+                for (int k = 0; k < 4; ++k) {
+                    const VECTOR3 r = mc[k] - oo;
+                    if (std::fabs(r.x * ax.x + r.z * ax.z) <= ohx && std::fabs(r.x * az.x + r.z * az.z) <= ohz) { cp = cp + mc[k]; ++nc; }
+                }
             if (!nc) cp = (oo + _V(0, 0, cz)) * 0.5; else cp = cp / nc;
             cp.y = 0.0;
             // the closing speed along the normal (the other's own velocity, mine with my turning)
@@ -1147,8 +1209,8 @@ protected:
             const double closing = -dotp(d, nrm);
             // standing on its brake (landed): a touch does nothing - the moving one pushes itself out; only a real blow
             // (closing above 0.5 m/s) moves it (each push took it out of the landed state: it twitched and jumped)
-            if ((GetFlightStatus() & 1) && closing < 0.5) continue;
-            const double m1 = GetMass(), m2 = o->GetMass(), mr = m1 * m2 / (m1 + m2);
+            if ((GetFlightStatus() & 1) && closing < 0.5) return;
+            const double m1 = GetMass(), mr = m1 * m2 / (m1 + m2);
             double f = best * m1 * 10.0;
             if (closing > 0.0) f += 0.5 * mr * closing / (std::max)(dt, 1e-3);
             f = (std::min)(f, 20.0 * 9.81 * m1);
@@ -1162,7 +1224,6 @@ protected:
                 if (closing > kEjectV) EjectAll();
             }
         }
-        carHitT_ -= dt;
     }
 
     // A crash above 30 km/h: the people on the deck and at the post are thrown forward off the platform with the speed it
@@ -1191,21 +1252,44 @@ protected:
     }
 
     // dust from under the wheels: on an airless body thrown in short ballistic sheets, in air it hangs as a cloud
+    // The dust is the body's own: its colour (the texture) and how it flies (the stream). The Moon and Io (no air): grey / sulphur,
+    // ballistic sheets - fast, thin, low and long (a low gravity), no billowing. Mars (0.6 kPa): rust-red, it leaves in a wide fan
+    // and hangs. Earth: brown-tan, a drag-held billow. Titan (146 kPa): orange, heavy and slow. Others: the old tan
+    struct DustKind { const char* body; const char* tex; double size, rate, v0, spread, life, grow, slow; };
+    static const DustKind* DustOf(const char* body) {
+        static const DustKind k[] = {
+            {"Moon",  "MPU_dust_grey",   0.16, 42.0, 7.0, 0.14, 2.6, 0.10, 0.0},
+            {"Io",    "MPU_dust_yellow", 0.16, 42.0, 6.0, 0.16, 2.0, 0.10, 0.0},
+            {"Mars",  "MPU_dust_red",    0.35, 30.0, 4.5, 0.60, 3.6, 1.40, 0.6},
+            {"Earth", "MPU_dust_tan",    0.40, 24.0, 3.5, 0.45, 2.2, 2.20, 2.5},
+            {"Titan", "MPU_dust_orange", 0.45, 18.0, 1.6, 0.50, 4.0, 1.00, 6.0},
+        };
+        for (const DustKind& d : k) if (!std::strcmp(d.body, body)) return &d;
+        return nullptr;
+    }
+    std::string dustBody_;
     void Dust() {
         const bool air = GetAtmPressure() > 50.0;
-        if (!dustMade_ || air != dustAir_) {
+        char nm[64] = ""; if (OBJHANDLE ref = GetSurfaceRef()) oapiGetObjectName(ref, nm, sizeof nm);
+        if (!dustMade_ || air != dustAir_ || dustBody_ != nm) {
             for (PSTREAM_HANDLE& h : dust_) if (h) { DelExhaustStream(h); h = nullptr; }
-            static SURFHANDLE tex = oapiRegisterParticleTexture(const_cast<char*>("Tantra_dust"));
+            const DustKind* dk = DustOf(nm);
+            SURFHANDLE tex = oapiRegisterParticleTexture(const_cast<char*>(dk ? dk->tex : "MPU_dust"));
             PARTICLESTREAMSPEC vac = {0, 0.25, 30.0, 5.0, 0.3, 0.9, 0.6, 0.0, PARTICLESTREAMSPEC::DIFFUSE,
                                       PARTICLESTREAMSPEC::LVL_LIN, 0, 1, PARTICLESTREAMSPEC::ATM_FLAT, 1, 1, tex};
             PARTICLESTREAMSPEC atm = {0, 0.4, 12.0, 2.0, 0.5, 5.0, 1.8, 1.5, PARTICLESTREAMSPEC::DIFFUSE,
                                       PARTICLESTREAMSPEC::LVL_LIN, 0, 1, PARTICLESTREAMSPEC::ATM_FLAT, 1, 1, tex};
+            if (dk) {
+                PARTICLESTREAMSPEC mine = {0, dk->size, dk->rate, dk->v0, dk->spread, dk->life, dk->grow, dk->slow, PARTICLESTREAMSPEC::DIFFUSE,
+                                           PARTICLESTREAMSPEC::LVL_LIN, 0, 1, PARTICLESTREAMSPEC::ATM_FLAT, 1, 1, tex};
+                vac = atm = mine;
+            }
             for (int i = 0; i < mpu::kWheels; ++i) {
                 const auto& W = mpu::kWheel[i];
                 const VECTOR3 at = _V(W.hub[0], W.hub[1] - mpu::kWheelR + 0.1, W.hub[2] - 0.5 * (W.hub[2] > 0 ? 1 : 1));
                 dust_[i] = AddParticleStream(air ? &atm : &vac, at, _V(0, 0.55, -0.83), &dustLv_[i]);
             }
-            dustAir_ = air; dustMade_ = true;
+            dustAir_ = air; dustMade_ = true; dustBody_ = nm;
         }
         for (int i = 0; i < mpu::kWheels; ++i) dustLv_[i] = n_[i] > 0.0 ? Clamp((std::fabs(vf_[i]) - 1.0) / 12.0, 0.0, 1.0) : 0.0;
     }
@@ -1213,7 +1297,19 @@ protected:
     // sound: only through air - none on the Moon; on Mars thin and near, on Earth full (Orbiter's air at the platform);
     // fades with the camera's distance. Hub motors (two layers crossfaded by speed), tyres rolling, knocks of the
     // suspension, the lift drive while the platform goes up or down.
-    enum { kSndDrive = 1, kSndInverter, kSndRoll, kSndKnock, kSndLift, kSndHum };
+    enum { kSndDrive = 1, kSndInverter, kSndRoll, kSndKnock, kSndLift, kSndHum,
+           kSndBrake = 20, kSndLadderDn, kSndLadderUp, kSndAirlock, kSndClick, kSndTick, kSndCrash, kSndCouple, kSndUncouple, kSndAlarm, kSndBeep, kSndWind };
+    double sfxAtt_ = 1.0;                                            // how loud the machine's own noises are heard now (Sound())
+    // a one-shot of the machine (steel, hatches, switches, a crash): through the air by the distance, aboard at once
+    void Sfx(int id, double vol = 1.0, bool restart = true) {
+        if (!snd_ || !snd_->IsPresent()) return;
+        const double a = Clamp(sfxAtt_ * vol, 0.0, 1.0);
+        if (a < 0.02) return;
+        if (!restart && snd_->IsWavPlaying(id)) return;
+        if (snd_->IsWavPlaying(id)) snd_->StopWav(id);
+        snd_->PlayWav(id, false, (float)a);
+    }
+    double beepT_ = 0.0;
     void Sound(double dt) {
         if (!snd_ || !snd_->IsPresent()) return;
         VECTOR3 ear, cg;
@@ -1230,6 +1326,8 @@ protected:
             const int pid = f ? api_.PersonOfBody(f) : 0;
             if (pid && api_.ShipOf(pid) == GetHandle()) att = (std::max)(att, cab_ ? 0.8 : 0.4);
         }
+        sfxAtt_ = (std::max)(att, 0.0);
+        const bool aboard = att >= (cab_ ? 0.79 : 0.39);                  // a person of ours aboard (the structure carries it)
         const double v = std::fabs(speed_);
         const double work = Clamp(std::fabs(powerW_ - kBaseW) / kPmax * 2.0 + v / kVmax * 0.4, 0.0, 1.0);
         const double hiK = Clamp(v / 18.0, 0.0, 1.0);
@@ -1250,6 +1348,16 @@ protected:
         layer(kSndHum, att * Clamp(std::pow(pw, 0.6) * 1.3, 0.0, 1.0) * 0.55 * (powerW_ > kBaseW + 20e3 ? 1.0 : 0.0));
         (void)hiK; (void)work;
         layer(kSndRoll, att * Clamp(v / 10.0, 0.0, 1.0) * 0.8);
+        // the brake on the ground: heavy - slower and deeper the slower we go; the service brake (S, ABS) pulses, Space and the
+        // parking brake lock the wheels and grate
+        const bool braking = (absBrake_ || brakeHeld_ || (park_ && v > 0.6)) && v > 0.5 && (GetFlightStatus() & 1) == 0;
+        layer(kSndBrake, braking ? att * Clamp(v / 5.0, 0.0, 1.0) * (brakeHeld_ || park_ ? 1.0 : 0.75) : 0.0);
+        if (snd_->IsWavPlaying(kSndBrake)) snd_->SetPlaybackSpeed(kSndBrake, (float)(0.62 + 0.45 * Clamp(v / 22.0, 0.0, 1.0)));
+        // the wind round the body (an atmosphere only), the cabin shuts most of it out
+        const double rho = (std::max)(0.0, GetAtmDensity());
+        layer(kSndWind, rho > 0.003 ? (aboard && cab_ ? 0.3 : 1.0) * Clamp(std::pow(v / 28.0, 1.4), 0.0, 1.0) * Clamp(std::sqrt(rho / 1.2), 0.0, 1.3) * 0.7 : 0.0);
+        // the reverse beeper, outside loud, in the cabin dull
+        if (speed_ < -0.3 && drive_ < -0.05) { if ((beepT_ -= dt) <= 0.0) { Sfx(kSndBeep, aboard ? 0.35 : 1.0); beepT_ = 0.9; } } else beepT_ = 0.0;
         layer(kSndLift, att * (rideMoving_ ? 0.6 : 0.0));
         double kick = 0.0;
         for (int i = 0; i < mpu::kWheels; ++i) {
@@ -1511,11 +1619,53 @@ protected:
     double bz0_ = kBodyZ0, bz1_ = kBodyZ1, btop_ = kBodyTop;
     double stepsOut_ = 1.0, stepsDrawn_ = -1.0;
     double height_[mpu::kWheels] = {}, n_[mpu::kWheels] = {}, delta_[mpu::kWheels] = {}, spin_[mpu::kWheels] = {};
+    double driveSm_ = 0.0, stuckT_ = 0.0, slipCruise_ = 0.08; bool boostWas_ = false;
+    bool limOff_ = false, motTrip_ = false;                          // the limiter is off; a motor has tripped on heat
+    double motT_ = -1.0, lossW_ = 0.0, motDerate_ = 1.0;             // the hottest motor K (-1: not set yet), their heat W, the least derate
+    double motTi_[mpu::kWheels] = {}, motDer_[mpu::kWheels] = {1, 1, 1, 1, 1, 1, 1, 1}, lossI_[mpu::kWheels] = {};
+    double pI_[mpu::kWheels] = {}, fI_[mpu::kWheels] = {};           // each motor's mechanical power W and force N this step
+    bool tripI_[mpu::kWheels] = {};
+    double vTop() const { return limOff_ ? kVunl : kVmax; }
+    // the motors' heat balance: backward-Euler sub-steps (a day's time acceleration is thousands of seconds a step)
+    // Eight motors, each with 1/8 of the heat capacity, the radiators and the airflow; the coolant loop couples them to their
+    // mean (150 W/K each). The losses come from each one's own load (pI_, fI_, filled by the wheel loop)
+    void MotorThermal(double dt) {
+        const double tamb = GetAtmPressure() > 100.0 ? GetAtmTemperature() : 200.0;     // the radiators see the ground and the sky
+        if (motT_ < 0.0) { for (double& t : motTi_) t = (std::max)(tamb, 280.0); motT_ = motTi_[0]; }
+        const double rho = (std::max)(0.0, GetAtmDensity()), v = std::fabs(speed_);
+        const double G = (60.0 + (rho > 0.005 ? 600.0 * (1.0 + v / 8.0) * std::sqrt(rho / 1.2) : 0.0)) / mpu::kWheels;   // W/K each
+        const double eA = 0.85 * 5.67e-8 * kRadA / mpu::kWheels, Ci = kMotC / mpu::kWheels, kc = 150.0;
+        const double over = (std::max)(0.0, v - 22.2) / 10.0;
+        lossW_ = 0.0;
+        for (int i = 0; i < mpu::kWheels; ++i) {
+            const double p = pI_[i], kf = fI_[i] / (kFmotor / mpu::kWheels);
+            lossI_[i] = kIronW * std::pow(v / 22.2, 1.6) * (p != 0.0 ? 1.0 : 0.15) + (kFwW / mpu::kWheels) * over * over * (p != 0.0 ? 1.0 : 0.0)
+                      + (kCuW / mpu::kWheels) * kf * kf + 0.01 * (std::max)(0.0, p) + 0.25 * (std::max)(0.0, -p);
+            lossW_ += lossI_[i];
+        }
+        const int ns = (int)Clamp(std::ceil(dt / 5.0), 1.0, 120.0); const double h = dt / ns;
+        for (int s = 0; s < ns; ++s) {
+            double tm = 0.0; for (double t : motTi_) tm += t / mpu::kWheels;
+            for (int i = 0; i < mpu::kWheels; ++i) {
+                const double T = motTi_[i];
+                const double Q = G * (T - tamb) + eA * (std::pow(T, 4) - std::pow(tamb, 4)) + kc * (T - tm), dQ = G + 4.0 * eA * T * T * T + kc;
+                motTi_[i] += h * (lossI_[i] - Q) / Ci / (1.0 + h * dQ / Ci);
+            }
+        }
+        motT_ = 0.0; motDerate_ = 1.0; motTrip_ = false;
+        for (int i = 0; i < mpu::kWheels; ++i) {
+            if (!std::isfinite(motTi_[i])) motTi_[i] = tamb;
+            if (motTi_[i] > kMotTrip && !tripI_[i]) { tripI_[i] = true; oapiWriteLogV("TVChassis %s: traction motor %d tripped on heat (%.0f C)", GetName(), i + 1, motTi_[i] - 273.15); }
+            if (motTi_[i] < kMotReset) tripI_[i] = false;
+            motDer_[i] = tripI_[i] ? 0.0 : Clamp((kMotTrip - motTi_[i]) / (kMotTrip - kMotDerate0), 0.0, 1.0);
+            motT_ = (std::max)(motT_, motTi_[i]); motDerate_ = (std::min)(motDerate_, motDer_[i]); motTrip_ |= tripI_[i];
+        }
+    }
     double k_ = 0.0, gSet_ = 0.0, steer_ = 0.0, drive_ = 0.0, speed_ = 0.0, yawRate_ = 0.0, hdgPrev_ = 0.0;
     double batt_ = 1.0, powerW_ = 0.0, still_ = 0.0;
     bool park_ = true;
     double armState_[mpu::kWheels] = {}, testT_ = 0.0, logT_ = 0.0;
-    double ride_ = 0.0, rideSet_ = 0.0, vCap_ = kVcruise;
+    double ride_ = 0.0, rideSet_ = 0.0, vCap_ = kVmax; bool cruise_ = true;
     bool brakeHeld_ = false, capsWas_ = false, absBrake_ = false;
     double rideTarget_ = 0.0;
     bool bWas_ = false, vWas_ = false, wasDriving_ = false, registered_ = false;
@@ -1551,7 +1701,7 @@ inline bool TVChassis::DriverState(OBJHANDLE person, ::MpuState* s) {
     const double nominal = mpu::kCgH - kSag + kDeckY;
     s->speed = speed_;
     s->speedMax = speed_ < -0.1 ? kVreverse : vCap_;
-    s->full = vCap_ >= kVmax ? 1 : 0;
+    s->full = cruise_ ? 0 : 1;
     s->steer = steer_;
     s->deck = GetAltitude(ALTMODE_GROUND) + kDeckY;
     s->deckMin = nominal + kRideMin;

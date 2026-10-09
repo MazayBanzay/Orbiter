@@ -24,8 +24,9 @@ public:
     void Shutdown();    // request full stop
     void EmergencyCut();  // e.g. chamber power lost: instant stop
 
-    // Advance the sequence. powerOk=false means the chamber field cannot be held.
-    void Update(double dt, bool powerOk);
+    // Advance the sequence. powerOk=false means the chamber field cannot be held; beamOk=false holds the
+    // guide beam down (the marching cup is still out past the rims).
+    void Update(double dt, bool powerOk, bool beamOk = true);
 
     IgnStage Stage() const { return stage_; }
     IgnStage Target() const { return target_; }

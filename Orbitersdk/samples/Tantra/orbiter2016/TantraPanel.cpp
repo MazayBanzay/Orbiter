@@ -586,7 +586,7 @@ bool Tantra::RedrawMain(int id, SURFHANDLE s) {
             PanelText(s, r[0] + 8, r[1] + 2, buf, anaMain ? FONT_GREEN : FONT_AMBER);
             PanelFill(s, r[0] + 8, r[1] + 22, w, 5, 30, 36, 34);
             PanelFill(s, r[0] + 8, r[1] + 22, int(w * level), 5, anaMain ? 190 : 230, anaMain ? 120 : 150, anaMain ? 255 : 60);
-            std::snprintf(buf, sizeof buf, "ГОНДОЛЫ %s %.0f%%", podHover_ ? "ВИСЕНИЕ" : "-", hov * 100);
+            std::snprintf(buf, sizeof buf, "ВЫДВ. БЛОКИ %s %.0f%%", podHover_ ? "ВИСЕНИЕ" : "-", hov * 100);
             PanelText(s, r[0] + 8, r[1] + 30, buf, podHover_ ? FONT_GREEN : FONT_AMBER);
             PanelFill(s, r[0] + 8, r[1] + 51, int(w * hov), 4, 110, 170, 230);
             return true;
@@ -753,7 +753,7 @@ bool Tantra::RedrawLower(int id, SURFHANDLE s) {
             PanelText(s, r[0] + 8, r[1] + 6, buf, irisAna_ > 0.99 ? FONT_GREEN : FONT_AMBER);
             std::snprintf(buf, sizeof buf, "маршевая: %s", marchOut_ > 0.99 ? "ВЫДВИНУТА" : marchOut_ > 0.0 || irisMarch_ > 0.0 ? "..." : "в колодце");
             PanelText(s, r[0] + 8, r[1] + 32, buf, marchOut_ > 0.99 ? FONT_GREEN : FONT_AMBER);
-            std::snprintf(buf, sizeof buf, "гондолы: %s", (std::max)(tuck_, cp.tuck) > 0.5 ? "утоплены" : "выдвинуты");
+            std::snprintf(buf, sizeof buf, "выдвижные блоки: %s", (std::max)(tuck_, cp.tuck) > 0.5 ? "утоплены" : "выдвинуты");
             PanelText(s, r[0] + 8, r[1] + 58, buf, FONT_AMBER);
             return true;
         }

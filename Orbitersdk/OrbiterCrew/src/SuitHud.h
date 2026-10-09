@@ -14,6 +14,9 @@
 namespace ocrew
 {
 	struct Suit;
+	// the suit computer's language (Config\OrbiterCrew\OrbiterCrew.cfg, LANGUAGE): a Russian text in the display's language
+	const char* SuitTr(const char* ru);
+	bool SuitEnglish();
 	// the machine she drives from its post (МПУ, Modules\MPU.dll, mpuDriverState): the same layout as MPU.dll's MpuState
 	// (TVChassis.h) field for field, with room behind it should that one grow
 	struct MpuState
@@ -74,7 +77,11 @@ namespace ocrew
 	class HudText
 	{
 	public:
+		HudText() = default;
+		~HudText();                       // the atlas texture is released with it (a second session needs the device clean)
+		HudText(const HudText&) = delete; HudText& operator=(const HudText&) = delete;   // one owner of the texture
 		bool Load();
+		void Release();                  // the texture back (the body leaves the world); Load again later
 		bool Ok() const { return tex != nullptr; }
 		// size 0 tiny, 1 small, 2 mid, 3 big; colour = atlas colour 0..6; align 0 left, 1 centre, 2 right;
 		// (x, y) = pen at the baseline in pixels; scale = pixels per display unit
@@ -110,9 +117,15 @@ namespace ocrew
 		void HelmetFrame(VESSEL* v, VISHANDLE vis, const HelmetView& hv, const HudData* d = nullptr);
 		Suit* life{};                          // the suit of the last frame (the switches act on it)
 		UINT plateIdx{ static_cast<UINT>(-1) }; bool onVisor{}; VISHANDLE plateVis{};
+		VESSEL* plateOwner{};    // the body the plate was added to (a new body - standing up, coming out - adds its own)
 		// the visor's modulator: the photonic layer in the glass that dims the outside light locally (behind the panels, along
 		// the visor's edges, over the sun, the whole view when the shade is down) - drawn into its own texture each step
 		SURFHANDLE modSrf{}; int modW{}, modH{}; DEVMESHHANDLE modDm{}; bool modLogged{};
+		double modKey[7]{}; bool modKeyed{};   // what the modulator drew last: drawn again only when that changes
+		// the sun's spot: a small sprite of its own (group 0), set on the sun's line every frame with the plate - it never
+		// trails behind a turn of the head; its texture is drawn once (and again only when its density changes)
+		SURFHANDLE sunSrf{}; DEVMESHHANDLE sunDm{}; double sunAmp{ -1 };
+		void SunSprite(VESSEL* v, DEVMESHHANDLE dm, const VECTOR3& eye, const VECTOR3& r, const VECTOR3& up, const VECTOR3& f, double dist);
 		double lastShade{}; bool lastSunlit{};
 		// particles through the optics: short sparks and streaks on the image, as dense as the dose rate (the field thins
 		// them)
@@ -125,6 +138,11 @@ namespace ocrew
 		// 1:1, independent of Orbiter's PanelMfdHudSize. Group 2 of the visor plate
 		SURFHANDLE lightSrc{}, lightOut{}; int lightW{}, lightH{}; DEVMESHHANDLE lightDm{}; void* ipi{}; bool ipiTried{}, lightLogged{};
 		void LightLayer(VESSEL* v, const HudData* d);
+		// the cost kept down without losing quality: the display redrawn 30 times a second (at once after a click), the
+		// modulator 15; between them the plate shows the last picture and still follows the camera every frame
+		double lightT{ -1 }, modT{ -1 }; unsigned clickSeq{}, drawnSeq{};
+		// the time it takes, logged every 5 s (ms per redraw; redraws per second)
+		double perfDraw{}, perfShader{}, perfMod{}, perfT0{ -1 }; int perfN{}, perfModN{};
 		int horizonMode{};       // the pitch ladder: 0 auto (in flight and in space, not on foot), 1 always, 2 off
 		int hudScale{ 2 };
 		// at a machine's post: its state this frame; the page МАШИНА comes up while she is there, the one before comes back
@@ -138,6 +156,7 @@ namespace ocrew
 		bool prefsLoaded{};
 		void LoadPrefs();
 		void SavePrefs() const;
+		void SaveLanguage(bool english) const;   // LANGUAGE in Config\OrbiterCrew\OrbiterCrew.cfg (shared with the crew's menu)
 		bool lightLive{}, drawingLight{};   // the HUD goes through the light layer (the VC HUD texture stays empty)
 		void PlaceVisor(VESSEL* v);            // the plate over the camera's own frame (position, axes, aperture) as it is now
 		void Click(double x, double y);        // a left click in the view, pixels of the HUD surface
@@ -196,7 +215,7 @@ namespace ocrew
 		double lastRR{ -1 };
 
 		// what can be clicked, from the last frame (pixels)
-		enum HitKind { H_LTAB, H_RTAB, H_LFOLD, H_RFOLD, H_TGT, H_AP, H_PAL, H_ZOOM, H_MODE, H_NVG, H_NEXT, H_BRIGHT, H_LOOK, H_ACK, H_SUIT, H_RES, H_HORIZON, H_MPU };
+		enum HitKind { H_LTAB, H_RTAB, H_LFOLD, H_RFOLD, H_TGT, H_AP, H_PAL, H_ZOOM, H_MODE, H_NVG, H_NEXT, H_BRIGHT, H_LOOK, H_ACK, H_SUIT, H_RES, H_HORIZON, H_MPU, H_LANG };
 		struct Hit { double x0, y0, x1, y1; int kind, arg; };
 		std::vector<Hit> hits;
 		int request{ -1 };
