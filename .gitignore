@@ -92,3 +92,8 @@ __pycache__/
 /Orbitersdk/samples/TVehicles/build/
 !/Config/Vessels/TVehicles/
 !/Meshes/TVehicles/
+
+# --- Tantra's lander (спасательная ракета): sources and tests ---
+!/Orbitersdk/samples/TantraLander/
+/Orbitersdk/samples/TantraLander/build/
+/Orbitersdk/samples/TantraLander/tests/lander_obj/
