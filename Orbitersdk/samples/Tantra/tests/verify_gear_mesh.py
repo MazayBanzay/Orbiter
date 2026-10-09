@@ -92,7 +92,7 @@ STOW = dict(gm.stowed_states())
 # Parts that stow inside the skin (since 2026-10-09 the stern legs too, in their body bays); the folded wings stow
 # outside it, in the shadow of the body (checked separately).
 MOVING = [n for n in gm.GROUPS if n.startswith(("fin", "door_", "pod_", "arm_pod", "hip_", "blade_", "ankle_", "foot_", "bay_door", "sleg_door", "sfoot",
-                                                 "kang_", "kfoot_"))]
+                                                 "kang_", "kfoot_", "guy_"))]
 MOVING += [n for n in gm.GROUPS if n.startswith("leg") and n != "leg_hinges"]
 OUTSIDE = [n for n in gm.GROUPS if n.startswith(("crest_", "wing_outer_", "elevon_"))]   # (2026-10-09) the stern legs stow in body bays
 RIBS = lambda pre: [n for n in gm.foot_groups(pre) if "_slat_" in n]   # the petals' plates lie on the ground
@@ -258,7 +258,7 @@ for side in gm.SIDES:
     W = gm.pose_world(foot_rim(V, f"foot_{side}"), pitch, lift)
     check(abs(W[:, 1].min() - gy) < 0.12, f"{side} foot on the ground while turning: {W[:, 1].min():.3f}")
 for n in gm.GROUPS:
-    if n.startswith(("foot_", "ankle_", "blade_", "hip_", "carriage_", "pin_")):
+    if n.startswith(("foot_", "ankle_", "blade_", "hip_", "carriage_", "pin_", "guy_")):   # the guys hold the foot rims
         continue
     W = gm.pose_world(V[n], pitch, lift)
     if W[:, 1].min() < gy + 1.0:
@@ -296,4 +296,20 @@ for i, L in enumerate(legs):
         d = np.hypot(hub[0] - sx * gm.HIP_X_OUT, hub[1] - 0.0) - gm.FOOT_R - (gm.LEG_RIB_L * math.cos(math.radians(6.0)) + gm.HUB_R)
         if sx * hub[0] > 0:
             check(d > 0.5, f"stern foot {i} clear of the {'starboard' if sx > 0 else 'port'} blade foot by {d:.1f} m")
+# (2026-10-09) the blade guys: anchored on the foot rim hoops over the lift, the turn and standing; reeled inside the blade
+for e in (0.0, 0.114, 0.3):
+    VG = gm.apply_pose(groups, comps, {f"blade_ext_{s}": e for s in gm.SIDES})
+    worst = 0.0
+    for side, sgn in (("port", -1), ("starboard", 1)):
+        lat, drop = gm.guy_vec(e)
+        hy = -gm.LEG_LMAX / 2 + (gm.BLADE_N - 1) / 2 * gm.BLADE_EXT * e
+        for gname, gsx in (("in", -sgn), ("out", sgn)):
+            exp = np.array([sgn * gm.HIP_X_OUT + gsx * lat, hy - drop])
+            P = VG[f"guy_{side}_{gname}_{gm.GUY_N - 1}"][:, :2]
+            worst = max(worst, np.linalg.norm(P - exp, axis=1).min())
+    check(worst < 0.4, f"guys at blade extension {e}: the cable end on the rim hoop (worst {worst:.2f} m)")
+VG = gm.apply_pose(groups, comps, {f"blade_ext_{s}": 0.9 for s in gm.SIDES})
+inside = all(np.abs(VG[f"guy_{s}_{g}_{j}"][:, 0] - (1 if s == "starboard" else -1) * gm.HIP_X_OUT).max() < gm.BLADE_T[-1] / 2
+             for s in gm.SIDES for g in ("in", "out") for j in range(gm.GUY_N))
+check(inside, "guys reeled inside the blade lying (extension 0.9)")
 print("ALL OK" if not fails else f"{fails} FAILED")

@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Тягач ловушки — 3D-макет</title>
+<style>
+  html,body{margin:0;height:100%;background:#07080a;color:#cfd6df;font:13px "Segoe UI",Arial;overflow:hidden}
+  #ui{position:absolute;left:12px;top:10px;max-width:460px;background:rgba(12,14,17,.82);border:1px solid #2a2f37;border-radius:6px;padding:10px 12px}
+  #ui h1{font-size:15px;margin:0 0 6px;color:#e6c79a}
+  #ui p{margin:4px 0;line-height:1.4}
+  #ui button{background:#1c2026;color:#cfd6df;border:1px solid #3a414b;border-radius:4px;padding:4px 8px;margin:4px 4px 0 0;cursor:pointer}
+  #ui button.on{border-color:#e6c79a;color:#e6c79a}
+  .k{color:#8fb39a}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>Тягач ловушки анамезона 45,84 кт — вариант 1</h1>
+  <p>Все 12 платформ-носителей одного типа: гусеничный модуль 17 × 2,8 × 2,9 м с замками под модули (как МПУ). 8 — под ловушкой (4 ряда поперёк, 2 вдоль), ширина 12 м; ловушка гранью вниз на V-ложементах, низ 3,4 м, верх 12,2 м. Ещё 4 рядом — энергогруппа.</p>
+  <p>На энергогруппе два модуля: <span class="k">двигательный «железо + аргон»</span> — открытая рама: бак железного порошка → топка с керамическим нагревателем 1500 K (46 МВт) → рекуператор → турбоагрегат замкнутого Брайтона на аргоне (π 2,3, КПД 0,56, 200 кг/с, 25,8 МВт) с гидронасосами; А-образная батарея воздушных охладителей 20 МВт; циклон окалины, дымовые газы — в поток охладителя, трубы нет. И <span class="k">модуль управления с жизнеобеспечением</span> — гермокабина в стиле Э.МПУ. Fe 29–40 т/ч, 44–65 т на гружёный рейс.</p>
+  <p>Масштаб 1:1, метры; человек 1,74 м у тягача. Мышь — вращать, колесо — приблизить, правая — сдвиг.</p>
+  <button id="bTantra" class="on">Днище «Тантры»</button><button id="bLow">Вид снизу</button><button id="bSide">Сбоку</button><button id="bEng">Двигатель</button><button id="bTop">Сверху</button><button id="bRot">Облёт</button>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const W = window.innerWidth, H = window.innerHeight;
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(W, H);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  document.body.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x07080a);
+  scene.fog = new THREE.FogExp2(0x0b0c0f, 0.0065);
+  const camera = new THREE.PerspectiveCamera(42, W / H, 0.3, 2000);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(-12, 5, 0);
+  function view(p, t) { camera.position.set(p[0], p[1], p[2]); controls.target.set(t[0], t[1], t[2]); controls.update(); }
+  view([-88, 5.5, 30], [-22, 7, 0]);
+
+  // ---------- materials: dark gunmetal, ceramic, composite ----------
+  const M = {
+    hull: new THREE.MeshStandardMaterial({ color: 0x2a2e35, metalness: 0.75, roughness: 0.42, flatShading: true }),
+    hullD: new THREE.MeshStandardMaterial({ color: 0x1b1e23, metalness: 0.7, roughness: 0.5, flatShading: true }),
+    ceramic: new THREE.MeshStandardMaterial({ color: 0x8c8a86, metalness: 0.1, roughness: 0.75, flatShading: true }),
+    track: new THREE.MeshStandardMaterial({ color: 0x121315, metalness: 0.5, roughness: 0.8 }),
+    shoe: new THREE.MeshStandardMaterial({ color: 0x24262b, metalness: 0.6, roughness: 0.6, flatShading: true }),
+    trap: new THREE.MeshStandardMaterial({ color: 0x2c3b52, metalness: 0.85, roughness: 0.35, flatShading: true }),
+    rib: new THREE.MeshStandardMaterial({ color: 0x1a2230, metalness: 0.9, roughness: 0.3, flatShading: true }),
+    cool: new THREE.MeshStandardMaterial({ color: 0x232b26, metalness: 0.6, roughness: 0.55, flatShading: true }),
+    pipe: new THREE.MeshStandardMaterial({ color: 0x3b3328, metalness: 0.7, roughness: 0.45 }),
+    warn: new THREE.MeshStandardMaterial({ color: 0x5a1010, emissive: 0x330000, metalness: 0.3, roughness: 0.6 }),
+    glowO: new THREE.MeshBasicMaterial({ color: 0xff6a1a }),
+    glowB: new THREE.MeshBasicMaterial({ color: 0x3fa8ff }),
+    lamp: new THREE.MeshBasicMaterial({ color: 0xfff2d8 }),
+    beacon: new THREE.MeshBasicMaterial({ color: 0xff2020 }),
+    glass: new THREE.MeshStandardMaterial({ color: 0x050607, metalness: 1.0, roughness: 0.08 }),
+    ground: new THREE.MeshStandardMaterial({ color: 0x131210, metalness: 0.0, roughness: 0.97 }),
+    road: new THREE.MeshStandardMaterial({ color: 0x1b1a17, metalness: 0.0, roughness: 0.92 }),
+    ship: new THREE.MeshStandardMaterial({ color: 0x15171b, metalness: 0.8, roughness: 0.4, flatShading: true, transparent: true, opacity: 0.92 }),
+    foot: new THREE.MeshStandardMaterial({ color: 0x2b2a27, metalness: 0.6, roughness: 0.6, flatShading: true }),
+    man: new THREE.MeshStandardMaterial({ color: 0xd8dde3, roughness: 0.6 }),
+  };
+  function add(geo, mat, x, y, z, parent, cast = true) {
+    const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; (parent || scene).add(m); return m;
+  }
+  // a faceted block: box with chamfered top edges (extruded profile along z)
+  function chamferBox(lx, ly, lz, ch, mat, x, y, z, parent) {
+    const s = new THREE.Shape();
+    s.moveTo(-lx / 2, 0); s.lineTo(lx / 2, 0); s.lineTo(lx / 2, ly - ch); s.lineTo(lx / 2 - ch, ly); s.lineTo(-lx / 2 + ch, ly); s.lineTo(-lx / 2, ly - ch); s.lineTo(-lx / 2, 0);
+    const g = new THREE.ExtrudeGeometry(s, { depth: lz, bevelEnabled: false });
+    g.translate(0, 0, -lz / 2);
+    return add(g, mat, x, y, z, parent);
+  }
+
+  // ---------- ground: the dark planet, a levelled road ----------
+  const ground = add(new THREE.PlaneGeometry(1600, 1600, 1, 1), M.ground, 0, 0, 0, scene, false);
+  ground.rotation.x = -Math.PI / 2;
+  const road = add(new THREE.PlaneGeometry(220, 16, 1, 1), M.road, -20, 0.01, 0, scene, false);
+  road.rotation.x = -Math.PI / 2;
+  for (let i = 0; i < 120; i++) {                       // stones
+    const r = 0.15 + Math.abs(Math.sin(i * 12.9898) * 0.45);
+    const x = -260 + ((i * 97.13) % 520), z = (i % 2 ? 1 : -1) * (12 + ((i * 53.7) % 120));
+    const st = add(new THREE.DodecahedronGeometry(r, 0), M.foot, x, r * 0.4, z);
+    st.rotation.set(i, i * 2, i * 3);
+  }
+
+  // ---------- the trap (anamezon container): octagon 8.1 m across flats, 34.6 m + trunnions, face down ----------
+  const trap = new THREE.Group(); scene.add(trap);
+  const R8 = 8.75 / 2, LB = 34.6, YC = 3.4 + 4.05;
+  const body = add(new THREE.CylinderGeometry(R8, R8, LB, 8, 1), M.trap, 0, 0, 0, trap);
+  body.rotation.z = Math.PI / 2; body.rotation.y = 0; body.rotateY(Math.PI / 8);
+  for (let i = 0; i <= 8; i++) {                       // stiffening rings
+    const ring = add(new THREE.CylinderGeometry(R8 + 0.12, R8 + 0.12, 0.35, 8, 1), M.rib, -LB / 2 + 0.6 + i * (LB - 1.2) / 8, 0, 0, trap);
+    ring.rotation.z = Math.PI / 2; ring.rotateY(Math.PI / 8);
+  }
+  for (const sx of [-1, 1]) {
+    const cap = add(new THREE.CylinderGeometry(R8 - 0.4, R8 - 0.4, 0.3, 8, 1), M.rib, sx * (LB / 2 + 0.15), 0, 0, trap);
+    cap.rotation.z = Math.PI / 2; cap.rotateY(Math.PI / 8);
+    const tr = add(new THREE.CylinderGeometry(0.9, 0.9, 0.6, 24), M.hull, sx * (LB / 2 + 0.3 + 0.3), 0, 0, trap);
+    tr.rotation.z = Math.PI / 2;
+    const coil = add(new THREE.TorusGeometry(2.6, 0.08, 8, 48), M.glowB, sx * (LB / 2 + 0.31), 0, 0, trap, false);
+    coil.rotation.y = Math.PI / 2;                       // the field status ring: the only light the trap shows
+  }
+  trap.position.set(0, YC, 0);
+
+  // ---------- 8 tracked modules: 4 rows across (2.8 m, 0.27 m gaps), 2 along (17 m) ----------
+  const ROWS = [-4.605, -1.535, 1.535, 4.605];
+  function trackModule(xc, zc, cradle = true) {
+    const g = new THREE.Group(); g.position.set(xc, 0, zc); scene.add(g);
+    // track loop side profile: a long rounded rectangle 16.8 x 1.9, extruded 2.8 wide
+    const L = 16.8, h = 1.9, r = 0.95;
+    const s = new THREE.Shape();
+    s.moveTo(-L / 2 + r, 0); s.lineTo(L / 2 - r, 0); s.absarc(L / 2 - r, r, r, -Math.PI / 2, Math.PI / 2, false);
+    s.lineTo(-L / 2 + r, h); s.absarc(-L / 2 + r, r, r, Math.PI / 2, Math.PI * 1.5, false);
+    const tg = new THREE.ExtrudeGeometry(s, { depth: 2.8, bevelEnabled: false, curveSegments: 16 }); tg.translate(0, 0, -1.4);
+    add(tg, M.track, 0, 0, 0, g);
+    // shoes on the top and the bottom runs
+    const shoeG = new THREE.BoxGeometry(0.42, 0.12, 2.9);
+    for (let i = 0; i < 34; i++) {
+      const x = -L / 2 + r + 0.2 + i * ((L - 2 * r) / 33);
+      add(shoeG, M.shoe, x, 0.06, 0, g); add(shoeG, M.shoe, x, h + 0.02, 0, g);
+    }
+    for (const sx of [-1, 1]) {                         // sprocket / idler discs
+      const d = add(new THREE.CylinderGeometry(0.98, 0.98, 2.95, 18), M.hull, sx * (L / 2 - r), r, 0, g);
+      d.rotation.x = Math.PI / 2;
+      const hub = add(new THREE.CylinderGeometry(0.45, 0.45, 3.1, 8), M.ceramic, sx * (L / 2 - r), r, 0, g);
+      hub.rotation.x = Math.PI / 2;
+    }
+    // module body (frame, hydro jacks inside) and the V-cradle on top
+    chamferBox(15.6, 0.9, 2.6, 0.25, M.hull, 0, 1.95, 0, g);
+    if (cradle) {
+    const cr = new THREE.Shape(); cr.moveTo(-1.4, 0); cr.lineTo(1.4, 0); cr.lineTo(1.4, 0.55); cr.lineTo(0.6, 0.2); cr.lineTo(-0.6, 0.2); cr.lineTo(-1.4, 0.55); cr.lineTo(-1.4, 0);
+    const cg = new THREE.ExtrudeGeometry(cr, { depth: 15.0, bevelEnabled: false }); cg.translate(0, 0, -7.5); cg.rotateY(Math.PI / 2);
+    add(cg, M.hullD, 0, 2.85, 0, g);
+    }
+    add(new THREE.BoxGeometry(15.4, 0.08, 0.12), M.warn, 0, 2.3, 1.36, g);       // warning stripe
+    add(new THREE.BoxGeometry(15.4, 0.08, 0.12), M.warn, 0, 2.3, -1.36, g);
+    for (const sx of [-1, 1]) add(new THREE.BoxGeometry(0.25, 0.25, 0.25), M.lamp, sx * 7.9, 2.4, 0, g, false);
+    return g;
+  }
+  for (const xc of [-8.5, 8.5]) for (const z of ROWS) trackModule(xc, z);
+  // V-saddles under the trap's lower faces (between modules and the trap)
+  for (const xc of [-8.5, 8.5]) for (const z of [-3.07, 0, 3.07]) {
+    const sd = add(new THREE.BoxGeometry(15, 0.5, 2.4), M.hullD, xc, 3.15, z);
+  }
+
+  // ---------- floodlights / beacons helpers ----------
+  const lights = [], beacons = [];
+  function flood(x, y, z, tx, ty, tz, parent) {
+    add(new THREE.CylinderGeometry(0.12, 0.18, y, 6), M.hullD, x, y / 2, z, parent);
+    add(new THREE.BoxGeometry(0.9, 0.5, 0.9), M.lamp, x, y + 0.2, z, parent, false);
+    const sl = new THREE.SpotLight(0xfff0d8, 3.2, 150, 0.42, 0.6, 1.4);
+    sl.position.set(x, y + 0.2, z); parent.add(sl);
+    const tgt = new THREE.Object3D(); tgt.position.set(tx, ty, tz); parent.add(tgt); sl.target = tgt;
+    sl.castShadow = true; sl.shadow.mapSize.set(1024, 1024); lights.push(sl);
+  }
+  // ---------- the energy group: 4 more platforms of the same type, side by side (12 x 17 m), carrying
+  // the engine module («iron + argon», open, on its own frame) and the control module with life support ----------
+  const EX = -17.9 - 14 - 8.5;                          // group centre: 14 m clear of the trap's cryostat end
+  const TX = EX;
+  for (const z of ROWS) trackModule(EX, z, false);
+  const E = new THREE.Group(); E.position.set(EX, 2.85, 0); scene.add(E);
+  // module frame on the 10 locks: two longitudinal box beams + cross beams (an open deck, not a hull)
+  for (const z of [-4.6, -1.53, 1.53, 4.6]) add(new THREE.BoxGeometry(16.6, 0.55, 0.5), M.hullD, 0, 0.28, z, E);
+  for (let i = 0; i < 7; i++) add(new THREE.BoxGeometry(0.45, 0.45, 11.6), M.hullD, -7.8 + i * 2.6, 0.62, 0, E);
+  function vessel(len, rad, mat, x, y, z, seg = 24) {
+    const v = add(new THREE.CylinderGeometry(rad, rad, len, seg), mat, x, y, z, E); v.rotation.z = Math.PI / 2;
+    for (const sx of [-1, 1]) {                        // dished heads and flanges
+      const hd = add(new THREE.SphereGeometry(rad, seg, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat, x + sx * len / 2, y, z, E);
+      hd.rotation.z = -sx * Math.PI / 2; hd.scale.set(1, 0.45, 1);
+      const fl = add(new THREE.CylinderGeometry(rad + 0.12, rad + 0.12, 0.22, seg), M.rib, x + sx * (len / 2 - 0.3), y, z, E); fl.rotation.z = Math.PI / 2;
+    }
+    return v;
+  }
+  function saddle(x, z, w, h) { add(new THREE.BoxGeometry(0.5, h, w), M.hullD, x, 0.85 + h / 2, z, E); }
+  function pipe(a, b, r, mat) {                         // a straight pipe between two points (group frame)
+    const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), d = B.clone().sub(A), L = d.length();
+    const p = add(new THREE.CylinderGeometry(r, r, L, 10), mat || M.pipe, 0, 0, 0, E);
+    p.position.copy(A.clone().add(B).multiplyScalar(0.5)); p.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+  }
+  // burner + ceramic heater (46 MW): a horizontal ceramic-clad vessel, a dull sight port; iron powder tank beside it
+  for (const x of [-4.2, 1.6]) saddle(x, -3.3, 2.6, 0.9);
+  vessel(7.4, 1.65, M.ceramic, -1.3, 3.3, -3.3);
+  add(new THREE.BoxGeometry(0.9, 0.3, 0.05), M.glowO, -1.3, 3.5, -4.97, E, false);
+  for (const x of [-4.8, -1.2]) saddle(x, 2.6, 2.2, 0.8);
+  vessel(5.6, 1.25, M.hullD, -3.0, 2.95, 2.6);
+  pipe([-0.2, 2.95, 2.6], [-0.2, 3.0, -1.7], 0.3, M.hullD);              // powder feed to the burner
+  // ash cyclone (short, beside the heater) and the flue going into the cooler air stream - no chimney
+  add(new THREE.CylinderGeometry(0.9, 0.9, 2.0, 16), M.hull, 3.6, 2.5 + 1.0, -4.0, E);
+  add(new THREE.ConeGeometry(0.9, 1.2, 16), M.hull, 3.6, 1.5 + 0.0 + 0.4, -4.0, E).rotation.x = Math.PI;
+  pipe([2.5, 3.6, -3.6], [3.6, 3.9, -4.0], 0.35);
+  // recuperator (≈62 MW): a long horizontal shell; the argon turbo-set on a skid with the hydraulic pumps
+  for (const x of [1.0, 6.0]) saddle(x, -0.4, 2.0, 0.6);
+  vessel(7.0, 1.0, M.hull, 3.5, 2.45, -0.4);
+  const skid = add(new THREE.BoxGeometry(6.2, 0.35, 3.0), M.hullD, 4.6, 1.05, 3.4, E);
+  const shaft = add(new THREE.CylinderGeometry(0.6, 0.6, 4.6, 20), M.hull, 4.6, 1.95, 3.4, E); shaft.rotation.z = Math.PI / 2;
+  const comp = add(new THREE.CylinderGeometry(0.85, 0.6, 1.2, 20), M.ceramic, 2.8, 1.95, 3.4, E); comp.rotation.z = Math.PI / 2;
+  const turb = add(new THREE.CylinderGeometry(0.6, 0.95, 1.4, 20), M.ceramic, 6.4, 1.95, 3.4, E); turb.rotation.z = Math.PI / 2;
+  for (const x of [3.4, 5.0, 6.6]) add(new THREE.BoxGeometry(1.0, 1.0, 1.0), M.hullD, x, 1.7, 4.95, E);    // hydraulic pumps
+  pipe([6.4, 1.95, 3.4], [6.9, 2.45, -0.4], 0.32);                     // turbine exhaust -> recuperator
+  pipe([2.3, 2.45, -0.4], [2.3, 3.3, -1.7], 0.32);                     // recuperator -> heater
+  pipe([-1.3, 3.3, -1.7], [6.4, 2.6, 2.4], 0.3);                       // heater -> turbine
+  // argon coolers (20 MW): an A-frame air-cooled bank across the rear, three fans each side on top
+  const CX = -6.6;
+  for (const sz of [-1, 1]) {
+    const bank = new THREE.Group(); bank.position.set(CX, 5.0, sz * 2.9); bank.rotation.x = sz * 0.62; E.add(bank);
+    add(new THREE.BoxGeometry(6.4, 0.45, 6.2), M.cool, 0, 0, 0, bank);
+    for (let i = 0; i < 12; i++) add(new THREE.BoxGeometry(0.1, 0.55, 6.0), M.hullD, -3.0 + i * 0.55, 0.05, 0, bank);
+    for (const fx of [-2.0, 0.0, 2.0]) {
+      const ring = add(new THREE.CylinderGeometry(0.95, 0.95, 0.5, 20, 1, true), M.hullD, fx, 0.45, 0, bank);
+      const hub = add(new THREE.CylinderGeometry(0.2, 0.2, 0.4, 10), M.hull, fx, 0.45, 0, bank);
+      for (let b = 0; b < 5; b++) { const bl = add(new THREE.BoxGeometry(0.8, 0.04, 0.22), M.hull, fx, 0.45, 0, bank); bl.rotation.y = b * Math.PI * 2 / 5; bl.translateX(0.45); }
+    }
+  }
+  for (const x of [CX - 3.0, CX + 3.0]) for (const z of [-5.4, 5.4]) add(new THREE.BoxGeometry(0.35, 4.0, 0.35), M.hullD, x, 2.8, z, E);
+  add(new THREE.BoxGeometry(6.6, 0.3, 0.6), M.hullD, CX, 7.0, 0, E);
+  pipe([-3.3, 2.0, -0.4], [CX + 2.6, 3.0, -0.8], 0.3); pipe([-3.3, 2.0, 0.4], [CX + 2.6, 3.0, 0.8], 0.3);
+  // control module with life support (as the EMPU cabin: a pressurised faceted body, small faceted glazing), front left, raised for view
+  const cab = new THREE.Group(); cab.position.set(6.3, 1.0, -3.4); E.add(cab);
+  add(new THREE.BoxGeometry(3.2, 1.2, 3.2), M.hullD, 0, 0.6, 0, cab);                                           // pedestal with the LSS racks
+  chamferBox(3.6, 2.4, 4.6, 0.7, M.hull, 0, 1.2, 0, cab);
+  for (const z of [-1.4, -0.47, 0.47, 1.4]) add(new THREE.BoxGeometry(0.05, 0.55, 0.8), M.glass, 1.83, 2.75, z, cab, false);
+  add(new THREE.BoxGeometry(0.9, 1.7, 0.06), M.hullD, -0.6, 2.15, 2.33, cab, false);                            // hatch
+  add(new THREE.BoxGeometry(2.4, 0.08, 1.6), M.cool, -0.2, 3.65, 0, cab);                                        // LSS radiator
+  // floodlights and beacons
+  flood(8.0, 12.0, -5.4, 40, -2.85, -6, E);
+  flood(8.0, 12.0, 5.4, 40, -2.85, 6, E);
+  flood(-8.0, 11.0, 5.6, -30, -2.85, 14, E);
+  for (const p of [[CX, 7.4, 0], [6.3, 5.0, -3.4]]) {
+    const b = add(new THREE.SphereGeometry(0.25, 10, 8), M.beacon, p[0], p[1], p[2], E, false);
+    const pl = new THREE.PointLight(0xff2020, 1.2, 22, 2); pl.position.set(p[0], p[1], p[2]); E.add(pl); beacons.push([b, pl]);
+  }
+  // hydraulic trunk lines from the pump skid forward to the trap platforms
+  for (const z of [-0.5, 0.5]) { const h = add(new THREE.CylinderGeometry(0.22, 0.22, 14.2, 10), M.pipe, 8.5 + 7.1, -1.2, z, E); h.rotation.z = Math.PI / 2; }
+
+  // module front lights
+  const sl2 = new THREE.SpotLight(0xfff0d8, 2.5, 120, 0.45, 0.6, 1.4); sl2.position.set(17.5, 3.0, 0); scene.add(sl2);
+  const t2 = new THREE.Object3D(); t2.position.set(60, 0, 0); scene.add(t2); sl2.target = t2;
+
+  // ---------- a person for scale (1.74 m) ----------
+  const man = new THREE.Group(); man.position.set(TX + 15.5, 0, 8.4); scene.add(man);
+  add(new THREE.CylinderGeometry(0.17, 0.2, 0.85, 10), M.man, 0, 0.43, 0, man);
+  add(new THREE.CylinderGeometry(0.22, 0.2, 0.62, 10), M.man, 0, 1.16, 0, man);
+  add(new THREE.SphereGeometry(0.13, 12, 10), M.man, 0, 1.6, 0, man);
+
+  // ---------- the Tantra overhead (reference): hull bottom 16.7 m, blade-leg feet, front foot ----------
+  const tantra = new THREE.Group(); scene.add(tantra);
+  const hull = add(new THREE.CylinderGeometry(13.3, 13.3, 90, 10, 1), M.ship, 7.5, 16.7 + 13.3, 0, tantra);
+  hull.rotation.z = Math.PI / 2;
+  for (const sz of [-1, 1]) {
+    const f = add(new THREE.CylinderGeometry(12.2, 12.2, 0.7, 24), M.foot, -8.3, 0.35, sz * 19, tantra);
+    add(new THREE.ConeGeometry(12.2, 4.2, 24, 1, true), M.foot, -8.3, 2.8, sz * 19, tantra);
+    add(new THREE.CylinderGeometry(1.6, 2.2, 18, 8), M.foot, -8.3, 13.5, sz * 19, tantra);
+  }
+  add(new THREE.CylinderGeometry(6.35, 6.35, 0.6, 20), M.foot, 41.2, 0.3, 0, tantra);
+  add(new THREE.ConeGeometry(6.35, 3.0, 20, 1, true), M.foot, 41.2, 2.0, 0, tantra);
+  add(new THREE.CylinderGeometry(1.1, 1.5, 15, 8), M.foot, 41.2, 10.5, 0, tantra);
+
+  // ---------- light: dark planet (no sun), faint sky, the vehicle's own floods ----------
+  scene.add(new THREE.HemisphereLight(0x3a4250, 0x0d0b09, 0.28));
+  const rim = new THREE.DirectionalLight(0x8090ad, 0.55); rim.position.set(-60, 40, -80); scene.add(rim);
+
+  // ---------- UI ----------
+  const bT = document.getElementById("bTantra"), bR = document.getElementById("bRot");
+  bT.onclick = () => { tantra.visible = !tantra.visible; bT.classList.toggle("on", tantra.visible); };
+  document.getElementById("bLow").onclick = () => view([-88, 5.5, 30], [-22, 7, 0]);
+  document.getElementById("bSide").onclick = () => { tantra.visible = false; bT.classList.remove("on"); view([-14, 16, 105], [-14, 4, 0]); };
+  document.getElementById("bEng").onclick = () => view([-22, 9.5, 17], [-40, 4.5, 0]);
+  document.getElementById("bTop").onclick = () => view([-12, 120, 0.1], [-12, 0, 0]);
+  let orbit = false; bR.onclick = () => { orbit = !orbit; bR.classList.toggle("on", orbit); };
+  window.addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+  let t = 0;
+  (function loop() {
+    t += 0.016;
+    const on = (Math.floor(t * 1.6) % 2) === 0;
+    for (const [b, pl] of beacons) { b.visible = on; pl.intensity = on ? 1.4 : 0.0; }
+    if (orbit) { const a = t * 0.08; camera.position.set(-12 + 70 * Math.cos(a), 14, 70 * Math.sin(a)); controls.target.set(-12, 6, 0); }
+    controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop);
+  })();
+})();
+</script>
+</body>
+</html>

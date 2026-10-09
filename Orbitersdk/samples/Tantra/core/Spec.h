@@ -48,6 +48,10 @@ constexpr double kAnaFocusS = -2.0;
 // (2026-10-09) the stern blocks are dual-mode: on the ion charges in the air (the plant's cascade fusion in the cup, its field
 // cap at 12.1 T x pi 3.0^2 = 1.65 GN a block), on the anamezon above. The cup area over the marching cup's:
 constexpr double kSternPlanAreaRatio = (3.0 * 3.0) / (2.2 * 2.2);
+// (2026-10-09, variant Б: 276 kt; the user: the central marching cup removed) the stern blocks are the planetary main engine:
+// the charges at 15 T in their own chamber coils (the anamezon coils, under their ~16 T quench): 2.53 GN a block, with the pods
+// 10.8 GN - T/W 1.60, 1.22 with a block out
+constexpr double kSternPlanTesla = 15.0;
 constexpr int kRetroCount = 2;                  // nose retro anamezon cups (MeshLayout kNoseCup*), jets forward
 constexpr double kRetroAreaFrac = 0.54;         // (2.2 / 3.0)^2 of a stern cup
 // Marching planetary cup (MeshLayout kMarch*): one cup R 2.2 in the central well, 12.1 T, run out past the rims to
@@ -97,21 +101,43 @@ constexpr double kWarpFreeze = 10.0;                   // s: the slow zero follo
 constexpr double kWindMean = 12.0, kGustSigma = 5.0, kGustTau = 4.0;  // m/s, m/s, s (own model)
 constexpr double kSideCd = 0.8, kSideArea = 2600.0;                    // m^2, lying or standing
 
-// Leg ratings (DESIGN_LOCAL «Ноги Т8 - окончательно», «Передняя нога-кенгуру»): CNT composite, safety 1.5 on everything.
-constexpr double kCntE = 0.6e12, kCntSigma = 1.0e9, kSafety = 1.5;
+// Leg ratings (DESIGN_LOCAL «Ноги Т8 - окончательно», «Передняя нога-кенгуру»): safety 1.5 on everything.
+constexpr double kCntE = 0.6e12, kCntSigma = 1.0e9, kSafety = 1.5;   // CNT composite (the struts, the guys)
+// (2026-10-09, the full ship) the stages' walls are boron-nitride ceramic («боразон», canon; PCBN lower bounds: compression
+// 3 GPa, E 0.65 TPa, 3.45 t/m3) - the same envelopes, thinner walls; MR physics carries the rest:
+//   * the blades are guyed at mid-length to the rims of their own feet (CNT cables D 0.66 m on MR winches): the weak axis
+//     buckles in two halves - effective length x kGuyK;
+//   * the stern legs and the front support stand with MR-locked ends (hinge / knee and ankle braked, the foot's root
+//     sintered): x kLockK; landing (free ankles) they are pinned columns - kLandMass;
+//   * the blade hips ride 20 T magnetic bearings 32 m^2 (Legs.h): the full load without the catchers.
+constexpr double kLegE = 0.65e12, kLegSigma = 3.0e9;
+constexpr double kGuyK = 0.5, kLockK = 0.5;
+// (2026-10-09, the user: «усиль без переработки» - a careful landing of the full ship) the stern legs land with their hull
+// hinges MR-braked (as standing) and the ankles free: fixed-pinned columns x kLandLockK (Pcr 1.65 GN, was pinned 0.81) until
+// the roots sinter (x kLockK). The MR struts add over the weight only what the columns take x kSafety (Tantra::UpdateGear):
+// the full 280 kt on a 1 g planet lands at <= 3.3 m/s with +0.54 g (f 1.54), on dense ground only (loose sand f 0.30).
+constexpr double kLandLockK = 0.7;
+// (2026-10-09) the stern blocks' magnetic jet deflection (an asymmetric nozzle field, no moving parts), as the march cup's
+// TVC the autopilots were built for (TantraGuidance kTvcM)
+constexpr double kSternTvcDeg = 10.0;
 // Telescopes as STEPPED columns (FE Euler, pinned ends): I = the uniform column with the same critical force at the
 // reference length, A = the smallest section (strength).
-constexpr double kBladeA = 1.86, kBladeI = 1.433;          // 6 stages 6.7x2.8 .. 5.2x1.3, walls 0.15 (Pcr 1346 MN at 79.4 m)
-constexpr double kSternShinA = 1.052, kSternShinI = 0.744; // 5 sections 3.0x2.5 .. 1.97x1.64, walls 0.16 (Pcr 857 MN at 71.7 m)
-constexpr double kSternLegL = 71.7;                       // hinge -> ankle, standing (2026-10-09: hinge at s 49.6)
-constexpr double kKangShinA = 0.245, kKangShinI = 0.129;  // shin 9 sections 2.2 .. 1.08, walls 0.06 (Pcr 175 MN at 66 m)
-// Design case of every support (2026-10-02): launch mass on a 2.5 g planet, load x kSafety within the strength and
-// the buckling force; the stern legs land with the MR struts adding up to kStrutExtraG over the weight.
-constexpr double kDesignG = 2.5, kLaunchMass = 54.2e6, kStrutExtraG = 1.5;   // the supports AS BUILT (4 x 9.37 kt, morning 2026-10-09)
-// (2026-10-09, canon) the full ship: 217.3 kt (4 x 45.2 kt anamezon, 4 x 641 t traps, 23.9 kt charges, 4 kt iron) + up to
-// 13 kt for the heavy rovers (Transport) = the design mass of the supports' redesign (Tantra_Design/DESIGN_LOCAL.md). Until it
-// is in the mesh the legs' sensors read over their rating above kLaunchMass at 2.5 g.
-constexpr double kFullMass = 230.0e6;
+constexpr double kBladeA = 1.718, kBladeI = 1.339;          // 6 stages 6.7x2.8 .. 5.2x1.3, BN walls 0.138 (Pcr 1.45 GN at 79.4 m)
+constexpr double kBladeIStrong = 8.49;                      // the same about the strong axis (along the hull)
+constexpr double kSternShinA = 0.895, kSternShinI = 0.648;  // 5 sections 3.0x2.5 .. 1.97x1.64, BN walls 0.134 (Pcr 0.81 GN)
+constexpr double kSternLegL = 71.7;                        // hinge -> ankle, standing (2026-10-09: hinge at s 49.6)
+constexpr double kKangShinA = 0.279, kKangShinI = 0.145;    // shin 9 sections 2.2 .. 1.08, BN walls 0.069 (Pcr 0.21 GN)
+// MR-locked ankle on a sintered root: the foot's rocking stiffness on dense ground (8 G R^3 / 3(1-nu), G 100 MPa, R 12.2);
+// the trunnion held by the hip motor-generators (magnetic, position hold) - the columns stand fore-aft at the full mass.
+constexpr double kAnchorKa = 6.9e11, kTrunnionHoldK = 4.0e11;   // N m/rad
+// Design cases (2026-10-09): the full ship kFullMass on a 2.5 g planet - lying, the turn on the blades, standing - with the
+// guys and the locks; landing kLandMass with free ankles and the MR struts adding up to kStrutExtraG over the weight.
+constexpr double kDesignG = 2.5, kStrutExtraG = 1.5;
+constexpr double kLandMass = 52.0e6;                      // touchdown rating: stern legs, cup feet on loose sand (arrival ~45 kt)
+constexpr double kLaunchMass = kLandMass;                 // (old name: the touchdown cases)
+// (2026-10-09, canon, variant Б of the user) the full ship 276 kt (4 x 57.6 kt anamezon, 4 x 817 t traps, 30.3 kt charges,
+// 4 kt iron, dry 7.88 kt with these supports) + 3.6 kt of the transport kit if it flies = the supports' design mass.
+constexpr double kFullMass = 280.0e6;
 constexpr double kBladeColumnL = 79.4, kKangColumnL = 66.0;   // standing / lifted column lengths [m]
 // Cup feet («чаша опоры», mesh: tools/gen_mesh.py FOOT_KINDS): R for loose sand at touchdown (2.5 g x1.5, 0.9 m skirt),
 // 12 box ribs 0.5 x depth (walls 60 mm), two struts per rib (0.5 L and the tip) from a mast on the hub, CNT canopy.
@@ -131,12 +157,15 @@ constexpr double kFootStrutDStern = 0.58, kFootStrutDBlade = 0.69, kFootStrutDKa
 // Launch 54.2 kt (4 x 9.37 kt) at s 67.3; on a planet with iron and argon 16.7 kt at s 60.4; iron spent, argon full
 // 12.7 kt at s 65.9; argon down to 3 kt s 61.1; empty 6.5 kt at s 67.3 - every state inside the trunnion track
 // (53.4..71.6, >= 4 m to spare) and in the blades' reach (stand at the nominal height, marching cup lip 16 m up).
-constexpr double kDryCGS = 67.1, kTrapCGS = 70.3, kIronCGS = 43.0, kArgonBodyCGS = 60.8, kArgonInsertCGS = 92.5;
+// (2026-10-09, variant Б) dry 7 880 t: + the supports for the full ship (blades 1 014 -> 2 012 t at s 64, stern legs
+// 760 -> 1 372 t at s 37, front support 80 -> 198 t at s 95, guys 110 t, MR locks and 20 T hip drums ~50 t) - CG s 64.7.
+constexpr double kDryCGS = 64.7, kTrapCGS = 70.3, kIronCGS = 43.0, kArgonBodyCGS = 60.8, kArgonInsertCGS = 92.5;
 constexpr double kArgonAftCGS = 34.0;
-// (2026-10-09) the ion charges are dense now (23.9 kt): body tanks 15.4 kt, aft tank 8.5 kt; the insert holds none (it
-// is free for the heavy rover's modules - Transport). Drain order unchanged: (insert,) body, aft last.
-constexpr double kArgonBodyShare = 0.644;       // of the charges: body tanks (15.4 of 23.9 kt)
-constexpr double kArgonAftShare = 0.356;        // aft tank (8.5 of 23.9 kt); the insert 0
+// (2026-10-09) the ion charges are dense now (30.3 kt): body tanks 19.5 kt, aft tank 10.8 kt; the insert holds none (it
+// is free for the transport kit - Transport). The AFT tank drains first now: with empty traps and full charges the CG is
+// s 54.2, the body tanks hold it inside the trunnion track as the charges go.
+constexpr double kArgonBodyShare = 0.644;       // of the charges: body tanks
+constexpr double kArgonAftShare = 0.356;        // aft tank; the insert 0
 
 // Attitude micro-motor blocks.
 constexpr double kAttNoseS = 164.0, kAttNoseR = 6.0;

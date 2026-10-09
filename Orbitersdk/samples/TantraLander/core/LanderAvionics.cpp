@@ -75,7 +75,7 @@ void Avionics::Hover(const AvIn& in, AvOut& out, bool land) {
     if (active == kMech) {
         for (int i = kMarch; i < kUnits; ++i) {
             if (shed[i] || P.u[i].broken) continue;
-            out.thr[i] = std::clamp(in.p.collective + 0.2 * (in.p.roll * P.u[i].x / kLiftX + in.p.pitch * P.u[i].z / 1.5), 0.0, 1.0);
+            out.thr[i] = std::clamp(in.p.collective + 0.2 * (in.p.roll * P.u[i].x / kLiftX + in.p.pitch * P.u[i].z / kLiftZ[2]), 0.0, 1.0);
         }
         decision = "ручное: рычаг общего шага, гидравлическая блокировка пар";
         return;
@@ -104,7 +104,9 @@ void Avionics::Hover(const AvIn& in, AvOut& out, bool land) {
         return;
     }
     // roll and pitch: F_i = each + a·x_i + b·z_i with Σ F x = τroll, Σ F z = τpitch (the set is centrally symmetric: Σx = Σz = 0)
-    const double tr = -f.Ixx * gain * (4.0 * f.roll + 4.0 * f.rollRate);
+    // ЦМ не на центре рядов (перекачка не довозит: конец висения, отказ бака) - ряды делят тягу так, чтобы равнодействующая
+    // шла через ЦМ (Σ F x = Fz·Δx); обратная связь по углам - поверх
+    const double tr = -f.Ixx * gain * (4.0 * f.roll + 4.0 * f.rollRate) + Fz * (P.XCg() - kXcgHover);
     const double tp = -f.Izz * gain * (4.0 * f.pitch + 4.0 * f.pitchRate);
     double sxx = 0, sxz = 0, szz = 0;
     for (int k = 0; k < n; ++k) { const Unit& u = P.u[idx[k]]; sxx += u.x * u.x; sxz += u.x * u.z; szz += u.z * u.z; }
@@ -155,8 +157,8 @@ void Avionics::Step(const AvIn& in, AvOut& out) {
     }
     case kFlight: {
         // the marches; the axis held by the УВТ: a march out - the other one turns its jet through the CM if the angle
-        // atan(x/arm) is within ±15°. Т1Б-А: x 1,8 m (geometry.thrusters), arm from the УВТ pivot −8,0 to the CG ~5,3–5,8 m:
-        // 17–19° > 15° - one march cannot hold the axis; the automat keeps the good one at idle until the other restarts
+        // atan(x/arm) is within ±15°. 25,4 м: x 2,31 m, arm from the УВТ pivot −10,28 to the CG ~7,0–7,7 m:
+        // 17–18° > 15° - one march cannot hold the axis; the automat keeps the good one at idle until the other restarts
         double F[2], sum = 0;
         const double lat = Latency();
         const bool out0 = Failed(P.u[0]), out1 = Failed(P.u[1]);
@@ -178,36 +180,40 @@ void Avionics::Step(const AvIn& in, AvOut& out) {
         s = std::clamp(s, -std::sin(kTvcMax * kPi / 180.0), std::sin(kTvcMax * kPi / 180.0));
         const double d = std::asin(s) * 180.0 / kPi;
         for (int i = 0; i < kMarch; ++i) { out.tvcY[i] = d; out.tvcP[i] = automat ? -std::clamp(57.3 * (1.0 * f.pitch + 1.0 * f.pitchRate), -kTvcMax, kTvcMax) : in.p.pitch * kTvcMax; }
+        // the afterburner: both marches together (one alone turns the ship), never near «Тантра»
+        const bool abNear = in.p.afterburner && f.shipDist < kAfterSafeDist;
+        for (int i = 0; i < kMarch; ++i) out.em[i] = in.p.afterburner && !abNear && in.p.march > 0.05;
         if (marchOutT_ > lat) decision = marchOutT_ < 10.0 ? (oneHolds ? "маршевый отказал: второй держит ось через УВТ, перезапуск"
                                                                        : "маршевый отказал: УВТ 15° не проводит струю второго через ЦМ, второй на малом газе до перезапуска")
                                        : f.h < 40e3 || !oneHolds ? "маршевый не перезапустился: возврат планированием" : "после 40 км: продолжение на одном маршевом";
-        else decision = "полёт";
+        else decision = abNear ? "форсаж запрещён: рядом «Тантра» (струя)" : (out.em[0] ? "полёт на форсаже" : "полёт");
         break;
     }
     case kEntry:
-        // Т1Б-А: the glide with the nose tank full (ЦМ −2,19), the flap 15°, the elevons 0 - the trim α 42,3° (balance)
+        // 25,4 м: the glide with all the entry argon in the nose tank (ЦМ −2,51), the flap 15°, the elevons 0 - the trim α 32,8°
         out.flap = kGlideFlap;
-        out.elevon = automat ? std::clamp(-57.3 * (2.0 * (f.alpha - kGlideAlpha * kPi / 180.0) + 1.0 * f.alphaRate), -25.0, 25.0) : in.p.pitch * 25.0;
-        decision = P.XCg() < kXBallNeedE0 ? "вход: ЦМ позади, перекачка в носовой не завершена" : "планирующий вход, щиток 15°, α 42°";
+        // the elevon sign as the mesh and the Newton tables have it: negative - the trailing edge up, nose up (−25° trims higher α)
+        out.elevon = automat ? std::clamp(57.3 * (2.0 * (f.alpha - kGlideAlpha * kPi / 180.0) + 1.0 * f.alphaRate), -25.0, 25.0) : -in.p.pitch * 25.0;
+        decision = P.XCg() < kXBallNeedE0 ? "вход: ЦМ позади, перекачка в носовой не завершена" : "планирующий вход, щиток 15°, атака 33°";
         break;
     case kBallistic: {
-        // Т1Б-А (balance_A): no trim at α 90°; with the entry argon in the nose tank (ЦМ ≥ −2,47) the elevons −25° trim the
-        // belly at α 63,8°; all of it in the aft tank (ЦМ −2,62) - no stable trim at any elevon
+        // 25,4 м (balance): no trim at α 90°; with the entry argon in the nose tank (ЦМ −2,51) the elevons −25° trim the
+        // belly at α 58,3°; all of it in the aft tank (ЦМ −2,94) still trims (α 87°); aft of −2,97 - no stable trim at −25°
         const double trim = kBallAlphaE25 * kPi / 180.0;
         const double err = f.alpha - trim;
         const bool balanced = P.XCg() >= kXBallNeedE25;
-        out.elevon = automat ? std::clamp(kBallElevon - 57.3 * (2.0 * err + 1.5 * f.alphaRate), -25.0, 25.0) : kBallElevon + in.p.pitch * 25.0;
+        out.elevon = automat ? std::clamp(kBallElevon + 57.3 * (2.0 * err + 1.5 * f.alphaRate), -25.0, 25.0) : kBallElevon - in.p.pitch * 25.0;
         const bool noseFirst = std::fabs(err) > 45.0 * kPi / 180.0;
         out.noseValve = in.p.nose || (automat && noseFirst);
-        decision = out.noseValve ? (in.p.nose ? "вдув в нос по команде" : "идёт носом: вдув аргона в нос, элевоны на возврат к α 64°")
-                 : !balanced ? "ЦМ позади −2,47 м: устойчивой балансировки нет - аргон в носовой бак"
-                             : "баллистический спуск днищем, α 64°, элевоны −25°";
+        decision = out.noseValve ? (in.p.nose ? "вдув в нос по команде" : "идёт носом: вдув аргона в нос, элевоны на возврат к атака 58°")
+                 : !balanced ? "ЦМ позади -2,97 м: устойчивой балансировки нет - аргон в носовой бак"
+                             : "баллистический спуск днищем, атака 58°, элевоны -25°";
         break;
     }
     case kRunway:
         out.flap = kRunwayFlap;
-        out.elevon = automat ? std::clamp(-57.3 * (1.0 * f.pitch + 1.0 * f.pitchRate), -25.0, 25.0) : in.p.pitch * 25.0;
-        decision = automat ? "автомат посадки на полосу: глиссада α 18°, ~100 м/с без тяги, щиток 10°" : "посадка на полосу вручную";
+        out.elevon = automat ? std::clamp(57.3 * (1.0 * f.pitch + 1.0 * f.pitchRate), -25.0, 25.0) : -in.p.pitch * 25.0;
+        decision = automat ? "автомат посадки на полосу: глиссада атака 18°, ~105 м/с без тяги, щиток 10°" : "посадка на полосу вручную";
         break;
     case kDock:
         Hover(in, out, false);

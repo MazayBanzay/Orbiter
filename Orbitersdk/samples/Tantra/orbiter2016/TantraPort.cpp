@@ -49,7 +49,8 @@ void Tantra::DefinePort() {
 // on the floor platform and beside it. A child vessel attaches with the ID "TLANDER" or "TMPU". MPU 1 and 2 ride the
 // platform down to the ground (Shift+O); MPU 3 waits beside it for the second run.
 void Tantra::DefineHangar() {
-    hangarAtt_[0] = CreateAttachment(false, _V(0, m::kCradleTopY, Zf(m::kHangarMidS)), _V(0, 1, 0), _V(0, 0, 1), "TLANDER");
+    // (2026-10-09) «Грань»: its mesh origin (TLANDER) at s 106.41, its bottom on the deck; the maglev lift moves the point
+    hangarAtt_[0] = CreateAttachment(false, _V(0, m::kCradleTopY + m::kLanderOriginUp, Zf(m::kLanderS)), _V(0, 1, 0), _V(0, 0, 1), "TLANDER");
     for (int i = 0; i < 3; ++i)
         hangarAtt_[1 + i] = CreateAttachment(false, _V(m::kMpuX[i], m::kHangarDeckY, Zf(m::kHangarMidS)), _V(0, 1, 0), _V(0, 0, 1), "TMPU");
     hangarAttRov_ = -1.0;
@@ -62,6 +63,90 @@ void Tantra::UpdateHangarAttach() {
     const double y = m::kHangarDeckY + rovers_ * m::kRoverDrop;
     for (int i = 0; i < 2; ++i)
         if (hangarAtt_[1 + i]) SetAttachmentParams(hangarAtt_[1 + i], _V(m::kMpuX[i], y, Zf(m::kHangarMidS)), _V(0, 1, 0), _V(0, 0, 1));
+}
+
+// (2026-10-09) The lander's maglev lift (tantra-maglev-launch): the round superconducting blocks in the deck and the aft bulkhead
+// act on the lander's own coils (its 6 lift cups below, its 2 marching cups behind). 0..1: up 13 m over the skin; 1..2: it turns
+// about its stern to the 70 deg stele (nose up, forward); the throw runs along the stele axis. Back: a lander that comes into the
+// field at the stele (2 m, 0.6 m/s) is taken and can be lowered.
+namespace {
+const double kLiftRise = 1.0 / 13.0, kLiftTurn = 1.0 / 14.0;   // per second: 1 m/s up, 5 deg/s over
+}
+
+void Tantra::UpdateLanderLift(double dt) {
+    if (!hangarAtt_[0]) return;
+    const double t = hangar_ >= 0.99 ? landerLiftT_ : 0.0;              // the doors shut: it stays (or goes) down
+    const double rate = (landerLift_ < 1.0 || (landerLift_ == 1.0 && t < 1.0)) ? kLiftRise : kLiftTurn;
+    landerLift_ = StepTo(landerLift_, t, rate * dt);
+    const double r = (std::min)(1.0, landerLift_) * m::kLanderRise;
+    const double th = (std::max)(0.0, landerLift_ - 1.0) * m::kLanderSteleDeg * RAD;
+    const double c = std::cos(th), s = std::sin(th);
+    const double oy = m::kLanderOriginUp, oz = m::kLanderS - m::kLanderSternS;   // the origin from the pivot (the stern on the deck)
+    const VECTOR3 pv = _V(0, m::kCradleTopY + r, Zf(m::kLanderSternS));
+    SetAttachmentParams(hangarAtt_[0], pv + _V(0, oy * c + oz * s, -oy * s + oz * c), _V(0, c, -s), _V(0, s, c));
+    // taking it back at the stele
+    if (landerLift_ >= 2.0 - 1e-6 && !GetAttachmentStatus(hangarAtt_[0])) {
+        VECTOR3 ap, ad, ar;
+        GetAttachmentParams(hangarAtt_[0], ap, ad, ar);
+        for (DWORD i = 0; i < oapiGetVesselCount(); ++i) {
+            OBJHANDLE h = oapiGetVesselByIndex(i);
+            VESSEL* v = oapiGetVesselInterface(h);
+            if (!v || h == GetHandle()) continue;
+            for (DWORD k = 0; k < v->AttachmentCount(true); ++k) {
+                ATTACHMENTHANDLE a = v->GetAttachmentHandle(true, k);
+                if (_stricmp(v->GetAttachmentId(a), "TLANDER") != 0 || v->GetAttachmentStatus(a)) continue;
+                VECTOR3 cp, cd, cr, g, loc, vr;
+                v->GetAttachmentParams(a, cp, cd, cr);
+                v->Local2Global(cp, g);
+                Global2Local(g, loc);
+                v->GetRelativeVel(GetHandle(), vr);
+                if (length(loc - ap) < 2.0 && length(vr) < 0.6 && AttachChild(h, hangarAtt_[0], a))
+                    Message("«Грань» в поле подъёмника - захвачена на стеле", "«Грань» in the lift's field - taken at the stele");
+            }
+        }
+    }
+}
+
+void Tantra::ActLanderLift() {
+    if (hangar_ < 0.99) { Message("Подъёмник «Грани»: сначала открыть ангар", "Lander lift: open the hangar first"); return; }
+    landerLiftT_ = landerLiftT_ > 1.0 ? 0.0 : 2.0;
+    Message(landerLiftT_ > 1.0 ? "Подъёмник: «Грань» вверх и на стелу 70°" : "Подъёмник: «Грань» на палубу",
+            landerLiftT_ > 1.0 ? "Lift: the lander up to the 70 deg stele" : "Lift: the lander down to the deck");
+}
+
+void Tantra::ActLanderLaunch(bool emergency) {
+    OBJHANDLE ch = hangarAtt_[0] ? GetAttachmentStatus(hangarAtt_[0]) : nullptr;
+    if (!ch) { Message("На подъёмнике нет «Грани»", "No lander on the lift"); return; }
+    if (landerLift_ < 2.0 - 1e-6) { Message("Выброс только со стелы (ГРАНЬ - вверх)", "Throw from the stele only (lift it up)"); return; }
+    const double now = oapiGetSysTime();
+    const bool air = GetAtmDensity() > 1e-5;
+    if (emergency && now - launchArm_ > 3.0) {   // the emergency throw: armed by the first press, the second within 3 s throws
+        launchArm_ = now;
+        Message("АВАРИЙНЫЙ ВЫБРОС: подтвердите в течение 3 с", "EMERGENCY THROW: confirm within 3 s");
+        return;
+    }
+    launchArm_ = -99.0;
+    const double strokeA = (emergency ? prm_.landerEmergencyG : prm_.landerG) * tantra::G0;
+    const double v = air || emergency ? std::sqrt(2.0 * strokeA * m::kLanderRise) : prm_.landerSpaceV;
+    VECTOR3 ap, ad, ar, axis;
+    GetAttachmentParams(hangarAtt_[0], ap, ad, ar);                    // ar: the lander's forward = the stele axis
+    GlobalRot(ar, axis);
+    DetachChild(hangarAtt_[0], 0.0);
+    VESSEL* lv = oapiGetVesselInterface(ch);
+    if (lv) {
+        VESSELSTATUS2 vs;
+        std::memset(&vs, 0, sizeof vs);
+        vs.version = 2;
+        lv->GetStatusEx(&vs);
+        vs.status = 0;
+        vs.flag = 0;
+        vs.nfuel = 0; vs.fuel = nullptr; vs.nthruster = 0; vs.thruster = nullptr; vs.ndockinfo = 0; vs.dockinfo = nullptr;
+        vs.rvel += axis * v;
+        lv->DefSetStateEx(&vs);
+    }
+    if (emergency) Message("АВАРИЙНЫЙ ВЫБРОС «Грани»: %.0f g, %.0f м/с по оси стелы", "EMERGENCY lander throw: %.0f g, %.0f m/s along the stele",
+                           prm_.landerEmergencyG, v);
+    else Message("Выброс «Грани»: %.1f м/с по оси стелы", "Lander throw: %.1f m/s along the stele", v);
 }
 
 void Tantra::UpdateEmptyMass() {

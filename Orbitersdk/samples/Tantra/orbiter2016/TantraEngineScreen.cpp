@@ -223,14 +223,13 @@ void Screen::Scale(Pad& g, const ScaleDef& o) {
         g.AddHit(d);
     }
 }
-// the bottom row, under the hand: ОТСЕЧКА, ОБХОД БЛОК. (two presses), ПРЕДЕЛ g, КОРМА (the stern blocks on the charges)
+// the bottom row, under the hand: ОТСЕЧКА, ОБХОД БЛОК. (two presses), ПРЕДЕЛ g
 void Screen::KeyRow2(Pad& g, const View& v, double x, double w) {
-    const double kw = std::floor((w - 30) / 4 / 10) * 10, y = kLY1 - 8 - 48;
+    const double kw = std::floor((w - 20) / 3 / 10) * 10, y = kLY1 - 8 - 48;
     g.Key(x, y, kw, 48, L"ОТСЕЧКА", kKeyWarn, kCmdCut);
     g.Key(x + kw + 10, y, kw, 48, v.bypass ? L"БЛОК. СНЯТЫ" : v.bypassArmed ? L"ПОДТВЕРДИТЬ" : L"ОБХОД БЛОК.",
           v.bypass ? kKeyWarnOn : v.bypassArmed ? (v.blink ? kKeyWarnOn : kKeyWarn) : kKeyOff, kCmdBypass);
     g.Key(x + 2 * (kw + 10), y, kw, 48, v.gLimOn ? L"ПРЕДЕЛ g ВКЛ" : L"ПРЕДЕЛ g ВЫКЛ", v.gLimOn ? kKeyOn : kKeyOff, kCmdGLimOnOff);
-    g.Key(x + 3 * (kw + 10), y, kw, 48, v.sternPlan ? L"КОРМА НА ЗАРЯДАХ" : L"КОРМА: ЗАРЯДЫ", v.sternPlan ? kKeyOn : kKeyOff, kCmdSternPlan);
 }
 
 // ================= the page =================

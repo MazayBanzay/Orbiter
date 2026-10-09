@@ -489,9 +489,9 @@ void Screen::DrawTop(oapi::Sketchpad* skp, ScreenFont& font, int ox, int oy, int
         Key(g, hitsTop_, L"СТОЛ СТОП", X(4), ky2, kw, 56, v.portStep != 0 ? kOff : kNa, kCmdTableStop, kYe, L"держать");
         // the stern's cups: indicators only (the engines' pages drive them)
         struct It { const wchar_t* n; std::wstring v; bool lamp; };
-        const It items[3] = {{L"чаши анамезона", v.irisAna > 0.5 ? L"ОТКРЫТЫ" : L"закрыты", v.irisAna < 0.5},
+        const It items[3] = {{L"кормовые чаши", v.irisAna > 0.5 ? L"ОТКРЫТЫ" : L"закрыты", v.irisAna < 0.5},
                              {L"ретро-чаши носа", v.irisNose > 0.5 ? L"ОТКРЫТЫ" : L"закрыты", v.irisNose < 0.5},
-                             {L"маршевая", v.marchOut > 0.5 ? L"ВЫДВИНУТА" : L"в колодце", true}};
+                             {L"центр кормы", L"магн. система", true}};   // (2026-10-09) the central cup is gone
         for (int i = 0; i < 3; ++i) {
             const double y = 646 + i * 32, x = 516, xr = 728;
             LampM(g, x + 7, y - Cap(17) / 2, items[i].lamp);
@@ -593,8 +593,13 @@ void Screen::DrawPult(oapi::Sketchpad* skp, ScreenFont& font, int ox, int oy, in
     Btn(g, hitsPult_, L"АНГАР", 1090, r1, 155, rh, v.hangarT > 0.5, kCmdHangar, cOr, v.hangar > 0.99 ? L"открыт" : v.hangar < 0.01 ? L"закрыт" : L"…");
     Btn(g, hitsPult_, L"ПОРТ", 1253, r1, 155, rh, v.port, kCmdPort, cOr, v.port ? L"на столе" : L"грунт");
     Btn(g, hitsPult_, L"ШЛЮЗ", 1416, r1, 155, rh, v.airlock, kCmdAirlock, cOr, v.airlock ? L"открыт" : L"закрыт");
-    Btn(g, hitsPult_, L"СТОЛ ВВЕРХ", 1090, r2, 236, rh, v.portStep != 0, kCmdTableUp, cOr, L"к погрузке и обратно");
-    Btn(g, hitsPult_, L"СТОЛ СТОП", 1335, r2, 236, rh, false, kCmdTableStop, cYe, L"держать");
+    // (2026-10-09) the table keys share the row with the lander's maglev lift: ГРАНЬ (up to the stele / down), ВЫБРОС, АВАР.
+    Btn(g, hitsPult_, L"СТОЛ ВВЕРХ", 1090, r2, 90, rh, v.portStep != 0, kCmdTableUp, cOr, L"погрузка");
+    Btn(g, hitsPult_, L"СТОЛ СТОП", 1190, r2, 90, rh, false, kCmdTableStop, cYe, L"держать");
+    Btn(g, hitsPult_, L"ГРАНЬ", 1290, r2, 90, rh, v.landerLiftT > 1.0, kCmdLanderLift, cOr,
+        v.landerLift >= 1.99 ? L"стела 70°" : v.landerLift <= 0.0 ? L"палуба" : L"…");
+    Btn(g, hitsPult_, L"ВЫБРОС", 1390, r2, 95, rh, false, kCmdLanderGo, cOr, v.landerOn ? L"по оси" : L"нет");
+    Btn(g, hitsPult_, L"АВАР.", 1495, r2, 80, rh, v.launchArmed, kCmdLanderGoEm, cRd, v.launchArmed ? L"ещё раз" : L"8 g");
 }
 
 }  // namespace tantra::mechscreen

@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Инженерная машина и электроплатформы</title>
+<style>
+  html,body{margin:0;height:100%;background:#07080a;color:#cfd6df;font:13px "Segoe UI",Arial;overflow:hidden}
+  #ui{position:absolute;left:12px;top:10px;max-width:470px;background:rgba(12,14,17,.86);border:1px solid #2a2f37;border-radius:6px;padding:10px 12px}
+  #ui h1{font-size:15px;margin:0 0 6px;color:#e6c79a}
+  #ui p{margin:4px 0;line-height:1.4}
+  #ui button{background:#1c2026;color:#cfd6df;border:1px solid #3a414b;border-radius:4px;padding:4px 8px;margin:4px 4px 0 0;cursor:pointer}
+  #ui button.on{border-color:#e6c79a;color:#e6c79a}
+  #hide{position:absolute;right:12px;top:10px;background:#1c2026;color:#cfd6df;border:1px solid #3a414b;border-radius:4px;padding:4px 8px}
+  .n{color:#8a93a0}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>Инженерная машина + 8 электроплатформ под ловушкой</h1>
+  <p>Схема Б из §19–20: ловушку везут 8 платформ, у каждой свой закрытый накопитель в торцевых отсеках корпуса (Li-S эпохи ≈ 10 т на 11 МВт·ч, или ячейка МПУ 3,6 т) и мотор-насос → гидравлика; зарядка у борта «Тантры» от стойки 50 МВт, ≈ 1,2 ч на цикл. Тягача нет. Впереди — одна инженерная машина: в трюме сложена в ячейку 17 × 4 × 2,9 м, на грунте раздвигает колею, опускает отвал, поднимает мачту и манипулятор, укладывает мост 14 м через трещину для себя.</p>
+  <p>Топка машины — бескислородная, кассеты СВС Ti + 2B → TiB₂ по 1 т, 6 + 1 камер в ванне расплава Si (6–7 т), аргон → турбина → насосы. Расход 1,8–2,0 т смеси на МВт·ч на валу (с подогревателем). Выхлопа нет — только тёплый воздух охладителей по бортам.</p>
+  <div><button id="mT">Транспорт (ячейка)</button><button id="mW" class="on">Работа</button><button id="mB">Укладка моста</button><button id="cut">Разрез топки</button></div>
+  <div><button id="cV">Машина</button><button id="cC">Колонна</button><button id="cF">Топка крупно</button><button id="cR">Облёт</button><button id="snd">▶ Звук</button></div>
+  <p class="n">Облик — эскиз. Масса машины (150 или 250 т), её мощность (2 или 4,1 МВт), прочность моста, число кассет в магазине — не посчитаны, показаны условно. Звук: турбина, насосы, охладители, траки; глухой удар — поджиг кассеты (для показа чаще, чем раз в 5 мин).</p>
+</div>
+<button id="hide">скрыть панель</button>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputEncoding = THREE.sRGBEncoding;
+  document.body.appendChild(renderer.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x07080a); scene.fog = new THREE.FogExp2(0x0b0c0f, 0.0055);
+  const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.2, 2000);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  function view(p, t) { camera.position.set(...p); controls.target.set(...t); controls.update(); }
+
+  const std = (c, m, r, extra) => new THREE.MeshStandardMaterial(Object.assign({ color: c, metalness: m, roughness: r }, extra || {}));
+  const M = {
+    hull: std(0x2a2e35, 0.75, 0.42, { flatShading: true }), hullD: std(0x1b1e23, 0.7, 0.5, { flatShading: true }),
+    body: std(0xb9bfc6, 0.35, 0.42), bodyD: std(0x5c636c, 0.5, 0.4), band: std(0x24282e, 0.8, 0.35),
+    orange: std(0xc8622a, 0.25, 0.5), yellow: std(0xc79a22, 0.3, 0.55), track: std(0x121315, 0.5, 0.8), shoe: std(0x24262b, 0.6, 0.6, { flatShading: true }),
+    trap: std(0x2c3b52, 0.85, 0.35, { flatShading: true }), rib: std(0x1a2230, 0.9, 0.3, { flatShading: true }), louver: std(0x1d2420, 0.6, 0.55, { flatShading: true }),
+    batt: std(0x26364a, 0.7, 0.35), glass: std(0x0a0d12, 1.0, 0.06), ground: std(0x131210, 0, 0.97), road: std(0x1b1a17, 0, 0.92), gap: new THREE.MeshBasicMaterial({ color: 0x020202 }),
+    cas: std(0x3a3f47, 0.6, 0.4), casS: std(0x9a9da2, 0.2, 0.8), sic: std(0x4b5a3a, 0.4, 0.6), bath: new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.55 }),
+    glowB: new THREE.MeshBasicMaterial({ color: 0x3fa8ff }), lamp: new THREE.MeshBasicMaterial({ color: 0xfff2d8 }), beacon: new THREE.MeshBasicMaterial({ color: 0xff2020 }), man: std(0xd8dde3, 0, 0.6),
+  };
+  function add(geo, mat, x, y, z, parent, cast = true) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; (parent || scene).add(m); return m; }
+  function profile(pts, width, mat, x, y, z, parent, bevel = 0.1) {          // side profile (x,y) extruded across z
+    const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) s.lineTo(p[0], p[1]); s.lineTo(pts[0][0], pts[0][1]);
+    const g = new THREE.ExtrudeGeometry(s, { depth: width - 2 * bevel, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2 }); g.translate(0, 0, -(width - 2 * bevel) / 2);
+    return add(g, mat, x, y, z, parent);
+  }
+  function grp(parent, x = 0, y = 0, z = 0) { const g = new THREE.Group(); g.position.set(x, y, z); (parent || scene).add(g); return g; }
+  function trackUnit(L, h, w, parent, nWheels) {
+    const g = grp(parent); const r = h / 2, s = new THREE.Shape();
+    s.moveTo(-L / 2 + r, 0); s.lineTo(L / 2 - r, 0); s.absarc(L / 2 - r, r, r, -Math.PI / 2, Math.PI / 2, false); s.lineTo(-L / 2 + r, h); s.absarc(-L / 2 + r, r, r, Math.PI / 2, Math.PI * 1.5, false);
+    const tg = new THREE.ExtrudeGeometry(s, { depth: w, bevelEnabled: false, curveSegments: 16 }); tg.translate(0, 0, -w / 2); add(tg, M.track, 0, 0, 0, g);
+    const shoe = new THREE.BoxGeometry(0.36, 0.1, w + 0.08), n = Math.round((L - 2 * r) / 0.46);
+    for (let i = 0; i <= n; i++) { const x = -L / 2 + r + i * ((L - 2 * r) / n); add(shoe, M.shoe, x, 0.05, 0, g); add(shoe, M.shoe, x, h + 0.02, 0, g); }
+    for (const sx of [-1, 1]) add(new THREE.CylinderGeometry(r * 1.02, r * 1.02, w + 0.06, 18), M.hull, sx * (L / 2 - r), r, 0, g).rotation.x = Math.PI / 2;
+    for (let i = 0; i < nWheels; i++) add(new THREE.CylinderGeometry(0.4, 0.4, w + 0.04, 16), M.hullD, -L / 2 + r + 0.6 + i * ((L - 2 * r - 1.2) / (nWheels - 1)), r * 0.85, 0, g).rotation.x = Math.PI / 2;
+    return g;
+  }
+  add(new THREE.PlaneGeometry(1800, 1800), M.ground, 0, 0, 0, scene, false).rotation.x = -Math.PI / 2;
+  add(new THREE.PlaneGeometry(300, 16), M.road, 30, 0.01, 0, scene, false).rotation.x = -Math.PI / 2;
+
+  // ================= electric platforms + trap =================
+  function platform(xc, zc) {
+    const g = grp(scene, xc, 0, zc);
+    trackUnit(16.8, 1.9, 2.8, g, 9);
+    add(new THREE.BoxGeometry(12.0, 0.9, 2.6), M.hull, 0, 2.4, 0, g);
+    for (const sx of [-1, 1]) {                                        // closed accumulator packs in both end compartments
+      add(new THREE.BoxGeometry(1.7, 0.9, 2.62), M.batt, sx * 6.9, 2.4, 0, g);
+      for (let k = 0; k < 4; k++) add(new THREE.BoxGeometry(0.06, 0.6, 2.64), M.band, sx * (6.25 + k * 0.42), 2.4, 0, g);
+      add(new THREE.CylinderGeometry(0.16, 0.16, 0.12, 12), M.orange, sx * 7.4, 2.4, 1.36, g).rotation.x = Math.PI / 2;
+    }
+    add(new THREE.BoxGeometry(15.4, 0.08, 0.12), M.orange, 0, 2.86, 1.36, g); add(new THREE.BoxGeometry(15.4, 0.08, 0.12), M.orange, 0, 2.86, -1.36, g);
+    add(new THREE.BoxGeometry(15.0, 0.5, 2.4), M.hullD, 0, 3.1, 0, g);
+    return g;
+  }
+  const ROWS4 = [-4.605, -1.535, 1.535, 4.605];
+  for (const xc of [-8.5, 8.5]) for (const z of ROWS4) platform(xc, z);
+  const trap = grp(scene, 0, 7.45, 0); const R8 = 4.375, LB = 34.6;
+  const tb = add(new THREE.CylinderGeometry(R8, R8, LB, 8), M.trap, 0, 0, 0, trap); tb.rotation.z = Math.PI / 2; tb.rotateY(Math.PI / 8);
+  for (let i = 0; i <= 8; i++) { const r = add(new THREE.CylinderGeometry(R8 + 0.12, R8 + 0.12, 0.35, 8), M.rib, -LB / 2 + 0.6 + i * (LB - 1.2) / 8, 0, 0, trap); r.rotation.z = Math.PI / 2; r.rotateY(Math.PI / 8); }
+  for (const sx of [-1, 1]) { add(new THREE.CylinderGeometry(0.9, 0.9, 0.6, 24), M.hull, sx * (LB / 2 + 0.6), 0, 0, trap).rotation.z = Math.PI / 2; add(new THREE.TorusGeometry(2.6, 0.08, 8, 48), M.glowB, sx * (LB / 2 + 0.31), 0, 0, trap, false).rotation.y = Math.PI / 2; }
+
+  // ================= engineering vehicle (x forward, 17 m long; in the hold 17 x 4 x 2.9 m) =================
+  const VX = 44;
+  const V = grp(scene, VX, 0, 0);
+  const TR = [trackUnit(16.4, 1.35, 1.2, V, 7), trackUnit(16.4, 1.35, 1.2, V, 7)];
+  add(new THREE.BoxGeometry(16.0, 0.95, 1.6), M.hull, 0, 0.875, 0, V);                          // lower hull between the tracks
+  const beams = []; for (const x of [-5.5, 0, 5.5]) for (const sz of [-1, 1]) beams.push({ sz, m: add(new THREE.BoxGeometry(0.5, 0.3, 1), M.bodyD, x, 1.0, 0, V) });
+  const deck = add(new THREE.BoxGeometry(12.7, 0.12, 4.0), M.hullD, -1.95, 1.41, 0, V);
+  // cab: low between the tracks, full width above them; living deck from 0.5 m to 2.85 m
+  add(new THREE.BoxGeometry(3.7, 0.9, 1.6), M.body, 6.15, 0.9, 0, V);
+  profile([[4.4, 1.35], [8.15, 1.35], [8.15, 1.8], [6.95, 2.85], [4.4, 2.85]], 4.0, M.body, 0, 0, 0, V, 0.12);
+  profile([[7.25, 2.0], [7.97, 2.0], [6.95, 2.76], [6.55, 2.76]], 3.4, M.glass, 0.06, 0, 0, V, 0.02);
+  for (const sz of [-1, 1]) { add(new THREE.BoxGeometry(2.4, 0.35, 0.05), M.glass, 5.7, 2.4, sz * 2.01, V, false); add(new THREE.BoxGeometry(1.0, 1.3, 0.05), M.bodyD, 4.95, 1.85, sz * 2.01, V, false); }
+  add(new THREE.BoxGeometry(3.9, 0.1, 4.04), M.orange, 6.3, 1.55, 0, V);
+  for (const sz of [-1, 1]) add(new THREE.BoxGeometry(0.15, 0.3, 0.8), M.lamp, 8.2, 1.6, sz * 1.3, V, false);
+  // dozer blade with folding wings; also the front support when laying the bridge
+  const BL = grp(V, 8.38, 0, 0);
+  const bladeMain = add(new THREE.BoxGeometry(0.18, 1.25, 4.0), M.yellow, 0, 0.62, 0, BL);
+  add(new THREE.BoxGeometry(0.12, 0.12, 4.0), M.hullD, 0.1, 0.05, 0, BL);
+  const wings = [-1, 1].map(sz => { const w = grp(BL, 0, 0, sz * 2.0); add(new THREE.BoxGeometry(0.16, 1.25, 1.2), M.yellow, 0, 0.62, sz * 0.6, w); return { w, sz }; });
+  const arms = [-1, 1].map(sz => add(new THREE.BoxGeometry(1, 0.22, 0.22), M.hullD, 8.1, 0.6, sz * 0.6, V));
+  // rear: the SHS furnace section under the bridge stack; coolers on both flanks and at the rear
+  const casing = []; const casMatT = std(0x5c636c, 0.5, 0.4, { transparent: true, opacity: 0.12, depthWrite: false });
+  casing.push(add(new THREE.BoxGeometry(7.2, 0.7, 4.0), M.bodyD, -4.6, 1.8, 0, V));
+  casing.push(add(new THREE.BoxGeometry(7.2, 0.95, 1.62), M.hull, -4.6, 0.875, 0, V)); casing.push(deck);
+  const louv = [];
+  for (const sz of [-1, 1]) for (let i = 0; i < 4; i++) { const lv = add(new THREE.BoxGeometry(1.4, 0.5, 0.06), M.louver, -7.4 + i * 1.6, 1.8, sz * 2.02, V); if (sz > 0) louv.push(lv); for (let k = 0; k < 4; k++) { const sl = add(new THREE.BoxGeometry(1.35, 0.04, 0.16), M.hullD, -7.4 + i * 1.6, 1.62 + k * 0.12, sz * 2.07, V); sl.rotation.x = sz * 0.6; if (sz > 0) louv.push(sl); } }
+  add(new THREE.BoxGeometry(0.06, 0.5, 3.4), M.louver, -8.22, 1.8, 0, V);
+  const wd = add(new THREE.CylinderGeometry(0.28, 0.28, 1.2, 16), M.hullD, -8.2, 0.9, 0, V); wd.rotation.x = Math.PI / 2;
+  // inside the furnace (seen in the cut): 6+1 chambers in the Si bath, cassette magazine, argon turbine with pumps
+  const inner = grp(V);
+  add(new THREE.BoxGeometry(4.5, 0.6, 1.5), M.bath, -5.75, 0.75, 0, inner, false);
+  for (let i = 0; i < 7; i++) { add(new THREE.CylinderGeometry(0.3, 0.3, 1.3, 16), i === 6 ? M.orange : M.sic, -7.6 + i * 0.62, 1.1, 0, inner); }
+  for (let i = 0; i < 4; i++) for (const z of [-1.65, -1.1, 1.1, 1.65]) { const x = -7.3 + i * 1.5, fresh = !(z > 0 && i > 1); const c = add(new THREE.CylinderGeometry(0.24, 0.24, 1.35, 14), fresh ? M.cas : M.casS, x, 1.75, z, inner); c.rotation.z = Math.PI / 2; add(new THREE.TorusGeometry(0.245, 0.03, 6, 16), M.orange, x + 0.5, 1.75, z, inner).rotation.y = Math.PI / 2; }   // magazine: fresh (dark) and spent (light) 1 t cassettes
+  const turb = add(new THREE.CylinderGeometry(0.32, 0.42, 1.6, 18), M.bodyD, -2.0, 1.75, 0, inner); turb.rotation.z = Math.PI / 2;
+  for (const z of [-0.75, 0.75]) add(new THREE.CylinderGeometry(0.22, 0.22, 0.7, 14), M.orange, -2.2, 1.0, z, inner);
+  inner.visible = false;
+  // folding bridge: two 7 m halves stacked over the furnace; slid forward on a launch beam and lowered across the gap
+  function bridgeHalf() {
+    const g = grp(V); add(new THREE.BoxGeometry(7.0, 0.3, 3.8), M.bodyD, 0, 0, 0, g);
+    for (const sz of [-1, 1]) { add(new THREE.BoxGeometry(7.0, 0.07, 1.3), M.band, 0, 0.18, sz * 1.15, g); add(new THREE.BoxGeometry(7.0, 0.36, 0.1), M.orange, 0, 0, sz * 1.92, g); }
+    return g;
+  }
+  const BA = bridgeHalf(), BB = bridgeHalf();
+  const beam = add(new THREE.BoxGeometry(1, 0.26, 0.5), M.hullD, 0, 2.93, 0, V);
+  // manipulator (recovery, cassette handling) between the cab and the bridge stack
+  const AR = grp(V, 2.9, 1.5, 1.3); add(new THREE.CylinderGeometry(0.35, 0.4, 0.3, 16), M.hullD, 0, 0.1, 0, AR);
+  const b1 = grp(AR, 0, 0.3, 0); add(new THREE.BoxGeometry(3.0, 0.3, 0.3), M.yellow, -1.5, 0, 0, b1);
+  const b2 = grp(b1, -3.0, 0, 0); add(new THREE.BoxGeometry(2.6, 0.24, 0.24), M.yellow, 1.3, 0, 0, b2);
+  const grip = add(new THREE.BoxGeometry(0.3, 0.5, 0.5), M.hullD, 2.6, -0.2, 0, b2);
+  // sensor mast
+  const MS = grp(V, 1.2, 1.5, -1.3); const mastG = grp(MS); add(new THREE.BoxGeometry(0.22, 2.6, 0.22), M.bodyD, 0, 1.3, 0, mastG);
+  add(new THREE.BoxGeometry(0.15, 0.12, 1.6), M.bodyD, 0, 2.6, 0, mastG); add(new THREE.SphereGeometry(0.28, 14, 10), M.body, 0, 2.85, 0, mastG); add(new THREE.SphereGeometry(0.12, 10, 8), M.beacon, 0, 3.2, 0, mastG, false);
+  // the hold cell outline 17 x 4 x 2.9 m
+  const cell = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(17, 2.9, 4)), new THREE.LineBasicMaterial({ color: 0x6fc3ff })); cell.position.set(0, 1.45, 0); V.add(cell);
+  // the crevasse for the bridge demo
+  const crev = grp(scene, VX, 0, 0); add(new THREE.BoxGeometry(10, 0.02, 9), M.gap, 17, 0.02, 0, crev, false);
+  for (const x of [12, 22]) add(new THREE.BoxGeometry(0.3, 0.12, 9), M.hullD, x, 0.06, 0, crev, false);
+
+  // ================= lights, people =================
+  function flood(x, y, z, tx, ty, tz) {
+    add(new THREE.CylinderGeometry(0.12, 0.18, y, 6), M.hullD, x, y / 2, z); add(new THREE.BoxGeometry(0.9, 0.5, 0.9), M.lamp, x, y + 0.2, z, scene, false);
+    const sl = new THREE.SpotLight(0xfff0d8, 3.0, 170, 0.5, 0.6, 1.4); sl.position.set(x, y + 0.2, z); scene.add(sl);
+    const tg = new THREE.Object3D(); tg.position.set(tx, ty, tz); scene.add(tg); sl.target = tg; sl.castShadow = true; sl.shadow.mapSize.set(1024, 1024);
+  }
+  flood(VX + 6, 11, -10, VX, 1, 0); flood(VX - 6, 10, 11, VX + 8, 1, 0); flood(-12, 11, -10, 5, 6, 0); flood(14, 11, 11, 0, 5, 0);
+  scene.add(new THREE.HemisphereLight(0x3a4250, 0x0d0b09, 0.34)); const rim = new THREE.DirectionalLight(0x8090ad, 0.6); rim.position.set(80, 40, -80); scene.add(rim);
+  function man(x, z) { const g = grp(scene, x, 0, z); add(new THREE.CylinderGeometry(0.17, 0.2, 0.85, 10), M.man, 0, 0.43, 0, g); add(new THREE.CylinderGeometry(0.22, 0.2, 0.62, 10), M.man, 0, 1.16, 0, g); add(new THREE.SphereGeometry(0.13, 12, 10), M.man, 0, 1.6, 0, g); }
+  man(VX + 4.9, 3.6); man(19, 7.5);
+
+  // heat shimmer from the flank coolers (no flue gas)
+  const haze = new THREE.MeshBasicMaterial({ color: 0x8c9aa6, transparent: true, opacity: 0.035, depthWrite: false }); const puffs = [];
+  for (const sz of [-1, 1]) for (let i = 0; i < 4; i++) for (let k = 0; k < 3; k++) puffs.push({ p: new THREE.Vector3(-7.4 + i * 1.6, 1.8, sz * 2.2), d: new THREE.Vector3(0, 0.6, sz * 1.1), age: k * 1.3, m: add(new THREE.SphereGeometry(0.5, 10, 8), haze, 0, -50, 0, scene, false) });
+
+  // ================= state & animation =================
+  const S = { dep: 1, arm: 1, br: 0 }, T = { dep: 1, arm: 1, br: 0 };
+  let cut = false, orbit = false, brPlay = false;
+  const clamp = x => Math.max(0, Math.min(1, x)), lerp = (a, b, k) => a + (b - a) * k, seg = (k, a, b) => clamp((k - a) / (b - a));
+  function apply() {
+    const d = S.dep, a = S.arm, b = S.br;
+    const zc = lerp(1.4, 2.4, d);
+    TR[0].position.z = -zc; TR[1].position.z = zc;
+    for (const q of beams) { const len = Math.max(0.01, zc - 0.6 - 0.8); q.m.scale.z = len; q.m.position.z = q.sz * (0.8 + len / 2); q.m.visible = len > 0.05; }
+    // blade: stowed tight to the nose -> lowered 0.9 m ahead; wings fold out
+    BL.position.set(lerp(8.38, 9.5, d), lerp(0.35, 0.0, d), 0); bladeMain.position.y = 0.62;
+    for (const q of wings) q.w.rotation.y = q.sz * lerp(-Math.PI * 0.94, 0.25, d);
+    for (const m of arms) { const x0 = 7.95, x1 = BL.position.x; m.scale.x = Math.max(0.05, x1 - x0); m.position.x = (x0 + x1) / 2; m.position.y = lerp(0.9, 0.55, d); }
+    // manipulator: folded backwards along the deck -> raised; mast: lying -> upright
+    b1.rotation.z = lerp(0, -0.95, a); b2.rotation.z = lerp(0, 1.9, a); AR.rotation.y = lerp(0, -0.6, a);
+    mastG.rotation.x = 0; mastG.rotation.z = lerp(Math.PI / 2, 0, a);
+    // bridge sequence
+    const p1 = seg(b, 0, 0.15), p2 = seg(b, 0.15, 0.4), p3 = seg(b, 0.4, 0.5), p4 = seg(b, 0.5, 0.8), p5 = seg(b, 0.8, 1.0);
+    BA.position.set(-4.0 + 17.5 * p4, lerp(2.33, 3.2, p1), 0);
+    BB.position.x = lerp(-4.0, 3.0, p2) + 17.5 * p4;
+    BB.position.y = lerp(lerp(2.68, 3.55, p1), 3.2, p3);
+    const yl = lerp(0, 2.75, p5); BA.position.y -= yl; BB.position.y -= yl;
+    BA.rotation.z = BB.rotation.z = -0.05 * Math.sin(Math.PI * p5);
+    beam.visible = b > 0.14 && b < 0.999; const bx1 = 8.5 + 9.0 * p4; beam.scale.x = bx1 + 1.0; beam.position.x = (bx1 - 1.0) / 2;
+    crev.visible = b > 0.001 || brPlay;
+  }
+  function setMode(m) {
+    ["mT", "mW", "mB"].forEach(id => document.getElementById(id).classList.toggle("on", id === m));
+    cell.visible = m === "mT";
+    if (m === "mT") { T.dep = 0; T.arm = 0; T.br = 0; brPlay = false; }
+    if (m === "mW") { T.dep = 1; T.arm = 1; T.br = 0; brPlay = false; }
+    if (m === "mB") { T.dep = 1; T.arm = 0; S.br = 0; T.br = 1; brPlay = true; view([VX + 6, 10, 30], [VX + 11, 1.5, 0]); }
+  }
+  document.getElementById("mT").onclick = () => { setMode("mT"); view([VX + 15, 6, 13], [VX, 1.4, 0]); };
+  document.getElementById("mW").onclick = () => setMode("mW");
+  document.getElementById("mB").onclick = () => setMode("mB");
+  const bc = document.getElementById("cut");
+  bc.onclick = () => { cut = !cut; bc.classList.toggle("on", cut); inner.visible = cut; for (const l of louv) l.visible = !cut; for (const q of puffs) q.m.visible = !cut; for (const c of casing) { if (!c.userData.m0) c.userData.m0 = c.material; c.material = cut ? casMatT : c.userData.m0; }
+    for (const h of [BA, BB]) h.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = cut; o.material.opacity = cut ? 0.15 : 1; o.material.depthWrite = !cut; } }); };
+  document.getElementById("cV").onclick = () => view([VX + 18, 7, 16], [VX, 1.5, 0]);
+  document.getElementById("cC").onclick = () => view([18, 24, 80], [18, 3, 0]);
+  document.getElementById("cF").onclick = () => { if (!cut) bc.onclick(); view([VX - 3, 6.5, 7.5], [VX - 4.8, 1.2, 0]); };
+  const bro = document.getElementById("cR"); bro.onclick = () => { orbit = !orbit; bro.classList.toggle("on", orbit); };
+  document.getElementById("hide").onclick = () => { const u = document.getElementById("ui"); u.style.display = u.style.display === "none" ? "block" : "none"; };
+  addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+  // ================= sound =================
+  let ac = null, nodes = [], playing = false, timers = [];
+  function noiseBuf(sec) { const b = ac.createBuffer(1, ac.sampleRate * sec, ac.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; }
+  function osc(f, a, out, type, f0) { const o = ac.createOscillator(); o.type = type || "sine"; if (f0) { o.frequency.setValueAtTime(f0, ac.currentTime); o.frequency.exponentialRampToValueAtTime(f, ac.currentTime + 4); } else o.frequency.value = f; const g = ac.createGain(); g.gain.value = a; o.connect(g); g.connect(out); o.start(); nodes.push(o); return o; }
+  function noise(lo, hi, a, out, nb) { const s = ac.createBufferSource(); s.buffer = nb; s.loop = true; const h = ac.createBiquadFilter(); h.type = "highpass"; h.frequency.value = lo; const l = ac.createBiquadFilter(); l.type = "lowpass"; l.frequency.value = hi; const g = ac.createGain(); g.gain.value = a; s.connect(h); h.connect(l); l.connect(g); g.connect(out); s.start(); nodes.push(s); return g; }
+  function startSound() {
+    ac = new (window.AudioContext || window.webkitAudioContext)(); nodes = [];
+    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -22; comp.ratio.value = 6; comp.connect(ac.destination);
+    const sat = ac.createWaveShaper(); const cv = new Float32Array(1024); for (let i = 0; i < 1024; i++) cv[i] = Math.tanh(2.0 * (i / 512 - 1)); sat.curve = cv; sat.connect(comp);
+    const master = ac.createGain(); master.gain.value = 0; master.gain.linearRampToValueAtTime(1.1, ac.currentTime + 3); master.connect(sat);
+    const nb = noiseBuf(4);
+    const air = noise(35, 600, 0.6, master, nb); const lfo = ac.createOscillator(); lfo.frequency.value = 26; const lg = ac.createGain(); lg.gain.value = 0.2; lfo.connect(lg); lg.connect(air.gain); lfo.start(); nodes.push(lfo);
+    osc(26, 0.3, master); osc(52, 0.12, master);
+    const pb = ac.createGain(); pb.gain.value = 0.12; pb.connect(master);
+    for (let i = 0; i < 4; i++) for (const [h, a] of [[1, 1], [2, 0.6], [3, 0.4], [4, 0.2]]) osc(150 * h * (1 + (Math.random() - 0.5) * 0.01), a, pb, "sine", 150 * h * 0.35);
+    osc(620, 0.07, master, "sine", 200); osc(1240, 0.025, master, "sine", 400); osc(1650, 0.03, master, "triangle", 520);
+    function clank() { const t0 = ac.currentTime; const s = ac.createBufferSource(); s.buffer = nb; const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 260 + Math.random() * 600; bp.Q.value = 5;
+      const g = ac.createGain(); g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.35 + Math.random() * 0.4, t0 + 0.004); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.25); s.connect(bp); bp.connect(g); g.connect(master); s.start(t0, Math.random() * 3, 0.3); }
+    function ignite() { const t0 = ac.currentTime;                                   // cassette ignition: dull thump + crackle inside the chamber
+      const th = ac.createOscillator(); th.frequency.setValueAtTime(55, t0); th.frequency.exponentialRampToValueAtTime(28, t0 + 0.6); const tg = ac.createGain(); tg.gain.setValueAtTime(0.9, t0); tg.gain.exponentialRampToValueAtTime(0.001, t0 + 0.9); th.connect(tg); tg.connect(master); th.start(t0); th.stop(t0 + 1);
+      const s = ac.createBufferSource(); s.buffer = nb; const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 900; bp.Q.value = 1.2; const g = ac.createGain(); g.gain.setValueAtTime(0.0, t0); g.gain.linearRampToValueAtTime(0.35, t0 + 0.05); g.gain.exponentialRampToValueAtTime(0.001, t0 + 2.2); s.connect(bp); bp.connect(g); g.connect(master); s.start(t0, Math.random() * 1.5, 2.3); }
+    timers.push(setInterval(() => { if (Math.random() < 0.9) clank(); }, 1000 / 7));
+    timers.push(setInterval(ignite, 6000)); setTimeout(ignite, 1500);
+  }
+  function stopSound() { timers.forEach(clearInterval); timers = []; if (ac) ac.close(); ac = null; }
+  const bs = document.getElementById("snd");
+  bs.onclick = () => { playing = !playing; bs.classList.toggle("on", playing); bs.textContent = playing ? "■ Звук" : "▶ Звук"; if (playing) startSound(); else stopSound(); };
+
+  setMode("mW"); apply();
+  view([VX + 18, 7, 16], [VX, 1.5, 0]);
+  let t = 0;
+  (function loop() {
+    t += 0.016;
+    for (const k of ["dep", "arm"]) S[k] += (T[k] - S[k]) * 0.05;
+    if (brPlay) { S.br = Math.min(1, S.br + 0.016 / 10); if (S.br >= 1) brPlay = false; } else S.br += (T.br - S.br) * 0.05;
+    apply();
+    for (const q of puffs) { q.age += 0.016; if (q.age > 3.9) q.age -= 3.9; const k = q.age / 3.9; const w = new THREE.Vector3(q.p.x + q.d.x * q.age, q.p.y + q.d.y * q.age + 0.3 * q.age * q.age, q.p.z + q.d.z * q.age); V.localToWorld(w); q.m.position.copy(w); const s = 0.4 + 1.4 * k; q.m.scale.set(s, s, s); }
+    if (orbit) { const a = t * 0.1; camera.position.set(VX + 24 * Math.cos(a), 9, 24 * Math.sin(a)); controls.target.set(VX, 1.5, 0); }
+    controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop);
+  })();
+})();
+</script>
+</body>
+</html>

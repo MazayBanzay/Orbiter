@@ -26,6 +26,10 @@ G = dict(G); G["hull_sections"] = [dict(s, x=nose_map(s["x"])) for s in G["hull_
 X_TIP = nose_map(11.0)
 OUT = os.path.join(HERE, "out")
 os.makedirs(OUT, exist_ok=True)
+# «Грань» 25,4 м (решение пользователя 2026-10-09): согласованная форма Т1Б-А, подобие ×1,285 по всем осям. Геометрия и
+# расчёты генератора ниже — в масштабе Т1Б-А (19,8 м); на вывод (.msh, json групп, оси анимаций) координаты × SCALE.
+# Массы, ЦМ, балансировка и шасси 25,4 м — Tantra_Design/lander_gran_254.json (замыкание ×K), не разделы «final» (они для 19,8 м).
+SCALE = float(os.environ.get("GRAN_SCALE", "1.285"))
 
 # ----------------------------------------------------------------------------- материалы
 MATERIALS = [  # name, diffuse rgb, specular rgb + power, emissive
@@ -428,7 +432,7 @@ V_TA = 2 * math.pi * TANK_A["R"] ** 2 * (TANK_A["x0"] - TANK_A["x1"]) * -1 * 0.9
 RHO_AR = 1395.0   # жидкий аргон 87 K, NIST
 X_TF = 0.5 * (TANK_F["x0"] + TANK_F["x1"]); X_TA = 0.5 * (TANK_A["x0"] + TANK_A["x1"])
 CAP_F, CAP_A = V_TF * RHO_AR / 1000 * 0.97, V_TA * RHO_AR / 1000 * 0.97   # 3 % свободного объёма
-X_ROWC = MP.get("x_rows", -2.50)   # центр рядов чаш = ЦМ висения (уточняется ниже; argon-перекачкой ЦМ ставится сюда)
+X_ROWC = MP.get("x_rows", -2.2228)   # центр рядов чаш = ЦМ висения. 25,4 м: −2,856/K - ряды за ЦМ после киля и переноса энергетики (lander_gran_254.json); у Т1Б-А было −2,50
 GEAR_M = (0.92, 1.88)   # GEAR.md: 2,8 т; деление по долям статической нагрузки 33/67 % — допущение
 MASS_FIXED = [  # id, т, x, примечание
     ("korpus_obshivka", round(m_hull_skin, 2), C_HULL[0], "Обшивка корпуса %.1f м² × 8 мм × 4800 кг/м³ (меш)" % A_HULL),
@@ -554,6 +558,7 @@ GEAR = {  # pivot (шарнир уборки), L до оси тележки, т�
 }
 WR, WW = 0.43, 0.26
 DOORS = {"N": (6.55, 9.0 - 0.07, -0.5, 0.5), "L": (-3.75, 0.15, -3.15, -2.05), "R": (-3.75, 0.15, 2.05, 3.15)}
+DOORS_HINGE = {"N": -0.5, "L": -3.15, "R": 3.15}   # петля наружной половины (вторая — у противоположной кромки)
 
 def closed_part(g, fn, center):
     s = len(g.t); fn(); fix_orient(g, s, np.asarray(center, float))
@@ -573,22 +578,30 @@ for s, d in GEAR.items():
     g = grp(nm, "metall", ("Передняя опора: стойка Ø0,30, ход 0,85 м, 2 колеса Ø0,81 × 0,22" if s == "N" else
                            "Основная опора %s: стойка Ø0,34, ход 0,85 м, тележка 2 оси × 2 колеса Ø1,14 × 0,41 (шаг осей 1,24 м), тормоза C/SiC" % s) +
             "; уборка вперёд 90°")
+    gs_ = grp(nm + "_shtok", "metall", "Шток амортизатора, балка тележки и оси опоры %s: ходит вдоль стойки (обжатие), вместе с колёсами" % s)
     gw_ = grp(nm + "_kolesa", "vnutr", "Колёса опоры %s (тёмные), вместе с %s" % (s, nm))
     p = np.array(d["piv"]); L = d["L"]
     axle_c = p + np.array([0, -L, 0])
     cyl(g, p + np.array([0, 0.12, 0]), p + np.array([0, -(L - 0.85), 0]), 0.17 if s != "N" else 0.15)   # цилиндр амортизатора
-    cyl(g, p + np.array([0, -(L - 0.85), 0]), axle_c + np.array([0, 0.05, 0]), 0.12 if s != "N" else 0.10)  # шток
+    cyl(gs_, p + np.array([0, -(L - 0.85), 0]), axle_c + np.array([0, 0.05, 0]), 0.12 if s != "N" else 0.10)  # шток
     cyl(g, p + np.array([0, 0, -0.32]), p + np.array([0, 0, 0.32]), 0.09)                           # ось шарнира уборки
     if len(d["axles"]) > 1:
-        cyl(g, axle_c + np.array([d["axles"][0] - 0.12, 0, 0]), axle_c + np.array([d["axles"][-1] + 0.12, 0, 0]), 0.09)  # балка тележки
+        cyl(gs_, axle_c + np.array([d["axles"][0] - 0.12, 0, 0]), axle_c + np.array([d["axles"][-1] + 0.12, 0, 0]), 0.09)  # балка тележки
     for ax_ in d["axles"]:
         c0 = axle_c + np.array([ax_, 0, 0])
-        cyl(g, c0 + np.array([0, 0, d["wz"][0] - d["ww"] / 2 + 0.03]), c0 + np.array([0, 0, d["wz"][1] + d["ww"] / 2 - 0.03]), 0.07)   # ось колёс
+        cyl(gs_, c0 + np.array([0, 0, d["wz"][0] - d["ww"] / 2 + 0.03]), c0 + np.array([0, 0, d["wz"][1] + d["ww"] / 2 - 0.03]), 0.07)   # ось колёс
         for wz in d["wz"]:
             wheel(gw_, c0 + np.array([0, 0, wz]), d["wr"], d["ww"])
     x0, x1, z0, z1 = DOORS[s]
-    gd = grp("stvorka_shassi_" + s, "bor_dnische", "Створка-полоз ниши %s: бериллиевая бронза + боразон, заподлицо; закрытая — аварийный полоз" % ("ПО" if s == "N" else s))
-    belly_plate_z(gd, x0, x1, z0, z1)
+    # Г (пользователь 2026-10-09 «крышки шасси почти с шасси?»): створка ниши — две половины на петлях по обеим кромкам,
+    # каждая висит вдвое мельче; закрытые — тот же полоз. Наружная половина — у петли DOORS_HINGE, внутренняя — у другой кромки
+    zm = (z0 + z1) / 2
+    zo = (z0, zm) if DOORS_HINGE[s] == z0 else (zm, z1)
+    zi = (zm, z1) if DOORS_HINGE[s] == z0 else (z0, zm)
+    gd = grp("stvorka_shassi_" + s, "bor_dnische", "Створка-полоз ниши %s, наружная половина: бериллиевая бронза + боразон, заподлицо; закрытая — аварийный полоз" % ("ПО" if s == "N" else s))
+    belly_plate_z(gd, x0, x1, zo[0], zo[1], nz=3)
+    gd2 = grp("stvorka_shassi_%s2" % s, "bor_dnische", "Створка-полоз ниши %s, внутренняя половина" % ("ПО" if s == "N" else s))
+    belly_plate_z(gd2, x0, x1, zi[0], zi[1], nz=3)
 
 
 # восьмигранный люк — левый борт
@@ -611,6 +624,41 @@ gp = grp("fotonnaya_polosa", "svechenie_dat", "Фотонная полоса д�
 xs_p = np.linspace(7.0, X_NOSE, 16)
 rings = [[(x, yt(x) + 0.004, -0.125), (x, yt(x) + 0.004, 0.125), (x, yt(x) + 0.018, 0.10), (x, yt(x) + 0.018, -0.10)] for x in xs_p]
 loft(rings, lambda j: gp)
+
+# киль: один, складной, по оси на корме (решение пользователя 2026-10-09, вариант «А» 9,85 м — DESIGN_LOCAL «необходимый размер 25,4 м»).
+# Размеры заданы для «Грани» 25,4 м (×FIN_K) и делятся на FIN_K: корень x −5,30…−11,45, высота 9,85, передняя кромка 20°,
+# задняя кромка вертикальна. Сечение гранёное (шестигранник): носок, грани до 25 % хорды, плоская часть до 75 %, клин к
+# задней кромке; t/c ≈ 5 % у корня. Корень прямой (линия шарнира) на 0,05 м выше верха корпуса по концам — верх выпуклый,
+# зазор 1…5 см закрыт неподвижной шарнирной балкой «kil_uzel». Ось складывания — по левой кромке корня, влево на 90°:
+# сложенный киль лежит над левым крылом не ниже линии шарнира.
+FIN_K = 1.285
+KIL_XLE, KIL_XTE, KIL_H = -5.30 / FIN_K, -11.45 / FIN_K, 9.85 / FIN_K
+KIL_TAN = math.tan(math.radians(20.0))
+KIL_TR, KIL_TT, KIL_TTE = 0.31 / FIN_K, 0.13 / FIN_K, 0.02
+_kya, _kyb = yt(KIL_XLE) + 0.05, yt(KIL_XTE) + 0.05
+def kil_root_y(x):
+    return _kya + (x - KIL_XLE) * (_kyb - _kya) / (KIL_XTE - KIL_XLE)
+assert min(kil_root_y(x) - yt(x) for x in np.linspace(KIL_XTE, KIL_XLE, 60)) > 0.005, "корень киля ниже верха корпуса"
+def kil_ring(h):
+    xle = KIL_XLE - h * KIL_TAN; c = xle - KIL_XTE; t = KIL_TR + (KIL_TT - KIL_TR) * h / KIL_H
+    pts = [(xle, 0.0), (xle - 0.25 * c, t / 2), (xle - 0.75 * c, t / 2), (KIL_XTE, KIL_TTE / 2),
+           (KIL_XTE, -KIL_TTE / 2), (xle - 0.75 * c, -t / 2), (xle - 0.25 * c, -t / 2)]
+    return [(x, kil_root_y(x) + h, z) for x, z in pts]
+g_kil = grp("kil", "lak_korpus", "Киль складной: 9,85 × 6,15/2,57 м (×1,285), 42,9 м², гранёное сечение; влево на 90° в ангаре")
+loft([kil_ring(0.0), kil_ring(KIL_H)], lambda j: g_kil)
+KIL_PIVOT = [round(KIL_XLE, 4), round(kil_root_y(KIL_XLE), 4), round(-KIL_TR / 2, 4)]
+_ka = np.array([KIL_XTE - KIL_XLE, kil_root_y(KIL_XTE) - kil_root_y(KIL_XLE), 0.0]); _ka /= np.linalg.norm(_ka)
+KIL_AXIS = [round(float(v), 5) for v in _ka]     # назад вдоль корня: +90° уводит верх киля влево (−z)
+g_kil_u = grp("kil_uzel", "lak_korpus", "Шарнирная балка киля по верху корпуса (неподвижная)")
+def _kil_half(x):   # полутолщина корня киля в точке x
+    c = KIL_XLE - KIL_XTE; xi = max(0.0, (KIL_XLE - x) / c)
+    if xi <= 0.25: return KIL_TR / 2 * xi / 0.25
+    if xi <= 0.75: return KIL_TR / 2
+    return KIL_TR / 2 + (KIL_TTE / 2 - KIL_TR / 2) * (xi - 0.75) / 0.25
+_ku = [[(x, yt(x) - 0.02, -_kil_half(x) - 0.004), (x, yt(x) - 0.02, _kil_half(x) + 0.004),
+        (x, kil_root_y(x) - 0.003, _kil_half(x) + 0.004), (x, kil_root_y(x) - 0.003, -_kil_half(x) - 0.004)]
+       for x in np.linspace(KIL_XLE - 0.02, KIL_XTE, 25)]
+loft(_ku, lambda j: g_kil_u)
 
 # двигатели ориентации (аргон), сопла заподлицо: восьмигранные выходы 0,12 м
 RCS = []
@@ -752,7 +800,7 @@ anim(["schitok"], [round(v, 3) for v in FLAP_PIVOT], [0, 0, 1], FLAP_MODES, [0, 
 # шасси: выпущено в висении/посадке, убрано в полёте и в ангаре; уборка ВПЕРЁД (+90° вокруг z) — выпуск весом и потоком
 gear_modes = {"hover": 0, "transition": 90, "cruise": 90, "entry": 90, "ballistic": 90, "glide": 0, "stowed": 90}
 for s in "NLR":
-    anim(["shassi_" + s, "shassi_%s_kolesa" % s], list(GEAR[s]["piv"]), [0, 0, 1], gear_modes, [0, 90],
+    anim(["shassi_" + s, "shassi_%s_shtok" % s, "shassi_%s_kolesa" % s], list(GEAR[s]["piv"]), [0, 0, 1], gear_modes, [0, 90],
          ("ПО" if s == "N" else "основная " + s) + ", уборка вперёд")
 door_open = {"hover": 1, "transition": 0, "cruise": 0, "entry": 0, "ballistic": 0, "glide": 1, "stowed": 0}
 for s, hz, sgn in (("N", -0.5, 1), ("L", -3.15, 1), ("R", 3.15, -1)):   # петля по внешней кромке, створка висит вниз
@@ -761,6 +809,13 @@ for s, hz, sgn in (("N", -0.5, 1), ("L", -3.15, 1), ("R", 3.15, -1)):   # пет
     anim(["stvorka_shassi_" + s], [round((x0 + x1) / 2, 3), round(ybz((x0 + x1) / 2, hz) - 0.008, 3), hz], [round(float(v), 4) for v in _ax],
          {k: sgn * 90 * v for k, v in door_open.items()}, sorted([0, sgn * 90]), "створка-полоз " + ("ПО" if s == "N" else s))
 anim(["lyuk", "lyuk_shov"], [HX + HR, HY, -hw(HX + HR)], [0, 1, 0], {k: (100 if k == "stowed" else 0) for k in MODES}, [0, 100], "люк, открыт в ангаре")
+anim(["kil"], KIL_PIVOT, KIL_AXIS, {k: (90 if k == "stowed" else 0) for k in MODES}, [0, 90], "киль, сложен влево в ангаре")
+# внутренние половины створок (после киля - номера прежних анимаций не меняются): петля по внутренней кромке, вниз
+for s, hz, sgn in (("N", 0.5, -1), ("L", -2.05, -1), ("R", 2.05, 1)):
+    x0, x1 = DOORS[s][:2]
+    _ax = np.array([x1 - x0, ybz(x1, hz) - ybz(x0, hz), 0.0]); _ax /= np.linalg.norm(_ax)
+    anim(["stvorka_shassi_%s2" % s], [round((x0 + x1) / 2, 3), round(ybz((x0 + x1) / 2, hz) - 0.008, 3), hz], [round(float(v), 4) for v in _ax],
+         {k: sgn * 90 * v for k, v in door_open.items()}, sorted([0, sgn * 90]), "внутренняя створка-полоз " + ("ПО" if s == "N" else s))
 
 # ----------------------------------------------------------------------------- проверки сетки
 def edge_check(names):
@@ -795,14 +850,14 @@ with open(os.path.join(OUT, "Lander.msh"), "w", newline="\r\n", encoding="ascii"
         f.write("LABEL %s\nMATERIAL %d\nTEXTURE %d\nGEOM %d %d ;%s\n" % (nm, g.mat, tx, len(g.v), len(g.t), nm))
         UVd = {}
         for i, j, k in g.t:
-            for q, uv in zip((i, j, k), uv_tri(g.v[i], g.v[j], g.v[k])):
+            for q, uv in zip((i, j, k), uv_tri(g.v[i] * SCALE, g.v[j] * SCALE, g.v[k] * SCALE)):   # плотность текстуры та же, что у 19,8 м
                 UVd[q] = uv
         g.uv = [UVd.get(q, (0.0, 0.0)) for q in range(len(g.v))]
         for p, n, uv in zip(g.v, g.n, g.uv):
-            P, N = to_orb(p), to_orb(n)
+            P, N = to_orb(p * SCALE), to_orb(n)
             f.write("%.3f %.3f %.3f %.4f %.4f %.4f %.4f %.4f\n" % (*P, *N, *uv))
         for t in g.t:
-            f.write("%d %d %d\n" % t)
+            f.write("%d %d %d\n" % (t[0], t[2], t[1]))   # Orbiter is left-handed: the x-z swap mirrors, so the order reverses
     f.write("MATERIALS %d\n" % len(MATERIALS))
     for m in MATERIALS:
         f.write(m[0] + "\n")
@@ -831,17 +886,52 @@ def inside_hull(p):
         return False
     return abs(z) < hw(x) - 0.01 and yb(x) + 0.01 < y < yt(x) - 0.01
 
+def inside_hull_ch(p):
+    """То же с нижними фасками (ybz): грань у фаски снаружи корпуса не отбрасывается."""
+    x, y, z = p
+    if x < -9 or x > X_TIP:
+        return False
+    return abs(z) < hw(x) - 0.01 and ybz(x, z) + 0.01 < y < yt(x) - 0.01
+
+def ray_hidden(names, occ_names, tmax=5.0, chunk=120):
+    """Грань скрыта, если луч из её центра по наружной нормали упирается в обшивку ближе tmax (лежит внутри аппарата
+    или под другой гранью). Пересечение луча с треугольником — Мёллер–Трумбор (1997)."""
+    T = np.vstack([np.array(GROUPS[n].v)[np.array(GROUPS[n].t)] for n in occ_names if GROUPS[n].t])
+    T0, E1, E2 = T[:, 0], T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]
+    out = {}
+    for nm in names:
+        g = GROUPS[nm]; P = np.array(g.v)[np.array(g.t)]
+        na = np.cross(P[:, 1] - P[:, 0], P[:, 2] - P[:, 0]); n = na / (np.linalg.norm(na, axis=1)[:, None] + 1e-15)
+        O = P.mean(axis=1) + 1e-3 * n
+        hid = np.zeros(len(O), bool)
+        for s in range(0, len(O), chunk):
+            o, d = O[s:s + chunk, None, :], n[s:s + chunk, None, :]
+            Pv = np.cross(d, E2[None]); det = (E1[None] * Pv).sum(-1)
+            ok = np.abs(det) > 1e-12; inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+            Tv = o - T0[None]; u = (Tv * Pv).sum(-1) * inv
+            Q = np.cross(Tv, E1[None]); v = (d * Q).sum(-1) * inv; t = (E2[None] * Q).sum(-1) * inv
+            hid[s:s + chunk] = (ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > 1e-6) & (t < tmax)).any(axis=1)
+        out[nm] = hid
+    return out
+# 2026-10-09: низ крыла лежит в группе dnische_tzp — его часть внутри корпуса считалась вместе с днищем, а грани в гнёздах
+# маршевых и под щитком — вместе с наружными (площадь в плане 193,6 вместо 172,5 м² по контуру, +12 %). Теперь скрытые
+# грани (луч по нормали упирается в обшивку ближе 5 м) отбрасываются; щиток в укладке — днище, как раньше.
+HIDDEN = ray_hidden(["dnische_tzp", "krylo_L", "krylo_R", "korpus"], [n for n in AERO_GROUPS if n != "schitok"])
 FACES = {}
+FACES_HIDDEN = {}
 for nm in AERO_GROUPS:
     g = GROUPS[nm]
     C, NA = [], []
-    for i, j, k in g.t:
+    nh = 0.0
+    for ti, (i, j, k) in enumerate(g.t):
         a, b, c = g.v[i], g.v[j], g.v[k]
         cen = (a + b + c) / 3
-        if nm.startswith("krylo") and inside_hull(cen):
+        if (nm.startswith("krylo") and inside_hull(cen)) or (nm in HIDDEN and HIDDEN[nm][ti]):
+            nh += float(np.clip(-0.5 * np.cross(b - a, c - a)[1], 0, None))
             continue
         C.append(cen); NA.append(0.5 * np.cross(b - a, c - a))
     FACES[nm] = (np.array(C), np.array(NA))
+    FACES_HIDDEN[nm] = round(nh, 3)     # отброшено, проекция наветренных снизу, м²
 
 def config_faces(tip_deg, elev_deg, flap_deg=0):
     C, NA = [], []
@@ -1136,7 +1226,7 @@ def gear_check():
     out = {}
     for s, d in GEAR.items():
         P = np.array(d["piv"]); Rm = rotmat([0, 0, 1], 90)
-        V = np.vstack([np.array(GROUPS["shassi_" + s].v), np.array(GROUPS["shassi_%s_kolesa" % s].v)])
+        V = np.vstack([np.array(GROUPS["shassi_" + s].v), np.array(GROUPS["shassi_%s_shtok" % s].v), np.array(GROUPS["shassi_%s_kolesa" % s].v)])
         Vr = (V - P) @ Rm.T + P
         outside = [p for p in Vr if not (abs(p[2]) < hw(p[0]) - 0.005 and ybz(p[0], p[2]) + 0.005 < p[1] < yt(p[0]) - 0.005)]
         x0, x1, z0, z1 = DOORS[s]
@@ -1337,17 +1427,35 @@ print("FIN ball", [(b["tip"], b["elev"], b["trims"]) for b in BL]); print("FIN t
 print("FIN gear", GEAR_N); print("FIN vland", FIN["v_land"]); print("FIN len", LEN); print("FIN tilt", TILT)
 print("FIN movers bad", [m for m in MV if m["cross_outside_openings"]]); print("FIN pairs", PAIRS)
 
+# масштаб 25,4 м: то, что меняется при подобии (коэффициенты аэродинамики не меняются, площади × K², длины × K)
+K2 = SCALE * SCALE
+HANGAR_254 = {"opening_L": 25.7, "shaft_W": 20.5, "shaft_bottom_above_lander_top_m": 2.1, "src": "«Тантра модули» 2026-10-09: проём s 94,7–120,4, шахта x ±10,25"}
+_kil_tip = moved(ANIM[-1], "stowed") * SCALE
+SCALE_INFO = {"K": SCALE, "S_REF": R2(S_REF * K2, 2), "L_REF": R2(L_REF * SCALE, 3),
+              "S_plan_0_60_90": [R2(S_plan0 * K2, 1), R2(S_plan60 * K2, 1), R2(S_plan90 * K2, 1)], "AR": R2(AR, 3),
+              "aero_hidden_down_m2": {k: R2(v * K2, 2) for k, v in FACES_HIDDEN.items() if v},
+              "by_mode": {m: {k: (R2(v * SCALE, 3) if isinstance(v, float) else v) for k, v in LEN[m].items()} for m in MODES},
+              "hangar": dict(HANGAR_254, L_stowed=R2(LEN["stowed"]["L"] * SCALE, 3), W_stowed=R2(LEN["stowed"]["W"] * SCALE, 3),
+                             clear_L_each_end=R2((HANGAR_254["opening_L"] - LEN["stowed"]["L"] * SCALE) / 2, 3),
+                             clear_W_each_side=R2((HANGAR_254["shaft_W"] - LEN["stowed"]["W"] * SCALE) / 2, 3)),
+              "kil": {"S_m2": R2(0.5 * (KIL_XLE - KIL_XTE + (KIL_XLE - KIL_H * KIL_TAN - KIL_XTE)) * KIL_H * K2, 2),
+                      "H_m": R2(KIL_H * SCALE, 3), "root_m": R2((KIL_XLE - KIL_XTE) * SCALE, 3), "tip_m": R2((KIL_XLE - KIL_H * KIL_TAN - KIL_XTE) * SCALE, 3),
+                      "pivot": [R2(c * SCALE, 4) for c in KIL_PIVOT], "axis": KIL_AXIS,
+                      "folded_z_min": R2(float(_kil_tip[:, 2].min()), 3), "folded_y": [R2(float(_kil_tip[:, 1].min()), 3), R2(float(_kil_tip[:, 1].max()), 3)]}}
+print("SCALE", json.dumps(SCALE_INFO, ensure_ascii=False))
+
 # json для браузера
 groups_js = []
 for nm in ORDER:
     g = GROUPS[nm]
-    V = np.round(np.array(g.v), 4).flatten().tolist(); N = np.round(np.array(g.n), 3).flatten().tolist()
+    V = np.round(np.array(g.v) * SCALE, 4).flatten().tolist(); N = np.round(np.array(g.n), 3).flatten().tolist()
     groups_js.append({"name": nm, "mat": MATERIALS[g.mat - 1][0], "purpose": g.purpose, "v": V, "n": N, "uv": np.round(np.array(g.uv), 3).flatten().tolist(),
                       "i": [x for t in g.t for x in t], "ntri": len(g.t)})
 layout = [p for p in G["primitives"] if p["role"] in ("cabin", "shield", "charges", "other") and p["id"] not in ("photon_strip",)]
 json.dump({"materials": {m[0]: {"color": HEX[m[0]], "emissive": "#%02x%02x%02x" % tuple(int(255 * c) for c in m[3]),
                                 "tex": (TEXTURES[MAT_TEX[m[0]] - 1] if m[0] in MAT_TEX else None)} for m in MATERIALS},
-           "groups": groups_js, "anim": ANIM, "modes": MODES, "rcs": RCS, "layout": layout, "aero": aero,
+           "groups": groups_js, "anim": [dict(e, pivot=[round(c * SCALE, 4) for c in e["pivot"]]) for e in ANIM], "modes": MODES,
+           "rcs": [dict(r, pos=[round(c * SCALE, 3) for c in r["pos"]]) for r in RCS], "layout": layout, "aero": aero, "scale": SCALE_INFO,
            "gear": {"ttx": GEAR_TTX, "fail": GEAR_FAIL, "check": GEAR_CHECK}, "final": FIN, "stats": {"triangles": NTRI, "groups": len(ORDER), "open_edges": checks, "hull_volume_m3": vol_hull}},
           open(os.path.join(OUT, "lander_mesh.json"), "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
 

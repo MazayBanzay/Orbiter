@@ -31,6 +31,9 @@ void TantraDisplays::FillMechView(ms::View& v) const {
     v.wingMode = t->wingMode_; v.wingFold = p.tuck;
     v.podOut = t->podOut_; v.podAngle = t->podAngle_; v.podTarget = t->podTarget_; v.podsWanted = t->podsWanted_;
     v.rovers = t->rovers_; v.hangar = t->hangar_; v.hangarT = t->hangarT_; v.bayDoors = t->bayDoors_;
+    v.landerLift = t->landerLift_; v.landerLiftT = t->landerLiftT_;
+    v.landerOn = t->hangarAtt_[0] && t->GetAttachmentStatus(t->hangarAtt_[0]) != nullptr;
+    v.launchArmed = oapiGetSysTime() - t->launchArm_ < 3.0;
     v.irisAna = t->irisAna_; v.irisNose = t->irisNose_; v.marchOut = t->marchOut_;
     v.liftStowed = t->lift_.Stowed(); v.liftAtGround = t->lift_.AtGround();
     v.airlock = t->crew_.AirlockOpen();                                        // what ActToggleAirlock switches
@@ -137,6 +140,9 @@ void TantraDisplays::MechCommand(int cmd) {
         case ms::kCmdPodsAft: t->ActPodsTo(0.0); break;
         case ms::kCmdPodsDown: t->ActPodsTo(90.0); break;
         case ms::kCmdHangar: t->ActHangar(); break;
+        case ms::kCmdLanderLift: t->ActLanderLift(); break;
+        case ms::kCmdLanderGo: t->ActLanderLaunch(false); break;
+        case ms::kCmdLanderGoEm: t->ActLanderLaunch(true); break;
         case ms::kCmdPort: t->ActPort(); break;
         case ms::kCmdAirlock: t->ActToggleAirlock(); break;
         case ms::kCmdTableUp: t->ActPortLift(); break;

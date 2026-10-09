@@ -93,13 +93,16 @@ bool Carriage::CommandGear(bool down, bool landed) {
 void Carriage::Update(double dt, double sCG) {
     sCG_ = sCG;
     const bool settling = p_ != pT_;  // carriage still moving: the gear waits for it
-    if (!(settling && gearT_ < gear_)) gear_ = StepTo(gear_, gearT_, dt / kGearTime);
-    // the wings and the fin (the user's rule): folded lying on the ground and around any carriage move (turning, the
-    // blades lie along the flanks through the wing roots); open standing on the stern - the launch stand, where they
-    // are the stabilisers of the nose-first climb and clear the stern legs by 30 deg; in the air as the crew set them.
+    // the lying gear's blades swing along the flanks through the wing roots: they run only with the wings folded
+    const bool bladesRun = set_ == FlightSet::Level && gear_ != gearT_;
+    if (!(settling && gearT_ < gear_) && !(bladesRun && tuck_ < 1.0)) gear_ = StepTo(gear_, gearT_, dt / kGearTime);
+    // the wings and the fin: folded around any carriage move (turning) and while the blades run in or out - the blades lie
+    // along the flanks through the wing roots; else as the crew set them - lying at rest, at the lift-off and the touch-down
+    // too (2026-10-09, the user: no folding at the lift-off and the touch-down - they are the plant's radiators and the
+    // balance crests); open standing on the stern - the launch stand, the stabilisers of the nose-first climb, 30 deg
+    // clear of the stern legs.
     const bool moving = settling || (p_ > 0.0 && p_ < 6.0);
-    const bool standing = p_ >= 6.0 && pT_ >= 6.0;
-    const double tuckT = moving || (grounded_ && !standing) ? 1.0 : 0.0;
+    const double tuckT = moving || bladesRun ? 1.0 : 0.0;
     tuck_ = snapTuck_ ? tuckT : StepTo(tuck_, tuckT, dt / kTuckTime);
     snapTuck_ = false;
     // the turn (phase 2-3) is slower: its inertia goes through the bending of the columns into the cup feet

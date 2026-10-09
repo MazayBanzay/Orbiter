@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Машина-слайдер под ловушку</title>
+<style>
+  html,body{margin:0;height:100%;background:#07080a;color:#cfd6df;font:13px "Segoe UI",Arial;overflow:hidden}
+  #ui{position:absolute;left:12px;top:10px;max-width:460px;background:rgba(12,14,17,.86);border:1px solid #2a2f37;border-radius:6px;padding:10px 12px}
+  #ui h1{font-size:15px;margin:0 0 6px;color:#e6c79a}
+  #ui p{margin:4px 0;line-height:1.4}
+  #ui button{background:#1c2026;color:#cfd6df;border:1px solid #3a414b;border-radius:4px;padding:4px 8px;margin:4px 4px 0 0;cursor:pointer}
+  #ui button.on{border-color:#e6c79a;color:#e6c79a}
+  #k{width:100%;margin:8px 0 2px}
+  .row{display:flex;justify-content:space-between;color:#8a93a0}
+  #hide{position:absolute;right:12px;top:10px;background:#1c2026;color:#cfd6df;border:1px solid #3a414b;border-radius:4px;padding:4px 8px}
+  .n{color:#8a93a0}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>Одна машина: мобильный режим ↔ грузовой</h1>
+  <p><b>Мобильный:</b> 4 гусеничных модуля на грунте, ещё 4 едут сверху на выдвижных направляющих, впереди кабина. Габарит ≈ 21 × 12,3 × 7 м.</p>
+  <p><b>Грузовой:</b> верхний ярус выдвигается назад, как ящик, опускается на домкратах за нижним и сцепляется с ним — получается платформа 34 × 12,3 м из 8 модулей под ловушку 58,4 кт. Ловушку опускают на ложементы.</p>
+  <p>Привод электрический: закрытые накопители в торцевых отсеках каждого модуля (§19), мотор-насос → гидромоторы гусениц. Выхлопа и пара нет.</p>
+  <input id="k" type="range" min="0" max="1000" value="0">
+  <div class="row"><span>мобильный</span><span>грузовой</span></div>
+  <div><button id="bM" class="on">Мобильный</button><button id="bG">Грузовой</button><button id="bL">Погрузка ловушки</button><button id="snd">▶ Звук</button></div>
+  <div><button id="cV">Машина</button><button id="cS">Сбоку</button><button id="cT">Сверху</button><button id="cR">Облёт</button></div>
+  <p class="n">Облик — эскиз. Не посчитано: масса машины, давление на грунт в мобильном режиме (4 гусеницы несут все 8 модулей), прочность направляющих при выдвижении, мощность хода в мобильном режиме.</p>
+</div>
+<button id="hide">скрыть панель</button>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputEncoding = THREE.sRGBEncoding;
+  document.body.appendChild(renderer.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x07080a); scene.fog = new THREE.FogExp2(0x0b0c0f, 0.005);
+  const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.3, 2000);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  function view(p, t) { camera.position.set(...p); controls.target.set(...t); controls.update(); }
+
+  const std = (c, m, r, extra) => new THREE.MeshStandardMaterial(Object.assign({ color: c, metalness: m, roughness: r }, extra || {}));
+  const M = {
+    hull: std(0x2a2e35, 0.75, 0.42, { flatShading: true }), hullD: std(0x1b1e23, 0.7, 0.5, { flatShading: true }),
+    body: std(0xb9bfc6, 0.35, 0.42), bodyD: std(0x5c636c, 0.5, 0.4), band: std(0x24282e, 0.8, 0.35), orange: std(0xc8622a, 0.25, 0.5),
+    track: std(0x121315, 0.5, 0.8), shoe: std(0x24262b, 0.6, 0.6, { flatShading: true }), trap: std(0x2c3b52, 0.85, 0.35, { flatShading: true }),
+    rib: std(0x1a2230, 0.9, 0.3, { flatShading: true }), batt: std(0x26364a, 0.7, 0.35), rail: std(0x7a6a50, 0.8, 0.35), jack: std(0x9aa3ad, 0.9, 0.25),
+    glass: std(0x0a0d12, 1.0, 0.06), ground: std(0x131210, 0, 0.97), road: std(0x1b1a17, 0, 0.92),
+    glowB: new THREE.MeshBasicMaterial({ color: 0x3fa8ff }), lamp: new THREE.MeshBasicMaterial({ color: 0xfff2d8 }), beacon: new THREE.MeshBasicMaterial({ color: 0xff2020 }), man: std(0xd8dde3, 0, 0.6),
+  };
+  function add(geo, mat, x, y, z, parent, cast = true) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; (parent || scene).add(m); return m; }
+  function grp(parent, x = 0, y = 0, z = 0) { const g = new THREE.Group(); g.position.set(x, y, z); (parent || scene).add(g); return g; }
+  function profile(pts, width, mat, x, y, z, parent, bevel = 0.1) {
+    const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) s.lineTo(p[0], p[1]); s.lineTo(pts[0][0], pts[0][1]);
+    const g = new THREE.ExtrudeGeometry(s, { depth: width - 2 * bevel, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2 }); g.translate(0, 0, -(width - 2 * bevel) / 2);
+    return add(g, mat, x, y, z, parent);
+  }
+  add(new THREE.PlaneGeometry(1800, 1800), M.ground, 0, 0, 0, scene, false).rotation.x = -Math.PI / 2;
+  add(new THREE.PlaneGeometry(300, 18), M.road, 0, 0.01, 0, scene, false).rotation.x = -Math.PI / 2;
+
+  // ---------- one tracked module 17 x 2.8 x 2.9 m: track, body with accumulator packs at both ends, cradle on top ----------
+  function module(parent, zc) {
+    const g = grp(parent, 0, 0, zc);
+    const L = 16.8, h = 1.9, r = 0.95, w = 2.8, s = new THREE.Shape();
+    s.moveTo(-L / 2 + r, 0); s.lineTo(L / 2 - r, 0); s.absarc(L / 2 - r, r, r, -Math.PI / 2, Math.PI / 2, false); s.lineTo(-L / 2 + r, h); s.absarc(-L / 2 + r, r, r, Math.PI / 2, Math.PI * 1.5, false);
+    const tg = new THREE.ExtrudeGeometry(s, { depth: w, bevelEnabled: false, curveSegments: 16 }); tg.translate(0, 0, -w / 2); add(tg, M.track, 0, 0, 0, g);
+    const shoe = new THREE.BoxGeometry(0.42, 0.12, w + 0.1);
+    for (let i = 0; i < 34; i++) { const x = -L / 2 + r + 0.2 + i * ((L - 2 * r) / 33); add(shoe, M.shoe, x, 0.06, 0, g); add(shoe, M.shoe, x, h + 0.02, 0, g); }
+    for (const sx of [-1, 1]) add(new THREE.CylinderGeometry(0.98, 0.98, w + 0.15, 18), M.hull, sx * (L / 2 - r), r, 0, g).rotation.x = Math.PI / 2;
+    for (let i = 0; i < 9; i++) add(new THREE.CylinderGeometry(0.55, 0.55, w + 0.06, 16), M.hullD, -6.6 + i * 1.65, 0.75, 0, g).rotation.x = Math.PI / 2;
+    add(new THREE.BoxGeometry(12.0, 0.9, 2.6), M.hull, 0, 2.4, 0, g);
+    for (const sx of [-1, 1]) {
+      add(new THREE.BoxGeometry(1.7, 0.9, 2.62), M.batt, sx * 6.9, 2.4, 0, g);
+      for (let k = 0; k < 4; k++) add(new THREE.BoxGeometry(0.06, 0.6, 2.64), M.band, sx * (6.25 + k * 0.42), 2.4, 0, g);
+    }
+    add(new THREE.BoxGeometry(15.4, 0.08, 0.12), M.orange, 0, 2.86, 1.36, g); add(new THREE.BoxGeometry(15.4, 0.08, 0.12), M.orange, 0, 2.86, -1.36, g);
+    add(new THREE.BoxGeometry(15.0, 0.5, 2.4), M.hullD, 0, 3.1, 0, g);
+    return g;
+  }
+  const ROWS = [-4.605, -1.535, 1.535, 4.605], FRONT = 8.5, H_UP = 3.65;
+  const LS = grp(scene, FRONT, 0, 0), US = grp(scene, FRONT, H_UP, 0);
+  for (const z of ROWS) { module(LS, z); module(US, z); }
+  // cross frames tying each set of 4 into one rigid body
+  for (const S of [LS, US]) for (const x of [-7.6, 0, 7.6]) add(new THREE.BoxGeometry(0.6, 0.5, 12.0), M.bodyD, x, 2.05, 0, S);
+  // rails on the lower set: fixed part + telescopic extension that slides out backwards
+  const railsFix = [], railsExt = [];
+  for (const z of ROWS) { railsFix.push(add(new THREE.BoxGeometry(16.8, 0.3, 0.5), M.rail, 0, 3.5, z, LS)); railsExt.push(add(new THREE.BoxGeometry(1, 0.24, 0.4), M.rail, 0, 3.5, z, LS)); }
+  // jacks on the upper set's outriggers (4 corners)
+  const jacks = [];
+  for (const x of [-7.8, 7.8]) for (const sz of [-1, 1]) {
+    add(new THREE.BoxGeometry(0.8, 0.5, 0.7), M.bodyD, x, 1.6, sz * 6.25, US);
+    const leg = add(new THREE.CylinderGeometry(0.22, 0.22, 1, 12), M.jack, x, 0, sz * 6.25, US); const pad = add(new THREE.CylinderGeometry(0.6, 0.6, 0.15, 16), M.hullD, x, 0, sz * 6.25, US);
+    jacks.push({ leg, pad });
+  }
+  // couplers between the sets (shown when locked)
+  const couplers = []; for (const z of ROWS) couplers.push(add(new THREE.BoxGeometry(0.9, 0.7, 1.2), M.orange, -8.55, 2.4, z, LS));
+  // head: front deck across all four rows, sealed cab on it (EMPU style), lamps
+  const HEAD = grp(LS, 0, 0, 0);
+  add(new THREE.BoxGeometry(4.2, 2.3, 12.3), M.hull, 10.5, 2.2, 0, HEAD);
+  add(new THREE.BoxGeometry(4.25, 0.12, 12.35), M.orange, 10.5, 2.9, 0, HEAD);
+  profile([[8.7, 3.35], [12.2, 3.35], [12.2, 4.4], [11.0, 6.35], [8.7, 6.35]], 5.6, M.body, 0, 0, 0, HEAD, 0.2);
+  profile([[11.35, 4.55], [12.05, 4.55], [11.0, 6.2], [10.6, 6.2]], 5.0, M.glass, 0.08, 0, 0, HEAD, 0.02);
+  for (const sz of [-1, 1]) add(new THREE.BoxGeometry(2.0, 0.5, 0.05), M.glass, 9.8, 5.6, sz * 2.81, HEAD, false);
+  for (const sz of [-1, 1]) for (const z of [2.0, 5.2]) add(new THREE.BoxGeometry(0.15, 0.35, 0.9), M.lamp, 12.62, 2.7, sz * z, HEAD, false);
+  add(new THREE.SphereGeometry(0.15, 10, 8), M.beacon, 9.2, 6.55, 0, HEAD, false);
+  for (let i = 0; i < 6; i++) add(new THREE.BoxGeometry(0.8, 0.05, 0.3), M.hullD, 9.5, 0.6 + i * 0.45, 6.25, HEAD);   // ladder
+
+  // the trap (lowered from above at loading)
+  const trap = grp(scene, 0, 7.6, 0); const R8 = 4.375, LB = 34.6;
+  const tb = add(new THREE.CylinderGeometry(R8, R8, LB, 8), M.trap, 0, 0, 0, trap); tb.rotation.z = Math.PI / 2; tb.rotateY(Math.PI / 8);
+  for (let i = 0; i <= 8; i++) { const r = add(new THREE.CylinderGeometry(R8 + 0.12, R8 + 0.12, 0.35, 8), M.rib, -LB / 2 + 0.6 + i * (LB - 1.2) / 8, 0, 0, trap); r.rotation.z = Math.PI / 2; r.rotateY(Math.PI / 8); }
+  for (const sx of [-1, 1]) { add(new THREE.CylinderGeometry(0.9, 0.9, 0.6, 24), M.hull, sx * (LB / 2 + 0.6), 0, 0, trap).rotation.z = Math.PI / 2; add(new THREE.TorusGeometry(2.6, 0.08, 8, 48), M.glowB, sx * (LB / 2 + 0.31), 0, 0, trap, false).rotation.y = Math.PI / 2; }
+  trap.visible = false;
+
+  // lights, people
+  function flood(x, y, z, tx, ty, tz) {
+    add(new THREE.CylinderGeometry(0.12, 0.18, y, 6), M.hullD, x, y / 2, z); add(new THREE.BoxGeometry(0.9, 0.5, 0.9), M.lamp, x, y + 0.2, z, scene, false);
+    const sl = new THREE.SpotLight(0xfff0d8, 3.2, 180, 0.55, 0.6, 1.4); sl.position.set(x, y + 0.2, z); scene.add(sl);
+    const tg = new THREE.Object3D(); tg.position.set(tx, ty, tz); scene.add(tg); sl.target = tg; sl.castShadow = true; sl.shadow.mapSize.set(1024, 1024);
+  }
+  flood(26, 12, -14, 8, 2, 0); flood(-14, 12, 14, -4, 2, 0); flood(6, 13, 16, 4, 3, 0); flood(-24, 11, -12, -10, 2, 0);
+  scene.add(new THREE.HemisphereLight(0x3a4250, 0x0d0b09, 0.36)); const rim = new THREE.DirectionalLight(0x8090ad, 0.6); rim.position.set(80, 40, -80); scene.add(rim);
+  const man = grp(scene, 21.5, 0, 7.8); add(new THREE.CylinderGeometry(0.17, 0.2, 0.85, 10), M.man, 0, 0.43, 0, man); add(new THREE.CylinderGeometry(0.22, 0.2, 0.62, 10), M.man, 0, 1.16, 0, man); add(new THREE.SphereGeometry(0.13, 12, 10), M.man, 0, 1.6, 0, man);
+
+  // ---------- transformation ----------
+  const clamp = x => Math.max(0, Math.min(1, x)), seg = (k, a, b) => clamp((k - a) / (b - a));
+  let k = 0, kT = 0, load = 0, loadT = 0;
+  function apply() {
+    const s1 = seg(k, 0, 0.45), sj = seg(k, 0.28, 0.45), s2 = seg(k, 0.5, 0.8), s3 = seg(k, 0.82, 0.92);
+    US.position.x = FRONT - 17.0 * s1; US.position.y = H_UP * (1 - s2);
+    const ext = 17.0 * s1 * (1 - s3);
+    for (const r of railsExt) { r.visible = ext > 0.05; r.scale.x = Math.max(0.05, ext); r.position.x = -8.4 - ext / 2; }
+    for (const r of railsFix) r.visible = k < 0.92;
+    const legOut = sj * (1 - seg(k, 0.8, 0.84));
+    for (const j of jacks) { const len = Math.max(0.05, (US.position.y + 1.4) * legOut); j.leg.visible = j.pad.visible = legOut > 0.02; j.leg.scale.y = len; j.leg.position.y = 1.4 - len / 2; j.pad.position.y = 1.4 - len + 0.07; }
+    for (const c of couplers) c.visible = k > 0.9;
+    trap.visible = k > 0.999 && load > 0.001; trap.position.y = 7.6 + 30 * (1 - load);
+  }
+  const slider = document.getElementById("k");
+  slider.oninput = () => { kT = k = slider.value / 1000; if (k < 0.999) { load = loadT = 0; } apply(); mark(); };
+  function mark() { document.getElementById("bM").classList.toggle("on", kT === 0); document.getElementById("bG").classList.toggle("on", kT === 1); document.getElementById("bL").classList.toggle("on", loadT === 1); }
+  document.getElementById("bM").onclick = () => { loadT = 0; load = 0; kT = 0; mark(); };
+  document.getElementById("bG").onclick = () => { kT = 1; mark(); };
+  document.getElementById("bL").onclick = () => { kT = 1; loadT = 1; load = 0; mark(); view([30, 22, 48], [0, 5, 0]); };
+  document.getElementById("cV").onclick = () => view([38, 13, 30], [10, 3, 0]);
+  document.getElementById("cS").onclick = () => view([2, 9, 72], [2, 4, 0]);
+  document.getElementById("cT").onclick = () => view([2, 80, 0.1], [2, 0, 0]);
+  let orbit = false; const bro = document.getElementById("cR"); bro.onclick = () => { orbit = !orbit; bro.classList.toggle("on", orbit); };
+  document.getElementById("hide").onclick = () => { const u = document.getElementById("ui"); u.style.display = u.style.display === "none" ? "block" : "none"; };
+  addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+  // ---------- sound: electric drive — motors, hydraulic pumps, tracks; hydraulics whine while transforming ----------
+  let ac = null, nodes = [], playing = false, timers = [], hydG = null;
+  function noiseBuf(sec) { const b = ac.createBuffer(1, ac.sampleRate * sec, ac.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; }
+  function osc(f, a, out, type, f0) { const o = ac.createOscillator(); o.type = type || "sine"; if (f0) { o.frequency.setValueAtTime(f0, ac.currentTime); o.frequency.exponentialRampToValueAtTime(f, ac.currentTime + 3); } else o.frequency.value = f; const g = ac.createGain(); g.gain.value = a; o.connect(g); g.connect(out); o.start(); nodes.push(o); return o; }
+  function noise(lo, hi, a, out, nb) { const s = ac.createBufferSource(); s.buffer = nb; s.loop = true; const h = ac.createBiquadFilter(); h.type = "highpass"; h.frequency.value = lo; const l = ac.createBiquadFilter(); l.type = "lowpass"; l.frequency.value = hi; const g = ac.createGain(); g.gain.value = a; s.connect(h); h.connect(l); l.connect(g); g.connect(out); s.start(); nodes.push(s); return g; }
+  function startSound() {
+    ac = new (window.AudioContext || window.webkitAudioContext)(); nodes = [];
+    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -22; comp.ratio.value = 6; comp.connect(ac.destination);
+    const sat = ac.createWaveShaper(); const cv = new Float32Array(1024); for (let i = 0; i < 1024; i++) cv[i] = Math.tanh(2.0 * (i / 512 - 1)); sat.curve = cv; sat.connect(comp);
+    const master = ac.createGain(); master.gain.value = 0; master.gain.linearRampToValueAtTime(1.1, ac.currentTime + 2.5); master.connect(sat);
+    const nb = noiseBuf(4);
+    noise(30, 260, 0.35, master, nb);                                                          // rolling grind
+    const pb = ac.createGain(); pb.gain.value = 0.12; pb.connect(master);                         // 8 motor-pump units, 150 Hz family
+    for (let i = 0; i < 8; i++) for (const [h, a] of [[1, 1], [2, 0.6], [3, 0.4], [4, 0.2]]) osc(150 * h * (1 + (Math.random() - 0.5) * 0.01), a, pb, "sine", 150 * h * 0.3);
+    osc(100, 0.12, master, "sawtooth", 30); osc(200, 0.05, master, "sine", 60); osc(2900, 0.01, master, "sine", 900);
+    hydG = ac.createGain(); hydG.gain.value = 0; hydG.connect(master); osc(420, 0.25, hydG, "sawtooth"); osc(630, 0.1, hydG, "sine"); noise(800, 3000, 0.25, hydG, nb);
+    function clank() { const t0 = ac.currentTime; const s = ac.createBufferSource(); s.buffer = nb; const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 180 + Math.random() * 520; bp.Q.value = 5;
+      const g = ac.createGain(); g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.4 + Math.random() * 0.5, t0 + 0.004); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35); s.connect(bp); bp.connect(g); g.connect(master); s.start(t0, Math.random() * 3, 0.4);
+      const th = ac.createOscillator(); th.frequency.setValueAtTime(70, t0); th.frequency.exponentialRampToValueAtTime(35, t0 + 0.25); const tg = ac.createGain(); tg.gain.setValueAtTime(0.4, t0); tg.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3); th.connect(tg); tg.connect(master); th.start(t0); th.stop(t0 + 0.35); }
+    timers.push(setInterval(() => { if (Math.random() < 0.9) clank(); }, 1000 / 12));
+  }
+  function stopSound() { timers.forEach(clearInterval); timers = []; if (ac) ac.close(); ac = null; hydG = null; }
+  const bs = document.getElementById("snd");
+  bs.onclick = () => { playing = !playing; bs.classList.toggle("on", playing); bs.textContent = playing ? "■ Звук" : "▶ Звук"; if (playing) startSound(); else stopSound(); };
+
+  apply(); view([38, 13, 30], [10, 3, 0]);
+  let t = 0;
+  (function loop() {
+    t += 0.016;
+    const moving = Math.abs(kT - k) > 1e-4;
+    if (moving) { k += Math.sign(kT - k) * Math.min(Math.abs(kT - k), 0.016 / 12); slider.value = Math.round(k * 1000); }
+    if (k > 0.999 && loadT > load) load = Math.min(loadT, load + 0.016 / 7);
+    if (hydG) hydG.gain.value += ((moving || (load > 0 && load < 1) ? 1 : 0) * 0.5 - hydG.gain.value) * 0.05;
+    apply();
+    if (orbit) { const a = t * 0.08; camera.position.set(2 + 55 * Math.cos(a), 18, 55 * Math.sin(a)); controls.target.set(2, 3, 0); }
+    controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop);
+  })();
+})();
+</script>
+</body>
+</html>

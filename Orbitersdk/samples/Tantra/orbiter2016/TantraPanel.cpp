@@ -726,7 +726,8 @@ bool Tantra::RedrawLower(int id, SURFHANDLE s) {
             std::snprintf(buf, sizeof buf, "привод цапф %6.0f МН·м", ld.driveMoment / 1e6);
             PanelText(s, r[0] + 8, y0 + 3 * dy, buf, FONT_AMBER);
             {   // column buckling: F L^2 against pi^2 E I / safety of the band mast (Spec.h)
-                const double flLim = PI * PI * tantra::spec::kCntE * tantra::spec::kBladeI / tantra::spec::kSafety;
+                const double flLim = PI * PI * tantra::spec::kLegE * tantra::spec::kBladeI /
+                                     (tantra::spec::kGuyK * tantra::spec::kGuyK * tantra::spec::kSafety);   // guyed at mid-length
                 std::snprintf(buf, sizeof buf, "изгиб лопастей %5.0f %%", 100.0 * ld.columnFL2 / flLim);
                 PanelText(s, r[0] + 8, y0 + 4 * dy, buf, ld.columnFL2 > flLim ? FONT_RED : FONT_GREEN);
             }
@@ -749,10 +750,10 @@ bool Tantra::RedrawLower(int id, SURFHANDLE s) {
             std::snprintf(key, sizeof key, "%.2f %.2f %.2f %.2f", irisAna_, irisMarch_, marchOut_, tuck_);
             if (!PanelChanged(id, key)) return false;
             PanelClear(s, id);
-            std::snprintf(buf, sizeof buf, "чаши анамезона: %s", irisAna_ > 0.99 ? "ОТКРЫТЫ" : irisAna_ < 0.01 ? "закрыты" : "...");
+            std::snprintf(buf, sizeof buf, "кормовые чаши: %s", irisAna_ > 0.99 ? "ОТКРЫТЫ" : irisAna_ < 0.01 ? "закрыты" : "...");
             PanelText(s, r[0] + 8, r[1] + 6, buf, irisAna_ > 0.99 ? FONT_GREEN : FONT_AMBER);
-            std::snprintf(buf, sizeof buf, "маршевая: %s", marchOut_ > 0.99 ? "ВЫДВИНУТА" : marchOut_ > 0.0 || irisMarch_ > 0.0 ? "..." : "в колодце");
-            PanelText(s, r[0] + 8, r[1] + 32, buf, marchOut_ > 0.99 ? FONT_GREEN : FONT_AMBER);
+            std::snprintf(buf, sizeof buf, "центр кормы: магнитная система");   // (2026-10-09) the central cup is gone
+            PanelText(s, r[0] + 8, r[1] + 32, buf, FONT_GREEN);
             std::snprintf(buf, sizeof buf, "выдвижные блоки: %s", (std::max)(tuck_, cp.tuck) > 0.5 ? "утоплены" : "выдвинуты");
             PanelText(s, r[0] + 8, r[1] + 58, buf, FONT_AMBER);
             return true;

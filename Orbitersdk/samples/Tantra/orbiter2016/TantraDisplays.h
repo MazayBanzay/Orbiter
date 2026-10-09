@@ -51,6 +51,8 @@ public:
     void FlyAttitude(const VECTOR3& nose, const VECTOR3* up, double dt, double rateMax);   // the autopilots' attitude by the RCS (TantraFlightCtl.cpp)
     void FlyRelease();
     void ApApply(double dt);                    // the engaged autopilot's commands to the ship
+    int TestLandEngage();                       // (2026-10-09) the self-test: ВЗВЕСТИ, then ПУСК + ПОДТВЕРДИТЬ of ПОСАДКА НА КОРМУ; 2 = engaged
+    const tantra::guidance::Landing& TestLand() const { return land_; }
     bool fcInit_ = false, fcFlying_ = false, apFlew_ = false; double fcEp_ = 0, fcEy_ = 0, fcEr_ = 0, fcWp_ = 0, fcWy_ = 0, fcWr_ = 0;
     void PaintSpot(int screen, double u, double v);   // the cursor unit's laser dot over a screen's picture (after a full redraw)
     // the dot moved without a redraw of its screen: the picture under the old dot put back, the new one painted (the user,

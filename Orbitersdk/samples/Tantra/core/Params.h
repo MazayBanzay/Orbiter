@@ -17,10 +17,10 @@ struct ShipParams {
     // Masses [kg]
     // (2026-10-09, Spec mass budget) dry operating: structure and systems 5 832 t, hangar cargo except the lander and
     // the MPU (separate vessels), crew, consumables; its CG Spec kDryCGS
-    double dryMass = 5.99e6;
-    double trapStructMass = 641.0e3;   // per trap: the container is the magnetic trap - coils, magnets, shell (fibre ~12 GPa)
-    double trapFuelMass = 45.2e6;      // anamezon per trap (2026-10-09 canon: 0.899 c in 55 h with braking -> 181 kt in 4)
-    double argonMass = 23.9e6;         // ion charges, dense (body tanks 15.4 kt, aft tank 8.5 kt): the take-off arc at 30 km/s
+    double dryMass = 7.88e6;           // (variant Б) + 1 888 t of the supports for the full ship (Spec kDryCGS)
+    double trapStructMass = 817.0e3;   // per trap: the container is the magnetic trap - coils, magnets, shell (virial: x load)
+    double trapFuelMass = 57.6e6;      // anamezon per trap (canon 0.899 c in 55 h with braking at the dry mass above: 230 kt)
+    double argonMass = 30.3e6;         // ion charges, dense (body tanks 19.5 kt, aft tank 10.8 kt): the take-off arc at 30 km/s
     double ironMass = 4.0e6;           // planetary reaction mass in space; 3.3 m of solid iron in the screen at sub-light
 
     // Anamezon drive (also feeds DriveSpec)
@@ -64,21 +64,26 @@ struct ShipParams {
 
     // Operations
     double gLimitDefault = 5.0;        // g, felt (uncompensated)
+    // (2026-10-09) the lander's maglev throw along the stele over the 13 m stroke: in the air 1 g over the gravity (the lander's
+    // coil frames, 16 m/s), the emergency one (heavy planets, the user: «явно больше 4g») 8 g (NASA-STD-3001 Gx seated, < 1 s:
+    // 45 m/s - the lander's frames are not rated for it yet), in space a gentle 2-3 m/s
+    double landerG = 1.0, landerEmergencyG = 8.0, landerSpaceV = 2.5;
 
     // Speed model (2026-10-09): one drive core and the same traps - the models differ ONLY in the drive's power (the user).
-    // The traps' load is the canon's (the user: «Канон.»): 0.899 c in 55 h from the dark planet with braking at home, jet
-    // 0.98 c: mass ratio 19.9 -> 4 x 45.2 kt anamezon, 217 kt with the charges at lift-off. The ship rose FULL from the dark
-    // planet at 2.5 g: planetary engines on an arc - the marching cup and the four stern blocks on ion charges (8.1 GN,
-    // T/W 1.52, 1.22 with a stern block out) - then the anamezon. Loading at Triton is only for economy and safety.
+    // The traps' load is the canon's (the user: «Канон.», variant Б): 0.899 c in 55 h from the dark planet with braking at
+    // home, jet 0.98 c: mass ratio 19.96 -> 4 x 57.6 kt anamezon at the dry mass with the full-ship supports, 276 kt with
+    // the charges at lift-off. The ship rose FULL from the dark planet at 2.5 g: planetary engines on an arc - the marching
+    // cup and the four stern blocks on ion charges (at 14 T: T/W 1.58, 1.25 with a stern block out) - then the anamezon.
+    // Loading at Triton is only for economy and safety.
     //   0 Efremov: 0.899 c in 55 h (the canon's inertia damper on the whole ship, compensator to 550 g);
-    //   1 lower power: the same fuel and speed, ~4 g at departure, weeks to speed.
+    //   1 lower power: the same fuel and speed, ~3 g at departure, weeks to speed.
     int speedModel = 1;
     void ApplySpeedModel() {
-        trapFuelMass = 45.2e6;
+        trapFuelMass = 57.6e6;
         if (speedModel == 1) {
             anaThrust = 2.29e9; pelletRate = 8.9e2; compMaxG = 20.0;
         } else {
-            anaThrust = 5.45e10; pelletRate = 2.1e4; compMaxG = 550.0;   // 55 h to 0.899 c; 8.8 g pellets
+            anaThrust = 6.94e10; pelletRate = 2.67e4; compMaxG = 550.0;   // 55.4 h to 0.899 c, peak 522 g; 8.8 g pellets
         }
     }
 

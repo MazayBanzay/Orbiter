@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Экспедиционный тягач — 3 варианта</title>
+<style>
+  html,body{margin:0;height:100%;background:#07080a;color:#cfd6df;font:13px "Segoe UI",Arial;overflow:hidden}
+  #ui{position:absolute;left:12px;top:10px;max-width:480px;background:rgba(12,14,17,.86);border:1px solid #2a2f37;border-radius:6px;padding:10px 12px}
+  #ui h1{font-size:15px;margin:0 0 6px;color:#e6c79a}
+  #ui p{margin:4px 0;line-height:1.4}
+  #ui button{background:#1c2026;color:#cfd6df;border:1px solid #3a414b;border-radius:4px;padding:4px 8px;margin:4px 4px 0 0;cursor:pointer}
+  #ui button.on{border-color:#e6c79a;color:#e6c79a}
+  #hide{position:absolute;right:12px;top:10px}
+  .k{color:#8fb39a}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>Экспедиционный тягач и поезд ловушки 58,4 кт</h1>
+  <p>Тягач — две сочленённые секции на тех же платформах: передняя (2 платформы) — экспедиционный модуль: кабина, жилой отсек с СЖО на несколько суток, шлюз, мачта с радаром/лидаром/антенной, лебёдка, складной отвал; задняя (4 платформы) — силовой модуль, сменный по варианту. Ловушка на 8 платформах сзади; тягач отцепляется и ходит сам.</p>
+  <div><button id="b1" class="on">1 · Синтез</button><button id="b2">2 · Сжигание железа</button><button id="b3">3 · Рейс — зарядка</button></div>
+  <p id="desc"></p>
+  <div><button id="snd">▶ Звук</button><button id="cut">Разрез силового модуля</button></div>
+  <div><button id="cA">Ракурс</button><button id="cS">Сбоку</button><button id="cT">Тягач крупно</button><button id="cR">Облёт</button></div>
+  <p style="color:#8a93a0">Звук по расчёту раздела 17, громче: гул охладителей, насосы 150/300/450 Гц, турбина ~480 Гц, редуктор, траки; у сжигания — рёв топки и дымосос; у накопителя — электромоторы насосов. Лучше в наушниках.</p>
+</div>
+<button id="hide" style="background:#1c2026;color:#cfd6df;border:1px solid #3a414b;border-radius:4px;padding:4px 8px">скрыть панель</button>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputEncoding = THREE.sRGBEncoding;
+  document.body.appendChild(renderer.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x07080a); scene.fog = new THREE.FogExp2(0x0b0c0f, 0.0055);
+  const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.3, 2000);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  function view(p, t) { camera.position.set(...p); controls.target.set(...t); controls.update(); }
+
+  const std = (c, m, r, extra) => new THREE.MeshStandardMaterial(Object.assign({ color: c, metalness: m, roughness: r }, extra || {}));
+  const M = {
+    hull: std(0x2a2e35, 0.75, 0.42, { flatShading: true }), hullD: std(0x1b1e23, 0.7, 0.5, { flatShading: true }),
+    body: std(0xb9bfc6, 0.35, 0.42), bodyD: std(0x5c636c, 0.5, 0.4), band: std(0x24282e, 0.8, 0.35),
+    orange: std(0xc8622a, 0.25, 0.5), yellow: std(0xb08a20, 0.3, 0.6), ceramic: std(0x8c8a86, 0.1, 0.75, { flatShading: true }),
+    track: std(0x121315, 0.5, 0.8), shoe: std(0x24262b, 0.6, 0.6, { flatShading: true }), trap: std(0x2c3b52, 0.85, 0.35, { flatShading: true }),
+    rib: std(0x1a2230, 0.9, 0.3, { flatShading: true }), louver: std(0x1d2420, 0.6, 0.55, { flatShading: true }), pipe: std(0x5a4a38, 0.7, 0.45),
+    cell: std(0x2c3440, 0.8, 0.3), glass: std(0x0a0d12, 1.0, 0.06), ground: std(0x131210, 0, 0.97), road: std(0x1b1a17, 0, 0.92),
+    glowB: new THREE.MeshBasicMaterial({ color: 0x3fa8ff }), glowO: new THREE.MeshBasicMaterial({ color: 0xff7a2a }),
+    lamp: new THREE.MeshBasicMaterial({ color: 0xfff2d8 }), beacon: new THREE.MeshBasicMaterial({ color: 0xff2020 }), man: std(0xd8dde3, 0, 0.6),
+  };
+  function add(geo, mat, x, y, z, parent, cast = true) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; (parent || scene).add(m); return m; }
+  function cbox(lx, ly, lz, ch, mat, x, y, z, parent) {   // chamfered top edges, extruded along z
+    const s = new THREE.Shape(); s.moveTo(-lx / 2, 0); s.lineTo(lx / 2, 0); s.lineTo(lx / 2, ly - ch); s.lineTo(lx / 2 - ch, ly); s.lineTo(-lx / 2 + ch, ly); s.lineTo(-lx / 2, ly - ch); s.lineTo(-lx / 2, 0);
+    const g = new THREE.ExtrudeGeometry(s, { depth: lz, bevelEnabled: false }); g.translate(0, 0, -lz / 2); return add(g, mat, x, y, z, parent);
+  }
+  function profile(pts, width, mat, x, y, z, parent, bevel = 0.35) {     // side profile (x,y) extruded across z
+    const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) s.lineTo(p[0], p[1]); s.lineTo(pts[0][0], pts[0][1]);
+    const g = new THREE.ExtrudeGeometry(s, { depth: width - 2 * bevel, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3 }); g.translate(0, 0, -(width - 2 * bevel) / 2);
+    return add(g, mat, x, y, z, parent);
+  }
+  add(new THREE.PlaneGeometry(1800, 1800), M.ground, 0, 0, 0, scene, false).rotation.x = -Math.PI / 2;
+  add(new THREE.PlaneGeometry(300, 16), M.road, 20, 0.01, 0, scene, false).rotation.x = -Math.PI / 2;
+
+  // ---------- the standard platform ----------
+  function platform(xc, zc, cradle, parent) {
+    const g = new THREE.Group(); g.position.set(xc, 0, zc); (parent || scene).add(g);
+    const L = 16.8, h = 1.9, r = 0.95, s = new THREE.Shape();
+    s.moveTo(-L / 2 + r, 0); s.lineTo(L / 2 - r, 0); s.absarc(L / 2 - r, r, r, -Math.PI / 2, Math.PI / 2, false); s.lineTo(-L / 2 + r, h); s.absarc(-L / 2 + r, r, r, Math.PI / 2, Math.PI * 1.5, false);
+    const tg = new THREE.ExtrudeGeometry(s, { depth: 2.8, bevelEnabled: false, curveSegments: 16 }); tg.translate(0, 0, -1.4); add(tg, M.track, 0, 0, 0, g);
+    const shoe = new THREE.BoxGeometry(0.42, 0.12, 2.9);
+    for (let i = 0; i < 34; i++) { const x = -L / 2 + r + 0.2 + i * ((L - 2 * r) / 33); add(shoe, M.shoe, x, 0.06, 0, g); add(shoe, M.shoe, x, h + 0.02, 0, g); }
+    for (const sx of [-1, 1]) add(new THREE.CylinderGeometry(0.98, 0.98, 2.95, 18), M.hull, sx * (L / 2 - r), r, 0, g).rotation.x = Math.PI / 2;
+    cbox(15.6, 0.9, 2.6, 0.25, M.hull, 0, 1.95, 0, g);
+    add(new THREE.BoxGeometry(15.4, 0.08, 0.12), M.orange, 0, 2.3, 1.36, g); add(new THREE.BoxGeometry(15.4, 0.08, 0.12), M.orange, 0, 2.3, -1.36, g);
+    if (cradle) add(new THREE.BoxGeometry(15.0, 0.5, 2.4), M.hullD, 0, 3.1, 0, g);
+    return g;
+  }
+  const ROWS4 = [-4.605, -1.535, 1.535, 4.605], ROWS2 = [-1.535, 1.535];
+  for (const xc of [-8.5, 8.5]) for (const z of ROWS4) platform(xc, z, true);
+  // the trap
+  const trap = new THREE.Group(); scene.add(trap); trap.position.set(0, 7.45, 0);
+  const R8 = 4.375, LB = 34.6;
+  const tb = add(new THREE.CylinderGeometry(R8, R8, LB, 8), M.trap, 0, 0, 0, trap); tb.rotation.z = Math.PI / 2; tb.rotateY(Math.PI / 8);
+  for (let i = 0; i <= 8; i++) { const r = add(new THREE.CylinderGeometry(R8 + 0.12, R8 + 0.12, 0.35, 8), M.rib, -LB / 2 + 0.6 + i * (LB - 1.2) / 8, 0, 0, trap); r.rotation.z = Math.PI / 2; r.rotateY(Math.PI / 8); }
+  for (const sx of [-1, 1]) { add(new THREE.CylinderGeometry(0.9, 0.9, 0.6, 24), M.hull, sx * (LB / 2 + 0.6), 0, 0, trap).rotation.z = Math.PI / 2; add(new THREE.TorusGeometry(2.6, 0.08, 8, 48), M.glowB, sx * (LB / 2 + 0.31), 0, 0, trap, false).rotation.y = Math.PI / 2; }
+
+  // ---------- the tractor: leads the train; power section (4 platforms) + articulation + expedition section (2 platforms) ----------
+  const PX = 28.8, EX = PX + 18.6;                      // power section 3.5 m ahead of the trap train (drawbar); expedition section ahead of it
+  for (const z of ROWS4) platform(PX, z, false);
+  for (const z of [-3.0, 3.0]) add(new THREE.BoxGeometry(4.2, 0.45, 0.45), M.hullD, 18.7, 1.9, z);   // drawbars tractor — trap train
+  add(new THREE.BoxGeometry(0.5, 0.5, 6.4), M.hullD, 18.7, 1.9, 0);
+  for (const z of ROWS2) platform(EX, z, false);
+  const P = new THREE.Group(); P.position.set(PX, 2.85, 0); scene.add(P);
+  const E = new THREE.Group(); E.position.set(EX, 2.85, 0); scene.add(E);
+  for (const z of [-4.6, -1.53, 1.53, 4.6]) add(new THREE.BoxGeometry(16.6, 0.5, 0.45), M.hullD, 0, 0.25, z, P);
+  // articulation: a drawbar with a turntable and a bellows walkway
+  add(new THREE.CylinderGeometry(1.2, 1.2, 0.6, 20), M.hullD, 9.25, 0.6, 0, P);
+  add(new THREE.BoxGeometry(2.4, 0.5, 1.4), M.hull, 9.25, 1.1, 0, P);
+  const bel = add(new THREE.CylinderGeometry(1.35, 1.35, 1.6, 16, 6, true), M.band, 9.25, 3.3, 0, P); bel.rotation.z = Math.PI / 2;
+  for (let i = 0; i < 6; i++) { const r = add(new THREE.TorusGeometry(1.36, 0.06, 6, 24), M.hullD, 8.6 + i * 0.26, 3.3, 0, P); r.rotation.y = Math.PI / 2; }
+
+  // expedition section: a long capsule body, wedge nose with panoramic glazing, mast, airlock, winch, folding blade
+  // low wedge-nosed locomotive cab: one living deck (2.2 m clear) over the life-support floor; the roof line runs on into the power hood
+  profile([[-8.0, 0], [5.2, 0], [8.6, 0.9], [8.6, 1.5], [4.6, 4.0], [-8.0, 4.3]], 5.6, M.body, 0, 0.5, 0, E, 0.4);
+  add(new THREE.BoxGeometry(16.2, 0.5, 5.75), M.band, -0.4, 0.75, 0, E);
+  add(new THREE.BoxGeometry(12.0, 0.12, 5.78), M.orange, -1.8, 1.7, 0, E);
+  // glazing: a wraparound band in the nose slope, narrow side strips
+  profile([[6.0, 2.05], [7.6, 2.05], [5.2, 4.15], [4.1, 4.2]], 5.0, M.glass, 0, 0.5, 0, E, 0.05);
+  for (const sz of [-1, 1]) add(new THREE.BoxGeometry(7.5, 0.5, 0.06), M.glass, 0.4, 3.75, sz * 2.83, E, false);
+  // airlock door (right side), ladder
+  add(new THREE.BoxGeometry(1.3, 2.3, 0.08), M.bodyD, -5.2, 2.0, 2.84, E, false);
+  for (let i = 0; i < 5; i++) add(new THREE.BoxGeometry(0.9, 0.05, 0.25), M.hullD, -5.2, -1.8 + i * 0.45, 3.1, E);
+  // low sensor mast: radar, lidar dome; comms dish laid along the roof
+  add(new THREE.BoxGeometry(0.4, 1.6, 0.4), M.bodyD, -1.5, 5.6, 0, E);
+  add(new THREE.BoxGeometry(2.4, 0.15, 0.6), M.bodyD, -1.5, 6.45, 0, E).rotation.y = 0.4;
+  add(new THREE.SphereGeometry(0.45, 16, 12), M.body, -1.5, 6.85, 0, E);
+  const dish = add(new THREE.SphereGeometry(0.9, 20, 10, 0, Math.PI * 2, 0, 0.9), M.body, -5.0, 5.3, 0, E); dish.rotation.z = 0.6;
+  add(new THREE.SphereGeometry(0.18, 10, 8), M.beacon, -1.5, 7.35, 0, E, false);
+  // life-support radiators flush in the roof, floodlights in the nose
+  add(new THREE.BoxGeometry(4.0, 0.06, 2.4), M.louver, -5.8, 4.83, 0, E);
+  for (const sz of [-1, 1]) add(new THREE.BoxGeometry(0.25, 0.35, 1.0), M.lamp, 8.62, 1.7, sz * 1.8, E, false);
+  // recovery winch and a folding dozer blade
+  const wd = add(new THREE.CylinderGeometry(0.55, 0.55, 2.4, 18), M.hullD, 9.2, -0.2, 0, E); wd.rotation.x = Math.PI / 2;
+  const bl = profile([[0, 0], [0.6, 0], [1.2, 2.6], [0.8, 2.6]], 6.6, M.hullD, 9.9, -2.6, 0, E, 0.05);
+  add(new THREE.BoxGeometry(0.3, 0.2, 6.6), M.orange, 11.0, 0.0, 0, E);
+
+  // ---------- power section variants ----------
+  const V = [new THREE.Group(), new THREE.Group(), new THREE.Group()]; for (const g of V) P.add(g);
+  const cutables = [];
+  // (1) fusion: the shield sphere (~8.4 m) under a smooth hump fairing; flank louvers; no exhaust
+  {
+    const g = V[0];
+    add(new THREE.SphereGeometry(4.2, 48, 32), std(0x23262c, 0.85, 0.32), -1.0, 4.6, 0, g);
+    // locomotive hood over the sphere: the front slope continues the cab roof, a long tail slope down to the drawbar
+    const fair = profile([[-8.2, 0], [8.2, 0], [8.2, 4.2], [5.0, 6.8], [1.5, 9.0], [-3.5, 9.0], [-6.8, 6.2], [-8.2, 3.6]], 11.6, M.body, 0, 0.5, 0, g, 1.2); cutables.push(fair);
+    add(new THREE.BoxGeometry(16.4, 1.0, 11.8), M.bodyD, 0, 0.5, 0, g);
+    add(new THREE.BoxGeometry(16.0, 0.14, 11.85), M.orange, 0, 1.75, 0, g);
+    for (const sz of [-1, 1]) for (let i = 0; i < 3; i++) {
+      const lv = new THREE.Group(); lv.position.set(-6.5 + i * 2.7, 2.4, sz * 5.95); g.add(lv);
+      add(new THREE.BoxGeometry(2.3, 1.8, 0.12), M.louver, 0, 0, 0, lv);
+      for (let k = 0; k < 6; k++) add(new THREE.BoxGeometry(2.2, 0.07, 0.3), M.hullD, 0, -0.75 + k * 0.3, sz * 0.1, lv).rotation.x = sz * 0.5;
+    }
+    for (const x of [5.4, 7.0]) { add(new THREE.CylinderGeometry(1.0, 1.1, 0.6, 20), M.band, x, 1.3, 0, g); }
+    add(new THREE.TorusGeometry(5.0, 0.18, 8, 64, Math.PI * 0.7), M.yellow, -1.0, 1.0, 0, g).rotation.set(-Math.PI / 2, 0, 0.55);
+  }
+  // (2) iron burning: the burner + ceramic heater under a low faceted casing, intake facing up-front, saddle bunkers of iron powder on the flanks,
+  //     swappable oxide containers at the rear, two low rear diffusers angled up and out, roof cooler deck
+  {
+    const g = V[1];
+    cbox(16.0, 3.2, 7.2, 1.0, M.body, 0, 0.0, 0, g);
+    add(new THREE.BoxGeometry(16.0, 0.18, 7.3), M.orange, 0, 2.0, 0, g);
+    for (const sz of [-1, 1]) { const t = add(new THREE.CylinderGeometry(1.25, 1.25, 13.0, 20), M.bodyD, -0.5, 1.4, sz * 4.75, g); t.rotation.z = Math.PI / 2;
+      for (const x of [-6.6, 5.6]) add(new THREE.SphereGeometry(1.25, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.bodyD, x, 1.4, sz * 4.75, g).rotation.z = x < 0 ? Math.PI / 2 : -Math.PI / 2; }
+    const intake = add(new THREE.CylinderGeometry(1.3, 1.6, 1.6, 6, 1, true), M.band, 5.6, 4.0, 0, g);
+    add(new THREE.BoxGeometry(5.5, 0.6, 5.2), M.cell, -1.0, 3.5, 0, g);                                         // cooler deck
+    for (const x of [-2.8, -1.0, 0.8]) add(new THREE.CylinderGeometry(0.75, 0.75, 0.4, 18, 1, true), M.hullD, x, 3.95, 0, g);
+    for (const sz of [-1, 1]) { const d = add(new THREE.CylinderGeometry(0.8, 1.15, 2.4, 8, 1, true), M.band, -5.6, 4.1, sz * 2.6, g); d.rotation.x = sz * 0.55; }   // stacks up and outward, away from the trap
+    add(new THREE.BoxGeometry(2.4, 2.0, 2.2), M.yellow, -6.8, 1.0, -1.5, g); add(new THREE.BoxGeometry(2.4, 2.0, 2.2), M.yellow, -6.8, 1.0, 1.5, g);
+    add(new THREE.BoxGeometry(0.06, 0.25, 1.2), M.glowO, 8.02, 1.5, 0, g, false);
+  }
+  // (3) trip-charge: open frame with swappable accumulator cassettes (superconducting field storage), the electric-hydraulic pump module,
+  //     a side charging boom with a docking head, small coolers
+  {
+    const g = V[2];
+    for (const [x, z] of [[-7.6, -5.4], [6.6, -5.4], [-7.6, 5.4], [6.6, 5.4]]) add(new THREE.BoxGeometry(0.4, 4.6, 0.4), M.bodyD, x, 2.3, z, g);
+    for (const z of [-5.4, 5.4]) add(new THREE.BoxGeometry(14.6, 0.35, 0.4), M.bodyD, -0.5, 4.6, z, g);
+    for (let r = 0; r < 2; r++) for (let i = 0; i < 6; i++) for (const sz of [-1, 1]) {
+      const c = add(new THREE.CylinderGeometry(0.85, 0.85, 3.6, 24), M.cell, -6.2 + i * 2.1, 1.0 + r * 1.9, sz * 2.9, g); c.rotation.x = Math.PI / 2;
+      add(new THREE.TorusGeometry(0.86, 0.05, 6, 24), M.orange, -6.2 + i * 2.1, 1.0 + r * 1.9, sz * 4.72, g);
+    }
+    cbox(4.2, 3.0, 3.6, 0.6, M.body, 5.0, 0.0, 0, g);
+    add(new THREE.BoxGeometry(3.0, 0.4, 3.0), M.louver, 5.0, 3.2, 0, g);
+    add(new THREE.BoxGeometry(14.6, 0.2, 11.2), M.bodyD, -0.5, 4.85, 0, g);                                    // roof plate over the cassettes
+    add(new THREE.BoxGeometry(0.5, 2.2, 0.5), M.bodyD, -6.0, 6.0, -5.2, g);                                     // charging boom, folds along the roof on the move
+    const arm = add(new THREE.BoxGeometry(0.3, 0.3, 3.0), M.bodyD, -6.0, 6.8, -6.5, g); arm.rotation.x = 0.3;
+    add(new THREE.CylinderGeometry(0.35, 0.35, 0.9, 16), M.orange, -6.0, 6.4, -8.1, g).rotation.x = Math.PI / 2;
+    add(new THREE.SphereGeometry(0.2, 10, 8), M.glowB, -6.0, 6.4, -8.6, g, false);
+  }
+
+  // ---------- haze: fusion = faint shimmer from flank louvers; iron = exhaust from two stacks up and outward + cooler deck; buffer = barely any ----------
+  const hazeMat = new THREE.MeshBasicMaterial({ color: 0x8c9aa6, transparent: true, opacity: 0.03, depthWrite: false });
+  const smokeMat = new THREE.MeshBasicMaterial({ color: 0x8a7a6a, transparent: true, opacity: 0.05, depthWrite: false });
+  const puffs = [];
+  function makeEmitters(n) {
+    for (const p of puffs) scene.remove(p.m); puffs.length = 0;
+    const list = [];
+    if (n === 0) for (const sz of [-1, 1]) for (let i = 0; i < 3; i++) list.push([new THREE.Vector3(-6.5 + i * 2.7, 2.4, sz * 6.2), new THREE.Vector3(0, 0.7, sz * 1.6), hazeMat]);
+    if (n === 1) { for (const sz of [-1, 1]) list.push([new THREE.Vector3(-5.6, 5.2, sz * 3.3), new THREE.Vector3(0, 2.6, sz * 1.8), smokeMat]); for (const x of [-2.8, -1.0, 0.8]) list.push([new THREE.Vector3(x, 4.2, 0), new THREE.Vector3(0, 2.6, 0), hazeMat]); }
+    if (n === 2) list.push([new THREE.Vector3(5.0, 3.5, 0), new THREE.Vector3(0, 1.8, 0), hazeMat]);
+    for (const [p, d, mat] of list) for (let i = 0; i < 5; i++) puffs.push({ p, d, age: Math.random() * 4, m: add(new THREE.SphereGeometry(1, 10, 8), mat, 0, -50, 0, scene, false) });
+  }
+
+  // lights, a person
+  function flood(x, y, z, tx, ty, tz) {
+    add(new THREE.CylinderGeometry(0.12, 0.18, y, 6), M.hullD, x, y / 2, z); add(new THREE.BoxGeometry(0.9, 0.5, 0.9), M.lamp, x, y + 0.2, z, scene, false);
+    const sl = new THREE.SpotLight(0xfff0d8, 3.0, 170, 0.45, 0.6, 1.4); sl.position.set(x, y + 0.2, z); scene.add(sl);
+    const tg = new THREE.Object3D(); tg.position.set(tx, ty, tz); scene.add(tg); sl.target = tg; sl.castShadow = true; sl.shadow.mapSize.set(1024, 1024);
+  }
+  flood(EX + 4, 12, -8, EX - 10, 3, 0); flood(PX - 4, 12, 9, PX + 10, 3, 0); flood(-12, 11, -9, 5, 6, 0);
+  const sl2 = new THREE.SpotLight(0xfff0d8, 3.0, 140, 0.5, 0.5, 1.4); sl2.position.set(EX + 11, 4.5, 0); scene.add(sl2); const t2 = new THREE.Object3D(); t2.position.set(EX + 80, 0, 0); scene.add(t2); sl2.target = t2;
+  scene.add(new THREE.HemisphereLight(0x3a4250, 0x0d0b09, 0.32)); const rim = new THREE.DirectionalLight(0x8090ad, 0.6); rim.position.set(80, 40, -80); scene.add(rim);
+  const man = new THREE.Group(); man.position.set(EX - 4.6, 0, 4.2); scene.add(man);
+  add(new THREE.CylinderGeometry(0.17, 0.2, 0.85, 10), M.man, 0, 0.43, 0, man); add(new THREE.CylinderGeometry(0.22, 0.2, 0.62, 10), M.man, 0, 1.16, 0, man); add(new THREE.SphereGeometry(0.13, 12, 10), M.man, 0, 1.6, 0, man);
+
+  // ---------- UI ----------
+  const D = [
+    'Синтез p-¹¹B + замкнутый аргон: шар защиты Ø ~8,4 м под обтекателем-горбом, жалюзи по бортам, выхлопа нет. Запас хода практически неограничен, работает и без атмосферы; цена — масса силовой части 0,8–1,4 кт, нейтроны и активация (пост в 20–30 м).',
+    'Сжигание железа на местном O₂ + замкнутый аргон: низкий кожух топки и нагревателя, воздухозаборник сверху спереди, железный порошок в седельных бункерах по бортам, сменные контейнеры окалины сзади, два низких диффузора дымовых газов назад-вверх, палуба охладителей. Без радиации; нужен кислород и запас железа.',
+    '«Рейс — зарядка» без кабелей: открытая рама со сменными кассетами накопителя поля (как ячейки МПУ — обменный фонд у корабля), модуль электрогидравлических насосов, зарядная мачта со стыковочной головкой сзади. Заряд от ВЭУ «Тантры» у борта; самый лёгкий, но без корабля — только запас кассет.',
+  ];
+  const btn = [document.getElementById("b1"), document.getElementById("b2"), document.getElementById("b3")], desc = document.getElementById("desc");
+  let cur = 0;
+  function setVar(n) { cur = n; V.forEach((g, i) => g.visible = i === n); btn.forEach((b, i) => b.classList.toggle("on", i === n)); desc.innerHTML = D[n]; makeEmitters(n); if (playing) { stopSound(); startSound(); } }
+  btn.forEach((b, i) => b.onclick = () => setVar(i));
+  let cut = false; const bc = document.getElementById("cut");
+  bc.onclick = () => { cut = !cut; bc.classList.toggle("on", cut); for (const f of cutables) f.material = cut ? std(0xb9bfc6, 0.35, 0.42, { transparent: true, opacity: 0.18, depthWrite: false }) : M.body; };
+  document.getElementById("cA").onclick = () => view([EX + 45, 6, 32], [PX, 5, 0]);
+  document.getElementById("cS").onclick = () => view([25, 15, 120], [25, 5, 0]);
+  document.getElementById("cT").onclick = () => view([EX + 22, 11, 24], [PX + 6, 4, 0]);
+  let orbit = false; const bro = document.getElementById("cR"); bro.onclick = () => { orbit = !orbit; bro.classList.toggle("on", orbit); };
+  document.getElementById("hide").onclick = () => { const u = document.getElementById("ui"); u.style.display = u.style.display === "none" ? "block" : "none"; };
+  addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+  // ---------- sound: louder and heavier (compressor), per variant ----------
+  let ac = null, nodes = [], playing = false, clankTimer = null;
+  function noiseBuf(sec) { const b = ac.createBuffer(1, ac.sampleRate * sec, ac.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; }
+  function osc(f, a, out, type, f0) { const o = ac.createOscillator(); o.type = type || "sine"; if (f0) { o.frequency.setValueAtTime(f0, ac.currentTime); o.frequency.exponentialRampToValueAtTime(f, ac.currentTime + 4); } else o.frequency.value = f; const g = ac.createGain(); g.gain.value = a; o.connect(g); g.connect(out); o.start(); nodes.push(o); return o; }
+  function noise(lo, hi, a, out, nb) { const s = ac.createBufferSource(); s.buffer = nb; s.loop = true; const h = ac.createBiquadFilter(); h.type = "highpass"; h.frequency.value = lo; const l = ac.createBiquadFilter(); l.type = "lowpass"; l.frequency.value = hi; const g = ac.createGain(); g.gain.value = a; s.connect(h); h.connect(l); l.connect(g); g.connect(out); s.start(); nodes.push(s); return g; }
+  function startSound() {
+    ac = new (window.AudioContext || window.webkitAudioContext)(); nodes = [];
+    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -24; comp.ratio.value = 6; comp.knee.value = 10; comp.attack.value = 0.01; comp.release.value = 0.3; comp.connect(ac.destination);
+    const sat = ac.createWaveShaper(); const curve = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(2.2 * x); } sat.curve = curve; sat.connect(comp);
+    const master = ac.createGain(); master.gain.value = 0; master.gain.linearRampToValueAtTime(1.2, ac.currentTime + 3.5); master.connect(sat);
+    const nb = noiseBuf(4);
+    // coolers: heavy air roar + 22 Hz whump + sub
+    const fanScale = cur === 2 ? 0.45 : cur === 1 ? 0.8 : 1.0;
+    const air = noise(30, 520, 0.85 * fanScale, master, nb);
+    const lfo = ac.createOscillator(); lfo.frequency.value = 22; const lg = ac.createGain(); lg.gain.value = 0.3 * fanScale; lfo.connect(lg); lg.connect(air.gain); lfo.start(); nodes.push(lfo);
+    osc(22, 0.45 * fanScale, master); osc(44, 0.22 * fanScale, master); osc(33, 0.18 * fanScale, master);
+    // pumps: 150 Hz family, chorus, saturated — the "industrial voice"
+    const pumpBus = ac.createGain(); pumpBus.gain.value = 0.11; pumpBus.connect(master);
+    for (let i = 0; i < 10; i++) for (const [h, a] of [[1, 1.0], [2, 0.6], [3, 0.4], [4, 0.25], [6, 0.12]]) osc(150 * h * (1 + (Math.random() - 0.5) * 0.008), a, pumpBus, "sine", 150 * h * 0.35);
+    // turbine rotor + gearbox (fusion and iron); electric motors and inverter (buffer)
+    if (cur < 2) { osc(480, 0.06, master, "sine", 160); osc(960, 0.02, master, "sine", 320); osc(1260, 0.03, master, "triangle", 420); osc(2520, 0.01, master, "sine", 840); }
+    else { osc(100, 0.16, master, "sawtooth", 35); osc(200, 0.06, master, "sine", 70); osc(2800, 0.012, master, "sine", 900); osc(3100, 0.008, master, "sine", 1000); }
+    // iron: furnace roar + induced-draft fan 198 Hz
+    if (cur === 1) { const roar = noise(55, 480, 1.0, master, nb); const fl = ac.createOscillator(); fl.frequency.value = 3.3; const fg = ac.createGain(); fg.gain.value = 0.35; fl.connect(fg); fg.connect(roar.gain); fl.start(); nodes.push(fl); osc(198, 0.08, master, "sawtooth", 70); osc(396, 0.03, master, "sine", 140); }
+    // tracks: heavy clanks + thumps
+    function clank() {
+      const t0 = ac.currentTime; const s = ac.createBufferSource(); s.buffer = nb; const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 180 + Math.random() * 520; bp.Q.value = 5;
+      const g = ac.createGain(); g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.5 + Math.random() * 0.5, t0 + 0.004); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35);
+      s.connect(bp); bp.connect(g); g.connect(master); s.start(t0, Math.random() * 3, 0.4);
+      const th = ac.createOscillator(); th.frequency.setValueAtTime(70, t0); th.frequency.exponentialRampToValueAtTime(35, t0 + 0.25); const tg2 = ac.createGain(); tg2.gain.setValueAtTime(0.5, t0); tg2.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3); th.connect(tg2); tg2.connect(master); th.start(t0); th.stop(t0 + 0.35);
+    }
+    clankTimer = setInterval(() => { if (Math.random() < 0.9) clank(); }, 1000 / 18 * 1.05);
+  }
+  function stopSound() { if (clankTimer) clearInterval(clankTimer); clankTimer = null; if (ac) ac.close(); ac = null; }
+  const bs = document.getElementById("snd");
+  bs.onclick = () => { playing = !playing; bs.classList.toggle("on", playing); bs.textContent = playing ? "■ Звук" : "▶ Звук"; if (playing) startSound(); else stopSound(); };
+
+  setVar(0);
+  view([EX + 45, 6, 32], [PX, 5, 0]);
+  let t = 0;
+  (function loop() {
+    t += 0.016;
+    for (const q of puffs) {
+      q.age += 0.016; const life = 4.0; if (q.age > life) q.age -= life; const k = q.age / life;
+      const w = new THREE.Vector3(q.p.x + q.d.x * q.age, q.p.y + q.d.y * q.age + 0.5 * q.age * q.age, q.p.z + q.d.z * q.age); P.localToWorld(w);
+      q.m.position.copy(w); const s = 0.5 + 2.0 * k; q.m.scale.set(s, s, s);
+    }
+    if (orbit) { const a = t * 0.08; camera.position.set(PX + 75 * Math.cos(a), 16, 75 * Math.sin(a)); controls.target.set(PX - 5, 5, 0); }
+    controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop);
+  })();
+})();
+</script>
+</body>
+</html>

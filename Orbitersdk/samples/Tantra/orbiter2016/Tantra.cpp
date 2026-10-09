@@ -252,6 +252,7 @@ void Tantra::LoadParams(FILEHANDLE cfg) {
         {"AnaChargedFraction", &prm_.anaChargedFraction},
         {"AnaNozzleEfficiency", &prm_.anaNozzleEfficiency},
         {"AnaJetHalfAngle", &prm_.anaJetHalfAngle},
+        {"LanderG", &prm_.landerG}, {"LanderEmergencyG", &prm_.landerEmergencyG}, {"LanderSpaceV", &prm_.landerSpaceV},
         {"HotStartBaseAlt", &prm_.hotStartBaseAlt},
         {"HotStartPerDecade", &prm_.hotStartPerDecade},
         {"HotStartRefPower", &prm_.hotStartRefPower},
@@ -319,9 +320,26 @@ void Tantra::DefinePropulsion() {
         retro_[i] = CreateThruster(_V(x, m::kNoseCupY, sp::Z(m::kNoseCupS)), _V(0, 0, -1), prm_.anaThrust * sp::kRetroAreaFrac, trap_[0],
                                    prm_.AnaExhaust());
     }
-    // Marching planetary cup: in the central well, thrusts only run out past the anamezon rims (UpdateGear).
-    march_ = CreateThruster(_V(0, m::kSternAxisY, sp::Z(m::kMarchLipS - m::kMarchTravel)), fwd, prm_.marchThrust, argon_, prm_.argonExhaust);
-    AddExhaust(march_, 60.0, 3.5);
+    // (2026-10-09, the user: the old central marching cup removed; its well holds the plume-shaping coil and the sensors)
+    // The planetary main thrust is the four stern blocks on the ion charges (their own fusion in the chamber, 15 T): one
+    // Orbiter thruster at the cluster centre (march_, the name kept for the autopilots and pages) with four plumes from the
+    // cups; the anamezon is the same blocks' other mode (ana_).
+    march_ = CreateThruster(_V(0, sp::kWellCentreY, sp::Z(sp::kAnaFocusS)), fwd, prm_.marchThrust, argon_, prm_.argonExhaust);
+    for (int i = 0; i < sp::kAnaCount; ++i) {
+        sternExhPos_[i] = mouths[i];
+        EXHAUSTSPEC& es = sternExh_[i];
+        es.th = march_;
+        es.level = &sternPlumeLv_[i];
+        es.lpos = &sternExhPos_[i];
+        es.ldir = &sternExhDir_;
+        es.lsize = 80.0;
+        es.wsize = 4.8;
+        es.lofs = 0.0;
+        es.modulate = 0.1;
+        es.tex = nullptr;
+        es.flags = 0;
+        AddExhaust(&es);
+    }
     // Four planetary pods x 3 cups in the flank bays (MeshLayout kPods). The cups are placed every step by
     // UpdatePods from the rig: arm run-out, pod swivel, jet splay, vessel frame.
     for (int p = 0; p < sp::kPodCount; ++p) {
@@ -523,6 +541,11 @@ void Tantra::clbkSaveState(FILEHANDLE scn) {
     oapiWriteScenario_string(scn, const_cast<char*>("GLIMIT"), buf);
     oapiWriteScenario_int(scn, const_cast<char*>("HOTSTART_OVERRIDE"), hotStartOverride_ ? 1 : 0);
     if (sternPlan_) oapiWriteScenario_int(scn, const_cast<char*>("STERNPLAN"), 1);
+    if (landerLift_ > 0.0 || landerLiftT_ > 0.0) {
+        char lb[64];
+        std::snprintf(lb, sizeof lb, "%.4f %.1f", landerLift_, landerLiftT_);
+        oapiWriteScenario_string(scn, const_cast<char*>("LANDERLIFT"), lb);
+    }
     oapiWriteScenario_float(scn, const_cast<char*>("SHIPTIME"), properTime_);
     {
         char dmg[400];
@@ -575,6 +598,12 @@ void Tantra::clbkLoadStateEx(FILEHANDLE scn, void* status) {
             hotStartOverride_ = i != 0;
         } else if (!_strnicmp(line, "STERNPLAN", 9) && std::sscanf(line + 9, "%d", &i) == 1) {
             sternPlan_ = i != 0;
+        } else if (!_strnicmp(line, "DROPTEST", 8)) {
+            std::sscanf(line + 8, "%lf %lf", &dropV_, &dropH_);
+        } else if (!_strnicmp(line, "SELFTEST", 8)) {
+            selfTest_ = std::atoi(line + 8);
+        } else if (!_strnicmp(line, "LANDERLIFT", 10)) {
+            std::sscanf(line + 10, "%lf %lf", &landerLift_, &landerLiftT_);
         } else if (!_strnicmp(line, "SHIPTIME", 8) && std::sscanf(line + 8, "%lf", &d) == 1) {
             properTime_ = d;
         } else if (!_strnicmp(line, "PODS", 4) && std::sscanf(line + 4, "%lf %lf", &d, &podTarget_) >= 1) {
@@ -657,8 +686,8 @@ bool Tantra::AnaIsMain() const { return engineSet_ == EngineSet::Anamezon && ign
 
 void Tantra::RebindGroups() {
     const bool anaMain = AnaIsMain();
-    const bool stern = !anaMain && SternPlanActive();   // the take-off: the marching cup and the stern blocks on the charges
-    const int want = anaMain ? 0 : stern ? 2 : 1;
+    const bool stern = false;   // (2026-10-09) the stern blocks' charges mode is march_ itself (the central cup is gone)
+    const int want = anaMain ? 0 : 1;
     const bool hover = podOut_ >= 1.0 && podAngle_ >= 45.0 && podAngle_ <= 135.0 && !podAssist_ && podAimed_;
     const bool mainIsAna = GetGroupThrusterCount(THGROUP_MAIN) == sp::kAnaCount;
     if (want != planGroup_ || anaMain != mainIsAna) {
@@ -703,8 +732,9 @@ void Tantra::UpdatePods(double dt) {
     const bool assistPrep = sp::kPodAssistOn && !fast && GroundContact() && carriage_.Busy() && P > 0.0 && P < 4.9;
     podAssist_ = assistPrep && P > 1.0;
     // the folded wings do not block the bays (2026-10-09: in a stern-first descent the wings are folded and the pods
-    // must come out); the carriage holds them in while the ship lies on the ground or moves on its supports
-    const bool allowed = !fast && (assistPrep || carriage_.Pose().tuck < 0.5);
+    // must come out; lying on the ground too - the vertical take-off and landing on the pods, the user). Only while the
+    // carriage moves the ship on its supports they stay in.
+    const bool allowed = !fast && (assistPrep || !carriage_.Busy());
     if (podsWanted_ && fast && podOut_ < 1.0 && !podMachWarned_) {
         Message("Выдвижные блоки: створки откроются при скоростном напоре ниже %.0f кПа", "Pods: the doors open below %.0f kPa dynamic pressure",
                 sp::kPodMaxQ / 1e3);
@@ -727,14 +757,29 @@ void Tantra::UpdatePods(double dt) {
     if (out) podOut_ = (std::min)(1.0, podOut_ + sw);
     else if (podAngle_ < 0.5) podOut_ = (std::max)(0.0, podOut_ - sw);
 
+    // (2026-10-09) the hover trim: the canted pairs (aft leaning forward, fore leaning aft) push along the hull unless they share
+    // the thrust equally (the Moon test: 11 % of the thrust forward, 9 m/s at the touch-down). Both pods turn by the angle that
+    // cancels it for the pairs' shares (s_a sin(c - d) = s_f sin(c + d)), plus a hold of the speed along the hull in the air.
+    double trim = 0.0;
+    if (cantTarget > 0.0 && podCant_ > 0.0) {
+        const double sa = podShare_[0], sf = podShare_[1];
+        trim = std::atan((sa - sf) / (std::max)(1e-6, sa + sf) * std::tan(podCant_ * RAD)) * DEG;
+        if (!GroundContact() && podCmd_ > 0.02) {
+            VECTOR3 vl;
+            GetGroundspeedVector(FRAME_LOCAL, vl);
+            trim += (std::max)(-8.0, (std::min)(8.0, 4.0 * vl.z));
+        }
+    }
+    hovTrim_ += (trim - hovTrim_) * (std::min)(1.0, dt * 2.0);
     const VECTOR3 dz = _V(0, 0, MeshDZ());
     const double midS = 0.5 * (m::kPods[0].s + m::kPods[sp::kPodCount - 1].s);
     for (int p = 0; p < sp::kPodCount; ++p) {
         const m::PodRig& r = m::kPods[p];
         const VECTOR3 pivot = V3(r.pivot), ax = V3(r.axis), turn = PodTurnAxis(r);
-        const VECTOR3 out = ax * (r.travel * podOut_);
+        // the arm runs only once the bay cover is open (the mesh rig: pod_retract kPodArmEnd .. 0)
+        const VECTOR3 out = ax * (r.travel * (std::max)(0.0, (std::min)(1.0, (podOut_ - (1.0 - m::kPodArmEnd)) / m::kPodArmEnd)));
         // the aft pair turns less (thrust leaning forward), the fore pair more (aft) - the mesh's pod_cant
-        const double deg = podAngle_ + (r.s < midS ? -podCant_ : podCant_);
+        const double deg = podAngle_ + hovTrim_ + (r.s < midS ? -podCant_ : podCant_);
         const double swivel = deg / sp::kPodSwivelMaxDeg * m::kPodSwivelMax;
         const VECTOR3 dir = RotateAbout(PodBaseThrust(r), turn, swivel);
         for (int c = 0; c < sp::kCupsPerPod; ++c) {
@@ -871,7 +916,7 @@ void Tantra::UpdateLegLoads(const VECTOR3& fh) {
     const double W = (std::max)(0.0, GetMass() * LocalG() - lift);
     const double h = p.trunnionH;
     const double rho = GetAtmDensity();
-    auto pcr = [](double I, double L) { return PI * PI * sp::kCntE * I / (L * L); };
+    auto pcr = [](double I, double L) { return PI * PI * sp::kLegE * I / (L * L); };   // BN-ceramic stages (Spec)
     const double colShare = p.columnShare, sternShare = 1.0 - colShare;
     // Fibre strain gauges in the stages: the load of every leg - weight share plus the overturning moment of the
     // wind force (ship frame: across the blade legs, in the plane of the stern feet) at the CG height.
@@ -890,13 +935,15 @@ void Tantra::UpdateLegLoads(const VECTOR3& fh) {
     }
     in.cosSplay = std::cos(16.0 * RAD);
     lg::LegLoads(in, legN_);
-    // Ratings: blades as columns of their current length (weak axis), stern legs at full length, the kangaroo
-    // thigh + shin as one column.
-    const double capB = (std::min)(sp::kCntSigma * sp::kBladeA, pcr(sp::kBladeI, (std::max)(30.0, p.mastLen))) / sp::kSafety;
-    const double capS = (std::min)(sp::kCntSigma * sp::kSternShinA, pcr(sp::kSternShinI, sp::kSternLegL)) / sp::kSafety;
+    // Ratings: blades as columns of their current length (weak axis), guyed at mid-length (kGuyK); stern legs at full
+    // length, the kangaroo thigh + shin as one column - both with their ends MR-locked once the feet's roots are sintered
+    // (kLockK), pinned before (landing); the stern legs land with the hull hinges braked - fixed-pinned (kLandLockK).
+    const double capB = (std::min)(sp::kLegSigma * sp::kBladeA, pcr(sp::kBladeI, sp::kGuyK * (std::max)(30.0, p.mastLen))) / sp::kSafety;
+    const double kS = sp::kLandLockK - (sp::kLandLockK - sp::kLockK) * solesStern_.Anchors(), kK = 1.0 - (1.0 - sp::kLockK) * solesCar_.Anchors();
+    const double capS = (std::min)(sp::kLegSigma * sp::kSternShinA, pcr(sp::kSternShinI, kS * sp::kSternLegL)) / sp::kSafety;
     const tantra::CarriageGeometry& g = carriage_.Geometry();
     const double kangL = g.kangThigh + g.kangShinMin + p.kangExt * (g.kangShinMax - g.kangShinMin);
-    const double capK = (std::min)(sp::kCntSigma * sp::kKangShinA, pcr(sp::kKangShinI, (std::max)(20.0, kangL))) / sp::kSafety;
+    const double capK = (std::min)(sp::kLegSigma * sp::kKangShinA, pcr(sp::kKangShinI, kK * (std::max)(20.0, kangL))) / sp::kSafety;
     static const char* kNameRu[7] = {"лопасть левая", "лопасть правая", "кормовая нога 1", "кормовая нога 2",
                                      "кормовая нога 3", "кормовая нога 4", "передняя опора"};
     static const char* kNameEn[7] = {"port blade", "starboard blade", "stern leg 1", "stern leg 2",
@@ -915,8 +962,8 @@ void Tantra::UpdateLegLoads(const VECTOR3& fh) {
     legLoad_ = legN_[worstLeg];
     legRatio_ = legR_[worstLeg];
     legName_ = russian_ ? kNameRu[worstLeg] : kNameEn[worstLeg];
-    // Hip magnetic bearings (10 T): above their capacity the drums sit on the sliding catchers.
-    const bool catcher = colShare > 0.0 && (std::max)(legN_[0], legN_[1]) > lg::BearingCapacity(lg::kHipBearingArea);
+    // Hip magnetic bearings (20 T, 32 m^2): above their capacity the drums sit on the sliding catchers.
+    const bool catcher = colShare > 0.0 && (std::max)(legN_[0], legN_[1]) > lg::BearingCapacity(lg::kHipBearingArea, lg::kHipTesla);
     if (catcher != hipCatcher_)
         Message(catcher ? "Цапфы: магнитные подшипники перегружены - на страховочных, привод медленнее"
                         : "Цапфы: снова на магнитной подвеске",
@@ -1050,9 +1097,9 @@ void Tantra::UpdateCG(bool force) {
     const double iron = GetPropellantMass(iron_), argon = GetPropellantMass(argon_);
     m += iron + argon;
     ms += iron * sp::kIronCGS;
-    // the insert (forward) drains first, then the body tanks, the aft tank between the stern-leg bays last (the CG)
-    const double aft = (std::min)(argon, sp::kArgonAftShare * prm_.argonMass);
-    const double body = (std::min)(argon - aft, sp::kArgonBodyShare * prm_.argonMass);
+    // (2026-10-09) the aft tank between the stern-leg bays drains first, the body tanks last (the CG with empty traps)
+    const double body = (std::min)(argon, sp::kArgonBodyShare * prm_.argonMass);
+    const double aft = (std::min)(argon - body, sp::kArgonAftShare * prm_.argonMass);
     ms += aft * sp::kArgonAftCGS + body * sp::kArgonBodyCGS + (argon - aft - body) * sp::kArgonInsertCGS;
     const double s = ms / m, d = s - frameS_;
     if (!force && std::fabs(d) < 0.2) return;
@@ -1107,7 +1154,6 @@ void Tantra::AimThroughCG() {
 
 void Tantra::SelectActiveTrap() {
     if (activeTrap_ < 0 || activeTrap_ >= sp::kTrapCount) activeTrap_ = 0;
-    if (SternPlanActive()) return;   // the stern blocks burn the charges now (UpdatePlant)
     if (GetPropellantMass(trap_[activeTrap_]) > 0.0) {
         for (THRUSTER_HANDLE th : ana_) SetThrusterResource(th, trap_[activeTrap_]);
         return;
@@ -1187,7 +1233,7 @@ void Tantra::ApplyThrottleLimits() {
         }
         return;
     }
-    maxThrust = prm_.marchThrust * f;
+    maxThrust = GetThrusterMax0(march_) > 0.0 ? GetThrusterMax0(march_) : prm_.marchThrust * f;   // the four blocks now
     if (planGroup_ == 2) {   // with the stern blocks: what the group gives now (while it gives nothing, the march's rating)
         double sum = GetThrusterMax0(march_);
         for (THRUSTER_HANDLE th : ana_) sum += GetThrusterMax0(th);
@@ -1417,11 +1463,10 @@ void Tantra::clbkPreStep(double, double simdt, double) {
     beta_ = length(v) / C_LIGHT;
 
     const double f = RocketFactor(beta_);
-    if (!SternPlanActive())   // (on the charges the plant sets them: UpdatePlant)
-        for (THRUSTER_HANDLE th : ana_) {
-            SetThrusterMax0(th, prm_.anaThrust * f);
-            SetThrusterIsp(th, prm_.AnaExhaust() * f);
-        }
+    for (THRUSTER_HANDLE th : ana_) {   // the blocks' anamezon mode (their charges mode is march_: UpdatePlant)
+        SetThrusterMax0(th, prm_.anaThrust * f);
+        SetThrusterIsp(th, prm_.AnaExhaust() * f);
+    }
     UpdateReactionMass();
     TANTRA_PERF("reaction");
     const double isp = (marchHigh_ ? prm_.ironExhaust : PodArgonExhaust()) * f;
@@ -1661,6 +1706,15 @@ void Tantra::UpdateDamage(double dt) {
             tantra::legs::Limits(tail ? tantra::legs::kStrokeStern : tantra::legs::kStrokeCarriage);
         g.vSoft = lim.vSoft;
         g.vBreak = lim.vBreak;
+        if (tail) {   // (2026-10-09) a heavy ship: the struts add over the weight only what the four columns take (x kSafety)
+            const double pc = (std::min)(sp::kLegSigma * sp::kSternShinA, PI * PI * sp::kLegE * sp::kSternShinI /
+                                         ((sp::kLandLockK * sp::kSternLegL) * (sp::kLandLockK * sp::kSternLegL)));
+            const double up4 = 4.0 * std::cos(16.0 * RAD) * pc / (std::max)(1.0, GetMass());   // m/s^2 the columns hold
+            const double aSoft = (std::min)(tantra::legs::kSoftG * G0, up4 / sp::kSafety - LocalG());
+            const double aBreak = (std::min)(tantra::legs::kBreakG * G0, up4 - LocalG());
+            g.vSoft = std::sqrt(2.0 * tantra::legs::kStrokeStern * (std::max)(0.0, aSoft));
+            g.vBreak = (std::max)(g.vSoft, std::sqrt(2.0 * tantra::legs::kStrokeStern * (std::max)(0.0, aBreak)));
+        }
     }
     // what hits the ground (core/Impact): from the ship's attitude - nose down, stern down, on its belly or a side
     if (g.touchdown) {
@@ -2287,7 +2341,8 @@ void Tantra::FootDust(double dt, const VECTOR3& up) {
         const VECTOR3 at = cupC_[l] + up * 0.5;
         if (footDust_[l] && length(at - footDustAt_[l]) < 3.0) continue;
         if (footDust_[l]) DelExhaustStream(footDust_[l]);
-        PARTICLESTREAMSPEC dust = {0, 0.5 * cupR_[l], 8.0, 4.0, 0.6, 9.0, 0.6 * cupR_[l], 1.5, PARTICLESTREAMSPEC::DIFFUSE,
+        // (2026-10-09) fewer, shorter-lived, slower-growing puffs: the cloud of seven feet at 8/s x 9 s halved the frame rate
+        PARTICLESTREAMSPEC dust = {0, 0.5 * cupR_[l], 3.0, 2.5, 0.6, 5.0, 0.4 * cupR_[l], 1.5, PARTICLESTREAMSPEC::DIFFUSE,
                                    PARTICLESTREAMSPEC::LVL_LIN, 0, 1, PARTICLESTREAMSPEC::ATM_PLIN, 0.0, 0.05, tex};
         footDust_[l] = AddParticleStream(&dust, at, up, &footDustLv_[l]);
         footDustAt_[l] = at;
@@ -2771,17 +2826,19 @@ void Tantra::UpdateGear(double simdt) {
     hangar_ = step(hangar_, hangarT_, 0.08);
     rovers_ = step(rovers_, hangar_ > 0.97 ? roversT_ : 0.0, 0.05);
     UpdateHangarAttach();             // MPU 1 and 2 ride the platform
+    UpdateLanderLift(simdt);          // the lander's maglev lift and stele (2026-10-09)
     // Stern interlocks. A: the anamezon irises open only with the marching cup home and its iris shut; B: the well
     // iris opens and the cup runs out only with the anamezon irises shut. The cup wants out whenever the planetary
     // set is selected and the ship is not standing on the legs with the engines idle.
     // (2026-10-09) The stern blocks on the charges (SternPlanActive): the irises open with the cup out; the cup goes home only
     // for the guide beam (AnaHot) - the field alone does not chase it in; the irises stay open through the hand-over.
+    // (2026-10-09) no central cup any more: the stern blocks' irises open for the anamezon or for the charges (the plant on)
     const bool anaActive = ignition_.Target() != IgnStage::Off || ignition_.FieldLevel() > 0.0;
-    const bool sternPlan = SternPlanActive();
-    const bool wantMarch = engineSet_ == EngineSet::Planetary && (sternPlan ? !AnaHot() : !anaActive);
-    const bool anaAllowed = (marchOut_ <= 0.0 && irisMarch_ <= 0.0) || sternPlan;
+    const bool sternPlan = SternPlanActive() && plant_.Running();
+    const bool wantMarch = false;
+    const bool anaAllowed = true;
     irisAna_ = step(irisAna_, (anaActive || sternPlan) && anaAllowed ? 1.0 : 0.0, 0.25);
-    const bool marchAllowed = irisAna_ <= 0.0 || (sternPlan && !AnaHot());
+    const bool marchAllowed = false;
     if (wantMarch && marchAllowed) {
         irisMarch_ = step(irisMarch_, 1.0, 0.5);
         if (irisMarch_ >= 1.0) marchOut_ = step(marchOut_, 1.0, 0.1);
@@ -2824,7 +2881,7 @@ void Tantra::UpdateGear(double simdt) {
     ex.tuck = tuck_;
     ex.wingIn = wingIn_;
     ex.wingOut = wingOut_;
-    ex.podSwivel = podAngle_ / sp::kPodSwivelMaxDeg;
+    ex.podSwivel = (podAngle_ + hovTrim_) / sp::kPodSwivelMaxDeg;
     ex.podCant = podCant_ / sp::kPodHoverCantDeg;
     ex.podStow = 1.0 - podOut_;
     ex.elevon[0] = elevon_[0];
@@ -3232,8 +3289,12 @@ void Tantra::LandNow(bool equilibrium) {
         // the ground (least squares along the axis nearest the vertical), CG height = the pads' mean depth - the sag
         VECTOR3 up;
         HorizonInvRot(_V(0, 1, 0), up);
-        const double ua[3] = {std::fabs(up.x), std::fabs(up.y), std::fabs(up.z)};
-        const int k = ua[0] > ua[1] ? (ua[0] > ua[2] ? 0 : 2) : (ua[1] > ua[2] ? 1 : 2), u = (k + 1) % 3, w = (k + 2) % 3;
+        // (2026-10-09) the fit runs along the ship axis the pads spread least on (their plane's normal: y lying, z standing) -
+        // the axis nearest the vertical was degenerate once the ship came in tilted over 45 deg
+        double mean[3] = {}, var[3] = {};
+        for (int i = 0; i < nTouch_; ++i) for (int q = 0; q < 3; ++q) mean[q] += touch_[i].data[q] / nTouch_;
+        for (int i = 0; i < nTouch_; ++i) for (int q = 0; q < 3; ++q) var[q] += (touch_[i].data[q] - mean[q]) * (touch_[i].data[q] - mean[q]);
+        const int k = var[0] < var[1] ? (var[0] < var[2] ? 0 : 2) : (var[1] < var[2] ? 1 : 2), u = (k + 1) % 3, w = (k + 2) % 3;
         double S[3][3] = {}, R[3] = {};                              // normal equations: c_k = a c_u + b c_w + d
         for (int i = 0; i < nTouch_; ++i) {
             const double* c = touch_[i].data;
@@ -3255,7 +3316,19 @@ void Tantra::LandNow(bool equilibrium) {
             n = n / length(n);
             if (dotp(n, up) < 0.0) n = -n;
             const double ang = std::acos((std::min)(1.0, dotp(n, up)));
-            if (ang > 1e-6 && ang < 45.0 * RAD) {                    // turn the hull: Q n = up (Rodrigues), Rs' = Rs Q
+            // (2026-10-09) Orbiter puts a scenario's landed ship down with its attitude of the save (or none: the planet frame -
+            // 58 deg at El Homra); the pads come from our own gear pose, so the hull is laid on them at any angle (it was
+            // capped at 45 deg: the ship stayed nose-up and every saved state kept it)
+            oapiWriteLogV("Tantra: landing on the pads: their plane %.2f deg off the vertical, %d pads (%s); up %.3f %.3f %.3f", ang * DEG,
+                          nTouch_, ang < 175.0 * RAD ? "levelled" : "upside down - left as is", up.x, up.y, up.z);
+            for (int i0 = 0; i0 < nTouch_; i0 += 12) {               // (diagnostics) the pads foot by foot: mean and spread
+                VECTOR3 mean = _V(0, 0, 0);
+                int c = 0;
+                for (int i = i0; i < (std::min)(nTouch_, i0 + 12); ++i, ++c) mean += touch_[i];
+                mean /= (std::max)(1, c);
+                oapiWriteLogV("Tantra:   pads %d-%d mean %.2f %.2f %.2f", i0, i0 + c - 1, mean.x, mean.y, mean.z);
+            }
+            if (ang > 1e-6 && ang < 175.0 * RAD) {                   // turn the hull: Q n = up (Rodrigues), Rs' = Rs Q
                 VECTOR3 ax = crossp(n, up);
                 ax = ax / length(ax);
                 const double cs = std::cos(ang), sn = std::sin(ang), t = 1.0 - cs;
@@ -3279,6 +3352,119 @@ void Tantra::LandNow(bool equilibrium) {
     vs.vrot = _V(h, 0.0, 0.0);
     DefSetStateEx(&vs);
     oapiWriteLogV("Tantra: at rest - Orbiter's landed state (%s, CG %.2f m over the ground)", equilibrium ? "after loading" : "still", h);
+}
+
+// (2026-10-09) the pods' check (scenario line SELFTEST 1), every second to the log: the pods out with the cups down, the
+// lever to 1.15 of the weight until 30 m up, then down at 1.5 m/s (the vertical speed held by the lever) onto the gear.
+void Tantra::SelfTestStep(double dt, bool landed) {
+    selfT_ += dt;
+    if (selfTest_ == 2) {   // ПОСАДКА НА КОРМУ: stood up 3 km over the ground, 80 m/s down, the legs in; the autopilot does the rest
+        namespace gd = tantra::guidance;
+        const gd::LFlight& F = disp_.TestLand().F();
+        if (selfStage_ == 0 && selfT_ > 2.0) {
+            carriage_.Load(0.0, 0.0, 0.0, 0.0, 1, 0);                    // the stern set, the legs stowed
+            VECTOR3 upL, up, xg;
+            HorizonInvRot(_V(0, 1, 0), upL);
+            GlobalRot(upL, up);
+            GlobalRot(_V(1, 0, 0), xg);
+            xg = unit(xg - up * dotp(xg, up));
+            const VECTOR3 yg = crossp(up, xg);
+            VESSELSTATUS2 vs;
+            std::memset(&vs, 0, sizeof vs);
+            vs.version = 2;
+            vs.rbody = GetGravityRef();
+            GetRelativePos(vs.rbody, vs.rpos);
+            GetRelativeVel(vs.rbody, vs.rvel);
+            vs.status = 0;
+            vs.rpos += up * 3000.0;
+            vs.rvel -= up * 80.0;
+            // the ship's axes in the global frame: x horizontal, z up (the nose), y = z x x
+            MATRIX3 R = _M(xg.x, yg.x, up.x, xg.y, yg.y, up.y, xg.z, yg.z, up.z);
+            vs.arot = _V(std::atan2(R.m23, R.m33), -std::asin((std::max)(-1.0, (std::min)(1.0, R.m13))), std::atan2(R.m12, R.m11));
+            DefSetStateEx(&vs);
+            restLock_ = false;
+            selfStage_ = 1; selfT_ = 0.0; selfLogT_ = 0.0; selfPeakG_ = 0.0;
+            oapiWriteLogV("Tantra: selftest - stood up 3 km over the ground, 80 m/s down, %.0f t, g %.2f", GetMass() / 1e3, LocalG());
+            return;
+        }
+        if (selfStage_ == 1) {
+            const int e = disp_.TestLandEngage();
+            if (e == 2) { selfStage_ = 2; oapiWriteLogV("Tantra: selftest - ПОСАДКА НА КОРМУ engaged at %.0f m, %.1f m/s", GetAltitude(ALTMODE_GROUND), F.vz); }
+            else if (selfT_ > 25.0) {
+                selfStage_ = 9;
+                std::string why;
+                for (const gd::Check& c : disp_.TestLand().ChecksShown()) if (!c.ok) { char b[200]; WideCharToMultiByte(1251, 0, c.t.c_str(), -1, b, sizeof b, nullptr, nullptr); why += b; why += "; "; }
+                oapiWriteLogV("Tantra: selftest - FAILED: the landing autopilot not engaged (%s)", why.c_str());
+            }
+        }
+        if (selfStage_ >= 2 && selfStage_ < 9) {
+            selfPeakG_ = (std::max)(selfPeakG_, accelG_);
+            if (selfStage_ == 2 && (F.mode == gd::kLanded || F.mode == gd::kCrash || (landed && selfT_ > 5.0))) {
+                selfStage_ = 3; selfT_ = 0.0; selfLogT_ = 0.0;
+                oapiWriteLogV("Tantra: selftest - %s: touch %.2f m/s down, %.2f m/s across, tilt %.1f deg, legs %s, the norms %s",
+                              F.mode == gd::kCrash ? "CRASH" : "landed", -F.td.vz, F.td.vx, F.td.tilt, F.td.legsOk ? "ok" : "NOT out", F.td.ok ? "kept" : "NOT kept");
+            } else if (selfStage_ == 3 && selfT_ > 15.0) {
+                selfStage_ = 9;
+                oapiWriteLogV("Tantra: selftest - done: peak felt %.2f g, the hull %.1f deg off the vertical, %s", selfPeakG_, 90.0 - std::fabs(GetPitch() * DEG),
+                              damage_.Destroyed() ? "the ship destroyed" : "the ship whole");
+            } else if (selfStage_ == 2 && selfT_ > 400.0) { selfStage_ = 9; oapiWriteLogV("Tantra: selftest - FAILED: not down in 400 s (mode %d)", F.mode); }
+        }
+        if (selfStage_ >= 1 && selfStage_ < 9 && selfT_ - selfLogT_ >= 1.0) {
+            selfLogT_ = selfT_;
+            oapiWriteLogV("Tantra: selftest land t %.0f mode %d phase %d stern %.1f m vz %.2f across %.2f %.2f tilt %.1f %.1f march %.0f/%.0f MN pods %.0f MN legs %.2f felt %.2f g tvc %.1f %.1f cmd tilt %.1f %.1f off the point %.0f %.0f m wind %.1f %.1f",
+                          selfT_, F.mode, F.phase, F.z, F.vz, disp_.TestLand().State().vE, disp_.TestLand().State().vN, disp_.TestLand().State().thE, disp_.TestLand().State().thN,
+                          F.Fm / 1e6, march_ ? GetThrusterMax0(march_) / 1e6 : 0.0, F.Fp / 1e6, carriage_.Gear(), accelG_, sternTvc_[0], sternTvc_[1],
+                          disp_.TestLand().Cmd().thE, disp_.TestLand().Cmd().thN, disp_.TestLand().State().xE, disp_.TestLand().State().xN,
+                          disp_.TestLand().State().windE, disp_.TestLand().State().windN);
+        }
+        return;
+    }
+    VECTOR3 upL;
+    HorizonInvRot(_V(0, 1, 0), upL);
+    double fUp = 0.0;
+    for (int k = 0; k < sp::kPodCups; ++k) {
+        VECTOR3 d;
+        GetThrusterDir(pod_[k], d);
+        fUp += GetThrusterMax0(pod_[k]) * (std::max)(0.0, dotp(d, upL));
+    }
+    const double W = GetMass() * LocalG(), alt = GetAltitude(ALTMODE_GROUND);
+    VECTOR3 v;
+    GetGroundspeedVector(FRAME_HORIZON, v);
+    if (selfStage_ >= 2) selfPeakG_ = (std::max)(selfPeakG_, accelG_);
+    auto lever = [&](double a) { podCmd_ = fUp > 1.0 ? (std::max)(0.0, (std::min)(1.0, GetMass() * (LocalG() + a) / fUp)) : 0.0; };
+    switch (selfStage_) {
+        case 0:
+            if (selfT_ > 3.0) { ActPods(true); selfStage_ = 1; oapiWriteLogV("Tantra: selftest - pods out, cups down (%.0f t, g %.2f)", GetMass() / 1e3, LocalG()); }
+            break;
+        case 1:
+            if (podOut_ >= 1.0 && podAimed_) {
+                selfStage_ = 2; selfH0_ = alt; selfPeakG_ = 0.0;
+                oapiWriteLogV("Tantra: selftest - pods out and aimed at %.1f s, thrust up %.0f MN, weight %.0f MN (T/W %.2f)", selfT_, fUp / 1e6, W / 1e6, fUp / W);
+            } else if (selfT_ > 60.0) { selfStage_ = 9; oapiWriteLogV("Tantra: selftest - FAILED: pods not out after 57 s (out %.2f, aimed %d)", podOut_, podAimed_ ? 1 : 0); }
+            break;
+        case 2:
+            lever(0.15 * LocalG());
+            if (alt > selfH0_ + 30.0) { selfStage_ = 3; oapiWriteLogV("Tantra: selftest - 30 m up at %.1f s, down now", selfT_); }
+            else if (selfT_ > 150.0) { selfStage_ = 9; podCmd_ = 0.0; oapiWriteLogV("Tantra: selftest - FAILED: not 30 m up (alt %.2f, from %.2f)", alt, selfH0_); }
+            break;
+        case 3:
+            if (GroundContact() || landed) { podCmd_ = 0.0; selfStage_ = 4; selfT_ = 0.0; oapiWriteLogV("Tantra: selftest - touch-down at %.2f m/s down, %.2f m/s across", -v.y, std::hypot(v.x, v.z)); }
+            else lever(0.5 * (-1.5 - v.y));
+            break;
+        case 4:
+            if (selfT_ > 10.0) { selfStage_ = 9; oapiWriteLogV("Tantra: selftest - done: peak felt %.2f g, CG %.2f m over the ground, pitch %.1f bank %.1f, %s", selfPeakG_, alt, GetPitch() * DEG, GetBank() * DEG, damage_.Destroyed() ? "the ship destroyed" : "the ship whole"); }
+            break;
+        default: break;
+    }
+    if (selfStage_ < 9 && selfT_ - selfLogT_ >= 1.0) {
+        selfLogT_ = selfT_;
+        VECTOR3 Ft, vl;
+        GetThrustVector(Ft);
+        GetGroundspeedVector(FRAME_LOCAL, vl);
+        oapiWriteLogV("Tantra: selftest axes - thrust %.2f %.2f %.2f MN, ground speed %.2f %.2f %.2f m/s (x right, y up, z nose), trim %.1f deg, shares %.2f %.2f", Ft.x / 1e6, Ft.y / 1e6, Ft.z / 1e6, vl.x, vl.y, vl.z, hovTrim_, podShare_[0], podShare_[1]);
+        oapiWriteLogV("Tantra: selftest %d t %.0f out %.2f cups %.0f aimed %d lever %.2f alt %.2f vy %.2f across %.2f pitch %.1f bank %.1f felt %.2f g balance R %.2f P %.2f crests folded %.2f", selfStage_, selfT_, podOut_, podAngle_, podAimed_ ? 1 : 0, podCmd_, alt, v.y, std::hypot(v.x, v.z), GetPitch() * DEG, GetBank() * DEG, accelG_, hovCmd_[0], hovCmd_[1], (std::max)(tuck_, carriage_.Pose().tuck));
+    }
+    if (selfStage_ == 4 && selfT_ < selfLogT_) selfLogT_ = 0.0;
 }
 
 // The ship at rest on the ground is handed to Orbiter's landed state: Orbiter 2024 never returns a body resting on
@@ -3311,8 +3497,44 @@ void Tantra::UpdateWarpFreeze(double dt) {
     restTimer_ = quiet && length(v) < 0.05 && length(w) < 0.003 ? restTimer_ + dt : 0.0;
     if (!firstRest_ && dt > 0.0) {                                   // the first step after loading
         firstRest_ = true;
-        if (landed && quiet) { LandNow(true); restLock_ = true; restTimer_ = 0.0; }
+        if (landed && quiet) { LandNow(true); restLock_ = true; restTimer_ = 0.0; if (dropV_ > 0.0) dropState_ = 1; }
     }
+    // (2026-10-09) the shock-absorption test (scenario line DROPTEST v h): laid on its pads, the ship is raised h metres and
+    // let fall onto its gear at v m/s down; the peak felt g, the struts' and the feet's events go to the log
+    if (dropState_ == 1 && landed && ++dropWait_ > 3) {
+        VECTOR3 up, upG;
+        HorizonInvRot(_V(0, 1, 0), up);
+        GlobalRot(up, upG);
+        MATRIX3 R;
+        GetRotationMatrix(R);
+        VESSELSTATUS2 vs;
+        std::memset(&vs, 0, sizeof vs);
+        vs.version = 2;
+        vs.rbody = GetGravityRef();
+        GetRelativePos(vs.rbody, vs.rpos);
+        GetRelativeVel(vs.rbody, vs.rvel);
+        vs.status = 0;
+        vs.rpos += upG * dropH_;
+        vs.rvel -= upG * dropV_;
+        vs.arot = _V(std::atan2(R.m23, R.m33), -std::asin((std::max)(-1.0, (std::min)(1.0, R.m13))), std::atan2(R.m12, R.m11));
+        vs.vrot = _V(0, 0, 0);
+        DefSetStateEx(&vs);
+        restLock_ = false;
+        dropState_ = 2;
+        dropT_ = dropPeakG_ = 0.0;
+        oapiWriteLogV("Tantra: drop test - %.0f t let go %.1f m over its rest at %.2f m/s down", GetMass() / 1e3, dropH_, dropV_);
+        return;
+    }
+    if (dropState_ == 2) {
+        dropT_ += dt;
+        dropPeakG_ = (std::max)(dropPeakG_, accelG_);
+        if (dropT_ > 10.0) {
+            oapiWriteLogV("Tantra: drop test - peak felt %.2f g, CG %.2f m over the ground, %s", dropPeakG_, GetAltitude(ALTMODE_GROUND),
+                          damage_.Destroyed() ? "the ship destroyed" : "the ship whole");
+            dropState_ = 3;
+        }
+    }
+    if (selfTest_ > 0 && firstRest_) SelfTestStep(dt, landed);
     if (!restLock_ && !landed && quiet && restTimer_ > 2.0) { LandNow(false); restLock_ = true; restTimer_ = 0.0; }
     // not while the carriage moves the ship: frozen in a pose half way up, Orbiter's landed state threw it 3 km into the
     // ground and out at 5 km/s; the ground mechanism holds it then (kinematic) and the warp hurries it
@@ -3492,10 +3714,15 @@ void Tantra::GroundMechanism(double dt, const VECTOR3* t, const int* legOf, int 
             const double tj = 3.0 * a * psi * (a + Ka) / det;
             return -(a * (2.0 * ti + tj - 3.0 * psi) + a * (ti + 2.0 * tj - 3.0 * psi)) / Lc;
         };
-        const double E = sp::kCntE, Ka = 5.0e10, Ca = 5.0e10;   // ankle drive (N m/rad) + MR and drive damping (N m s/rad)
+        // (2026-10-09) the full ship: on a sintered root the ankle is MR-locked (kAnchorKa, the foot rocking in the ground),
+        // the trunnions are held by the hip motor-generators (kTrunnionHoldK); across, the guys brace the blade at mid-length
+        // to its foot's rims - the upper half sways. Without them 276 kt at 2.5 g leans over fore-aft (kx < 0).
+        const double E = sp::kLegE, Ca = 5.0e10;   // MR and drive damping (N m s/rad)
+        const double Ka = 5.0e10 + (sp::kAnchorKa - 5.0e10) * solesCar_.Anchors();   // the ankle drive .. locked on the root
+        const double Lg = L * sp::kGuyK;
         double tiX, tiY;
-        double kx = 2.0 * column(E * 7.2, L, Ka, sp::kBalanceKp / 2.0, tiX) - m * gl / L;
-        double ky = 2.0 * column(E * sp::kBladeI, L, Ka, 1e16, tiY) - m * gl / L;
+        double kx = 2.0 * column(E * sp::kBladeIStrong, L, Ka, sp::kTrunnionHoldK, tiX) - m * gl / L;
+        double ky = 2.0 * column(E * sp::kBladeI, Lg, Ka, 1e16, tiY) - m * gl / Lg;
         const double stiff = onBlades ? 0.0 : 1.0;               // kangaroo or stern legs carry: the ship stands rigid
         kx = (std::max)(kx, 1e5) + stiff * 3e9;
         ky = (std::max)(ky, 1e5) + stiff * 3e9;
@@ -3806,6 +4033,13 @@ void Tantra::AutoFlightSet() {
         crestsFolded_ = true;
         Message("Спуск кормой вперёд: крылья сложены, перо убрано", "Stern-first descent: wings folded, fin down");
     }
+    // (2026-10-09) the sub-light: over 0.01 c the gas of the medium cuts like a beam; the open crests (tips 40 m off the axis)
+    // stand out of the deflector's magnetic shadow (R 15 m) - they fold along the chines into it (DESIGN «Форма v3»)
+    if (!crestsFolded_ && beta_ > 0.01) {
+        wingMode_ = 2;
+        crestsFolded_ = true;
+        Message("Субсвет: крылья сложены в тень дефлектора, перо убрано", "Sub-light: wings folded into the deflector's shadow, fin down");
+    }
 }
 
 void Tantra::ActCrests() {
@@ -3820,8 +4054,13 @@ void Tantra::ActCrests() {
 }
 
 void Tantra::ActHangar() {
-    if (hangarT_ < 0.5 && !(carriage_.Progress() <= 0.0 && carriage_.Gear() >= 1.0)) {
-        Message("Ангар открывается только лёжа на лопастях", "Hangar opens only while lying on the blades");
+    // lying on the blades, or in flight (2026-10-09: the lander leaves and comes back in space too)
+    if (hangarT_ < 0.5 && !(carriage_.Progress() <= 0.0 && (carriage_.Gear() >= 1.0 || !GroundContact()))) {
+        Message("Ангар открывается только лёжа на лопастях или в полёте", "Hangar opens only while lying on the blades or in flight");
+        return;
+    }
+    if (hangarT_ > 0.5 && (landerLift_ > 0.0 || landerLiftT_ > 0.0)) {
+        Message("Ангар: подъёмник «Грани» не на палубе - створки не закрыть", "Hangar: the lander lift is not down - the doors stay open");
         return;
     }
     hangarT_ = hangarT_ < 0.5 ? 1.0 : 0.0;
@@ -3956,21 +4195,37 @@ void Tantra::UpdatePlant(double simdt, double f) {
     e.crestsOut = (std::max)(tuck_, carriage_.Pose().tuck) < 0.5;
     e.noseT = damage_.Temperature(tantra::damage::kZoneNose);
     plantOut_ = plant_.Step(simdt > 0.0 ? simdt : 0.0, e, simdt > 0.0 ? &PlantRnd : nullptr);
-    const bool sternPlan = SternPlanActive();
-    const bool cupOut = marchOut_ >= 0.99 && (irisAna_ <= 0.01 || (sternPlan && !AnaHot()));
-    SetThrusterMax0(march_, cupOut ? plantOut_.maxThrust * f : 0.0);
+    // (2026-10-09) the planetary main thrust = the four stern blocks on the ion charges (the central cup is gone): the plant's
+    // cascade fusion per cup, each block's field cap at its own 15 T over its area (bk x the plant's single-cup state), the
+    // irises open. They keep the thrust while the guide beam comes up and hand it to the anamezon at the feed (SternHandOver).
+    // The plant's stern temperature stands for the blocks' heat.
+    const double bk = sp::kSternPlanAreaRatio * (sp::kSternPlanTesla / pl::Plant::kBNom) * (sp::kSternPlanTesla / pl::Plant::kBNom);
+    const bool cupsOpen = irisAna_ >= 0.99 && SternPlanActive() && !damage_.Destroyed() &&
+                          !damage_.Lost(tantra::damage::kMarchCup);   // a wrecked stern burns no charges (nor plumes)
+    SetThrusterMax0(march_, cupsOpen ? plantOut_.maxThrust * sp::kAnaCount * bk * f : 0.0);
     SetThrusterIsp(march_, plantOut_.exhaust * f);
     PROPELLANT_HANDLE ph = plantOut_.mass == pl::kArgon ? argon_ : iron_;   // the bare products: from the iron store for now
     if (GetThrusterResource(march_) != ph && GetPropellantMass(ph) > 1.0) SetThrusterResource(march_, ph);
-    // the stern blocks on the charges: the same cascade fusion and field cap per cup area, with their irises open; they keep
-    // the thrust while the guide beam comes up and hand it to the anamezon at the feed (SternHandOver). The blocks' own heat
-    // is not modelled yet (the plant's stern temperature is the marching cup's).
-    if (sternPlan)
-        for (THRUSTER_HANDLE th : ana_) {
-            SetThrusterMax0(th, irisAna_ >= 0.99 ? plantOut_.maxThrust * sp::kSternPlanAreaRatio * f : 0.0);
-            SetThrusterIsp(th, plantOut_.exhaust * f);
-            if (GetThrusterResource(th) != ph && GetPropellantMass(ph) > 1.0) SetThrusterResource(th, ph);
-        }
+    for (int i = 0; i < sp::kAnaCount; ++i) {   // the four plumes from the cups (the anamezon beam is drawn by TantraExhaust)
+        sternExhPos_[i] = _V(sp::kAnaCupX[i], sp::kAnaCupY[i], Zf(sp::kAnaFocusS));
+        sternPlumeLv_[i] = cupsOpen && GetThrusterMax0(march_) > 0.0 ? GetThrusterLevel(march_) : 0.0;
+    }
+    // (2026-10-09, the user's «делай»: the stern blocks' magnetic jet deflection) an asymmetric field at the nozzles turns the
+    // four jets together up to kSternTvcDeg; it follows the pitch and yaw controls (the RCS groups: the pilot's keys and the
+    // autopilots alike) while the blocks thrust, slewing 20 deg/s. Pitch up: the force down at the stern (as the RCS couples).
+    {
+        const bool on = GetThrusterLevel(march_) > 0.0;
+        const double cp = on ? GetThrusterGroupLevel(THGROUP_ATT_PITCHUP) - GetThrusterGroupLevel(THGROUP_ATT_PITCHDOWN) : 0.0;
+        const double cy = on ? GetThrusterGroupLevel(THGROUP_ATT_YAWRIGHT) - GetThrusterGroupLevel(THGROUP_ATT_YAWLEFT) : 0.0;
+        const double sl = 20.0 * (std::max)(0.0, simdt);
+        auto slew = [sl](double& a, double want) { a += (std::max)(-sl, (std::min)(sl, want - a)); };
+        slew(sternTvc_[0], sp::kSternTvcDeg * (std::max)(-1.0, (std::min)(1.0, cp)));
+        slew(sternTvc_[1], sp::kSternTvcDeg * (std::max)(-1.0, (std::min)(1.0, cy)));
+        const double p = sternTvc_[0] * RAD, y = sternTvc_[1] * RAD;
+        const VECTOR3 d = unit(_V(-std::sin(y), -std::sin(p), std::cos(p) * std::cos(y)));
+        SetThrusterDir(march_, d);
+        sternExhDir_ = -d;
+    }
     for (const pl::Event& ev : plant_.TakeEvents()) Message("%s", "%s", ev.ru.c_str(), ev.en.c_str());
     if (plantStage_ == pl::kStRun && plant_.StageNow() != pl::kStRun && march_) SetThrusterLevel(march_, 0.0);   // off the run: the lever to zero
     plantStage_ = plant_.StageNow();

@@ -26,6 +26,7 @@ enum Cmd {
     kCmdHangar, kCmdPort, kCmdAirlock, kCmdTableUp, kCmdTableStop,
     kCmdTabMech, kCmdTabThermal,
     kCmdWing90, kCmdWing30, kCmdWingFold, kCmdLift,     // the wings' mode chosen directly; the airlock's crew lift
+    kCmdLanderLift, kCmdLanderGo, kCmdLanderGoEm,       // (2026-10-09) the lander's maglev lift: up/down, the throw, the emergency throw
 };
 
 // the carriage progress of the positions (the carriage's phases 0..6; the turn is phase 2, theta = 90 * Ease(p - 2))
@@ -57,6 +58,7 @@ struct View {
     double podOut = 0.0, podAngle = 0.0, podTarget = 0.0; bool podsWanted = false;
     int podBlock = 0;                        // the bays held shut (Tantra::UpdatePods): 0 no, 1 the carriage lies/moves, 2 over kPodMaxQ
     double rovers = 0.0, hangar = 0.0, hangarT = 0.0, bayDoors = 0.0;
+    double landerLift = 0.0, landerLiftT = 0.0; bool landerOn = false, launchArmed = false;   // 0 deck .. 1 up .. 2 stele
     double irisAna = 0.0, irisNose = 0.0, marchOut = 0.0;
     bool liftStowed = true, liftAtGround = false, liftLowering = false; double liftMove = 0.0;   // the airlock lift
     bool airlock = false;                    // the airlock key's state

@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Ядерный тягач — 3D и звук</title>
+<style>
+  html,body{margin:0;height:100%;background:#07080a;color:#cfd6df;font:13px "Segoe UI",Arial;overflow:hidden}
+  #ui{position:absolute;left:12px;top:10px;max-width:470px;background:rgba(12,14,17,.85);border:1px solid #2a2f37;border-radius:6px;padding:10px 12px}
+  #ui h1{font-size:15px;margin:0 0 6px;color:#e6c79a}
+  #ui p{margin:4px 0;line-height:1.4}
+  #ui button{background:#1c2026;color:#cfd6df;border:1px solid #3a414b;border-radius:4px;padding:4px 8px;margin:4px 4px 0 0;cursor:pointer}
+  #ui button.on{border-color:#e6c79a;color:#e6c79a}
+  .k{color:#8fb39a}.w{color:#e6a07a}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>Тягач ловушки 58,4 кт — ядерный локомотив (синтез p-¹¹B + замкнутый аргон)</h1>
+  <p id="desc"></p>
+  <p>Охладители выдувают тёплый воздух на +25–40 K (37,5 МВт) с нескольких сторон: борта, крыша, корма. Пламени и дыма нет — над машиной марево. Платформы одного типа: 8 под ловушкой + 4 под тягачом.</p>
+  <div>
+    <button id="v1" class="on">1 · Атомный локомотив</button><button id="v2">2 · Реактор напоказ</button>
+  </div>
+  <div>
+    <button id="cut">Разрез кожуха</button><button id="snd">▶ Звук</button><button id="t80">+ свист 15×Т-80 (худож.)</button>
+  </div>
+  <div>
+    <button id="cLow">Снизу</button><button id="cSide">Сбоку</button><button id="cTr">Тягач крупно</button><button id="cRot">Облёт</button>
+  </div>
+  <p style="color:#8a93a0">Звук — по расчёту раздела 17: гул вентиляторов 18–27 Гц и воздух, насосы 150/300/450 Гц, оборотный тон турбины ~480 Гц, редуктор, лязг траков. Свист Т-80 снаружи по расчёту не слышен — это художественный слой. Лучше в наушниках.</p>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputEncoding = THREE.sRGBEncoding;
+  document.body.appendChild(renderer.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x07080a); scene.fog = new THREE.FogExp2(0x0b0c0f, 0.006);
+  const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.3, 2000);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  function view(p, t) { camera.position.set(...p); controls.target.set(...t); controls.update(); }
+
+  const M = {
+    hull: new THREE.MeshStandardMaterial({ color: 0x2a2e35, metalness: 0.75, roughness: 0.42, flatShading: true }),
+    hullD: new THREE.MeshStandardMaterial({ color: 0x1b1e23, metalness: 0.7, roughness: 0.5, flatShading: true }),
+    hood: new THREE.MeshStandardMaterial({ color: 0x8a919b, metalness: 0.55, roughness: 0.38 }),
+    band: new THREE.MeshStandardMaterial({ color: 0x2b2f36, metalness: 0.8, roughness: 0.35 }),
+    sphere: new THREE.MeshStandardMaterial({ color: 0x23262c, metalness: 0.85, roughness: 0.32 }),
+    ceramic: new THREE.MeshStandardMaterial({ color: 0x8c8a86, metalness: 0.1, roughness: 0.75, flatShading: true }),
+    track: new THREE.MeshStandardMaterial({ color: 0x121315, metalness: 0.5, roughness: 0.8 }),
+    shoe: new THREE.MeshStandardMaterial({ color: 0x24262b, metalness: 0.6, roughness: 0.6, flatShading: true }),
+    trap: new THREE.MeshStandardMaterial({ color: 0x2c3b52, metalness: 0.85, roughness: 0.35, flatShading: true }),
+    rib: new THREE.MeshStandardMaterial({ color: 0x1a2230, metalness: 0.9, roughness: 0.3, flatShading: true }),
+    louver: new THREE.MeshStandardMaterial({ color: 0x1d2420, metalness: 0.6, roughness: 0.55, flatShading: true }),
+    pipe: new THREE.MeshStandardMaterial({ color: 0x5a4a38, metalness: 0.7, roughness: 0.45 }),
+    warn: new THREE.MeshStandardMaterial({ color: 0x6a1414, emissive: 0x2a0000, metalness: 0.3, roughness: 0.6 }),
+    yellow: new THREE.MeshStandardMaterial({ color: 0xb08a20, metalness: 0.3, roughness: 0.6 }),
+    glowB: new THREE.MeshBasicMaterial({ color: 0x3fa8ff }),
+    lamp: new THREE.MeshBasicMaterial({ color: 0xfff2d8 }),
+    beacon: new THREE.MeshBasicMaterial({ color: 0xff2020 }),
+    glass: new THREE.MeshStandardMaterial({ color: 0x0a0d12, metalness: 1.0, roughness: 0.06 }),
+    ground: new THREE.MeshStandardMaterial({ color: 0x131210, roughness: 0.97 }),
+    road: new THREE.MeshStandardMaterial({ color: 0x1b1a17, roughness: 0.92 }),
+    man: new THREE.MeshStandardMaterial({ color: 0xd8dde3, roughness: 0.6 }),
+  };
+  function add(geo, mat, x, y, z, parent, cast = true) {
+    const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; (parent || scene).add(m); return m;
+  }
+  function chamferBox(lx, ly, lz, ch, mat, x, y, z, parent) {
+    const s = new THREE.Shape();
+    s.moveTo(-lx / 2, 0); s.lineTo(lx / 2, 0); s.lineTo(lx / 2, ly - ch); s.lineTo(lx / 2 - ch, ly); s.lineTo(-lx / 2 + ch, ly); s.lineTo(-lx / 2, ly - ch); s.lineTo(-lx / 2, 0);
+    const g = new THREE.ExtrudeGeometry(s, { depth: lz, bevelEnabled: false }); g.translate(0, 0, -lz / 2);
+    return add(g, mat, x, y, z, parent);
+  }
+
+  // ground and road
+  add(new THREE.PlaneGeometry(1600, 1600), M.ground, 0, 0, 0, scene, false).rotation.x = -Math.PI / 2;
+  add(new THREE.PlaneGeometry(240, 16), M.road, -25, 0.01, 0, scene, false).rotation.x = -Math.PI / 2;
+
+  // ---------- the standard platform (tracked module 17 x 2.8 x 2.9) ----------
+  const ROWS = [-4.605, -1.535, 1.535, 4.605];
+  function platform(xc, zc, cradle) {
+    const g = new THREE.Group(); g.position.set(xc, 0, zc); scene.add(g);
+    const L = 16.8, h = 1.9, r = 0.95, s = new THREE.Shape();
+    s.moveTo(-L / 2 + r, 0); s.lineTo(L / 2 - r, 0); s.absarc(L / 2 - r, r, r, -Math.PI / 2, Math.PI / 2, false);
+    s.lineTo(-L / 2 + r, h); s.absarc(-L / 2 + r, r, r, Math.PI / 2, Math.PI * 1.5, false);
+    const tg = new THREE.ExtrudeGeometry(s, { depth: 2.8, bevelEnabled: false, curveSegments: 16 }); tg.translate(0, 0, -1.4);
+    add(tg, M.track, 0, 0, 0, g);
+    const shoe = new THREE.BoxGeometry(0.42, 0.12, 2.9);
+    for (let i = 0; i < 34; i++) { const x = -L / 2 + r + 0.2 + i * ((L - 2 * r) / 33); add(shoe, M.shoe, x, 0.06, 0, g); add(shoe, M.shoe, x, h + 0.02, 0, g); }
+    for (const sx of [-1, 1]) { const d = add(new THREE.CylinderGeometry(0.98, 0.98, 2.95, 18), M.hull, sx * (L / 2 - r), r, 0, g); d.rotation.x = Math.PI / 2; }
+    chamferBox(15.6, 0.9, 2.6, 0.25, M.hull, 0, 1.95, 0, g);
+    add(new THREE.BoxGeometry(15.4, 0.08, 0.12), M.warn, 0, 2.3, 1.36, g); add(new THREE.BoxGeometry(15.4, 0.08, 0.12), M.warn, 0, 2.3, -1.36, g);
+    if (cradle) add(new THREE.BoxGeometry(15.0, 0.5, 2.4), M.hullD, 0, 3.1, 0, g);
+    return g;
+  }
+  for (const xc of [-8.5, 8.5]) for (const z of ROWS) platform(xc, z, true);
+
+  // ---------- the trap 58.4 kt ----------
+  const trap = new THREE.Group(); scene.add(trap); trap.position.set(0, 3.4 + 4.05, 0);
+  const R8 = 8.75 / 2, LB = 34.6;
+  const tb = add(new THREE.CylinderGeometry(R8, R8, LB, 8), M.trap, 0, 0, 0, trap); tb.rotation.z = Math.PI / 2; tb.rotateY(Math.PI / 8);
+  for (let i = 0; i <= 8; i++) { const ring = add(new THREE.CylinderGeometry(R8 + 0.12, R8 + 0.12, 0.35, 8), M.rib, -LB / 2 + 0.6 + i * (LB - 1.2) / 8, 0, 0, trap); ring.rotation.z = Math.PI / 2; ring.rotateY(Math.PI / 8); }
+  for (const sx of [-1, 1]) {
+    const tr = add(new THREE.CylinderGeometry(0.9, 0.9, 0.6, 24), M.hull, sx * (LB / 2 + 0.6), 0, 0, trap); tr.rotation.z = Math.PI / 2;
+    add(new THREE.TorusGeometry(2.6, 0.08, 8, 48), M.glowB, sx * (LB / 2 + 0.31), 0, 0, trap, false).rotation.y = Math.PI / 2;
+  }
+
+  // ---------- the tractor: 4 platforms side by side; the fusion sphere is its heart ----------
+  const TX = -17.9 - 30 - 8.5;           // the sphere 30 m from the trap (dose, chapter 15-16)
+  for (const z of ROWS) platform(TX, z, false);
+  const deck = new THREE.Group(); deck.position.set(TX, 2.85, 0); scene.add(deck);
+  for (const z of [-4.6, -1.53, 1.53, 4.6]) add(new THREE.BoxGeometry(16.6, 0.55, 0.5), M.hullD, 0, 0.28, z, deck);
+  for (let i = 0; i < 7; i++) add(new THREE.BoxGeometry(0.45, 0.45, 11.6), M.hullD, -7.8 + i * 2.6, 0.62, 0, deck);
+
+  // shared inner equipment: shield sphere (fusion core inside), turbine hall, recuperator, pump rows
+  const inner = new THREE.Group(); deck.add(inner);
+  const SR = 4.2;                        // sphere radius ~ 8.4 m diameter (chapter 16, variant A)
+  const sph = add(new THREE.SphereGeometry(SR, 48, 32), M.sphere, 1.0, SR + 0.4, 0, inner);
+  for (let k = 0; k < 6; k++) { const b = add(new THREE.TorusGeometry(SR + 0.02, 0.07, 6, 64), M.band, 1.0, SR + 0.4, 0, inner); b.rotation.y = k * Math.PI / 6; }
+  add(new THREE.TorusGeometry(SR + 0.03, 0.1, 6, 64), M.yellow, 1.0, SR + 0.4, 0, inner).rotation.x = Math.PI / 2;
+  add(new THREE.CylinderGeometry(3.2, 3.6, 0.6, 24), M.hullD, 1.0, 0.7, 0, inner);                       // saddle ring
+  const turb = add(new THREE.CylinderGeometry(1.1, 1.1, 5.0, 24), M.hull, -5.4, 2.0, 2.6, inner); turb.rotation.z = Math.PI / 2;
+  const cmp = add(new THREE.CylinderGeometry(1.3, 0.9, 1.3, 24), M.ceramic, -3.5, 2.0, 2.6, inner); cmp.rotation.z = Math.PI / 2;
+  const tbn = add(new THREE.CylinderGeometry(0.9, 1.35, 1.5, 24), M.ceramic, -7.4, 2.0, 2.6, inner); tbn.rotation.z = Math.PI / 2;
+  const rec = add(new THREE.CylinderGeometry(1.2, 1.2, 6.0, 20), M.hull, -5.2, 2.0, -2.6, inner); rec.rotation.z = Math.PI / 2;
+  for (let i = 0; i < 6; i++) add(new THREE.BoxGeometry(0.9, 0.9, 0.9), M.hullD, -7.6 + i * 0.95, 1.2, 4.9, inner);
+  const hp = add(new THREE.CylinderGeometry(0.32, 0.32, 5.2, 12), M.pipe, -2.2, SR + 0.4, 1.6, inner); hp.rotation.z = Math.PI / 2;
+  const cp = add(new THREE.CylinderGeometry(0.32, 0.32, 5.2, 12), M.pipe, -2.2, 2.0, -1.6, inner); cp.rotation.z = Math.PI / 2;
+
+  // ---------- variant 1: nuclear locomotive — a long rounded hood, louvers on both flanks, roof stacks, rear diffuser, raised cab ----------
+  const v1 = new THREE.Group(); deck.add(v1);
+  const hoodShape = new THREE.Shape(); const HW = 5.9, HH = 9.6, HR = 3.4;
+  hoodShape.moveTo(-HW, 0); hoodShape.lineTo(HW, 0); hoodShape.lineTo(HW, HH - HR); hoodShape.absarc(HW - HR, HH - HR, HR, 0, Math.PI / 2, false);
+  hoodShape.lineTo(-HW + HR, HH); hoodShape.absarc(-HW + HR, HH - HR, HR, Math.PI / 2, Math.PI, false); hoodShape.lineTo(-HW, 0);
+  const hoodG = new THREE.ExtrudeGeometry(hoodShape, { depth: 15.2, bevelEnabled: true, bevelThickness: 0.5, bevelSize: 0.5, bevelSegments: 4, curveSegments: 16 });
+  hoodG.translate(0, 0, -7.6); hoodG.rotateY(Math.PI / 2);
+  const hoodMesh = add(hoodG, M.hood, -0.6, 0.9, 0, v1);
+  for (const x of [-6.6, 5.4]) {                      // dark bands
+    const bs = new THREE.ExtrudeGeometry(hoodShape, { depth: 0.5, bevelEnabled: false, curveSegments: 16 }); bs.translate(0, 0, -0.25); bs.rotateY(Math.PI / 2);
+    const b = add(bs, M.band, x, 0.85, 0, v1); b.scale.set(1.0, 1.01, 1.01);
+  }
+  const louvers = [];
+  for (const sz of [-1, 1]) {                         // flank louver banks (outlets on both sides)
+    for (let i = 0; i < 4; i++) {
+      const lv = new THREE.Group(); lv.position.set(-5.2 + i * 3.1, 4.4, sz * (HW + 0.52)); v1.add(lv);
+      add(new THREE.BoxGeometry(2.7, 3.4, 0.15), M.louver, 0, 0, 0, lv);
+      for (let k = 0; k < 9; k++) { const sl = add(new THREE.BoxGeometry(2.6, 0.08, 0.35), M.hullD, 0, -1.5 + k * 0.37, sz * 0.12, lv); sl.rotation.x = sz * 0.5; }
+      louvers.push([lv, sz]);
+    }
+  }
+  const roofFans = [];
+  for (const x of [-4.8, -1.6, 1.6]) {               // roof outlet stacks with fans
+    add(new THREE.CylinderGeometry(1.35, 1.5, 0.9, 24), M.band, x, HH + 1.2, 0, v1);
+    const fan = new THREE.Group(); fan.position.set(x, HH + 1.55, 0); v1.add(fan);
+    for (let b = 0; b < 5; b++) { const bl = add(new THREE.BoxGeometry(1.15, 0.05, 0.3), M.hullD, 0, 0, 0, fan); bl.rotation.y = b * Math.PI * 2 / 5; bl.translateX(0.6); }
+    roofFans.push(fan);
+  }
+  const diff = add(new THREE.CylinderGeometry(2.6, 3.4, 2.4, 6, 1, true), M.band, -8.2, 6.0, 0, v1); diff.rotation.z = Math.PI / 2;   // rear diffuser
+  // raised cab (front), panoramic glazing
+  const cab = new THREE.Group(); cab.position.set(7.9, 5.6, 0); v1.add(cab);
+  chamferBox(3.6, 3.4, 9.0, 1.0, M.hood, 0, 0, 0, cab);
+  add(new THREE.BoxGeometry(0.06, 1.0, 7.6), M.glass, 1.82, 2.5, 0, cab, false);
+  for (const sz of [-1, 1]) add(new THREE.BoxGeometry(2.6, 0.9, 0.06), M.glass, 0.2, 2.5, sz * 4.52, cab, false);
+  add(new THREE.BoxGeometry(3.4, 0.12, 9.2), M.band, 0, 3.45, 0, cab);
+  for (const sz of [-1, 1]) add(new THREE.BoxGeometry(0.4, 0.4, 0.4), M.lamp, 1.85, 0.7, sz * 3.8, cab, false);
+  add(new THREE.SphereGeometry(0.25, 10, 8), M.beacon, 0, 3.8, 0, cab, false);
+  add(new THREE.BoxGeometry(0.3, 0.1, 11.6), M.yellow, 8.2, 1.0, 0, v1);
+
+  // ---------- variant 2: reactor on show — the sphere exposed in an open frame, turbine hall behind, side cooling towers ----------
+  const v2 = new THREE.Group(); deck.add(v2); v2.visible = false;
+  for (const [x, z] of [[-3.6, -5.0], [5.6, -5.0], [-3.6, 5.0], [5.6, 5.0]]) add(new THREE.BoxGeometry(0.6, 11.0, 0.6), M.hullD, x, 5.5, z, v2);
+  for (const z of [-5.0, 5.0]) add(new THREE.BoxGeometry(9.8, 0.6, 0.6), M.hullD, 1.0, 11.0, z, v2);
+  for (const x of [-3.6, 5.6]) add(new THREE.BoxGeometry(0.6, 0.6, 10.6), M.hullD, x, 11.0, 0, v2);
+  for (let k = 0; k < 8; k++) {                       // radial argon headers on the sphere
+    const a = k * Math.PI / 4; const p = add(new THREE.CylinderGeometry(0.22, 0.22, 2.2, 10), M.pipe, 1.0 + Math.cos(a) * (SR + 0.9), SR + 0.4 + 2.2, Math.sin(a) * (SR + 0.9), v2);
+    p.rotation.z = Math.cos(a) * 0.5; p.rotation.x = -Math.sin(a) * 0.5;
+  }
+  chamferBox(6.4, 5.2, 11.4, 1.2, M.hood, -5.3, 0.9, 0, v2);                                     // turbine hall casing (gamma screen, Ar-41)
+  add(new THREE.BoxGeometry(0.3, 0.12, 11.6), M.yellow, -2.0, 1.1, 0, v2);
+  const towers = [];
+  for (const sz of [-1, 1]) {                       // two cooling towers on the rear corners, open to the sides and up
+    const tw = add(new THREE.CylinderGeometry(1.7, 2.3, 7.6, 8, 1, true), M.band, -6.8, 4.7, sz * 4.2, v2);
+    add(new THREE.CylinderGeometry(2.35, 2.35, 0.4, 8), M.hullD, -6.8, 0.9, sz * 4.2, v2);
+    towers.push([-6.8, 8.6, sz * 4.2]);
+  }
+  for (const sz of [-1, 1]) for (let i = 0; i < 3; i++) {   // side louver panels between the frame posts
+    const lv = new THREE.Group(); lv.position.set(-1.6 + i * 2.6, 3.0, sz * 5.3); v2.add(lv);
+    add(new THREE.BoxGeometry(2.3, 2.6, 0.15), M.louver, 0, 0, 0, lv);
+    for (let k = 0; k < 7; k++) { const sl = add(new THREE.BoxGeometry(2.2, 0.08, 0.35), M.hullD, 0, -1.1 + k * 0.37, sz * 0.12, lv); sl.rotation.x = sz * 0.5; }
+  }
+  const cab2 = new THREE.Group(); cab2.position.set(8.0, 0.9, 3.4); v2.add(cab2);
+  chamferBox(3.4, 3.0, 4.6, 0.8, M.hood, 0, 0, 0, cab2);
+  add(new THREE.BoxGeometry(0.06, 0.8, 3.8), M.glass, 1.72, 2.1, 0, cab2, false);
+  add(new THREE.SphereGeometry(0.25, 10, 8), M.beacon, 0, 3.3, 0, cab2, false);
+  add(new THREE.SphereGeometry(0.28, 10, 8), M.beacon, 1.0, 2 * SR + 0.7, 0, v2, false);
+
+  // ---------- warm-air plumes (heat shimmer) from all outlets: translucent puffs drifting out and up ----------
+  const puffMat = new THREE.MeshBasicMaterial({ color: 0x8c9aa6, transparent: true, opacity: 0.03, depthWrite: false });
+  const puffs = [];
+  function emitter(getPos, dir, n, spread) { for (let i = 0; i < n; i++) puffs.push({ getPos, dir, spread, age: Math.random() * 4, m: add(new THREE.SphereGeometry(1, 10, 8), puffMat, 0, -50, 0, scene, false) }); }
+  function worldOf(obj, x, y, z) { const v = new THREE.Vector3(x, y, z); obj.localToWorld(v); return v; }
+  const v1emit = [], v2emit = [];
+  for (const [lv, sz] of louvers) v1emit.push(() => [worldOf(lv, 0, 0, sz * 0.4), new THREE.Vector3(0, 0.8, sz * 2.2)]);
+  for (const f of roofFans) v1emit.push(() => [worldOf(f, 0, 0.3, 0), new THREE.Vector3(0, 3.2, 0)]);
+  v1emit.push(() => [worldOf(diff, 0, -1.4, 0), new THREE.Vector3(-3.0, 0.9, 0)]);
+  for (const p of towers) v2emit.push(() => [worldOf(deck, p[0], p[1], p[2]), new THREE.Vector3(0, 3.0, Math.sign(p[2]) * 0.8)]);
+  for (const sz of [-1, 1]) for (let i = 0; i < 3; i++) v2emit.push(() => [worldOf(deck, -1.6 + i * 2.6, 3.0, sz * 5.6), new THREE.Vector3(0, 0.7, sz * 2.0)]);
+  let emitSet = v1emit;
+  function rebuildPuffs() { for (const p of puffs) scene.remove(p.m); puffs.length = 0; for (const e of emitSet) emitter(e, null, 5, 0.6); }
+  rebuildPuffs();
+
+  // floodlights and a person
+  function flood(x, y, z, tx, ty, tz) {
+    add(new THREE.CylinderGeometry(0.12, 0.18, y, 6), M.hullD, x, y / 2, z);
+    add(new THREE.BoxGeometry(0.9, 0.5, 0.9), M.lamp, x, y + 0.2, z, scene, false);
+    const sl = new THREE.SpotLight(0xfff0d8, 3.0, 160, 0.45, 0.6, 1.4); sl.position.set(x, y + 0.2, z); scene.add(sl);
+    const tg = new THREE.Object3D(); tg.position.set(tx, ty, tz); scene.add(tg); sl.target = tg; sl.castShadow = true; sl.shadow.mapSize.set(1024, 1024);
+  }
+  flood(TX + 12, 13, -7, TX + 40, 0, -6); flood(TX + 12, 13, 7, TX + 40, 0, 6); flood(TX - 10, 12, 8, TX - 30, 0, 14); flood(20, 11, -8, 0, 6, 0);
+  scene.add(new THREE.HemisphereLight(0x3a4250, 0x0d0b09, 0.28));
+  const rim = new THREE.DirectionalLight(0x8090ad, 0.6); rim.position.set(-60, 40, -80); scene.add(rim);
+  const man = new THREE.Group(); man.position.set(TX + 11, 0, 8.6); scene.add(man);
+  add(new THREE.CylinderGeometry(0.17, 0.2, 0.85, 10), M.man, 0, 0.43, 0, man); add(new THREE.CylinderGeometry(0.22, 0.2, 0.62, 10), M.man, 0, 1.16, 0, man); add(new THREE.SphereGeometry(0.13, 12, 10), M.man, 0, 1.6, 0, man);
+
+  // ---------- UI ----------
+  const desc = document.getElementById("desc");
+  const D1 = 'Вариант 1 — <span class="k">атомный локомотив</span>: длинный скруглённый кожух на 4 платформах, внутри шар защиты Ø ~8,4 м (синтез p-¹¹B 64–88 МВт, внутри — камера BN), турбоагрегат замкнутого Брайтона, рекуператор, насосы. Выход тёплого воздуха: жалюзи по обоим бортам, три вентиляторные шахты на крыше, кормовой диффузор. Поднятая кабина с панорамным остеклением.';
+  const D2 = 'Вариант 2 — <span class="k">реактор напоказ</span>: шар защиты открыт в силовой раме — главный объём машины, радиальные коллекторы аргона; за ним зал турбоагрегата в гамма-кожухе (Ar-41); две градирни-шахты на кормовых углах выдувают вверх и в стороны, жалюзи по бортам; кабина спереди сбоку.';
+  desc.innerHTML = D1;
+  const bv1 = document.getElementById("v1"), bv2 = document.getElementById("v2"), bcut = document.getElementById("cut");
+  function setVar(n) { v1.visible = n === 1; v2.visible = n === 2; bv1.classList.toggle("on", n === 1); bv2.classList.toggle("on", n === 2); desc.innerHTML = n === 1 ? D1 : D2; emitSet = n === 1 ? v1emit : v2emit; rebuildPuffs(); }
+  bv1.onclick = () => setVar(1); bv2.onclick = () => setVar(2);
+  let cut = false; bcut.onclick = () => { cut = !cut; bcut.classList.toggle("on", cut); hoodMesh.material = cut ? new THREE.MeshStandardMaterial({ color: 0x8a919b, metalness: 0.55, roughness: 0.38, transparent: true, opacity: 0.22, depthWrite: false }) : M.hood; };
+  document.getElementById("cLow").onclick = () => view([TX - 40, 4.5, 30], [TX + 15, 7, 0]);
+  document.getElementById("cSide").onclick = () => view([-20, 14, 105], [-20, 5, 0]);
+  document.getElementById("cTr").onclick = () => view([TX + 26, 10, 22], [TX, 6, 0]);
+  let orbit = false; const brot = document.getElementById("cRot"); brot.onclick = () => { orbit = !orbit; brot.classList.toggle("on", orbit); };
+  view([TX - 40, 4.5, 30], [TX + 15, 7, 0]);
+  addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+  // ---------- sound: Web Audio, built from the tones of chapter 17 ----------
+  let ac = null, master = null, whineGain = null, playing = false, clankTimer = null;
+  function noiseBuffer(sec) { const b = ac.createBuffer(1, ac.sampleRate * sec, ac.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; }
+  function startSound() {
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    master = ac.createGain(); master.gain.value = 0.0; master.connect(ac.destination);
+    master.gain.linearRampToValueAtTime(0.9, ac.currentTime + 3.5);           // spool-up
+    const nb = noiseBuffer(4);
+    // cooler fans: low rumble + air, amplitude "whump" at the blade-pass 22 Hz
+    const air = ac.createBufferSource(); air.buffer = nb; air.loop = true;
+    const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 480;
+    const hp = ac.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 35;
+    const airG = ac.createGain(); airG.gain.value = 0.55;
+    const lfo = ac.createOscillator(); lfo.frequency.value = 22; const lfoG = ac.createGain(); lfoG.gain.value = 0.18; lfo.connect(lfoG); lfoG.connect(airG.gain);
+    air.connect(hp); hp.connect(lp); lp.connect(airG); airG.connect(master); air.start(); lfo.start();
+    const sub = ac.createOscillator(); sub.frequency.value = 22; const subG = ac.createGain(); subG.gain.value = 0.35; sub.connect(subG); subG.connect(master); sub.start();
+    const sub2 = ac.createOscillator(); sub2.frequency.value = 44; const sub2G = ac.createGain(); sub2G.gain.value = 0.15; sub2.connect(sub2G); sub2G.connect(master); sub2.start();
+    // pump rows: 150/300/450 Hz, detuned chorus of 8 voices (38 pumps)
+    const pumpG = ac.createGain(); pumpG.gain.value = 0.05; pumpG.connect(master);
+    for (let i = 0; i < 8; i++) for (const [h, a] of [[1, 1.0], [2, 0.55], [3, 0.35], [4, 0.2]]) {
+      const o = ac.createOscillator(); o.type = "sine"; o.frequency.value = 150 * h * (1 + (Math.random() - 0.5) * 0.008);
+      const g = ac.createGain(); g.gain.value = a; o.connect(g); g.connect(pumpG); o.start();
+    }
+    // turbine rotor tone ~480 Hz and gearbox mesh ~1260 Hz, faint, sliding up during the spool-up
+    for (const [f, a] of [[480, 0.035], [960, 0.012], [1260, 0.018], [2520, 0.006]]) {
+      const o = ac.createOscillator(); o.frequency.setValueAtTime(f * 0.4, ac.currentTime); o.frequency.exponentialRampToValueAtTime(f, ac.currentTime + 4);
+      const g = ac.createGain(); g.gain.value = a; o.connect(g); g.connect(master); o.start();
+    }
+    // ARTISTIC: 15 x T-80 turbine whine ~4 kHz, detuned
+    whineGain = ac.createGain(); whineGain.gain.value = whineOn ? 0.03 : 0.0; whineGain.connect(master);
+    for (let i = 0; i < 15; i++) {
+      const o = ac.createOscillator(); const f = 4000 * (1 + (Math.random() - 0.5) * 0.06);
+      o.frequency.setValueAtTime(f * 0.35, ac.currentTime); o.frequency.exponentialRampToValueAtTime(f, ac.currentTime + 4.5);
+      const g = ac.createGain(); g.gain.value = 1 / 15; o.connect(g); g.connect(whineGain); o.start();
+      const o2 = ac.createOscillator(); o2.frequency.setValueAtTime(f * 0.7, ac.currentTime); o2.frequency.exponentialRampToValueAtTime(f * 2, ac.currentTime + 4.5);
+      const g2 = ac.createGain(); g2.gain.value = 0.3 / 15; o2.connect(g2); g2.connect(whineGain); o2.start();
+    }
+    // track clanks: 12 platforms, about once a second each, metallic decays
+    function clank() {
+      const t0 = ac.currentTime; const src = ac.createBufferSource(); src.buffer = nb;
+      const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 300 + Math.random() * 500; bp.Q.value = 6;
+      const g = ac.createGain(); g.gain.setValueAtTime(0.0, t0); g.gain.linearRampToValueAtTime(0.25 + Math.random() * 0.35, t0 + 0.005); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3);
+      src.connect(bp); bp.connect(g); g.connect(master); src.start(t0, Math.random() * 3, 0.35);
+    }
+    clankTimer = setInterval(() => { if (Math.random() < 0.95) clank(); }, 1000 / 12 * 1.05);
+  }
+  function stopSound() { if (clankTimer) clearInterval(clankTimer); clankTimer = null; if (ac) ac.close(); ac = null; }
+  const bsnd = document.getElementById("snd"), bt80 = document.getElementById("t80");
+  let whineOn = false;
+  bsnd.onclick = () => { playing = !playing; bsnd.classList.toggle("on", playing); bsnd.textContent = playing ? "■ Звук" : "▶ Звук"; if (playing) startSound(); else stopSound(); };
+  bt80.onclick = () => { whineOn = !whineOn; bt80.classList.toggle("on", whineOn); if (whineGain) whineGain.gain.linearRampToValueAtTime(whineOn ? 0.03 : 0.0, ac.currentTime + 0.5); };
+
+  // ---------- loop ----------
+  let t = 0;
+  (function loop() {
+    t += 0.016;
+    for (const f of roofFans) f.rotation.y += 0.25;
+    for (const p of puffs) {
+      p.age += 0.016; const life = 4.0;
+      if (p.age > life) p.age -= life;
+      const [pos, dir] = p.getPos(); const k = p.age / life;
+      p.m.position.set(pos.x + dir.x * p.age + Math.sin(p.age * 3 + pos.x) * 0.3, pos.y + dir.y * p.age + 0.6 * p.age * p.age, pos.z + dir.z * p.age);
+      const s = 0.5 + 2.0 * k; p.m.scale.set(s, s, s);
+      p.m.visible = (v1.visible && emitSet === v1emit) || (v2.visible && emitSet === v2emit);
+    }
+    if (orbit) { const a = t * 0.08; camera.position.set(TX + 20 + 75 * Math.cos(a), 15, 75 * Math.sin(a)); controls.target.set(TX + 20, 6, 0); }
+    controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop);
+  })();
+})();
+</script>
+</body>
+</html>

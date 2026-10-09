@@ -47,8 +47,8 @@ double Propulsion::XCg() const {
     return mx / m;
 }
 
-// the nose tank's argon the schedule wants: the entry - the aft one's argon in the nose up to 4,85 т (cg_modes[2], the
-// ballistic too: balance_A); the hover - the CG on the rows' centre −2,50 (cg_modes[5]); the feed - all into the aft one
+// the nose tank's argon the schedule wants: the entry - all the argon in the nose (10,29 т вмещает 6,3: cg_modes, the
+// ballistic too); the hover - the CG towards the rows' centre −3,21 (reached only as far as the argon allows); the feed - all aft
 double Propulsion::NoseTarget(int trim) const {
     const Tank& N = tank[kTNose]; const Tank& A = tank[kTAft];
     const double S = N.kg + (A.leak ? 0.0 : A.kg);   // «leak», not «isolated»: an empty tank still takes the argon
@@ -139,7 +139,7 @@ void Propulsion::StepUnit(int i, const PropIn& in, double coolShare, bool argonO
     if (un.emBlocked && un.coilT < 21.0) un.emBlocked = false;
     un.emergency = want && in.em[i] && un.stage == kStRun && !un.emBlocked;
     if (un.emergency) un.emTime += dt; else if (!in.em[i]) un.emTime = 0.0;
-    un.v = un.emergency ? kEmV : un.vNom;
+    un.v = un.emergency ? (un.march ? kAfterV : kEmV) : un.vNom;   // the march's «emergency» is its afterburner
     const double Pnom = un.Fnom * un.vNom / 2.0;
     un.thrustSet = want ? std::min(1.0, in.thr[i]) * 2.0 * Pnom / un.v : 0.0;
     // the field the thrust needs (≥ 12,1 T; the march up to 16 T), the lift cups stay at 12,1 T
@@ -147,14 +147,14 @@ void Propulsion::StepUnit(int i, const PropIn& in, double coolShare, bool argonO
     un.Bset = !canRun ? 0.0 : un.march ? std::min(kBmax, std::max(kB, std::sqrt(2.0 * kMu0 * pfield))) : kB;
 
     // the windings: heat against the cold line; the current against the critical current
-    un.coilHeat = kCoilBase + kChi * un.pJet * kCoilRadShare * (un.emergency ? kEmHeat : 1.0);
+    un.coilHeat = kCoilBase + kChi * un.pJet * kCoilRadShare * (un.emergency ? kEmHeat : 1.0) + (un.emergency && un.march ? kAfterHeat : 0.0);
     un.coilCool = un.line * coolShare;
     un.coilT = std::max(20.0, un.coilT + (un.coilHeat - un.coilCool) / un.C * dt);
     const double warm = std::max(1e-6, 1.0 - (un.coilT - 20.0) / (kTc - 20.0));
     un.ratio = un.B > 0.05 ? kIratio * std::pow(un.B / kB, 1.0 + kIcB) / warm : 0.0;
     un.margin = 1.0 - un.ratio;
     if (un.ratio >= 1.0) Quench(un, un.coilT > 21.0 ? "перегрев обмотки: ток выше критического" : "поле выше критического");
-    if (un.emergency && un.margin < kEmMargin) {
+    if (un.emergency && un.margin < (un.march ? kAfterMargin : kEmMargin)) {
         un.emergency = false; un.emBlocked = true; un.v = un.vNom;
         un.thrustSet = std::min(1.0, in.thr[i]) * un.Fnom;
     }
@@ -184,8 +184,9 @@ void Propulsion::StepUnit(int i, const PropIn& in, double coolShare, bool argonO
         if (!argonOk) { Stall(un, "нет аргона: остался резерв носа"); break; }
         if (chargesKg <= 0) { Stall(un, "нет ионных зарядов"); break; }
         if (!un.injOk[un.injector]) { Stall(un, "отказ инжектора зарядов"); break; }
-        un.node = un.emergency ? Node{kLimit, un.B > kB + 0.1 ? "аварийный режим 11,5 км/с, поле выше 12,1 Тл" : "аварийный режим 11,5 км/с"}
-                : un.emBlocked ? Node{kLimit, "аварийный режим снят: запас по току 20 %"}
+        un.node = un.emergency ? (un.march ? Node{kLimit, "форсаж 19,3 км/с, поле до 16 Тл"}
+                                           : Node{kLimit, un.B > kB + 0.1 ? "аварийный режим 11,5 км/с, поле выше 12,1 Тл" : "аварийный режим 11,5 км/с"})
+                : un.emBlocked ? Node{kLimit, un.march ? "форсаж снят: обмотка у критического тока, ждёт охлаждения" : "аварийный режим снят: запас по току 20 %"}
                 : un.coilT > 30.0 ? Node{kLimit, "обмотка тёплая"} : Node{kRun, "работа"};
         break;
     case kStStall:

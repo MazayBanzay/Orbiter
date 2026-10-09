@@ -9,8 +9,8 @@
 namespace {
 // (2026-10-09, canon) the container is the magnetic trap: 45.2 kt, 641 t, octagon 8.1 m across flats, 35.8 m with the
 // trunnions. The mesh and the touchdown box below are still the T8 cassette's (66.6 m) - to be redrawn.
-const double kStructMass = 641.0e3;     // trap container (ShipParams::trapStructMass)
-const double kAnamezonMax = 45.2e6;     // ShipParams::trapFuelMass, both speed models (scenarios keep fractions of it)
+const double kStructMass = 817.0e3;     // trap container (ShipParams::trapStructMass, variant Б)
+const double kAnamezonMax = 57.6e6;     // ShipParams::trapFuelMass, both speed models (scenarios keep fractions of it)
 const double kR = 4.15, kHalfLen = 33.3;  // half the flat width, half the body length (T8 mesh)
 }  // namespace
 

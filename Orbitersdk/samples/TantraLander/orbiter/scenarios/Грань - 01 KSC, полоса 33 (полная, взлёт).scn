@@ -1,0 +1,44 @@
+BEGIN_DESC
+Ђ√раньї 25,4 м на полосе 33 KSC: полна€ (212 т), 14 человек, 2 контейнера. –ежим Ђполосаї.
+¬злЄт на маршевых: 3 (полЄт), основна€ руко€ть на полную; шасси уберЄтс€ само в полЄте (на земле не уберЄтс€).
+¬исение с экипажем на «емле запрещено (только E - аварийно).
+
+ лавиши: 1 висение, 2 переход, 3 полЄт, 4 вход, 5 баллистика, 6 полоса, 7 вертикальна€ посадка, 8 ангар;
+G шасси, B форсаж маршевых, K киль, O люк, = / - высота висени€ (Shift x10), E аварийный режим,
+P перекачка в носовой перед входом, N вдув в нос. “€га маршевых - основна€ руко€ть (Num+/Num-),
+в висении ручкой задаЄтс€ наклон (автомат держит), рысканием - курс.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 51982.6690545866
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Gran
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Gran
+  MODE Extern
+  POS 4.0 -160.0 15.0
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Gran:TantraLander
+  STATUS Landed Earth
+  POS -80.6826440 28.5970140
+  HEADING 330.01
+  RCSMODE 0
+  AFCMODE 7
+  MODE 5
+  CREW 14
+  ARGON 10291 30851 11867
+  STORE 1.0
+  GEARCMD -1
+END
+END_SHIPS

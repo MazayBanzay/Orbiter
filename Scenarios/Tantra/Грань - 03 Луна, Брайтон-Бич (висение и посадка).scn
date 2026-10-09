@@ -1,0 +1,42 @@
+BEGIN_DESC
+«Грань» на реголите у Брайтон-Бич: 2 пилота, полная. На Луне висение с экипажем штатно.
+1 - висение, = / - высота, 7 - вертикальная посадка на амортизаторах; 3 - полёт на маршевых (форсаж B).
+
+Клавиши: 1 висение, 2 переход, 3 полёт, 4 вход, 5 баллистика, 6 полоса, 7 вертикальная посадка, 8 ангар;
+G шасси, B форсаж маршевых, K киль, O люк, = / - высота висения (Shift x10), E аварийный режим,
+P перекачка в носовой перед входом, N вдув в нос. Тяга маршевых - основная рукоять (Num+/Num-),
+в висении ручкой задаётся наклон (автомат держит), рысканием - курс.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52006.7485132526
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Gran
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Gran
+  MODE Extern
+  POS 4.0 -150.0 10.0
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Gran:TantraLander
+  STATUS Landed Moon
+  POS -33.4600 41.1350
+  HEADING 70.00
+  RCSMODE 0
+  MODE 0
+  CREW 2
+  ARGON 10291 30851 11867
+  STORE 1.0
+  HHOLD 40.0
+END
+END_SHIPS

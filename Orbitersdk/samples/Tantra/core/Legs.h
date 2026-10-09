@@ -15,7 +15,9 @@ constexpr int kLegCount = 7;
 constexpr int kKangaroo = 6;
 
 constexpr double kTesla = 10.0;
-constexpr double kHipBearingArea = 9.0;          // blade hip drum R 1.5 x 3.0 m, projected [m^2]
+// (2026-10-09) the blade hips carry the full ship: 20 T over a drum D 4.0 x 8.15 m - 5.18 GN, the turn x1.5 at 280 kt
+constexpr double kHipTesla = 20.0;
+constexpr double kHipBearingArea = 32.6;         // blade hip drum projected [m^2]
 constexpr double kSternBearingArea = 6.72;       // stern-leg hinge R 1.2 x 2.8 m
 constexpr double kKangBearingArea = 5.76;        // kangaroo hip drum R 0.9 x 3.2 m
 constexpr double kCatcherMu = 0.05;              // sliding catcher bearing

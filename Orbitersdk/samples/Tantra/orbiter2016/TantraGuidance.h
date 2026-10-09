@@ -62,9 +62,13 @@ constexpr double kLDt = 0.02;                     // s: the landing planner's st
 
 // ---- the plant's cups (tantra_plant_model.js, the numbers of core/Plant and Spec) ----
 constexpr double kMu0 = 4e-7 * kPi, kBNom = 12.1, kEtaN = 0.9, kEFus = 7.0e13, kChi = 1e-5;
-constexpr double kAMarch = kPi * 2.2 * 2.2, kAPod = kPi * 0.8 * 0.8;
+// (2026-10-09) no central march cup any more: «the march» of the autopilots is the four stern blocks on the charges, as the
+// ship has them (Tantra::UpdatePlant: the plant's cup x 4 x Spec kSternPlanAreaRatio x (kSternPlanTesla / 12.1)^2, area and
+// power alike - the plant's field B drives them); the pods' cups R 0.55 (ShipParams podThrustTotal: 55 MN a cup at 12.1 T)
+constexpr double kSternK = 4.0 * (3.0 * 3.0) / (2.2 * 2.2) * (15.0 / 12.1) * (15.0 / 12.1);
+constexpr double kAMarch = kPi * 2.2 * 2.2 * kSternK, kAPod = kPi * 0.55 * 0.55;
 constexpr int kNPod = 12;                         // 4 pods x 3 cups
-constexpr double kPfMarch = 2.2e14;               // W fusion at 100 %
+constexpr double kPfMarch = 2.2e14 * kSternK;     // W fusion at 100 %
 constexpr double kVArgon = 3.0e4, kVIron = 3.0e5; // m/s: the exhaust of argon (in the air) and iron
 constexpr double kSternStore = 1.0e12;            // J the stern soaks (C_STERN = store / 1400 K)
 double FieldThrust(double B, double area);        // B^2 / 2mu0 x A

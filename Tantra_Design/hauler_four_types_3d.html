@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Четыре типа носителя</title>
+<style>
+  html,body{margin:0;height:100%;background:#07080a;color:#cfd6df;font:13px "Segoe UI",Arial;overflow:hidden}
+  #ui{position:absolute;left:12px;top:10px;max-width:520px;max-height:calc(100% - 24px);overflow:auto;background:rgba(12,14,17,.9);border:1px solid #2a2f37;border-radius:6px;padding:10px 12px;box-sizing:border-box}
+  #ui h1{font-size:15px;margin:0 0 6px;color:#e6c79a}
+  #ui p{margin:3px 0;line-height:1.4}
+  #ui button{background:#1c2026;color:#cfd6df;border:1px solid #3a414b;border-radius:4px;padding:4px 8px;margin:4px 4px 0 0;cursor:pointer}
+  #ui button.on{border-color:#e6c79a;color:#e6c79a}
+  table{border-collapse:collapse;margin:6px 0;width:100%;font-size:12px} th,td{border-top:1px solid #2a2f37;padding:3px 4px;vertical-align:top;text-align:left} th{color:#e6c79a;font-weight:600}
+  .ok{color:#8fb39a}.no{color:#d08a7a}.n{color:#8a93a0}
+  #hide{position:absolute;right:12px;top:10px;background:#1c2026;color:#cfd6df;border:1px solid #3a414b;border-radius:4px;padding:4px 8px}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>Контейнер 58,4 кт при 2,5 g — четыре типа носителя</h1>
+  <p class="n">Числа — из проверенных §22–23 отчёта. «Не посчитано» — так и есть. Взлётная масса «Тантры» 276 кт, сухая 7,88 кт, бюджет комплекта 0,43 кт.</p>
+  <table>
+    <tr><th></th><th>Габарит (с контейнером)</th><th>Масса</th><th>Вывод</th></tr>
+    <tr><td>А · модульная гусеничная</td><td>34–68 × 12 × 2,9 м (≈ 12 м), 2–4 ряда по 3 модуля</td><td>2,85–3,4 кт при 2 рядах; модуль 475–565 т (лимит 250 т)</td><td class="no">условно: рама не посчитана, модуль тяжелее ячейки</td></tr>
+    <tr><td>Б · цельный тягач</td><td>40 × 12 × 4 м (≈ 12,6 м)</td><td>не посчитана</td><td class="no">не выгружается: больше платформы 18 × 9 м</td></tr>
+    <tr><td>В · магнитная платформа</td><td>36 × 12 м, палуба 2,15 м (≈ 10,8 м); маты 12 × 4 м</td><td>1,0–1,4 кт с матами</td><td class="no">носителем — нет (8–25 сут); модулем стыковки под килем ≤ 150 м — да</td></tr>
+    <tr><td>Г · колёсная в стандарте МПУ</td><td>51–68 × 12 м, 159–170 колёс Ø 2,4 м; балка — высота не посчитана</td><td>1,15–4,0 кт + балка 0,6–1,4 кт</td><td class="no">только скала R ≥ 13–19 МПа; рама не строится в 0,5 м</td></tr>
+  </table>
+  <p>Доля взлётной массы: А ≈ 1,0–1,2 %, В ≈ 0,4–0,5 %, Г ≈ 0,6–2,0 %. Ни один тип не проходит в бюджет 0,43 кт. Рекомендация §23: основной — А, В — только модуль стыковки под килем, Г — резерв на скалу. Решаете Вы.</p>
+  <div><button id="c0">Все рядом</button><button id="cA">А</button><button id="cB">Б</button><button id="cV">В</button><button id="cG">Г</button><button id="cT">Сверху</button><button id="cR">Облёт</button></div>
+</div>
+<button id="hide">скрыть панель</button>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputEncoding = THREE.sRGBEncoding;
+  document.body.appendChild(renderer.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x07080a); scene.fog = new THREE.FogExp2(0x0b0c0f, 0.003);
+  const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.3, 3000);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  function view(p, t) { camera.position.set(...p); controls.target.set(...t); controls.update(); }
+  const std = (c, m, r, e) => new THREE.MeshStandardMaterial(Object.assign({ color: c, metalness: m, roughness: r }, e || {}));
+  const M = {
+    hull: std(0x2a2e35, 0.75, 0.42, { flatShading: true }), hullD: std(0x1b1e23, 0.7, 0.5, { flatShading: true }), body: std(0xb9bfc6, 0.35, 0.42), bodyD: std(0x5c636c, 0.5, 0.4),
+    band: std(0x24282e, 0.8, 0.35), orange: std(0xc8622a, 0.25, 0.5), yellow: std(0xc79a22, 0.3, 0.55), track: std(0x121315, 0.5, 0.8), shoe: std(0x24262b, 0.6, 0.6, { flatShading: true }),
+    trap: std(0x2c3b52, 0.85, 0.35, { flatShading: true }), rib: std(0x1a2230, 0.9, 0.3, { flatShading: true }), batt: std(0x26364a, 0.7, 0.35), ring: std(0x7a6a50, 0.8, 0.35), jack: std(0x9aa3ad, 0.9, 0.25),
+    mat: std(0x3b3a36, 0.4, 0.8, { flatShading: true }), rail: std(0x7a6a50, 0.8, 0.35), tyre: std(0x16171a, 0.3, 0.85), rim: std(0x6f767e, 0.8, 0.35),
+    glass: std(0x0a0d12, 1.0, 0.06), ground: std(0x131210, 0, 0.97), road: std(0x1b1a17, 0, 0.92),
+    glowB: new THREE.MeshBasicMaterial({ color: 0x3fa8ff }), coil: new THREE.MeshBasicMaterial({ color: 0x4fb4ff, transparent: true, opacity: 0.55 }), lamp: new THREE.MeshBasicMaterial({ color: 0xfff2d8 }), man: std(0xd8dde3, 0, 0.6),
+  };
+  function add(geo, mat, x, y, z, parent, cast = true) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; (parent || scene).add(m); return m; }
+  function grp(parent, x = 0, y = 0, z = 0) { const g = new THREE.Group(); g.position.set(x, y, z); (parent || scene).add(g); return g; }
+  function extr(pts, depth, mat, parent) { const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) s.lineTo(p[0], p[1]); s.lineTo(pts[0][0], pts[0][1]); const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false }); g.translate(0, 0, -depth / 2); return add(g, mat, 0, 0, 0, parent); }
+  function trackUnit(L, h, w, parent, nW) {
+    const g = grp(parent); const r = h / 2, s = new THREE.Shape();
+    s.moveTo(-L / 2 + r, 0); s.lineTo(L / 2 - r, 0); s.absarc(L / 2 - r, r, r, -Math.PI / 2, Math.PI / 2, false); s.lineTo(-L / 2 + r, h); s.absarc(-L / 2 + r, r, r, Math.PI / 2, Math.PI * 1.5, false);
+    const tg = new THREE.ExtrudeGeometry(s, { depth: w, bevelEnabled: false, curveSegments: 12 }); tg.translate(0, 0, -w / 2); add(tg, M.track, 0, 0, 0, g);
+    const shoe = new THREE.BoxGeometry(0.4, 0.1, w + 0.08), n = Math.round((L - 2 * r) / 0.6);
+    for (let i = 0; i <= n; i++) { const x = -L / 2 + r + i * ((L - 2 * r) / n); add(shoe, M.shoe, x, 0.05, 0, g); add(shoe, M.shoe, x, h + 0.02, 0, g); }
+    for (const sx of [-1, 1]) add(new THREE.CylinderGeometry(r * 1.02, r * 1.02, w + 0.06, 14), M.hull, sx * (L / 2 - r), r, 0, g).rotation.x = Math.PI / 2;
+    for (let i = 0; i < nW; i++) add(new THREE.CylinderGeometry(0.45, 0.45, w + 0.04, 12), M.hullD, -L / 2 + r + 0.7 + i * ((L - 2 * r - 1.4) / (nW - 1)), r * 0.8, 0, g).rotation.x = Math.PI / 2;
+    return g;
+  }
+  function label(lines, x, y, z, parent, s = 1) {
+    const fs = 38, lh = 48, pad = 18, w = 40 + Math.max(...lines.map(l => l.length)) * 21, h = pad * 2 + lh * lines.length;
+    const c = document.createElement("canvas"); c.width = w; c.height = h; const ctx = c.getContext("2d");
+    ctx.fillStyle = "rgba(10,12,15,0.82)"; ctx.fillRect(0, 0, w, h); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    lines.forEach((l, i) => { ctx.fillStyle = i === 0 ? "#e6c79a" : "#cfd6df"; ctx.font = (i === 0 ? "bold " : "") + fs + "px Segoe UI, Arial"; ctx.fillText(l, w / 2, pad + lh * (i + 0.5)); });
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false })); sp.scale.set(w / 64 * s, h / 64 * s, 1); sp.position.set(x, y, z); sp.renderOrder = 10; (parent || scene).add(sp); return sp;
+  }
+  function dim(a, b, txt, at, parent) {
+    const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...a), new THREE.Vector3(...b)]); (parent || scene).add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xe6c79a })));
+    label([txt], at[0], at[1], at[2], parent, 0.8);
+  }
+  add(new THREE.PlaneGeometry(2400, 2400), M.ground, 0, 0, 0, scene, false).rotation.x = -Math.PI / 2;
+
+  function container(parent, y) {
+    const t = grp(parent, 0, y, 0); const R8 = 4.375, LB = 34.6;
+    const tb = add(new THREE.CylinderGeometry(R8, R8, LB, 8), M.trap, 0, 0, 0, t); tb.rotation.z = Math.PI / 2; tb.rotateY(Math.PI / 8);
+    for (let i = 0; i <= 8; i++) { const r = add(new THREE.CylinderGeometry(R8 + 0.12, R8 + 0.12, 0.35, 8), M.rib, -LB / 2 + 0.6 + i * (LB - 1.2) / 8, 0, 0, t); r.rotation.z = Math.PI / 2; r.rotateY(Math.PI / 8); }
+    for (const sx of [-1, 1]) { add(new THREE.CylinderGeometry(0.9, 0.9, 0.6, 24), M.hull, sx * (LB / 2 + 0.6), 0, 0, t).rotation.z = Math.PI / 2; add(new THREE.TorusGeometry(2.6, 0.08, 8, 48), M.glowB, sx * (LB / 2 + 0.31), 0, 0, t, false).rotation.y = Math.PI / 2; }
+    return t;
+  }
+  function saddles(parent, deckY) { for (const dx of [-14, -7, 0, 7, 14]) { const m = extr([[-4.3, 0], [4.3, 0], [4.3, 1.5], [3.9, 2.72], [1.68, 0.5], [-1.68, 0.5], [-3.9, 2.72], [-4.3, 1.5]], 1.0, M.bodyD, parent); m.rotation.y = Math.PI / 2; m.position.set(dx, deckY, 0); } }
+  function mpu(parent, x, y, z) {
+    const g = grp(parent, x, y, z);
+    add(new THREE.BoxGeometry(9.52, 1.3, 4.4), M.body, 0, 1.3, 0, g); add(new THREE.BoxGeometry(3.0, 1.0, 3.6), M.glass, 3.2, 2.4, 0, g); add(new THREE.BoxGeometry(9.6, 0.1, 4.45), M.orange, 0, 1.95, 0, g);
+    for (let i = 0; i < 4; i++) for (const sz of [-1, 1]) add(new THREE.CylinderGeometry(0.8, 0.8, 0.65, 16), M.tyre, -3.6 + i * 2.4, 0.8, sz * 2.0, g).rotation.x = Math.PI / 2;
+    return g;
+  }
+  const Z = { A: -51, B: -17, V: 17, G: 51 };
+
+  // ===== A: modular tracked, 2 rows x 3 (sand case of §22) =====
+  const A = grp(scene, 0, 0, Z.A);
+  function moduleA(parent, x, z) {
+    const g = grp(parent, x, 0, z);
+    for (const sz of [-1, 1]) trackUnit(16.6, 1.9, 1.7, g, 7).position.z = sz * 1.15;
+    add(new THREE.CylinderGeometry(1.7, 1.7, 0.16, 28), M.ring, 0, 2.08, 0, g);
+    add(new THREE.BoxGeometry(17.0, 0.7, 4.0), M.hull, 0, 2.55, 0, g);
+    for (const sx of [-1, 1]) add(new THREE.BoxGeometry(1.6, 0.66, 4.02), M.batt, sx * 7.6, 2.55, 0, g);
+    for (const sz of [-1, 1]) add(new THREE.BoxGeometry(13.8, 0.08, 0.06), M.orange, 0, 2.88, sz * 2.0, g);
+  }
+  for (const x of [-8.65, 8.65]) for (const z of [-4, 0, 4]) moduleA(A, x, z);
+  saddles(A, 2.9); container(A, 7.45);
+  mpu(A, 26, 0, 0);
+  dim([-17.3, 0.15, 7.5], [17.3, 0.15, 7.5], "34,3 м (2 ряда; честно 2–4 ряда → до 68 м)", [0, 1.4, 9.5], A);
+  dim([19, 0.15, -6], [19, 0.15, 6], "12,0 м", [20.5, 1.4, -8], A);
+  label(["А · модульная гусеничная", "34–68 × 12 × 2,9 м, с контейнером ≈ 12 м", "масса 2,85–3,4 кт (2 ряда), модуль 475–565 т", "≈ 1,0–1,2 % взлётной 276 кт", "условно: рама не посчитана"], 0, 17, 0, A, 1.0);
+
+  // ===== B: one-piece tracked tractor 40 x 12 x 4 =====
+  const B = grp(scene, 0, 0, Z.B);
+  for (const xb of [-9.6, 9.6]) for (const z of [-4.45, -1.45, 1.45, 4.45]) { const bg = grp(B, xb, 0, z); trackUnit(17, 2.0, 2.6, bg, 7); add(new THREE.BoxGeometry(15.4, 0.4, 2.0), M.hull, 0, 2.2, 0, bg); }
+  add(new THREE.BoxGeometry(40, 1.2, 12), M.hull, 0, 3.4, 0, B);
+  for (const sz of [-1, 1]) for (let i = 0; i < 6; i++) add(new THREE.BoxGeometry(4.6, 0.9, 0.08), M.batt, -15 + i * 6, 3.4, sz * 6.03, B);
+  const cab = grp(B, 0, 4.0, 0); extr([[16.6, 0], [20, 0], [20, 1.2], [18.9, 3.0], [16.6, 3.0]], 6.0, M.body, cab);
+  add(new THREE.BoxGeometry(0.3, 1.8, 12.6), M.yellow, 21.6, 1.9, 0, B);
+  const Bc = grp(B, -2, 0, 0); saddles(Bc, 4.0); container(Bc, 8.55);
+  dim([-20, 0.15, 7.5], [20, 0.15, 7.5], "40,0 м", [0, 1.4, 9.5], B);
+  label(["Б · цельный тягач", "40 × 12 × 4 м, с контейнером ≈ 12,6 м", "масса не посчитана", "не выгружается: больше платформы 18 × 9 м"], -2, 17.5, 0, B, 1.0);
+
+  // ===== V: superconducting repulsion platform on self-laid mats =====
+  const V = grp(scene, 0, 0, Z.V);
+  // mats 12 x 4 m: 9 under the platform + 1 ahead; side guides
+  for (let i = 0; i < 10; i++) add(new THREE.BoxGeometry(3.9, 0.7, 12), M.mat, -16 + i * 4, 0.35, 0, V);
+  for (const sz of [-1, 1]) add(new THREE.BoxGeometry(40, 0.35, 0.3), M.rail, 2, 0.88, sz * 5.7, V);
+  // platform: 9 modules 12 x 4 x 1.4 m, levitating 5 cm above the mats; deck 2.15 m
+  for (let i = 0; i < 9; i++) { add(new THREE.BoxGeometry(3.95, 1.4, 12), M.hull, -16 + i * 4, 0.75 + 0.7, 0, V); add(new THREE.BoxGeometry(3.96, 0.08, 12.02), M.orange, -16 + i * 4, 2.1, 0, V); }
+  add(new THREE.BoxGeometry(36, 0.06, 8), M.coil, 0, 0.77, 0, V, false);                 // levitation zone 8 x 36 m (alternating coil array, 1 m pitch)
+  for (let i = 0; i < 36; i++) add(new THREE.BoxGeometry(0.5, 0.05, 8), i % 2 ? M.coil : M.glowB, -17.5 + i, 0.78, 0, V, false);
+  for (const sz of [-1, 1]) add(new THREE.BoxGeometry(36, 0.25, 0.4), M.jack, 0, 0.73, sz * 4.4, V);   // emergency skids
+  const Vc = grp(V, 0, 0, 0); saddles(Vc, 2.15); container(Vc, 6.7);
+  // folding portal at the rear carrying a mat forward over the container
+  const P = grp(V, -20.5, 0, 0);
+  for (const sz of [-1, 1]) add(new THREE.BoxGeometry(0.6, 11.5, 0.6), M.yellow, 0, 5.75, sz * 6.6, P);
+  add(new THREE.BoxGeometry(0.8, 0.8, 14), M.yellow, 0, 11.5, 0, P);
+  add(new THREE.BoxGeometry(3.9, 0.7, 12), M.mat, 0, 10.6, 0, P);
+  add(new THREE.BoxGeometry(3.9, 0.7, 12), M.mat, -24.5 + 20.5, 0.35, 14, V);                    // spare mat aside
+  dim([-18, 0.15, 7.6], [18, 0.15, 7.6], "36,0 м (маты 12 × 4 м, шаг 4 м)", [0, 1.4, 9.6], V);
+  label(["В · магнитная платформа", "36 × 12 м, палуба 2,15 м, с контейнером ≈ 10,8 м", "масса 1,0–1,4 кт с матами; 40–80 м/ч", "≈ 0,4–0,5 % взлётной", "носителем — нет; модуль стыковки под килем — да"], 0, 17, 0, V, 1.0);
+
+  // ===== G: wheeled, MPU standard, 3 rows x 3 modules, 162 wheels D 2.4 =====
+  const G = grp(scene, 0, 0, Z.G);
+  const tyreGeo = new THREE.CylinderGeometry(1.2, 1.2, 1.2, 18), rimGeo = new THREE.CylinderGeometry(0.6, 0.6, 1.22, 12);
+  for (let r = 0; r < 3; r++) for (const zm of [-4, 0, 4]) {
+    const g = grp(G, -17.3 + r * 17.3, 0, zm);
+    for (let i = 0; i < 6; i++) for (const k of [-1, 0, 1]) { const x = -6.5 + i * 2.6, z = k * 1.33; add(tyreGeo, M.tyre, x, 1.2, z, g).rotation.x = Math.PI / 2; add(rimGeo, M.rim, x, 1.2, z, g).rotation.x = Math.PI / 2; }
+    add(new THREE.BoxGeometry(17, 0.5, 4.0), M.hull, 0, 2.65, 0, g);
+    for (const sx of [-1, 1]) add(new THREE.BoxGeometry(1.4, 0.5, 4.02), M.batt, sx * 7.7, 2.65, 0, g);
+  }
+  add(new THREE.BoxGeometry(51.6, 1.2, 12), M.bodyD, 0, 3.5, 0, G);                               // the beam above the wheels (height not computed — shown 1.2 m)
+  for (const sz of [-1, 1]) add(new THREE.BoxGeometry(51.6, 0.1, 0.06), M.orange, 0, 4.08, sz * 6.02, G);
+  const Gc = grp(G, 0, 0, 0); saddles(Gc, 4.1); container(Gc, 8.65);
+  mpu(G, 32, 0, 0);
+  dim([-25.8, 0.15, 7.5], [25.8, 0.15, 7.5], "51,6 м (3 ряда; 4 ряда → 68 м)", [0, 1.4, 9.5], G);
+  label(["Г · колёсная в стандарте МПУ", "51–68 × 12 м, 159–170 колёс Ø 2,4 × 1,2 м", "масса 1,15–4,0 кт + балка 0,6–1,4 кт", "≈ 0,6–2,0 % взлётной", "только скала R ≥ 13–19 МПа; балка не посчитана"], 0, 18, 0, G, 1.0);
+
+  // people for scale
+  for (const z of [Z.A, Z.B, Z.V, Z.G]) { const m = grp(scene, 24, 0, z + 8); add(new THREE.CylinderGeometry(0.17, 0.2, 0.85, 10), M.man, 0, 0.43, 0, m); add(new THREE.CylinderGeometry(0.22, 0.2, 0.62, 10), M.man, 0, 1.16, 0, m); add(new THREE.SphereGeometry(0.13, 12, 10), M.man, 0, 1.6, 0, m); }
+
+  // lights
+  function flood(x, y, z, tx, ty, tz) {
+    const sl = new THREE.SpotLight(0xfff0d8, 3.0, 260, 0.7, 0.6, 1.2); sl.position.set(x, y, z); scene.add(sl);
+    const tg = new THREE.Object3D(); tg.position.set(tx, ty, tz); scene.add(tg); sl.target = tg; sl.castShadow = true; sl.shadow.mapSize.set(1024, 1024);
+  }
+  flood(60, 40, -90, 0, 3, Z.A); flood(60, 40, -20, 0, 3, Z.B); flood(60, 40, 40, 0, 3, Z.V); flood(60, 40, 100, 0, 3, Z.G); flood(-60, 35, 0, 0, 3, 0);
+  scene.add(new THREE.HemisphereLight(0x46505f, 0x0d0b09, 0.5)); const rim = new THREE.DirectionalLight(0x8090ad, 0.7); rim.position.set(80, 60, -80); scene.add(rim);
+
+  const views = { c0: [[95, 55, 110], [0, 4, 0]], cA: [[40, 20, Z.A - 42], [0, 5, Z.A]], cB: [[42, 18, Z.B - 40], [0, 5, Z.B]], cV: [[40, 16, Z.V + 40], [0, 4, Z.V]], cG: [[44, 18, Z.G + 44], [0, 5, Z.G]], cT: [[0, 230, 1], [0, 0, 0]] };
+  for (const id in views) document.getElementById(id).onclick = () => view(...views[id]);
+  let orbit = false; const bro = document.getElementById("cR"); bro.onclick = () => { orbit = !orbit; bro.classList.toggle("on", orbit); };
+  document.getElementById("hide").onclick = () => { const u = document.getElementById("ui"); u.style.display = u.style.display === "none" ? "block" : "none"; };
+  addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+  view(...views.c0);
+  let t = 0;
+  (function loop() { t += 0.016; if (orbit) { const a = t * 0.05; camera.position.set(150 * Math.cos(a), 60, 150 * Math.sin(a)); controls.target.set(0, 4, 0); } controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+})();
+</script>
+</body>
+</html>

@@ -718,6 +718,20 @@ FOOT_KINDS = {   # R, rib depth, post, struts (fraction of the rib, collar heigh
     "kang": dict(R=6.35, depth=0.30, fork=1.5, struts=((0.5, 0.6, 0.24), (1.0, 1.2, 0.29)), retract=0.55, back=True),
 }
 FOOT_H = FOOT_KINDS["blade"]["fork"] + FOOT_RIM_DROP      # ankle above the ground (blades, stern legs)
+# (2026-10-09, the full ship 280 kt) guys: MR-tensioned CNT cables (D 0.66 m) from a collar at the blade's mid-length (its
+# MR winch inside the stage) to the rim hoops of the blade's own foot, inboard and outboard - the weak axis buckles in two
+# halves (Spec kGuyK). Telescopic cable covers: anchored over blade_ext 0..GUY_E1 (lift, turn, standing), reeled into the
+# blade by GUY_E2 (lying, stowed).
+GUY_N, GUY_SEG, GUY_R = 8, 6.5, 0.33
+GUY_E1, GUY_E2 = 0.30, 0.40
+GUY_ROT = 1.0                                   # sense of the rig's rotation about +z that swings a guy outward (checked)
+
+
+def guy_vec(e):
+    """(lateral, drop) from the collar hinge on the blade axis to the rim anchor, blade extension e (0 out .. 1 in)."""
+    hinge = -LEG_LMAX / 2 + (BLADE_N - 1) / 2 * BLADE_EXT * e
+    anchor = -LEG_LMAX + (BLADE_N - 1) * BLADE_EXT * e - FOOT_H + FOOT_LIP
+    return FOOT_KINDS["blade"]["R"], hinge - anchor
 KANG_FOOT_H = FOOT_KINDS["kang"]["fork"] + FOOT_RIM_DROP  # kangaroo ankle above the ground
 ROLL = math.atan2(N_F[1], N_F[0])
 PIN_N, PIN_X0, PIN_STEP, PIN_LEN = 4, 9.75, 1.8, 1.9   # pin stages (deployed: x0 + k*step .. + len); roll pivot at x0
@@ -848,6 +862,10 @@ POD_X_OUT = 17.5                                   # pod centre deployed
 POD_S = (43.6, 84.0)
 POD_CUP_R = 0.55                                   # (2026-10-09, user's decision 5) 3 x R 0.55 a pod, 55 MN a cup, 665 MN in all
 POD_DOOR_L = 6.5
+# (2026-10-09) the bay covers stay with the hull (rig): 0.12 m armour panels, open over pod_retract 1 .. POD_ARM_END before
+# the arm moves; the fore ones sink POD_COVER_SINK and slide forward under the skin, the aft ones swing POD_COVER_SWING deg
+# about their aft edge onto the skin (it curves inward aft of the bay)
+POD_COVER_T, POD_ARM_END, POD_COVER_SINK, POD_COVER_SWING = 0.12, 0.7, 0.16, 182.0
 POD_SWIVEL_MAX = math.radians(180.0)
 POD_CANT = math.radians(15.0)        # (2026-10-09) hover: the aft pair turns 15 deg less, the fore pair 15 more (Spec kPodHoverCantDeg)
 
@@ -876,14 +894,17 @@ NOSE_CUP_S1 = NOSE_CUP_S + 6.5
 NOSE_DOSE_S0, NOSE_DOSE_S1, NOSE_DOSE_R = 156.0, 162.1, 1.3      # nose dosing trap behind each retro cup
 # anamezon feed ducts (starboard; port mirrored, detour round the airlock): header just ahead of the traps, then over
 # the hangar along the flank, behind the decks, under the central post floor to the dosing trap
-FEED_R, FEED_X, FEED_HEAD_S = 0.10, 9.25, 98.0       # anamezon is a magnetically held stream, not fluid: a thin core in an insulating
+FEED_R, FEED_X, FEED_HEAD_S = 0.10, 9.25, 94.0       # anamezon is a magnetically held stream, not fluid: a thin core in an insulating
 FEED_SLEEVE_R, FEED_COIL_R, FEED_COIL_STEP = 0.26, 0.40, 2.5     # vacuum jacket and confinement solenoid rings
-BUF_S0, BUF_S1, BUF_R = 88.6, 94.6, 1.35                         # buffer bottle in front of each trap: the cassette plugs into it
+# (2026-10-09) the buffers end 1.2 m earlier and the header runs at s 94.0, behind the hangar's aft bulkhead (s 94.2)
+BUF_S0, BUF_S1, BUF_R = 88.6, 93.4, 1.35                         # buffer bottle in front of each trap: the cassette plugs into it
 SCREEN_S0, SCREEN_S1 = 144.0, 152.0                              # 8 m screen (iridium plates, water/charge core) between the crew and the nose motors
 MIRROR_S = (154.8, 155.6)                                        # magnetic mirror rings (particle reflection) round each nose axis
 MIRROR_R = 2.5
-FEED_PATH = [(9.25, 5.0, 98.0), (9.25, 5.0, 119.0), (8.4, 6.1, 121.0), (5.6, 6.1, 123.0), (5.6, 6.1, 134.8), (5.6, 4.5, 135.8),
-             (5.6, 4.5, 144.3), (5.6, -1.0, 144.3), (3.0, -1.0, 150.0), (3.0, -1.0, 156.5)]       # over the upper deck, round the bridge drum
+# (2026-10-09) the ducts leave the lander's shaft (x <= 10.3): along the hangar's side band at mid-height outside it, up to the
+# old route just forward of the hangar
+FEED_PATH = [(9.25, 0.0, 94.0), (10.85, 0.0, 94.0), (10.85, 0.0, 121.3), (10.0, 3.0, 121.3), (8.4, 6.1, 122.0), (5.6, 6.1, 123.0),
+             (5.6, 6.1, 134.8), (5.6, 4.5, 135.8), (5.6, 4.5, 144.3), (5.6, -1.0, 144.3), (3.0, -1.0, 150.0), (3.0, -1.0, 156.5)]   # over the upper deck, round the bridge drum
 FEED_PATH_PORT = FEED_PATH
 
 # Anamezon port and trap columns: 2x2 cylinders D 8 m in octagonal armour, s 21-87.6, lifted by their trunnions on
@@ -899,7 +920,15 @@ LIFT_Y0, LIFT_TRAVEL, LIFT_CEIL = TRAP_XY[2][1], 36.0, (1 - FL) * wh_at(50.0)[1]
 LIFT_N, LIFT_SEG = 8, 5.2
 HEAD_S = (CASS_S0 - 1.7, 88.6)                 # the aft heads clear the trunnions (0.6 m) by 0.1 m
 TRAP_MOUTH_Y = _YB_C - 0.2
-HANGAR_S = (90.6 + INSERT_L, 111.6 + INSERT_L)
+# (2026-10-09, the user: the hangar is built round the lander «Грань» 25.44 x 20.30 x 4.17 m) the upper hangar runs aft to the
+# bulkhead at s 94.2 (top opening s 94.7-120.4, x >= 10.3), the lower level (MPU platform, bottom doors) keeps its stations.
+# The lander leaves through the top by the maglev lift (tantra-maglev-launch): it rises on the lift's round magnet blocks
+# (under its 6 lift cups, behind its 2 marching cups) and turns to a 70 deg stele about its stern; the jet of its marching
+# cups goes into the deflector skin aft of the opening (boron nitride). A deck separates the upper hangar from the lower.
+HANGAR_S = (94.2, 120.9)
+HANGAR_FLOOR_S = (90.6 + INSERT_L, 111.6 + INSERT_L)   # the lower level: MPU platform, bottom doors (as before)
+LANDER_S, LANDER_STERN_S = 106.41, 94.83               # TLANDER (the lander's mesh origin), its stern
+LANDER_RISE, LANDER_STELE_DEG = 13.0, 70.0             # the lift: up over the skin, then the stele
 AIRLOCK_S = 120.0 + INSERT_L
 # Main airlock lift (port flank, s 129): the lock cell x -8.85..-6.85, y 1.0..3.1. Door panel swings out; a four-stage telescopic
 # arm carries the platform OUT 4.4 m (the hull bulges to x 11 below the door, the platform must clear it), a mast comes down to
@@ -1394,11 +1423,13 @@ def openings():
     SF = sec(HANGAR_REF_S)
     W, H = wh_at(HANGAR_REF_S)
     K = key_wh(W, H)
-    uh = SF.u_of((0.62 * W, (1 - FL) * H - 0.12 * H))
+    # (2026-10-09) the top opening as wide as the lander's shaft needs at its narrowest (forward) end: x 10.3 on the upper bevel
+    SE = sec(HANGAR_S[1] - 0.5)
+    uh = min((u for u in np.linspace(0.30, 0.49, 1901) if SE.at(u)[1] > 2.0), key=lambda u: abs(SE.at(u)[0] - 10.3))
     O.append(_open("hangar_top", uh, mir(uh), HANGAR_S[0] + 0.5, HANGAR_S[1] - 0.5, depth=3.0))
     ub = SF.u_of(K["C"])                                   # bottom doors run up to the chine: the XR2 span is 23.9 m
-    O.append(_open("hangar_bottom_starboard", 0.0, ub, HANGAR_S[0] + 0.9, HANGAR_S[1] - 0.5, depth=5.0))   # aft edge clear of the kangaroo pocket
-    O.append(_open("hangar_bottom_port", mir(ub), 1.0, HANGAR_S[0] + 0.9, HANGAR_S[1] - 0.5, depth=5.0))
+    O.append(_open("hangar_bottom_starboard", 0.0, ub, HANGAR_FLOOR_S[0] + 0.9, HANGAR_FLOOR_S[1] - 0.5, depth=5.0))   # aft edge clear of the kangaroo pocket
+    O.append(_open("hangar_bottom_port", mir(ub), 1.0, HANGAR_FLOOR_S[0] + 0.9, HANGAR_FLOOR_S[1] - 0.5, depth=5.0))
     SA = sec(AIRLOCK_S)
     KA = key_wh(*wh_at(AIRLOCK_S))
     fe = unit(KA["T"] - KA["C"])
@@ -1593,8 +1624,9 @@ def compartments():
     the hangar lock into the hangar, the space airlock on the port side, and a 1.1 m technical passage along the
     roof slot between the trap columns. The stern (s 0-20, engines) is unmanned."""
     C = [
-        ("tech_passage", "технический проход", 20.0, 119.0, 5.5, 7.5, 0.55, 0.0, (0.0, 6.5, 60.0)),
-        ("tech_link", "переход в проход", 119.0, 125.0, 5.5, 7.5, 2.6, -0.2, (0.0, 6.5, 122.0)),
+        # (2026-10-09) the passage ends before the lander's shaft and goes down a shaft to the hangar's lower level (under the deck)
+        ("tech_passage", "технический проход", 20.0, 93.3, 5.5, 7.5, 0.55, 0.0, (0.0, 6.5, 60.0)),
+        ("tech_link", "переход в проход", 121.0, 125.0, 5.5, 7.5, 2.6, -0.2, (0.0, 6.5, 122.0)),
         ("hangar", "ангар", HANGAR_S[0] + 0.5, 120.3, -5.6, 3.3, 12.0, 0.0, (0.0, 1.0, (HANGAR_S[0] + HANGAR_S[1]) / 2)),
         ("hangar_lock", "тамбур ангара", 120.3, 121.6, -4.5, -2.4, 0.9, -0.45, (-0.45, -3.0, 120.9)),
         ("lab_deck", "нижний уровень: спортзал, санузлы, мастерская, склад", 121.6, 134.0, -4.5, -1.75, 8.4, 0.0, (0.0, -3.0, 127.0)),
@@ -1604,6 +1636,7 @@ def compartments():
         ("command_bridge", "командная рубка (капсула)", BR_S - 4.4, BR_S + 4.4, BR_Y - 1.0, BR_Y + BR_R, 4.7, 0.0,
          (0.0, BR_Y - 1.0 + 1.65, BR_S - 0.5)),
         ("mid_deck", "средний уровень: каюты", 121.6, 134.0, -1.75, 1.0, 8.4, 0.0, (0.0, -0.1, 127.0)),   # 2026-10-09: appended last
+        ("tech_shaft", "шахта прохода в ангар", 93.3, 94.2, -4.4, 7.5, 0.55, 0.0, (0.0, 1.0, 93.75)),     # 2026-10-09: appended last
     ]
     out = []
     for key, ru, s0, s1, y0, y1, hx, xc, cam in C:
@@ -1612,7 +1645,7 @@ def compartments():
 
 
 COMPARTMENTS = compartments()
-PASS_STEPS = [(20.0, 105.0, 5.5), (105.0, 112.0, 6.0), (112.0, 119.0, 5.5)]     # floor of the passage by station (the hangar beam at s 106-111)
+PASS_STEPS = [(20.0, 93.3, 5.5)]     # floor of the passage by station (2026-10-09: it ends at the shaft before the hangar)
 PASS_H = 2.0
 # Openings in the interior walls: ("z", s, x, sill, w, h) in a bulkhead, ("y", y, x, s, size) hatch in a floor/ceiling slab,
 # ("x", x, s, sill, w, h) in a side wall. Applied to every wall lying in the plane.
@@ -1629,9 +1662,10 @@ DOORS_INT = [
     ("z", 134.0, 3.4, -4.5, 1.2, 2.1),                 # lower deck -> keel bay (starboard corridor)
     ("z", 134.0, -3.4, -4.5, 1.2, 2.1),                # lower deck -> keel bay (port corridor)
     ("y", 5.5, -2.05, 123.6, 1.5, 2.4),                # lift shaft, upper deck <-> link room (technical level)
-    ("z", 119.0, 0.0, 5.5, 1.0, 2.0),                  # passage -> link room
+    ("z", 93.3, 0.0, 5.5, 1.0, 2.0),                   # passage -> the shaft down to the hangar (2026-10-09; was -> link room)
     ("x", -7.0, AIRLOCK_S, 1.0, 1.2, 2.1),             # living deck -> airlock
     ("x", -9.1, AIRLOCK_S, 1.0, 1.2, 2.1),             # airlock -> outside
+    ("z", 94.2, 0.0, -4.4, 0.9, 2.0),                  # the shaft -> the hangar's lower level, under the deck (2026-10-09)
 ]
 
 
@@ -1677,7 +1711,8 @@ def _fit_hx(c):
 
 
 for _c in COMPARTMENTS:
-    if _c["key"] not in ("tech_passage", "airlock", "hangar_lock", "hangar", "bridge_access", "command_bridge", "keel_bay", "tech_link"):
+    if _c["key"] not in ("tech_passage", "airlock", "hangar_lock", "hangar", "bridge_access", "command_bridge", "keel_bay", "tech_link",
+                         "tech_shaft"):
         _c["hx"] = round(_fit_hx(_c), 1)
 
 
@@ -3674,7 +3709,9 @@ def _bridge_quadrant(G, Pp, top):
     cx, cz, cw, cd = BR_POD_KEY                                                      # the guard cover: hinged at his edge
     cov = Group("bridge_pod_cover", MAT["br_cover"])
     h0 = Pp((cx, cz - cd / 2 - .002), top + .001)
-    box(cov, h0 + (-cw / 2, 0, 0), h0 + (cw / 2, .028, cd))
+    # (2026-10-09, the user: «кнопка с колпачком - дичь») no guard cover: the key is a plain key; the group stays (the module's
+    # contract) as a speck hidden in the console's top
+    box(cov, h0 + (-.0005, -.004, 0), h0 + (.0005, -.003, .001))
     out.append(cov)
     YOKE["hinge"] = h0
     sx, sz, sw, sh, tl = BR_PODS_SCR                                                 # the pods' display: a slab tilted to him
@@ -4747,9 +4784,14 @@ def build_interior():
             slab_y(gc, c["y1"], xc - hx, xc + hx, z0, z1, dy=-0.075)
             slab_z(g, z0, xc - hx, xc + hx, c["y0"], c["y1"], c["s0"])
             slab_z(g, z1, xc - hx, xc + hx, c["y0"], c["y1"], c["s1"])
-            if c["key"] in ("airlock", "keel_bay", "tech_link"):
+            if c["key"] in ("airlock", "keel_bay", "tech_link", "tech_shaft"):
                 for sgn in (-1, 1):
                     slab_x(g, xc + sgn * hx, z0, z1, c["y0"], c["y1"])
+            if c["key"] == "tech_shaft":                     # a ladder on its aft wall: two rails, rungs every 0.3 m
+                for xr in (-0.25, 0.25):
+                    box(g, (xr - 0.025, c["y0"], z0 + 0.06), (xr + 0.025, c["y1"] - 2.0, z0 + 0.11))
+                for yr in np.arange(c["y0"] + 0.3, c["y1"] - 2.0, 0.3):
+                    box(g, (-0.25, yr - 0.015, z0 + 0.15), (0.25, yr + 0.015, z0 + 0.18))
         out.append(g)                                         # (the group order is a contract with the module: new groups go to the end)
         extra += [x_ for x_ in (gf, gc) if x_.v]
     out += build_rooms()
@@ -4799,6 +4841,8 @@ GROUPS = (["hull", "shoulder", "nose", "spine", "fin", "fin_upper", "crest_port"
           + ["armour_shoulder", "belly"]            # appended last: the indices of every group before them stay as they were
           + [f"sleg_door_{i}" for i in range(4)]   # the stern-leg bay doors (2026-10-09)
           + [f"pocket_door_{sd}_{lv}" for sd in ("port", "starboard") for lv in ("up", "low")]   # the blade pocket doors (2026-10-09)
+          + [f"guy_{sd}_{g}_{j}" for sd in ("port", "starboard") for g in ("in", "out") for j in range(GUY_N)]   # blade guys (2026-10-09)
+          + ["hangar_deflector"]                     # the lander's jet deflector aft of the top opening (2026-10-09)
 )
 
 
@@ -4921,8 +4965,22 @@ def build():
         if o.get("depth") and not o["name"].startswith("hangar"):
             liner(pl, o, o["depth"])
     hi = grp("hangar_inner", "structure")
-    for n in ("hangar_top", "hangar_bottom_starboard", "hangar_bottom_port"):
-        liner(hi, OPEN[n], OPEN[n]["depth"])
+    _yd = -(FL - 0.233) * wh_at(HANGAR_REF_S)[1] + 0.2
+
+    def _bot_depth(u, s=None):                              # (2026-10-09) the lower level's walls end under the deck
+        return max(0.3, (_yd - 0.12) - hull_xy(HANGAR_REF_S if s is None else s, u)[1])
+    for n in ("hangar_bottom_starboard", "hangar_bottom_port"):
+        liner(hi, OPEN[n], _bot_depth)
+    # (2026-10-09) the lander's shaft: vertical walls from the top opening's edges down to the deck (a liner along the skin
+    # normal leaned 2 m into the lander's way up)
+    _ho = OPEN["hangar_top"]
+    for sa in np.arange(_ho["a"], _ho["b"] - 1e-6, 1.0):
+        sb = min(sa + 1.0, _ho["b"])
+        ea, eb = sec(sa).at(_ho["u"][0]), sec(sb).at(_ho["u"][0])
+        xe, ye = min(ea[0], eb[0]), min(ea[1], eb[1])
+        for sgn in (-1, 1):
+            x0, x1 = sorted((sgn * xe, sgn * (xe + 0.15)))
+            box(hi, (x0, _yd, zs(sa)), (x1, ye - 0.05, zs(sb)))
 
     # ---- fin slot lips (the spine): two rails along the slot, seals over the retracted fin
     g = grp("spine", "structure")
@@ -4976,19 +5034,25 @@ def build():
     lathe(g, [(RIM_S - 0.02, WELL_C_R - 0.05), (RIM_S - 0.02, WELL_C_R + 0.3)], center=(0.0, SYC))   # rim ring
     g = grp("well_centre", "engine_metal")
     lathe(g, [(RIM_S, WELL_C_R), (WELL_C_DEPTH_S, WELL_C_R), (WELL_C_DEPTH_S, 0.3)], center=(0.0, SYC), inward=True)
-    # marching planetary cup on its sliding mount (reference: stowed, lip at MARCH_LIP_S under the shut well iris)
+    # (2026-10-09, the user: the old central marching cup removed) the central well holds the stern's magnetic system: the
+    # superconducting plume-shaping coil between the four blocks' jets (it keeps them apart and off the stern) with two
+    # more coils of the stack behind it, and the sensors on a post at the mouth (the jets' plasma, the guide beam, the
+    # radiation); a fixed bezel where the well's iris was. Group names kept (the module's contract).
     g = grp("march_unit", "engine_metal")
-    cup(g, 0.0, SYC, MARCH_LIP_S, MARCH_D, MARCH_R)
-    b0, b1 = MARCH_LIP_S + MARCH_D, MARCH_LIP_S + MARCH_D + MARCH_BODY_L
-    lathe(g, [(b0 - 0.4, MARCH_R + 0.1), (b0 - 0.4, MARCH_R + 0.45), (b0, MARCH_R + 0.45), (b0, MARCH_BODY_R), (b1, MARCH_BODY_R), (b1, 0.0)],
-          center=(0.0, SYC))                                                      # coil ring, housing, end cap
-    for k in range(4):                                                            # slide shoes on the well wall
+    for c0, c1, ri, ro in ((MARCH_LIP_S + 0.2, MARCH_LIP_S + 1.6, 1.25, 2.45), (MARCH_LIP_S + 2.4, MARCH_LIP_S + 3.4, 1.0, 2.45),
+                           (MARCH_LIP_S + 4.2, MARCH_LIP_S + 5.2, 1.0, 2.45)):
+        lathe(g, [(c0, ri), (c0, ro), (c1, ro), (c1, ri), (c0, ri)], center=(0.0, SYC))     # coil cases
+    lathe(g, [(MARCH_LIP_S + 5.2, 0.0), (MARCH_LIP_S + 5.2, 1.0), (MARCH_LIP_S + 5.6, 1.0), (MARCH_LIP_S + 5.6, 0.0)], center=(0.0, SYC))
+    tube(g, (0.0, SYC, zs(MARCH_LIP_S + 5.2)), (0.0, SYC, zs(MARCH_LIP_S - 0.1)), 0.45, n=16)        # the sensor post
+    lathe(g, [(MARCH_LIP_S - 0.1, 0.75), (MARCH_LIP_S - 0.35, 0.6), (MARCH_LIP_S - 0.45, 0.3), (MARCH_LIP_S - 0.48, 0.0)],
+          center=(0.0, SYC))                                                                       # the sensor head
+    for k in range(4):                                                            # four sensor windows looking at the four jets
         a = math.pi / 4 + k * math.pi / 2
-        c = np.array([0.0, SYC, 0.0]) + np.array([math.cos(a), math.sin(a), 0.0]) * (WELL_C_R - 0.12)
-        obox(g, c + np.array([0, 0, zs(b0 + 2.0)]), (math.cos(a), math.sin(a), 0), (-math.sin(a), math.cos(a), 0), (0, 0, 1), 0.1, 0.5, 1.5)
+        c = np.array([0.0, SYC, 0.0]) + np.array([math.cos(a), math.sin(a), 0.0]) * 0.5
+        tube(g, c + np.array([0, 0, zs(MARCH_LIP_S - 0.05)]), c + np.array([0, 0, zs(MARCH_LIP_S - 0.42)]), 0.12, n=8)
     g = grp("iris_march", "nose_iridium")
-    disc_n(g, (0.0, SYC, zs(MARCH_IRIS_S)), (0, 0, -1), WELL_C_R + 0.02, seg=32)
-    disc_n(g, (0.0, SYC, zs(MARCH_IRIS_S + 0.05)), (0, 0, 1), WELL_C_R + 0.02, seg=32)
+    lathe(g, [(MARCH_IRIS_S, 1.9), (MARCH_IRIS_S, WELL_C_R + 0.02), (MARCH_IRIS_S + 0.05, WELL_C_R + 0.02), (MARCH_IRIS_S + 0.05, 1.9),
+              (MARCH_IRIS_S, 1.9)], center=(0.0, SYC))                                              # the fixed bezel
     # nose retro cups behind their skin openings; the covers (petals) are the irises
     g = grp("cups_nose", "boron_nitride")
     for sgn in (1, -1):
@@ -5063,7 +5127,7 @@ def build():
 
     # ---- planetary pods (reference: stowed in the flank bays, covers flush, cups aft)
     for i, p in enumerate(PODS):
-        patch(grp(f"door_pod_{i}", "hull_lacquer"), OPEN[f"pod_{i}"], back=0.25)
+        patch(grp(f"door_pod_{i}", "hull_lacquer"), OPEN[f"pod_{i}"], back=POD_COVER_T)
         c, e, nn = p["centre"], p["e"], p["n"]
         g = grp(f"pod_{i}", "engine_metal")
         obox(g, c, e, nn, (0, 0, 1), POD_W / 2, POD_T / 2, POD_L / 2)
@@ -5078,25 +5142,49 @@ def build():
     # The visiting craft itself is not part of this mesh.
     ht = OPEN["hangar_top"]
     half = lambda o, lo, hi: dict(o, u=(lo, hi))
-    patch(grp("door_top_starboard", "hull_lacquer"), half(ht, ht["u"][0], 0.5))       # white like the deck round them («Стрела»)
-    patch(grp("door_top_port", "hull_lacquer"), half(ht, 0.5, ht["u"][1]))
+    # white like the deck round them («Стрела»); (2026-10-09) the wider leaves sit 10 mm deeper: they were 3.4 cm proud when shut (2.4 now)
+    patch(grp("door_top_starboard", "hull_lacquer"), half(ht, ht["u"][0], 0.5), off=-0.01)
+    patch(grp("door_top_port", "hull_lacquer"), half(ht, 0.5, ht["u"][1]), off=-0.01)
     patch(grp("door_bottom_starboard", "belly_carbide"), OPEN["hangar_bottom_starboard"])
     patch(grp("door_bottom_port", "belly_carbide"), OPEN["hangar_bottom_port"])
     hs0, hs1 = HANGAR_S
     Wh, Hh = wh_at(HANGAR_REF_S)
     y_ch = -(FL - 0.233) * Hh
-    # ceiling frame: as wide as the hull at its own height allows (at the chine width it stuck 0.9 m out of the flanks)
+    yd = y_ch + 0.2                                                                                 # the deck top: the lander's bottom
     _us = np.linspace(0.0, 1.0, 1201)
-    _wf = min(max(abs(q[0]) for q in (hull_xy(sf, u) for u in _us) if y_ch + 5.5 <= q[1] <= y_ch + 6.1)
-              for sf in np.linspace(hs0 + 0.5, hs1 - 0.5, 9)) - 0.3
-    box(hi, (-_wf, y_ch + 5.6, zs(hs0 + 0.5)), (_wf, y_ch + 6.0, zs(hs1 - 0.5)))
-    g = grp("shuttle", "mechanism")                                                                 # docking cradle
-    for z0 in (hs0 + 3.0, hs1 - 5.0):
-        box(g, (-2.5, y_ch - 1.6, zs(z0)), (2.5, y_ch - 1.2, zs(z0 + 2.0)))
-        box(g, (-0.4, y_ch - 1.2, zs(z0 + 0.6)), (0.4, y_ch + 0.2, zs(z0 + 1.4)))
+
+    def _hw(sf, y0, y1):                                                                            # inner half-width of the hull at s, y0..y1
+        return min(abs(q[0]) for q in (hull_xy(sf, u) for u in _us) if y0 <= q[1] <= y1 and q[0] > 0) - 0.3
+    # (2026-10-09) the deck between the upper hangar (the lander) and the lower level (MPU platform, the way from the lock to the
+    # passage's shaft): a 0.1 m plate, the lander lies on its magnet blocks; the old XR2 ceiling frame and cradle are gone
+    for sa, sb in zip(np.arange(hs0 + 0.3, hs1 - 0.3, 2.0), list(np.arange(hs0 + 2.3, hs1 - 0.3, 2.0)) + [hs1 - 0.3]):
+        w = min(_hw(sa, yd - 0.1, yd), _hw(min(sb, hs1 - 0.3), yd - 0.1, yd))
+        box(hi, (-w, yd - 0.1, zs(sa)), (w, yd - 0.01, zs(min(sb, hs1 - 0.3))))
+    # the aft bulkhead s 94.2-94.5 from the lower level's floor to the top opening's liner, a door to the passage's shaft at x 0
+    yt = top_y(hs0 + 0.35) - 3.2
+    yf = -4.4                                                                                       # the lower floor over the kangaroo pocket
+    w = _hw(hs0 + 0.35, yf, yt)
+    for x0, x1, y0, y1 in ((-w, -0.5, yf, yt), (0.5, w, yf, yt), (-0.5, 0.5, yf + 2.05, yt)):
+        box(hi, (x0, y0, zs(hs0)), (x1, y1, zs(hs0 + 0.3)))
+    w = _hw(97.0, yf - 0.08, yf)                                                                    # the lower floor aft (over the pocket)
+    box(hi, (-w, yf - 0.06, zs(hs0 + 0.3)), (w, yf, zs(HANGAR_FLOOR_S[0] + 0.7)))
+    # the maglev lift: round superconducting blocks flush in the deck under the lander's 6 lift cups (its coils), and on the
+    # aft bulkhead behind its 2 marching cups up to the opening - they raise it 13 m and turn it to the 70 deg stele
+    g = grp("shuttle", "mechanism")
+    for sb in (LANDER_S - 2.856 - 3.855, LANDER_S - 2.856 + 3.855):
+        for xb in (-1.93, 0.0, 1.93):
+            tube(g, (xb, yd - 0.1, zs(sb)), (xb, yd + 0.005, zs(sb)), 0.7, n=20)
+    for xb in (-2.31, 2.31):
+        for yb_ in np.arange(yd + 1.0, yt - 0.5, 2.0):
+            tube(g, (xb, yb_, zs(hs0 + 0.3)), (xb, yb_, zs(hs0 + 0.45)), 0.8, n=20)
     g = grp("rover_platform", "mechanism")
     yb = -FL * Hh
-    box(g, (-4.5, yb + 0.25, zs(hs0 + 1.5)), (4.5, yb + 0.5, zs(hs1 - 1.5)))
+    fs0, fs1 = HANGAR_FLOOR_S
+    box(g, (-4.5, yb + 0.25, zs(fs0 + 1.5)), (4.5, yb + 0.5, zs(fs1 - 1.5)))
+    # the jet deflector: the skin aft of the opening in boron nitride (the lander's marching jet at the stele hits it, ~0.15 m tiles)
+    ut = OPEN["hangar_top"]["u"]
+    # hexagonal boron nitride is white: the «Стрела» ceramic look of the deck round it (the violet nose-cup material was wrong)
+    surface(lambda s: grp("hangar_deflector", "hull_lacquer"), ut[0] - 0.02, ut[1] + 0.02, rect_keep(88.0, hs0 + 0.45), off=0.01)
     # (the rover stubs that stood here went 2026-10-09: the MPU are their own vessels, attached to the platform as "TMPU")
 
     # ---- flush patches: pin-slot seals; airlock door
@@ -5181,12 +5269,14 @@ def build():
             x0, x1 = xs(PIN_X0 + k * PIN_STEP, PIN_X0 + k * PIN_STEP + PIN_LEN)
             hy, hz = 2.5 - 0.15 * k, 1.5 - 0.15 * k
             box(gk, (x0, -hy, T[2] - hz), (x1, hy, T[2] + hz))
-        g = grp(f"hip_{side}", "mechanism")                     # hip block with the pitch bearing (drum R 1.5 x 3.0)
+        g = grp(f"hip_{side}", "mechanism")                     # hip block with the pitch bearing
         bi, bo, bh, bl = HIP_BLOCK
         x0, x1 = xs(HIP_X_OUT - bi, HIP_X_OUT + bo)
         box(g, (x0, -bh, T[2] - bl), (x1, bh, T[2] + bl))
-        tube(g, T - np.array([sgn * 1.0, 0, 0]), T + np.array([sgn * 1.45, 0, 0]), 1.3, n=20)
-        for xr in (-1.0, 1.2):                                  # catcher (sliding) bearing rings of the magnetic bearing
+        # (2026-10-09) 20 T magnetic bearing with six nested gaps (D 2.6 .. 1.1 m) in a drum R 1.3 x 2.95 m: 32.6 m^2
+        # projected, the full ship on the turn x1.5 (core/Legs.h); the catcher rings stay as the back-up
+        tube(g, T - np.array([sgn * 1.2, 0, 0]), T + np.array([sgn * 1.75, 0, 0]), 1.3, n=20)
+        for xr in (-1.2, 1.5):                                  # catcher (sliding) bearing rings of the magnetic bearing
             tube(g, T + np.array([sgn * xr, 0, 0]), T + np.array([sgn * (xr + 0.25), 0, 0]), 1.42, n=20)
         for i in range(BLADE_N):                                # stages: boxes hanging from the hip, nested at the top
             g = grp(f"blade_{side}_{i}", "band")
@@ -5199,6 +5289,15 @@ def build():
         tube(g, A, A + np.array([0, ANKLE_R + STRUT_EXT_C + 0.8, 0]), 0.75, n=16)
         lathe_axis(g, A, (0, 1, 0), [(-0.75, 0.0), (-0.75, 0.9), (0.4, 1.0), (0.95, 0.0)], seg=20)
         cup_foot(grp, f"foot_{side}", FootFrame(A, (sgn, 0, 0), (0, 1, 0), "blade"))
+        # guys (2026-10-09): built anchored at the reference extension 0, telescopic covers from the collar hinge on the axis
+        H = T + np.array([0, -LEG_LMAX / 2, 0])
+        lat, drop = guy_vec(0.0)
+        L0 = math.hypot(lat, drop)
+        for gname, gsx in (("in", -sgn), ("out", sgn)):
+            u0 = np.array([gsx * lat, -drop, 0.0]) / L0
+            for j in range(GUY_N):
+                p0 = H + u0 * (j * (L0 - GUY_SEG) / (GUY_N - 1))
+                tube(grp(f"guy_{side}_{gname}_{j}", "mechanism"), p0, p0 + u0 * GUY_SEG, GUY_R - 0.015 * j, n=12)
 
     # ---- anamezon port: two belly bays under the trap columns, armoured doors, liner walls
     g = grp("bay_liner", "dark")
@@ -5341,9 +5440,21 @@ def rig(legs):
     # stage half way; the pod turns about the arm axis with the cups going DOWN (0 cups aft .. 180 cups forward;
     # 2026-10-09: it used to turn them up, the hover thrust pointed down)
     pod_swivels = []                         # the pod group itself rides the last link of the chain: arm, swivel, cant
+    # (2026-10-09, the user: the hull armour must not ride out on the pods) the bay cover stays with the hull and opens first
+    # (state 1 .. POD_ARM_END), then the arm runs the pod out (POD_ARM_END .. 0): the fore covers sink under the skin and slide
+    # forward (free 7 m there); the aft bays have no room under the skin (blade pockets 0.21-0.25 m under it, the stern leg
+    # doors above, the belly below): their covers swing about the aft edge onto the skin behind the bay, trailing in the flow
     for i, p in enumerate(PODS):
-        arm = add("pod_retract", "tr", [f"door_pod_{i}"], -p["n"] * p["travel"], d=1.0)
-        add("pod_retract", "tr", [f"arm_pod_{i}"], -p["n"] * p["travel"] * 0.5, d=1.0)
+        arm = add("pod_retract", "tr", [], -p["n"] * p["travel"], s0=0.0, s1=POD_ARM_END, d=1.0)   # pivot only
+        add("pod_retract", "tr", [f"arm_pod_{i}"], -p["n"] * p["travel"] * 0.5, s0=0.0, s1=POD_ARM_END, d=1.0)
+        if p["s"] > 60.0:
+            sink = add("pod_retract", "tr", [], p["n"] * POD_COVER_SINK, s0=0.5 * (1.0 + POD_ARM_END), s1=1.0, d=1.0)   # pivot only
+            add("pod_retract", "tr", [f"door_pod_{i}"], np.array([0.0, 0.0, -(POD_DOOR_L + 0.3)]), parent=sink, s0=POD_ARM_END,
+                s1=0.5 * (1.0 + POD_ARM_END), d=1.0)
+        else:
+            hinge = p["centre"] + p["n"] * (POD_T / 2 + 0.12) + np.array([0.0, 0.0, zs(p["s0"]) - p["centre"][2]])
+            ax = p["e"] if np.dot(np.cross(p["e"], [0.0, 0.0, 1.0]), p["n"]) > 0 else -p["e"]
+            add("pod_retract", "rot", [f"door_pod_{i}"], (hinge, ax, -math.radians(POD_COVER_SWING)), s0=POD_ARM_END, s1=1.0, d=1.0)
         pod_swivels.append(add("pod_swivel", "rot", [], (p["centre"], -p["n"] * p["sgn"], POD_SWIVEL_MAX), parent=arm))   # pivot only
     for i, (x, y) in enumerate(ANA_CUPS):
         add("iris_ana", "sc", [f"iris_ana_{i}"], (np.array([x, y, zs(RIM_S - 0.05)]), np.array([0.001, 0.001, 1])))
@@ -5392,6 +5503,24 @@ def rig(legs):
         st = add("strut_carriage", "tr", [f"ankle_{side}"], np.array([0, -STROKE_C, 0]), parent=ank, d=STRUT_D_C)  # 0 bottomed .. 1 unloaded
         A = T + np.array([0, -LEG_LMAX, 0])
         cup_rig(add, f"foot_fold_{side}", f"foot_{side}", FootFrame(A, (sgn, 0, 0), (0, 1, 0), "blade"), st)   # 1 = folded past the ankle
+        # guys (2026-10-09): the collar rides the mid-length (2.5 stages); anchored 0..GUY_E1 the cover turns about its hinge
+        # (two linear pieces of the true angle) and telescopes to the anchor; by GUY_E2 it is reeled along the axis
+        an = f"blade_ext_{side}"
+        co = add(an, "tr", [], np.array([0, (BLADE_N - 1) / 2 * BLADE_EXT, 0]), parent=pi)    # pivot only
+        H = T + np.array([0, -LEG_LMAX / 2, 0])
+        zax = np.array([0, 0, 1.0])
+        th = [math.atan2(*guy_vec(e)) for e in (0.0, GUY_E1 / 2, GUY_E1)]
+        Ls = [math.hypot(*guy_vec(e)) for e in (0.0, GUY_E1)]
+        for gname, gsx in (("in", -sgn), ("out", sgn)):
+            lat, drop = guy_vec(0.0)
+            u0 = np.array([gsx * lat, -drop, 0.0]) / Ls[0]
+            r1 = add(an, "rot", [], (H, zax, GUY_ROT * gsx * (th[1] - th[0])), parent=co, s0=0.0, s1=GUY_E1 / 2)
+            r2 = add(an, "rot", [], (H, zax, GUY_ROT * gsx * (th[2] - th[1])), parent=r1, s0=GUY_E1 / 2, s1=GUY_E1)
+            r3 = add(an, "rot", [], (H, zax, -GUY_ROT * gsx * th[2]), parent=r2, s0=GUY_E1, s1=GUY_E2)
+            for j in range(GUY_N):
+                k = j / (GUY_N - 1)
+                tb = add(an, "tr", [], -u0 * k * (Ls[1] - GUY_SEG), parent=r3, s0=GUY_E1, s1=GUY_E2)     # pivot only
+                add(an, "tr", [f"guy_{side}_{gname}_{j}"], -u0 * k * (Ls[0] - Ls[1]), parent=tb, s0=0.0, s1=GUY_E1)
     mz = LEG_MZ
     for i, L in enumerate(legs):
         o = OPEN[f"sleg_{i}"]                                               # the bay door: hinged on its inboard edge, opens first
@@ -5659,7 +5788,7 @@ def write_debris(groups, root):
     DEBRIS.clear()
     chunk_extra = {"hull_stern": ["well", "baffle", "cups_anamezon", "well_centre", "march_unit", "iris_march", "body_flap"],
                    "hull_traps": ["bay_liner"] + [f"trap_{i}" for i in range(4)],
-                   "hull_hangar": ["hangar_inner", "shuttle", "rover_platform"],
+                   "hull_hangar": ["hangar_inner", "shuttle", "rover_platform", "hangar_deflector"],
                    "hull_nose": ["nose_ana", "ana_feed", "ana_buffer", "nose_screen", "nose_screen_core", "nose_mirror"]}
     for d_ in DEBRIS_DEFS:
         name, spec, mass = d_[:3]
@@ -5814,8 +5943,11 @@ def write_layout(legs, comps, path):
     _Hh = wh_at(HANGAR_REF_S)[1]
     _yb, _ych = -FL * _Hh, -(FL - 0.233) * _Hh
     L.append("// hangar payloads (2026-10-09): lander on the cradle, three MPU on the floor platform (1, 2) and beside it (3)")
-    L.append(f"constexpr double kHangarMidS = {(HANGAR_S[0] + HANGAR_S[1]) / 2:.2f}, kHangarDeckY = {_yb + 0.5:.3f}, kCradleTopY = {_ych + 0.2:.3f}, "
+    L.append(f"constexpr double kHangarMidS = {(HANGAR_FLOOR_S[0] + HANGAR_FLOOR_S[1]) / 2:.2f}, kHangarDeckY = {_yb + 0.5:.3f}, kCradleTopY = {_ych + 0.2:.3f}, "
              f"kRoverDrop = {(-AXIS_H + 0.25) - (_yb + 0.25):.3f};")
+    L.append("// the lander «Грань» (2026-10-09): TLANDER at its mesh origin on the deck; its stern; the maglev lift's rise and stele")
+    L.append(f"constexpr double kLanderS = {LANDER_S:.2f}, kLanderSternS = {LANDER_STERN_S:.2f}, kLanderOriginUp = 1.424, "
+             f"kLanderRise = {LANDER_RISE:.1f}, kLanderSteleDeg = {LANDER_STELE_DEG:.1f};")
     L.append("constexpr double kMpuX[3] = {-2.225, 2.225, 6.875};   // MPU slots across the hangar (chassis 8.8 x 4.35 m)")
     L.append(f"constexpr double kLockOut = {LOCK_OUT}, kLockDrop = {LOCK_DROP}, kLockX0 = {LOCK_X0}, kLockX1 = {LOCK_X1}, "
              f"kLockDeckY = {CAB_Y0}, kLockMastTop = {LOCK_MAST_TOP}, kLockMastStub = {LOCK_MAST_STUB}, kLockMastFull = {LOCK_MAST_FULL:.3f};  // crew lift: arm travel, descent, cabin x, floor, mast pivot, stowed and full mast")
@@ -5827,6 +5959,7 @@ def write_layout(legs, comps, path):
     L.append("// normal) by `travel`; the pod turns about -axis * side through `pivot`, cups down (0 = cups aft .. kPodSwivelMax = 180 deg).")
     L.append(f"constexpr int kPodCount = {len(PODS)};")
     L.append(f"constexpr double kPodSwivelMax = {POD_SWIVEL_MAX:.6f}, kPodCupR = {POD_CUP_R};")
+    L.append(f"constexpr double kPodArmEnd = {POD_ARM_END};   // pod_retract: the covers open over 1 .. this, the arm runs over this .. 0")
     L.append("struct PodRig { double s; V pivot, axis; double travel; V cup[3]; };")
     L.append("constexpr PodRig kPods[kPodCount] = {")
     for p in PODS:

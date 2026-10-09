@@ -10,6 +10,9 @@
 //   ankle  - the post and its ball over the leg's design load (fatigue over 1x, at once over 1.5x): the foot is lost.
 //   collar - the lowest stage joint of the leg (the fibre sensors' load / rating, as before): the leg folds there.
 #pragma once
+#include <cmath>
+
+#include "Spec.h"
 
 namespace tantra::foot {
 
@@ -22,8 +25,13 @@ struct Rating {
     double ankle;    // design load of the ankle (the whole foot) [N]
     int sections;    // telescopic sections of the leg (the lowest joint is between the last two)
 };
-// blades 722 MN, stern legs 481 MN (2.5 g x 1.5 of the full mass, standing on four), kangaroo 103 MN (its column)
-constexpr Rating kRating[3] = {{722e6 / kCells, 722e6, 6}, {481e6 / kCells, 481e6, 4}, {103e6 / kCells, 103e6, 9}};
+// (2026-10-09) the feet carry the full ship like their columns (Spec kFullMass at 2.5 g x1.5; they had stayed at the old
+// 722 / 481 / 103 MN and broke at once under 276 kt on Earth): a blade foot the turn on the blades alone (W/2), a stern foot
+// standing on four with the splay, the front support its share of the tripod; the MR struts of the petals run ~7x the
+// old force at the same size (the gas column and the valve at ~300 MPa)
+constexpr double kFootW = spec::kFullMass * 9.80665 * spec::kDesignG * spec::kSafety;
+constexpr double kBladeFoot = kFootW / 2.0, kSternFoot = kFootW / 4.0 / 0.9613, kKangFoot = kFootW * (58.1 - 53.4) / (111.4 - 53.4);
+constexpr Rating kRating[3] = {{kBladeFoot / kCells, kBladeFoot, 6}, {kSternFoot / kCells, kSternFoot, 4}, {kKangFoot / kCells, kKangFoot, 9}};
 constexpr double kBurstV = 2.5;   // bottomed out faster than this: the rim pinches the cell [m/s]
 constexpr double kRibV = 5.0;     // a bare rib hitting the ground faster than this breaks [m/s]
 

@@ -209,6 +209,20 @@ void TantraDisplays::DrawAutopilot(oapi::Sketchpad* skp, int ox, int oy, int w, 
     apScr_.Draw(skp, font_, ox, oy, w, h, v);
 }
 
+// (2026-10-09) the self-test (Tantra::SelfTestStep, SELFTEST 2) presses the landing page's keys as the pilot would: ВЗВЕСТИ
+// (the point under the ship), then, once the check has passed, ПУСК and ПОДТВЕРДИТЬ
+int TantraDisplays::TestLandEngage() {
+    const double now = oapiGetSysTime();
+    if (land_.Engaged()) return 2;
+    if (land_.Armed()) { land_.Start(now); land_.Start(now); return land_.Engaged() ? 2 : 1; }
+    if (!land_.Checking() && land_.CanArm()) {
+        double lng = 0, lat = 0, rad = 0; t_->GetEquPos(lng, lat, rad);
+        padLon_ = lng; padLat_ = lat; havePad_ = true;
+        land_.Arm(now); apPage_ = 1;
+    }
+    return land_.Checking() ? 1 : 0;
+}
+
 bool TantraDisplays::TouchAutopilot(double x, double y) {
     const int c = apScr_.Hit(x, y);
     if (c < 0) return false;

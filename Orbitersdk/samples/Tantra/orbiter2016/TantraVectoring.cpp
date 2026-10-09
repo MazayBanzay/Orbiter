@@ -32,12 +32,42 @@ void Tantra::PodVectoring(double simdt) {
     }
     const double a = podAngle_ * RAD, s = std::sin(a), c = std::cos(a);
     const double k = (std::min)(1.0, (std::max)(simdt, 0.0) * 3.0);
+    // (2026-10-09) the hover's automatic balance: the Moon test rolled the hull 47 deg in 20 s and laid it on its side - the
+    // pods thrust level with the CG (no restoring moment) and the RCS gives ~5e7 N m against ~1e9 needed. The local vertical
+    // in the ship's axes holds the hull level: up to ±50 % of every cup, the left pods against the right (roll) and the fore
+    // pair against the aft (pitch); the gains from the moment the pods have and the hull's inertia (a critically damped
+    // loop at 0.6 rad/s in roll, 0.35 rad/s in pitch). The pilot's УВТ adds to it.
+    double bR = 0.0, bP = 0.0;
+    const bool hoverSet = podOut_ >= 1.0 && podAimed_ && podAngle_ >= 45.0 && podAngle_ <= 135.0;
+    if (hoverSet && podCmd_ > 0.02) {
+        VECTOR3 up;
+        HorizonInvRot(_V(0, 1, 0), up);
+        const double dt = (std::max)(simdt, 1e-4), f = (std::min)(1.0, dt * 8.0);
+        if (hovOn_) {
+            hovRate_[0] += ((up.x - hovUp_[0]) / dt - hovRate_[0]) * f;
+            hovRate_[1] += ((up.z - hovUp_[1]) / dt - hovRate_[1]) * f;
+        } else hovRate_[0] = hovRate_[1] = 0.0;
+        hovUp_[0] = up.x; hovUp_[1] = up.z; hovOn_ = true;
+        double F = 0.0;
+        for (int i = 0; i < sp::kPodCups; ++i) F += GetThrusterMax0(pod_[i]);
+        VECTOR3 pmi;
+        GetPMI(pmi);
+        const double m = GetMass(), xArm = std::fabs(tantra::mesh::kPods[0].pivot.x);
+        const double zArm = 0.5 * (tantra::mesh::kPods[2].s - tantra::mesh::kPods[0].s);
+        const double aR = 0.5 * F * s * xArm / (pmi.z * m), aP = 0.5 * F * s * zArm / (pmi.x * m);   // rad/s^2 at full swing
+        if (aR > 1e-6 && aP > 1e-6) {
+            const double wR = 0.6, wP = 0.35;
+            bR = (std::max)(-1.0, (std::min)(1.0, (wR * wR * up.x + 2.0 * wR * hovRate_[0]) / aR));       // + roll right
+            bP = (std::max)(-1.0, (std::min)(1.0, -(wP * wP * up.z + 2.0 * wP * hovRate_[1]) / aP));      // + nose up
+        }
+    } else hovOn_ = false;
+    hovCmd_[0] = bR; hovCmd_[1] = bP;
     for (int p = 0; p < sp::kPodCount; ++p) {
         const double side = tantra::mesh::kPods[p].pivot.x < 0.0 ? -1.0 : 1.0;      // left -1, right +1
         const double fore = p >= 2 ? 1.0 : -1.0;                                    // kPods: the aft pair first, then the fore pair
         // the roll right: the left pods push more (in the hover they lift the left side); the pitch up: the fore pair; the yaw
         // right: the left pods push more forward (with the cups aft)
-        const double dT = 0.15 * (-side * R * s + fore * P * s - side * Y * c);
+        const double dT = 0.15 * (-side * R * s + fore * P * s - side * Y * c) + 0.5 * (-side * bR + fore * bP);
         const double want = (std::max)(0.0, (std::min)(1.0, coll + dT));
         for (int cc = 0; cc < sp::kCupsPerPod; ++cc) {
             const int i = p * sp::kCupsPerPod + cc;

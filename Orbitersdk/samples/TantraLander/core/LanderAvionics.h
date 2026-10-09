@@ -1,4 +1,4 @@
-// «Грань» Т1Б-А: the avionics as the «Тантра» concept has it - photonics and analog, no silicon, three contours with a smooth
+// «Грань» 25,4 м: the avionics as the «Тантра» concept has it - photonics and analog, no silicon, three contours with a smooth
 // degradation: 3 the photonic «intelligence» (all modes, 0,05 s) -> 2 the analog automat (hold modes, 0,3 s) -> 1 mechanics
 // and hydraulics (the pilot's levers, a hydraulic interlock that sheds the opposite cup). A contour that fails hands over to
 // the next one with its reason; a mode the active contour cannot fly stays manual with its reason. No Orbiter dependencies.
@@ -24,6 +24,7 @@ struct Flight {
     double Ixx = 0, Izz = 0, Iyy = 0;         // kg·m² roll, pitch, yaw
     bool atmosphere = false;                  // the body has an atmosphere (and the runway: Земля) - hover_ru
     double mach = 0;                          // the flight Mach number (the wing tips' schedule)
+    double shipDist = 1e9;                    // m to «Тантра» (the afterburner is refused closer than kAfterSafeDist)
 };
 
 struct Pilot {
@@ -34,6 +35,7 @@ struct Pilot {
     bool nose = false;                        // the porous nose blow by hand
     double hHold = 30.0;                      // m the hover holds
     bool hoverEmergency = false;              // the emergency hover allowed (crew aboard, a body with an atmosphere)
+    bool afterburner = false;                 // the marches' afterburner asked (форсаж)
 };
 
 struct AvIn {

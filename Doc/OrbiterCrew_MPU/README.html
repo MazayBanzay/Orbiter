@@ -1,0 +1,140 @@
+<!doctype html><html><head><meta charset="utf-8"><title>OrbiterCrew and MPU</title><style>body{font-family:'Segoe UI',Arial,sans-serif;font-size:10.5pt;color:#1b1f23;max-width:180mm;margin:auto;line-height:1.4}
+h1{font-size:21pt;border-bottom:2px solid #333;padding-bottom:4px}h2{font-size:14pt;margin-top:16px;border-bottom:1px solid #bbb}
+h3{font-size:12pt}table{border-collapse:collapse;width:100%;font-size:10pt}td,th{border:1px solid #bbb;padding:5px;vertical-align:top}
+th{background:#eee}code{background:#f1f1f1;padding:1px 3px;border-radius:3px;font-size:9.5pt}
+pre{background:#f6f8fa;border:1px solid #ddd;padding:8px;border-radius:4px;font-size:9pt;white-space:pre-wrap}
+pre code{background:none;padding:0}</style></head><body><h1>OrbiterCrew and MPU - beta 0.2081026b (Orbiter 2024)</h1>
+<p>OrbiterCrew: people with physiology, a space suit and a jet pack. MPU / EMPU: an open and a sealed electric 8x8 mobile platform, with a charging station. Early beta.</p>
+<h2>Install</h2>
+<ol>
+<li>A clean <strong>Orbiter 2024</strong> (x86). Start it with <strong>Orbiter_ng.exe</strong> (the D3D9 client); the inline-graphics orbiter.exe is not supported.</li>
+<li>Launchpad, tab Modules: tick <strong>XRSound</strong> (all sound goes through it).</li>
+<li>Unpack the archive into the Orbiter folder (it only adds files).</li>
+<li>Two settings are needed for the EMPU cabin:<ul>
+<li><code>D3D9Client.cfg</code>: <code>NearClipPlaneMode = 1</code> (otherwise holes appear in the cabin walls) and <code>ShadowMapMode = 2</code> (otherwise the Sun shines through the hull and the cabin lamps are invisible).</li>
+<li><code>Orbiter_NG.cfg</code>: <code>EnableLocalLights = TRUE</code>, <code>MaxLights = 8</code> (the cabin lamps and headlights).</li>
+<li>Recommended: <code>D3D9Client.cfg</code>: <code>ShaderCacheUse = 1</code> (the client keeps its compiled shaders: much faster starts after the first).</li>
+</ul>
+</li>
+<li>Scenarios: folder <strong>MPU</strong> (start with "MPU - Earth, KSC"; its description lists the controls). In any of them the person can stand up (F), put the suit on (K) and use the suit computer.</li>
+</ol>
+<h2>Scenarios</h2>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MPU - Earth, KSC</td>
+<td>Drive the EMPU, charge it at the station, swap cells, couple the open MPU</td>
+</tr>
+<tr>
+<td>MPU - Moon, Brighton Beach</td>
+<td>The same on regolith in vacuum</td>
+</tr>
+<tr>
+<td>MPU - Mars, Olympus</td>
+<td>The same under a thin red-dust sky</td>
+</tr>
+<tr>
+<td>MPU - Earth, crash test</td>
+<td>Speed limiter off, 130 km/h into the charging station</td>
+</tr>
+<tr>
+<td>MPU - Earth, KSC, Delta Glider</td>
+<td>Board a stock Delta Glider through its nose airlock, fly it, get out (see "Boarding other ships" below)</td>
+</tr>
+</tbody>
+</table>
+<h2>On foot</h2>
+<ul>
+<li>W/S walk, A/D turn, Q/E side step, Shift run, Space jump. F1 eyes / outside view; right mouse held looks around.</li>
+<li>K suit on/off (off only in breathable air), L lamps, B takes / drops the jet pack.</li>
+<li>Look at a thing within reach: its actions show beside the aim; the mouse wheel picks one, F does it. Alt gives the cursor and marks every place of an action within 8 m with an orange square.</li>
+<li>Inside a cabin F1 switches between the eyes and a view from behind (it stops at the walls).</li>
+<li>Language (English / Russian): the suit computer's left MFD, page Options, switch RU | EN - it sets the suit computer and the interaction menu at once and is remembered (<code>LANGUAGE</code> in <code>Config\OrbiterCrew\OrbiterCrew.cfg</code>). The EMPU's screens have their own switch (terminal, SETUP: RUS / ENG).</li>
+<li>In a cabin the head sways with the machine's inertia and a light road shake at speed: <code>SHAKE</code> in the same file (1 as modelled, 0.5 half, 0 none).</li>
+</ul>
+<h2>Platforms</h2>
+<ul>
+<li>W/S drive and brake (reverse from standstill), A/D steer, Shift+W full power, Space brake, B parking brake, Caps Lock platform up/down.</li>
+<li>EMPU: sealed cabin with an airlock, a yoke, a touch terminal (NAV, POWER, LIFE / ENV, GEAR, MOTOR, SETUP; RUS / ENG; speed limiter) and cabin lights.</li>
+<li>Charging: F at the station's cable reel, then at the machine's power socket (front bumper, right). Cells come out and go in at the bays and at the station's rack.</li>
+<li>Crashes damage wheels and the hull; above 50 km/h they injure the people inside.</li>
+</ul>
+<p>The suit computer (H, eyes view), the interaction menu and the messages are English or Russian (see Language above); the scenario texts are English.</p>
+<p>Binaries only. The suit cannot be sat in the EMPU's seat yet.</p>
+<h2>Boarding other ships</h2>
+<p>An OrbiterCrew person can board ships that are not part of OrbiterCrew: the stock Delta Glider, and any other ship. The ship's own module is never changed.</p>
+<h3>How it works</h3>
+<ul>
+<li>Walk up to the ship and look at its airlock (or docking port) within reach. Its actions show in the menu beside the aim (mouse wheel picks, F does; Alt shows the places of actions as orange squares).</li>
+<li><strong>open / close the airlock</strong> - OrbiterCrew presses the ship's own keys for you (as if you pressed them with the ship in focus) and reads its door animations back.</li>
+<li><strong>go in</strong> (the airlock open) - the person is aboard: the ship gets the focus and the view, and you fly it as usual. The person breathes the cabin air.</li>
+<li><strong>Getting out</strong> - press <strong>F</strong> with the ship in focus, standing on the ground with the airlock open. The person steps out at the airlock and gets the focus back.</li>
+</ul>
+<h3>Any ship, with no file</h3>
+<p>A ship with no file of its own (see below) can be boarded at its <strong>first docking port</strong>: the menu shows "go in" there (no doors to work). Classes with a menu of their own are left out in <code>Config\OrbiterCrew\Ships\_default.cfg</code>:</p>
+<pre><code>EXCLUDE OrbiterCrew\ TVehicles\ MPU EMPU Tantra    ; class names that start so
+OFF                                                ; (on a line of its own) no default boarding at all
+</code></pre>
+<h3>Adding a ship: one file</h3>
+<p>Create <code>Config\OrbiterCrew\Ships\&lt;ClassName&gt;.cfg</code>, where <code>&lt;ClassName&gt;</code> is the ship's class name (the part after the colon in a scenario line, e.g. <code>GL-01:DeltaGlider</code> -&gt; <code>DeltaGlider.cfg</code>; a class in a subfolder, <code>Vendor\Ship</code>, goes to <code>Ships\Vendor\Ship.cfg</code>). UTF-8 text; <code>;</code> starts a comment.</p>
+<table>
+<thead>
+<tr>
+<th>Line</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LABEL</code></td>
+<td>The place's name in the menu: the Russian name, a vertical bar, the English one (shown with <code>LANGUAGE en</code>)</td>
+</tr>
+<tr>
+<td><code>NODE x y z</code></td>
+<td>The airlock's outer opening, ship frame, metres</td>
+</tr>
+<tr>
+<td><code>REACH r</code></td>
+<td>How far from the person's eyes it can be used, metres</td>
+</tr>
+<tr>
+<td><code>OPEN K 17 O 11</code></td>
+<td>To open: pairs of a key (letter A-Z, pressed on the ship) and the animation it moves</td>
+</tr>
+<tr>
+<td><code>CLOSE O 11 K 17</code></td>
+<td>To close, the same way</td>
+</tr>
+<tr>
+<td><code>IN 11 17</code></td>
+<td>The animations that must be open to go in and out</td>
+</tr>
+<tr>
+<td><code>EXIT x y z</code></td>
+<td>Where the person steps out, ship frame (put on the ground under it)</td>
+</tr>
+</tbody>
+</table>
+<p>Without <code>OPEN</code> the menu shows only "go in".</p>
+<p>The animation numbers are the ship's own: the order in which its module creates its animations (<code>CreateAnimation</code>), from 0. They can be found in the ship's source, or from its author.</p>
+<h3>Example: the stock Delta Glider</h3>
+<pre><code>LABEL носовой шлюз | nose airlock
+NODE 0 -0.49 10.40
+REACH 3.2
+OPEN K 17 O 11        ; K the nose cone (animation 17), O the outer door (11)
+CLOSE O 11 K 17
+IN 11 17
+EXIT 0 0 12.5
+</code></pre>
+<h3>Notes</h3>
+<ul>
+<li>Out only on the ground, stopped, with the airlock open.</li>
+<li>A person aboard is saved with the scenario (<code>RIDE &lt;ship name&gt;</code> in the person's block) and is aboard again when it is loaded.</li>
+<li>Scenario to try: <strong>MPU - Earth, KSC, Delta Glider</strong>.</li>
+</ul></body></html>

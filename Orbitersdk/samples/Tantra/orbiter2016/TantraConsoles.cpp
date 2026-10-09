@@ -319,14 +319,10 @@ bool TantraDisplays::TouchConsoleL(double x, double y) {
         if (t->podOut_ < 0.99) { t->Message("Выдвижные блоки в отсеках: рукоять заперта", "The pods are in their bays: the lever is locked"); return true; }
         SetPodLevel(along); return true;
     }
-    if (i == kHitPods) {
-        if (now - podCoverT_ >= 6.0) { podCoverT_ = now; return true; }  // the first touch lifts the cover
-        podCoverT_ = now;
+    if (i == kHitPods) {   // (2026-10-09) a plain key, no guard cover; the folded wings do not hold the pods in (UpdatePods)
         if (t->podsWanted_) {                                             // stowing: only with their thrust at 0
             if (PodLevel() > 0.001) { t->Message("Уборка выдвижных блоков: сначала их тяга 0", "Stowing the pods: their thrust to 0 first"); return true; }
             t->podsWanted_ = false; t->podTarget_ = 0.0; t->Message("Выдвижные блоки: чаши в 0°, в отсеки", "Pods: cups aft, into the bays");
-        } else if ((std::max)(t->tuck_, t->carriage_.Pose().tuck) >= 0.5) {   // the bays open only with the wings out (Tantra::UpdatePods)
-            t->Message("Выдвижные блоки: крылья сложены — выпуск невозможен (на грунте лёжа крылья сложены)", "Pods: the wings are folded - they cannot come out");
         } else t->ActPods(false);
         return true;
     }

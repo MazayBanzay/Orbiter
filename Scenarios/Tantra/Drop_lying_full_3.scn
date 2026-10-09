@@ -1,0 +1,42 @@
+BEGIN_DESC
+«вездолЄт первого класса Ђ“антраї на космодроме Ёль ’омра.
+ орабль стоит горизонтально на кормовых упорах и носовой стойке.
+Ёкипаж 37-й звЄздной экспедиции на борту.
+
+ лавиши: K - маршевые планетарные/анамезон, J - шаг запуска анамезона
+(Shift+J - останов, Ctrl+J - сн€ть блокировку ниже 50 км),
+G - ограничитель перегрузки (Shift+G - предел), Y - ловушка подачи.
+Ёкипаж (OrbiterCrew): 1/2 выбор, A шлюз, E выход у подъЄмника, S экипаж;
+возвращение - встать у подъЄмника шлюза при открытом шлюзе.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52000.5
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Tantra
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Tantra
+  MODE Extern
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Tantra:Tantra
+  STATUS Landed Earth
+  POS 12.5000000 29.5000000
+  HEADING 90.00
+  PRPLEVEL 0:1.000 1:1.000 2:1.000 3:1.000 4:1.000
+  DROPTEST 2.7 0.1
+  ENGSET 0
+  IGNITION 0
+  GLIMIT 1 5.00
+END
+END_SHIPS

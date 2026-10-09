@@ -927,7 +927,7 @@ std::vector<Check> Landing::BuildChecks() const {
     const LandPlan& P = plan_;
     const double W = (std::max)(1.0, s.m * s.g), tw = (MarchMax() + PodsMax()) / W;
     return {{L"Поле: АВТО — поле и темп капсул ведёт установка", s.fieldAuto},
-            {L"Тяга/вес " + Fmt(tw, 2) + L" (чаша " + Fmt(MarchMax() / W, 2) + L" + выдвижные блоки)", tw > 1.5},
+            {L"Тяга/вес " + Fmt(tw, 2) + L" (кормовые блоки " + Fmt(MarchMax() / W, 2) + L" + выдвижные блоки)", tw > 1.5},
             {L"Аргон " + Fmt(s.argon / 1e6, 2) + L" кт · по плану " + Fmt(P.used / 1e6, 2) + L" кт", P.used < s.argon},
             {L"Ноги убраны, приводы ног в норме", true},
             {P.ok ? L"План: касание Т+" + Clock(P.tTouch) + L" · " + Fmt(P.td.vz, 1) + L" м/с · пик " + Fmt(P.maxG, 1) + L" g" : std::wstring(L"План: посадка вне норм"), P.ok}};

@@ -1,4 +1,4 @@
-// «Грань» Т1Б-А: the lander's systems core - Step(dt, Inputs) -> Snapshot, as core/TantraCore of «Тантра». No Orbiter
+// «Грань» 25,4 м: the lander's systems core - Step(dt, Inputs) -> Snapshot, as core/TantraCore of «Тантра». No Orbiter
 // dependencies (tests/lander_core_test.cpp, docs/CORE.md).
 //  * НАКОПИТЕЛЬ (charged from «Тантра»: the rescue rocket spends the common stock) feeds by priority: life support, the analog
 //    contour's battery, the lift cups' triggers, cryocooler A, the march triggers, the photonic contour, cryocooler B, the drives.

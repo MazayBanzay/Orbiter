@@ -97,3 +97,10 @@ __pycache__/
 !/Orbitersdk/samples/TantraLander/
 /Orbitersdk/samples/TantraLander/build/
 /Orbitersdk/samples/TantraLander/tests/lander_obj/
+
+# --- lander config, MPU config/sounds/dust textures, crew+MPU README ---
+!/Config/Vessels/TantraLander.cfg
+!/Config/MPU/
+!/Textures/MPU_*.dds
+!/XRSound/MPU/
+!/Doc/OrbiterCrew_MPU/

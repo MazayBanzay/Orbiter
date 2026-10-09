@@ -1,4 +1,4 @@
-// «Грань» Т1Б-А: the propulsion as real systems. No Orbiter dependencies (tests/lander_core_test.cpp).
+// «Грань» 25,4 м: the propulsion as real systems. No Orbiter dependencies (tests/lander_core_test.cpp).
 //  * 8 ion-trigger units in magnetic cups: 2 marches (УВТ ±15°) and 6 lift cups in two rows of three under two doors.
 //  * Each unit: the field B (ramped, REBCO windings: the current against the critical current, the windings' temperature
 //    against its cold line), the trigger (charged from the store: P_jet/Q), the charge injectors A/B, the argon feed.
@@ -9,7 +9,7 @@
 //  * Two cryocoolers (one standby), the argon attitude thrusters, the nose reserve 0,5 т.
 //  * Т1Б-А: three argon tanks - носовой, кормовой, в кессоне крыла; the engines feed from the aft one (the others through the
 //    cross-feed); the transfer by two paths (А основной, Б - второй насос/клапан, 40 кг/с каждый) keeps the CG by mode:
-//    подача (крыло, нос → корма), вход (корма → нос до 4,85 т: планирование и баллистика), висение (ЦМ −2,50, центр рядов).
+//    подача (крыло, нос → корма), вход (корма → нос, все 6,3 т: планирование и баллистика), висение (ЦМ к центру рядов −3,21).
 #pragma once
 
 namespace tantra::lander {

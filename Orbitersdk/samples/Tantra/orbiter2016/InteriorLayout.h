@@ -2,28 +2,21 @@
 #pragma once
 namespace tantra::interior {
 struct Box { float x0, y0, z0, x1, y1, z1; };
-constexpr int kSolidsCount = 712;
-constexpr Box kSolids[712] = {
-    {-0.590f, 5.500f, -40.000f, -0.510f, 7.500f, 45.000f},
-    {0.510f, 5.500f, -40.000f, 0.590f, 7.500f, 45.000f},
-    {-0.590f, 6.000f, 45.000f, -0.510f, 8.000f, 52.000f},
-    {0.510f, 6.000f, 45.000f, 0.590f, 8.000f, 52.000f},
-    {-0.590f, 5.500f, 52.000f, -0.510f, 7.500f, 59.000f},
-    {0.510f, 5.500f, 52.000f, 0.590f, 7.500f, 59.000f},
-    {-0.550f, 5.500f, 44.960f, 0.550f, 6.000f, 45.040f},
-    {-0.550f, 5.500f, 51.960f, 0.550f, 6.000f, 52.040f},
+constexpr int kSolidsCount = 748;
+constexpr Box kSolids[748] = {
+    {-0.590f, 5.500f, -40.000f, -0.510f, 7.500f, 33.300f},
+    {0.510f, 5.500f, -40.000f, 0.590f, 7.500f, 33.300f},
     {-0.550f, 5.500f, -40.080f, -0.400f, 7.500f, -39.920f},
     {0.400f, 5.500f, -40.080f, 0.550f, 7.500f, -39.920f},
     {-0.400f, 7.400f, -40.080f, 0.400f, 7.500f, -39.920f},
-    {-0.550f, 5.500f, 58.920f, -0.500f, 7.500f, 59.080f},
-    {0.500f, 5.500f, 58.920f, 0.550f, 7.500f, 59.080f},
-    {-2.800f, 5.425f, 59.000f, -2.800f, 5.575f, 65.000f},
+    {-0.550f, 5.500f, 33.220f, -0.500f, 7.500f, 33.380f},
+    {0.500f, 5.500f, 33.220f, 0.550f, 7.500f, 33.380f},
+    {-2.800f, 5.425f, 61.000f, -2.800f, 5.575f, 65.000f},
     {-2.800f, 5.425f, 64.800f, -1.300f, 5.575f, 65.000f},
-    {-2.800f, 5.500f, 58.920f, -0.500f, 7.500f, 59.080f},
-    {0.500f, 5.500f, 58.920f, 2.400f, 7.500f, 59.080f},
+    {-2.800f, 5.500f, 60.920f, 2.400f, 7.500f, 61.080f},
     {-2.800f, 5.500f, 64.920f, 2.400f, 7.500f, 65.080f},
-    {-2.880f, 5.500f, 59.000f, -2.720f, 7.500f, 65.000f},
-    {2.320f, 5.500f, 59.000f, 2.480f, 7.500f, 65.000f},
+    {-2.880f, 5.500f, 61.000f, -2.720f, 7.500f, 65.000f},
+    {2.320f, 5.500f, 61.000f, 2.480f, 7.500f, 65.000f},
     {-1.350f, -4.500f, 60.220f, -1.150f, -2.400f, 60.380f},
     {0.250f, -4.500f, 60.220f, 0.450f, -2.400f, 60.380f},
     {-1.350f, -4.500f, 61.520f, -1.150f, -2.400f, 61.680f},
@@ -181,6 +174,49 @@ constexpr Box kSolids[712] = {
     {-6.400f, -0.250f, 73.990f, 6.400f, 0.250f, 74.150f},
     {-6.400f, 0.250f, 73.990f, 6.400f, 0.750f, 74.150f},
     {-6.400f, 0.750f, 73.990f, 6.400f, 0.900f, 74.150f},
+    {-0.550f, -4.400f, 33.220f, -0.500f, 7.500f, 33.380f},
+    {0.500f, -4.400f, 33.220f, 0.550f, 7.500f, 33.380f},
+    {-0.500f, -4.400f, 33.220f, 0.500f, 5.500f, 33.380f},
+    {-0.550f, -4.400f, 34.120f, -0.450f, 7.500f, 34.280f},
+    {0.450f, -4.400f, 34.120f, 0.550f, 7.500f, 34.280f},
+    {-0.450f, -2.400f, 34.120f, 0.450f, 7.500f, 34.280f},
+    {-0.630f, -4.400f, 33.300f, -0.470f, 7.500f, 34.200f},
+    {0.470f, -4.400f, 33.300f, 0.630f, 7.500f, 34.200f},
+    {-0.275f, -4.400f, 33.360f, -0.225f, 5.500f, 33.410f},
+    {0.225f, -4.400f, 33.360f, 0.275f, 5.500f, 33.410f},
+    {-0.250f, -4.115f, 33.450f, 0.250f, -4.085f, 33.480f},
+    {-0.250f, -3.815f, 33.450f, 0.250f, -3.785f, 33.480f},
+    {-0.250f, -3.515f, 33.450f, 0.250f, -3.485f, 33.480f},
+    {-0.250f, -3.215f, 33.450f, 0.250f, -3.185f, 33.480f},
+    {-0.250f, -2.915f, 33.450f, 0.250f, -2.885f, 33.480f},
+    {-0.250f, -2.615f, 33.450f, 0.250f, -2.585f, 33.480f},
+    {-0.250f, -2.315f, 33.450f, 0.250f, -2.285f, 33.480f},
+    {-0.250f, -2.015f, 33.450f, 0.250f, -1.985f, 33.480f},
+    {-0.250f, -1.715f, 33.450f, 0.250f, -1.685f, 33.480f},
+    {-0.250f, -1.415f, 33.450f, 0.250f, -1.385f, 33.480f},
+    {-0.250f, -1.115f, 33.450f, 0.250f, -1.085f, 33.480f},
+    {-0.250f, -0.815f, 33.450f, 0.250f, -0.785f, 33.480f},
+    {-0.250f, -0.515f, 33.450f, 0.250f, -0.485f, 33.480f},
+    {-0.250f, -0.215f, 33.450f, 0.250f, -0.185f, 33.480f},
+    {-0.250f, 0.085f, 33.450f, 0.250f, 0.115f, 33.480f},
+    {-0.250f, 0.385f, 33.450f, 0.250f, 0.415f, 33.480f},
+    {-0.250f, 0.685f, 33.450f, 0.250f, 0.715f, 33.480f},
+    {-0.250f, 0.985f, 33.450f, 0.250f, 1.015f, 33.480f},
+    {-0.250f, 1.285f, 33.450f, 0.250f, 1.315f, 33.480f},
+    {-0.250f, 1.585f, 33.450f, 0.250f, 1.615f, 33.480f},
+    {-0.250f, 1.885f, 33.450f, 0.250f, 1.915f, 33.480f},
+    {-0.250f, 2.185f, 33.450f, 0.250f, 2.215f, 33.480f},
+    {-0.250f, 2.485f, 33.450f, 0.250f, 2.515f, 33.480f},
+    {-0.250f, 2.785f, 33.450f, 0.250f, 2.815f, 33.480f},
+    {-0.250f, 3.085f, 33.450f, 0.250f, 3.115f, 33.480f},
+    {-0.250f, 3.385f, 33.450f, 0.250f, 3.415f, 33.480f},
+    {-0.250f, 3.685f, 33.450f, 0.250f, 3.715f, 33.480f},
+    {-0.250f, 3.985f, 33.450f, 0.250f, 4.015f, 33.480f},
+    {-0.250f, 4.285f, 33.450f, 0.250f, 4.315f, 33.480f},
+    {-0.250f, 4.585f, 33.450f, 0.250f, 4.615f, 33.480f},
+    {-0.250f, 4.885f, 33.450f, 0.250f, 4.915f, 33.480f},
+    {-0.250f, 5.185f, 33.450f, 0.250f, 5.215f, 33.480f},
+    {-0.250f, 5.485f, 33.450f, 0.250f, 5.515f, 33.480f},
     {-4.080f, -4.425f, 61.600f, -4.020f, -1.825f, 63.000f},
     {-4.080f, -4.425f, 64.200f, -4.020f, -1.825f, 70.400f},
     {-4.080f, -4.425f, 71.600f, -4.020f, -1.825f, 74.000f},
@@ -717,17 +753,13 @@ constexpr Box kSolids[712] = {
     {0.975f, 1.175f, 68.050f, 1.005f, 1.215f, 69.350f},
     {0.975f, 1.175f, 70.650f, 1.005f, 1.215f, 73.900f},
 };
-constexpr int kFloorsCount = 227;
-constexpr Box kFloors[227] = {
-    {-0.550f, 5.425f, -40.000f, 0.550f, 5.575f, 45.000f},
-    {-0.550f, 7.440f, -40.000f, 0.550f, 7.560f, 45.000f},
-    {-0.550f, 5.925f, 45.000f, 0.550f, 6.075f, 52.000f},
-    {-0.550f, 7.940f, 45.000f, 0.550f, 8.060f, 52.000f},
-    {-0.550f, 5.425f, 52.000f, 0.550f, 5.575f, 59.000f},
-    {-0.550f, 7.440f, 52.000f, 0.550f, 7.560f, 59.000f},
-    {-1.300f, 5.425f, 59.000f, 2.400f, 5.575f, 65.000f},
-    {-2.800f, 5.425f, 59.000f, -1.300f, 5.575f, 62.400f},
-    {-2.800f, 7.350f, 59.000f, 2.400f, 7.500f, 65.000f},
+constexpr int kFloorsCount = 225;
+constexpr Box kFloors[225] = {
+    {-0.550f, 5.425f, -40.000f, 0.550f, 5.575f, 33.300f},
+    {-0.550f, 7.440f, -40.000f, 0.550f, 7.560f, 33.300f},
+    {-1.300f, 5.425f, 61.000f, 2.400f, 5.575f, 65.000f},
+    {-2.800f, 5.425f, 61.000f, -1.300f, 5.575f, 62.400f},
+    {-2.800f, 7.350f, 61.000f, 2.400f, 7.500f, 65.000f},
     {-1.350f, -4.575f, 60.300f, 0.450f, -4.425f, 61.600f},
     {-1.350f, -2.550f, 60.300f, 0.450f, -2.400f, 61.600f},
     {-7.800f, -4.575f, 61.600f, 7.800f, -4.425f, 74.000f},
@@ -819,6 +851,8 @@ constexpr Box kFloors[227] = {
     {1.050f, 0.840f, 61.600f, 6.400f, 0.990f, 74.000f},
     {0.150f, 0.840f, 61.600f, 1.050f, 0.990f, 62.900f},
     {0.150f, 0.840f, 64.900f, 1.050f, 0.990f, 74.000f},
+    {-0.550f, -4.475f, 33.300f, 0.550f, -4.325f, 34.200f},
+    {-0.550f, 7.350f, 33.300f, 0.550f, 7.500f, 34.200f},
     {-5.450f, 0.820f, 63.350f, -4.950f, 0.850f, 63.850f},
     {-5.450f, 0.820f, 66.750f, -4.950f, 0.850f, 67.250f},
     {-5.450f, 0.820f, 69.550f, -4.950f, 0.850f, 70.050f},
@@ -1071,23 +1105,23 @@ struct MfdPlace { double c[3], ex[3], up[3], n[3], s; unsigned slot; int mode; }
 constexpr int kMfdCount = 6;
 constexpr MfdPlace kMfd[6] = {{{1.8283, 1.9580, 79.1788}, {1.0000, 0.0000, 0.0000}, {0.0000, 0.9703, 0.2419}, {0.0000, 0.2419, -0.9703}, 0.400, 22u, 9}, {{2.2483, 1.9580, 79.1788}, {1.0000, 0.0000, 0.0000}, {0.0000, 0.9703, 0.2419}, {0.0000, 0.2419, -0.9703}, 0.400, 23u, 1}, {{2.6683, 1.9580, 79.1788}, {1.0000, 0.0000, 0.0000}, {0.0000, 0.9703, 0.2419}, {0.0000, 0.2419, -0.9703}, 0.400, 24u, 3}, {{-2.6683, 1.9580, 79.1788}, {1.0000, 0.0000, 0.0000}, {0.0000, 0.9703, 0.2419}, {0.0000, 0.2419, -0.9703}, 0.400, 25u, 2}, {{-2.2483, 1.9580, 79.1788}, {1.0000, 0.0000, 0.0000}, {0.0000, 0.9703, 0.2419}, {0.0000, 0.2419, -0.9703}, 0.400, 26u, 1}, {{-1.8283, 1.9580, 79.1788}, {1.0000, 0.0000, 0.0000}, {0.0000, 0.9703, 0.2419}, {0.0000, 0.2419, -0.9703}, 0.400, 27u, 6}};
 constexpr unsigned kLiftStatusSlot = 21u;   // the status screen's texture slot in TantraVC (drawn by the module)
-constexpr int kLiftBtnLit[3] = {152, 154, 156}, kLiftBtnDim[3] = {153, 155, 157};   // TantraVC groups of the caps
+constexpr int kLiftBtnLit[3] = {155, 157, 159}, kLiftBtnDim[3] = {156, 158, 160};   // TantraVC groups of the caps
 // the lift: door B (two leaves, built open, each slides kDoorBTravel to the middle: a -> +z, b -> -z), its half width;
 // the cabin's panel: the groups that ride with the cabin, the caps (DOWN, UP, OUT) lit / dim and their fronts (stowed), the screen's slot
-constexpr int kDoorBGroups[4] = {159, 160, 161, 162}; constexpr double kDoorBTravel = 0.700, kDoorBHw = 0.700;
+constexpr int kDoorBGroups[4] = {162, 163, 164, 165}; constexpr double kDoorBTravel = 0.700, kDoorBHw = 0.700;
 // the inner lift (lobby shaft): cab groups, cab floor x/z range, the three stop floors, the door in the east shaft wall
-constexpr int kILiftGroups[2] = {176, 177};
+constexpr int kILiftGroups[2] = {179, 180};
 constexpr double kILiftX0 = -2.720, kILiftX1 = -1.380, kILiftZ0 = 62.480, kILiftZ1 = 64.720, kILiftDoorX = -1.300, kILiftDoorZ = 63.600, kILiftDoorHw = 0.600;
 constexpr int kILiftStopN = 4, kILiftHome = 2;   // stops: lower, middle, living, technical; the cab waits at home
 constexpr double kILiftStop[4] = {-4.425, -1.675, 1.075, 5.575};
-constexpr int kILiftDoor[4] = {182, 185, 188, 191}; constexpr int kILiftDoorN[4] = {183, 186, 189, 192}; constexpr int kILiftSend[4] = {178, 179, 180, 181}; constexpr int kILiftCall[4] = {184, 187, 190, 193};
+constexpr int kILiftDoor[4] = {185, 188, 191, 194}; constexpr int kILiftDoorN[4] = {186, 189, 192, 195}; constexpr int kILiftSend[4] = {181, 182, 183, 184}; constexpr int kILiftCall[4] = {187, 190, 193, 196};
 constexpr double kILiftCallPos[4][3] = {{-1.550, -3.225, 64.840}, {-1.550, -0.475, 64.840}, {-1.550, 2.275, 64.840}, {-1.550, 6.775, 64.840}};   // the call buttons' fronts (forward end of the shaft, facing +z)
 constexpr double kILiftSendPos[4][3] = {{-2.640, -3.175, 63.150}, {-2.640, -3.175, 63.450}, {-2.640, -3.175, 63.750}, {-2.640, -3.175, 64.050}};   // the send buttons' fronts, the cab at the lower stop
-constexpr int kCabRideCount = 13; constexpr int kCabRide[13] = {163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175};
-constexpr int kCabBtnLit[3] = {166, 168, 170}, kCabBtnDim[3] = {167, 169, 171};
+constexpr int kCabRideCount = 13; constexpr int kCabRide[13] = {166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178};
+constexpr int kCabBtnLit[3] = {169, 171, 173}, kCabBtnDim[3] = {170, 172, 174};
 constexpr double kCabBtn[3][3] = {{-8.270, 2.318, 70.398}, {-7.850, 2.318, 70.398}, {-7.430, 2.318, 70.398}};
 constexpr unsigned kCabScreenSlot = 36u;   // the cabin's screen (drawn by the module)
-constexpr int kCabDoorA[3] = {172, 174, 175}, kCabDoorB = 173; constexpr double kCabDoorTravel = 0.66;   // the cabin's doors: a (+edge, +porthole glass) slides -z, b +z
+constexpr int kCabDoorA[3] = {175, 177, 178}, kCabDoorB = 176; constexpr double kCabDoorTravel = 0.66;   // the cabin's doors: a (+edge, +porthole glass) slides -z, b +z
 constexpr double kCabLight[3] = {-7.850, 3.150, 69.000};   // the cabin's ceiling light (stowed): a point light that rides with it
 constexpr double kCabSpot[2][3] = {{-8.850, 3.330, 67.700}, {-8.850, 3.330, 70.300}}, kCabSpotDir[3] = {-0.45, -0.893, 0.0};   // the floodlights (stowed)
 // the medical bay's beds: the pelvis lying on the couch (x, y, z) and the direction to the head (x, z); OrbiterCrew lies down there
@@ -1119,7 +1153,7 @@ constexpr int kGlassMat = 79;   // the glasses' material (0-based): its opacity 
 // the groups behind it in its view cone from the design eye (hidden in ОПТИКА: the world is seen through the screen; the capsule
 // and the way behind it stay), the HUD glass 2 cm before the front zone (its own slot, alpha from the game's surface; aspect of the zone)
 constexpr int kGrpScreen[5] = {9, 10, 11, 12, 13};
-constexpr int kGrpHudGlass = 194; constexpr unsigned kHudSlot = 54u; constexpr double kHudAspect = 3.4416;
+constexpr int kGrpHudGlass = 197; constexpr unsigned kHudSlot = 54u; constexpr double kHudAspect = 3.4416;
 constexpr int kSpotDiscs = 5;   // the light spot: discs of 13 vertices (centre, 12 round), front then back faces
 constexpr double kSpotR[5] = {0.0050, 0.0090, 0.0160, 0.0260, 0.0380};
 // the sensor strips ХОД, ВЫСОТА on his right armrest and the cursor unit's key plate on the left one: centres at the seat's rest place
@@ -1154,7 +1188,7 @@ constexpr Seat kSeats[] = {
     {"console_port", -2.248f, 77.603f, 0.0000f, 1.0000f},
 };
 struct RoomRect { const char* name; float x0, x1, z0, z1, y0, y1; };
-constexpr int kRoomCount = 55;
+constexpr int kRoomCount = 56;
 constexpr RoomRect kRooms[] = {
     {"lobby_l", -2.80f, 2.80f, 61.60f, 65.60f, -4.50f, -1.75f},
     {"corr_l_p", -4.00f, -2.80f, 61.60f, 74.00f, -4.50f, -1.75f},
@@ -1201,9 +1235,9 @@ constexpr RoomRect kRooms[] = {
     {"power", -2.80f, 2.80f, 79.00f, 83.80f, -4.90f, -2.90f},
     {"stores", -6.20f, -4.00f, 74.00f, 83.80f, -4.90f, -2.90f},
     {"stores_k", 4.00f, 6.20f, 74.00f, 83.80f, -4.90f, -2.90f},
-    {"tech_passage", -0.55f, 0.55f, -40.00f, 59.00f, 5.50f, 7.50f},
-    {"tech_link", -2.80f, 2.40f, 59.00f, 65.00f, 5.50f, 7.50f},
-    {"hangar", -12.00f, 12.00f, 40.10f, 60.30f, -5.60f, 3.30f},
+    {"tech_passage", -0.55f, 0.55f, -40.00f, 33.30f, 5.50f, 7.50f},
+    {"tech_link", -2.80f, 2.40f, 61.00f, 65.00f, 5.50f, 7.50f},
+    {"hangar", -12.00f, 12.00f, 34.70f, 60.30f, -5.60f, 3.30f},
     {"hangar_lock", -1.35f, 0.45f, 60.30f, 61.60f, -4.50f, -2.40f},
     {"lab_deck", -7.80f, 7.80f, 61.60f, 74.00f, -4.50f, -1.75f},
     {"crew_deck", -7.40f, 7.40f, 61.60f, 74.00f, 1.00f, 5.50f},
@@ -1211,5 +1245,6 @@ constexpr RoomRect kRooms[] = {
     {"keel_bay", -6.20f, 6.20f, 74.00f, 83.80f, -4.90f, -2.90f},
     {"command_bridge", -4.70f, 4.70f, 74.60f, 83.40f, 1.00f, 6.60f},
     {"mid_deck", -8.40f, 8.40f, 61.60f, 74.00f, -1.75f, 1.00f},
+    {"tech_shaft", -0.55f, 0.55f, 33.30f, 34.20f, -4.40f, 7.50f},
 };
 }  // namespace tantra::interior

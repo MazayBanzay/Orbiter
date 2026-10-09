@@ -168,6 +168,10 @@ private:
     THRUSTER_HANDLE pod_[tantra::spec::kPodCups] = {};      // auxiliary pods
     VECTOR3 podExhPos_[tantra::spec::kPodCups] = {}, podExhDir_[tantra::spec::kPodCups] = {};
     EXHAUSTSPEC podExh_[tantra::spec::kPodCups] = {};
+    // (2026-10-09) the stern blocks' plumes on the ion charges (the anamezon beam has its own renderer): level 0 off that mode
+    EXHAUSTSPEC sternExh_[tantra::spec::kAnaCount] = {};
+    double sternPlumeLv_[tantra::spec::kAnaCount] = {};
+    VECTOR3 sternExhPos_[tantra::spec::kAnaCount] = {}, sternExhDir_ = {0.0, 0.0, -1.0};   // vessel frame (follows the CG)
     bool podHover_ = false;
     double podOut_ = 0.0;                      // pods: 0 in the bays (doors shut) .. 1 hanging out
     bool podsWanted_ = false;                  // pilot wants the pods out
@@ -326,8 +330,8 @@ private:
     int planGroup_ = -1;                       // main throttle: 0 anamezon, 1 marching planetary cup, 2 + the stern blocks
     // (2026-10-09) dual-mode stern blocks: on the ion charges with the marching cup (the take-off arc), then the anamezon with
     // the thrust carried over (the hand-over waits for the guide beam, the beam for the marching cup home)
-    bool sternPlan_ = false;                   // the bridge key КОРМА: ЗАРЯДЫ
-    bool SternPlanActive() const { return sternPlan_ && engineSet_ == EngineSet::Planetary; }
+    bool sternPlan_ = false;                   // (kept for old scenarios; the blocks are the planetary main engine now)
+    bool SternPlanActive() const { return engineSet_ == EngineSet::Planetary; }
     bool AnaHot() const { return ignition_.Target() >= tantra::IgnStage::Beam || ignition_.BeamLevel() > 0.0; }
     void ActToggleSternPlan();
     void SternHandOver();
@@ -386,6 +390,23 @@ private:
     double hangar_ = 0.0, hangarT_ = 0.0, rovers_ = 0.0, roversT_ = 0.0;
     ATTACHMENTHANDLE hangarAtt_[4] = {};   // 0 lander on the cradle, 1-3 MPU (1, 2 on the platform, 3 beside it)
     double hangarAttRov_ = -1.0;           // platform state the MPU attachments were last placed for
+    // (2026-10-09) the lander's maglev lift: 0 on the deck .. 1 raised 13 m .. 2 at the 70 deg stele; the throw along the stele
+    double landerLift_ = 0.0, landerLiftT_ = 0.0, launchArm_ = -99.0;
+    // (2026-10-09) the shock-absorption test: scenario line DROPTEST v h (UpdateWarpFreeze)
+    double dropV_ = 0.0, dropH_ = 0.0, dropT_ = 0.0, dropPeakG_ = 0.0;
+    int dropState_ = 0, dropWait_ = 0;
+    // (2026-10-09) the pods' check: scenario line SELFTEST 1 - out, cups down, a lift-off to 30 m and a landing (SelfTestStep)
+    int selfTest_ = 0, selfStage_ = 0;
+    double selfT_ = 0.0, selfLogT_ = 0.0, selfH0_ = 0.0, selfPeakG_ = 0.0;
+    void SelfTestStep(double dt, bool landed);
+    // (2026-10-09) the hover's automatic balance (PodVectoring): the local vertical in the ship's axes, its rate, the commands
+    double hovUp_[2] = {0.0, 0.0}, hovRate_[2] = {0.0, 0.0}, hovCmd_[2] = {0.0, 0.0};
+    bool hovOn_ = false;
+    double hovTrim_ = 0.0;                 // deg: both pods' common turn in the hover (UpdatePods)
+    double sternTvc_[2] = {0.0, 0.0};      // deg: the stern blocks' jet deflection, pitch up / yaw right (UpdatePlant)
+    void ActLanderLift();                 // ГРАНЬ: up to the stele / down to the deck
+    void ActLanderLaunch(bool emergency);  // ВЫБРОС / АВАР. ВЫБРОС (the emergency one: a second press within 3 s)
+    void UpdateLanderLift(double dt);
     double irisAna_ = 0.0, irisMarch_ = 0.0, marchOut_ = 0.0, irisNose_ = 0.0, airlockUp_ = 0.0;
     bool marchHigh_ = false;          // marching cup and pods run on iron (above kMarchArgonAlt), else argon
 
