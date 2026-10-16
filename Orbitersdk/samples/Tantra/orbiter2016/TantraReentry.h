@@ -43,6 +43,7 @@ constexpr double kAoaNose = 40.0;                 // deg: НОСОМ
 constexpr double kTurnLead = 120.0;               // s: the turn to the burn attitude starts this long before the burn
 constexpr double kLead = 150.0;                   // s: the earliest burn from now
 constexpr double kAttTol = 5.0;                   // deg: the hull on its attitude
+constexpr double kTermNear = 0.9;                 // of kTermTrig: from here the forecast checks the trigger every second, as in flight
 constexpr double kTermTrig = 0.8;                 // the braking starts when the level reaching the alignment is this share of the usable
 constexpr double kAlignH = 9000.0, kAlignV = 250.0, kAlignTau = 6.0;   // m, m/s, s: the braking aims there; then the thrust steers the
                                                   // velocity onto 150 m/s straight down (its error over kAlignTau, gravity and drag

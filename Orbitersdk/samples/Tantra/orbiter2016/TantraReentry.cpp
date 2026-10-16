@@ -112,7 +112,9 @@ double TermLevel(double h, double v, double gam, const Look& k, double hint) {
         if (f(a) > kAlignV && f(b) <= kAlignV) { lo = a; hi = b; bracket = true; }
     }
     if (!bracket && f(0.0) <= kAlignV) return 0.0;
-    while (hi - lo > 0.004) { const double mid = 0.5 * (lo + hi); if (f(mid) > kAlignV) lo = mid; else hi = mid; }
+    // (2026-10-16) to 0.0005: the level grows slowly toward the trigger, and the 0.004 steps moved the braking's start by
+    // seconds - ~6 km on the ground at each replan (reentry_test, Earth 52 kt)
+    while (hi - lo > 0.0005) { const double mid = 0.5 * (lo + hi); if (f(mid) > kAlignV) lo = mid; else hi = mid; }
     return hi;
 }
 
@@ -343,7 +345,10 @@ void SimStep(Sim& S, double dt) {
         in.air = &S.in.air; in.body = S.body; in.skin = &S.skin; in.expo = S.in.expo; in.expo.pods = S.pod; in.gearArea = 0.0;
         double hot = 1e9;
         for (int z = 0; z < kZones; ++z) hot = (std::min)(hot, S.skin.Limit(z) - kMarginK - S.skin.Temperature(z));
-        in.hotMargin = hot; in.sternT = S.sternT; in.tSafe = S.in.tSafe; in.t = S.t; in.evalDt = S.phase == 4 ? 10.0 : S.evalDt;
+        // (2026-10-16) near the braking's trigger the look-ahead runs every second, as in flight (Reentry::Step, evalDt 1):
+        // at 10 s the forecast started the braking 10-15 s late and the site was missed by ~46 km (reentry_test, Earth 52 kt)
+        const bool nearTrig = S.reg.lTerm >= kTermNear * kTermTrig;
+        in.hotMargin = hot; in.sternT = S.sternT; in.tSafe = S.in.tSafe; in.t = S.t; in.evalDt = S.phase == 4 ? (nearTrig ? 1.0 : 10.0) : S.evalDt;
         Regulate(S.reg, in, S.phase);
         // the transitions
         if ((S.phase == 5 || S.phase == 4) && S.in.regime != kRNose && S.reg.lTerm >= kTermTrig) {
@@ -457,7 +462,7 @@ SimOut RunSim(const PlanIn& in, double tBurn, double hpT, bool rangeCtl, double 
         double dt;
         if (S.phase == 1) dt = (std::min)(5.0, (std::max)(1e-3, S.tBurn - S.t));
         else if (S.phase == 3) dt = 0.1;
-        else if (S.phase == 4) dt = h > kEI + 30e3 ? 5.0 : 1.0;
+        else if (S.phase == 4) dt = h > kEI + 30e3 && S.reg.lTerm < kTermNear * kTermTrig ? 5.0 : 1.0;
         else dt = h > 30e3 ? 1.0 : 0.5;
         SimStep(S, dt);
     }
