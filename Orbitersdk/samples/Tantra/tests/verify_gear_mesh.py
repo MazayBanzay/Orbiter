@@ -134,9 +134,8 @@ for n in OUTSIDE:
 V_fin = np.vstack([V["fin"], V["fin_upper"]])
 check(V_fin[:, 1].max() <= gm.top_y(30) + 0.01 and V_fin[:, 1].min() > -9.0,
       f"fin retracted: y {V_fin[:, 1].min():.1f}..{V_fin[:, 1].max():.2f} (skin {gm.top_y(30):.2f})")
-# marching cup home under its iris; nose cups inside the nose
-mz = (V["march_unit"][:, 2] - gm.STERN_Z).min()
-check(mz > gm.MARCH_IRIS_S + 0.2, f"marching cup stowed behind the well iris: lip s {mz:.2f} (iris {gm.MARCH_IRIS_S})")
+# (2026-10-09) no marching cup any more: the well holds the fixed magnetic system and its sensor post (their sensor head
+# stands at the well's mouth by design) - the old «cup home under its iris» check is gone; nose cups inside the nose
 Pn = samples(G["cups_nose"], V["cups_nose"])
 Pn = Pn[Pn[:, 2] - gm.STERN_Z <= gm.NOSE_CUP_S + 0.05]                    # the cups themselves (the throats sit in the openings)
 check(np.nanmax(outs(Pn)) < -0.3, f"nose retro cups inside the nose skin ({np.nanmax(outs(Pn)):+.2f} m)")
@@ -191,7 +190,20 @@ for i, L in enumerate(legs):
           lambda t, i=i, ph=ph, ex=ex: dict(STOW, **{f"leg{i}_swing": ph * t, f"leg{i}_ext": ex * min(1, max(0, (t - gm.LEG_EXT_DELAY) / (1 - gm.LEG_EXT_DELAY))),
                                                     f"leg{i}_foot_stand": t, f"leg{i}_rail": 1 - min(1, 2 * t), f"leg{i}_fold": 1 - max(0, 2 * t - 1)}))
 for i in range(4):
-    sweep(f"pod {i} arm out", [f"door_pod_{i}", f"pod_{i}", f"arm_pod_{i}"], [f"pod_{i}"], lambda t: dict(STOW, pod_retract=1 - t))
+    # (2026-10-09) the bay cover stays with the hull: the fore ones slide under the skin (that is their path, checked below),
+    # the aft ones swing out over it - the arm's sweep is the pod and the arm
+    sweep(f"pod {i} arm out", [f"pod_{i}", f"arm_pod_{i}"], [f"pod_{i}"], lambda t: dict(STOW, pod_retract=1 - t))
+for i, p in enumerate(gm.PODS):   # the covers' own path: the fore ones 6..32 cm under the skin, the aft ones never into it
+    worst_in, worst_out = 1e9, -1e9
+    for t in np.linspace(0, 1, 9):
+        W = gm.apply_pose(groups, comps, dict(STOW, pod_retract=1 - t))
+        d, u, s = skin(samples(G[f"door_pod_{i}"], W[f"door_pod_{i}"]))
+        if t > 0.35:    # out of its opening
+            worst_in, worst_out = min(worst_in, float(np.nanmin(d))), max(worst_out, float(np.nanmax(d)))
+    if p["s"] > 60.0:
+        check(worst_out < -0.03, f"pod {i} cover slides under the skin: {worst_in:+.2f}..{worst_out:+.2f} m")
+    else:
+        check(worst_in > -0.03, f"pod {i} cover swings over the skin: {worst_in:+.2f}..{worst_out:+.2f} m")
 sweep("pods swivel", [f"pod_{i}" for i in range(4)], [], lambda t: dict(STOW, pod_retract=0, pod_swivel=t), n=12)
 WINGS = ["crest_starboard", "crest_port", "wing_outer_starboard", "wing_outer_port", "elevon_starboard", "elevon_port"]
 sweep("wings unfold (outer out, then inner down)", WINGS, [],

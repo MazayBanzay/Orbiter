@@ -318,9 +318,12 @@ Cup PodCup() { return CupOf(kAPod, kBNom, kPfMarch * kAPod / kAMarch, false); }
 // the plant's split of a thrust demand: the pods keep a base share (side force), the march takes the rest up to 12.1 T, the
 // pods the excess; the field the march share needs (auto range 6...12.1 T)
 struct Alloc { double Fm, Fp, B; };
-Alloc AllocL(double F) {
-    const double base = (std::min)(F, kPodBase * PodsMax()), Fm = (std::min)(F - base, MarchMax());
-    return {Fm, (std::min)(PodsMax(), F - Fm), Clamp(FieldFor(Fm), kBmin, kBmax)};
+// (2026-10-09) the pods only as far as they are out and aimed: in the bays their base share went nowhere (the Earth test:
+// 427 MN of the march under a 445 MN ship, the hover sank)
+double PodsAvail(const LFlight& s) { return s.FpMax >= 0.0 ? (std::min)(PodsMax(), s.FpMax) : PodsMax(); }
+Alloc AllocL(double F, double pm) {
+    const double base = (std::min)(F, kPodBase * pm), Fm = (std::min)(F - base, MarchMax());
+    return {Fm, (std::min)(pm, F - Fm), Clamp(FieldFor(Fm), kBmin, kBmax)};
 }
 void SetPhaseL(LFlight& s, int p) { s.phase = p; s.phT = 0.0; }
 void LEv(LFlight& s, int key, const std::wstring& txt, int lvl, Journal* log) {
@@ -333,7 +336,7 @@ double Tilt(const LFlight& s) { return std::hypot(s.ax[0].th, s.ax[1].th); }
 double RampTime(const LFlight& s, double F) {
     for (double t = 0; t <= 20; t += 0.1) {
         const double Fm = (std::min)(FieldThrust((std::min)(kBmax, s.B + kBrate * t), kAMarch), s.Fm + kRateM * MarchMax() * t);
-        const double Fp = (std::min)(PodsMax(), s.Fp + kRateP * PodsMax() * t);
+        const double Fp = (std::min)(PodsAvail(s), s.Fp + kRateP * PodsAvail(s) * t);
         if (Fm + Fp >= F) return t;
     }
     return 20;
@@ -341,7 +344,7 @@ double RampTime(const LFlight& s, double F) {
 
 void LandGuide(LFlight& s, Journal* log) {
     const double hH = s.hHover; const int mode = s.mode;
-    const double Fmax = (std::min)(MarchMax() + PodsMax(), kLGLim * kG0 * s.m), aAv = Fmax / s.m - s.g, aB = kBrakeK * aAv;
+    const double Fmax = (std::min)(MarchMax() + PodsAvail(s), kLGLim * kG0 * s.m), aAv = Fmax / s.m - s.g, aB = kBrakeK * aAv;
     s.aB = aB;
     if (mode == kIdle || mode == kManual || mode == kLanded || mode == kCrash) return;
     if (!s.air) {                                     // on the legs: the load goes over from the thrust to the legs
@@ -374,7 +377,7 @@ void LandGuide(LFlight& s, Journal* log) {
             azDes = d > 0.5 ? (std::min)(aAv, 1.05 * s.vz * s.vz / (2 * d)) : aAv; tiltMax = 3;
             // the thrust cannot drop at once (20 and 25 %/s): hand over to the hover while the ramp-down still kills the rest
             const double F = s.Fm + s.Fp, aNow = (std::max)(0.0, F / s.m - s.g);
-            const double tDown = (std::max)(0.0, F - s.m * s.g) / (kRateM * MarchMax() + kRateP * PodsMax());
+            const double tDown = (std::max)(0.0, F - s.m * s.g) / (kRateM * MarchMax() + kRateP * PodsAvail(s));
             if (s.vz > -(std::max)(2.0, aNow * tDown / 2)) {
                 SetPhaseL(s, s.legs >= 1 ? 4 : 3);
                 LEv(s, kEvHover, L"Висение " + Fmt(s.z, 0) + L" м" + (s.legs < 1 ? L" · ждём ноги" : L""), kOk, log);
@@ -401,8 +404,11 @@ void LandGuide(LFlight& s, Journal* log) {
     s.Fcmd = (std::max)(0.0, (s.m * (s.g + azDes) - s.Dz) / (std::max)(0.5, std::cos(Tilt(s) * kD2R)));
     // over the point: a PD on the drift; the pods' nozzles first, the rest by tilting the hull (each horizontal axis)
     const double sp = std::sin(kTvcP * kD2R);
+    // (2026-10-09) the PD as a speed toward the point, the speed capped: 2.3 km off it ran at 44 m/s and flew 2.7 km past
+    const double vLim = s.phase <= 2 ? 30.0 : s.phase <= 4 ? 5.0 : 1.0;
     for (Axis& a : s.ax) {
-        const double ax = Clamp(-latW * latW * a.x - 2 * 0.9 * latW * a.vx, -1.5, 1.5), L = s.m * ax - a.Dx;
+        const double vT = Clamp(-latW / (2 * 0.9) * a.x, -vLim, vLim);
+        const double ax = Clamp(2 * 0.9 * latW * (vT - a.vx), -1.5, 1.5), L = s.m * ax - a.Dx;
         a.dPcmd = s.Fp > 1e6 ? std::asin(Clamp(L / s.Fp, -sp, sp)) * kR2D : 0;
         const double Lrem = L - s.Fp * std::sin(a.dP * kD2R);
         a.thCmd = Clamp(std::asin(Clamp(Lrem / (std::max)(1e6, s.Fm + s.Fp), -0.2, 0.2)) * kR2D, -tiltMax, tiltMax);
@@ -461,14 +467,14 @@ void LandStep(LFlight& s, double dt) {
     LegsDone(s, nullptr);
     LandGuide(s, nullptr);
     // the plant: AUTO runs the field and the capsule rate under the thrust demand; MANUAL holds the operator's field
-    const double Fd = Clamp(s.Fcmd, 0, (std::min)(MarchMax() + PodsMax(), kLGLim * kG0 * s.m));
-    const Alloc al = AllocL(Fd);
+    const double Fd = Clamp(s.Fcmd, 0, (std::min)(MarchMax() + PodsAvail(s), kLGLim * kG0 * s.m));
+    const Alloc al = AllocL(Fd, PodsAvail(s));
     s.Breq = s.fieldAuto ? al.B : s.Bhold;
     if (s.fieldAuto) s.B += Clamp(s.Breq - s.B, -kBrate * dt, kBrate * dt);
     const Cup cm = MarchCupL(s.B); const double cap = cm.F;
-    s.FmC = (std::min)(al.Fm, cap); s.FpC = Clamp(Fd - s.FmC, 0, PodsMax());   // the pods carry what the field does not hold yet
+    s.FmC = (std::min)(al.Fm, cap); s.FpC = Clamp(Fd - s.FmC, 0, PodsAvail(s));   // the pods carry what the field does not hold yet
     s.Fm = (std::min)(cap, s.Fm + Clamp(s.FmC - s.Fm, -kRateM * MarchMax() * dt, kRateM * MarchMax() * dt));
-    s.Fp += Clamp(s.FpC - s.Fp, -kRateP * PodsMax() * dt, kRateP * PodsMax() * dt);
+    s.Fp += Clamp(s.FpC - s.Fp, -kRateP * PodsAvail(s) * dt, kRateP * PodsAvail(s) * dt);
     LandTvc(s, dt);
     const double I = s.m * kGyr * kGyr, Mp = kPodArm * s.Fp * std::sin(a.dP * kD2R), Mw = kCpArm * a.Dx;
     const double aM = (a.th + a.dM) * kD2R, aP = (a.th + a.dP) * kD2R;
@@ -899,12 +905,12 @@ void Landing::Replan() {
         const double d = std::hypot(st_.xE, st_.xN);
         s.z = st_.z; s.vz = st_.vz;
         s.ax[0].x = -d; s.ax[0].vx = d > 1 ? -(st_.vE * st_.xE + st_.vN * st_.xN) / d : 0.0;
-        s.legs = st_.legs; s.Fm = st_.Fm; s.Fp = st_.Fp; s.B = st_.B;
+        s.legs = st_.legs; s.Fm = st_.Fm; s.Fp = st_.Fp; s.B = st_.B; s.FpMax = st_.FpMax;
     } else {
         s.z = kLZ0; s.vz = kLVz0; s.ax[0].x = kLX0; s.ax[0].vx = kLVx0;
         const double Dz = 0.5 * kRho0 * std::exp(-s.z / kHs) * s.vz * s.vz * kCdA;
         s.Fcmd = s.m * s.g - Dz;
-        const Alloc a = AllocL(s.Fcmd);
+        const Alloc a = AllocL(s.Fcmd, PodsAvail(s));
         s.Fm = a.Fm; s.Fp = a.Fp; s.B = s.Breq = a.B;
     }
     plan_ = PlanLanding(s);
@@ -925,7 +931,7 @@ std::vector<Check> Landing::BuildChecks() const {
     if (s.mode != kIdle)
         return {{L"Поле: АВТО", s.fieldAuto}, {L"Аргон " + Fmt(s.argon / 1e6, 2) + L" кт", s.argon > 0.3e6}, {L"Продолжение с фазы " + Fmt(PhaseFromState(), 0), true}};
     const LandPlan& P = plan_;
-    const double W = (std::max)(1.0, s.m * s.g), tw = (MarchMax() + PodsMax()) / W;
+    const double W = (std::max)(1.0, s.m * s.g), tw = (MarchMax() + PodsAvail(s)) / W;
     return {{L"Поле: АВТО — поле и темп капсул ведёт установка", s.fieldAuto},
             {L"Тяга/вес " + Fmt(tw, 2) + L" (кормовые блоки " + Fmt(MarchMax() / W, 2) + L" + выдвижные блоки)", tw > 1.5},
             {L"Аргон " + Fmt(s.argon / 1e6, 2) + L" кт · по плану " + Fmt(P.used / 1e6, 2) + L" кт", P.used < s.argon},
@@ -949,13 +955,13 @@ void Landing::Step(const LandState& st, double now) {
     LFlight& s = fl_;
     const double cE = -aN_, cN = aE_;                 // across: 90 deg left of along
     s.g = st.g; s.rho = st.rho; s.m = st.mass; s.argon = st.argon; s.z = st.z; s.vz = st.vz; s.legs = st.legs;
-    s.Fm = st.Fm; s.Fp = st.Fp; s.B = st.B; s.Ts = st.sternT; s.wNow = wind_;
+    s.Fm = st.Fm; s.Fp = st.Fp; s.B = st.B; s.FpMax = st.FpMax; s.Ts = st.sternT; s.wNow = wind_;
     Axis& A = s.ax[0]; Axis& C = s.ax[1];
     A.x = st.xE * aE_ + st.xN * aN_; A.vx = st.vE * aE_ + st.vN * aN_; A.th = st.thE * aE_ + st.thN * aN_; A.om = st.omE * aE_ + st.omN * aN_; A.w = wind_;
     C.x = st.xE * cE + st.xN * cN; C.vx = st.vE * cE + st.vN * cN; C.th = st.thE * cE + st.thN * cN; C.om = st.omE * cE + st.omN * cN; C.w = 0;
     LandCmd out;
     if (s.mode == kIdle) {                            // not engaged: what the screen shows
-        s.air = !st.contact; s.aB = (std::min)(MarchMax() + PodsMax(), kLGLim * kG0 * s.m) / s.m * kBrakeK - s.g * kBrakeK;
+        s.air = !st.contact; s.aB = (std::min)(MarchMax() + PodsAvail(s), kLGLim * kG0 * s.m) / s.m * kBrakeK - s.g * kBrakeK;
         cmd_ = out;
         return;
     }
@@ -975,13 +981,13 @@ void Landing::Step(const LandState& st, double now) {
     const bool ended = s.mode == kLanded || s.mode == kCrash;
     // the plant: the demand split, the field the march share needs (AUTO) or the operator's, the capsule rates from what is
     // given now; the march never over what the present field holds
-    const double Fd = Clamp(s.Fcmd, 0, (std::min)(MarchMax() + PodsMax(), kLGLim * kG0 * s.m));
-    const Alloc al = AllocL(Fd);
+    const double Fd = Clamp(s.Fcmd, 0, (std::min)(MarchMax() + PodsAvail(s), kLGLim * kG0 * s.m));
+    const Alloc al = AllocL(Fd, PodsAvail(s));
     s.Breq = s.fieldAuto ? al.B : s.Bhold;
     const double cap = MarchCupL(st.B).F;
-    s.FmC = (std::min)(al.Fm, cap); s.FpC = Clamp(Fd - s.FmC, 0, PodsMax());
+    s.FmC = (std::min)(al.Fm, cap); s.FpC = Clamp(Fd - s.FmC, 0, PodsAvail(s));
     const double Fm = (std::min)(cap, st.Fm + Clamp(s.FmC - st.Fm, -kRateM * MarchMax() * dt, kRateM * MarchMax() * dt));
-    const double Fp = Clamp(st.Fp + Clamp(s.FpC - st.Fp, -kRateP * PodsMax() * dt, kRateP * PodsMax() * dt), 0, PodsMax());
+    const double Fp = Clamp(st.Fp + Clamp(s.FpC - st.Fp, -kRateP * PodsAvail(s) * dt, kRateP * PodsAvail(s) * dt), 0, PodsAvail(s));
     {   // the TVC acts on what will be given
         const double fm = s.Fm, fp = s.Fp;
         s.Fm = Fm; s.Fp = Fp; LandTvc(s, dt); s.Fm = fm; s.Fp = fp;

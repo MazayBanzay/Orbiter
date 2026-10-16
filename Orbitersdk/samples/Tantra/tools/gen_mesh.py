@@ -865,7 +865,7 @@ POD_DOOR_L = 6.5
 # (2026-10-09) the bay covers stay with the hull (rig): 0.12 m armour panels, open over pod_retract 1 .. POD_ARM_END before
 # the arm moves; the fore ones sink POD_COVER_SINK and slide forward under the skin, the aft ones swing POD_COVER_SWING deg
 # about their aft edge onto the skin (it curves inward aft of the bay)
-POD_COVER_T, POD_ARM_END, POD_COVER_SINK, POD_COVER_SWING = 0.12, 0.7, 0.16, 182.0
+POD_COVER_T, POD_ARM_END, POD_COVER_SINK, POD_COVER_SWING = 0.12, 0.7, 0.16, 192.0
 POD_SWIVEL_MAX = math.radians(180.0)
 POD_CANT = math.radians(15.0)        # (2026-10-09) hover: the aft pair turns 15 deg less, the fore pair 15 more (Spec kPodHoverCantDeg)
 
@@ -1576,11 +1576,28 @@ def rect_keep(s0, s1):
     return lambda u, um: [(s0, s1)]
 
 
+PATCH_T = 0.12   # (2026-10-09, the user: «все крышки не имеют объёма») a cover's thickness unless given
+
+
 def patch(g, o, off=0.0, back=None):
-    """Door/cover over opening o (flush); optional back face `back` m inside."""
+    """Door/cover over opening o (flush) as a closed slab: the outer face, the back face `back` m inside (PATCH_T if not
+    given) and the edge walls round it (2026-10-09: the covers were single sheets / two sheets with open edges)."""
+    t = PATCH_T if back is None else back
     surface(lambda s: g, o["u"][0], o["u"][1], opening_keep(o), off=off)
-    if back:
-        surface(lambda s: g, o["u"][0], o["u"][1], opening_keep(o), off=-back, inward=True)
+    surface(lambda s: g, o["u"][0], o["u"][1], opening_keep(o), off=off - t, inward=True)
+    for u, sg in ((o["u"][0], -1), (o["u"][1], 1)):          # walls along the u-edges, facing out of the slab
+        ss = [s for s in edge_points(u) if ev(o["a"], u) - 1e-6 <= s <= ev(o["b"], u) + 1e-6]
+        for s0, s1 in zip(ss, ss[1:]):
+            nrm = hull_pt((s0 + s1) / 2, u + sg * 2e-3) - hull_pt((s0 + s1) / 2, u)
+            p = [hull_pt(s0, u, off), hull_pt(s1, u, off), hull_pt(s1, u, off - t), hull_pt(s0, u, off - t)]
+            g.quad(*[g.vert(q, nrm) for q in p], nrm)
+    grid = [u for u in UGRID if o["u"][0] - 1e-9 <= u <= o["u"][1] + 1e-9]
+    for end, sg in (("a", -1), ("b", 1)):                     # the s-ends
+        for u0, u1 in zip(grid, grid[1:]):
+            s0, s1 = ev(o[end], u0), ev(o[end], u1)
+            nrm = np.array([0, 0, sg * 1.0])
+            p = [hull_pt(s0, u0, off), hull_pt(s1, u1, off), hull_pt(s1, u1, off - t), hull_pt(s0, u0, off - t)]
+            g.quad(*[g.vert(q, nrm) for q in p], nrm)
 
 
 def liner(g, o, depth):
@@ -5028,7 +5045,8 @@ def build():
     for i, (x, y) in enumerate(ANA_CUPS):
         g = grp(f"iris_ana_{i}", "nose_iridium")
         disc_n(g, (x, y, zs(RIM_S - 0.05)), (0, 0, -1), ANA_R + 0.1, seg=24)
-        disc_n(g, (x, y, zs(RIM_S)), (0, 0, 1), ANA_R + 0.1, seg=24)
+        disc_n(g, (x, y, zs(RIM_S + 0.10)), (0, 0, 1), ANA_R + 0.1, seg=24)    # (2026-10-09) 0.15 m thick with its rim
+        lathe(g, [(RIM_S - 0.05, ANA_R + 0.1), (RIM_S + 0.10, ANA_R + 0.1)], center=(x, y))
     # central well: collar (cup ceramic, it sees the reaction zones at grazing angles) and the deep metal well
     g = grp("baffle", "nose_iridium")
     lathe(g, [(RIM_S - 0.02, WELL_C_R - 0.05), (RIM_S - 0.02, WELL_C_R + 0.3)], center=(0.0, SYC))   # rim ring
@@ -5452,7 +5470,8 @@ def rig(legs):
             add("pod_retract", "tr", [f"door_pod_{i}"], np.array([0.0, 0.0, -(POD_DOOR_L + 0.3)]), parent=sink, s0=POD_ARM_END,
                 s1=0.5 * (1.0 + POD_ARM_END), d=1.0)
         else:
-            hinge = p["centre"] + p["n"] * (POD_T / 2 + 0.12) + np.array([0.0, 0.0, zs(p["s0"]) - p["centre"][2]])
+            # the hinge line 8 cm proud of the skin at the aft edge; the skin behind the bay leans in ~12 deg (the swing)
+            hinge = p["centre"] + p["n"] * (POD_T / 2 + 0.12 + 0.08) + np.array([0.0, 0.0, zs(p["s0"]) - p["centre"][2]])
             ax = p["e"] if np.dot(np.cross(p["e"], [0.0, 0.0, 1.0]), p["n"]) > 0 else -p["e"]
             add("pod_retract", "rot", [f"door_pod_{i}"], (hinge, ax, -math.radians(POD_COVER_SWING)), s0=POD_ARM_END, s1=1.0, d=1.0)
         pod_swivels.append(add("pod_swivel", "rot", [], (p["centre"], -p["n"] * p["sgn"], POD_SWIVEL_MAX), parent=arm))   # pivot only
@@ -5749,105 +5768,307 @@ def v3(a):
 
 
 # ---------------------------------------------------------------------------
-# Debris: every part that can break off becomes a vessel of its own (Config/Vessels/Tantra/Debris_*.cfg,
-# Meshes/Tantra/Debris/*.msh), built from the same groups, centred on its own centroid. The hull breaks into
-# four chunks by station. name, groups (or station range of the hull for a chunk), mass [t]
-_HULL_GROUPS = ("hull", "shoulder", "nose", "spine", "pocket_liner", "airlock", "cups_nose", "iris_nose_0", "iris_nose_1")
-HULL_ZONES = [("hull_stern", (-10.0, 21.0), 900.0), ("hull_traps", (21.0, 88.0), 1200.0), ("hull_hangar", (88.0, 121.0), 500.0),
-              ("hull_living", (121.0, 145.0), 400.0), ("hull_nose", (145.0, 185.0), 400.0)]
-FEET_DEBRIS = [(f"foot_{side}", 420.0) for side in SIDES] + [(f"sfoot{i}", 400.0) for i in range(4)] + [("kfoot", 150.0)]
-LOWER_DEBRIS = ([(f"leg_{side}", [f"blade_{side}_{BLADE_N - 1}", f"ankle_{side}"], f"foot_{side}", 520.0) for side in SIDES]
-                + [(f"sternleg_{i}", [f"leg{i}_sec{LEG_SEC_N - 1}", f"leg{i}_ankle"], f"sfoot{i}", 450.0) for i in range(4)]
-                + [("kangleg", [f"kang_shin_{KANG_SEC_N - 1}", "kang_ankle"], "kfoot", 170.0)])
-DEBRIS_DEFS = (
-    [("crest_port", ["crest_port", "wing_outer_port", "elevon_port"], 22.0),
-     ("crest_starboard", ["crest_starboard", "wing_outer_starboard", "elevon_starboard"], 22.0),
-     ("fin", ["fin", "fin_upper"], 24.0)]
-    + [(f"pod_{i}", [f"pod_{i}", f"door_pod_{i}", f"arm_pod_{i}"], 120.0) for i in range(4)]
-    + [(f"leg_{side}", [f"blade_{side}_{i}" for i in range(1, BLADE_N)] + [f"ankle_{side}"] + foot_groups(f"foot_{side}"), 400.0) for side in SIDES]
-    + [(f"sternleg_{i}", [f"leg{i}_sec{k}" for k in range(1, LEG_SEC_N)] + [f"leg{i}_ankle"] + foot_groups(f"sfoot{i}"), 110.0) for i in range(4)]
-    + [("kangleg", [f"kang_shin_{k}" for k in range(1, KANG_SEC_N)] + ["kang_ankle"] + foot_groups("kfoot"), 150.0)]
-    + [(n, [n], 6.0) for n in ("door_top_port", "door_top_starboard", "door_bottom_port", "door_bottom_starboard", "kang_door")]
-    + [(n, [n], 10.0) for n in ("bay_door_port", "bay_door_starboard")]
-    + [(f"{n}{v}", rng_, m_) + ((v[1:],) if v else ()) for n, rng_, m_ in HULL_ZONES for v in ("", "_flat", "_short")]
+# Debris (2026-10-09 rework; the user: «разваливается ненатурально... без потери фпс... нормально с работой кусков и не
+# лишних деталей»): only the ship's own parts, in the pose they are in when they part.
+#  * hull chunks (the Impact zones by station): every exterior group in the FLIGHT pose (legs, pods and doors stowed), the
+#    triangles by their station; the parts that may be out of that pose at the break-up (CHUNK_PARTS: pods, legs, doors)
+#    stay in their chunk as labelled groups - the debris module hides those Tantra sends off as pieces of their own (cfg
+#    Parts), so nothing of the ship vanishes (102 groups did) and nothing is doubled;
+#  * pieces apart, each in its pose: the crests in the three wing modes, the fin up and down, the pods out (swivel 0 - the
+#    module is given the attitude), the legs deployed (the blades and the front support lying, the stern legs standing),
+#    the doors open, the feet and the last stages, one petal of each kind;
+#  * per piece the groups are merged by material (a leg was ~110 draw calls), its centre of mass and its inertia come from
+#    the skin's area (a thin shell, not the bounding box), its contact points are its own extreme points in 26 directions
+#    (a leg lying on its side hung 10-12 m up on the corners of its foot's box).
+_SKIN_SPLIT = ("hull", "shoulder", "nose", "spine", "belly", "pocket_liner", "ana_feed")   # long groups: by triangle station
+HULL_ZONES = [("hull_stern", (-10.0, 21.0), 1635.0), ("hull_traps", (21.0, 88.0), 1200.0), ("hull_hangar", (88.0, 121.0), 500.0),
+              ("hull_living", (121.0, 145.0), 416.0), ("hull_nose", (145.0, 185.0), 663.0)]   # dry t (Spec mass budget)
+_FREE = {"crest_port", "wing_outer_port", "elevon_port", "crest_starboard", "wing_outer_starboard", "elevon_starboard",
+         "fin", "fin_upper"}                                    # always pieces of their own (never in a chunk)
+
+
+def _leg_groups(side):
+    """The whole blade leg as it swings: every stage, the guys, the ankle, the foot."""
+    return ([f"blade_{side}_{i}" for i in range(BLADE_N)] + [n for n in GROUPS if n.startswith(f"guy_{side}_")]
+            + [f"ankle_{side}"] + foot_groups(f"foot_{side}"))
+
+
+def _sleg_groups(i):
+    return [f"leg{i}_sec{k}" for k in range(LEG_SEC_N)] + [f"leg{i}_ankle"] + foot_groups(f"sfoot{i}")
+
+
+def _kang_groups():
+    return ["kang_thigh", "kang_brace"] + [f"kang_shin_{k}" for k in range(KANG_SEC_N)] + ["kang_ankle"] + foot_groups("kfoot")
+
+
+def _posed(groups, comps, states):
+    """Vertices AND normals after the rig (apply_pose turns the vertices only)."""
+    V = {g.name: np.array(g.v, float) for g in groups}
+    N = {g.name: np.array(g.n, float) for g in groups}
+    M = comp_matrices(comps, states)
+    for i, c in enumerate(comps):
+        for gname in c["groups"]:
+            if gname in V and len(V[gname]):
+                m = M[i]
+                V[gname] = (m[:3, :3] @ V[gname].T).T + m[:3, 3]
+                N[gname] = (m[:3, :3] @ N[gname].T).T
+    return V, N
+
+
+# the parts a chunk carries as labelled groups (their index = the bit in the hide mask Tantra sends; MeshLayout kChunkPart*)
+CHUNK_PARTS = ([(f"pod_{i}", [f"pod_{i}", f"arm_pod_{i}"]) for i in range(4)]   # the bay covers stay with the hull
+               + [(f"leg_{s}", _leg_groups(s)) for s in SIDES]
+               + [(f"sternleg_{i}", _sleg_groups(i)) for i in range(4)]
+               + [("kangleg", _kang_groups())]
+               + [(n, [n]) for n in ("door_top_port", "door_top_starboard", "door_bottom_port", "door_bottom_starboard",
+                                     "bay_door_port", "bay_door_starboard", "kang_door")])
+
+
+def _wing_states(mode):
+    fold_in = {0: 0.0, 1: WING_RAISE / WING_FOLD, 2: 1.0}[mode]
+    return {"crest_lateral": fold_in, "wing_outer": 1.0 if mode == 2 else 0.0}
+
+
+def _sep_pieces(legs):
+    """Pieces apart: name, groups, rig states of their pose, mass [t]."""
+    lying, standing = _lying_states(), _standing_states(legs)
+    out = []
+    for side in SIDES:
+        for mode in range(3):
+            out.append((f"crest_{side}_m{mode}", [f"crest_{side}", f"wing_outer_{side}", f"elevon_{side}"], _wing_states(mode), 22.0))
+    out += [("fin_up", ["fin", "fin_upper"], {"crest_dorsal": 0.0}, 24.0), ("fin_down", ["fin", "fin_upper"], {"crest_dorsal": 1.0}, 24.0)]
+    out += [(f"pod_{i}", [f"pod_{i}", f"arm_pod_{i}"], {"pod_retract": 0.0, "pod_swivel": 0.0}, 100.0) for i in range(4)]
+    out += [(f"leg_{s}", _leg_groups(s), lying, 1006.0) for s in SIDES]
+    out += [("kangleg", _kang_groups(), lying, 198.0)]
+    out += [(f"sternleg_{i}", _sleg_groups(i), standing, 343.0) for i in range(4)]
+    out += [(n, [n], {"hangar": 1.0}, 6.0) for n in ("door_top_port", "door_top_starboard", "door_bottom_port", "door_bottom_starboard")]
+    out += [(n, [n], {"bay_doors": 1.0}, 10.0) for n in ("bay_door_port", "bay_door_starboard")]
+    out += [("kang_door", ["kang_door"], lying, 6.0)]
     # a leg breaks at its joints (core/Foot): the foot at the ankle, the last stage with the foot at the lowest joint
-    + [(f"{pre}_whole", foot_groups(pre), mf) for pre, mf in FEET_DEBRIS]
-    + [(f"{leg}_lower", segs + foot_groups(pre), ml) for leg, segs, pre, ml in LOWER_DEBRIS]
-    # one petal torn off (keel, slats, rod, skirts) of each kind
-    + [(f"petal_{kind}", [n for n in petal_groups(pre, 0) if "_strut_" not in n], mp) for kind, pre, mp in
-       (("blade", "foot_port", 35.0), ("stern", "sfoot0", 30.0), ("kang", "kfoot", 12.0))])
-DEBRIS = []  # filled by write_debris: (name, class, centroid (mesh frame), mass)
+    for pre, mf, st in [(f"foot_{s}", 420.0, lying) for s in SIDES] + [(f"sfoot{i}", 400.0, standing) for i in range(4)] + [("kfoot", 150.0, lying)]:
+        out.append((f"{pre}_whole", foot_groups(pre), st, mf))
+    for leg, segs, pre, ml, st in ([(f"leg_{s}", [f"blade_{s}_{BLADE_N - 1}", f"ankle_{s}"], f"foot_{s}", 520.0, lying) for s in SIDES]
+                                   + [(f"sternleg_{i}", [f"leg{i}_sec{LEG_SEC_N - 1}", f"leg{i}_ankle"], f"sfoot{i}", 450.0, standing) for i in range(4)]
+                                   + [("kangleg", [f"kang_shin_{KANG_SEC_N - 1}", "kang_ankle"], "kfoot", 170.0, lying)]):
+        out.append((f"{leg}_lower", segs + foot_groups(pre), st, ml))
+    for kind, pre, mp, st in (("blade", "foot_port", 35.0, lying), ("stern", "sfoot0", 30.0, standing), ("kang", "kfoot", 12.0, lying)):
+        out.append((f"petal_{kind}", [n for n in petal_groups(pre, 0) if "_strut_" not in n], st, mp))
+    return out
 
 
-def write_debris(groups, root):
+def _lying_states():
+    """Lying on the gear at rest (the blades down at the parked hips, the front support out), pods in."""
+    yb = -FL * wh_at((KANG_S0 + KANG_S1) / 2)[1]
+    hip_h = AXIS_H + yb + KANG_DEPTH - KANG_THIGH_W / 2 - 0.1
+    st = dict(kang_states(hip_h))
+    for i in range(4):
+        st.update({f"leg{i}_rail": 1.0, f"leg{i}_fold": 1.0})
+    for s in SIDES:
+        st.update({f"track_{s}": 0.0, f"blade_ext_{s}": (LEG_LMAX - (AXIS_H - FOOT_H)) / (LEG_LMAX - LEG_LMIN)})
+    return st
+
+
+def _standing_states(legs):
+    st = stowed_states()
+    for i, g in enumerate(legs):
+        st.update({f"leg{i}_swing": g["phi_stand"] / g["phi_max"], f"leg{i}_ext": g["e_stand"] / LEG_EXT_MAX, f"leg{i}_foot_stand": 1,
+                   f"leg{i}_rail": 0.0, f"leg{i}_fold": 0.0})
+    return st
+
+
+def _clip_into(ng, V, N, tris, zlo, zhi):
+    """The triangles of V/N clipped to zlo <= z <= zhi (a hull chunk cut at its joints), appended to ng."""
+    def clip(poly, z0, keep_above):
+        out = []
+        for k in range(len(poly)):
+            (pa, na), (pb, nb) = poly[k], poly[(k + 1) % len(poly)]
+            ia = pa[2] >= z0 if keep_above else pa[2] <= z0
+            ib = pb[2] >= z0 if keep_above else pb[2] <= z0
+            if ia:
+                out.append((pa, na))
+            if ia != ib:
+                t = (z0 - pa[2]) / (pb[2] - pa[2])
+                out.append((pa + (pb - pa) * t, na + (nb - na) * t))
+        return out
+    for t in tris:
+        poly = [(V[i], N[i]) for i in t]
+        zz = [V[i][2] for i in t]
+        if min(zz) >= zlo and max(zz) <= zhi:
+            idx = [ng.vert(V[i], N[i]) for i in t]
+            ng.t.append(tuple(idx))
+            continue
+        poly = clip(clip(poly, zlo, True), zhi, False)
+        if len(poly) < 3:
+            continue
+        idx = [ng.vert(p, n) for p, n in poly]
+        for k in range(1, len(idx) - 1):
+            ng.t.append((idx[0], idx[k], idx[k + 1]))
+
+
+def _merge(parts, VN, label=None):
+    """One group per material (label: 'part_<name>' on every group of a chunk part); VN: posed (V, N) or None."""
+    by = {}
+    for g in parts:
+        P = VN[0].get(g.name) if VN else None
+        Nn = VN[1].get(g.name) if VN else None
+        if P is None:
+            P, Nn = np.array(g.v, float), np.array(g.n, float)
+        if not len(P) or not g.t:
+            continue
+        q = by.setdefault(g.material, Group(f"{label}_{g.material}" if label else f"m{g.material}", g.material))
+        o = len(q.v)
+        q.v += [np.asarray(p, float) for p in P]
+        q.n += [np.asarray(n, float) for n in Nn] if Nn is not None and len(Nn) == len(P) else [np.array([0, 1.0, 0])] * len(P)
+        q.t += [(a + o, b + o, c + o) for a, b, c in g.t]
+    return list(by.values())
+
+
+def _shell(out):
+    """Area-weighted centroid and the inertia per unit mass of the skin (thin shell) of the merged groups."""
+    A, C, T = 0.0, np.zeros(3), []
+    for q in out:
+        Vq = np.array(q.v, float)
+        for a, b, c in q.t:
+            p0, p1, p2 = Vq[a], Vq[b], Vq[c]
+            ar = 0.5 * np.linalg.norm(np.cross(p1 - p0, p2 - p0))
+            if ar <= 0:
+                continue
+            m = (p0 + p1 + p2) / 3
+            A += ar; C += ar * m; T.append((ar, m))
+    c = C / A if A > 0 else np.zeros(3)
+    I = np.zeros(3)
+    for ar, m in T:
+        d = m - c
+        I += ar * np.array([d[1] ** 2 + d[2] ** 2, d[0] ** 2 + d[2] ** 2, d[0] ** 2 + d[1] ** 2])
+    return c, (I / A if A > 0 else np.ones(3))
+
+
+def _contacts(P):
+    """The piece's own extreme points in 26 directions (deduplicated); the first three span its underside."""
+    dirs = [np.array(d, float) for d in ((0, -1, 1), (-1, -1, -1), (1, -1, -1))]
+    dirs += [np.array((x, y, z), float) for x in (-1, 0, 1) for y in (-1, 0, 1) for z in (-1, 0, 1) if (x, y, z) != (0, 0, 0)]
+    pts = []
+    for d in dirs:
+        p = P[int(np.argmax(P @ (d / np.linalg.norm(d))))]
+        if all(np.linalg.norm(p - q) > 0.3 for q in pts):
+            pts.append(p)
+    return pts[:24]
+
+
+DEBRIS = []  # filled by write_debris: (name, class, centroid (mesh frame), mass, cog over the ground)
+CHUNK_HOSTS = {}   # part -> the chunk that carries it (by its station in the flight pose)
+
+
+def _write_piece(name, out, mass, mdir, cdir, parts_line=None):
+    P = np.vstack([np.array(q.v) for q in out])
+    c, pmi = _shell(out)
+    for q in out:
+        q.v = [np.asarray(v) - c for v in q.v]
+    P = P - c
+    write_msh(out, os.path.join(mdir, name + ".msh"))
+    lo, hi = P.min(0), P.max(0)
+    ext = hi - lo
+    size = float(np.linalg.norm(ext) / 2)
+    pts = _contacts(P)
+    with open(os.path.join(cdir, f"Debris_{name}.cfg"), "w", newline="\r\n") as f:
+        f.write(f"; Tantra debris: {name} (generated by tools/gen_mesh.py)\n")
+        f.write(f"ClassName = Tantra\\Debris_{name}\nMeshName = Tantra\\Debris\\{name}\n")
+        f.write(f"Size = {max(1.0, size):.1f}\nMass = {mass * 1e3:.0f}\n")
+        f.write(f"Inertia = {pmi[0]:.2f} {pmi[1]:.2f} {pmi[2]:.2f}\n")
+        f.write(f"CrossSections = {ext[1] * ext[2] * 0.6:.1f} {ext[0] * ext[2] * 0.6:.1f} {ext[0] * ext[1] * 0.6:.1f}\n")
+        f.write("CW = 1.0 1.0 1.2\nLiftFactor = 0.0\n")
+        f.write(f"TouchdownPoints = {pts[0][0]:.2f} {pts[0][1]:.2f} {pts[0][2]:.2f}  {pts[1][0]:.2f} {pts[1][1]:.2f} {pts[1][2]:.2f}  "
+                f"{pts[2][0]:.2f} {pts[2][1]:.2f} {pts[2][2]:.2f}\n")
+        f.write(f"COG_OverGround = {-lo[1]:.2f}\nEnableFocus = TRUE\n")
+        f.write("Module = TantraDebris\n")
+        f.write(f"TdCount = {len(pts)}\n")                       # its own extreme points (orbiter2016/TantraDebris.cpp)
+        for k, p in enumerate(pts):
+            f.write(f"TdP{k:02d} = {p[0]:.2f} {p[1]:.2f} {p[2]:.2f}\n")
+        if parts_line:
+            f.write(f"Parts = {parts_line}\n")
+    return c, -lo[1]
+
+
+def write_debris(groups, root, legs=None):
     G = {g.name: g for g in groups}
     mdir = os.path.join(root, "Meshes", "Tantra", "Debris")
     cdir = os.path.join(root, "Config", "Vessels", "Tantra")
     os.makedirs(mdir, exist_ok=True)
     os.makedirs(cdir, exist_ok=True)
     DEBRIS.clear()
-    chunk_extra = {"hull_stern": ["well", "baffle", "cups_anamezon", "well_centre", "march_unit", "iris_march", "body_flap"],
-                   "hull_traps": ["bay_liner"] + [f"trap_{i}" for i in range(4)],
-                   "hull_hangar": ["hangar_inner", "shuttle", "rover_platform", "hangar_deflector"],
-                   "hull_nose": ["nose_ana", "ana_feed", "ana_buffer", "nose_screen", "nose_screen_core", "nose_mirror"]}
-    for d_ in DEBRIS_DEFS:
-        name, spec, mass = d_[:3]
-        crush = d_[3] if len(d_) > 3 else None     # "flat": a belly blow pressed it to 55 %, "short": an axial one to 50 %
-        parts = []
-        if isinstance(spec, tuple):  # hull chunk: triangles of the skin groups by station, whole inner groups
-            s0, s1 = spec
-            for gname in _HULL_GROUPS:
-                g = G[gname]
-                V = np.array(g.v)
-                ng = Group(gname, g.material)
-                for t in g.t:
-                    s = V[list(t), 2].mean() - STERN_Z
-                    if s0 <= s < s1:
-                        idx = [ng.vert(V[k], g.n[k]) for k in t]
-                        ng.t.append(tuple(idx))
-                if ng.t:
-                    parts.append(ng)
-            parts += [G[n] for n in chunk_extra.get(name.replace("_flat", "").replace("_short", ""), [])]
-        else:
-            parts = [G[n] for n in spec]
-        P = np.vstack([np.array(p.v) for p in parts])
-        c = (P.min(0) + P.max(0)) / 2
-        out = []
-        for p in parts:
-            q = Group(p.name, p.material)
-            q.v = [np.asarray(v) - c for v in p.v]
-            q.n = list(p.n)
-            q.t = list(p.t)
-            out.append(q)
-        if crush:
-            lo0 = (P.min(0) - c)
-            for q in out:
-                for k, v in enumerate(q.v):
-                    v = np.array(v, float)
-                    if crush == "flat":
-                        v[1] = lo0[1] + (v[1] - lo0[1]) * 0.55
+    CHUNK_HOSTS.clear()
+    comps = rig(legs if legs is not None else SLEGS)
+    Vf, Nf = _posed(groups, comps, stowed_states())               # the flight pose: legs, pods and doors stowed
+    # the chunk parts: who carries which (by the part's centroid station in the flight pose)
+    part_of = {}
+    for pi, (pn, gl) in enumerate(CHUNK_PARTS):
+        P = np.vstack([Vf[n] for n in gl if n in Vf and len(Vf[n])])
+        s = float(P[:, 2].mean()) - STERN_Z
+        host = next((zn for zn, (s0, s1), _ in HULL_ZONES if s0 <= s < s1), HULL_ZONES[-1][0])
+        CHUNK_HOSTS[pn] = host
+        for n in gl:
+            part_of[n] = (pi, pn)
+    # every run of whole zones the joints can leave together (hull_<first><last>: hull_04 is the whole hull, hull_11 the trap
+    # block alone); a crushed zone breaks off alone, so the crushed forms are of single zones only
+    zi = {zn: k for k, (zn, _, _) in enumerate(HULL_ZONES)}
+    for i in range(len(HULL_ZONES)):
+        for j in range(i, len(HULL_ZONES)):
+            s0, s1 = HULL_ZONES[i][1][0], HULL_ZONES[j][1][1]
+            mass = sum(m_ for _, _, m_ in HULL_ZONES[i:j + 1])
+            for crush in (("", "_flat", "_short") if i == j else ("",)):
+                base = []                                           # the hull's own groups (by triangle station)
+                for g in groups:
+                    if g.name in _FREE or g.name in part_of or not g.t:
+                        continue
+                    Vg = Vf[g.name]
+                    sg = Vg[:, 2] - STERN_Z
+                    split = g.name in _SKIN_SPLIT or sg.max() - sg.min() > 0.6 * (HULL_ZONES[i][1][1] - HULL_ZONES[i][1][0])
+                    if split:
+                        if sg.max() <= s0 or sg.min() >= s1:
+                            continue
+                    elif not (s0 <= sg.mean() < s1):
+                        continue
+                    ng = Group(g.name, g.material)
+                    if split:
+                        _clip_into(ng, Vg, Nf[g.name], g.t, zs(s0), zs(s1))   # cut at the joints' planes
                     else:
-                        v[2] *= 0.5
-                    q.v[k] = v
-            P = np.vstack([np.array(q.v) for q in out]) + c
-        write_msh(out, os.path.join(mdir, name + ".msh"))
-        lo, hi = P.min(0) - c, P.max(0) - c
-        ext = hi - lo
-        size = float(np.linalg.norm(ext) / 2)
-        ixx, iyy, izz = (ext[1] ** 2 + ext[2] ** 2) / 12, (ext[0] ** 2 + ext[2] ** 2) / 12, (ext[0] ** 2 + ext[1] ** 2) / 12
-        with open(os.path.join(cdir, f"Debris_{name}.cfg"), "w", newline="\r\n") as f:
-            f.write(f"; Tantra debris: {name} (generated by tools/gen_mesh.py)\n")
-            f.write(f"ClassName = Tantra\\Debris_{name}\nMeshName = Tantra\\Debris\\{name}\n")
-            f.write(f"Size = {max(1.0, size):.1f}\nMass = {mass * 1e3:.0f}\n")
-            f.write(f"Inertia = {ixx:.2f} {iyy:.2f} {izz:.2f}\n")
-            f.write(f"CrossSections = {ext[1] * ext[2] * 0.6:.1f} {ext[0] * ext[2] * 0.6:.1f} {ext[0] * ext[1] * 0.6:.1f}\n")
-            f.write("CW = 1.0 1.0 1.2\nLiftFactor = 0.0\n")
-            f.write(f"TouchdownPoints = 0 {lo[1]:.2f} {hi[2] * 0.8:.2f}  {lo[0] * 0.8:.2f} {lo[1]:.2f} {lo[2] * 0.8:.2f}  "
-                    f"{hi[0] * 0.8:.2f} {lo[1]:.2f} {lo[2] * 0.8:.2f}\n")
-            f.write(f"COG_OverGround = {-lo[1]:.2f}\nEnableFocus = TRUE\n")
-            # a rigid body on the ground (orbiter2016/TantraDebris.cpp): contacts at the corners of this box
-            f.write(f"Module = TantraDebris\nTdBox = {lo[0]:.2f} {lo[1]:.2f} {lo[2]:.2f} {hi[0]:.2f} {hi[1]:.2f} {hi[2]:.2f}\n")
-        DEBRIS.append((name, f"Tantra\\Debris_{name}", c, mass * 1e3, -lo[1]))
+                        ng.v, ng.n, ng.t = list(Vg), list(Nf[g.name]), list(g.t)
+                    if ng.t:
+                        base.append(ng)
+                out = _merge(base, None)
+                parts_line = []
+                for pi, (pn, gl) in enumerate(CHUNK_PARTS):
+                    if not (i <= zi[CHUNK_HOSTS[pn]] <= j):
+                        continue
+                    i0 = len(out)
+                    out += _merge([G[n] for n in gl if n in G], (Vf, Nf), label=f"part_{pn}")
+                    parts_line.append(f"{pi}:" + ",".join(str(k) for k in range(i0, len(out))))
+                if crush:
+                    Pall = np.vstack([np.array(q.v) for q in out])
+                    lo0, c0 = Pall.min(0), (Pall.min(0) + Pall.max(0)) / 2
+                    for q in out:
+                        for k, v in enumerate(q.v):
+                            v = np.array(v, float)
+                            if crush == "_flat":
+                                v[1] = lo0[1] + (v[1] - lo0[1]) * 0.55       # a belly blow pressed it to 55 %
+                            else:
+                                v[2] = c0[2] + (v[2] - c0[2]) * 0.5         # an axial one to 50 %
+                            q.v[k] = v
+                nm = f"hull_{i}{j}{crush}"
+                c, cog = _write_piece(nm, out, mass, mdir, cdir, " ".join(parts_line))
+                DEBRIS.append((nm, f"Tantra\\Debris_{nm}", c, mass * 1e3, cog))
+    for name, gl, states, mass in _sep_pieces(legs if legs is not None else SLEGS):
+        out = _merge([G[n] for n in gl if n in G], _posed(groups, comps, states))
+        c, cog = _write_piece(name, out, mass, mdir, cdir)
+        DEBRIS.append((name, f"Tantra\\Debris_{name}", c, mass * 1e3, cog))
+    # what an older generator left and nothing spawns any more (hull_aft/mid/fore, the pods' covers, the pose-less crests)
+    keep = {d[0] for d in DEBRIS}
+    for fn in os.listdir(mdir):
+        if fn.endswith(".msh") and fn[:-4] not in keep:
+            os.remove(os.path.join(mdir, fn))
+    for fn in os.listdir(cdir):
+        if fn.startswith("Debris_") and fn.endswith(".cfg") and fn[7:-4] not in keep:
+            os.remove(os.path.join(cdir, fn))
 
 
 def write_layout(legs, comps, path):
@@ -6014,6 +6235,13 @@ def write_layout(legs, comps, path):
     L.append(f"constexpr double kBridgeS = {BR_S}, kBridgeY = {BR_Y}, kBridgeR = {BR_R}, kBridgeHx = {BR_HX}, kBridgeZ = {zs(BR_S):.3f};\n")
     L.append("// Debris vessels (tools/gen_mesh.py write_debris): class, spawn point = centroid in the mesh frame.")
     L.append("struct DebrisDef { const char* name; const char* cls; V centre; double mass; double cogH; };   // cogH: COG over the ground lying")
+    # (2026-10-09) the parts a hull chunk carries as labelled groups: bit i of the hide mask sent to its debris module
+    L.append(f"constexpr int kChunkPartCount = {len(CHUNK_PARTS)};")
+    L.append("struct ChunkPart { const char* name; const char* host; };")
+    L.append("constexpr ChunkPart kChunkPart[kChunkPartCount] = {")
+    for pn, _ in CHUNK_PARTS:
+        L.append(f'    {{"{pn}", "{CHUNK_HOSTS.get(pn, "")}"}},')
+    L.append("};")
     L.append(f"constexpr int kDebrisCount = {len(DEBRIS)};")
     L.append("constexpr DebrisDef kDebris[kDebrisCount] = {")
     for name, cls, c, mass, cog in DEBRIS:
@@ -6498,7 +6726,7 @@ if __name__ == "__main__":
     raw_dir = os.path.join(here, "..", "build", "mesh")
     os.makedirs(raw_dir, exist_ok=True)
     write_json(groups, os.path.join(raw_dir, "tantra_raw.json"))
-    write_debris(groups, root if install else work)
+    write_debris(groups, root if install else work, legs)
     write_layout(legs, rig(legs), os.path.join(here, "..", "orbiter2016", "MeshLayout.h") if install else os.path.join(work, "MeshLayout.h"))
     nv = sum(len(g.v) for g in groups)
     nt = sum(len(g.t) for g in groups)

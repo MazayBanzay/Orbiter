@@ -205,10 +205,17 @@ private:
     VISHANDLE vis_ = nullptr;
     // Broken parts leave the ship as vessels of their own (MeshLayout kDebris): where they were, with the
     // ship's velocity plus a separation push and a tumble. The destroyed hull breaks into four chunks.
-    void SpawnDebris(const char* name, const VECTOR3* posLocal, const VECTOR3& pushLocal, double tumble);
+    // (2026-10-09 rework) rotLocal: the part's attitude in the ship frame (a turned pod); hide: the chunk parts its module
+    // hides (they left apart); mass > 0: its real mass. The velocity is the ship's at that point (v + w x r), less what
+    // the ground took if the ship broke on it this step (breakImpact_)
+    OBJHANDLE SpawnDebris(const char* name, const VECTOR3* posLocal, const VECTOR3& pushLocal, double tumble,
+                          const MATRIX3* rotLocal = nullptr, unsigned hide = 0, double mass = 0.0);
     void BreakPart(int part);
     void BreakUp();
-    int debrisCount_ = 0;
+    void DeadStep(double dt);          // the frame left after a break-up: held where it died, nothing else simulated
+    bool PodPose(int i, VECTOR3& pos, MATRIX3& rot);   // a pod out as a piece: its centre and attitude in the ship frame
+    bool breakImpact_ = false;         // the break-up happens on the ground's blow this step
+    int debrisCount_ = 0, petalDebris_ = 0;
     bool shipGone_ = false, shownGone_ = false;
     bool shownLost_[tantra::damage::kPartCount] = {};
     unsigned long long shownLeg_[7] = {~0ull, ~0ull, ~0ull, ~0ull, ~0ull, ~0ull, ~0ull};   // what each leg showed lost (bits)

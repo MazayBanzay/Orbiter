@@ -137,6 +137,8 @@ constexpr double kLandMass = 52.0e6;                      // touchdown rating: s
 constexpr double kLaunchMass = kLandMass;                 // (old name: the touchdown cases)
 // (2026-10-09, canon, variant Б of the user) the full ship 276 kt (4 x 57.6 kt anamezon, 4 x 817 t traps, 30.3 kt charges,
 // 4 kt iron, dry 7.88 kt with these supports) + 3.6 kt of the transport kit if it flies = the supports' design mass.
+// (2026-10-16, the user) the same load read as the canon's 5/6 c both ways + an emergency reserve of 0.27 c (ShipParams
+// ApplySpeedModel; Tantra_Design/tools/mission_budget.py).
 constexpr double kFullMass = 280.0e6;
 constexpr double kBladeColumnL = 79.4, kKangColumnL = 66.0;   // standing / lifted column lengths [m]
 // Cup feet («чаша опоры», mesh: tools/gen_mesh.py FOOT_KINDS): R for loose sand at touchdown (2.5 g x1.5, 0.9 m skirt),

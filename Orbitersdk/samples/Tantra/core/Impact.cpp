@@ -7,6 +7,9 @@ namespace tantra::impact {
 
 namespace {
 constexpr double kPi = 3.14159265358979;
+// (2026-10-09) the ground also resists by its inertia (Poncelet: p = soil + rho v^2, a blunt body, the soil's 1 800 kg/m^3):
+// with its static bearing alone a 272 kt ship nose-first at 520 m/s "sank" 15 km at 1 g, whole, the crew unhurt (the user)
+constexpr double kSoilRho = 1800.0;
 }
 
 // stations from the stern; forces: the mean load-bearing capacity while the zone crushes. The trap cassettes hold their
@@ -52,8 +55,11 @@ Result Solve(const Input& in) {
             }
             const double Fs = z >= 0 ? kZones[z].force : 1e13;
             // the patch: the nose cone widens as it goes in; the stern cluster is broad
-            const double rp = in.mode == kNoseFirst ? std::min(12.0, 1.5 + (r.crushed[kNose] + r.penetration) * 0.35) : 14.0;
-            const double Fg = in.soil * kPi * rp * rp;
+            // (2026-10-09) crushed through, the wreck spreads in its crater: the patch widens on with the depth (capped at
+            // 12 m the crushed ship "sank" under its own weight - the soil's static bearing on 450 m^2 ~ its weight)
+            const double rCap = z >= 0 ? 12.0 : 75.0;
+            const double rp = in.mode == kNoseFirst ? std::min(rCap, 1.5 + (r.crushed[kNose] + r.penetration) * 0.35) : (std::max)(14.0, std::min(rCap, 14.0 + r.penetration * 0.35));
+            const double Fg = (in.soil + kSoilRho * v * v) * kPi * rp * rp;
             if (Fg < Fs) { F = Fg; r.penetration += v * dt; }
             else { F = Fs; if (z >= 0) r.crushed[z] += v * dt; }
         } else {
@@ -61,7 +67,7 @@ Result Solve(const Input& in) {
             const double d = r.belly + r.penetration;
             const double w = std::min(24.0, 2.0 * std::sqrt(2.0 * 12.0 * std::max(0.01, d)));
             const double A = w * (in.mode == kBelly ? 150.0 : 140.0);
-            const double Fs = kBellyPressure * A, Fg = in.soil * A;
+            const double Fs = kBellyPressure * A, Fg = (in.soil + kSoilRho * v * v) * A;
             if (Fg < Fs) { F = Fg; r.penetration += v * dt; } else { F = Fs; r.belly += v * dt; }
         }
         const double a = (F - W) / m;

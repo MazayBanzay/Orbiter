@@ -1426,6 +1426,11 @@ void Tantra::SeatKeys() {
 void Tantra::clbkPreStep(double, double simdt, double) {
     tantra::perf::P().Begin();
     if (Coast(simdt)) { TANTRA_PERF("coast"); return; }   // time warp over x10 on the ground: the ship held, nothing simulated
+    if (shipGone_) {                              // (2026-10-09) the dead frame after a break-up: the people inside, the hold
+        if (oapiGetTimeAcceleration() <= 10.0) interior_.Step(simdt);
+        DeadStep(simdt);
+        return;
+    }
     if (oapiGetTimeAcceleration() <= 10.0)        // over x10 the interior is not computed at all (the user: no sense in it)
         interior_.Step(simdt);                    // the moving bridge seats, the deferred stand-up (OrbiterCrew)
     TANTRA_PERF("interior");
@@ -1560,6 +1565,7 @@ void Tantra::clbkPreStep(double, double simdt, double) {
 void Tantra::clbkPostStep(double, double simdt, double) {
     tantra::perf::P().Begin();
     if (frozen_ && oapiGetTimeAcceleration() > 10.0 && !carriage_.Busy()) { tantra::perf::P().Frame(); return; }
+    if (shipGone_) { tantra::perf::P().Frame(); return; }   // the dead frame: nothing to simulate
     properTime_ += simdt * ProperTimeRate(beta_);
 
     // Settling after a start on the ground: count the time at rest on the contacts.
@@ -1744,7 +1750,7 @@ void Tantra::UpdateDamage(double dt) {
                 russian_ ? ev[i].ru : ev[i].en, ev[i].en);
         BreakPart(ev[i].part);
     }
-    if (damage_.Destroyed() && !shipGone_) BreakUp();
+    if (damage_.Destroyed() && !shipGone_) { breakImpact_ = g.touchdown; BreakUp(); }
     // the dead frame left after a break-up on the ground stays where the ship died: sliding on its hull points at speed
     // over the terrain, Orbiter's stiff contact springs threw it off the planet at 10^9 m/s (and the camera with it)
     if (shipGone_ && GetSurfaceRef() && (GroundContact() || GetAltitude(ALTMODE_GROUND) < 200.0)) {
@@ -1763,60 +1769,69 @@ void Tantra::UpdateDamage(double dt) {
 }
 
 // Spawn a debris vessel. posLocal: where it is now (ship frame), else its place in the mesh (centroid).
-void Tantra::SpawnDebris(const char* name, const VECTOR3* posLocal, const VECTOR3& pushLocal, double tumble) {
+// (2026-10-09 rework) It leaves with the velocity of the ship's material at that point (v + w x r: a spinning hull flings
+// its ends), in the attitude of the ship (and of the part in it: rotLocal), spinning with the ship (tumble: the extra of a
+// tear-off). If the ship broke on the ground this very step, the ground has taken the velocity into it (a small rebound)
+// and a third of the sliding. hide: the stowed parts a hull chunk carries but which left apart (its module hides them).
+OBJHANDLE Tantra::SpawnDebris(const char* name, const VECTOR3* posLocal, const VECTOR3& pushLocal, double tumble,
+                              const MATRIX3* rotLocal, unsigned hide, double mass) {
     namespace m = tantra::mesh;
     const m::DebrisDef* d = nullptr;
     for (const m::DebrisDef& e : m::kDebris)
         if (!std::strcmp(e.name, name)) d = &e;
-    if (!d) return;
+    if (!d) { oapiWriteLogV("Tantra: debris %s - no such piece", name); return nullptr; }
     const VECTOR3 p = posLocal ? *posLocal : V3(d->centre) + _V(0, 0, MeshDZ());
     OBJHANDLE ref = GetGravityRef();
-    VECTOR3 g, shipG, rpos, rvel, push, w;
+    VECTOR3 g, shipG, rpos, rvel, push, w, wg;
     Local2Global(p, g);
     GetGlobalPos(shipG);
     GetRelativePos(ref, rpos);
     GetRelativeVel(ref, rvel);
     GlobalRot(pushLocal, push);
     GetAngularVel(w);
+    GlobalRot(w, wg);
     MATRIX3 R;
     GetRotationMatrix(R);
+    if (rotLocal) R = mul(R, *rotLocal);
     VESSELSTATUS2 vs;
     std::memset(&vs, 0, sizeof vs);
     vs.version = 2;
     vs.rbody = ref;
     vs.status = 0;
     vs.rpos = rpos + (g - shipG);
-    vs.rvel = rvel + push;
+    vs.rvel = rvel + crossp(wg, g - shipG) + push;
+    if (breakImpact_ && GetSurfaceRef()) {          // the ground stopped the hull: no velocity into it, a third less sliding
+        VECTOR3 vh, up, dv;
+        GetGroundspeedVector(FRAME_HORIZON, vh);
+        VECTOR3 pp;
+        oapiGetGlobalPos(GetSurfaceRef(), &pp);
+        up = unit(shipG - pp);
+        HorizonRot(_V(-0.3 * vh.x, 0.0, -0.3 * vh.z), dv);
+        if (vh.y < 0.0) dv = dv + up * (-1.1 * vh.y);
+        vs.rvel = vs.rvel + dv;
+    }
     vs.arot = _V(std::atan2(R.m23, R.m33), -std::asin((std::max)(-1.0, (std::min)(1.0, R.m13))), std::atan2(R.m12, R.m11));
     auto rnd = [this]() {
         windRng_ = windRng_ * 1664525u + 1013904223u;
         return ((windRng_ >> 8) / 16777216.0) * 2.0 - 1.0;
     };
-    vs.vrot = w + _V(rnd(), rnd(), rnd()) * tumble;
-    // the piece flies on with the ship's velocity and its push; on the ground its own module (TantraDebris.dll) lifts it
-    // out of the soil, lets it tumble and scrape to a stop and lays it down. Only without that module: laid at once
-    OBJHANDLE sref = GetSurfaceRef();
-    static const bool debrisModule = GetFileAttributesA("Modules\\TantraDebris.dll") != INVALID_FILE_ATTRIBUTES;
-    if (sref && !debrisModule && (GroundContact() || GetAltitude(ALTMODE_GROUND) < 60.0)) {
-        double lng, lat, rad;
-        oapiGlobalToEqu(sref, g, &lng, &lat, &rad);
-        double hdg = 0.0;
-        oapiGetHeading(GetHandle(), &hdg);
-        vs.rbody = sref;
-        vs.status = 1;
-        vs.surf_lng = lng;
-        vs.surf_lat = lat;
-        vs.surf_hdg = hdg + 0.4 * rnd();
-        vs.arot = _V(0.0, 0.0, 0.0);
-        vs.vrot = _V(d->cogH, 0.0, 0.0);
-        vs.rvel = _V(0.0, 0.0, 0.0);
-    }
+    const VECTOR3 wp = rotLocal ? tmul(*rotLocal, w) : w;            // the ship's spin in the part's axes
+    vs.vrot = wp + _V(rnd(), rnd(), rnd()) * tumble;
     char vname[64];
     std::snprintf(vname, sizeof vname, "%s_debris_%02d", GetName(), ++debrisCount_);
     const OBJHANDLE made = oapiCreateVesselEx(vname, d->cls, &vs);
-    if (!std::strncmp(name, "hull_traps", 10)) lastTrapsChunk_ = made;   // the biggest piece: the camera follows it
-    oapiWriteLogV("Tantra: debris %s (%s) %s, the ship %.1f m over the ground, %.1f m/s", vname, name,
-                  vs.status == 1 ? "laid on the ground" : "free", GetAltitude(ALTMODE_GROUND), GetGroundspeed());
+    if (made) {
+        VESSEL* v = oapiGetVesselInterface(made);
+        if (v && mass > 0.0) v->SetEmptyMass(mass);
+        if (v && hide && v->Version() >= 2) static_cast<VESSEL3*>(v)->clbkGeneric(0x7A01, static_cast<int>(hide), nullptr);
+    }
+    if (!std::strncmp(name, "hull_1", 6) || !std::strncmp(name, "hull_0", 6)) {   // the piece with the trap block: the camera follows it
+        const char* nm = name + 5;
+        if (nm[0] <= '1' && nm[1] >= '1') lastTrapsChunk_ = made;
+    }
+    oapiWriteLogV("Tantra: debris %s (%s) %.0f t, %.1f m/s off the ship centre motion, the ship %.1f m over the ground", vname, name,
+                  (mass > 0.0 ? mass : d->mass) / 1e3, length(vs.rvel - rvel), GetAltitude(ALTMODE_GROUND));
+    return made;
 }
 
 // A part torn off: its debris leaves from where the part is now.
@@ -1889,9 +1904,12 @@ void Tantra::FootEvents() {
         ft::Feet::Describe(e, dm::Model::NameEn(dm::kLegPort + e.leg), false, en, sizeof en);
         Message("%s", "%s", russian_ ? ru : en);
         oapiWriteLogV("Tantra: foot - %s", en);
-        if (e.kind == ft::kRibBroken && e.cell >= 0) {
+        // a broken petal: the first few lie where they broke as pieces; the rest stay under their foot (one vessel a petal,
+        // up to 84 of them, was the frame rate's end)
+        if (e.kind == ft::kRibBroken && e.cell >= 0 && petalDebris_ < 6) {
             static const char* kPetal[3] = {"petal_blade", "petal_stern", "petal_kang"};
-            SpawnDebris(kPetal[ft::KindOf(e.leg)], &padPos_[e.leg][e.cell], _V(0, 1.0, 0), 0.6);
+            SpawnDebris(kPetal[ft::KindOf(e.leg)], &padPos_[e.leg][e.cell], _V(0, 0, 0), 0.2);
+            ++petalDebris_;
         }
         if (e.kind == ft::kAnkleBroken || e.kind == ft::kCollarBroken) {
             damage_.Inflict(dm::kLegPort + e.leg, 1.0, true);
@@ -1914,113 +1932,235 @@ bool Tantra::LegJointDebris(int l) {
     return true;
 }
 
+// A pod out of its bay as a piece: the piece was made out with its cups aft; now it is turned about its arm by the pod's
+// angle (and the hover's cant and trim) - its centre and its attitude in the ship frame
+bool Tantra::PodPose(int i, VECTOR3& pos, MATRIX3& rot) {
+    namespace m = tantra::mesh;
+    static const char* kPodN[4] = {"pod_0", "pod_1", "pod_2", "pod_3"};
+    const m::PodRig& r = m::kPods[i];
+    const VECTOR3 turn = PodTurnAxis(r);
+    const VECTOR3 piv = V3(r.pivot) + V3(r.axis) * r.travel + _V(0, 0, MeshDZ());   // the arm out
+    const double deg = podAngle_ + hovTrim_ + (r.s < 0.5 * (m::kPods[0].s + m::kPods[sp::kPodCount - 1].s) ? -podCant_ : podCant_);
+    const double sw = deg / sp::kPodSwivelMaxDeg * m::kPodSwivelMax;
+    const VECTOR3 cx = RotateAbout(_V(1, 0, 0), turn, sw), cy = RotateAbout(_V(0, 1, 0), turn, sw), cz = RotateAbout(_V(0, 0, 1), turn, sw);
+    rot = _M(cx.x, cy.x, cz.x, cx.y, cy.y, cz.y, cx.z, cy.z, cz.z);
+    for (const m::DebrisDef& e : m::kDebris) if (!std::strcmp(e.name, kPodN[i])) {
+        const VECTOR3 c0 = V3(e.centre) + _V(0, 0, MeshDZ());
+        pos = piv + RotateAbout(c0 - piv, turn, sw);
+        return true;
+    }
+    return false;
+}
+
+// A part torn off alone (the flow, the heat, its own load): it leaves from where it is, in the pose it is in, with the
+// motion of the ship at that point and a little spin of the tearing (the flow then takes it). (2026-10-09 rework: the
+// pieces are posed - the crests in their wing mode, the fin up or down, the pods turned, the legs deployed.)
 void Tantra::BreakPart(int part) {
     namespace dm = tantra::damage;
     namespace m = tantra::mesh;
-    const VECTOR3 out = _V(0, 1, 0);
+    const tantra::CarriagePose& cp = carriage_.Pose();
+    const double fold = (std::max)(tuck_, cp.tuck);
+    const bool level = carriage_.Set() == tantra::Carriage::FlightSet::Level, gearOut = carriage_.Gear() > 0.5;
+    const char* mode[3] = {"_m0", "_m1", "_m2"};
+    const int wm = fold > 0.5 ? 2 : wingMode_ == 1 ? 1 : 0;
+    char nm[32];
     switch (part) {
-        case dm::kCrestPort: SpawnDebris("crest_port", nullptr, _V(-3, 1, -2), 0.6); break;
-        case dm::kCrestStbd: SpawnDebris("crest_starboard", nullptr, _V(3, 1, -2), 0.6); break;
-        case dm::kFin: SpawnDebris("fin", nullptr, _V(0, 3, -2), 0.5); break;
+        case dm::kCrestPort: std::snprintf(nm, sizeof nm, "crest_port%s", mode[wm]); SpawnDebris(nm, nullptr, _V(0, 0, 0), 0.2); break;
+        case dm::kCrestStbd: std::snprintf(nm, sizeof nm, "crest_starboard%s", mode[wm]); SpawnDebris(nm, nullptr, _V(0, 0, 0), 0.2); break;
+        case dm::kFin: SpawnDebris(fold > 0.5 ? "fin_down" : "fin_up", nullptr, _V(0, 0, 0), 0.2); break;
         case dm::kPod0: case dm::kPod1: case dm::kPod2: case dm::kPod3: {
             const int i = part - dm::kPod0;
-            VECTOR3 c = _V(0, 0, 0);
-            for (int k = 0; k < sp::kCupsPerPod; ++k) c = c + podExhPos_[i * sp::kCupsPerPod + k];
-            c = c / sp::kCupsPerPod;
-            const char* names[4] = {"pod_0", "pod_1", "pod_2", "pod_3"};
-            SpawnDebris(names[i], podOut_ > 0.5 ? &c : nullptr, _V(c.x > 0 ? 2.0 : -2.0, -1, -1), 1.0);
+            VECTOR3 pos;
+            MATRIX3 rot;
+            static const char* kPodN[4] = {"pod_0", "pod_1", "pod_2", "pod_3"};
+            if (podOut_ > 0.5 && PodPose(i, pos, rot)) SpawnDebris(kPodN[i], &pos, _V(0, 0, 0), 0.2, &rot);   // in its bay it stays in the hull
             break;
         }
         case dm::kLegPort: case dm::kLegStbd: case dm::kSternLeg0: case dm::kSternLeg1: case dm::kSternLeg2: case dm::kSternLeg3:
-        case dm::kKangLeg:
+        case dm::kKangLeg: {
             if (LegJointDebris(part - dm::kLegPort)) break;   // the foot at the ankle / the last stage at the lowest joint
-            if (part == dm::kKangLeg) goto kang;
-            if (part >= dm::kSternLeg0) goto stern;
-            {
-            const tantra::CarriagePose& p = carriage_.Pose();
-            const double side = part == dm::kLegPort ? -1.0 : 1.0;
-            VECTOR3 c = _V(side * m::kHipXOut, -0.5 * p.mastLen, p.hipS - frameS_);  // the blade, hanging
-            SpawnDebris(part == dm::kLegPort ? "leg_port" : "leg_starboard", &c, _V(side * 1.5, 0, 0), 0.3);
-            break;
-        }
-        kang: {
-            const tantra::CarriageGeometry& g = carriage_.Geometry();
-            VECTOR3 c = _V(0, g.kangHipY - 0.5 * (g.kangThigh + g.kangShinMin), Zf(g.kangHipS + 0.5 * g.kangFootFwd));
-            SpawnDebris("kangleg", &c, _V(0, -1, 1), 0.3);
-            break;
-        }
-        stern: {
-            const int i = part - dm::kSternLeg0;
-            const m::LegRig& L = m::kLegs[i];
-            VECTOR3 h = V3(L.hinge) + _V(0, 0, MeshDZ());
-            VECTOR3 f = _V(L.radial.x * m::kStandR, L.radial.y * m::kStandR, Zf(m::kStandGroundS));
-            VECTOR3 c = (h + f) * 0.5;
-            const char* names[4] = {"sternleg_0", "sternleg_1", "sternleg_2", "sternleg_3"};
-            SpawnDebris(names[i], &c, _V(L.radial.x, L.radial.y, 0) * 1.5, 0.3);
+            if (part == dm::kLegPort || part == dm::kLegStbd) {
+                if (!(level && gearOut)) break;               // stowed in its pocket: it stays in the hull
+                const char* n = part == dm::kLegPort ? "leg_port" : "leg_starboard";
+                for (const m::DebrisDef& e : m::kDebris) if (!std::strcmp(e.name, n)) {
+                    const VECTOR3 c = V3(e.centre) + _V(0, 0, MeshDZ() + cp.hipS - carriage_.Geometry().trackS0);
+                    SpawnDebris(n, &c, _V(0, 0, 0), 0.1);
+                }
+            } else if (part == dm::kKangLeg) {
+                if (level && gearOut) { SpawnDebris("kangleg", nullptr, _V(0, 0, 0), 0.1); SpawnDebris("kang_door", nullptr, _V(0, 0, 0), 0.1); }
+            } else if (!level && gearOut) {
+                static const char* kSlegN[4] = {"sternleg_0", "sternleg_1", "sternleg_2", "sternleg_3"};
+                SpawnDebris(kSlegN[part - dm::kSternLeg0], nullptr, _V(0, 0, 0), 0.1);
+            }
             break;
         }
         case dm::kHangarDoors:
-            SpawnDebris("door_top_port", nullptr, _V(-2, 3, -3), 1.0);
-            SpawnDebris("door_top_starboard", nullptr, _V(2, 3, -3), 1.0);
-            SpawnDebris("door_bottom_port", nullptr, _V(-2, -2, -3), 1.0);
-            SpawnDebris("door_bottom_starboard", nullptr, _V(2, -2, -3), 1.0);
+            for (const char* n : {"door_top_port", "door_top_starboard", "door_bottom_port", "door_bottom_starboard"}) SpawnDebris(n, nullptr, _V(0, 0, 0), 0.3);
             break;
         case dm::kBayDoors:
-            SpawnDebris("bay_door_port", nullptr, _V(-2, -2, -3), 1.0);
-            SpawnDebris("bay_door_starboard", nullptr, _V(2, -2, -3), 1.0);
+            for (const char* n : {"bay_door_port", "bay_door_starboard"}) SpawnDebris(n, nullptr, _V(0, 0, 0), 0.3);
             break;
         default: break;
     }
-    (void)out;
 }
 
-// The hull fails: it breaks into four chunks flying apart, with whatever was still attached; the ship
-// becomes a dead, invisible frame (Ctrl+Shift+D repairs it for debugging).
+// The hull fails (2026-10-09 rework; the user: «разваливается ненатурально»). It parts only at the joints that broke:
+// the ground's blow (core/Impact BreakLines) if it broke on it this step, else the load (the joints' g ratings against the
+// structure's g) or the heat (the nose burnt through parts at the living module's joint; else the hangar's, the weakest).
+// One piece per run of whole zones (hull_<first><last>), each with the stowed parts it carries; the parts out of their
+// stowed pose (crests and fin, deployed legs, pods out, open doors) leave as pieces of their own with the motion of their
+// section - nothing flies off at random; a cut joint lets go of the strain (0.5 m/s apart). The masses are the ship's: the
+// zones' dry shares, the traps' anamezon and shells and the charges in the trap block. The attached craft are let go.
 void Tantra::BreakUp() {
     namespace dm = tantra::damage;
+    namespace im = tantra::impact;
+    namespace m = tantra::mesh;
     shipGone_ = true;
     for (AIRFOILHANDLE& h : foil_) {  // the invisible frame left behind must not fly like the ship
         if (h) DelAirfoil(h);
         h = nullptr;
     }
-    // the hull parts along the lines the impact broke (core/Impact BreakLines): zones not cut apart stay together and
-    // move as one piece; a zone crushed half or more is a crushed chunk (flattened by a belly blow, shortened along the
-    // axis); the pieces separate along the axis, a belly blow throws them up by what the blow left
-    {
-        namespace im = tantra::impact;
-        double share[im::kZoneCount];
-        for (int z = 0; z < im::kZoneCount; ++z) share[z] = damage_.Crushed(z) / (im::kZones[z].s1 - im::kZones[z].s0);
-        const dm::ImpactReport& ir = damage_.LastImpact();
-        const im::Breakup b = im::BreakLines(ir.mode, share, damage_.Belly(), ir.peakG);
-        static const char* kChunk[im::kZoneCount] = {"hull_stern", "hull_traps", "hull_hangar", "hull_living", "hull_nose"};
-        int pieces = 1;
-        for (bool c : b.cut) pieces += c ? 1 : 0;
-        int piece = 0;
-        char cuts[64] = "";
-        for (int z = 0; z < im::kZoneCount; ++z) {
-            if (z > 0 && b.cut[z - 1]) {
-                ++piece;
-                std::snprintf(cuts + std::strlen(cuts), sizeof cuts - std::strlen(cuts), " s%.0f", im::kZones[z].s0);
-            }
-            char name[40];
-            std::snprintf(name, sizeof name, "%s%s", kChunk[z], b.crush[z] == 1 ? "_flat" : b.crush[z] == 2 ? "_short" : "");
-            const double along = pieces > 1 ? (piece - 0.5 * (pieces - 1)) * 1.5 : 0.0;
-            const double up = ir.mode == im::kBelly || ir.mode == im::kSide ? 0.08 * ir.v : 0.0;
-            SpawnDebris(name, nullptr, _V(0, up, along), pieces > 1 ? 0.12 : 0.03);
-        }
-        oapiWriteLogV("Tantra: break-up - %d pieces, cut at%s (impact %d, %.0f g, belly %.1f m)", pieces, cuts[0] ? cuts : " nothing",
-                      ir.mode, ir.peakG, damage_.Belly());
-        // the camera that watched the ship goes with its biggest piece (the ship's own frame stays behind, invisible)
-        if (lastTrapsChunk_ && oapiCameraTarget() == GetHandle()) oapiCameraAttach(lastTrapsChunk_, oapiCameraInternal() ? 0 : 1);
+    for (DWORD i = 0; i < AttachmentCount(false); ++i) {             // the lander, the rovers: free with the ship's motion
+        ATTACHMENTHANDLE a = GetAttachmentHandle(false, i);
+        if (a && GetAttachmentStatus(a)) DetachChild(a, 0.0);
     }
-    for (int part = 0; part < dm::kPartCount; ++part)
-        if (!damage_.Lost(part) && part != dm::kHull && part != dm::kNose && part != dm::kBelly && part != dm::kMarchCup) {
-            const bool stowed = (part >= dm::kPod0 && part <= dm::kPod3 && podOut_ < 0.5) ||
-                                (part >= dm::kLegPort && part <= dm::kKangLeg && carriage_.Gear() < 0.5) ||
-                                (part == dm::kHangarDoors && hangar_ < 0.5) || (part == dm::kBayDoors && bayDoors_ < 0.5);
-            if (!stowed) BreakPart(part);  // stowed parts stay inside their chunk
+    double share[im::kZoneCount];
+    for (int z = 0; z < im::kZoneCount; ++z) share[z] = damage_.Crushed(z) / (im::kZones[z].s1 - im::kZones[z].s0);
+    const dm::ImpactReport& ir = damage_.LastImpact();
+    im::Breakup b = breakImpact_ ? im::BreakLines(ir.mode, share, damage_.Belly(), ir.peakG)
+                                 : im::BreakLines(im::kBelly, share, 0.0, structG_);
+    if (!breakImpact_) {
+        for (int z = 0; z < im::kZoneCount; ++z) b.crush[z] = 0;
+        if (damage_.Lost(dm::kNose)) b.cut[im::kZoneCount - 2] = true;   // the nose burnt through: it parts at the living module
+    }
+    // which chunk parts leave apart now, which are gone already
+    auto bit = [](const char* nm) -> unsigned {
+        for (int i = 0; i < m::kChunkPartCount; ++i) if (!std::strcmp(m::kChunkPart[i].name, nm)) return 1u << i;
+        return 0u;
+    };
+    const tantra::CarriagePose& cp = carriage_.Pose();
+    const bool level = carriage_.Set() == tantra::Carriage::FlightSet::Level, gearOut = carriage_.Gear() > 0.5;
+    unsigned apart = 0, gone = 0;
+    static const char* kPodN[4] = {"pod_0", "pod_1", "pod_2", "pod_3"};
+    static const char* kSlegN[4] = {"sternleg_0", "sternleg_1", "sternleg_2", "sternleg_3"};
+    for (int i = 0; i < 4; ++i) {
+        if (damage_.Lost(dm::kPod0 + i)) gone |= bit(kPodN[i]); else if (podOut_ > 0.5) apart |= bit(kPodN[i]);
+        if (damage_.Lost(dm::kSternLeg0 + i)) gone |= bit(kSlegN[i]); else if (!level && gearOut) apart |= bit(kSlegN[i]);
+    }
+    if (damage_.Lost(dm::kLegPort)) gone |= bit("leg_port"); else if (level && gearOut) apart |= bit("leg_port");
+    if (damage_.Lost(dm::kLegStbd)) gone |= bit("leg_starboard"); else if (level && gearOut) apart |= bit("leg_starboard");
+    if (damage_.Lost(dm::kKangLeg)) gone |= bit("kangleg") | bit("kang_door");
+    else if (level && gearOut) apart |= bit("kangleg") | bit("kang_door");
+    static const char* kHangarN[4] = {"door_top_port", "door_top_starboard", "door_bottom_port", "door_bottom_starboard"};
+    static const char* kBayN[2] = {"bay_door_port", "bay_door_starboard"};
+    for (const char* n : kHangarN) { if (damage_.Lost(dm::kHangarDoors)) gone |= bit(n); else if (hangar_ > 0.5) apart |= bit(n); }
+    for (const char* n : kBayN) { if (damage_.Lost(dm::kBayDoors)) gone |= bit(n); else if (bayDoors_ > 0.5) apart |= bit(n); }
+    // the parts apart (their masses from their pieces' definitions)
+    struct Apart { const char* name; VECTOR3 pos; bool posGiven; MATRIX3 rot; bool rotGiven; };
+    std::vector<Apart> parts;
+    auto add = [&](const char* nm) { parts.push_back({nm, _V(0, 0, 0), false, identity(), false}); };
+    const double fold = (std::max)(tuck_, cp.tuck);
+    if (!damage_.Lost(dm::kCrestPort)) add(fold > 0.5 ? "crest_port_m2" : wingMode_ == 1 ? "crest_port_m1" : "crest_port_m0");
+    if (!damage_.Lost(dm::kCrestStbd)) add(fold > 0.5 ? "crest_starboard_m2" : wingMode_ == 1 ? "crest_starboard_m1" : "crest_starboard_m0");
+    if (!damage_.Lost(dm::kFin)) add(fold > 0.5 ? "fin_down" : "fin_up");
+    if (level && gearOut) {
+        const double dzHip = cp.hipS - carriage_.Geometry().trackS0;   // the pieces were made with the hips parked at the track's start
+        for (const char* n : {"leg_port", "leg_starboard"}) {
+            if (!(apart & bit(n))) continue;
+            for (const m::DebrisDef& e : m::kDebris) if (!std::strcmp(e.name, n))
+                parts.push_back({n, V3(e.centre) + _V(0, 0, MeshDZ() + dzHip), true, identity(), false});
         }
+        if (apart & bit("kangleg")) { add("kangleg"); add("kang_door"); }
+    }
+    if (!level && gearOut) for (int i = 0; i < 4; ++i) if (apart & bit(kSlegN[i])) add(kSlegN[i]);
+    if (podOut_ > 0.5) for (int i = 0; i < 4; ++i) {
+        if (!(apart & bit(kPodN[i]))) continue;
+        Apart a = {kPodN[i], _V(0, 0, 0), true, identity(), true};
+        if (PodPose(i, a.pos, a.rot)) parts.push_back(a);
+    }
+    for (const char* n : kHangarN) if (apart & bit(n)) add(n);
+    for (const char* n : kBayN) if (apart & bit(n)) add(n);
+    // the masses: what the pieces apart weigh, the rest is the hull's (its zones' dry shares; the trap block carries the
+    // traps' anamezon and shells and the charges)
+    auto defMass = [](const char* nm) { for (const m::DebrisDef& e : m::kDebris) if (!std::strcmp(e.name, nm)) return e.mass; return 0.0; };
+    double mApart = 0.0;
+    for (const Apart& a : parts) mApart += defMass(a.name);
+    double dry[im::kZoneCount], cont[im::kZoneCount] = {}, sumDry = 0.0, sumCont = 0.0;
+    for (int z = 0; z < im::kZoneCount; ++z) {
+        char nm[16];
+        std::snprintf(nm, sizeof nm, "hull_%d%d", z, z);
+        dry[z] = defMass(nm);
+        sumDry += dry[z];
+    }
+    for (int i = 0; i < sp::kTrapCount; ++i) if (trap_[i]) cont[im::kTraps] += GetPropellantMass(trap_[i]) + (trapPresent_[i] ? prm_.trapStructMass : 0.0);
+    if (argon_) cont[im::kTraps] += GetPropellantMass(argon_);
+    if (iron_) cont[im::kTraps] += GetPropellantMass(iron_);
+    for (double c : cont) sumCont += c;
+    const double k = (std::max)(0.2, (GetMass() - mApart - sumCont) / (std::max)(1.0, sumDry));   // the dry structure's scale
+    // the hull: one piece per run of uncut zones
+    int z0 = 0, pieces = 0;
+    char cuts[64] = "";
+    const unsigned hide = apart | gone;
+    for (int z = 0; z < im::kZoneCount; ++z) {
+        const bool end = z == im::kZoneCount - 1 || b.cut[z];
+        if (!end) continue;
+        if (z < im::kZoneCount - 1) std::snprintf(cuts + std::strlen(cuts), sizeof cuts - std::strlen(cuts), " s%.0f", im::kZones[z + 1].s0);
+        char nm[24];
+        const int cr = z0 == z ? b.crush[z] : 0;
+        std::snprintf(nm, sizeof nm, "hull_%d%d%s", z0, z, cr == 1 ? "_flat" : cr == 2 ? "_short" : "");
+        double mass = 0.0;
+        for (int q = z0; q <= z; ++q) mass += dry[q] * k + cont[q];
+        // a cut joint lets go of its strain: the pieces part along the axis at 0.5 m/s
+        const double along = (z0 > 0 && b.cut[z0 - 1] ? 0.25 : 0.0) - (z < im::kZoneCount - 1 && b.cut[z] ? 0.25 : 0.0);
+        SpawnDebris(nm, nullptr, _V(0, 0, along), 0.0, nullptr, hide, mass);
+        ++pieces;
+        z0 = z + 1;
+    }
+    for (const Apart& a : parts) SpawnDebris(a.name, a.posGiven ? &a.pos : nullptr, _V(0, 0, 0), 0.0, a.rotGiven ? &a.rot : nullptr);
+    oapiWriteLogV("Tantra: break-up - %d hull pieces, cut at%s, %d parts apart (%s, %.0f g, belly %.1f m), %.0f t",
+                  pieces, cuts[0] ? cuts : " nothing", static_cast<int>(parts.size()), breakImpact_ ? "the ground's blow" : "load / heat",
+                  breakImpact_ ? ir.peakG : structG_, damage_.Belly(), GetMass() / 1e3);
+    // the camera that watched the ship goes with the piece carrying the trap block (the ship's own frame stays, invisible)
+    if (lastTrapsChunk_ && oapiCameraTarget() == GetHandle()) oapiCameraAttach(lastTrapsChunk_, oapiCameraInternal() ? 0 : 1);
+    breakImpact_ = false;
     UpdateDamageVisual(true);
+}
+
+// The frame left after a break-up: invisible, its engines and systems dead; on the ground it is held where the ship died
+// (Orbiter's stiff contact springs threw a sliding frame off the planet); nothing else is simulated (it cost the frame rate)
+void Tantra::DeadStep(double dt) {
+    // the drop test that broke the ship: 30 s on, where every piece lies (none must hang in the air)
+    if (dropState_ == 2) {
+        dropT_ += dt;
+        if (dropT_ > 30.0) {
+            dropState_ = 3;
+            char pre[64];
+            std::snprintf(pre, sizeof pre, "%s_debris_", GetName());
+            for (DWORD i = 0; i < oapiGetVesselCount(); ++i) {
+                OBJHANDLE h = oapiGetVesselByIndex(i);
+                char nm[64];
+                oapiGetObjectName(h, nm, sizeof nm);
+                if (std::strncmp(nm, pre, std::strlen(pre))) continue;
+                VESSEL* v = oapiGetVesselInterface(h);
+                VESSELSTATUS2 st;
+                std::memset(&st, 0, sizeof st);
+                st.version = 2;
+                v->GetStatusEx(&st);
+                oapiWriteLogV("Tantra: drop test - %s %s %.0f t: CG %.2f m over the ground, %.2f m/s, %s", nm, v->GetClassName(),
+                              v->GetMass() / 1e3, v->GetAltitude(ALTMODE_GROUND), v->GetGroundspeed(), st.status == 1 ? "at rest" : "moving");
+            }
+            oapiWriteLogV("Tantra: drop test - peak felt %.2f g, the ship broke up", dropPeakG_);
+        }
+    }
+    for (THRUSTER_HANDLE th : ana_) if (th) SetThrusterLevel(th, 0.0);
+    if (march_) SetThrusterLevel(march_, 0.0);
+    if (GetSurfaceRef() && (GroundContact() || GetAltitude(ALTMODE_GROUND) < 200.0)) {
+        VESSELSTATUS2 st;
+        std::memset(&st, 0, sizeof st);
+        st.version = 2;
+        GetStatusEx(&st);
+        if (st.status != 1) { LandNow(false); restLock_ = true; }
+    }
 }
 
 void Tantra::clbkVisualCreated(VISHANDLE vis, int) {
@@ -2058,10 +2198,10 @@ void Tantra::UpdateDamageVisual(bool force) {
             case dm::kCrestPort: g[n++] = m::GRP_CREST_PORT; g[n++] = m::GRP_ELEVON_PORT; break;
             case dm::kCrestStbd: g[n++] = m::GRP_CREST_STARBOARD; g[n++] = m::GRP_ELEVON_STARBOARD; break;
             case dm::kFin: g[n++] = m::GRP_FIN; break;
-            case dm::kPod0: g[n++] = m::GRP_POD_0; g[n++] = m::GRP_DOOR_POD_0; g[n++] = m::GRP_ARM_POD_0; break;
-            case dm::kPod1: g[n++] = m::GRP_POD_1; g[n++] = m::GRP_DOOR_POD_1; g[n++] = m::GRP_ARM_POD_1; break;
-            case dm::kPod2: g[n++] = m::GRP_POD_2; g[n++] = m::GRP_DOOR_POD_2; g[n++] = m::GRP_ARM_POD_2; break;
-            case dm::kPod3: g[n++] = m::GRP_POD_3; g[n++] = m::GRP_DOOR_POD_3; g[n++] = m::GRP_ARM_POD_3; break;
+            case dm::kPod0: g[n++] = m::GRP_POD_0; g[n++] = m::GRP_ARM_POD_0; break;
+            case dm::kPod1: g[n++] = m::GRP_POD_1; g[n++] = m::GRP_ARM_POD_1; break;
+            case dm::kPod2: g[n++] = m::GRP_POD_2; g[n++] = m::GRP_ARM_POD_2; break;
+            case dm::kPod3: g[n++] = m::GRP_POD_3; g[n++] = m::GRP_ARM_POD_3; break;
             case dm::kLegPort:
             case dm::kLegStbd: {   // stages 1-2, ankle, umbrella (hub, ribs, fabric) - stage 0 stays on the hip
                 const bool port = part == dm::kLegPort;

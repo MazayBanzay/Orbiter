@@ -287,6 +287,7 @@ struct LandState {
     double windE = 0.0, windN = 0.0;              // m/s: the wind (where it blows to)
     double mass = 52.34e6, argon = 6.2e6;         // kg
     double Fm = 0.0, Fp = 0.0;                    // N now: the march, the pods
+    double FpMax = -1.0;                          // N: the pods' thrust available now (out and aimed; 0 in the bays; < 0 nominal)
     double B = kBNom;                             // T: the march cup's field now (Plant::Field)
     double legs = 0.0;                            // the stern legs 0 stowed .. 1 on their locks
     bool contact = false;                         // GroundContact()
@@ -318,6 +319,7 @@ struct LFlight {
     double z = 0.0, vz = 0.0; Axis ax[2];         // 0 along the wind (the mockup's x), 1 across
     double legs = 0.0; bool legsOn = false, air = true, legsDone = false;
     double Fm = 0.0, Fp = 0.0, B = kBmin, Breq = kBmin, Fcmd = 0.0, FmC = 0.0, FpC = 0.0;
+    double FpMax = -1.0;                          // N: the pods available (LandState::FpMax; < 0 the nominal PodsMax)
     bool fieldAuto = true; double Bhold = 0.0;
     double dBrake = 0.0, tRamp = 0.0, aB = 0.0, maxG = 0.0, felt = 0.0, F0u = 0.0, zHold = 0.0, wNow = 0.0;
     double Ts = kLT0, maxTs = kLT0;

@@ -31,7 +31,7 @@ const ZoneSpec kZone[kZoneCount] = {
 constexpr double kCrestArea = 240.0, kCrestRating = 14.0e6;  // per wing, normal force [N]
 constexpr double kFinArea = 726.0, kFinRating = 12.0e6;
 constexpr double kPodQ = 60.0e3, kGearQ = 40.0e3, kDoorQ = 3.0e3;  // dynamic pressure the part takes [Pa]
-constexpr double kHullG = 6.0, kHullGBreak = 9.0;
+constexpr double kHullG = 10.0, kHullGBreak = 25.0;   // fatigue over 10 g; the weakest joint (the hangar's) gives at 25 g
 constexpr double kTdBelly = 1.0, kTdBellyBreak = 5.0;  // [m/s]; the legs' limits come with Ground (ankle struts)
 
 const char* kRu[kPartCount] = {"щит носа", "днище", "крыло левое", "крыло правое", "перо",
@@ -129,8 +129,13 @@ void Model::Step(double dt, const Flight& f, const Exposure& x, const Ground& g,
     if (x.hangar > 0.1 && q_ > kDoorQ) Hurt(kHangarDoors, q_ > 3.0 * kDoorQ ? 1.0 : 0.3 * dt, enabled);
     if (x.bays > 0.1 && q_ > kDoorQ) Hurt(kBayDoors, q_ > 3.0 * kDoorQ ? 1.0 : 0.3 * dt, enabled);
     // --- g-load on the hull
-    if (f.gLoad > kHullGBreak) Hurt(kHull, 1.0, enabled);
-    else if (f.gLoad > kHullG) Hurt(kHull, (f.gLoad - kHullG) * 0.1 * dt, enabled);
+    // (2026-10-09) in flight only - on the ground the blow is the impact model's (the structure's g there is Orbiter's contact
+    // springs); the hull breaks where its weakest joint gives (core/Impact kJointG, the hangar's 25 g: Tantra::BreakUp cuts
+    // the joints over their rating), not at 9 g as before (the equipment holds ~200 g along the axis)
+    if (!g.contact) {
+        if (f.gLoad > kHullGBreak) Hurt(kHull, 1.0, enabled);
+        else if (f.gLoad > kHullG) Hurt(kHull, (f.gLoad - kHullG) * 0.1 * dt, enabled);
+    }
     // --- touchdown impact and leg overloads
     if (g.touchdown) {
         double v = g.vDown;  // what is left for the hull after the legs

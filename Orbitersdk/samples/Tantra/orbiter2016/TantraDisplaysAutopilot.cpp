@@ -62,7 +62,8 @@ void TantraDisplays::FillLandState(gd::LandState& s, double dt) {
     s.windE = v.x - a.x; s.windN = v.z - a.z;
     s.mass = t->GetMass(); s.argon = t->ArgonMass();
     s.Fm = t->march_ ? t->GetThrusterMax0(t->march_) * t->GetThrusterLevel(t->march_) : 0.0;
-    s.Fp = 0.0; for (THRUSTER_HANDLE h : t->pod_) if (h) s.Fp += t->GetThrusterMax0(h) * t->GetThrusterLevel(h);
+    s.Fp = 0.0; s.FpMax = 0.0;   // (the pods give thrust only out and aimed: Max0 is 0 in the bays)
+    for (THRUSTER_HANDLE h : t->pod_) if (h) { s.Fp += t->GetThrusterMax0(h) * t->GetThrusterLevel(h); s.FpMax += t->GetThrusterMax0(h); }
     s.B = t->plant_.Field(); s.legs = t->carriage_.Gear(); s.contact = t->GroundContact(); s.sternT = t->plant_.SternT();
 }
 

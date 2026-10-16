@@ -130,11 +130,11 @@ int main() {
     {   // g-load and the damage switch
         Model m;
         Flight f;
-        f.gLoad = 10;
+        f.gLoad = 26;   // (2026-10-09) over the weakest joint's rating (the hangar's 25 g, core/Impact kJointG)
         m.Step(0.02, f, clean, air, false);
         check(!m.Destroyed(), "damage off in Orbiter: nothing breaks");
         m.Step(0.02, f, clean, air, true);
-        check(m.Destroyed(), "10 g: hull lost");
+        check(m.Destroyed(), "26 g in flight: the hull breaks at its weakest joint");
         char buf[256];
         m.Save(buf, sizeof buf);
         Model n;

@@ -19,7 +19,7 @@ struct ShipParams {
     // the MPU (separate vessels), crew, consumables; its CG Spec kDryCGS
     double dryMass = 7.88e6;           // (variant Б) + 1 888 t of the supports for the full ship (Spec kDryCGS)
     double trapStructMass = 817.0e3;   // per trap: the container is the magnetic trap - coils, magnets, shell (virial: x load)
-    double trapFuelMass = 57.6e6;      // anamezon per trap (canon 0.899 c in 55 h with braking at the dry mass above: 230 kt)
+    double trapFuelMass = 57.6e6;      // anamezon per trap (canon 5/6 c with braking + 0.27 c reserve; ApplySpeedModel): 230 kt
     double argonMass = 30.3e6;         // ion charges, dense (body tanks 19.5 kt, aft tank 10.8 kt): the take-off arc at 30 km/s
     double ironMass = 4.0e6;           // planetary reaction mass in space; 3.3 m of solid iron in the screen at sub-light
 
@@ -70,20 +70,22 @@ struct ShipParams {
     double landerG = 1.0, landerEmergencyG = 8.0, landerSpaceV = 2.5;
 
     // Speed model (2026-10-09): one drive core and the same traps - the models differ ONLY in the drive's power (the user).
-    // The traps' load is the canon's (the user: «Канон.», variant Б): 0.899 c in 55 h from the dark planet with braking at
-    // home, jet 0.98 c: mass ratio 19.96 -> 4 x 57.6 kt anamezon at the dry mass with the full-ship supports, 276 kt with
-    // the charges at lift-off. The ship rose FULL from the dark planet at 2.5 g: planetary engines on an arc - the marching
-    // cup and the four stern blocks on ion charges (at 14 T: T/W 1.58, 1.25 with a stern block out) - then the anamezon.
-    // Loading at Triton is only for economy and safety.
-    //   0 Efremov: 0.899 c in 55 h (the canon's inertia damper on the whole ship, compensator to 550 g);
-    //   1 lower power: the same fuel and speed, ~3 g at departure, weeks to speed.
+    // The traps' load (variant Б's 57.6 kt; the user, 2026-10-16: the nominal is the canon's 5/6 c, 900 million km/h, the
+    // rest is an emergency reserve): from the dark planet with braking at home, both on the anamezon only, jet 0.98 c. The
+    // mass carried through the whole flight is 16.0 kt - dry 7.88, traps 4 x 0.817, the screen's iron 4.0 and argon 0.86
+    // (Tantra_Design/tools/mission_budget.py) - so 4 x 57.6 kt give 5/6 c both ways plus 0.27 c, and the ship still brakes
+    // on three traps if one is lost right after the acceleration. 276 kt with the charges at lift-off (the supports: 280).
+    // The ship rose FULL from the dark planet at 2.5 g: planetary engines on an arc - the four stern blocks on ion
+    // charges - then the anamezon. Loading at Triton is only for economy and safety.
+    //   0 Efremov: 5/6 c in 52 h (the canon's inertia damper on the whole ship, compensator to 550 g);
+    //   1 lower power: the same fuel and speed, ~3.8 g at departure, ~65 days to speed.
     int speedModel = 1;
     void ApplySpeedModel() {
         trapFuelMass = 57.6e6;
         if (speedModel == 1) {
             anaThrust = 2.29e9; pelletRate = 8.9e2; compMaxG = 20.0;
         } else {
-            anaThrust = 6.94e10; pelletRate = 2.67e4; compMaxG = 550.0;   // 55.4 h to 0.899 c, peak 522 g; 8.8 g pellets
+            anaThrust = 6.83e10; pelletRate = 2.64e4; compMaxG = 550.0;   // 52.0 h to 0.834 c, peak 385 g; 8.8 g pellets
         }
     }
 

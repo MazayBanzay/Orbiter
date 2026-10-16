@@ -36,10 +36,20 @@ int main() {
     // full traps, nose-first at 400 m/s: the hull before the cassettes is gone, the cassettes hold (rigid core)
     r = hit(kNoseFirst, full, 400.0, 60.0e6);
     check(Grade(Share(r, kLiving)) == 3, "nose at 400 m/s: the living module destroyed");
-    check(Share(r, kTraps) < 0.1 && r.peakG < 190.0, "nose at 400 m/s: the trap cassettes hold (under 190 g)");
+    // (2026-10-09) with the soil's inertia (rho v^2) the ground no longer gives way at 400 m/s: after the nose, the living
+    // module and the hangar are crushed (~0.3 TJ of 4.2) the block meets the ground at ~390 m/s, where the soil's ~2e11 N
+    // beats its 70 GN - the cassettes are crushed (before: they sank into the ground unharmed at 1 g)
+    std::printf("     52 kt nose-first 400 m/s: traps %.2f crushed, %.0f g, %.1f m into the ground\n", Share(r, kTraps), r.peakG, r.penetration);
+    check(Share(r, kTraps) >= 0.4 && r.penetration < 100.0, "nose at 400 m/s: the ground's inertia crushes into the trap block (holed or worse)");
     // soft ground: the ship goes in rather than crushing
     r = hit(kNoseFirst, light, 60.0, 1.5e6);
     check(r.penetration > 5.0 && Share(r, kNose) < 0.05, "nose into sand at 60 m/s: goes into the ground");
+    // (2026-10-09, the user's flight) the full ship (272 kt) nose-first at 520 m/s on firm ground: the soil's inertia (rho v^2)
+    // stops the nose, the ship crushes through to the trap block - the cassettes breached - and goes no deeper than tens of m
+    r = hit(kNoseFirst, 272.0e6, 520.0, 6.0e6);
+    std::printf("     272 kt nose-first 520 m/s: nose %.2f living %.2f hangar %.2f traps %.2f stern %.2f crushed, %.1f m into the ground, %.0f g\n",
+                Share(r, kNose), Share(r, kLiving), Share(r, kHangar), Share(r, kTraps), Share(r, kStern), r.penetration, r.peakG);
+    check(Share(r, kTraps) > 0.85 && r.penetration < 150.0, "full ship nose-first at 520 m/s: crushed through the traps, a crater not 15 km into the ground");
     // equipment: across the reactor holds 38 g, along the axis 200
     check(EquipState(kVeu, 37.0, false, 0.0) == 1, "reactor at 37 g across: at its limit");
     check(EquipState(kVeu, 50.0, false, 0.0) == 2, "reactor at 50 g across: damaged");

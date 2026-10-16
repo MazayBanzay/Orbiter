@@ -1,37 +1,99 @@
 // Tantra debris (TantraDebris.dll): a piece of the broken ship as a rigid body. Orbiter has no collisions between vessels,
 // but each piece meets the ground: it falls, tumbles, scrapes over the soil with friction and comes to rest - then it is
 // handed to Orbiter's landed state (a body on stiff contact springs would tremble forever, and time warp would throw it
-// off the planet). The contact points are the corners of its bounding box (TdBox in Debris_*.cfg, written by
-// tools/gen_mesh.py), the springs sized to its mass (4 cm under its weight), damped near critically; a piece created
-// partly in the ground is first lifted onto the surface.
+// off the planet). (2026-10-09 rework) The contact points are the piece's own extreme points (TdPoints in Debris_*.cfg,
+// written by tools/gen_mesh.py; the corners of its bounding box held a leg lying on its side 10 m up on its foot's box),
+// the springs sized to its mass (4 cm under its weight on three points), damped near critically; a piece created partly
+// in the ground is first lifted onto the surface. A hull chunk carries the ship's stowed parts as labelled groups (cfg
+// Parts): the ship tells it (clbkGeneric kMsgHide, a bit mask) which of them left as pieces of their own - those it hides.
 #define ORBITER_MODULE
 #include "orbitersdk.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <vector>
 
 namespace {
 
 constexpr double kG0 = 9.81;
+constexpr int kMsgHide = 0x7A01;     // the ship's message: prm = the mask of the parts to hide (Tantra::SpawnDebris)
 
 class TantraDebris : public VESSEL4 {
 public:
     TantraDebris(OBJHANDLE h, int fmodel) : VESSEL4(h, fmodel) {}
 
     void clbkSetClassCaps(FILEHANDLE cfg) override {
-        char buf[256];
-        if (oapiReadItem_string(cfg, const_cast<char*>("TdBox"), buf))
-            std::sscanf(buf, "%lf %lf %lf %lf %lf %lf", &lo_.x, &lo_.y, &lo_.z, &hi_.x, &hi_.y, &hi_.z);
+        char buf[2048];
+        pts_.clear();
+        int n = 0;
+        if (oapiReadItem_int(cfg, const_cast<char*>("TdCount"), n)) {   // one point a line (TdP00 = x y z): no long lines
+            for (int i = 0; i < n && i < 32; ++i) {
+                char key[16];
+                std::snprintf(key, sizeof key, "TdP%02d", i);
+                VECTOR3 v;
+                if (oapiReadItem_vec(cfg, key, v)) pts_.push_back(v);
+            }
+        } else if (oapiReadItem_string(cfg, const_cast<char*>("TdBox"), buf)) {   // older pieces: the box corners
+            VECTOR3 lo, hi;
+            std::sscanf(buf, "%lf %lf %lf %lf %lf %lf", &lo.x, &lo.y, &lo.z, &hi.x, &hi.y, &hi.z);
+            pts_ = {{0.5 * (lo.x + hi.x), lo.y, hi.z}, {lo.x, lo.y, lo.z}, {hi.x, lo.y, lo.z}, {hi.x, lo.y, hi.z},
+                    {lo.x, lo.y, hi.z}, {lo.x, hi.y, lo.z}, {hi.x, hi.y, lo.z}, {hi.x, hi.y, hi.z}, {lo.x, hi.y, hi.z}};
+        }
+        if (pts_.size() < 3) pts_ = {{0, -1, 1}, {-1, -1, -1}, {1, -1, -1}, {0, 1, 0}};
+        parts_.clear();
+        if (oapiReadItem_string(cfg, const_cast<char*>("Parts"), buf)) {   // "bit:g0,g1 bit:g2 ..."
+            const char* p = buf;
+            while (*p) {
+                while (*p == ' ') ++p;
+                if (!*p) break;
+                char* e = nullptr;
+                const int bit = static_cast<int>(std::strtol(p, &e, 10));
+                if (e == p || *e != ':') break;
+                p = e + 1;
+                for (;;) {
+                    const int gi = static_cast<int>(std::strtol(p, &e, 10));
+                    if (e == p) break;
+                    parts_.push_back({bit, gi});
+                    p = e;
+                    if (*p != ',') break;
+                    ++p;
+                }
+            }
+        }
         Contacts();
     }
 
     void clbkPostCreation() override { Contacts(); }
 
+    void clbkLoadStateEx(FILEHANDLE scn, void* status) override {
+        char* line;
+        while (oapiReadScenario_nextline(scn, line)) {
+            if (!_strnicmp(line, "HIDE", 4)) hide_ = static_cast<unsigned>(std::strtoul(line + 4, nullptr, 10));
+            else ParseScenarioLineEx(line, status);
+        }
+    }
+
+    void clbkSaveState(FILEHANDLE scn) override {
+        VESSEL4::clbkSaveState(scn);
+        if (hide_) oapiWriteScenario_int(scn, const_cast<char*>("HIDE"), static_cast<int>(hide_));
+    }
+
+    int clbkGeneric(int msgid, int prm, void* context) override {
+        (void)context;
+        if (msgid == kMsgHide) { hide_ = static_cast<unsigned>(prm); ApplyHide(); return 1; }
+        return 0;
+    }
+
+    void clbkVisualCreated(VISHANDLE vis, int refcount) override { (void)refcount; vis_ = vis; ApplyHide(); }
+    void clbkVisualDestroyed(VISHANDLE vis, int refcount) override { (void)refcount; if (vis == vis_) vis_ = nullptr; }
+
     void clbkPreStep(double simt, double simdt, double mjd) override {
         (void)simt; (void)mjd;
         if (simdt <= 0.0) return;
+        if (std::fabs(GetMass() - massK_) > 0.1 * massK_) Contacts();    // the ship gave it its real mass
         OBJHANDLE ref = GetSurfaceRef();
         if (!ref) return;
         VESSELSTATUS2 st;
@@ -59,25 +121,33 @@ public:
     }
 
 private:
-    // the corners of the box: the bottom four first (Orbiter's ground plane: front, left rear, right rear), then the top
+    // the piece's own points: the first three span its underside (Orbiter's ground plane), the rest its hull
     void Contacts() {
         const double m = (std::max)(1000.0, GetMass());
-        const double k = m * kG0 / (4.0 * 0.04), c = 2.0 * 0.6 * std::sqrt(k * m / 4.0);
-        const VECTOR3 p[8] = {{0.5 * (lo_.x + hi_.x), lo_.y, hi_.z}, {lo_.x, lo_.y, lo_.z}, {hi_.x, lo_.y, lo_.z}, {hi_.x, lo_.y, hi_.z},
-                              {lo_.x, lo_.y, hi_.z}, {lo_.x, hi_.y, lo_.z}, {hi_.x, hi_.y, lo_.z}, {hi_.x, hi_.y, hi_.z}};
-        TOUCHDOWNVTX t[9];
-        for (int i = 0; i < 8; ++i) t[i] = {p[i], k, c, 0.7, 0.7};
-        t[8] = {{lo_.x, hi_.y, hi_.z}, k, c, 0.7, 0.7};
-        SetTouchdownPoints(t, 9);
+        massK_ = m;
+        const double k = m * kG0 / (3.0 * 0.04), c = 2.0 * 0.6 * std::sqrt(k * m / 3.0);
+        std::vector<TOUCHDOWNVTX> t;
+        for (const VECTOR3& p : pts_) t.push_back({p, k, c, 0.7, 0.7});
+        SetTouchdownPoints(t.data(), static_cast<DWORD>(t.size()));
     }
 
-    // lift the piece so that no corner is under the ground (the springs would fire it off)
+    void ApplyHide() {
+        if (!vis_ || parts_.empty()) return;
+        DEVMESHHANDLE mesh = GetDevMesh(vis_, 0);
+        if (!mesh) return;
+        for (const Part& p : parts_) {
+            GROUPEDITSPEC s = {};
+            s.flags = (hide_ >> p.bit) & 1u ? GRPEDIT_ADDUSERFLAG : GRPEDIT_DELUSERFLAG;
+            s.UsrFlag = 0x3;
+            oapiEditMeshGroup(mesh, static_cast<DWORD>(p.group), &s);
+        }
+    }
+
+    // lift the piece so that none of its points is under the ground (the springs would fire it off)
     void Lift(OBJHANDLE ref) {
         const double R = oapiGetSize(ref);
-        const VECTOR3 c[8] = {{lo_.x, lo_.y, lo_.z}, {hi_.x, lo_.y, lo_.z}, {lo_.x, hi_.y, lo_.z}, {hi_.x, hi_.y, lo_.z},
-                              {lo_.x, lo_.y, hi_.z}, {hi_.x, lo_.y, hi_.z}, {lo_.x, hi_.y, hi_.z}, {hi_.x, hi_.y, hi_.z}};
         double deepest = 0.0;
-        for (const VECTOR3& q : c) {
+        for (const VECTOR3& q : pts_) {
             VECTOR3 g;
             Local2Global(q, g);
             double lng, lat, rad;
@@ -123,8 +193,12 @@ private:
         still_ = 0.0;
     }
 
-    VECTOR3 lo_ = {-1, -1, -1}, hi_ = {1, 1, 1};
-    double still_ = 0.0, sinceContact_ = 1e9;
+    struct Part { int bit, group; };
+    std::vector<VECTOR3> pts_;
+    std::vector<Part> parts_;
+    unsigned hide_ = 0;
+    VISHANDLE vis_ = nullptr;
+    double still_ = 0.0, sinceContact_ = 1e9, massK_ = 1.0;
     bool lifted_ = false;
 };
 
