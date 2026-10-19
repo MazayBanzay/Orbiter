@@ -104,3 +104,29 @@ __pycache__/
 !/Textures/MPU_*.dds
 !/XRSound/MPU/
 !/Doc/OrbiterCrew_MPU/
+
+# --- planets and the D3D9 client fork (AtmoFX): Titan surface, Io lava field, Jupiter/Io/Titan volumes ---
+# generated outputs (tiles, micro textures, caches, ground rasters) and Cassini source data stay local
+!/Orbitersdk/samples/TitanSite/
+/Orbitersdk/samples/TitanSite/**/*.npz
+!/Orbitersdk/samples/IoLava/
+/Orbitersdk/samples/IoLava/build/
+!/Orbitersdk/samples/AtmoFX/
+/Orbitersdk/samples/AtmoFX/build/
+/Orbitersdk/samples/AtmoFX/assets/
+!/Orbitersdk/samples/D3D9Fork/
+!/Config/AtmoFX_Volume.cfg
+!/Config/TitanFX_Volume.cfg
+!/Config/Titan.cfg
+!/Config/Io.cfg
+!/Config/MicroTex.cfg
+!/Config/GC/
+/Config/GC/*
+!/Config/GC/Titan.atm.cfg
+!/Config/GC/Io.atm.cfg
+!/Config/GC/Jupiter.atm.cfg
+!/Scenarios/AtmoFX/
+/Config/OrbiterCrew/Ground/*.bin
+
+# caches of generators (numpy archives) never go to git
+*.npz

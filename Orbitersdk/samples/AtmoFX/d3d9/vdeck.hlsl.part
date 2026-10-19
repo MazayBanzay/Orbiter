@@ -1,0 +1,127 @@
+// ============================================================================
+// AtmoFX volumetric cloud deck (prototype, Jupiter only)
+// One deck between VD_TOP - VD_THICK and VD_TOP above the reference radius, its top surface a
+// procedural flow-like height field (zonal streaks, domain-warped swirls, convective towers) that
+// drifts with latitude-dependent zonal winds. Ray-marched in the cloud-layer pass (rays that meet
+// the stock cloud shell) and in the surface pass (rays going down while the camera is under the
+// deck top). Frame: geocentric world axes; latitude from the polar axis, longitude from the camera's
+// meridian (tile world matrices carry a per-tile longitude rotation, so they cannot give a common
+// planet frame in the shader; anchored to the camera the deck stays put under a hovering observer).
+// ============================================================================
+
+#define VD_TOP     480.0e3		// deck top altitude [m] (Jupiter.cfg CloudAlt)
+#define VD_THICK   55.0e3		// deck thickness [m]
+#define VD_DEEP    160.0e3		// murk below the deck that is marched [m]
+#define VD_STEPS   40
+#define VD_FEAT    70.0			// main feature size [km]
+
+bool VD_IsTarget() { return abs(Const.PlanetRad - 69911.0e3) < 2.0e5 && Const.CamAlt < 2.0e7; }	// Jupiter, camera within 20000 km
+
+float vd_hash(float2 p)
+{
+	p = frac(p * float2(0.1031, 0.1030));
+	p += dot(p, p.yx + 33.33);
+	return frac((p.x + p.y) * p.x);
+}
+
+float vd_noise(float2 x)
+{
+	float2 i = floor(x), f = frac(x);
+	float2 u = f * f * (3.0 - 2.0 * f);
+	float a = vd_hash(i), b = vd_hash(i + float2(1, 0)), c = vd_hash(i + float2(0, 1)), d = vd_hash(i + float2(1, 1));
+	return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
+}
+
+float vd_fbm(float2 x, int oct)
+{
+	float s = 0, a = 0.5;
+	[loop] for (int i = 0; i < oct; i++) {
+		s += a * vd_noise(x);
+		x = float2(1.6 * x.x + 1.2 * x.y, -1.2 * x.x + 1.6 * x.y) + 17.0;
+		a *= 0.5;
+	}
+	return s;
+}
+
+// geocentric point [m] -> flow coordinates [km] (x east, y north), advected by zonal winds
+float2 vd_flow(float3 p)
+{
+	float3 pole = Const.vPolarAxis;
+	float3 e0 = normalize(Const.toCam - pole * dot(Const.toCam, pole));
+	float3 e1 = cross(pole, e0);
+	float r = length(p);
+	float lat = asin(clamp(dot(p, pole) / r, -1, 1));
+	float lng = atan2(dot(p, e1), dot(p, e0));
+	float t = Const.Time * 180.0;
+	float wind = 110.0 * sin(lat * 7.0) + 45.0 * sin(lat * 13.0 + 1.0);	// m/s, alternating jets
+	float cl = max(cos(lat), 0.05);
+	lng -= wind * t / (Const.PlanetRad * cl);
+	return float2(lng * Const.PlanetRad * cl, lat * Const.PlanetRad) * 0.001;
+}
+
+// deck top as a fraction of the thickness (0..1) at a geocentric point
+float vd_top(float3 p, out float tow)
+{
+	float2 xy = vd_flow(p);
+	float2 q = float2(xy.x * 0.33, xy.y) / VD_FEAT;					// streaks along the wind
+	float2 w = float2(vd_fbm(q * 0.45, 3), vd_fbm(q * 0.45 + 5.2, 3)) - 0.5;
+	float n = vd_fbm(q + w * 3.0, 4);
+	tow = smoothstep(0.60, 0.78, vd_fbm(q * 2.7 + w * 5.0 + 11.0, 3));
+	float top = saturate((n - 0.30) * 2.4);
+	return saturate(top * 0.78 + tow * 0.35 * (0.4 + top));
+}
+
+// march [t0, t1] along a world-space ray from ro; returns (premultiplied colour, opacity)
+float4 vd_march(float3 roW, float3 rdW, float t0, float t1, float3 albedo, float jitter)
+{
+	float3 ro = roW, rd = rdW, sn = Const.toSun;
+	float Rbot = Const.PlanetRad + VD_TOP - VD_THICK;
+	float dt = (t1 - t0) / VD_STEPS;
+	float T = 1.0;
+	float3 col = 0;
+	float3 hazeC = albedo * float3(0.95, 0.92, 0.88);
+	float3 deepC = albedo * float3(0.35, 0.27, 0.22);
+	[loop] for (int i = 0; i < VD_STEPS; i++) {
+		float t = t0 + (i + jitter) * dt;
+		float3 p = ro + rd * t;
+		float r = length(p);
+		float h = (r - Rbot) / VD_THICK;									// 0 at the deck base, 1 at the top
+		float sunUp = dot(p / r, sn);
+		float day = saturate((sunUp + 0.08) * 5.0);
+		float sigma, light;
+		float3 c;
+		if (h >= 0.0) {
+			float tow;
+			float top = vd_top(p, tow);
+			float d = saturate((top - h) * 14.0) * saturate(h * 6.0 + 0.3);
+			// self shadow: how far the deck top rises over this point towards the sun
+			float tow2;
+			float topS = vd_top(p + sn * 9.0e3, tow2);
+			float occl = saturate((topS - h) * 4.0);
+			light = day * (1.0 - 0.75 * occl) * (0.55 + 0.45 * saturate(h * 1.3));
+			sigma = d * 4.0e-4 + 1.2e-5;										// cloud + clear-air haze [1/m]
+			c = lerp(hazeC, albedo * (0.80 + 0.35 * h + 0.25 * tow), saturate(d * 3.0));
+		}
+		else {
+			light = day * 0.35 * exp(h * 2.0);
+			sigma = 2.5e-5;													// murk under the deck
+			c = deepC;
+		}
+		float a = 1.0 - exp(-sigma * dt);
+		col += T * a * c * LightFX(light + 0.18 * Const.Ambient);
+		T *= 1.0 - a;
+		if (T < 0.01) break;
+	}
+	return float4(col, 1.0 - T);
+}
+
+// distances along a ray to a sphere of radius R (x = near, y = far; y < 0 if missed)
+float2 vd_sphere(float3 ro, float3 rd, float R)
+{
+	float b = dot(ro, rd), c = dot(ro, ro) - R * R;
+	float D = b * b - c;
+	if (D < 0) return float2(-1, -1);
+	float s = sqrt(D);
+	return float2(-b - s, -b + s);
+}
+

@@ -1,0 +1,46 @@
+BEGIN_DESC
+AtmoFX: a Delta Glider enters Jupiter's atmosphere (needs the AtmoFX fork of D3D9Client). At start the AtmoFX probe puts the glider 1000 km above the reference radius, 600 km west of a sunlit point (sun ~35 deg), flying east at 4 km/s relative to the air, 5 deg below the horizon, nose along the flow. Orbiter's own physics does the rest: the air thickens over 700-500 km - through the haze and the ammonia deck - and brakes the glider hard (Orbiter does not destroy it).
+External view behind the glider (F1 - cockpit). Time acceleration speeds it up. The invisible probe only places the glider; its status line stays on screen.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 60970.5
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship JDG
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET JDG
+  MODE Extern
+  POS 3.00 -170.00 12.00
+  TRACKMODE TargetRelative
+  FOV 60.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Probe:AtmoProbe
+  STATUS Landed Jupiter
+  POS 0.0000000 -15.0000000
+  HEADING 0.00
+  ALTKM 455
+  SUNELEV 35
+  CLOUDS 0
+  LAUNCH JDG 1000 4 5 600
+END
+JDG:DeltaGlider
+  STATUS Landed Jupiter
+  POS 0.0000000 -15.0000000
+  HEADING 90.00
+  RCSMODE 0
+  AFCMODE 7
+  PRPLEVEL 0:1.000000 1:1.000000
+  NAVFREQ 0 0 0 0
+END
+END_SHIPS

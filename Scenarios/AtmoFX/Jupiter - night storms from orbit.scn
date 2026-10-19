@@ -1,0 +1,33 @@
+BEGIN_DESC
+AtmoFX alpha, level 1 (stock D3D9 client). The probe hangs 180 000 km above Jupiter, just past the terminator, looking straight down: the night side is under it, the day side beyond the terminator. Storm cells flash on the night side.
+Keys: J - lightning on/off. Ctrl+arrows / right mouse button - look around. Numpad8/2 with Shift - change altitude.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 60970.5
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Probe
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Probe
+  MODE Cockpit
+  FOV 60.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Probe:AtmoProbe
+  STATUS Landed Jupiter
+  POS 0.0000000 -15.0000000
+  HEADING 0.00
+  ALTKM 180000
+  SUNELEV -15
+END
+END_SHIPS

@@ -1,0 +1,34 @@
+BEGIN_DESC
+AtmoFX alpha, level 1 (stock D3D9 client). Automatic descent: the probe starts 620 km above Jupiter's reference radius - over the stock cloud layer (480 km) - and sinks at 1 km/s to 448 km, drifting north at 0.5 km/s. Under the stock layer (now a ceiling) the AtmoFX decks, cumulus impostors and lightning under the deck appear.
+Keys: K - AtmoFX clouds on/off (before/after, FPS). J - lightning on/off. Numpad8/2 - climb/descend (stops the descent, Shift x10). Numpad4/6 - drift slower/faster, Numpad5 - stop. Time acceleration speeds up the descent and the drift. Ctrl+arrows / right mouse button - look around.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 60970.5
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Probe
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Probe
+  MODE Cockpit
+  FOV 55.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Probe:AtmoProbe
+  STATUS Landed Jupiter
+  POS 0.0000000 -15.0000000
+  HEADING 0.00
+  TOUR 620 448 1.0
+  DRIFT 0.5
+  SUNELEV 30
+END
+END_SHIPS

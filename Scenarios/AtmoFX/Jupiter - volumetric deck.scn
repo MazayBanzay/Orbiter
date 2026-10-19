@@ -1,0 +1,35 @@
+BEGIN_DESC
+AtmoFX volumetric deck: needs the AtmoFX fork of D3D9Client (_src\build_d3d9\install_client.bat; "install_client.bat stock" restores the stock client). One ammonia cloud deck 425-480 km above Jupiter's reference radius is ray-marched in 3D: chromophore-tinted (ochre, cream, brown) clouds on a flow map of bands and vortices (Config\AtmoFX_Volume.cfg: sizes, density, steps), moved by zonal jets. Beyond 1500 km the stock layer shows.
+The probe descends from 1500 km to 470 km at 8 km/s (real time, ~2 min), drifting north at 0.3 km/s. Numpad8/2 climb/descend (stops the descent, Shift x10), Numpad4/6/5 drift. Ctrl+arrows / right mouse - look around.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 60970.5
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Probe
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Probe
+  MODE Cockpit
+  FOV 60.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Probe:AtmoProbe
+  STATUS Landed Jupiter
+  POS 0.0000000 -15.0000000
+  HEADING 0.00
+  TOUR 1500 470 8.0
+  DRIFT 0.3
+  SUNELEV 35
+  CLOUDS 0
+END
+END_SHIPS

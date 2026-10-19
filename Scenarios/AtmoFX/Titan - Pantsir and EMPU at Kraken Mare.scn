@@ -1,0 +1,82 @@
+BEGIN_DESC
+Titan, northern summer (June 2017), local morning: the Sun ~25 deg up in the east. Southern Kraken Mare, the head of a drowned river valley (ria) on the eastern shore of a peninsula, ~59.33 N 40.49 E (site of the Titan surface work: Orbitersdk/samples/TitanSite).
+A river mouth on the low cobble shore (alluvial fan, Huygens-site look). The heavy suit "Pantsir" (Niza Krit) ~15 m from the liquid, facing the sea to the east; the EMPU with its headlights on 75 m inland, and Kaira Rean in the Suit_T10 with the flight module next to it. The MPU 5 m ahead of the EMPU (east), facing the same way - rear to the EMPU's front, to tow it (couple at 2..4 m between the pins: back it up ~1 m). Sea level -617 m.
+Light: the haze (Huygens DISR: vertical extinction 3-5.5, blue absorbed by tholins) leaves ~0.1% of Earth's daylight, diffuse and orange, almost no shadows; visibility of kilometres near the ground. Saturn is ~23 deg up in the SW but hidden by the haze.
+Air: 1.5 bar N2 at 94 K - calm, dense, cold. The liquid is methane/ethane: dark, mirror-flat, seen by the reflected orange sky.
+Visual atmosphere: Config/GC/Titan.atm.cfg (AtmoFX fork of D3D9Client, AtmoFX_MieAbs); the physical atmosphere (Config/Titan.cfg) is unchanged.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 57908.0000
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Niza_Krit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Niza_Krit
+  MODE Extern
+  POS 3.0 -160.0 20.0
+  TRACKMODE TargetRelative
+  FOV 50.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Niza_Krit:OrbiterCrew\AstronavigatorPantsir
+  STATUS Landed Titan
+  POS 40.5529200 59.3335000
+  HEADING 90.00
+  ALT 0.989
+  AFCMODE 7
+  NAME Niza Krit
+  ROLE Spe
+  SEX female
+  SUIT 1
+  SUIT_CLASS Pantsir
+  FIELD 0
+END
+EMPU-1:EMPU
+  STATUS Landed Titan
+  POS 40.5503000 59.3335000
+  HEADING 90.00
+  ALT 0.880
+  CELLS 0.900 0.900 0.900 -1.000
+  PARK 1
+  HEADLIGHTS 1
+END
+MPU-1:MPU
+  STATUS Landed Titan
+  POS 40.5509107 59.3335000
+  HEADING 90.00
+  ALT 0.880
+  CELLS 0.900 0.900 0.900 0.900
+  PARK 1
+END
+KairaRean:OrbiterCrew\AstronavigatorT2
+  STATUS Landed Titan
+  POS 40.5503000 59.3335700
+  HEADING 90.00
+  ALT 0.930
+  AFCMODE 7
+  NAME Kaira Rean
+  ROLE astronavigator
+  SEX female
+  SUIT 1
+  SUIT_SET Boron
+  SUIT_O2 1.0
+  SUIT_WATER 2.0
+  SUIT_SORBENT 0.0
+  SUIT_BATTERY 6.0
+  SUIT_N2 1.5
+  SUIT_SERVO 1
+  JETPACK 1
+  JET_FUEL 13
+  JET_MODEL 3
+END
+END_SHIPS

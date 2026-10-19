@@ -1,0 +1,35 @@
+BEGIN_DESC
+AtmoFX layers (needs the AtmoFX fork of D3D9Client). Noon light, sun 40 deg up. The probe sinks from 560 km - in the photochemical haze - at 2 km/s (real time, ~2 min) through the ammonia deck (445-475 km), the clear gap, the brown ammonium hydrosulfide deck (390-415 km) down to the water clouds (330-370 km), where the light is nearly gone and lightning flickers. Layers in Config\AtmoFX_Volume.cfg.
+Numpad8/2 climb/descend (stops the descent, Shift x10), Numpad4/6/5 drift. Ctrl+arrows / right mouse - look around (up at the deck above, down into the depths).
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 60970.5
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Probe
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Probe
+  MODE Cockpit
+  FOV 60.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Probe:AtmoProbe
+  STATUS Landed Jupiter
+  POS 0.0000000 -15.0000000
+  HEADING 0.00
+  TOUR 560 345 2.0
+  DRIFT 0.2
+  SUNELEV 40
+  CLOUDS 0
+END
+END_SHIPS

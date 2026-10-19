@@ -1,0 +1,840 @@
+diff --git a/OVP/D3D9Client/Particle.cpp b/OVP/D3D9Client/Particle.cpp
+index 6bc93d1..e47d35a 100644
+--- a/OVP/D3D9Client/Particle.cpp
++++ b/OVP/D3D9Client/Particle.cpp
+@@ -13,6 +13,30 @@
+ #include "D3D9Surface.h"
+ #include "D3D9Config.h"
+ #include <stdio.h>
++#include <map>
++
++// AtmoFX fork: Orbiter's wind is one random table (up to +-25 m/s per axis) for every body with an atmosphere; real
++// surface winds differ (Titan < 1 m/s, Huygens). The particles take the wind relative to the ground scaled per body:
++// Config\GC\<body>.atm.cfg  AtmoFX_ParticleWind = <scale> (default 1, unchanged).
++static double ParticleWindScale(OBJHANDLE hPlanet)
++{
++	static std::map<OBJHANDLE, double> cache;
++	auto it = cache.find(hPlanet);
++	if (it != cache.end()) return it->second;
++	double k = 1.0;
++	char name[64], path[128];
++	oapiGetObjectName(hPlanet, name, 64);
++	sprintf_s(path, "GC/%s.atm.cfg", name);
++	FILEHANDLE f = oapiOpenFile(path, FILE_IN_ZEROONFAIL, CONFIG);
++	if (f) {
++		if (oapiReadItem_float(f, (char*)"AtmoFX_ParticleWind", k)) {
++			char buf[160]; sprintf_s(buf, "AtmoFX: particle wind x%.3f for [%s]", k, name); oapiWriteLog(buf);
++		}
++		oapiCloseFile(f, FILE_IN_ZEROONFAIL);
++	}
++	cache[hPlanet] = k;
++	return k;
++}
+ 
+ static bool needsetup = true;
+ 
+@@ -591,15 +615,24 @@ void ExhaustStream::Update ()
+ 			if (prm.rho) {
+ 				pref = sqrt(prm.rho) / 1.1371;
+ 				slow = exp(-beta*pref*dt);
+-				dv *= exp(-prm.rho*2.0); // reduce gravitational effect in atmosphere (buoyancy)
++				// reduce gravitational effect in atmosphere (buoyancy). AtmoFX fork: exp(-rho*2) alone zeroes gravity in a dense,
++				// low-g atmosphere (Titan: e^-10.9) and dust never settles; keep at least the factor that gives the settling speed
++				// it gives on Earth (~0.3 m/s with this drag): g*f/(beta*pref) = 0.3 m/s. Earth and thin atmospheres are unchanged.
++				const double gloc = GGRAV * oapiGetMass(hPlanet) / (d*d);
++				double fb = exp(-prm.rho*2.0), fmin = 0.3*beta*pref/gloc;
++				if (fb < fmin) fb = (fmin < 1.0 ? fmin : 1.0);
++				dv *= fb;
+ 			} else {
+ 			//	pref = 0.0;
+ 				slow = 1.0;
+ 			}
++			const double wk = ParticleWindScale(hPlanet);	// AtmoFX fork: the wind relative to the ground, scaled per body
+ 			oapiGlobalToEqu (hPlanet, pfirst->pos, &lng, &lat, &r1);
+ 			VECTOR3 av1 = oapiGetWindVector (hPlanet, lng, lat, r1-rad, 3);
++			if (wk != 1.0) { VECTOR3 gv = oapiGetGroundVector(hPlanet, lng, lat, 3); av1 = gv + (av1 - gv) * wk; }
+ 			oapiGlobalToEqu (hPlanet, plast->pos, &lng, &lat, &r2);
+ 			VECTOR3 av2 = oapiGetWindVector (hPlanet, lng, lat, r2-rad, 3);
++			if (wk != 1.0) { VECTOR3 gv = oapiGetGroundVector(hPlanet, lng, lat, 3); av2 = gv + (av2 - gv) * wk; }
+ 			VECTOR3 dav = (av2-av1)/np;
+ 			double r = oapiGetSize (hPlanet);
+ 			if (vessel) r += vessel->GetSurfaceElevation();
+@@ -616,7 +649,7 @@ void ExhaustStream::Update ()
+ 					VECTOR3 dp = s * (r/length(s)-1.0);
+ 					p->pos += dp;
+ 
+-					static double dv_scale = length(vv)*0.2;
++					double dv_scale = length(vv)*0.2;	// AtmoFX fork: was static - the first particle ever (a rocket exhaust) set the kick for all streams
+ 					VECTOR3 dv = {((double)rand()/(double)RAND_MAX-0.5)*dv_scale,
+ 								  ((double)rand()/(double)RAND_MAX-0.5)*dv_scale,
+ 								  ((double)rand()/(double)RAND_MAX-0.5)*dv_scale};
+diff --git a/OVP/D3D9Client/Scene.cpp b/OVP/D3D9Client/Scene.cpp
+index ebed069..0bb7d01 100644
+--- a/OVP/D3D9Client/Scene.cpp
++++ b/OVP/D3D9Client/Scene.cpp
+@@ -6,6 +6,16 @@
+ //				 2012 - 2016 Jarmo Nikkanen
+ // ==============================================================
+ 
++#include "AtmoVolume.h"	// AtmoFX fork
++#include "HeatShimmer.h"	// AtmoFX fork
++#include "JetEjecta.h"	// AtmoFX fork
++#include "FreeParticles.h"	// AtmoFX fork: grains, ice crystals, condensate fog from module sources
++#include "LiquidVolume.h"	// AtmoFX fork
++#include "LiquidFoam.h"	// AtmoFX fork
++#include "HudOverlay.h"	// AtmoFX fork
++#include "LiquidWake.h"	// AtmoFX fork
++#include "TitanVolume.h"	// AtmoFX fork
++#include "ExhaustVolume.h"	// AtmoFX fork
+ #include "Scene.h"
+ #include "VPlanet.h"
+ #include "VVessel.h"
+@@ -323,6 +333,17 @@ Scene::~Scene ()
+ {
+ 	_TRACE;
+ 
++	AtmoVolume::Release();	// AtmoFX fork
++	TitanVolume::Release();	// AtmoFX fork
++	ExhaustVolume::Release();	// AtmoFX fork
++	HeatShimmer::Release();	// AtmoFX fork
++	JetEjecta::Release();	// AtmoFX fork
++	FreeParticles::Release();	// AtmoFX fork
++	LiquidVolume::Release();	// AtmoFX fork
++	LiquidFoam::Release();	// AtmoFX fork
++	HudOverlay::Release();	// AtmoFX fork
++	LiquidWake::Release();	// AtmoFX fork
++
+ 	pDevice->SetRenderTarget(0, NULL);
+ 	pDevice->SetRenderTarget(1, NULL);
+ 	pDevice->SetRenderTarget(2, NULL);
+@@ -1918,6 +1939,15 @@ void Scene::RenderMainScene()
+ 	//
+ 	for (DWORD n = 0; n < nstream; n++) pstream[n]->Render(pDevice);
+ 
++	// AtmoFX fork: ground ejecta under rocket jets, then the heat shimmer (both before the cockpit pass and the 2D overlays)
++	JetEjecta::Render(pDevice, this);
++	FreeParticles::Render(pDevice, this);	// grains, ice crystals, condensate fog from module sources (wheels, vents, cold jets)
++	LiquidWake::Render(pDevice, this);		// Kelvin wakes and ripple rings on the liquid level
++	LiquidFoam::Render(pDevice, this);		// bubbles and foam from warm parts in a liquid
++	LiquidVolume::Render(pDevice, this);	// under a liquid surface: the column and the surface from below
++	HeatShimmer::Render(pDevice, this);
++	HudOverlay::Render(pDevice, this);	// conformal helmet HUD markers (depth-tested)
++
+ 
+ 	// -------------------------------------------------------------------------------------------------------
+ 	// Render vessel axis vectors
+@@ -3688,6 +3718,25 @@ void Scene::RenderGlares()
+ 			if (WorldToScreenSpace2(pos, &pt))
+ 			{
+ 				float cis = 1.0f, glare = float(Config->GFXGlare) * saturate(8.0 * AU / sdst);
++
++				// AtmoFX fork: the visibility depth pass holds vessels only, so terrain never hides the glare.
++				// Cast a few rays toward the Sun against the rendered surface tiles (close to the ground only).
++				vPlanet* vpx = GetCameraProxyVisual();
++				if (vpx && GetCameraAltitude() < 50e3) {
++					D3DXVECTOR3 us((float)usun.x, (float)usun.y, (float)usun.z), ax, ay;
++					D3DXVec3Cross(&ax, &us, fabs(us.y) < 0.9f ? ptr(D3DXVECTOR3(0, 1, 0)) : ptr(D3DXVECTOR3(1, 0, 0)));
++					D3DXVec3Normalize(&ax, &ax); D3DXVec3Cross(&ay, &us, &ax);
++					const float off[5][2] = { {0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1} };
++					int hit = 0;
++					for (auto& o : off) {
++						D3DXVECTOR3 r = us + (ax * o[0] + ay * o[1]) * 0.004f;	// ~0.25 deg, about the glare core
++						D3DXVec3Normalize(&r, &r);
++						TILEPICK tp; memset(&tp, 0, sizeof(tp));
++						vpx->PickSurface(r, &tp);
++						if (tp.pTile) hit++;
++					}
++					glare *= 1.0f - hit / 5.0f;
++				}
+ 				FVECTOR4 clr = FVECTOR4(1, 1, 1, 1);
+ 
+ 				vPlanet* vp = GetCameraNearVisual();
+diff --git a/OVP/D3D9Client/Surfmgr2.cpp b/OVP/D3D9Client/Surfmgr2.cpp
+index 85278c8..4620306 100644
+--- a/OVP/D3D9Client/Surfmgr2.cpp
++++ b/OVP/D3D9Client/Surfmgr2.cpp
+@@ -12,6 +12,8 @@
+ // LOD (level-of-detail) algorithm for surface patch resolution.
+ // ==============================================================
+ 
++#include "HudOverlay.h"	// AtmoFX fork
++#include "LiquidVolume.h"	// AtmoFX fork
+ #include "Surfmgr2.h"
+ #include "Tilemgr2.h"
+ #include "Cloudmgr2.h"
+@@ -532,7 +534,11 @@ bool SurfTile::LoadElevationData ()
+ 			INT16 *pelev_file = 0;
+ 			QuadTreeNode<SurfTile> *parent = node->Parent();
+ 			for (; plvl >= 0; plvl--) { // find ancestor with elevation data
+-				if (parent && parent->Entry()->has_elevfile) {
++				// AtmoFX fork: an ancestor re-created after zooming out may not have loaded its data yet (has_elevfile
++				// is only set by its own LoadElevationData); load it now, or a coarse level's terrain is used instead
++				if (parent && parent->Entry() && !parent->Entry()->has_elevfile && !parent->Entry()->elev)
++					parent->Entry()->LoadElevationData();
++				if (parent && parent->Entry() && parent->Entry()->has_elevfile) {
+ 					pelev_file = parent->Entry()->elev_file;
+ 					break;
+ 				}
+@@ -780,7 +786,7 @@ void SurfTile::Render ()
+ 	bool has_lights = false;
+ 	bool has_microtex = false;
+ 	bool has_atmosphere = vPlanet->HasAtmosphere();
+-	bool has_ripples = vPlanet->HasRipples();
++	bool has_ripples = vPlanet->HasRipples() || vPlanet->LiquidRipples();	// AtmoFX fork
+ 	bool bUseZBuf = mgr->IsUsingZBuf();
+ 
+ 	if (vPlanet->CameraAltitude()>20e3) has_ripples = false;
+@@ -962,9 +968,38 @@ void SurfTile::Render ()
+ 	// Night Lights and Water Specular
+ 	// ----------------------------------------------------------------------
+ 	
+-	if (pShader->bNightlights || pShader->bWater)
++	// AtmoFX fork: emissive mask (lava) - bound for any shader, day and night
++	const bool maskGloss = (vPlanet->LavaGloss() > 0.0f) && (ltex != nullptr);
++	const bool maskEmis = ((vPlanet->MaskEmissive() > 0.0f) && (ltex != nullptr)) || maskGloss;	// the mask is bound for the gloss too
++	fc->bMaskEmis = maskEmis;
++	sp->fMaskGain = vPlanet->MaskEmissive();
++	sp->fLavaGloss = maskGloss ? vPlanet->LavaGloss() : 0.0f;
++	sp->vSkyHor = vPlanet->SkyHorizon(); sp->vSkyZen = vPlanet->SkyZenith(); sp->vGndLight = vPlanet->GroundLight(); sp->vLiquid = vPlanet->Liquid(); sp->vLiquidCol = vPlanet->LiquidColor();
++	{	// AtmoFX fork: helmet HUD contours on the camera's planet
++		float hr[3], hs; sp->vHudTerr = FVECTOR4(0, 0, 0, 0);
++		if (vPlanet->Object() == oapiCameraProxyGbody() && HudOverlay::TerrainOn(hr, &hs)) sp->vHudTerr = FVECTOR4(hr[0], hr[1], hr[2], hs);
++	}
++	{	// AtmoFX fork: liquid ripples continuous in the planet frame (period 6 m), not per tile (no seams between tile levels)
++		sp->vRipO = FVECTOR4(0, 0, 0, 0);
++		if (vPlanet->LiquidRipples()) {
++			const double P = 6.0;
++			MATRIX3 R; oapiGetRotationMatrix(vPlanet->Object(), &R);
++			VECTOR3 pp; oapiGetGlobalPos(vPlanet->Object(), &pp);
++			const VECTOR3 c = tmul(R, vPlanet->GetScene()->GetCameraGPos() - pp);	// camera, planet frame [m]
++			const VECTOR3 u = unit(c);
++			auto md = [P](double x) { double m = fmod(x, P); return (float)(m < 0 ? m + P : m); };
++			sp->vRipR0 = FVECTOR4((float)R.m11, (float)R.m21, (float)R.m31, (float)u.x);
++			sp->vRipR1 = FVECTOR4((float)R.m12, (float)R.m22, (float)R.m32, (float)u.y);
++			sp->vRipR2 = FVECTOR4((float)R.m13, (float)R.m23, (float)R.m33, (float)u.z);
++			sp->vRipO = FVECTOR4(md(c.x), md(c.y), md(c.z), (float)P);
++		}
++		double shR = 0; sp->vLiqSheet = FVECTOR4(0, 0, 0, 0);
++		if (LiquidVolume::SheetRadius(vPlanet->Object(), vPlanet->GetScene()->GetCameraGPos(), &shR)) sp->vLiqSheet = FVECTOR4(1.0f, (float)shR, 0.0f, 0.0f);
++	}
++
++	if (pShader->bNightlights || pShader->bWater || maskEmis)
+ 	{
+-		if ((has_specular || has_lights) && ltex) {
++		if (((has_specular || has_lights) && ltex) || maskEmis) {
+ 			pShader->SetTexture(pShader->tMask, ltex, IPF_CLAMP | IPF_ANISOTROPIC, Config->Anisotrophy);
+ 			fc->bMask = true;
+ 		}
+@@ -975,6 +1010,7 @@ void SurfTile::Render ()
+ 	{
+ 		fc->bTexture = false;
+ 		fc->bMask = false;
++		fc->bMaskEmis = false;
+ 		fc->bCloudShd = false;
+ 		fc->bMicroTex = false;
+ 	}
+@@ -1391,7 +1427,7 @@ void TileManager2<SurfTile>::Render (MATRIX4 &dwmat, bool use_zbuf, const vPlane
+ 
+ 	static float spec_base = 0.7f; // 0.95f;
+ 
+-	bool has_ripples = vp->HasRipples();
++	bool has_ripples = vp->HasRipples() || vp->LiquidRipples();	// AtmoFX fork
+ 
+ 	// Choose a proper shader for a body
+ 	//
+diff --git a/OVP/D3D9Client/VPlanet.cpp b/OVP/D3D9Client/VPlanet.cpp
+index 5d15aad..571d830 100644
+--- a/OVP/D3D9Client/VPlanet.cpp
++++ b/OVP/D3D9Client/VPlanet.cpp
+@@ -36,6 +36,8 @@
+ #include "VectorHelpers.h"
+ #include "OapiExtension.h"
+ #include "IProcess.h"
++#include "AtmoVolume.h"	// AtmoFX fork
++#include "TitanVolume.h"	// AtmoFX fork
+ #include <filesystem>
+ 
+ using namespace oapi;
+@@ -1070,6 +1072,10 @@ bool vPlanet::Render(LPDIRECT3DDEVICE9 dev)
+ 			dev->SetRenderState(D3DRS_CULLMODE, D3DCULL_CCW);
+ 		}
+ 
++		// AtmoFX fork: volumetric cloud deck over everything drawn for this planet
++		if (scn->GetRenderPass() == RENDERPASS_MAINSCENE) AtmoVolume::Render(dev, hObj, (Scene*)scn, prm.cloudrot);
++		if (scn->GetRenderPass() == RENDERPASS_MAINSCENE) TitanVolume::Render(dev, hObj, (Scene*)scn);	// methane clouds
++
+ 	}
+ 
+ 	// Shutdown shadows to prevent from causing problems
+diff --git a/OVP/D3D9Client/VPlanet.h b/OVP/D3D9Client/VPlanet.h
+index cf8eeed..8bdb8f5 100644
+--- a/OVP/D3D9Client/VPlanet.h
++++ b/OVP/D3D9Client/VPlanet.h
+@@ -38,6 +38,7 @@ bool FilterElevationPhysics(OBJHANDLE hPlanet, int lvl, int ilat, int ilng, doub
+ #define PLT_CLOUDS 3
+ #define PLT_GIANT 4
+ #define PLT_G_CLOUDS 5
++#define PLT_MARS_WATER 6	// AtmoFX fork: Mars variant + _WATER/_RIPPLES (AtmoFX_Water, e.g. Titan lakes)
+ 
+ class PlanetShader : public ShaderClass
+ {
+@@ -94,6 +95,18 @@ struct ShaderParams
+ 	float	 fAlpha;
+ 	float	 fBeta;
+ 	float	 fTgtScale;
++	float	 fMaskGain;			// AtmoFX fork: emissive mask gain (0 = off)
++	float	 fLavaGloss;		// AtmoFX fork: mask alpha = glassy sheen strength (0 = off, mask alpha stays the water flag)
++	float	 _padSky[3];		// AtmoFX fork: HLSL starts the next float4 on a new register (fLavaGloss sits in .x)
++	float4	 vSkyHor;			// AtmoFX fork: sky reflected by liquids, at the horizon (rgb), w = sun-side boost
++	float4	 vSkyZen;			// AtmoFX fork: sky reflected by liquids, at the zenith (rgb), w > 0 = use instead of the stock sky table
++	float4	 vGndLight;			// AtmoFX fork: diffuse sky light on the ground (rgb), w = direct sunlight scale (0 = stock lighting)
++	float4	 vLiquid;			// AtmoFX fork: x > 0 liquid FX on, y = extinction [1/m], z = bottom albedo, w = liquid level [m]
++	float4	 vLiquidCol;		// AtmoFX fork: colour of the deep liquid body (AtmoFX_LiquidColor), shared with LiquidVolume
++	float4	 vHudTerr;			// AtmoFX fork: helmet HUD terrain contours: rgb colour (0 = off), w = contour step [m] (HudOverlay)
++	float4	 vRipR0, vRipR1, vRipR2;	// AtmoFX fork: global -> planet frame rows (xyz), camera up in the planet frame (w)
++	float4	 vRipO;				// AtmoFX fork: camera position in the planet frame mod the ripple period (xyz) [m], w = period (0 = stock)
++	float4	 vLiqSheet;			// AtmoFX fork: x > 0: the liquid surface sheet is drawn (LiquidVolume), y = its radius [m]
+ };
+ 
+ // Bools for NewPlanet.hlsl
+@@ -112,6 +125,7 @@ struct FlowControlPS
+ 	BOOL bPlanetShadow;			// Use spherical approximation for shadow
+ 	BOOL bEclipse;				// Eclipse is occuring
+ 	BOOL bTexture;				// Surface texture exists
++	BOOL bMaskEmis;				// AtmoFX fork: add the mask as emission (lava)
+ };
+ 
+ struct FlowControlVS
+@@ -184,6 +198,7 @@ struct ConstParams
+ 	float  wSpec;				// Water smoothness
+ 	float  wBrightness;
+ 	float  wBoost;
++	float3 MieExt;				// AtmoFX fork: Mie extinction spectrum = MieWave + absorption (AtmoFX_MieAbs)
+ };
+ 
+ #pragma pack(pop)
+@@ -214,6 +229,9 @@ class vPlanet: public vObject {
+ 	friend class vBase;
+ 
+ public:
++	float LavaGloss() const { return fLavaGloss; }		// AtmoFX fork: AtmoFX_LavaGloss in <planet>.atm.cfg
++	float MaskEmissive() const { return fMaskEmisGain; }	// AtmoFX fork: Config/GC/<planet>.atm.cfg AtmoFX_MaskEmissive / AtmoFX_MaskGain
++
+ 
+ 	struct sOverlay {
+ 		LPDIRECT3DTEXTURE9 pSurf[4];
+@@ -379,6 +397,23 @@ protected:
+ 	static void LoadMicroTextures(LPDIRECT3DDEVICE9 pDev);
+ 
+ private:
++	float fMaskEmisGain = 0.0f;	// AtmoFX fork
++	float fLavaGloss = 0.0f;	// AtmoFX fork
++	bool bAtmoFXWater = false;	// AtmoFX fork: AtmoFX_Water
++	FVECTOR3 vMieAbs = FVECTOR3(0, 0, 0);	// AtmoFX fork: AtmoFX_MieAbs
++	FVECTOR4 vSkyHor = FVECTOR4(0, 0, 0, 0), vSkyZen = FVECTOR4(0, 0, 0, 0);	// AtmoFX fork: AtmoFX_SkyHorizon / AtmoFX_SkyZenith
++	FVECTOR4 vGndLight = FVECTOR4(0, 0, 0, 0);	// AtmoFX fork: AtmoFX_GroundLight
++	FVECTOR4 vLiquid = FVECTOR4(0, 0, 0, 0);	// AtmoFX fork: AtmoFX_Liquid
++	FVECTOR4 vLiquidCol = FVECTOR4(0, 0, 0, 0);	// AtmoFX fork: AtmoFX_LiquidColor
++public:
++	const FVECTOR4& SkyHorizon() const { return vSkyHor; }
++	const FVECTOR4& SkyZenith() const { return vSkyZen; }
++	const FVECTOR4& GroundLight() const { return vGndLight; }
++	const FVECTOR4& Liquid() const { return vLiquid; }
++	const FVECTOR4& LiquidColor() const { return vLiquidCol; }
++	bool LiquidRipples() const { return vLiquid.x > 0; }	// AtmoFX fork: animated ripples on liquids without SpecularRipple
++private:
++
+ 
+ 	LPDIRECT3DTEXTURE9 pSunColor, pRaySkyView, pMieSkyView, pLandViewRay, pLandViewMie, pAmbientSky, pLandViewAtn;
+ 
+diff --git a/OVP/D3D9Client/VPlanetAtmo.cpp b/OVP/D3D9Client/VPlanetAtmo.cpp
+index e8ed2bd..5f03840 100644
+--- a/OVP/D3D9Client/VPlanetAtmo.cpp
++++ b/OVP/D3D9Client/VPlanetAtmo.cpp
+@@ -147,6 +147,13 @@ void vPlanet::GlobalInitAtmosphere(oapi::D3D9Client* gc)
+ 
+ 	pRender[PLT_MARS] = new PlanetShader(pDev, "Modules/D3D9Client/NewPlanet.hlsl", "TerrainVS", "TerrainPS", "Mars", (flags + blend).c_str());
+ 
++	// AtmoFX fork: the Mars variant (micro textures) with liquid surfaces from the mask alpha, if reflections are enabled
++	if (bWater) {
++		string wf = flags + "_WATER ";
++		if (bRiples) wf += "_RIPPLES ";
++		pRender[PLT_MARS_WATER] = new PlanetShader(pDev, "Modules/D3D9Client/NewPlanet.hlsl", "TerrainVS", "TerrainPS", "MarsWater", (wf + blend).c_str());
++	}
++
+ 
+ 	flags += "_NO_ATMOSPHERE ";
+ 
+@@ -293,7 +300,7 @@ FVECTOR4 vPlanet::ComputeCameraView(float angle, float rad, float distance)
+ {
+ 	FVECTOR2 od = Gauss7(angle, rad, distance, cp.iH); // Ray/Mie Optical depth
+ 	FVECTOR2 rm = od * cp.rmO;
+-	FVECTOR3 clr = cp.RayWave * rm.x + cp.MieWave * rm.y;
++	FVECTOR3 clr = cp.RayWave * rm.x + cp.MieExt * rm.y;
+ 	return FVECTOR4(exp(-clr), od.x + od.y);
+ }
+ 
+@@ -389,7 +396,7 @@ FVECTOR3 vPlanet::SunLightColor(float angle, float alt)
+ 	float r = alt + cp.PlanetRad;
+ 	float d = RayLength(angle, r);
+ 	FVECTOR2 rm = Gauss7(angle, r, d, cp.iH) * cp.rmO;
+-	FVECTOR3 clr = cp.RayWave * rm.x + cp.MieWave * rm.y;
++	FVECTOR3 clr = cp.RayWave * rm.x + cp.MieExt * rm.y;
+ 	return exp(-clr);
+ }
+ 
+@@ -468,7 +475,7 @@ FVECTOR4 vPlanet::SunLightColor(VECTOR3 relpos, double rf)
+ 	else rm = Gauss7(r - size, -ca, cp.PlanetRad, cp.AtmoRad, cp.iH); // Sample point 'pos' lies with-in atmosphere
+ 
+ 	rm = rm * (cp.rmO * rf);
+-	cSun *= exp(-(cp.RayWave * rm.x + cp.MieWave * rm.y)) * svb;
++	cSun *= exp(-(cp.RayWave * rm.x + cp.MieExt * rm.y)) * svb;
+ 	return FVECTOR4(cSun, svb);
+ }
+ 
+@@ -544,6 +551,16 @@ D3D9Sun vPlanet::GetObjectAtmoParams(VECTOR3 vRelPos)
+ 	op.Ambient *= exp(-alt * cp.iH.x) * cp.rmI.x * 6e5;
+ 	op.Ambient += float(ambient) * 0.0039f;
+ 
++	// AtmoFX fork: thick haze (AtmoFX_GroundLight): vessels get the same diffuse sky light as the ground and the
++	// same weaker direct beam; the stock term above is scaled by TWBld (0 for Titan), which left them black
++	if (vGndLight.w > 0) {
++		auto sstep = [](double e0, double e1, double x) { double t = (x - e0) / (e1 - e0); t = t < 0 ? 0 : (t > 1 ? 1 : t); return t * t * (3 - 2 * t); };
++		float day = float(sstep(-0.15, 0.25, dNS));
++		float fade = float(1.0 - sstep(60e3, 150e3, alt));	// in the lower atmosphere only
++		op.Ambient += FVECTOR3(vGndLight.x, vGndLight.y, vGndLight.z) * (day * fade);
++		op.Color *= 1.0f + (vGndLight.w - 1.0f) * fade;
++	}
++
+ 	if (d > 1000.0f) {
+ 		FVECTOR4 rl, mi; // Incatter Color
+ 		IntegrateSegment(vRelPos, -vRay, d, &rl, &mi);	// Rayleigh and Mie inscatter
+@@ -681,6 +698,7 @@ void vPlanet::UpdateScatter()
+ 	cp.AngCtr = sqrt(max(0.0f, 1.0f - qw * qw));
+ 	cp.RayWave = unit(pow(FVECTOR3(atmo->red, atmo->green, atmo->blue), -atmo->rpow));
+ 	cp.MieWave = unit(pow(FVECTOR3(atmo->red, atmo->green, atmo->blue), -atmo->mpow));
++	cp.MieExt = cp.MieWave + vMieAbs;	// AtmoFX fork: absorbing haze (Titan tholins); zero = stock
+ 
+ 	cp.rmO.x = atmo->ray * atmo->rayrat * scr * 4.0f * PI;
+ 	cp.rmO.y = atmo->mie * atmo->mierat * scm * 4.0f * PI;
+@@ -823,7 +841,8 @@ int vPlanet::GetShaderID()
+ {
+ 	if (strcmp(ShaderName, "Moon") == 0) return PLT_MOON;
+ 	if (strcmp(ShaderName, "Earth") == 0) return PLT_EARTH;
+-	if (strcmp(ShaderName, "Mars") == 0) return PLT_MARS;
++	const int mars = (bAtmoFXWater && pRender[PLT_MARS_WATER]) ? PLT_MARS_WATER : PLT_MARS;	// AtmoFX fork
++	if (strcmp(ShaderName, "Mars") == 0) return mars;
+ 	if (strcmp(ShaderName, "Giant") == 0) return PLT_GIANT;
+ 	if (strcmp(ShaderName, "Auto") == 0)
+ 	{
+@@ -833,7 +852,7 @@ int vPlanet::GetShaderID()
+ 			bool render_shadows = CloudMgr2() != NULL;
+ 			if (has_ripples || render_shadows) return PLT_EARTH;
+ 			if (size > 6e6) return PLT_GIANT;
+-			return PLT_MARS;
++			return mars;
+ 		}
+ 	}
+ 	return PLT_MOON;
+@@ -1002,6 +1021,54 @@ bool vPlanet::LoadAtmoConfig()
+ 	if (oapiReadItem_string(hFile, (char*)"Shader", ShaderName) == false) strcpy_s(ShaderName, 32, "Auto");
+ 	if (oapiReadItem_string(hFile, (char*)"ConfigName", AtmoConfigName) == false) strcpy_s(AtmoConfigName, 32, "Custom");
+ 
++	// AtmoFX fork: surface mask as emission (e.g. Io's lava): colour = sRGB->linear(mask) * gain, added on top
++	{
++		int me = 0; double gain = 1.0;
++		fMaskEmisGain = 0.0f;
++		if (oapiReadItem_int(hFile, (char*)"AtmoFX_MaskEmissive", me) && me) {
++			oapiReadItem_float(hFile, (char*)"AtmoFX_MaskGain", gain);
++			fMaskEmisGain = (float)gain;
++			LogAlw("AtmoFX: emissive surface mask for [%s], gain %.2f", name, gain);
++		}
++		// absorption added to the Mie extinction only (in the MieWave units): orange haze both in transmission and in scattered light
++		VECTOR3 ab = _V(0, 0, 0);
++		vMieAbs = FVECTOR3(0, 0, 0);
++		if (oapiReadItem_vec(hFile, (char*)"AtmoFX_MieAbs", ab)) {
++			vMieAbs = FVECTOR3(float(ab.x), float(ab.y), float(ab.z));
++			LogAlw("AtmoFX: Mie absorption for [%s]: %.3f %.3f %.3f", name, ab.x, ab.y, ab.z);
++		}
++		// liquid surfaces (mask alpha 0) with the Mars shader: water/ripples variant; the ocean tint is the WTrsn key (0 for dark liquids)
++		int aw = 0;
++		bAtmoFXWater = oapiReadItem_int(hFile, (char*)"AtmoFX_Water", aw) && aw;
++		if (bAtmoFXWater) LogAlw("AtmoFX: liquid surfaces with the Mars shader for [%s]", name);
++		// sky reflected by liquids: an analytic sky (the stock sky table is hidden under a volumetric haze and may differ)
++		vSkyHor = FVECTOR4(0, 0, 0, 0); vSkyZen = FVECTOR4(0, 0, 0, 0);
++		{
++			char sb[256];
++			if (oapiReadItem_string(hFile, (char*)"AtmoFX_SkyHorizon", sb)) { float r = 0, g = 0, b = 0, w = 0; sscanf(sb, "%f %f %f %f", &r, &g, &b, &w); vSkyHor = FVECTOR4(r, g, b, w); }
++			vGndLight = FVECTOR4(0, 0, 0, 0);
++			vLiquid = FVECTOR4(0, 0, 0, 0);
++			if (oapiReadItem_string(hFile, (char*)"AtmoFX_Liquid", sb)) { float e = 0, d = 0, a = 0; sscanf(sb, "%f %f %f", &e, &d, &a); vLiquid = FVECTOR4(e, d, a, 0.0f); LogAlw("AtmoFX: liquid FX for [%s]: on %.0f, depth gain %.2f, bottom %.2f", name, e, d, a); }
++			{ double lv = 0, ex = 0; if (oapiReadItem_float(hFile, (char*)"AtmoFX_LiquidLevel", lv)) vLiquid.w = float(lv); if (oapiReadItem_float(hFile, (char*)"AtmoFX_LiquidExt", ex)) vLiquid.y = float(ex);
++			  if (vLiquid.x > 0) LogAlw("AtmoFX: liquid level %.2f m, extinction %.3f /m for [%s]", vLiquid.w, vLiquid.y, name); }
++			vLiquidCol = FVECTOR4(0.0f, 0.0f, 0.0f, 0.0f);
++			if (oapiReadItem_string(hFile, (char*)"AtmoFX_LiquidColor", sb)) { float r = 0, g = 0, b = 0; sscanf(sb, "%f %f %f", &r, &g, &b); vLiquidCol = FVECTOR4(r, g, b, 1.0f); }
++			if (oapiReadItem_string(hFile, (char*)"AtmoFX_GroundLight", sb)) { float r = 0, g = 0, b = 0, w = 0; sscanf(sb, "%f %f %f %f", &r, &g, &b, &w); vGndLight = FVECTOR4(r, g, b, w); LogAlw("AtmoFX: ground light for [%s]: sky %.2f %.2f %.2f, direct x%.2f", name, r, g, b, w); }
++			if (oapiReadItem_string(hFile, (char*)"AtmoFX_SkyZenith", sb)) { float r = 0, g = 0, b = 0; sscanf(sb, "%f %f %f", &r, &g, &b); vSkyZen = FVECTOR4(r, g, b, 1.0f); }
++			int dbg = 0;
++			if (vSkyZen.w > 0 && oapiReadItem_int(hFile, (char*)"AtmoFX_WaterDebug", dbg) && dbg) vSkyZen.w = 2.0f;	// shader debug view
++			if (vSkyZen.w > 0) LogAlw("AtmoFX: analytic reflected sky for [%s]%s", name, vSkyZen.w > 1.5f ? " (WATER DEBUG VIEW)" : "");
++		}
++		// mask alpha as a glassy sheen of fresh lava instead of the water flag
++		int lg = 0; double gs = 1.0;
++		fLavaGloss = 0.0f;
++		if (oapiReadItem_int(hFile, (char*)"AtmoFX_LavaGloss", lg) && lg) {
++			oapiReadItem_float(hFile, (char*)"AtmoFX_LavaGlossGain", gs);
++			fLavaGloss = (float)gs;
++			LogAlw("AtmoFX: lava gloss in the mask alpha for [%s], gain %.2f", name, gs);
++		}
++	}
++
+ 	LoadStruct(hFile, &SPrm, 0);
+ 	LoadStruct(hFile, &OPrm, 1);
+ 	LoadStruct(hFile, &HPrm, 2);
+diff --git a/OVP/D3D9Client/VVessel.cpp b/OVP/D3D9Client/VVessel.cpp
+index bb0ab52..2cc17fc 100644
+--- a/OVP/D3D9Client/VVessel.cpp
++++ b/OVP/D3D9Client/VVessel.cpp
+@@ -6,6 +6,7 @@
+ //				 2010-2019 Jarmo Nikkanen (D3D9Client modification)
+ // ==============================================================
+ 
++#include "ExhaustVolume.h"	// AtmoFX fork
+ #include <set>
+ #include "VVessel.h"
+ #include "VPlanet.h"
+@@ -961,6 +962,10 @@ bool vVessel::RenderExhaust()
+ 	for (DWORD i=0;i<nexhaust;i++) {
+ 		if (vessel->GetExhaustLevel(i)==0.0) continue;
+ 		vessel->GetExhaustSpec(i, &es);
++		if ((es.flags & EXHAUST_VOLUME) && ExhaustVolume::Render(D3D9Effect::pDev, &mWorld, -cdir, &es, defexhausttex, scn)) {	// AtmoFX fork
++			if (es.lsize>ExhaustLength) ExhaustLength = float(es.lsize);
++			continue;
++		}
+ 		D3D9Effect::RenderExhaust(&mWorld, cdir, &es, defexhausttex);
+ 		if (es.lsize>ExhaustLength) ExhaustLength = float(es.lsize);
+ 	}
+diff --git a/OVP/D3D9Client/shaders/NewPlanet.hlsl b/OVP/D3D9Client/shaders/NewPlanet.hlsl
+index 5b43b27..a0a5a6c 100644
+--- a/OVP/D3D9Client/shaders/NewPlanet.hlsl
++++ b/OVP/D3D9Client/shaders/NewPlanet.hlsl
+@@ -48,6 +48,7 @@ struct TileVS
+ #if defined(_SHDMAP)
+ 	float4 shdH     : TEXCOORD3;
+ #endif
++	float  elevM	: TEXCOORD4;  // AtmoFX fork: vertex elevation over the mean radius [m] (full precision, unlike the geo-radius)
+ };
+ 
+ struct CldVS
+@@ -84,6 +85,7 @@ struct FlowControlPS
+ 	BOOL bPlanetShadow;			// Use spherical approximation for shadow
+ 	BOOL bEclipse;				// Eclipse is occuring
+ 	BOOL bTexture;				// Surface texture exists
++	BOOL bMaskEmis;				// AtmoFX fork: add the mask as emission (lava)
+ };
+ 
+ struct FlowControlVS
+@@ -109,6 +111,18 @@ struct PerObjectParams
+ 	float	 fAlpha;
+ 	float	 fBeta;
+ 	float	 fTgtScale;
++	float	 fMaskGain;			// AtmoFX fork: emissive mask gain
++	float	 fLavaGloss;		// AtmoFX fork: mask alpha = glassy sheen strength (0 = off)
++	float3	 _padSky;			// AtmoFX fork: explicit, matches the C++ padding
++	float4	 vSkyHor;			// AtmoFX fork: reflected sky at the horizon, w = sun-side boost
++	float4	 vSkyZen;			// AtmoFX fork: reflected sky at the zenith, w > 0 = enabled
++	float4	 vGndLight;			// AtmoFX fork: diffuse sky light on the ground (rgb), w = direct sunlight scale (0 = off)
++	float4	 vLiquid;			// AtmoFX fork: x > 0 liquid FX, y = extinction [1/m], z = bottom albedo, w = liquid level [m]
++	float4	 vLiquidCol;		// AtmoFX fork: colour of the deep liquid body (AtmoFX_LiquidColor)
++	float4	 vHudTerr;			// AtmoFX fork: helmet HUD contours: rgb colour (0 = off), w = step [m]
++	float4	 vRipR0, vRipR1, vRipR2;	// AtmoFX fork: global -> planet frame rows, camera up in the planet frame (w)
++	float4	 vRipO;				// AtmoFX fork: camera planet-frame position mod the ripple period [m], w = period (0 = stock)
++	float4	 vLiqSheet;			// AtmoFX fork: x > 0: the liquid surface sheet is drawn (LiquidVolume), y = its radius [m]
+ };
+ 
+ uniform extern PerObjectParams Prm;
+@@ -366,6 +380,7 @@ TileVS TerrainVS(TILEVERTEX vrt)
+ 	outVS.texUV.xy = vrt.tex0.xy;
+ 	outVS.camW = float4(-vPosW, dot(vVrt, vPlN));
+ 	outVS.nrmW = vNrmW;
++	outVS.elevM = vrt.elev;
+ 	
+ 	return outVS;
+ }
+@@ -386,6 +401,23 @@ float GGX_NDF(float dHN, float rgh)
+ }
+ 
+ 
++// AtmoFX fork: helmet HUD synthetic terrain - contour lines of the real elevation (every step, brighter every 5th) and the
++// shoreline at the liquid level; emissive, anti-aliased with the screen derivatives, faded where the lines crowd together
++float3 HudContours(float elev, float dist)
++{
++	if (Prm.vHudTerr.w <= 0.0f) return 0;
++	float f = elev / Prm.vHudTerr.w, w = fwidth(f);
++	float d = abs(frac(f + 0.5f) - 0.5f);
++	float ln = 1.0f - smoothstep(0.5f * w, 1.5f * w, d);
++	float f5 = f * 0.2f, w5 = fwidth(f5), d5 = abs(frac(f5 + 0.5f) - 0.5f);
++	float mj = 1.0f - smoothstep(0.6f * w5, 1.8f * w5, d5);
++	float crowd = saturate((0.35f - w) / 0.2f), crowd5 = saturate((0.35f - w5) / 0.2f);
++	float shore = 0;
++	if (Prm.vLiquid.x > 0) { float fs = abs(elev - Prm.vLiquid.w), ws = max(fwidth(elev), 1e-3f); shore = 1.0f - smoothstep(ws, 3.0f * ws, fs); }
++	float fade = saturate(1.0f - dist / 20000.0f);
++	return Prm.vHudTerr.rgb * (0.45f * ln * crowd + 0.9f * mj * crowd5 + 1.1f * shore) * fade;
++}
++
+ float4 TerrainPS(TileVS frg) : COLOR
+ {
+ 
+@@ -399,7 +431,23 @@ float4 TerrainPS(TileVS frg) : COLOR
+ 	float fChA = 0.0f, fChB = 0.0f;
+ 
+ #if defined(_RIPPLES)
+-	if (Flow.bTexture) cNrm = tex2D(tOcean, vUVWtr).xyz;
++	// AtmoFX fork: only when the ripple texture is bound (bodies without SpecularRipple, e.g. Titan's Mars+water
++	// variant, have none: an unbound sampler returns 0 and the "normal" became a fixed horizontal vector)
++	if (Flow.bTexture && Flow.bRipples) {
++		if (Prm.vRipO.w > 0) {
++			// AtmoFX fork: ripple coordinates continuous on the planet (planet frame, metres), not per tile: the per-tile
++			// micro-texture scale jumped at the edges of tiles of different levels, and so did the reflected sky (straight
++			// bands on the far liquid). Tri-planar on the planet-frame axes, weighted by the local up.
++			float3 q = -frg.camW.xyz;
++			float3 qp = float3(dot(Prm.vRipR0.xyz, q), dot(Prm.vRipR1.xyz, q), dot(Prm.vRipR2.xyz, q)) + Prm.vRipO.xyz;
++			qp /= Prm.vRipO.w;
++			float3 up = float3(Prm.vRipR0.w, Prm.vRipR1.w, Prm.vRipR2.w);
++			float3 wt = up * up; wt *= wt; wt /= (wt.x + wt.y + wt.z);
++			float2 drift = float2(Const.Time / 180.0f, 0.0f);
++			cNrm = tex2D(tOcean, qp.yz + drift).xyz * wt.x + tex2D(tOcean, qp.xz + drift).xyz * wt.y + tex2D(tOcean, qp.xy + drift).xyz * wt.z;
++		}
++		else cNrm = tex2D(tOcean, vUVWtr).xyz;
++	}
+ #endif
+ 
+ 	// Fetch Main Textures
+@@ -474,12 +522,20 @@ float4 TerrainPS(TileVS frg) : COLOR
+ 	float   alt = rad - Const.PlanetRad;		// Pixel altitude over mean radius
+ 	float  fSrf = (1.0 - Const.CamSpace);		// Camera colse to surface ?
+ 	float fMask = (1.0 - cMsk.a);				// Specular Mask
++	float fGloss = (Flow.bMask && Prm.fLavaGloss > 0) ? saturate(cMsk.a) * Prm.fLavaGloss : 0;	// AtmoFX fork: lava sheen
++	if (Prm.fLavaGloss > 0) fMask = 0;			// AtmoFX fork: on such a body the alpha is never water
++	// AtmoFX fork: terrain below the liquid level where the mask is not pure land (the interpolated shore band and the
++	// step down to the lowered bottom) is under the liquid: shade it as liquid so no dry "wall" shows below the level
++	if (Prm.vLiquid.x > 0 && Flow.bMask && cMsk.a < 0.99f)
++		fMask = max(fMask, saturate((Prm.vLiquid.w - frg.elevM) / 0.15f));
+ 	float  fSpe = 0;
+ 	float fAmpf = 1.0f;
+ 	float fDRS = dot(vRay, Const.toSun);
+ 	float fDPS = dot(vPlN, Const.toSun);		// Mean normal dot sun
+ 
+ 
++	float3 lqN = vPlN;							// AtmoFX fork: liquid surface normal (ripples when present)
++
+ #if defined(_WATER)
+ #if defined(_RIPPLES)
+ 
+@@ -491,6 +547,7 @@ float4 TerrainPS(TileVS frg) : COLOR
+ 
+ 	float3 wnrmW = (Const.vTangent * cNrm.r) + (Const.vBiTangent * cNrm.g) + (vPlN * cNrm.b);
+ 	wnrmW = lerp(nvrW, wnrmW, fMask);
++	lqN = normalize(wnrmW + vPlN * (1.0f - fMask));
+ 	float fDWS = dot(wnrmW, Const.toSun); // Water normal dot sun
+ 
+ 	// Render with specular ripples and fresnel water -------------------------
+@@ -511,7 +568,14 @@ float4 TerrainPS(TileVS frg) : COLOR
+ 	//
+ 	if (!Flow.bInSpace)
+ 	{
+-		cRfl = GetAmbient(reflect(-vRay, wnrmW)) * fF.y * fSrf;	
++		float3 vRfl = reflect(-vRay, wnrmW);
++		if (Prm.vSkyZen.w > 0) {	// AtmoFX fork: the sky the viewer actually sees (volumetric haze), not the stock table
++			float e = sqrt(saturate(dot(vRfl, vPlN)));
++			float3 sky = lerp(Prm.vSkyHor.rgb, Prm.vSkyZen.rgb, e);
++			sky *= 1.0f + Prm.vSkyHor.w * pow(saturate(dot(vRfl, Const.toSun)), 3.0f);
++			cRfl = max(sky, 0) * fF.y * fSrf;
++		}
++		else cRfl = GetAmbient(vRfl) * fF.y * fSrf;
+ 		// Attennuate diffuse texture for fresnel refl.
+ 		cTex.rgb *= saturate(1.0f - f.y * fSrf * fMask) * saturate(1.0f - f.z * fSrf * fMask);
+ 	}
+@@ -535,6 +599,7 @@ float4 TerrainPS(TileVS frg) : COLOR
+ 	{
+ 		float step1 = smoothstep(15000, 3000, dst);
+ 		step1 *= (step1 * step1);
++		if (Prm.vLiquid.x > 0) step1 *= saturate(1.0f - fMask * 1.5f);	// AtmoFX fork: liquids are smooth, no ground grain
+ 		float3 cFnl = max(0, min(2, 1.333f * (cFar + cMed + cLow) - 1));
+ 
+ 		// Create normals
+@@ -576,6 +641,26 @@ float4 TerrainPS(TileVS frg) : COLOR
+ 
+ 	float3 cDiffLocal = 0;
+ 
++	// AtmoFX fork: the bottom seen through the clear liquid (terrain under the liquid mask lies below the liquid
++	// level). vLiquid: x on, y = extinction [1/m], z = bottom albedo, w = liquid level [m from the mean radius].
++	// Path = down through the liquid for the light + up along the view; organics absorb blue more (0.6, 1, 1.8).
++	float3 lqT = 0;		// AtmoFX fork: transmittance down to the bottom and back
++	float lqD = 0;		// AtmoFX fork: liquid depth [m]
++	bool lqOn = false;
++	if (Prm.vLiquid.x > 0 && Prm.vLiquid.y > 0 && fMask > 0.01f) {
++		float fD = Prm.vLiquid.w - frg.elevM;								// liquid depth [m]: from the vertex elevation, not the
++																			// geo-radius (float steps of ~0.25 m at 2575 km flickered)
++		// the liquid is shaded after the lighting (below): here only the bottom's albedo and its transmittance; liquid
++		// with no depth in the terrain (seas outside detailed sites lie flat at the level) counts as deep - no bottom
++		lqOn = true;
++		lqD = max(fD, 0.0f);
++		if (fD > 0) {
++			float fPath = fD + fD / max(dot(vRay, vPlN), 0.05f);
++			lqT = exp(-Prm.vLiquid.y * fPath * float3(0.6f, 1.0f, 1.8f));
++			cTex.rgb = lerp(cTex.rgb, float3(1.0f, 0.86f, 0.68f) * Prm.vLiquid.z, fMask);
++		}
++	}
++
+ #if defined(_LOCALLIGHTS)
+ 	LocalLights(cDiffLocal, nrmW, -frg.camW.xyz);
+ #endif
+@@ -607,7 +692,20 @@ float4 TerrainPS(TileVS frg) : COLOR
+ 	fLvl *= fECL;	// Apply eclipse
+ 
+ 	float3 color = cTex.rgb * LightFX(max(fLvl, 0) * fShadow + cDiffLocal);
+-	return float4(pow(saturate(color * Const.TrExpo), Const.TrGamma), 1.0f);		// Gamma corrention
++	float3 cEmis = Flow.bMaskEmis ? pow(saturate(cMsk.rgb), 2.2f) * Prm.fMaskGain : 0;	// AtmoFX fork: lava glow
++
++	// AtmoFX fork: glassy sheen of fresh lava crust (mask alpha): Schlick F0 0.053 (n ~1.6), narrow GGX,
++	// added over the emission, not multiplied by the albedo
++	if (fGloss > 0) {
++		float3 nG = nrmW;
++		float dNL = dot(nG, Const.toSun), dNV = saturate(dot(nG, vRay));
++		float dHN = saturate(dot(hlvW, nG)), dHV = saturate(dot(hlvW, vRay));
++		float fFr = 0.053f + 0.947f * pow(1.0f - dHV, 5.0f);
++		float fSp = GGX_NDF(dHN, 0.06f) * fFr / (4.0f * max(saturate(dNL), dNV) + 1e-3);
++		fSp *= saturate(dNL * 8.0f) * fSHD * fECL * fShadow;
++		cEmis += min(fSp, 16.0f) * fGloss;
++	}
++	return float4(pow(saturate(color * Const.TrExpo), Const.TrGamma) + cEmis + HudContours(frg.elevM, dst), 1.0f);		// Gamma corrention
+ #else
+ 
+ 	float fShd = 1.0f;
+@@ -678,11 +776,53 @@ float4 TerrainPS(TileVS frg) : COLOR
+ 	// Bake light and shadow terms
+ 	float3 cL = cSF * fD * fShadow * fShd;
+ 
++	// AtmoFX fork: thick haze (Titan, Huygens DISR): ~90 % of the light comes from the sky - a diffuse sky term the stock
++	// (Rayleigh-based) ambient lacks, and a weaker direct beam, so shadows are faint; follows the daylight
++	if (Prm.vGndLight.w > 0) {
++		cL *= Prm.vGndLight.w;
++		cA += Prm.vGndLight.rgb * smoothstep(-0.15f, 0.25f, fDPS) * (0.75f + 0.25f * saturate(dot(nrmW, vPlN)));
++	}
++
+ 	// Lit the texture with various things
+-	cTex.rgb *= cL * 2.0f + (cA + cDiffLocal + Const.cAmbient * Const.Ambient) * saturate(1.0f + fG + fZ) + cNgt;
++	float3 cLit = cL * 2.0f + (cA + cDiffLocal + Const.cAmbient * Const.Ambient) * saturate(1.0f + fG + fZ) + cNgt;
++	cTex.rgb *= cLit;
+ 
+ 	cTex.rgb = max(float3(0, 0, 0), cTex.rgb);
+ 
++	// AtmoFX fork: liquid hydrocarbons as a dielectric mirror (Cassini: radar-smooth seas, specular sun glints, the darkest
++	// surfaces on Titan): Fresnel for n ~1.29 (F0 0.016) mirrors the sky, more towards grazing angles; the rest enters and
++	// comes back from the dark liquid body or, in the shallows, from the lit bottom. Not lit as a diffuse surface.
++	if (lqOn) {
++		float cosV = saturate(dot(vRay, lqN));
++		float F = 0.016f + 0.984f * pow(1.0f - cosV, 5.0f);
++		float3 vRf = reflect(-vRay, lqN);
++		float3 sky;
++		if (Prm.vSkyZen.w > 0) {
++			sky = lerp(Prm.vSkyHor.rgb, Prm.vSkyZen.rgb, sqrt(saturate(dot(vRf, vPlN))));
++			sky *= 1.0f + Prm.vSkyHor.w * pow(saturate(dot(vRf, Const.toSun)), 3.0f);
++		}
++		else sky = GetAmbient(vRf);
++		float3 skyL = Prm.vGndLight.w > 0 ? Prm.vGndLight.rgb : cLit * 0.5f;
++		float3 deep = (Prm.vLiquidCol.w > 0 ? Prm.vLiquidCol.rgb : float3(0.4f, 0.3f, 0.14f)) * 0.06f * skyL;
++		float3 under = deep * (1.0f - lqT) + cTex.rgb * lqT;			// cTex here: the lit bottom
++		// the Sun's glint on the nearly flat surface (dim disc through the haze)
++		float3 hL = normalize(vRay + Const.toSun);
++		float dNL = dot(lqN, Const.toSun);
++		float g = GGX_NDF(saturate(dot(hL, lqN)), 0.04f) * (0.016f + 0.984f * pow(1.0f - saturate(dot(vRay, hL)), 5.0f));
++		float3 glint = cSun * min(g / (4.0f * max(saturate(dNL), cosV) + 1e-3f), 30.0f) * smoothstep(-0.001f, 0.03f, fDPS);
++		float3 liq = max(sky, 0) * F + under * (1.0f - F) + glint;
++		// inside the radius of LiquidVolume's surface sheet the sheet does the optics (reflection, the column above the
++		// bottom): here only the bottom lit through the liquid above it, or the dark body where no bottom is modelled
++		if (Prm.vLiqSheet.x > 0) {
++			float k = saturate((Prm.vLiqSheet.y * 0.9f - dst) / (Prm.vLiqSheet.y * 0.1f));
++			float3 near = lqD > 0 ? cTex.rgb * exp(-Prm.vLiquid.y * lqD * float3(0.6f, 1.0f, 1.8f)) : deep;
++			liq = lerp(liq, near, k);
++		}
++		cTex.rgb = lerp(cTex.rgb, liq, fMask);
++		cRfl *= 1.0f - fMask;
++		fSpe *= 1.0f - fMask;
++	}
++
+ 	// Add Reflection
+ 	cTex.rgb += cRfl * 0.75f;
+ 
+@@ -699,7 +839,12 @@ float4 TerrainPS(TileVS frg) : COLOR
+ 	cTex.rgb *= fECL;	// Apply eclipse
+ 	cTex.rgb += cNgt2;
+ 
+-	return float4(HDR(cTex.rgb), 1.0f);
++	// AtmoFX fork: emissive mask (lava glow), not multiplied by the albedo; the HDR curve compresses values > 1
++	if (Flow.bMaskEmis) cTex.rgb += pow(saturate(cMsk.rgb), 2.2f) * Prm.fMaskGain;
++
++	// AtmoFX fork: liquid debug view (AtmoFX_SkyZenith w = 2): R = liquid mask, G = sun glint, B = reflected sky
++	if (Prm.vSkyZen.w > 1.5f) return float4(fMask, saturate(fSpe * 0.2f), saturate(dot(cRfl, 0.33f)), 1.0f);
++	return float4(HDR(cTex.rgb) + HudContours(frg.elevM, dst), 1.0f);	// AtmoFX fork: HUD contours over the HDR curve
+ #endif
+ }
+ 
+diff --git a/OVP/D3D9Client/shaders/Scatter.hlsl b/OVP/D3D9Client/shaders/Scatter.hlsl
+index 76eca4f..83b9b60 100644
+--- a/OVP/D3D9Client/shaders/Scatter.hlsl
++++ b/OVP/D3D9Client/shaders/Scatter.hlsl
+@@ -88,6 +88,7 @@ struct AtmoParams
+ 	float  wSpec;				// Water smoothness
+ 	float  wBrightness;
+ 	float  wBoost;
++	float3 MieExt;				// AtmoFX fork: Mie extinction spectrum = MieWave + absorption (AtmoFX_MieAbs)
+ };
+ 
+ struct sFlow {
+@@ -322,7 +323,7 @@ float3 GetSunColor(float dir, float alt)
+ float3 ComputeCameraView(float a, float r, float d)
+ {
+ 	float2 rm = Gauss7(a, r, d, Const.iH) * Const.rmO;
+-	float3 clr = Const.RayWave * rm.r + Const.MieWave * rm.g;
++	float3 clr = Const.RayWave * rm.r + Const.MieExt * rm.g;
+ 	return exp(-clr);
+ }
+ 
+@@ -464,7 +465,7 @@ float3 ComputeCameraView(float3 vPos, float3 vNrm, float3 vRay, float r)
+ 	if (Flo.bCamInSpace) d = RayLength(a, r);
+ 	else d = dot(vPos - Const.CamPos, vRay);
+ 	float2 rm = Gauss7(a, r, d, Const.iH) * Const.rmO;
+-	float3 clr = Const.RayWave * rm.r + Const.MieWave * rm.g;
++	float3 clr = Const.RayWave * rm.r + Const.MieExt * rm.g;
+ 	return exp(-clr);
+ }
+ 
+@@ -523,7 +524,7 @@ float4 SunColor(float x : TEXCOORD0, float y : TEXCOORD1) : COLOR
+ 	float rad = alt + Const.PlanetRad;
+ 	float dist = RayLength(-ang, rad);
+ 	float2 rm = Gauss7(-ang, rad, dist, Const.iH) * Const.rmO;
+-	float3 clr = Const.RayWave * rm.r + Const.MieWave * rm.g;
++	float3 clr = Const.RayWave * rm.r + Const.MieExt * rm.g;
+ 
+ 	return float4(exp(-clr), 1.0f);
+ }
+@@ -583,7 +584,7 @@ float4 SkyView(float u : TEXCOORD0, float v : TEXCOORD1) : COLOR
+ 		float4 cMlt = AmbientApprox(Const.toCam);
+ 		cMlt.rgb *= exp(-Const.CamAlt * Const.iH.r);
+ 		cMlt.rgb *= cMlt.a;
+-		cMlt.rgb *= exp(-(Const.RayWave * vOut.r + Const.MieWave * vOut.g));
++		cMlt.rgb *= exp(-(Const.RayWave * vOut.r + Const.MieExt * vOut.g));
+ 		float alpha = ilerp(10e3, 150e3, vDepth.r);
+ 		return float4(ret.rgb + cMlt.rgb, alpha);
+ 	}
+@@ -641,7 +642,7 @@ float4 RingView(float u : TEXCOORD0, float v : TEXCOORD1) : COLOR
+ 		float4 cMlt = AmbientApprox(Const.toCam);
+ 		cMlt.rgb *= exp(-Const.CamAlt * Const.iH.r);
+ 		cMlt.rgb *= cMlt.a;
+-		cMlt.rgb *= exp(-(Const.RayWave * vOut.r + Const.MieWave * vOut.g));
++		cMlt.rgb *= exp(-(Const.RayWave * vOut.r + Const.MieExt * vOut.g));
+ 		float alpha = ilerp(10e3, 150e3, vDepth.r);
+ 		alpha = alpha > 0 ? sqrt(alpha) : 0;
+ 		return float4(ret.rgb + cMlt.rgb, alpha);

@@ -1,0 +1,1 @@
+AtmoFX alpha: gas-giant clouds, impostor cumulus and lightning with the stock D3D9 client (Orbitersdk\samples\AtmoFX).
