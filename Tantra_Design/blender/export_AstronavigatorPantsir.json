@@ -1,0 +1,60 @@
+{
+ "textures": [
+  {
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_metal.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\surf_metal.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_boraz.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\surf_boraz.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_enamel.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\surf_enamel.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_graphite.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\surf_graphite.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_mirror.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\surf_mirror.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_rubber.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\surf_rubber.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_red.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\surf_red.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_sole.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\surf_sole.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_visor.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\surf_visor.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_slit.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\surf_slit.dds",
+   "alpha": false
+  },
+  {
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_rad.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\surf_rad.dds",
+   "alpha": false
+  }
+ ],
+ "orbiter": "C:\\Games\\Orbiter-2024"
+}

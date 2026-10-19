@@ -1,0 +1,7 @@
+rendered A Хребет
+rendered B Пояс и лопатки
+rendered C Люк
+rendered D Броня-радиатор
+rendered E Два этажа
+rendered F Кассеты
+DONE

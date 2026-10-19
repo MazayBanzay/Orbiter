@@ -1,0 +1,4 @@
+ok C:\Games\Orbiter-2024\Tantra_Design\lander_mesh\..\..\Orbitersdk\samples\TantraLander\orbiter\LanderMesh.h x_ac -3.126 S_plan 284.8 elevon 5.14 m² flap 20.64 m² fin mac 4.60
+cups rear [(-1.927, np.float64(-1.796), np.float64(-6.708)), (0.0, np.float64(-1.796), np.float64(-6.708)), (1.927, np.float64(-1.796), np.float64(-6.708))]
+cups front [(-1.927, np.float64(-1.764), np.float64(1.002)), (0.0, np.float64(-1.764), np.float64(1.002)), (1.927, np.float64(-1.764), np.float64(1.002))]
+march exits [(np.float64(-2.313), np.float64(0.257), np.float64(-11.565)), (np.float64(2.313), np.float64(0.257), np.float64(-11.565))]

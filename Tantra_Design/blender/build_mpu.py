@@ -3,6 +3,7 @@
 # as the Tantra's) and the four vectored thrust pods (static here).
 # blender --background astronavigator_coverall.blend --python build_mpu.py      (VARIANT = MPU | EMPU)
 #   -> Meshes\MPU\MPU.msh (or EMPU.msh), Orbitersdk\samples\MPU\MpuGeo.h (MPU only), renders\<variant>_test_side.png / _34.png
+# After regenerating either vehicle mesh, run ..\tools\build_battery_cell.py to rebuild the shared removable-cell mesh and PBR maps.
 # Blender axes: x across, y along (front -y), z up. Orbiter: x right, y up, z forward  =>  (x, y, z)_orb = (-x, z - CG_H, -y).
 # Groups: one per (part, material); the header lists the groups of each arm and each wheel for the animations.
 import bpy, bmesh, math, os, sys, traceback
@@ -28,7 +29,8 @@ MATS = [("Hull", (0.11, 0.12, 0.135), 0.0), ("Deck", (0.20, 0.21, 0.23), 0.0), (
         ("Lamp", (1.0, 0.96, 0.85), 1.0), ("Seam", (0.04, 0.04, 0.045), 0.0), ("Blade", (0.20, 0.22, 0.26), 0.0),
         ("White", (0.85, 0.86, 0.87), 0.0), ("Window", (0.55, 0.68, 0.72), 0.0), ("Lining", (0.58, 0.59, 0.58), 0.0),
         ("Seat", (0.15, 0.16, 0.18), 0.0), ("Ceramic", (0.78, 0.76, 0.72), 0.0), ("Coil", (0.55, 0.30, 0.15), 0.0),
-        ("Warn", (0.86, 0.64, 0.08), 0.0), ("LampIn", (1.0, 0.25, 0.18), 1.0), ("Term", (1.0, 1.0, 1.0), 1.0), ("YScr", (1.0, 1.0, 1.0), 1.0)]
+        ("Warn", (0.86, 0.64, 0.08), 0.0), ("LampIn", (1.0, 0.25, 0.18), 1.0), ("Term", (1.0, 1.0, 1.0), 1.0), ("YScr", (1.0, 1.0, 1.0), 1.0),
+        ("Cell", (0.72, 0.75, 0.77), 0.0)]
 ALPHA = {"Window": 0.12}
 MI = {n: i for i, (n, _, _) in enumerate(MATS)}
 parts = {}                                        # part name -> list of (verts, faces, material index) triangles collected
@@ -54,7 +56,7 @@ def ring(c, ax, r, seg):
     ax = ax.normalized(); e1 = ax.orthogonal().normalized(); e2 = ax.cross(e1)
     return [c + (e1 * math.cos(2 * math.pi * j / seg) + e2 * math.sin(2 * math.pi * j / seg)) * r for j in range(seg)]
 
-def loft(pn, rings, mi, cap=True, closed=False, smooth=True):
+def loft(pn, rings, mi, cap=True, closed=False, smooth=True, omit_faces=None):
     d = part(pn).setdefault(mi, ([], [])); n = len(rings[0]); k = len(rings)
     cen = [sum(r, Vector()) / n for r in rings]
     if smooth:
@@ -71,6 +73,7 @@ def loft(pn, rings, mi, cap=True, closed=False, smooth=True):
         for i in range(k if closed else k - 1):
             A, B = rings[i], rings[(i + 1) % k]
             for j in range(n):
+                if omit_faces and (i, j) in omit_faces: continue
                 j1 = (j + 1) % n; add_poly(pn, [A[j], A[j1], B[j1], B[j]], mi)
     if cap and not closed:
         add_poly(pn, list(reversed(rings[0])), mi); add_poly(pn, list(rings[-1]), mi)
@@ -571,8 +574,14 @@ def post():
 try:
     # ---------------- body (chassis v2): backbone, deck frame, locks, battery trays, bumpers ----------------
     B = "Body"
-    st = [(-4.25, 0.32, 0.72, 1.20, 0.12), (-3.9, 0.45, 0.65, 1.30, 0.14), (3.9, 0.45, 0.65, 1.30, 0.14), (4.25, 0.32, 0.72, 1.20, 0.12)]
-    loft(B, [oct_ring(y, hw, z0, z1, ch) for y, hw, z0, z1, ch in st], MI["Hull"], smooth=False)
+    st = [(-4.25, 0.32, 0.72, 1.20, 0.12), (-3.9, 0.45, 0.65, 1.30, 0.14),
+          (-0.95, 0.45, 0.65, 1.30, 0.14), (0.95, 0.45, 0.65, 1.30, 0.14),
+          (3.9, 0.45, 0.65, 1.30, 0.14), (4.25, 0.32, 0.72, 1.20, 0.12)]
+    # The battery rack is an open-sided service bay. Cut the left longitudinal shell face
+    # behind it; otherwise that continuous Hull face reads as a black blanking plate when
+    # a cartridge is absent. Keep both shoulders around the opening intact.
+    shell_cut = {(2, 6)} if VAR == "EMPU" else set()
+    loft(B, [oct_ring(y, hw, z0, z1, ch) for y, hw, z0, z1, ch in st], MI["Hull"], smooth=False, omit_faces=shell_cut)
     for yy in (-3.0, -1.0, 1.0, 3.0):
         loft(B, [oct_ring(yy - 0.01, 0.455, 0.645, 1.305, 0.14), oct_ring(yy + 0.01, 0.455, 0.645, 1.305, 0.14)], MI["Seam"], smooth=False)
     box(B, (-0.50, -4.0, 0.62), (0.50, 4.0, 0.65), MI["Metal"])                                    # skid plate
@@ -588,13 +597,62 @@ try:
         box(B, (-1.30, y0, 1.60), (1.30, y1, 1.62), MI["Deck"])
     for sx in (-1, 1):
         for y in (-4.2, -2.45, 0.0, 2.45, 4.2): box(B, (sx * 1.40 - 0.09, y - 0.09, 1.60), (sx * 1.40 + 0.09, y + 0.09, 1.70), MI["Red"])   # twist-locks
-        box(B, (sx * 0.47, -0.95, 0.75), (sx * 1.25, 0.95, 1.30), MI["Hull"])                     # battery trays
-        for k in range(4): box(B, (sx * 1.25, -0.85 + k * 0.45, 0.80), (sx * 1.26, -0.50 + k * 0.45, 1.26), MI["Seam"])
+        if sx > 0:
+            box(B, (sx * 0.47, -0.95, 0.75), (sx * 1.25, 0.95, 1.30), MI["Hull"])                 # closed service tray
+        else:
+            # Open the service face so the removable cell cartridges are visible through their doors.
+            box(B, (-1.25, -0.95, 0.75), (-0.47, 0.95, 0.80), MI["Hull"])
+            box(B, (-0.54, -0.95, 0.80), (-0.47, 0.95, 1.30), MI["Hull"])
+            box(B, (-1.25, -0.95, 0.80), (-0.47, -0.89, 1.30), MI["Hull"])
+            box(B, (-1.25, 0.89, 0.80), (-0.47, 0.95, 1.30), MI["Hull"])
+            box(B, (-1.25, -0.95, 1.25), (-0.47, 0.95, 1.30), MI["Hull"])
+            for sy in (-0.45, 0.0, 0.45): box(B, (-1.25, sy - 0.025, 0.80), (-0.54, sy + 0.025, 1.25), MI["Metal"])
+            if VAR == "EMPU":
+                # (2026-10-16, the user: «батареи не имеют опоры и ящика») each slot a bright metal box the cartridge
+                # sits in: its floor with two guide rails (the cartridge's underside at z 0.839), the back plate with the
+                # docking connector, the contact bar under the roof, the slot's sides lined; the lowered cover continues
+                # the rails outwards (a shelf the cartridge slides out over, TVChassis)
+                for k in range(4):
+                    yc = -0.675 + k * 0.45
+                    box(B, (-1.25, yc - 0.200, 0.800), (-0.54, yc + 0.200, 0.812), MI["Metal"])                  # the slot's floor
+                    for ry in (yc - 0.095, yc + 0.095):
+                        box(B, (-1.25, ry - 0.018, 0.812), (-0.56, ry + 0.018, 0.839), MI["Blade"])           # guide rails
+                    box(B, (-0.56, yc - 0.170, 0.84), (-0.54, yc + 0.170, 1.22), MI["Metal"])                # back plate
+                    box(B, (-0.79, yc - 0.090, 0.95), (-0.56, yc + 0.090, 1.07), MI["Hull"])                 # the docking connector
+                    box(B, (-1.00, yc - 0.100, 1.222), (-0.62, yc + 0.100, 1.25), MI["Blade"])               # contact bar (roof)
+                    for wy in (yc - 0.200, yc + 0.188):
+                        box(B, (-1.25, wy, 0.812), (-0.56, wy + 0.012, 1.25), MI["Metal"])                  # side linings
+                    box(B, (-1.265, yc - 0.200, 0.795), (-1.25, yc + 0.200, 0.825), MI["Warn"])             # the sill's edge
+        # the panel lines of the closed tray (on the EMPU's open side they stood in front of the slots as black plates)
+        if sx > 0 or VAR != "EMPU":
+            for k in range(4): box(B, (sx * 1.25, -0.85 + k * 0.45, 0.80), (sx * 1.26, -0.50 + k * 0.45, 1.26), MI["Seam"])
         if sx < 0:                                                    # the right side (orbiter +x): the four energy cells' hatches
             for k in range(4):
                 yc = -0.675 + k * 0.45
-                box(B, (-1.265, yc - 0.15, 0.82), (-1.255, yc + 0.15, 1.24), MI["Hull"])           # the hatch
-                box(B, (-1.30, yc - 0.06, 1.08), (-1.265, yc + 0.06, 1.12), MI["Red"])             # its handle
+                pack = "CellPack%d" % k
+                # 80 kg cartridge, inserted from the open side; the raised end grip stays with the pack.
+                box(pack, (-1.200, yc - 0.135, 0.825), (-0.820, yc + 0.135, 1.185), MI["Cell"])
+                box(pack, (-1.225, yc - 0.085, 1.125), (-1.200, yc + 0.085, 1.165), MI["Cell"])
+                for ry in (yc - 0.105, yc + 0.105):
+                    box(pack, (-1.215, ry - 0.012, 0.850), (-1.200, ry + 0.012, 1.160), MI["Cell"])
+            if VAR == "EMPU":
+                for k in range(4):
+                    yc = -0.675 + k * 0.45
+                # Each cell door is a separate group so TVChassis can swing it on its upper hinge.
+                    door = "CellDoor%d" % k
+                    box(door, (-1.300, yc - 0.145, 0.825), (-1.265, yc + 0.145, 1.235), MI["Hull"])
+                    box(door, (-1.330, yc - 0.060, 1.065), (-1.300, yc + 0.060, 1.105), MI["Hull"])
+                    box(door, (-1.315, yc - 0.145, 0.825), (-1.300, yc - 0.128, 1.235), MI["Hull"])
+                    box(door, (-1.315, yc + 0.128, 0.825), (-1.300, yc + 0.145, 1.235), MI["Hull"])
+                    box(door, (-1.315, yc - 0.145, 0.825), (-1.300, yc + 0.145, 0.842), MI["Hull"])
+                    box(door, (-1.315, yc - 0.145, 1.218), (-1.300, yc + 0.145, 1.235), MI["Hull"])
+                    for hy in (yc - 0.105, yc + 0.105):
+                        box(door, (-1.345, hy - 0.025, 1.215), (-1.300, hy + 0.025, 1.275), MI["Hull"])
+                    # its inner face: a bright plate with the rails - lowered (hinged at the bottom, TVChassis) it is the shelf
+                    # the cartridge slides out over, the rails in line with the slot's
+                    box(door, (-1.265, yc - 0.140, 0.830), (-1.262, yc + 0.140, 1.230), MI["Metal"])
+                    for ry in (yc - 0.095, yc + 0.095):
+                        box(door, (-1.262, ry - 0.018, 0.835), (-1.237, ry + 0.018, 1.225), MI["Blade"])
     for sy in (-1, 1):                                                                               # bumpers, folded couplings, lamps
         y = sy * 4.35
         box(B, (-1.25, y - 0.10, 0.95), (1.25, y + 0.10, 1.40), MI["Hull"])
@@ -683,7 +741,8 @@ try:
         vs_, fs_ = parts["Top"][mi_]
         parts["Top"][mi_] = ([(pp + Vector((0, 0, DZD)), nn) for pp, nn in vs_], fs_)
     names = (["Low%d" % i for i in range(8)] + ["Up%d" % i for i in range(8)] + ["Kn%d" % i for i in range(8)] +
-             ["Wheel%d" % i for i in range(8)] + ["Steps", "TowBar", "Body", "Top", "Yoke", "TermScr", "YokeScr", "Ladder"])
+             ["Wheel%d" % i for i in range(8)] + ["Steps", "TowBar", "Body", "Top", "Yoke", "TermScr", "YokeScr", "Ladder"] +
+             (["CellDoor%d" % i for i in range(4)] if VAR == "EMPU" else []) + ["CellPack%d" % i for i in range(4)])
     groups, gidx = [], {}
     for pn in names:
         for mi in sorted(parts.get(pn, {})):
@@ -693,7 +752,7 @@ try:
     # per tile); a planar projection on each vertex's normal (the dominant axis), in the rest pose - moving parts keep theirs
     TEX = {"Hull": ("MPU\\mpu_composite.dds", 1.0), "Deck": ("MPU\\mpu_deck.dds", 1.0), "Metal": ("MPU\\mpu_metal.dds", 0.5),
            "Blade": ("MPU\\mpu_metal.dds", 0.5), "Tread": ("MPU\\mpu_rubber.dds", 0.5), "White": ("MPU\\mpu_white.dds", 1.0),
-           "Lining": ("MPU\\mpu_lining.dds", 1.0), "Seat": ("MPU\\mpu_seat.dds", 0.5),
+           "Lining": ("MPU\\mpu_lining.dds", 1.0), "Seat": ("MPU\\mpu_seat.dds", 0.5), "Cell": ("MPU\\mpu_cell.dds", 0.25),
            "Term": ("MPU\\empu_term.dds", 0.0), "YScr": ("MPU\\empu_yoke.dds", 0.0)}   # drawn by MPU.cpp at run time
     TEXLIST = sorted({t for t, _ in TEX.values()})
     def uv(p, n, tile):
@@ -739,6 +798,10 @@ try:
                     (*to_orb(TERM_C), *to(tr), *to(tu_), *to(tn)))
             f.write("constexpr double kTermSW = %.3f, kTermSH = %.3f, kTermRecess = %.3f;   // the screen; the keys at +-(SW/2 + 0.065) across, 0.225 - k*0.09 up\n" % (TERM_SW, TERM_SH, TERM_RECESS))
             lg = gidx.get("Ladder", [])
+            dg = [gidx["CellDoor%d" % i] for i in range(4)]       # each cover: a group per material (hull, inner plate, rails)
+            f.write("constexpr int kCellDoorGrp[4][4] = {%s};  // individually animated battery access covers\n" % ", ".join("{%s}" % ", ".join(map(str, g + [0] * (4 - len(g)))) for g in dg))
+            f.write("constexpr int kCellDoorN[4] = {%s};\n" % ", ".join(str(len(g)) for g in dg))
+            f.write("constexpr int kCellPackGrp[4] = {%s};  // removable battery cartridges\n" % ", ".join(str(gidx["CellPack%d" % i][0]) for i in range(4)))
             f.write("constexpr int kLadderGrp[4] = {%s};\nconstexpr int kLadderN = %d;\nconstexpr double kLadderHinge[3] = {0.0, %.3f, %.3f};   // folds about x\n" %
                     (", ".join(map(str, lg + [0] * (4 - len(lg)))), len(lg), DE - 0.03 - CG_H, -(4.25 + 0.05)))
             f.write("constexpr int kYokeGrp[8] = {%s};\nconstexpr int kYokeN = %d;\n}  // namespace empu\n" % (", ".join(map(str, yg + [0] * (8 - len(yg)))), len(yg)))
@@ -757,6 +820,7 @@ try:
         f.write("constexpr int kStepsGrp[4] = {%s};\nconstexpr int kStepsN = %d;\n" % (", ".join(map(str, sg + [0] * (4 - len(sg)))), len(sg)))
         f.write("constexpr double kStepsStow[3] = {0.200, 0.450, 0.000};   // stowed: their offset from the deployed pose\n")
         f.write("constexpr int kTowBarGrp = %d;   // the tow bar: vertex z (orbiter) = -t (0..1), x / y the tube's offset\n" % gidx["TowBar"][0])
+        f.write("constexpr int kCellPackGrp[4] = {%s};  // removable battery cartridges\n" % ", ".join(str(gidx["CellPack%d" % i][0]) for i in range(4)))
         f.write("constexpr double kHitchF[3] = {0.0, 0.060, 4.550}, kHitchR[3] = {0.0, 0.060, -4.550};   // the coupling pins\n}  // namespace mpu\n")
     log.append("groups %d, verts %d" % (len(groups), sum(len(v) for _, _, (v, f) in groups)))
     # ---------------- preview with her for scale ----------------

@@ -1,0 +1,11 @@
+built 1 Костный мозг 14
+built 2 Чешуя 8
+built 3 Пояса 26
+built 4 Погоны 10
+built 5 Портупея 16
+built 6 Падение 18
+built 7 Орбита 10
+built 8 Укладка 17
+built 9 На каркасе 14
+built 10 Минимум 6
+DONE

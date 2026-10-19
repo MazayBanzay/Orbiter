@@ -1,0 +1,198 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+<defs><linearGradient id="top" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0.92"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient><linearGradient id="bot" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#000" stop-opacity="0.92"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient></defs>
+<rect width="1920" height="1080" fill="#1c2128"/>
+<rect x="0" y="0" width="1920" height="70" fill="#000" fill-opacity="0.92"/>
+<rect x="0" y="70" width="1920" height="90" fill="url(#top)"/>
+<rect x="0" y="735" width="1920" height="345" fill="#000" fill-opacity="0.92"/>
+<rect x="0" y="645" width="1920" height="90" fill="url(#bot)"/>
+<defs><radialGradient id="vig" cx="0.5" cy="0.5" r="0.75"><stop offset="0.6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.55"/></radialGradient></defs>
+<rect width="1920" height="1080" fill="url(#vig)"/>
+<line x1="670" y1="118" x2="670" y2="128" stroke="#8c98a3" stroke-width="1"/>
+<line x1="728" y1="118" x2="728" y2="134" stroke="#8c98a3" stroke-width="1"/>
+<text x="728" y="108" font-family="Consolas, monospace" font-size="13" fill="#e8ecef" text-anchor="middle" font-weight="normal">338</text>
+<line x1="786" y1="118" x2="786" y2="128" stroke="#8c98a3" stroke-width="1"/>
+<line x1="844" y1="118" x2="844" y2="134" stroke="#8c98a3" stroke-width="1"/>
+<text x="844" y="108" font-family="Consolas, monospace" font-size="13" fill="#e8ecef" text-anchor="middle" font-weight="normal">348</text>
+<line x1="902" y1="118" x2="902" y2="128" stroke="#8c98a3" stroke-width="1"/>
+<line x1="960" y1="118" x2="960" y2="134" stroke="#8c98a3" stroke-width="1"/>
+<text x="960" y="108" font-family="Consolas, monospace" font-size="13" fill="#e8ecef" text-anchor="middle" font-weight="normal">358</text>
+<line x1="1018" y1="118" x2="1018" y2="128" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1076" y1="118" x2="1076" y2="134" stroke="#8c98a3" stroke-width="1"/>
+<text x="1076" y="108" font-family="Consolas, monospace" font-size="13" fill="#e8ecef" text-anchor="middle" font-weight="normal">008</text>
+<line x1="1134" y1="118" x2="1134" y2="128" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1192" y1="118" x2="1192" y2="134" stroke="#8c98a3" stroke-width="1"/>
+<text x="1192" y="108" font-family="Consolas, monospace" font-size="13" fill="#e8ecef" text-anchor="middle" font-weight="normal">018</text>
+<line x1="1250" y1="118" x2="1250" y2="128" stroke="#8c98a3" stroke-width="1"/>
+<rect x="926" y="140" width="68" height="30" fill="none" fill-opacity="1" stroke="#e8ecef" stroke-width="1.5"/>
+<text x="960" y="162" font-family="Consolas, monospace" font-size="18" fill="#e8ecef" text-anchor="middle" font-weight="normal">358°</text>
+<path d="M 316.928 226.607 A 1150 1150 0 0 1 566.677 99.3535" fill="none" stroke="#8c98a3" stroke-width="2"/>
+<path d="M 464.83 146.5 A 1146 1146 0 0 1 568.045 103.112" fill="none" stroke="#ff5a4a" stroke-width="5"/>
+<line x1="324.757" y1="238.213" x2="316.928" y2="226.607" stroke="#8c98a3" stroke-width="1"/>
+<line x1="340.269" y1="219.593" x2="336.473" y2="213.711" stroke="#8c98a3" stroke-width="1"/>
+<line x1="359.952" y1="207.174" x2="356.277" y2="201.216" stroke="#8c98a3" stroke-width="1"/>
+<line x1="379.884" y1="195.158" x2="376.331" y2="189.126" stroke="#8c98a3" stroke-width="1"/>
+<line x1="403.485" y1="189.653" x2="396.627" y2="177.448" stroke="#8c98a3" stroke-width="1"/>
+<line x1="420.461" y1="172.356" x2="417.156" y2="166.185" stroke="#8c98a3" stroke-width="1"/>
+<line x1="441.089" y1="161.58" x2="437.911" y2="155.342" stroke="#8c98a3" stroke-width="1"/>
+<line x1="461.932" y1="151.225" x2="458.882" y2="144.925" stroke="#8c98a3" stroke-width="1"/>
+<line x1="485.904" y1="147.659" x2="480.061" y2="134.936" stroke="#8c98a3" stroke-width="1"/>
+<line x1="504.23" y1="131.8" x2="501.439" y2="125.381" stroke="#8c98a3" stroke-width="1"/>
+<line x1="525.666" y1="122.738" x2="523.006" y2="116.263" stroke="#8c98a3" stroke-width="1"/>
+<line x1="547.283" y1="114.114" x2="544.756" y2="107.586" stroke="#8c98a3" stroke-width="1"/>
+<line x1="571.465" y1="112.509" x2="566.677" y2="99.3535" stroke="#8c98a3" stroke-width="1"/>
+<polygon points="374.301,185.68 358.091,172.041 370.23,164.89" fill="#7fdc8a" stroke="none" stroke-width="1"/>
+<text x="453.347" y="185.637" font-family="Consolas, monospace" font-size="15" fill="#7fdc8a" text-anchor="middle" font-weight="normal">РАДИАЦИЯ мЗв/ч  14 · поле 50 %</text>
+<path d="M 604.63 86.285 A 1150 1150 0 0 1 879.78 32.8013" fill="none" stroke="#8c98a3" stroke-width="2"/>
+<path d="M 838.221 40.4887 A 1146 1146 0 0 1 880.059 36.7916" fill="none" stroke="#ff5a4a" stroke-width="5"/>
+<line x1="608.957" y1="99.5998" x2="604.63" y2="86.285" stroke="#8c98a3" stroke-width="1"/>
+<line x1="629" y1="85.9762" x2="626.973" y2="79.2761" stroke="#8c98a3" stroke-width="1"/>
+<line x1="651.344" y1="79.4636" x2="649.454" y2="72.7236" stroke="#8c98a3" stroke-width="1"/>
+<line x1="673.816" y1="73.4072" x2="672.063" y2="66.6302" stroke="#8c98a3" stroke-width="1"/>
+<line x1="698.02" y1="74.621" x2="694.792" y2="60.9984" stroke="#8c98a3" stroke-width="1"/>
+<line x1="719.106" y1="62.6733" x2="717.63" y2="55.8305" stroke="#8c98a3" stroke-width="1"/>
+<line x1="741.905" y1="58.0001" x2="740.57" y2="51.1287" stroke="#8c98a3" stroke-width="1"/>
+<line x1="764.795" y1="53.7921" x2="763.6" y2="46.895" stroke="#8c98a3" stroke-width="1"/>
+<line x1="788.821" y1="56.9712" x2="786.711" y2="43.131" stroke="#8c98a3" stroke-width="1"/>
+<line x1="810.809" y1="46.7785" x2="809.895" y2="39.8384" stroke="#8c98a3" stroke-width="1"/>
+<line x1="833.913" y1="43.9758" x2="833.141" y2="37.0185" stroke="#8c98a3" stroke-width="1"/>
+<line x1="857.069" y1="41.6441" x2="856.439" y2="34.6725" stroke="#8c98a3" stroke-width="1"/>
+<line x1="880.757" y1="46.7672" x2="879.78" y2="32.8013" stroke="#8c98a3" stroke-width="1"/>
+<polygon points="717.706,51.7227 706.625,33.6681 720.399,30.7102" fill="#e8ecef" stroke="none" stroke-width="1"/>
+<text x="747.057" y="84.5041" font-family="Consolas, monospace" font-size="15" fill="#e8ecef" text-anchor="middle" font-weight="normal">ТЕЛО  37,6 °C · пульс 92</text>
+<path d="M 1040.22 32.8013 A 1150 1150 0 0 1 1315.37 86.285" fill="none" stroke="#8c98a3" stroke-width="2"/>
+<path d="M 1211.55 61.9495 A 1146 1146 0 0 1 1314.13 90.0892" fill="none" stroke="#ff5a4a" stroke-width="5"/>
+<line x1="1039.24" y1="46.7672" x2="1040.22" y2="32.8013" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1062.93" y1="41.6441" x2="1063.56" y2="34.6725" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1086.09" y1="43.9758" x2="1086.86" y2="37.0185" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1109.19" y1="46.7785" x2="1110.11" y2="39.8384" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1131.18" y1="56.9712" x2="1133.29" y2="43.131" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1155.2" y1="53.7921" x2="1156.4" y2="46.895" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1178.09" y1="58.0001" x2="1179.43" y2="51.1287" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1200.89" y1="62.6733" x2="1202.37" y2="55.8305" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1221.98" y1="74.621" x2="1225.21" y2="60.9984" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1246.18" y1="73.4072" x2="1247.94" y2="66.6302" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1268.66" y1="79.4636" x2="1270.55" y2="72.7236" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1291" y1="85.9762" x2="1293.03" y2="79.2761" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1311.04" y1="99.5998" x2="1315.37" y2="86.285" stroke="#8c98a3" stroke-width="1"/>
+<polygon points="1257.12,64.9057 1255.46,43.7867 1269.07,47.414" fill="#ff5a4a" stroke="none" stroke-width="1"/>
+<text x="1172.94" y="84.5041" font-family="Consolas, monospace" font-size="15" fill="#ff5a4a" text-anchor="middle" font-weight="normal">СРЕДА  +612 °C</text>
+<path d="M 1353.32 99.3535 A 1150 1150 0 0 1 1603.07 226.607" fill="none" stroke="#8c98a3" stroke-width="2"/>
+<path d="M 1529.53 185.541 A 1146 1146 0 0 1 1600.84 229.923" fill="none" stroke="#ff5a4a" stroke-width="5"/>
+<line x1="1348.53" y1="112.509" x2="1353.32" y2="99.3535" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1372.72" y1="114.114" x2="1375.24" y2="107.586" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1394.33" y1="122.738" x2="1396.99" y2="116.263" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1415.77" y1="131.8" x2="1418.56" y2="125.381" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1434.1" y1="147.659" x2="1439.94" y2="134.936" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1458.07" y1="151.225" x2="1461.12" y2="144.925" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1478.91" y1="161.58" x2="1482.09" y2="155.342" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1499.54" y1="172.356" x2="1502.84" y2="166.185" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1516.51" y1="189.653" x2="1523.37" y2="177.448" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1540.12" y1="195.158" x2="1543.67" y2="189.126" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1560.05" y1="207.174" x2="1563.72" y2="201.216" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1579.73" y1="219.593" x2="1583.53" y2="213.711" stroke="#8c98a3" stroke-width="1"/>
+<line x1="1595.24" y1="238.213" x2="1603.07" y2="226.607" stroke="#8c98a3" stroke-width="1"/>
+<polygon points="1508.87,164.886 1512.18,143.961 1524.57,150.661" fill="#ffb347" stroke="none" stroke-width="1"/>
+<text x="1466.65" y="185.637" font-family="Consolas, monospace" font-size="15" fill="#ffb347" text-anchor="middle" font-weight="normal">КОРПУС  +540 °C</text>
+<text x="960" y="232" font-family="Consolas, monospace" font-size="14" fill="#ff5a4a" text-anchor="middle" font-weight="normal">22:41:06  |  СРЕДА ВНЕ ДОПУСКА +612 °C  ·  подтвердите щелчком</text>
+<rect x="1350" y="60" width="86" height="30" fill="none" fill-opacity="1" stroke="#ffb347" stroke-width="2"/>
+<text x="1393" y="81" font-family="Consolas, monospace" font-size="14" fill="#ffb347" text-anchor="middle" font-weight="normal">ПОЛЕ 50</text>
+<rect x="1442" y="60" width="86" height="30" fill="none" fill-opacity="1" stroke="#8c98a3" stroke-width="1"/>
+<text x="1485" y="81" font-family="Consolas, monospace" font-size="14" fill="#e8ecef" text-anchor="middle" font-weight="normal">ШЛЕМ</text>
+<rect x="1534" y="60" width="86" height="30" fill="none" fill-opacity="1" stroke="#ffb347" stroke-width="2"/>
+<text x="1577" y="81" font-family="Consolas, monospace" font-size="14" fill="#ffb347" text-anchor="middle" font-weight="normal">СВЕТ</text>
+<rect x="1626" y="60" width="86" height="30" fill="none" fill-opacity="1" stroke="#8c98a3" stroke-width="1"/>
+<text x="1669" y="81" font-family="Consolas, monospace" font-size="14" fill="#e8ecef" text-anchor="middle" font-weight="normal">ПНВ</text>
+<rect x="1442" y="100" width="86" height="30" fill="none" fill-opacity="1" stroke="#ffb347" stroke-width="2"/>
+<text x="1485" y="121" font-family="Consolas, monospace" font-size="14" fill="#ffb347" text-anchor="middle" font-weight="normal">СЕРВО</text>
+<rect x="1534" y="100" width="86" height="30" fill="none" fill-opacity="1" stroke="#8c98a3" stroke-width="1"/>
+<text x="1577" y="121" font-family="Consolas, monospace" font-size="14" fill="#e8ecef" text-anchor="middle" font-weight="normal">ЭКОНОМ</text>
+<rect x="1626" y="100" width="86" height="30" fill="none" fill-opacity="1" stroke="#ffb347" stroke-width="2"/>
+<text x="1669" y="121" font-family="Consolas, monospace" font-size="14" fill="#ffb347" text-anchor="middle" font-weight="normal">ИСПАР.</text>
+<text x="1710" y="48" font-family="Consolas, monospace" font-size="13" fill="#8c98a3" text-anchor="end" font-weight="normal">Ио · рассвет · вакуум · 1 нбар</text>
+<rect x="190" y="60" width="30" height="44" fill="#141920" fill-opacity="1" stroke="#4a535d" stroke-width="1"/>
+<text x="205" y="92" font-family="Consolas, monospace" font-size="28" fill="#ffb347" text-anchor="middle" font-weight="bold">0</text>
+<rect x="224" y="60" width="30" height="44" fill="#141920" fill-opacity="1" stroke="#4a535d" stroke-width="1"/>
+<text x="239" y="92" font-family="Consolas, monospace" font-size="28" fill="#ffb347" text-anchor="middle" font-weight="bold">3</text>
+<rect x="258" y="60" width="30" height="44" fill="#141920" fill-opacity="1" stroke="#4a535d" stroke-width="1"/>
+<text x="273" y="92" font-family="Consolas, monospace" font-size="28" fill="#ffb347" text-anchor="middle" font-weight="bold">7</text>
+<text x="300" y="80" font-family="Consolas, monospace" font-size="14" fill="#ffb347" text-anchor="start" font-weight="normal">ЗАПАС мин</text>
+<text x="300" y="100" font-family="Consolas, monospace" font-size="13" fill="#ffb347" text-anchor="start" font-weight="normal">по жаре · вода 3,1 кг</text>
+<rect x="70" y="760" width="420" height="280" fill="#0b0f14" fill-opacity="0.85" stroke="#2c333b" stroke-width="1"/>
+<text x="84" y="786" font-family="Consolas, monospace" font-size="18" fill="#e8ecef" text-anchor="start" font-weight="bold">ПАНЦИРЬ</text>
+<text x="476" y="786" font-family="Consolas, monospace" font-size="13" fill="#8c98a3" text-anchor="end" font-weight="normal">управление</text>
+<rect x="80" y="798" width="77" height="24" fill="none" fill-opacity="1" stroke="#8c98a3" stroke-width="1"/>
+<text x="118" y="815" font-family="Consolas, monospace" font-size="11" fill="#e8ecef" text-anchor="middle" font-weight="normal">ДАННЫЕ</text>
+<rect x="160" y="798" width="77" height="24" fill="none" fill-opacity="1" stroke="#ffb347" stroke-width="2"/>
+<text x="198" y="815" font-family="Consolas, monospace" font-size="11" fill="#ffb347" text-anchor="middle" font-weight="normal">РАДИАТОР</text>
+<rect x="240" y="798" width="77" height="24" fill="none" fill-opacity="1" stroke="#8c98a3" stroke-width="1"/>
+<text x="278" y="815" font-family="Consolas, monospace" font-size="11" fill="#e8ecef" text-anchor="middle" font-weight="normal">ПРИВОДЫ</text>
+<rect x="320" y="798" width="77" height="24" fill="none" fill-opacity="1" stroke="#8c98a3" stroke-width="1"/>
+<text x="358" y="815" font-family="Consolas, monospace" font-size="11" fill="#e8ecef" text-anchor="middle" font-weight="normal">ПОЛЕ</text>
+<rect x="400" y="798" width="77" height="24" fill="none" fill-opacity="1" stroke="#8c98a3" stroke-width="1"/>
+<text x="438" y="815" font-family="Consolas, monospace" font-size="11" fill="#e8ecef" text-anchor="middle" font-weight="normal">ПОВРЕЖД.</text>
+<text x="84" y="850" font-family="Consolas, monospace" font-size="13" fill="#e8ecef" text-anchor="start" font-weight="normal">Радиатор</text>
+<text x="476" y="850" font-family="Consolas, monospace" font-size="13" fill="#ffb347" text-anchor="end" font-weight="normal">+774 °C · светится</text>
+<text x="84" y="873" font-family="Consolas, monospace" font-size="13" fill="#e8ecef" text-anchor="start" font-weight="normal">Нагрузка насоса</text>
+<text x="476" y="873" font-family="Consolas, monospace" font-size="13" fill="#ffb347" text-anchor="end" font-weight="normal">64 % · COP 0,12</text>
+<text x="84" y="896" font-family="Consolas, monospace" font-size="13" fill="#e8ecef" text-anchor="start" font-weight="normal">Компрессор</text>
+<text x="476" y="896" font-family="Consolas, monospace" font-size="13" fill="#ff5a4a" text-anchor="end" font-weight="normal">перегрузка x2,1</text>
+<text x="84" y="919" font-family="Consolas, monospace" font-size="13" fill="#e8ecef" text-anchor="start" font-weight="normal">Охлаждение</text>
+<text x="476" y="919" font-family="Consolas, monospace" font-size="13" fill="#e8ecef" text-anchor="end" font-weight="normal">983 Вт (испаритель)</text>
+<text x="84" y="942" font-family="Consolas, monospace" font-size="13" fill="#e8ecef" text-anchor="start" font-weight="normal">Испаритель</text>
+<text x="476" y="942" font-family="Consolas, monospace" font-size="13" fill="#7fd6ff" text-anchor="end" font-weight="normal">3,1 кг · 1 кВт · 186 мин</text>
+<text x="84" y="965" font-family="Consolas, monospace" font-size="13" fill="#e8ecef" text-anchor="start" font-weight="normal">Предел по жаре</text>
+<text x="476" y="965" font-family="Consolas, monospace" font-size="13" fill="#ffb347" text-anchor="end" font-weight="normal">+502 °C · без поля +522</text>
+<text x="84" y="988" font-family="Consolas, monospace" font-size="13" fill="#e8ecef" text-anchor="start" font-weight="normal">Аппаратура</text>
+<text x="476" y="988" font-family="Consolas, monospace" font-size="13" fill="#7fdc8a" text-anchor="end" font-weight="normal">+40 °C</text>
+<text x="84" y="1011" font-family="Consolas, monospace" font-size="13" fill="#e8ecef" text-anchor="start" font-weight="normal">Контур</text>
+<text x="476" y="1011" font-family="Consolas, monospace" font-size="13" fill="#7fdc8a" text-anchor="end" font-weight="normal">исправен</text>
+<rect x="520" y="760" width="420" height="280" fill="#0b0f14" fill-opacity="0.85" stroke="#2c333b" stroke-width="1"/>
+<text x="532" y="782" font-family="Consolas, monospace" font-size="15" fill="#e8ecef" text-anchor="start" font-weight="normal">КАРТА</text>
+<text x="928" y="782" font-family="Consolas, monospace" font-size="14" fill="#8c98a3" text-anchor="end" font-weight="normal">▿</text>
+<text x="534" y="804" font-family="Consolas, monospace" font-size="11" fill="#ffb347" text-anchor="start" font-weight="normal">МЕСТН</text>
+<text x="632" y="804" font-family="Consolas, monospace" font-size="11" fill="#8c98a3" text-anchor="start" font-weight="normal">ОРБИТА</text>
+<text x="730" y="804" font-family="Consolas, monospace" font-size="11" fill="#8c98a3" text-anchor="start" font-weight="normal">ПИТАНИЕ</text>
+<text x="828" y="804" font-family="Consolas, monospace" font-size="11" fill="#8c98a3" text-anchor="start" font-weight="normal">ОПЦИИ</text>
+<line x1="530" y1="812" x2="930" y2="812" stroke="#2c333b" stroke-width="1"/>
+<circle cx="730" cy="920" r="26" fill="none" stroke="#3a6070" stroke-width="1"/>
+<circle cx="730" cy="920" r="52" fill="none" stroke="#3a6070" stroke-width="1"/>
+<circle cx="730" cy="920" r="78" fill="none" stroke="#3a6070" stroke-width="1"/>
+<circle cx="730" cy="920" r="104" fill="none" stroke="#3a6070" stroke-width="1"/>
+<polygon points="730,905 722,930 738,930" fill="#7fd6ff" stroke="none" stroke-width="1"/>
+<text x="538" y="1025" font-family="Consolas, monospace" font-size="11" fill="#8c98a3" text-anchor="start" font-weight="normal">100 м</text>
+<rect x="970" y="760" width="420" height="280" fill="#0b0f14" fill-opacity="0.85" stroke="#2c333b" stroke-width="1"/>
+<text x="982" y="782" font-family="Consolas, monospace" font-size="15" fill="#e8ecef" text-anchor="start" font-weight="normal">ОРГАНИЗМ</text>
+<text x="1378" y="782" font-family="Consolas, monospace" font-size="14" fill="#8c98a3" text-anchor="end" font-weight="normal">▿</text>
+<text x="984" y="804" font-family="Consolas, monospace" font-size="11" fill="#8c98a3" text-anchor="start" font-weight="normal">ЦЕЛИ</text>
+<text x="1082" y="804" font-family="Consolas, monospace" font-size="11" fill="#8c98a3" text-anchor="start" font-weight="normal">ПОЛЁТ</text>
+<text x="1180" y="804" font-family="Consolas, monospace" font-size="11" fill="#8c98a3" text-anchor="start" font-weight="normal">ПОСАДКА</text>
+<text x="1278" y="804" font-family="Consolas, monospace" font-size="11" fill="#ffb347" text-anchor="start" font-weight="normal">ОРГАНИЗМ</text>
+<line x1="980" y1="812" x2="1380" y2="812" stroke="#2c333b" stroke-width="1"/>
+<text x="986" y="840" font-family="Consolas, monospace" font-size="13" fill="#8c98a3" text-anchor="start" font-weight="normal">ПУЛЬС</text>
+<text x="1374" y="840" font-family="Consolas, monospace" font-size="14" fill="#e8ecef" text-anchor="end" font-weight="normal">92</text>
+<text x="986" y="884" font-family="Consolas, monospace" font-size="13" fill="#8c98a3" text-anchor="start" font-weight="normal">ТЕМПЕРАТУРА ТЕЛА</text>
+<text x="1374" y="884" font-family="Consolas, monospace" font-size="14" fill="#e8ecef" text-anchor="end" font-weight="normal">37,6 °C</text>
+<text x="986" y="928" font-family="Consolas, monospace" font-size="13" fill="#8c98a3" text-anchor="start" font-weight="normal">ДОЗА ЗА ВЫХОД</text>
+<text x="1374" y="928" font-family="Consolas, monospace" font-size="14" fill="#e8ecef" text-anchor="end" font-weight="normal">0,21 Зв</text>
+<text x="986" y="972" font-family="Consolas, monospace" font-size="13" fill="#8c98a3" text-anchor="start" font-weight="normal">СОСТОЯНИЕ</text>
+<text x="1374" y="972" font-family="Consolas, monospace" font-size="14" fill="#e8ecef" text-anchor="end" font-weight="normal">ПЕРЕГРЕВ 1</text>
+<text x="560" y="720" font-family="Consolas, monospace" font-size="13" fill="#8c98a3" text-anchor="start" font-weight="normal">СКОРОСТЬ</text>
+<text x="560" y="742" font-family="Consolas, monospace" font-size="17" fill="#e8ecef" text-anchor="start" font-weight="normal">0,7 м/с</text>
+<text x="780" y="720" font-family="Consolas, monospace" font-size="13" fill="#8c98a3" text-anchor="start" font-weight="normal">КУРС</text>
+<text x="780" y="742" font-family="Consolas, monospace" font-size="17" fill="#e8ecef" text-anchor="start" font-weight="normal">358°</text>
+<text x="1000" y="720" font-family="Consolas, monospace" font-size="13" fill="#8c98a3" text-anchor="start" font-weight="normal">ЦЕЛЬ</text>
+<text x="1000" y="742" font-family="Consolas, monospace" font-size="17" fill="#ffb347" text-anchor="start" font-weight="normal">кромка 4 м</text>
+<text x="1220" y="720" font-family="Consolas, monospace" font-size="13" fill="#8c98a3" text-anchor="start" font-weight="normal">ГРУНТ</text>
+<text x="1220" y="742" font-family="Consolas, monospace" font-size="17" fill="#ff5a4a" text-anchor="start" font-weight="normal">+780 °C</text>
+<rect x="1420" y="760" width="420" height="280" fill="#0b0f14" fill-opacity="0.85" stroke="#2c333b" stroke-width="1"/>
+<text x="1434" y="786" font-family="Consolas, monospace" font-size="17" fill="#e8ecef" text-anchor="start" font-weight="normal">РАСХОД</text>
+<text x="1826" y="786" font-family="Consolas, monospace" font-size="13" fill="#ffb347" text-anchor="end" font-weight="normal">хватит на 9 ч · батарея</text>
+<text x="1434" y="830" font-family="Consolas, monospace" font-size="14" fill="#e8ecef" text-anchor="start" font-weight="normal">Питание</text>
+<text x="1826" y="830" font-family="Consolas, monospace" font-size="14" fill="#e8ecef" text-anchor="end" font-weight="normal">2 310 Вт · поле 1 000</text>
+<text x="1434" y="870" font-family="Consolas, monospace" font-size="14" fill="#e8ecef" text-anchor="start" font-weight="normal">Батарея</text>
+<text x="1826" y="870" font-family="Consolas, monospace" font-size="14" fill="#e8ecef" text-anchor="end" font-weight="normal">62 % · 9 ч</text>
+<text x="1434" y="910" font-family="Consolas, monospace" font-size="14" fill="#e8ecef" text-anchor="start" font-weight="normal">Кислород</text>
+<text x="1826" y="910" font-family="Consolas, monospace" font-size="14" fill="#e8ecef" text-anchor="end" font-weight="normal">81 % · 30 ч</text>
+<text x="1434" y="950" font-family="Consolas, monospace" font-size="14" fill="#e8ecef" text-anchor="start" font-weight="normal">Вода испарителя</text>
+<text x="1826" y="950" font-family="Consolas, monospace" font-size="14" fill="#7fd6ff" text-anchor="end" font-weight="normal">3,1 кг · 186 мин</text>
+</svg>

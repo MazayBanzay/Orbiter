@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>В2: механика тележки</title>
+<style>
+  html,body{margin:0;height:100%;background:#07080a;color:#cfd6df;font:13px "Segoe UI",Arial;overflow:hidden}
+  #ui{position:absolute;left:12px;top:10px;max-width:520px;max-height:calc(100% - 24px);overflow:auto;background:rgba(12,14,17,.9);border:1px solid #2a2f37;border-radius:6px;padding:10px 12px;box-sizing:border-box}
+  #ui h1{font-size:15px;margin:0 0 6px;color:#e6c79a}
+  #ui p{margin:3px 0;line-height:1.4}
+  #ui button{background:#1c2026;color:#cfd6df;border:1px solid #3a414b;border-radius:4px;padding:4px 8px;margin:4px 4px 0 0;cursor:pointer}
+  #ui button.on{border-color:#e6c79a;color:#e6c79a}
+  table{border-collapse:collapse;margin:6px 0;width:100%;font-size:12px} th,td{border-top:1px solid #2a2f37;padding:3px 4px;vertical-align:top;text-align:left} th{color:#e6c79a;font-weight:600}
+  .ok{color:#8fb39a}.no{color:#d08a7a}.n{color:#8a93a0}
+  #hide{position:absolute;right:12px;top:10px;background:#1c2026;color:#cfd6df;border:1px solid #3a414b;border-radius:4px;padding:4px 8px}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>В2: механика тележки (под меш) и состав с одной кабиной</h1>
+  <table>
+    <tr><th>Нагрузка</th><td>на тележку 83,5–84,7 МН; ×1,2 ×1,5 = 150–153 МН расчётная</td></tr>
+    <tr><th>Гусеницы</th><td>2 × 1,9 м, обвод 8,4 × 1,8 м, пятно 6,6 м; 40 звеньев шаг 0,475 м по ≈ 0,87 т; ≈ 3,35 МПа на грунт</td></tr>
+    <tr><th>Катки</th><td>7 станций шаг 0,95 м, сдвоенные Ø 0,9 × 0,7 м; станция 6,0 МН (расч. 10,8); Герц 0,79 ГПа сталь / 0,97 ГПа с облицовкой PCBN</td></tr>
+    <tr><th>Подвеска</th><td>балансирный рычаг + гидропневмоцилиндр Ø 0,63 м при 35 МПа, ход ±0,3 м; 14 на тележку; MR-клапаны, 3 гидрогруппы на состав (трёхточечное опирание)</td></tr>
+    <tr><th>Поворот</th><td>опорно-поворотный круг Ø 3,6 м, ролики 0,3 м: 13,4 МН/м, 1,8 ГПа (статический предел ISO 76 — 4,0); 2 цилиндра руления</td></tr>
+    <tr><th>Привод</th><td>мотор-насос 1,5–2,3 МВт (с грузом 1 км/ч); ведущее Ø 1,8 м, 2 радиально-поршневых гидромотора, 1,5–2,3 МН·м (с f 1,5 — 2,3–3,4)</td></tr>
+    <tr><th>Энергия</th><td>цикл 3 км туда (с грузом) и обратно, f 1,5: 6,9–11,1 МВт·ч на тележку. Батарея Li-S эпохи 6,3–10,1 т, 9–15 м³ — в кессоне палубы (≈ 17,7 м³) входит. Конденсаторы как основной накопитель — 140–220 т, нет; только буфер пиков ≈ 50 кВт·ч (домкраты, трогание). Зарядка у борта: состав 124–200 МВт·ч, стойка 50 МВт — 2,5–4 ч</td></tr>
+    <tr><th>Материалы</th><td>конструкция (кессон палубы, рамы тележки, ступицы катков, гильзы цилиндров) — углепластик и титан; контакт и износ (звенья, пальцы, бандажи катков, зубья ведущего, дорожки круга) — мартенситно-стареющая сталь 2,0 ГПа; облицовка беговых дорожек и бандажей — PCBN 5 мм (только сжатие); ролики круга — Si₃N₄</td></tr><tr><th>Масса тележки</th><td>по узлам: сталь ≈ 255–260 т; с материалами по местам ≈ 125–130 т (звенья 34, катки 28, привод 9, круг 10, подвеска 10, рамы 8, палуба 8, пакет 6–10, прочее 12); состав ≈ 2,25–2,35 кт</td></tr>
+    <tr><th>Скорость</th><td>с грузом 1 км/ч; порожним 10 км/ч — предел ходовой (тяжёлые звенья, удары), мощности хватает на 18–28 км/ч</td></tr>
+    <tr><th>Кабина</th><td>одна: гермомодуль 5,6 × 3,4 × 2,4 м на 4–5 человек, спускается платформой ангара (18 × 9 × 2,89), ставится на ведущую машину у корабля через меню; две другие машины — ведомые</td></tr>
+  </table>
+  <p class="n">Оценки мои, по формулам (Герц, изгиб, давление, оболочка под давлением); прочности и плотности материалов — по памяти, не сверены. Не посчитаны: усталость звеньев и пальцев, динамика при 10 км/ч, тепловой режим пакетов, грузоподъёмность платформы ангара.</p>
+  <div><button id="cut">Разрез</button><button id="cD">Тележка</button><button id="cC">Кабина</button><button id="cT">Состав</button></div>
+</div>
+<button id="hide">скрыть панель</button>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputEncoding = THREE.sRGBEncoding;
+  document.body.appendChild(renderer.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x07080a); scene.fog = new THREE.FogExp2(0x0b0c0f, 0.003);
+  const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.3, 3000);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  function view(p, t) { camera.position.set(...p); controls.target.set(...t); controls.update(); }
+  const std = (c, m, r, e) => new THREE.MeshStandardMaterial(Object.assign({ color: c, metalness: m, roughness: r }, e || {}));
+  const M = {
+    hull: std(0x2a2e35, 0.75, 0.42, { flatShading: true }), hullD: std(0x1b1e23, 0.7, 0.5, { flatShading: true }), body: std(0xb9bfc6, 0.35, 0.42), bodyD: std(0x5c636c, 0.5, 0.4),
+    band: std(0x24282e, 0.8, 0.35), orange: std(0xc8622a, 0.25, 0.5), yellow: std(0xc79a22, 0.3, 0.55), track: std(0x121315, 0.5, 0.8), shoe: std(0x24262b, 0.6, 0.6, { flatShading: true }),
+    trap: std(0x2c3b52, 0.85, 0.35, { flatShading: true }), rib: std(0x1a2230, 0.9, 0.3, { flatShading: true }), batt: std(0x26364a, 0.7, 0.35), ring: std(0x7a6a50, 0.8, 0.35), jack: std(0x9aa3ad, 0.9, 0.25),
+    mat: std(0x3b3a36, 0.4, 0.8, { flatShading: true }), rail: std(0x7a6a50, 0.8, 0.35), tyre: std(0x16171a, 0.3, 0.85), rim: std(0x6f767e, 0.8, 0.35),
+    glass: std(0x0a0d12, 1.0, 0.06), ground: std(0x131210, 0, 0.97), road: std(0x1b1a17, 0, 0.92),
+    glowB: new THREE.MeshBasicMaterial({ color: 0x3fa8ff }), coil: new THREE.MeshBasicMaterial({ color: 0x4fb4ff, transparent: true, opacity: 0.55 }), lamp: new THREE.MeshBasicMaterial({ color: 0xfff2d8 }), man: std(0xd8dde3, 0, 0.6),
+  };
+  function add(geo, mat, x, y, z, parent, cast = true) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; (parent || scene).add(m); return m; }
+  function grp(parent, x = 0, y = 0, z = 0) { const g = new THREE.Group(); g.position.set(x, y, z); (parent || scene).add(g); return g; }
+  function extr(pts, depth, mat, parent) { const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) s.lineTo(p[0], p[1]); s.lineTo(pts[0][0], pts[0][1]); const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false }); g.translate(0, 0, -depth / 2); return add(g, mat, 0, 0, 0, parent); }
+  function trackUnit(L, h, w, parent, nW) {
+    const g = grp(parent); const r = h / 2, s = new THREE.Shape();
+    s.moveTo(-L / 2 + r, 0); s.lineTo(L / 2 - r, 0); s.absarc(L / 2 - r, r, r, -Math.PI / 2, Math.PI / 2, false); s.lineTo(-L / 2 + r, h); s.absarc(-L / 2 + r, r, r, Math.PI / 2, Math.PI * 1.5, false);
+    const tg = new THREE.ExtrudeGeometry(s, { depth: w, bevelEnabled: false, curveSegments: 12 }); tg.translate(0, 0, -w / 2); add(tg, M.track, 0, 0, 0, g);
+    const shoe = new THREE.BoxGeometry(0.4, 0.1, w + 0.08), n = Math.round((L - 2 * r) / 0.6);
+    for (let i = 0; i <= n; i++) { const x = -L / 2 + r + i * ((L - 2 * r) / n); add(shoe, M.shoe, x, 0.05, 0, g); add(shoe, M.shoe, x, h + 0.02, 0, g); }
+    for (const sx of [-1, 1]) add(new THREE.CylinderGeometry(r * 1.02, r * 1.02, w + 0.06, 14), M.hull, sx * (L / 2 - r), r, 0, g).rotation.x = Math.PI / 2;
+    for (let i = 0; i < nW; i++) add(new THREE.CylinderGeometry(0.45, 0.45, w + 0.04, 12), M.hullD, -L / 2 + r + 0.7 + i * ((L - 2 * r - 1.4) / (nW - 1)), r * 0.8, 0, g).rotation.x = Math.PI / 2;
+    return g;
+  }
+  function label(lines, x, y, z, parent, s = 1) {
+    const fs = 38, lh = 48, pad = 18, w = 40 + Math.max(...lines.map(l => l.length)) * 21, h = pad * 2 + lh * lines.length;
+    const c = document.createElement("canvas"); c.width = w; c.height = h; const ctx = c.getContext("2d");
+    ctx.fillStyle = "rgba(10,12,15,0.82)"; ctx.fillRect(0, 0, w, h); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    lines.forEach((l, i) => { ctx.fillStyle = i === 0 ? "#e6c79a" : "#cfd6df"; ctx.font = (i === 0 ? "bold " : "") + fs + "px Segoe UI, Arial"; ctx.fillText(l, w / 2, pad + lh * (i + 0.5)); });
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false })); sp.scale.set(w / 64 * s, h / 64 * s, 1); sp.position.set(x, y, z); sp.renderOrder = 10; (parent || scene).add(sp); return sp;
+  }
+  function dim(a, b, txt, at, parent) {
+    const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...a), new THREE.Vector3(...b)]); (parent || scene).add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xe6c79a })));
+    label([txt], at[0], at[1], at[2], parent, 0.8);
+  }
+  add(new THREE.PlaneGeometry(2400, 2400), M.ground, 0, 0, 0, scene, false).rotation.x = -Math.PI / 2;
+
+  function container(parent, y) {
+    const t = grp(parent, 0, y, 0); const R8 = 4.375, LB = 34.6;
+    const tb = add(new THREE.CylinderGeometry(R8, R8, LB, 8), M.trap, 0, 0, 0, t); tb.rotation.z = Math.PI / 2; tb.rotateY(Math.PI / 8);
+    for (let i = 0; i <= 8; i++) { const r = add(new THREE.CylinderGeometry(R8 + 0.12, R8 + 0.12, 0.35, 8), M.rib, -LB / 2 + 0.6 + i * (LB - 1.2) / 8, 0, 0, t); r.rotation.z = Math.PI / 2; r.rotateY(Math.PI / 8); }
+    for (const sx of [-1, 1]) { add(new THREE.CylinderGeometry(0.9, 0.9, 0.6, 24), M.hull, sx * (LB / 2 + 0.6), 0, 0, t).rotation.z = Math.PI / 2; add(new THREE.TorusGeometry(2.6, 0.08, 8, 48), M.glowB, sx * (LB / 2 + 0.31), 0, 0, t, false).rotation.y = Math.PI / 2; }
+    return t;
+  }
+  function saddles(parent, deckY) { for (const dx of [-14, -7, 0, 7, 14]) { const m = extr([[-4.3, 0], [4.3, 0], [4.3, 1.5], [3.9, 2.72], [1.68, 0.5], [-1.68, 0.5], [-3.9, 2.72], [-4.3, 1.5]], 1.0, M.bodyD, parent); m.rotation.y = Math.PI / 2; m.position.set(dx, deckY, 0); } }
+  function mpu(parent, x, y, z) {
+    const g = grp(parent, x, y, z);
+    add(new THREE.BoxGeometry(9.52, 1.3, 4.4), M.body, 0, 1.3, 0, g); add(new THREE.BoxGeometry(3.0, 1.0, 3.6), M.glass, 3.2, 2.4, 0, g); add(new THREE.BoxGeometry(9.6, 0.1, 4.45), M.orange, 0, 1.95, 0, g);
+    for (let i = 0; i < 4; i++) for (const sz of [-1, 1]) add(new THREE.CylinderGeometry(0.8, 0.8, 0.65, 16), M.tyre, -3.6 + i * 2.4, 0.8, sz * 2.0, g).rotation.x = Math.PI / 2;
+    return g;
+  }
+
+
+  const LS = 8.8, P = LS + 0.3, H = 2.85;
+  const T = { belt: std(0x121315, 0.5, 0.8, { transparent: true, opacity: 1 }), deck: std(0x2a2e35, 0.75, 0.42, { transparent: true, opacity: 1, flatShading: true }) };
+  const cutMats = [T.belt, T.deck];
+  // ---------- one cart, mechanically detailed (origin = bottom centre) ----------
+  function cartDetail(parent, labels) {
+    const g = grp(parent);
+    for (const sz of [-1, 1]) {
+      const tz = sz * 1.05, tg = grp(g, 0, 0, tz);
+      // track belt: loop 8.4 m, height 1.8, width 1.9; 40 links pitch 0.475
+      const r = 0.9, L = 8.4, s = new THREE.Shape();
+      s.moveTo(-L / 2 + r, 0); s.lineTo(L / 2 - r, 0); s.absarc(L / 2 - r, r, r, -Math.PI / 2, Math.PI / 2, false); s.lineTo(-L / 2 + r, 2 * r); s.absarc(-L / 2 + r, r, r, Math.PI / 2, Math.PI * 1.5, false);
+      const hole = new THREE.Path(); hole.moveTo(-L / 2 + r, 0.12); hole.lineTo(L / 2 - r, 0.12); hole.absarc(L / 2 - r, r, r - 0.12, -Math.PI / 2, Math.PI / 2, false); hole.lineTo(-L / 2 + r, 2 * r - 0.12); hole.absarc(-L / 2 + r, r, r - 0.12, Math.PI / 2, Math.PI * 1.5, false); s.holes.push(hole);
+      const bg = new THREE.ExtrudeGeometry(s, { depth: 1.9, bevelEnabled: false, curveSegments: 18 }); bg.translate(0, 0, -0.95); add(bg, T.belt, 0, 0, 0, tg);
+      for (let i = 0; i < 18; i++) for (const yy of [0.06, 1.74]) add(new THREE.BoxGeometry(0.1, 0.05, 1.92), M.shoe, -3.3 + i * 0.388, yy, 0, tg);
+      // sprocket (rear, driven) and idler (front), D 1.8
+      add(new THREE.CylinderGeometry(0.78, 0.78, 1.5, 20), M.ring, -3.3, 0.9, 0, tg).rotation.x = Math.PI / 2;
+      for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; add(new THREE.BoxGeometry(0.16, 0.16, 1.55), M.ring, -3.3 + 0.82 * Math.cos(a), 0.9 + 0.82 * Math.sin(a), 0, tg); }
+      add(new THREE.CylinderGeometry(0.75, 0.75, 1.5, 20), M.hullD, 3.3, 0.9, 0, tg).rotation.x = Math.PI / 2;
+      // two hydraulic motors on the sprocket hub
+      for (const mz of [-1, 1]) add(new THREE.CylinderGeometry(0.42, 0.42, 0.35, 16), M.orange, -3.3, 0.9, mz * (sz > 0 ? 1.15 : 1.15) * 0, tg).rotation.x = Math.PI / 2;
+      add(new THREE.CylinderGeometry(0.45, 0.45, 0.4, 16), M.orange, -3.3, 0.9, sz * 1.15, tg).rotation.x = Math.PI / 2;
+      // 7 roller stations, pitch 0.95: twin rollers D 0.9 x 0.7, trailing arms, hydro-pneumatic cylinders
+      for (let i = 0; i < 7; i++) {
+        const x = -2.85 + i * 0.95;
+        for (const fz of [-0.5, 0.5]) add(new THREE.CylinderGeometry(0.45, 0.45, 0.7, 18), M.rim, x, 0.57, fz, tg).rotation.x = Math.PI / 2;
+        const arm = add(new THREE.BoxGeometry(0.7, 0.18, 0.25), M.bodyD, x + 0.3, 0.95, 0, tg); arm.rotation.z = -0.55;
+        const cyl = add(new THREE.CylinderGeometry(0.16, 0.16, 0.7, 12), M.jack, x + 0.35, 1.35, 0, tg); cyl.rotation.z = Math.PI / 2 - 0.25;
+      }
+      for (const x of [-1.5, 1.5]) add(new THREE.CylinderGeometry(0.2, 0.2, 1.2, 12), M.rim, x, 1.55, 0, tg).rotation.x = Math.PI / 2;   // return rollers
+      add(new THREE.BoxGeometry(7.2, 0.35, 0.5), M.hull, 0, 1.45, 0, tg);                                                             // track frame
+    }
+    add(new THREE.BoxGeometry(2.6, 0.3, 3.6), M.hull, 0, 1.75, 0, g);                       // truck cross-member
+    add(new THREE.CylinderGeometry(1.8, 1.8, 0.2, 40), M.ring, 0, 2.0, 0, g);                // slewing ring D 3.6
+    for (const sx of [-1, 1]) add(new THREE.CylinderGeometry(0.12, 0.12, 1.6, 10), M.jack, sx * 2.6, 1.95, 1.6, g).rotation.x = Math.PI / 2;   // steering cylinders
+    const deck = add(new THREE.BoxGeometry(LS, 0.75, 4.0), T.deck, 0, 2.475, 0, g);
+    // inside the deck box: 2 battery bays 8.0 x 0.6 x 1.7; end compartments: motor-pump 2.3 MW, capacitor buffer, charging socket
+    for (const bz of [-0.95, 0.95]) add(new THREE.BoxGeometry(7.0, 0.55, 1.6), M.batt, 0, 2.47, bz, g);
+    add(new THREE.CylinderGeometry(0.35, 0.35, 1.4, 16), M.orange, -3.95, 2.47, -0.9, g).rotation.x = Math.PI / 2;
+    add(new THREE.BoxGeometry(0.6, 0.45, 1.0), M.coil || M.glowB, -3.95, 2.47, 1.0, g);
+    add(new THREE.CylinderGeometry(0.16, 0.16, 0.12, 12), M.glowB, LS / 2 + 0.02, 2.47, 1.5, g, false).rotation.z = Math.PI / 2;
+    for (const sz of [-1, 1]) add(new THREE.BoxGeometry(LS - 1, 0.07, 0.06), M.orange, 0, 2.83, sz * 2.0, g);
+    for (const sx of [-1, 1]) for (const z of [-1.2, 1.2]) add(new THREE.BoxGeometry(0.25, 0.35, 0.5), M.yellow, sx * (LS / 2 + 0.1), 2.45, z, g);   // coupling jaws
+    if (labels) {
+      label(["Гусеница 1,9 × 8,4 м, обвод 18,9 м", "40 звеньев шаг 0,475, звено ≈ 0,87 т"], 0, 0.9, -4.6, g, 0.42);
+      label(["7 станций катков Ø 0,9 × 2 × 0,7 м", "Герц 0,79 ГПа (сталь), 0,97 (PCBN)"], 0, -1.2, 3.6, g, 0.42);
+      label(["Подвеска: рычаг + гидроцилиндр Ø 0,63 м,", "35 МПа, ход ±0,3 м, 3 гидрогруппы"], 2.5, 3.9, 3.2, g, 0.42);
+      label(["Ведущее Ø 1,8: 2 гидромотора,", "2,3–3,4 МН·м с f 1,5"], -5.8, 1.0, 2.8, g, 0.42);
+      label(["Поворотный круг Ø 3,6, ролики 0,3 м:", "1,8 ГПа (статика ISO 76 ≤ 4,0)"], 0, 4.0, -3.4, g, 0.42);
+      label(["Палуба-кессон 8,8 × 4,0 × 0,75: пояса 40 мм;", "внутри пакеты Li-S 6,3–10,1 т (9–15 м³ из 17,7)"], 0, 5.4, 0, g, 0.42);
+      label(["Торец: мотор-насос 2,3 МВт, буфер", "конденсаторов ≈ 50 кВт·ч, гнездо зарядки"], -6.6, 3.6, -1.2, g, 0.42);
+    }
+    return g;
+  }
+  // ---------- detail cart on its own ----------
+  const D = grp(scene, -34, 0, 0); cartDetail(D, true);
+  // ---------- full train: 3 machines x 2 spans x 3 carts, ONE cab on the lead machine ----------
+  const TR = grp(scene, 12, 0, 0), X0 = -(6 * P - 0.3) / 2 + LS / 2;
+  for (let s = 0; s < 6; s++) for (const z of [-4, 0, 4]) { const c = cartDetail(TR, false); c.position.set(X0 + s * P, 0, z); }
+  for (let s = 0; s < 6; s++) for (const sx of [-1, 1]) add(new THREE.BoxGeometry(0.6, 0.5, 12.0), M.bodyD, X0 + s * P + sx * 3.6, 2.9, 0, TR);   // span cross-beams (carry the В2 outriggers)
+  const cab = grp(TR, X0 + 5 * P + LS / 2 - 3.0, H + 0.25, -4.2);
+  add(new THREE.BoxGeometry(5.0, 0.6, 3.2), M.hullD, 0, 0.3, 0, cab);
+  extr([[-2.8, 0.6], [2.6, 0.6], [2.8, 1.4], [2.1, 3.0], [-2.8, 3.0]], 3.4, M.body, cab);
+  add(new THREE.BoxGeometry(0.05, 0.7, 2.8), M.glass, 2.52, 2.35, 0, cab, false); for (const sz of [-1, 1]) add(new THREE.BoxGeometry(2.6, 0.5, 0.05), M.glass, 0.6, 2.4, sz * 1.71, cab, false);
+  add(new THREE.BoxGeometry(1.0, 1.9, 0.08), M.bodyD, -1.2, 1.6, 1.72, cab, false);
+  const CON = grp(TR, X0 + 2.5 * P, 0, 0); saddles(CON, H + 0.25); container(CON, 7.65);
+  label(["Состав: 18 тележек, 54,3 × 12 м, ≈ 2,25–2,35 кт", "одна кабина на ведущей машине — ставится у корабля из меню"], 0, 17, 0, TR, 1.0);
+  // ---------- controls ----------
+  let cut = false; const bc = document.getElementById("cut");
+  bc.onclick = () => { cut = !cut; bc.classList.toggle("on", cut); for (const m of cutMats) { m.opacity = cut ? 0.18 : 1; m.depthWrite = !cut; m.needsUpdate = true; } };
+  document.getElementById("cD").onclick = () => view([-34 + 15, 8, 19], [-34, 2.0, 0]);
+  document.getElementById("cT").onclick = () => view([45, 28, 62], [10, 4, 0]);
+  document.getElementById("cC").onclick = () => view([12 + X0 + 5 * P + 16, 9, 20], [12 + X0 + 5 * P, 4, -3]);
+  function flood(x, y, z, tx, ty, tz) { const s = new THREE.SpotLight(0xfff0d8, 3.0, 220, 0.7, 0.6, 1.2); s.position.set(x, y, z); scene.add(s); const tg = new THREE.Object3D(); tg.position.set(tx, ty, tz); scene.add(tg); s.target = tg; s.castShadow = true; s.shadow.mapSize.set(1024, 1024); }
+  flood(-20, 30, 30, -34, 1, 0); flood(40, 45, 55, 10, 4, 0); flood(-40, 40, -50, 0, 4, 0);
+  scene.add(new THREE.HemisphereLight(0x46505f, 0x0d0b09, 0.6)); const rim = new THREE.DirectionalLight(0x8090ad, 0.7); rim.position.set(80, 60, -80); scene.add(rim);
+  const man = grp(scene, -28, 0, 4); add(new THREE.CylinderGeometry(0.17, 0.2, 0.85, 10), M.man, 0, 0.43, 0, man); add(new THREE.CylinderGeometry(0.22, 0.2, 0.62, 10), M.man, 0, 1.16, 0, man); add(new THREE.SphereGeometry(0.13, 12, 10), M.man, 0, 1.6, 0, man);
+  document.getElementById("hide").onclick = () => { const u = document.getElementById("ui"); u.style.display = u.style.display === "none" ? "block" : "none"; };
+  addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+  view([-34 + 15, 8, 19], [-34, 2.0, 0]);
+  (function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+})();
+</script>
+</body>
+</html>

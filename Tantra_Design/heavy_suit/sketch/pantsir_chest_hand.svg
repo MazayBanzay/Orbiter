@@ -1,0 +1,188 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1500" viewBox="0 0 2000 1500">
+<rect x="0" y="0" width="2000" height="1500" fill="#fbfbf8"/>
+<text x="30.0" y="44.0" font-family="Segoe UI, Arial" font-size="23" fill="#1d2733" text-anchor="start" font-weight="600">«Панцирь» · мастер-эскиз для 3D (рев. M): грудной экран и капсула кисти «Ладонь» · каждая грань - своя плоскость</text>
+<text x="30.0" y="70.0" font-family="Segoe UI, Arial" font-size="14" fill="#5d6b78" text-anchor="start" font-weight="normal">тон грани = её наклон к свету (светлое - вверх/вперёд, тёмное - вбок/вниз) · тёмные линии - швы и загнутые губы · кружки - головки стоек · размеры в метрах</text>
+<rect x="5" y="85" width="1990" height="700" fill="none" stroke="#e2e6ea"/>
+<text x="25.0" y="115.0" font-family="Segoe UI, Arial" font-size="20" fill="#1d2733" text-anchor="start" font-weight="600">Грудной экран: 4 ряда внахлёст (C1 ключичный, C2 грудной, C3 рёберный, C4 брюшной)</text>
+<polygon points="330.0,155.0 495.0,185.0 605.0,260.0 610.0,310.0 592.0,370.0 575.0,430.0 568.0,530.0 570.0,710.0 330.0,710.0 330.0,710.0 90.0,710.0 92.0,530.0 85.0,430.0 68.0,370.0 50.0,310.0 55.0,260.0 165.0,185.0 330.0,155.0" fill="#8d969e" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.2" stroke-linejoin="round"/>
+<polygon points="160.0,185.0 500.0,185.0 495.0,155.0 165.0,155.0" fill="#4a525a" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.4" stroke-linejoin="round"/>
+<polygon points="330.0,590.0 495.0,590.0 480.0,682.0 330.0,690.0" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="330.0,590.0 165.0,590.0 180.0,682.0 330.0,690.0" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="495.0,590.0 558.0,580.0 542.0,670.0 480.0,682.0" fill="#9e9c96" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="165.0,590.0 102.0,580.0 118.0,670.0 180.0,682.0" fill="#9e9c96" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<line x1="112.0" y1="684.0" x2="548.0" y2="684.0" stroke="#1d2733" stroke-width="2.6"/>
+<polygon points="330.0,490.0 510.0,490.0 500.0,605.0 330.0,612.0" fill="#e9e7e1" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="330.0,490.0 150.0,490.0 160.0,605.0 330.0,612.0" fill="#e9e7e1" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="510.0,490.0 580.0,480.0 566.0,590.0 500.0,605.0" fill="#b9b7b0" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="150.0,490.0 80.0,480.0 94.0,590.0 160.0,605.0" fill="#b9b7b0" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<line x1="90.0" y1="606.0" x2="570.0" y2="606.0" stroke="#1d2733" stroke-width="2.6"/>
+<polygon points="330.0,335.0 510.0,335.0 525.0,505.0 330.0,515.0" fill="#e9e7e1" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="330.0,335.0 150.0,335.0 135.0,505.0 330.0,515.0" fill="#e9e7e1" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="510.0,335.0 545.0,325.0 602.0,370.0 592.0,480.0 525.0,505.0" fill="#b9b7b0" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="150.0,335.0 115.0,325.0 58.0,370.0 68.0,480.0 135.0,505.0" fill="#b9b7b0" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<line x1="68.0" y1="509.0" x2="592.0" y2="509.0" stroke="#1d2733" stroke-width="2.6"/>
+<polygon points="330.0,285.0 480.0,285.0 545.0,325.0 535.0,360.0 330.0,358.0" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="330.0,285.0 180.0,285.0 115.0,325.0 125.0,360.0 330.0,358.0" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<line x1="125.0" y1="354.0" x2="535.0" y2="354.0" stroke="#1d2733" stroke-width="2.6"/>
+<line x1="330.0" y1="285.0" x2="330.0" y2="690.0" stroke="#1d2733" stroke-width="2.4"/>
+<circle cx="360.0" cy="300.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="300.0" cy="300.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="480.0" cy="300.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="180.0" cy="300.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="360.0" cy="400.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="300.0" cy="400.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="480.0" cy="400.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="180.0" cy="400.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="360.0" cy="480.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="300.0" cy="480.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="480.0" cy="480.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="180.0" cy="480.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="360.0" cy="560.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="300.0" cy="560.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="480.0" cy="560.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="180.0" cy="560.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="360.0" cy="640.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="300.0" cy="640.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="480.0" cy="640.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="180.0" cy="640.0" r="4.0" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<text x="420.0" y="330.0" font-family="Segoe UI, Arial" font-size="13" fill="#1d2733" text-anchor="middle" font-weight="normal">C1</text>
+<text x="420.0" y="430.0" font-family="Segoe UI, Arial" font-size="13" fill="#1d2733" text-anchor="middle" font-weight="normal">C2</text>
+<text x="560.0" y="420.0" font-family="Segoe UI, Arial" font-size="11" fill="#1d2733" text-anchor="middle" font-weight="normal">C2o</text>
+<text x="420.0" y="555.0" font-family="Segoe UI, Arial" font-size="13" fill="#1d2733" text-anchor="middle" font-weight="normal">C3</text>
+<text x="420.0" y="640.0" font-family="Segoe UI, Arial" font-size="13" fill="#1d2733" text-anchor="middle" font-weight="normal">C4</text>
+<text x="240.0" y="230.0" font-family="Segoe UI, Arial" font-size="12" fill="#c8463c" text-anchor="middle" font-weight="normal">ПАНЦИРЬ-2</text>
+<line x1="58.0" y1="735.0" x2="602.0" y2="735.0" stroke="#b0523a" stroke-width="1.0"/>
+<text x="330.0" y="755.0" font-family="Segoe UI, Arial" font-size="12" fill="#b0523a" text-anchor="middle" font-weight="normal">0,544 м по экрану на уровне C2</text>
+<text x="330.0" y="775.0" font-family="Segoe UI, Arial" font-size="13" fill="#5d6b78" text-anchor="middle" font-weight="normal">спереди</text>
+<polygon points="760.0,185.0 1020.0,185.0 1065.0,260.0 1063.0,370.0 1068.0,510.0 1038.0,710.0 740.0,710.0 720.0,330.0" fill="#8d969e" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.2" stroke-linejoin="round"/>
+<polygon points="1030.0,278.0 1105.0,358.0 1098.0,366.0 1040.0,290.0" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<line x1="1098.0" y1="366.0" x2="1084.0" y2="362.0" stroke="#1d2733" stroke-width="2.6"/>
+<text x="1125.0" y="318.0" font-family="Segoe UI, Arial" font-size="12" fill="#b0523a" text-anchor="start" font-weight="normal">C1 · наклон назад 30°</text>
+<polygon points="1105.0,332.0 1107.0,515.0 1093.0,520.0 1092.0,338.0" fill="#e9e7e1" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<line x1="1093.0" y1="520.0" x2="1079.0" y2="516.0" stroke="#1d2733" stroke-width="2.6"/>
+<text x="1127.0" y="423.5" font-family="Segoe UI, Arial" font-size="12" fill="#b0523a" text-anchor="start" font-weight="normal">C2 · вертикаль, ребро +22 мм</text>
+<polygon points="1098.0,488.0 1080.0,612.0 1066.0,615.0 1085.0,492.0" fill="#e9e7e1" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<line x1="1066.0" y1="615.0" x2="1052.0" y2="611.0" stroke="#1d2733" stroke-width="2.6"/>
+<text x="1100.0" y="550.0" font-family="Segoe UI, Arial" font-size="12" fill="#b0523a" text-anchor="start" font-weight="normal">C3 · вперёд-вниз 10° (обратный скат)</text>
+<polygon points="1078.0,588.0 1050.0,690.0 1037.0,690.0 1065.0,590.0" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<line x1="1050.0" y1="690.0" x2="1036.0" y2="686.0" stroke="#1d2733" stroke-width="2.6"/>
+<text x="1070.0" y="639.0" font-family="Segoe UI, Arial" font-size="12" fill="#b0523a" text-anchor="start" font-weight="normal">C4 · назад-вниз 18°</text>
+<line x1="1050.0" y1="330.0" x2="1072.0" y2="330.0" stroke="#4a525a" stroke-width="3.0"/>
+<line x1="1070.0" y1="430.0" x2="1092.0" y2="430.0" stroke="#4a525a" stroke-width="3.0"/>
+<line x1="1050.0" y1="550.0" x2="1072.0" y2="550.0" stroke="#4a525a" stroke-width="3.0"/>
+<line x1="1030.0" y1="640.0" x2="1052.0" y2="640.0" stroke="#4a525a" stroke-width="3.0"/>
+<text x="900.0" y="755.0" font-family="Segoe UI, Arial" font-size="12" fill="#b0523a" text-anchor="middle" font-weight="normal">сбоку: зазор 15–22 мм внутри габарита, губа загнута внутрь</text>
+<polygon points="1650.0,272.0 1830.0,290.0 1895.0,350.0 1900.0,490.0 1830.0,610.0 1650.0,620.0 1650.0,620.0 1470.0,610.0 1400.0,490.0 1405.0,350.0 1470.0,290.0 1650.0,272.0" fill="#8d969e" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.2" stroke-linejoin="round"/>
+<polygon points="1650.0,233.0 1830.0,248.0 1830.0,260.0 1650.0,245.0" fill="#e9e7e1" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="1650.0,233.0 1470.0,248.0 1470.0,260.0 1650.0,245.0" fill="#e9e7e1" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="1830.0,248.0 1912.0,320.0 1905.0,328.0 1830.0,260.0" fill="#b9b7b0" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="1470.0,248.0 1388.0,320.0 1395.0,328.0 1470.0,260.0" fill="#b9b7b0" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<line x1="1710.0" y1="270.0" x2="1710.0" y2="253.0" stroke="#4a525a" stroke-width="3.0"/>
+<line x1="1590.0" y1="270.0" x2="1590.0" y2="253.0" stroke="#4a525a" stroke-width="3.0"/>
+<line x1="1800.0" y1="275.0" x2="1800.0" y2="258.0" stroke="#4a525a" stroke-width="3.0"/>
+<line x1="1500.0" y1="275.0" x2="1500.0" y2="258.0" stroke="#4a525a" stroke-width="3.0"/>
+<line x1="1870.0" y1="320.0" x2="1870.0" y2="303.0" stroke="#4a525a" stroke-width="3.0"/>
+<line x1="1430.0" y1="320.0" x2="1430.0" y2="303.0" stroke="#4a525a" stroke-width="3.0"/>
+<text x="1650.0" y="215.0" font-family="Segoe UI, Arial" font-size="12" fill="#b0523a" text-anchor="middle" font-weight="normal">ребро грудины</text>
+<text x="1750.0" y="205.0" font-family="Segoe UI, Arial" font-size="12" fill="#b0523a" text-anchor="middle" font-weight="normal">18°</text>
+<text x="1900.0" y="275.0" font-family="Segoe UI, Arial" font-size="12" fill="#b0523a" text-anchor="middle" font-weight="normal">55°</text>
+<polygon points="1450.0,620.0 1850.0,620.0 1850.0,655.0 1450.0,655.0" fill="#6f7a84" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.2" stroke-linejoin="round"/>
+<text x="1650.0" y="685.0" font-family="Segoe UI, Arial" font-size="12" fill="#b0523a" text-anchor="middle" font-weight="normal">дверь-радиатор сзади - без экрана</text>
+<text x="1650.0" y="730.0" font-family="Segoe UI, Arial" font-size="12" fill="#5d6b78" text-anchor="middle" font-weight="normal">сверху (разрез z = 1,30, через C2)</text>
+<rect x="5" y="795" width="1990" height="695" fill="none" stroke="#e2e6ea"/>
+<text x="25.0" y="825.0" font-family="Segoe UI, Arial" font-size="20" fill="#1d2733" text-anchor="start" font-weight="600">Капсула кисти «Ладонь»: тыльная плита из 4 граней + скос к костяшкам, бугор большого пальца, вогнутая ладонь</text>
+<polygon points="28.0,1195.0 96.0,1191.6 96.0,1028.4 28.0,1025.0" fill="#8d969e" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="96.0,1198.4 130.0,1198.4 130.0,1021.6 96.0,1021.6" fill="#4a525a" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.6" stroke-linejoin="round"/>
+<circle cx="113.0" cy="1011.4" r="8.5" fill="#c8463c" stroke="#1d2733" stroke-width="1.2"/>
+<polygon points="181.0,1014.8 317.0,997.8 330.6,970.6 266.0,957.0 206.5,984.2" fill="#9e9c96" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="130.0,1103.2 130.0,1031.8 325.5,1014.8 376.5,1025.0 376.5,1103.2" fill="#e9e7e1" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.2" stroke-linejoin="round"/>
+<polygon points="130.0,1103.2 130.0,1188.2 325.5,1212.0 376.5,1201.8 376.5,1103.2" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.2" stroke-linejoin="round"/>
+<polygon points="130.0,1031.8 130.0,1025.0 325.5,1004.6 325.5,1014.8" fill="#b9b7b0" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.6" stroke-linejoin="round"/>
+<polygon points="130.0,1188.2 130.0,1195.0 325.5,1222.2 325.5,1212.0" fill="#9e9c96" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.6" stroke-linejoin="round"/>
+<polygon points="376.5,1025.0 402.0,1035.2 402.0,1195.0 376.5,1201.8" fill="#b9b7b0" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<line x1="130.0" y1="1103.2" x2="376.5" y2="1103.2" stroke="#1d2733" stroke-width="2.4"/>
+<circle cx="181.0" cy="1059.0" r="5.1" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="181.0" cy="1161.0" r="5.1" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="317.0" cy="1050.5" r="5.1" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<circle cx="317.0" cy="1178.0" r="5.1" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<polygon points="283.0,1178.0 334.0,1178.0 334.0,1161.0 283.0,1161.0" fill="#c8463c" fill-opacity="1.00" stroke="#1d2733" stroke-width="0.8" stroke-linejoin="round"/>
+<polygon points="402.0,1195.0 415.6,1195.0 415.6,1035.2 402.0,1035.2" fill="#4a525a" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.6" stroke-linejoin="round"/>
+<polygon points="419.0,1084.5 498.9,1083.4 509.1,1076.6 509.1,1055.0 498.9,1048.2 419.0,1047.1" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<line x1="422.4" y1="1073.3" x2="498.9" y2="1072.8" stroke="#5d6b78" stroke-width="0.8"/>
+<line x1="422.4" y1="1058.3" x2="498.9" y2="1058.8" stroke="#5d6b78" stroke-width="0.8"/>
+<circle cx="415.6" cy="1065.8" r="12.7" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<polygon points="512.5,1083.4 566.9,1082.3 577.1,1075.5 577.1,1056.1 566.9,1049.3 512.5,1048.2" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<line x1="515.9" y1="1072.8" x2="566.9" y2="1072.4" stroke="#5d6b78" stroke-width="0.8"/>
+<line x1="515.9" y1="1058.8" x2="566.9" y2="1059.2" stroke="#5d6b78" stroke-width="0.8"/>
+<circle cx="509.1" cy="1065.8" r="12.7" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<polygon points="580.5,1082.3 621.3,1081.1 631.5,1074.3 631.5,1057.3 621.3,1050.5 580.5,1049.3" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<line x1="583.9" y1="1072.4" x2="621.3" y2="1071.9" stroke="#5d6b78" stroke-width="0.8"/>
+<line x1="583.9" y1="1059.2" x2="621.3" y2="1059.7" stroke="#5d6b78" stroke-width="0.8"/>
+<circle cx="577.1" cy="1065.8" r="12.7" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<polygon points="419.0,1178.0 493.8,1175.8 504.0,1169.0 504.0,1112.2 493.8,1105.4 419.0,1103.2" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<line x1="422.4" y1="1155.6" x2="493.8" y2="1154.7" stroke="#5d6b78" stroke-width="0.8"/>
+<line x1="422.4" y1="1125.6" x2="493.8" y2="1126.5" stroke="#5d6b78" stroke-width="0.8"/>
+<circle cx="415.6" cy="1140.6" r="13.9" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<polygon points="507.4,1175.8 561.8,1173.5 572.0,1166.7 572.0,1114.5 561.8,1107.7 507.4,1105.4" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<line x1="510.8" y1="1154.7" x2="561.8" y2="1153.8" stroke="#5d6b78" stroke-width="0.8"/>
+<line x1="510.8" y1="1126.5" x2="561.8" y2="1127.4" stroke="#5d6b78" stroke-width="0.8"/>
+<circle cx="504.0" cy="1140.6" r="13.9" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<polygon points="575.4,1173.5 616.2,1171.3 626.4,1164.5 626.4,1116.7 616.2,1109.9 575.4,1107.7" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<line x1="578.8" y1="1153.8" x2="616.2" y2="1152.9" stroke="#5d6b78" stroke-width="0.8"/>
+<line x1="578.8" y1="1127.4" x2="616.2" y2="1128.3" stroke="#5d6b78" stroke-width="0.8"/>
+<circle cx="572.0" cy="1140.6" r="13.9" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<line x1="419.0" y1="1116.8" x2="623.0" y2="1120.2" stroke="#5d6b78" stroke-width="0.9"/>
+<line x1="419.0" y1="1164.4" x2="623.0" y2="1161.0" stroke="#5d6b78" stroke-width="0.9"/>
+<polygon points="300.0,970.6 381.6,991.0 385.0,1014.8 306.8,997.8" fill="#b9b7b0" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<circle cx="306.8" cy="982.5" r="11.9" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<polygon points="385.0,994.4 446.2,1021.6 442.8,1042.0 385.0,1014.8" fill="#b9b7b0" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<circle cx="385.0" cy="1004.6" r="10.2" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<text x="130.0" y="1271.5" font-family="Segoe UI, Arial" font-size="11" fill="#b0523a" text-anchor="middle" font-weight="normal">0</text>
+<text x="325.5" y="1271.5" font-family="Segoe UI, Arial" font-size="11" fill="#b0523a" text-anchor="middle" font-weight="normal">0,115</text>
+<text x="402.0" y="1271.5" font-family="Segoe UI, Arial" font-size="11" fill="#b0523a" text-anchor="middle" font-weight="normal">0,16</text>
+<text x="130.0" y="991.0" font-family="Segoe UI, Arial" font-size="11" fill="#b0523a" text-anchor="middle" font-weight="normal">0,092</text>
+<text x="325.5" y="1246.0" font-family="Segoe UI, Arial" font-size="11" fill="#b0523a" text-anchor="middle" font-weight="normal">0,126</text>
+<text x="470.0" y="931.5" font-family="Segoe UI, Arial" font-size="11" fill="#b0523a" text-anchor="middle" font-weight="normal">большой</text>
+<text x="249.0" y="931.5" font-family="Segoe UI, Arial" font-size="11" fill="#b0523a" text-anchor="middle" font-weight="normal">бугор (тенар)</text>
+<text x="334.0" y="1322.5" font-family="Segoe UI, Arial" font-size="12" fill="#5d6b78" text-anchor="middle" font-weight="normal">сверху: две плоскости у срединной складки, фаски по краям, скос к костяшкам</text>
+<polygon points="728.0,1148.0 796.0,1142.9 796.0,1012.0 728.0,1008.6" fill="#8d969e" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="796.0,1151.4 830.0,1151.4 830.0,1003.5 796.0,1003.5" fill="#4a525a" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.6" stroke-linejoin="round"/>
+<polygon points="830.0,1012.0 932.0,1008.6 932.0,1029.0 830.0,1032.4" fill="#e9e7e1" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="932.0,1008.6 1076.5,1035.8 1076.5,1056.2 932.0,1029.0" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="1076.5,1035.8 1102.0,1056.2 1102.0,1073.2 1076.5,1056.2" fill="#b9b7b0" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="830.0,1032.4 1102.0,1073.2 1102.0,1124.2 1017.0,1131.0 830.0,1137.8" fill="#8d969e" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="830.0,1137.8 1017.0,1131.0 1102.0,1124.2 1102.0,1134.4 1017.0,1144.6 830.0,1148.0" fill="#9e9c96" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="881.0,1141.2 1017.0,1137.8 1034.0,1158.2 974.5,1173.5 906.5,1165.0" fill="#b9b7b0" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="1102.0,1127.6 1115.6,1127.6 1115.6,1059.6 1102.0,1059.6" fill="#4a525a" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.6" stroke-linejoin="round"/>
+<polygon points="1117.7,1066.5 1210.4,1079.5 1206.8,1113.6 1113.5,1107.1" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="1132.1,1109.0 1192.7,1113.4 1193.6,1105.3 1132.9,1100.9" fill="#2b2f33" fill-opacity="1.00" stroke="#1d2733" stroke-width="0.6" stroke-linejoin="round"/>
+<circle cx="1115.6" cy="1086.8" r="14.7" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<polygon points="1216.2,1079.4 1277.1,1109.8 1264.3,1138.6 1201.0,1113.7" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="1213.4,1119.3 1254.5,1135.5 1257.6,1128.7 1216.4,1112.4" fill="#2b2f33" fill-opacity="1.00" stroke="#1d2733" stroke-width="0.6" stroke-linejoin="round"/>
+<circle cx="1208.6" cy="1096.6" r="13.5" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<polygon points="1282.2,1111.5 1320.8,1149.9 1301.5,1171.3 1259.2,1137.0" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="1267.3,1144.2 1294.8,1166.6 1299.3,1161.5 1271.9,1139.2" fill="#2b2f33" fill-opacity="1.00" stroke="#1d2733" stroke-width="0.6" stroke-linejoin="round"/>
+<circle cx="1270.7" cy="1124.2" r="12.3" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<polygon points="1012.0,1150.7 1072.6,1205.4 1052.4,1229.5 988.0,1179.3" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="1000.5,1189.8 1042.3,1222.5 1047.1,1216.7 1005.3,1184.1" fill="#2b2f33" fill-opacity="1.00" stroke="#1d2733" stroke-width="0.6" stroke-linejoin="round"/>
+<circle cx="1000.0" cy="1165.0" r="13.5" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<polygon points="1077.1,1208.3 1109.0,1264.6 1084.5,1279.9 1047.9,1226.6" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="1054.8,1237.5 1078.5,1272.2 1084.3,1268.6 1060.6,1233.9" fill="#2b2f33" fill-opacity="1.00" stroke="#1d2733" stroke-width="0.6" stroke-linejoin="round"/>
+<circle cx="1062.5" cy="1217.5" r="12.4" fill="#4a525a" stroke="#1d2733" stroke-width="1.2"/>
+<polygon points="838.5,1110.6 1034.0,1103.8 1085.0,1097.0 1085.0,1069.8 1034.0,1059.6 838.5,1046.0" fill="#e59a55" fill-opacity="0.20" stroke="#e59a55" stroke-width="1.4" stroke-linejoin="round" stroke-dasharray="5,3"/>
+<text x="881.0" y="981.4" font-family="Segoe UI, Arial" font-size="11" fill="#b0523a" text-anchor="middle" font-weight="normal">плоско</text>
+<text x="1000.0" y="995.0" font-family="Segoe UI, Arial" font-size="11" fill="#b0523a" text-anchor="middle" font-weight="normal">скат 12°</text>
+<text x="1110.5" y="1029.0" font-family="Segoe UI, Arial" font-size="11" fill="#b0523a" text-anchor="middle" font-weight="normal">35°</text>
+<text x="957.5" y="1207.5" font-family="Segoe UI, Arial" font-size="11" fill="#b0523a" text-anchor="middle" font-weight="normal">тенар</text>
+<text x="1034.0" y="1309.5" font-family="Segoe UI, Arial" font-size="12" fill="#5d6b78" text-anchor="middle" font-weight="normal">сбоку (со стороны большого): толщина 0,075 у запястья, 0,045 у костяшек</text>
+<polygon points="1651.4,1035.8 1756.8,1018.8 1756.8,1035.8 1661.6,1049.4" fill="#d2d0c9" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="1756.8,1018.8 1852.0,1035.8 1841.8,1049.4 1756.8,1035.8" fill="#e9e7e1" fill-opacity="1.00" stroke="#1d2733" stroke-width="2.0" stroke-linejoin="round"/>
+<polygon points="1641.2,1066.4 1651.4,1035.8 1661.6,1049.4 1651.4,1073.2" fill="#9e9c96" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.6" stroke-linejoin="round"/>
+<polygon points="1862.2,1066.4 1852.0,1035.8 1841.8,1049.4 1852.0,1073.2" fill="#b9b7b0" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.6" stroke-linejoin="round"/>
+<polygon points="1651.4,1073.2 1852.0,1073.2 1852.0,1124.2 1750.0,1117.4 1651.4,1124.2" fill="#8d969e" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="1651.4,1124.2 1750.0,1117.4 1852.0,1124.2 1852.0,1134.4 1750.0,1127.6 1651.4,1134.4" fill="#9e9c96" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.6" stroke-linejoin="round"/>
+<polygon points="1835.0,1131.0 1894.5,1141.2 1903.0,1165.0 1852.0,1171.8 1818.0,1148.0" fill="#b9b7b0" fill-opacity="1.00" stroke="#1d2733" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="1682.0,1100.4 1818.0,1100.4 1818.0,1056.2 1682.0,1056.2" fill="#e59a55" fill-opacity="0.20" stroke="#e59a55" stroke-width="1.4" stroke-linejoin="round" stroke-dasharray="5,3"/>
+<line x1="1756.8" y1="1018.8" x2="1756.8" y2="1035.8" stroke="#1d2733" stroke-width="2.4"/>
+<text x="1750.0" y="1224.5" font-family="Segoe UI, Arial" font-size="12" fill="#5d6b78" text-anchor="middle" font-weight="normal">разрез x = 0,10 (взгляд вперёд): складка, две плоскости по 12°, фаски 40°</text>
+</svg>

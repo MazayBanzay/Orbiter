@@ -1,0 +1,4 @@
+pelv bounds x -0.135..0.135 y -0.157..-0.123 z 0.962..1.069  centre-front y at z1.00: -0.156
+GAME block: 56 parts
+GAME saved C:\Games\Orbiter-2024\Tantra_Design\blender\astronavigator_suit2.blend 168
+DONE

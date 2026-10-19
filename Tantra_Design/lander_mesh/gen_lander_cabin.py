@@ -127,7 +127,8 @@ MATS = [("metal", (0.46, 0.49, 0.51), (0.35, 0.35, 0.35, 20), (0, 0, 0)), ("dark
         ("bronze", (0.54, 0.43, 0.23), (0.6, 0.55, 0.4, 40), (0, 0, 0)), ("panel", (0.22, 0.24, 0.26), (0.25, 0.25, 0.25, 12), (0, 0, 0)),
         ("label", (0.9, 0.9, 0.9), (0.1, 0.1, 0.1, 10), (0.55, 0.55, 0.55))]
 MI = {m[0]: i + 1 for i, m in enumerate(MATS)}
-TEXTURES = [("cab_metal", ""), ("cab_yoke", ""), ("cab_lbl", "D"), ("cab_ship", "D")] + [("cab_mfd%d" % i, "") for i in range(4)]
+TEXTURES = [("cab_metal", ""), ("cab_yoke", ""), ("cab_lbl", "D"), ("cab_ship", "D")] + [("cab_mfd%d" % i, "") for i in range(4)] + \
+           [("cab_scr%d" % i, "") for i in range(3)]
 TI = {t[0]: i + 1 for i, t in enumerate(TEXTURES)}
 LBL_W, LBL_H, LBL_CW, LBL_CH = 512, 256, 64, 32          # the Orbiter MFDs' button labels: 4 MFDs × 15 cells of 64 × 32
 SHIP_W, SHIP_H = 1024, 512                               # the ships' MFDs: commander left half, second pilot right half
@@ -171,7 +172,6 @@ for i in range(NA):
         z0, z1 = -WD / 2 + WD * j / NZ, -WD / 2 + WD * (j + 1) / NZ
         p = lambda a, z: np.array([CX + RD * math.cos(a), CY + RD * math.sin(a), z])
         cen = p((a0 + a1) / 2, (z0 + z1) / 2)
-        if seen_through(cen) or any(seen_through(p(a, z)) for a in (a0, a1) for z in (z0, z1)): continue
         A, B, C2, Dd = p(a0, z0), p(a1, z0), p(a1, z1), p(a0, z1)
         u0, u1 = i / NA * 8, (i + 1) / NA * 8
         g.quad(A, Dd, C2, B, ((u0, z0), (u0, z1), (u1, z1), (u1, z0)))         # its face towards the axis
@@ -183,7 +183,6 @@ for e, rin in ((-1, 0.42), (1, 0.10)):
         for k in range(6):
             r0, r1 = rin + (RD - rin) * k / 6, rin + (RD - rin) * (k + 1) / 6
             Q = [np.array([CX + r * math.cos(a), CY + r * math.sin(a), z]) for r, a in ((r0, a0), (r1, a0), (r1, a1), (r0, a1))]
-            if seen_through(sum(Q) / 4) or any(seen_through(q) for q in Q): continue
             if e < 0: gc.quad(Q[0], Q[1], Q[2], Q[3])                          # the left cap faces +z (inside)
             else: gc.quad(Q[0], Q[3], Q[2], Q[1])
 gh = grp("drum_hatch_rim", MI["bronze"])
@@ -191,6 +190,40 @@ torus(gh, (CX, CY, -WD / 2 + 0.03), (0, 0, 1), 0.42, 0.025, 40, 6)
 xs = math.sqrt(RD ** 2 - (YFL - CY) ** 2)
 grp("drum_floor", MI["dark"], TI["cab_metal"]).quad((CX - xs, YFL, -WD / 2), (CX - xs, YFL, WD / 2), (CX + xs, YFL, WD / 2), (CX + xs, YFL, -WD / 2),
                                                    ((0, 0), (0, 3), (1.1, 3), (1.1, 0)))
+# the screen itself: three zones (left, middle, right), each its own texture slot; UV = the projection of the zone's camera
+# from the design eye SCR_EYE (Orbiter coordinates for the camera, as in «Тантра»'s gen_mesh: yaw about +y from +z, pitch up)
+SCR_EYE = np.array([DEP[0], DEP[1], 0.0])
+SCR_T = [T0, -27 * D2R, 27 * D2R, T1]
+SCR_CAMS = []
+def O3(p): return np.array([p[2], p[1], p[0]], float)
+def screen_cam(Po):
+    az = np.arctan2(Po[:, 0], Po[:, 2]); yaw = (az.min() + az.max()) / 2
+    el = np.arctan2(Po[:, 1], np.hypot(Po[:, 0], Po[:, 2])); pitch = (el.min() + el.max()) / 2
+    f = np.array([math.sin(yaw) * math.cos(pitch), math.sin(pitch), math.cos(yaw) * math.cos(pitch)])
+    u = np.array([-math.sin(yaw) * math.sin(pitch), math.cos(pitch), -math.cos(yaw) * math.sin(pitch)])
+    r = np.array([math.cos(yaw), 0.0, -math.sin(yaw)])
+    df, du, dr = Po @ f, Po @ u, Po @ r
+    assert df.min() > 0.1, "a screen zone behind the design eye"
+    tv, th = np.abs(du / df).max() * 1.01, np.abs(dr / df).max() * 1.01
+    return yaw, pitch, f, u, r, tv, th
+NR = 10
+for zi in range(3):
+    ta, tb = SCR_T[zi], SCR_T[zi + 1]
+    ncol = 24 if zi == 1 else 22
+    grid = []
+    for i in range(ncol + 1):
+        t = ta + (tb - ta) * i / ncol; px, pz = P(t); y0 = screen_bottom(pz)
+        grid.append([np.array([px, y0 + (Y_TOP - y0) * k / NR, pz]) for k in range(NR + 1)])
+    Po = np.array([O3(q - SCR_EYE) for col in grid for q in col])
+    yaw, pitch, f, u, r, tv, th = screen_cam(Po)
+    SCR_CAMS.append((math.degrees(yaw), math.degrees(pitch), 2 * math.degrees(math.atan(tv)), th / tv, TI["cab_scr%d" % zi]))
+    def uv(q):
+        o = O3(q - SCR_EYE); return (0.5 + 0.5 * (o @ r) / (o @ f) / th, 0.5 - 0.5 * (o @ u) / (o @ f) / tv)
+    gz = grp("screen_%d" % zi, MI["mfd"], TI["cab_scr%d" % zi])
+    for i in range(ncol):
+        for k in range(NR):
+            A, B, C2, Dd = grid[i][k], grid[i + 1][k], grid[i + 1][k + 1], grid[i][k + 1]
+            gz.quad(A, B, C2, Dd, (uv(A), uv(B), uv(C2), uv(Dd)))                   # towards the pilots (the arc's inside)
 # the screen's frame: the top and the bottom edges, the ends
 gf = grp("screen_frame", MI["dark"])
 N = 96
@@ -381,10 +414,11 @@ for pi_, keys in ((0, KEYS[-1]), (1, KEYS[1])):
         tw = d.textlength(t, font=f); d.text(((x0 + x1) / 2 - tw / 2, y0 + 7), t, font=f, fill=(200, 210, 205, 255))
 save("cab_ship", sp_, True)
 for i in range(4): save("cab_mfd%d" % i, Image.new("RGB", (64, 64), (0, 0, 0)))
+for i in range(3): save("cab_scr%d" % i, Image.new("RGB", (64, 64), (8, 12, 16)))
 
 # ------------------------------------------------------------------ the groups' sets for the animations
 STATIC = ["drum_supports", "drum_bearings"]
-MODULE = {t: [n for n in G if n.endswith("_" + t) and not n.startswith("roll_bearing")] for t in ("K", "2")}
+MODULE = {t: [n for n in G if n.endswith("_" + t) and not n.startswith("roll_bearing") and not n.startswith("screen_")] for t in ("K", "2")}
 for mi in range(4):
     t = "K" if mi < 2 else "2"
     MODULE[t] += [n for n in ("mfd_%d" % mi, "mfd_btn_%d" % mi) if n not in MODULE[t]]
@@ -457,6 +491,12 @@ L = ["// «Грань» 25,4 м: the pilots' cabin mesh LanderCabin.msh (the dru
      "constexpr double kHubN[2][3] = {%s, %s};" % (V3(INFO[("hubn", 0)]), V3(INFO[("hubn", 1)])),
      "constexpr double kMarch[2][3] = {%s, %s};" % (V3(INFO[("march", 0)]), V3(INFO[("march", 1)])),
      "constexpr double kDrumFloorY = %.4f, kDrumHatch[3] = %s, kDrumHatchR = 0.42;   // the drum's floor; its axial hatch (left end)" % (YFL, V3((CX, CY, -WD / 2))),
+     "// the view screen (as in «Тантра»): three zones, each a ShipView camera (yaw, pitch deg in the built drum, Orbiter frame;",
+     "// vfov deg; aspect w/h; the texture slot), projected from the design eye kScrEye; the cameras turn with the drum",
+     "struct ScreenZone { double yaw, pitch, vfov, aspect; int slot; };",
+     "constexpr ScreenZone kScreenZones[3] = {" + ", ".join("{%.3f, %.3f, %.3f, %.4f, %d}" % c for c in SCR_CAMS) + "};",
+     "constexpr int kScreenGroup[3] = {G_screen_0, G_screen_1, G_screen_2};",
+     "constexpr double kScrEye[3] = %s;" % V3(SCR_EYE),
      "", "}  // namespace tantra::lander::cabin"]
 open(HDR, "w", encoding="utf-8").write("\n".join(L) + "\n")
 print("ok", len(ORDER), "groups", sum(len(G[n].t) for n in ORDER), "tris; drum", len(DRUM), "module", len(MODULE["K"]), len(MODULE["2"]))

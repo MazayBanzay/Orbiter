@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Шнабель на шинах</title>
+<style>
+  html,body{margin:0;height:100%;background:#07080a;color:#cfd6df;font:13px "Segoe UI",Arial;overflow:hidden}
+  #ui{position:absolute;left:12px;top:10px;max-width:520px;max-height:calc(100% - 24px);overflow:auto;background:rgba(12,14,17,.9);border:1px solid #2a2f37;border-radius:6px;padding:10px 12px;box-sizing:border-box}
+  #ui h1{font-size:15px;margin:0 0 6px;color:#e6c79a}
+  #ui p{margin:3px 0;line-height:1.4}
+  #ui button{background:#1c2026;color:#cfd6df;border:1px solid #3a414b;border-radius:4px;padding:4px 8px;margin:4px 4px 0 0;cursor:pointer}
+  #ui button.on{border-color:#e6c79a;color:#e6c79a}
+  table{border-collapse:collapse;margin:6px 0;width:100%;font-size:12px} th,td{border-top:1px solid #2a2f37;padding:3px 4px;vertical-align:top;text-align:left} th{color:#e6c79a;font-weight:600}
+  .ok{color:#8fb39a}.no{color:#d08a7a}.n{color:#8a93a0}
+  #hide{position:absolute;right:12px;top:10px;background:#1c2026;color:#cfd6df;border:1px solid #3a414b;border-radius:4px;padding:4px 8px}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>«Шнабель на шинах» — контейнер как хребет</h1>
+  <p>Контейнер 58,4 кт работает хребтом. Бандажи из нанотрубок с колодками из боразона, V-распорки из боразона (только сжатие) на нижние пояса, за торцами — растяжки, как у ног «Тантры». Под ними 30 тележек по 8 шин высокого давления; тележки на поворотных узлах, шины связаны гидравликой через MR-клапаны (неравномерность 1,05).</p>
+  <table>
+    <tr><th>Габарит</th><td>64,5 × 12 × 11,4 м (с контейнером)</td></tr>
+    <tr><th>Шины</th><td>240 шт. Ø 2,0 × 1,3 м, 3,3 МПа, корд из нанотрубок ≈ 1,65 мм (2,5 кг/м², 3 ГПа — допущение эпохи); пятно ≈ 456 м², песок q 6,4 — запас 1,85</td></tr>
+    <tr><th>Привод</th><td>80 ведущих ступиц (оранжевые, каждый третий ряд): гидромоторы 0,5–1,2 МН·м и 120–530 кВт; мотор-насосы 0,3–0,7 МВт в тележках на пакетах. Всего 10–40 МВт при 1–2 км/ч; момент 43–98 МН·м (с f 1,5) → приводы 87–390 т</td></tr>
+    <tr><th>Масса</th><td>≈ 0,4–0,75 кт: шины 150–220 т, приводы 90–260 т, фермы и рамы 60–120 т (не посчитано), бандажи 20–40, гидравлика 15–25, пакеты 13–67, кабина 8</td></tr>
+    <tr><th>Условия</th><td>оболочка контейнера держит изгиб (≈ 140 МН·м при шаге бандажей 5,5 м) — вопрос к «Тантре»; дорога выровнена (сопротивление 0,02–0,03); порезы шин на скале не посчитаны</td></tr>
+  </table>
+  <div><button id="cmp" class="on">Рядом В2 (сравнение)</button><button id="cA">Общий</button><button id="cS">Сбоку</button><button id="cW">Шины</button><button id="cC">Кабина</button></div>
+</div>
+<button id="hide">скрыть панель</button>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputEncoding = THREE.sRGBEncoding;
+  document.body.appendChild(renderer.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x07080a); scene.fog = new THREE.FogExp2(0x0b0c0f, 0.003);
+  const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.3, 3000);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  function view(p, t) { camera.position.set(...p); controls.target.set(...t); controls.update(); }
+  const std = (c, m, r, e) => new THREE.MeshStandardMaterial(Object.assign({ color: c, metalness: m, roughness: r }, e || {}));
+  const M = {
+    hull: std(0x2a2e35, 0.75, 0.42, { flatShading: true }), hullD: std(0x1b1e23, 0.7, 0.5, { flatShading: true }), body: std(0xb9bfc6, 0.35, 0.42), bodyD: std(0x5c636c, 0.5, 0.4),
+    band: std(0x24282e, 0.8, 0.35), orange: std(0xc8622a, 0.25, 0.5), yellow: std(0xc79a22, 0.3, 0.55), track: std(0x121315, 0.5, 0.8), shoe: std(0x24262b, 0.6, 0.6, { flatShading: true }),
+    trap: std(0x2c3b52, 0.85, 0.35, { flatShading: true }), rib: std(0x1a2230, 0.9, 0.3, { flatShading: true }), batt: std(0x26364a, 0.7, 0.35), ring: std(0x7a6a50, 0.8, 0.35), jack: std(0x9aa3ad, 0.9, 0.25),
+    mat: std(0x3b3a36, 0.4, 0.8, { flatShading: true }), rail: std(0x7a6a50, 0.8, 0.35), tyre: std(0x16171a, 0.3, 0.85), rim: std(0x6f767e, 0.8, 0.35),
+    glass: std(0x0a0d12, 1.0, 0.06), ground: std(0x131210, 0, 0.97), road: std(0x1b1a17, 0, 0.92),
+    glowB: new THREE.MeshBasicMaterial({ color: 0x3fa8ff }), coil: new THREE.MeshBasicMaterial({ color: 0x4fb4ff, transparent: true, opacity: 0.55 }), lamp: new THREE.MeshBasicMaterial({ color: 0xfff2d8 }), man: std(0xd8dde3, 0, 0.6),
+  };
+  function add(geo, mat, x, y, z, parent, cast = true) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; (parent || scene).add(m); return m; }
+  function grp(parent, x = 0, y = 0, z = 0) { const g = new THREE.Group(); g.position.set(x, y, z); (parent || scene).add(g); return g; }
+  function extr(pts, depth, mat, parent) { const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) s.lineTo(p[0], p[1]); s.lineTo(pts[0][0], pts[0][1]); const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false }); g.translate(0, 0, -depth / 2); return add(g, mat, 0, 0, 0, parent); }
+  function trackUnit(L, h, w, parent, nW) {
+    const g = grp(parent); const r = h / 2, s = new THREE.Shape();
+    s.moveTo(-L / 2 + r, 0); s.lineTo(L / 2 - r, 0); s.absarc(L / 2 - r, r, r, -Math.PI / 2, Math.PI / 2, false); s.lineTo(-L / 2 + r, h); s.absarc(-L / 2 + r, r, r, Math.PI / 2, Math.PI * 1.5, false);
+    const tg = new THREE.ExtrudeGeometry(s, { depth: w, bevelEnabled: false, curveSegments: 12 }); tg.translate(0, 0, -w / 2); add(tg, M.track, 0, 0, 0, g);
+    const shoe = new THREE.BoxGeometry(0.4, 0.1, w + 0.08), n = Math.round((L - 2 * r) / 0.6);
+    for (let i = 0; i <= n; i++) { const x = -L / 2 + r + i * ((L - 2 * r) / n); add(shoe, M.shoe, x, 0.05, 0, g); add(shoe, M.shoe, x, h + 0.02, 0, g); }
+    for (const sx of [-1, 1]) add(new THREE.CylinderGeometry(r * 1.02, r * 1.02, w + 0.06, 14), M.hull, sx * (L / 2 - r), r, 0, g).rotation.x = Math.PI / 2;
+    for (let i = 0; i < nW; i++) add(new THREE.CylinderGeometry(0.45, 0.45, w + 0.04, 12), M.hullD, -L / 2 + r + 0.7 + i * ((L - 2 * r - 1.4) / (nW - 1)), r * 0.8, 0, g).rotation.x = Math.PI / 2;
+    return g;
+  }
+  function label(lines, x, y, z, parent, s = 1) {
+    const fs = 38, lh = 48, pad = 18, w = 40 + Math.max(...lines.map(l => l.length)) * 21, h = pad * 2 + lh * lines.length;
+    const c = document.createElement("canvas"); c.width = w; c.height = h; const ctx = c.getContext("2d");
+    ctx.fillStyle = "rgba(10,12,15,0.82)"; ctx.fillRect(0, 0, w, h); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    lines.forEach((l, i) => { ctx.fillStyle = i === 0 ? "#e6c79a" : "#cfd6df"; ctx.font = (i === 0 ? "bold " : "") + fs + "px Segoe UI, Arial"; ctx.fillText(l, w / 2, pad + lh * (i + 0.5)); });
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false })); sp.scale.set(w / 64 * s, h / 64 * s, 1); sp.position.set(x, y, z); sp.renderOrder = 10; (parent || scene).add(sp); return sp;
+  }
+  function dim(a, b, txt, at, parent) {
+    const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...a), new THREE.Vector3(...b)]); (parent || scene).add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xe6c79a })));
+    label([txt], at[0], at[1], at[2], parent, 0.8);
+  }
+  add(new THREE.PlaneGeometry(2400, 2400), M.ground, 0, 0, 0, scene, false).rotation.x = -Math.PI / 2;
+
+  function container(parent, y) {
+    const t = grp(parent, 0, y, 0); const R8 = 4.375, LB = 34.6;
+    const tb = add(new THREE.CylinderGeometry(R8, R8, LB, 8), M.trap, 0, 0, 0, t); tb.rotation.z = Math.PI / 2; tb.rotateY(Math.PI / 8);
+    for (let i = 0; i <= 8; i++) { const r = add(new THREE.CylinderGeometry(R8 + 0.12, R8 + 0.12, 0.35, 8), M.rib, -LB / 2 + 0.6 + i * (LB - 1.2) / 8, 0, 0, t); r.rotation.z = Math.PI / 2; r.rotateY(Math.PI / 8); }
+    for (const sx of [-1, 1]) { add(new THREE.CylinderGeometry(0.9, 0.9, 0.6, 24), M.hull, sx * (LB / 2 + 0.6), 0, 0, t).rotation.z = Math.PI / 2; add(new THREE.TorusGeometry(2.6, 0.08, 8, 48), M.glowB, sx * (LB / 2 + 0.31), 0, 0, t, false).rotation.y = Math.PI / 2; }
+    return t;
+  }
+  function saddles(parent, deckY) { for (const dx of [-14, -7, 0, 7, 14]) { const m = extr([[-4.3, 0], [4.3, 0], [4.3, 1.5], [3.9, 2.72], [1.68, 0.5], [-1.68, 0.5], [-3.9, 2.72], [-4.3, 1.5]], 1.0, M.bodyD, parent); m.rotation.y = Math.PI / 2; m.position.set(dx, deckY, 0); } }
+  function mpu(parent, x, y, z) {
+    const g = grp(parent, x, y, z);
+    add(new THREE.BoxGeometry(9.52, 1.3, 4.4), M.body, 0, 1.3, 0, g); add(new THREE.BoxGeometry(3.0, 1.0, 3.6), M.glass, 3.2, 2.4, 0, g); add(new THREE.BoxGeometry(9.6, 0.1, 4.45), M.orange, 0, 1.95, 0, g);
+    for (let i = 0; i < 4; i++) for (const sz of [-1, 1]) add(new THREE.CylinderGeometry(0.8, 0.8, 0.65, 16), M.tyre, -3.6 + i * 2.4, 0.8, sz * 2.0, g).rotation.x = Math.PI / 2;
+    return g;
+  }
+
+
+  const PC = std(0xe8e6df, 0.15, 0.5);                 // PCBN struts (compression)
+  const CF = std(0x3b4048, 0.4, 0.35);                 // CFRP frames
+  const TIE = std(0x111214, 0.6, 0.4);                 // CNT / MR ties (tension)
+  const TYRE = std(0x1a1b1e, 0.1, 0.9), RIM = std(0x8d949c, 0.8, 0.35), DRV = std(0xc8622a, 0.4, 0.45);
+  function strut(a, b, r, mat, parent) {
+    const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), d = B.clone().sub(A), len = d.length();
+    const m = add(new THREE.CylinderGeometry(r, r, len, 8), mat, 0, 0, 0, parent);
+    m.position.copy(A.clone().add(B).multiplyScalar(0.5)); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); return m;
+  }
+  const S = grp(scene, 0, 0, 0);
+  const NR = 30, PX = 2.15, X0 = -(NR * PX) / 2 + PX / 2, ZS = [], CY = 7.35;
+  for (let j = 0; j < 8; j++) ZS.push(-5.25 + j * 1.5);
+  // tyres and rims as instanced meshes (240), driven hubs (every third row) in orange
+  const tg = new THREE.TorusGeometry(0.68, 0.32, 10, 22); tg.scale(1, 1, 2.0);
+  const tyres = new THREE.InstancedMesh(tg, TYRE, NR * 8), rims = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.42, 0.42, 1.3, 14), RIM, NR * 8);
+  const drv = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.36, 0.36, 1.36, 14), DRV, 80);
+  tyres.castShadow = rims.castShadow = true; tyres.receiveShadow = true;
+  const o = new THREE.Object3D(); let n = 0, nd = 0;
+  for (let i = 0; i < NR; i++) for (const z of ZS) {
+    o.position.set(X0 + i * PX, 1.0, z); o.rotation.set(0, 0, 0); o.updateMatrix(); tyres.setMatrixAt(n, o.matrix);
+    o.rotation.set(Math.PI / 2, 0, 0); o.updateMatrix(); rims.setMatrixAt(n, o.matrix); n++;
+    if (i % 3 === 0) { drv.setMatrixAt(nd++, o.matrix); }
+  }
+  S.add(tyres); S.add(rims); S.add(drv);
+  // bogies: 15 along x 2 across, 2 rows x 4 tyres each; light CFRP frame, swivel node
+  for (let b = 0; b < 15; b++) for (const zc of [-3.0, 3.0]) {
+    const x = X0 + (2 * b + 0.5) * PX;
+    for (const z of [zc - 2.25, zc - 0.75, zc + 0.75, zc + 2.25]) add(new THREE.BoxGeometry(4.0, 0.22, 0.22), CF, x, 1.95, z, S);
+    add(new THREE.BoxGeometry(0.5, 0.22, 5.4), CF, x, 2.1, zc, S);
+    add(new THREE.CylinderGeometry(0.7, 0.7, 0.18, 20), M.ring, x, 2.3, zc, S);
+    strut([x, 2.35, zc], [x, 2.75, zc], 0.18, CF, S);
+  }
+  // lower chords and cross tubes
+  for (const z of [-3.0, 3.0]) strut([X0 - 1, 2.75, z], [X0 + (NR - 1) * PX + 1, 2.75, z], 0.2, PC, S);
+  for (let b = 0; b < 15; b++) { const x = X0 + (2 * b + 0.5) * PX; strut([x, 2.75, -3.0], [x, 2.75, 3.0], 0.12, PC, S); if (b % 2 === 0) { strut([x, 2.75, -3.0], [x + 2 * PX, 2.75, 3.0], 0.07, TIE, S); } }
+  // container as the spine: bands (CNT) with PCBN pads, V-struts to the chords
+  const C = container(S, CY);
+  const bandX = [-16.6, -11, -5.5, 0, 5.5, 11, 16.6];
+  for (const x of bandX) {
+    const band = add(new THREE.CylinderGeometry(4.5, 4.5, 0.3, 8, 1, true), TIE, x, CY, 0, S); band.rotation.z = Math.PI / 2; band.rotateY(Math.PI / 8); band.material = TIE;
+    add(new THREE.BoxGeometry(0.6, 0.45, 3.2), PC, x, CY - 4.05 - 0.22, 0, S);
+    for (const s of [-1, 1]) { strut([x, CY - 4.3, s * 1.5], [x - 1.4, 2.75, s * 3.0], 0.13, PC, S); strut([x, CY - 4.3, s * 1.5], [x + 1.4, 2.75, s * 3.0], 0.13, PC, S); strut([x, CY - 1.6, s * 4.0], [x, 2.75, s * 3.0], 0.11, PC, S); }
+  }
+  // Schnabel arms beyond the container ends: ties from the end bands to the chord ends, PCBN posts
+  for (const sx of [-1, 1]) for (const z of [-2.6, 2.6]) {
+    const top = [sx * 16.8, CY + 2.2, z], end = [sx * (X0 * -1 + 0.6), 2.9, z * 1.15];
+    strut(top, end, 0.09, TIE, S);
+    for (const fx of [20.5, 24.5, 28.5]) { const t = (fx - 16.8) / (Math.abs(end[0]) - 16.8); const y = top[1] + (end[1] - top[1]) * t, zz = z + (end[2] - z) * t; strut([sx * fx, 2.75, z > 0 ? 3.0 : -3.0], [sx * fx, y, zz], 0.12, PC, S); strut([sx * fx, 2.75, z > 0 ? 3.0 : -3.0], [sx * (fx + 4), y - 1.6, zz], 0.06, TIE, S); }
+  }
+  // one cab on the front platform (sealed module, 4–5 people)
+  add(new THREE.BoxGeometry(6.0, 0.18, 3.8), CF, 30.0, 2.95, 0, S);
+  const cab = grp(S, 27.4, 3.05, 0); extr([[0, 0], [5.4, 0], [5.6, 0.9], [4.9, 2.4], [0, 2.4]], 3.4, M.body, cab);
+  add(new THREE.BoxGeometry(0.05, 0.7, 2.8), M.glass, 5.33, 1.65, 0, cab, false); for (const sz of [-1, 1]) add(new THREE.BoxGeometry(2.6, 0.5, 0.05), M.glass, 3.0, 1.7, sz * 1.71, cab, false);
+  label(["«Шнабель на шинах»: 64,5 × 12 × 11,4 м", "240 шин Ø 2,0 × 1,3 м (80 ведущих), 3,3 МПа", "≈ 0,4–0,75 кт с приводом"], 0, 15.5, 0, S, 1.0);
+  dim([X0 - 1.075, 0.12, 7.3], [-X0 + 1.075, 0.12, 7.3], "64,5 м", [0, 1.3, 9.0], S); dim([34, 0.12, -6], [34, 0.12, 6], "12,0 м", [35.5, 1.3, -8], S);
+  // comparison: the heavy tracked В2 (simplified)
+  const B = grp(scene, 0, 0, -30);
+  const Xb = -(6 * 9.1 - 0.3) / 2 + 4.4;
+  for (let s = 0; s < 6; s++) for (const z of [-4, 0, 4]) { const x = Xb + s * 9.1; for (const tz of [-1.05, 1.05]) add(new THREE.BoxGeometry(8.4, 1.8, 1.9), M.track, x, 0.9, z + tz, B); add(new THREE.BoxGeometry(8.8, 0.95, 4.0), M.hull, x, 2.38, z, B); }
+  container(B, 7.4); saddles(B, 2.85);
+  label(["В2 гусеничный: 54,3 × 12 м", "≈ 2,25–2,35 кт"], 0, 15, 0, B, 1.0);
+  const bc = document.getElementById("cmp"); bc.onclick = () => { B.visible = !B.visible; bc.classList.toggle("on", B.visible); };
+  document.getElementById("cA").onclick = () => view([46, 20, 52], [0, 4, 0]);
+  document.getElementById("cS").onclick = () => view([0, 6, 60], [0, 5, 0]);
+  document.getElementById("cW").onclick = () => view([-22, 3.2, 12], [-14, 2.5, 0]);
+  document.getElementById("cC").onclick = () => view([42, 8, 14], [30, 4, 0]);
+  function flood(x, y, z, tx, ty, tz) { const s = new THREE.SpotLight(0xfff0d8, 3.0, 240, 0.75, 0.6, 1.2); s.position.set(x, y, z); scene.add(s); const t2 = new THREE.Object3D(); t2.position.set(tx, ty, tz); scene.add(t2); s.target = t2; s.castShadow = true; s.shadow.mapSize.set(2048, 2048); }
+  flood(40, 50, 55, 0, 3, 0); flood(-40, 40, -60, 0, 3, -15);
+  scene.add(new THREE.HemisphereLight(0x55606f, 0x0d0b09, 0.65)); const rim = new THREE.DirectionalLight(0x8090ad, 0.8); rim.position.set(80, 60, -80); scene.add(rim);
+  const man = grp(scene, 36, 0, 7); add(new THREE.CylinderGeometry(0.17, 0.2, 0.85, 10), M.man, 0, 0.43, 0, man); add(new THREE.CylinderGeometry(0.22, 0.2, 0.62, 10), M.man, 0, 1.16, 0, man); add(new THREE.SphereGeometry(0.13, 12, 10), M.man, 0, 1.6, 0, man);
+  document.getElementById("hide").onclick = () => { const u = document.getElementById("ui"); u.style.display = u.style.display === "none" ? "block" : "none"; };
+  addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+  view([46, 20, 52], [0, 4, 0]);
+  (function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+})();
+</script>
+</body>
+</html>

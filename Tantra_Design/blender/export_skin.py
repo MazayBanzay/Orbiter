@@ -13,13 +13,20 @@ ORBITER = os.path.abspath(os.path.join(ROOT, ".."))
 # variant: coverall (BodySkin) or suit (SuitSkin); both share the skeleton and get their own grounded clips
 VARIANT = os.environ.get("TANTRA_VARIANT", "coverall")
 BLEND, MESH_NAME, SKIN_NAME, CLIP_SUB = {"coverall": ("astronavigator_coverall.blend", "AstronavigatorSkin", "Astronavigator", "anim"),
-                                         "suit": ("astronavigator_suit.blend", "AstronavigatorSuit", "AstronavigatorSuit", "anim_suit")}[VARIANT]
+                                         "suit": ("astronavigator_suit.blend", "AstronavigatorSuit", "AstronavigatorSuit", "anim_suit"),
+                                         # (2026-10-16) the new suit type (the old one is the prototype): its own blend, mesh
+                                         # and skin; its clips written apart (anim_suit2) - the game keeps the suit's anim_suit
+                                         "suit2": ("astronavigator_suit2.blend", "AstronavigatorSuit2", "AstronavigatorSuit2", "anim_suit2"),
+                                         # (2026-10-17, pantsir session) the heavy suit «Панцирь» P3 (Tantra_Design/heavy_suit/game)
+                                         "pantsir": ("astronavigator_pantsir.blend", "AstronavigatorPantsir", "AstronavigatorPantsir", "anim_pantsir")}[VARIANT]
 BLEND = os.environ.get("TANTRA_BLEND", BLEND)   # e.g. astronavigator_body.blend: the person without clothes
 MESH_OUT = os.path.join(ORBITER, "Meshes", "Tantra", MESH_NAME + ".msh")
 CFG_DIR = os.path.join(ORBITER, "Config", "Tantra"); CLIP_DIR = os.path.join(CFG_DIR, CLIP_SUB)
 os.makedirs(CLIP_DIR, exist_ok=True)
 TEX_SUB = "Tantra\\Astronavigator"; ORIGIN_H = 0.93
 SUIT_TEX_SUB = "Tantra\\AstronavigatorSuit"      # textures that belong to the suit; the body keeps its own
+if VARIANT == "pantsir": SUIT_TEX_SUB = "Tantra\\AstronavigatorPantsir"   # (pantsir) its own texture folder
+PANTSIR_SPEC = {}                                   # (pantsir) Orbiter material name -> specular, from the blend's materials
 BODY_LABELS = {"Skin", "Brows", "Lashes", "Eyes", "Hair", "Boots"}
 MANIFEST = os.path.join(HERE, "export_%s.json" % MESH_NAME); new_textures = []
 EYE_TEX = os.path.join(ROOT, "mpfbu", "data", "eyes", "materials", "brown_eye.png")
@@ -147,10 +154,16 @@ def export_bind(arm, bones):
             img = EYE_TEX if s == "Eyes" else image_of(mat)
             sub = TEX_SUB if s in BODY_LABELS or VARIANT == "coverall" else SUIT_TEX_SUB
             tname = os.path.splitext(os.path.basename(img))[0] if (img and sub == SUIT_TEX_SUB) else lname   # suit: one file per image
-            tex = tex_index(sub + "\\" + tname + ".dds") if img and os.path.exists(img) else 0
+            if VARIANT == "pantsir" and s in BODY_LABELS and img and os.path.exists(img):   # (pantsir) the head's own copies (Metalness maps), copied, not converted
+                tex = tex_index(SUIT_TEX_SUB + "\\head_" + s.lower() + ".dds")
+            else:
+                tex = tex_index(sub + "\\" + tname + ".dds") if img and os.path.exists(img) else 0
             if tex and sub == SUIT_TEX_SUB and not any(t["src"] == img for t in new_textures): new_textures.append({"src": img, "dds": sub + "\\" + tname + ".dds", "alpha": False})
             a = alpha_of(mat)
-            mat_i = mat_index(lname, ((1, 1, 1) if tex else base_color(mat)[:3]) + (a,))
+            mkey = lname
+            if VARIANT == "pantsir" and mat is not None and mat.get("orb_name"):   # (pantsir) one Orbiter material per surface kind, shared by its groups
+                mkey = mat["orb_name"]; PANTSIR_SPEC[mkey] = mat.get("orb_spec", "0.1 0.1 0.1 1 8")
+            mat_i = mat_index(mkey, ((1, 1, 1) if tex else base_color(mat)[:3]) + (a,))
             verts, index, faces = [], {}, []
             for t in tris:
                 face = []
@@ -167,8 +180,11 @@ def export_bind(arm, bones):
     with open(MESH_OUT, "w", encoding="ascii", newline="\r\n") as f:
         f.write("MSHX1\nGROUPS %d\n" % len(groups))
         for lname, mat_i, tex, verts, faces in groups:
-            # glass casts no shadow (the client's shadow map knows no transparency: a clear visor would black out her face)
-            flag = "FLAG 1\n" if lname.split("_")[0] in ("Visor", "SunShade") else ""
+            # no shadow from glass and the face's small alpha cards (the client's shadow map knows no transparency: a clear
+            # visor would black out her face, the lashes' and brows' cards and the eyeballs drew dark "glasses" on it -
+            # 2026-10-18; the coverall figure's head groups have the same). Any visor name: VisorB too
+            base = lname.split("_")[0]
+            flag = "FLAG 1\n" if base.startswith("Visor") or base in ("SunShade", "Brows", "Lashes", "Eyes", "Hair") else ""
             f.write("LABEL %s\nMATERIAL %d\nTEXTURE %d\n%sGEOM %d %d\n" % (lname, mat_i, tex, flag, len(verts), len(faces)))
             for P, Nn, U, W in verts: f.write("%.5f %.5f %.5f %.4f %.4f %.4f %.5f %.5f\n" % (P.x, P.y, P.z, Nn.x, Nn.y, Nn.z, U[0], U[1]))
             for a, b, c in faces: f.write("%d %d %d\n" % (a, c, b))
@@ -176,6 +192,7 @@ def export_bind(arm, bones):
         for k, _ in materials: f.write(k + "\n")
         for k, (r, g_, b, _a) in materials:
             spec = "1.0 0.85 0.5 1 90" if k.startswith("SunShade") else "0.5 0.5 0.5 1 40" if _a < 1 else "0.1 0.1 0.1 1 8"
+            spec = PANTSIR_SPEC.get(k, spec)                                   # (pantsir)
             f.write("MATERIAL %s\n%.3f %.3f %.3f %.3f\n%.3f %.3f %.3f %.3f\n%s\n0 0 0 1\n" % (k, r, g_, b, _a, r, g_, b, _a, spec))
         f.write("TEXTURES %d\n" % len(textures))
         for t in textures: f.write(t + "\n")
@@ -306,6 +323,35 @@ try:
                 if p_ == side + "Foot":
                     R_, t_ = idle_frame[n_]; idle_frame[n_] = (Rm @ R_, piv + Rm @ (t_ - piv))
             log.append("  idle %s foot levelled by %.1f deg" % (side, math.degrees(want - now)))
+    # (pantsir, 2026-10-19) the suit is built round the person in a set stance (pose_fit, kept on the armature as pz_fit):
+    # its arm and leg bones are retargeted onto it - in the parent's frame, each frame's own swing kept on top - so the
+    # plates meet in the game's idle and the walk and run swing about the sleeves' directions. The feet keep their world
+    # orientation (flat soles), the hands follow the forearms
+    retarget = None
+    if VARIANT == "pantsir" and arm.get("pz_fit"):
+        import json
+        fitW = {n: Matrix([v[0:4], v[4:8], v[8:12], v[12:16]]) for n, v in json.loads(arm["pz_fit"]).items()}
+        par1 = {b.name: (b.parent.name if b.parent else None) for b in arm.data.bones}
+        fitR = {n: C3 @ M.to_3x3().normalized() @ C3.transposed() for n, M in fitW.items()}
+        MOVE = [s + b for s in ("Left", "Right") for b in ("Arm", "ForeArm", "Hand", "UpLeg", "Leg")]
+        KEEP = [s + b for s in ("Left", "Right") for b in ("Foot", "ToeBase")]
+        def loc(Rp, Rb): return Rp.transposed() @ Rb
+        D = {}
+        for n in MOVE:
+            p = par1[n]
+            if n in fitR and p in fitR: D[n] = loc(fitR[p], fitR[n]) @ loc(idle_frame[p][0].normalized(), idle_frame[n][0].normalized()).transposed()
+        def retarget(fr):
+            out = {}
+            for n in bones:
+                R, t = fr[n]; p = par1[n]
+                if p is None or p not in out: out[n] = (R, t); continue
+                Rp0, tp0 = fr[p]; Rp1, tp1 = out[p]
+                Rl = Rp0.transposed() @ R; tl = Rp0.transposed() @ (t - tp0)
+                R1 = R if n in KEEP else Rp1 @ (D.get(n, Matrix.Identity(3)) @ Rl)
+                out[n] = (R1, tp1 + Rp1 @ tl)
+            return out
+        idle_frame = retarget(idle_frame)
+        log.append("  pantsir: clips retargeted onto the suit's stance (%d bones)" % len(D))
     write_clip("idle", [idle_frame], 30, 0.0, 0.0, 0, bones)
 
     for name, clip in CLIPS:
@@ -577,6 +623,7 @@ try:
                     out[bn] = (Quaternion(acc).normalized().to_matrix(), (ta + 2 * tb + tc) / 4)
                 smooth.append(out)
             frames = smooth
+        if retarget is not None: frames = [retarget(f) for f in frames]
         write_clip(name, frames, fps, stride, stride / T, 1, bones)
         log.append("  %s cycle frames %d..%d (peaks %s)" % (clip, a, b, peaks))
 except Exception:

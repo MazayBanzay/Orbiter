@@ -1,0 +1,11 @@
+rendered 1 Плита
+rendered 2 Кассеты
+rendered 3 Пояс
+rendered 4 Хребет
+rendered 5 Коромысло
+rendered 6 Раковина
+rendered 7 Крылья
+rendered 8 Испаритель
+rendered 9 Позвонки
+rendered 10 Ферма
+DONE
