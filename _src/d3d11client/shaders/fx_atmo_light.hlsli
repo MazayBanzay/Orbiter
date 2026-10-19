@@ -30,6 +30,17 @@ float FxAltR(float x) { return mCentre.w + (mGeo.x - mCentre.w) * x * x; }
 
 bool FxActive() { return mGeo.z > 0.5; }
 
+// the sky's light as L2 spherical harmonics, convolved for a cosine (FxAtmo.cpp, fx_sky_sh.hlsl); [9].w = 1: valid
+StructuredBuffer<float4> tFxSH : register(t13);
+float3 FxSHIrradiance(float3 d)
+{
+    float3 e = tFxSH[0].rgb * 0.282095
+             + tFxSH[1].rgb * (0.488603 * d.y) + tFxSH[2].rgb * (0.488603 * d.z) + tFxSH[3].rgb * (0.488603 * d.x)
+             + tFxSH[4].rgb * (1.092548 * d.x * d.y) + tFxSH[5].rgb * (1.092548 * d.y * d.z) + tFxSH[6].rgb * (0.315392 * (3 * d.z * d.z - 1))
+             + tFxSH[7].rgb * (1.092548 * d.x * d.z) + tFxSH[8].rgb * (0.546274 * (d.x * d.x - d.y * d.y));
+    return e;
+}
+
 // bilinear filtering by hand (no sampler register taken from the client)
 float4 FxBilinear(Texture2D t, float2 f, int2 org, int2 size)
 {
@@ -105,7 +116,15 @@ float3 FxSkyLight(float3 n, float3 wp)
     float3 E = FxIrradiance(r, mu);
     float3 G = mGround.rgb * (E + FxTransToSun(r, mu) * saturate(mu));     // light from the ground below
     float k = dot(n, up);
-    return E * (0.5 + 0.5 * k) + G * (0.5 - 0.5 * k) + space;
+    float3 iso = E * (0.5 + 0.5 * k) + G * (0.5 - 0.5 * k);
+    // the real sky around the camera (fx_sky_sh.hlsl): directional - the Sun-side sky, the darker zenith, the ground's
+    // bounce - for points at about the camera's height
+    float4 shv = tFxSH[9];
+    if (shv.w > 0.5) {
+        float wAlt = saturate(1 - abs(r - shv.x) / 5000);
+        if (wAlt > 0) iso = lerp(iso, max(FxSHIrradiance(n), 0), wAlt);
+    }
+    return iso + space;
 }
 
 #endif

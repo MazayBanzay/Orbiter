@@ -3,7 +3,42 @@
 #include "Client.h"
 #include <wincodec.h>
 #include "Fx.h"
+#include "Exhaust.h"
+#include "Wake.h"
 #include <cstdio>
+#include <exception>
+#include <psapi.h>
+#pragma comment(lib, "psapi.lib")
+#include <typeinfo>
+
+// an exception nobody caught ends the process without a crash dump (std::terminate -> abort -> fast fail 0xC0000409):
+// what it was and where it came from go to Orbiter.log first (module + offset per frame, for the build's PDB)
+bool g_traceAlloc = false;     // test runs: log big allocations (TestScript turns it on)
+int g_traceFrames = 0;
+void LogMemory(const char* when);
+// what the client itself holds (LogMemory): the surfaces made for drawing (on the GPU) and their CPU copies (DIBs, private
+// memory of the process)
+long g_surfLive = 0, g_dibLive = 0; double g_surfMB = 0, g_dibMB = 0;
+static void LogTerminate()
+{
+    char what[256] = "unknown";
+    if (std::exception_ptr e = std::current_exception()) {
+        try { std::rethrow_exception(e); }
+        catch (const std::exception& x) { snprintf(what, sizeof what, "%s: %s", typeid(x).name(), x.what()); }
+        catch (...) { snprintf(what, sizeof what, "a non-std exception"); }
+    } else snprintf(what, sizeof what, "no active exception (terminate called directly)");
+    oapiWriteLogV("D3D11Client: FATAL terminate: %s", what);
+    void* fr[48] = {};
+    const USHORT n = CaptureStackBackTrace(0, 48, fr, nullptr);
+    for (USHORT i = 0; i < n; i++) {
+        HMODULE m = nullptr; char path[MAX_PATH] = "?";
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)fr[i], &m) && m)
+            GetModuleFileNameA(m, path, MAX_PATH);
+        const char* base = strrchr(path, 92);   // '\\'
+        oapiWriteLogV("D3D11Client:   #%02u %s+0x%x", i, base ? base + 1 : path, (unsigned)((const char*)fr[i] - (const char*)m));
+    }
+    abort();
+}
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -69,6 +104,7 @@ HWND D3D11Client::clbkCreateRenderWindow()
     RECT rc; GetClientRect(hWnd, &rc);
     if (rc.right > 0 && rc.bottom > 0) { W = rc.right; H = rc.bottom; }
     // test runs (tools/run_test.ps1 sets D3D11CLIENT_TEST): the window never shows and never takes the focus
+    std::set_terminate(LogTerminate);     // (this thread: the render and simulation loop)
     char tv[8] = "";
     if (GetEnvironmentVariableA("D3D11CLIENT_TEST", tv, sizeof tv) && tv[0] == '1') {
         testMode = true;
@@ -81,7 +117,7 @@ HWND D3D11Client::clbkCreateRenderWindow()
     if (!shadersOk) LOGC("shader compilation FAILED - see above; the scene is not drawn");
     CreateLiquid();
     CreateParticleTexture();
-    if (shadersOk) FxInit(this);
+    if (shadersOk) { FxInit(this); ExhaustInit(this); }
     loaderRun = true;
     loader = std::thread(&D3D11Client::LoaderMain, this);
     QueryPerformanceFrequency(&qpf); QueryPerformanceCounter(&tStart); tLog = tStart;
@@ -89,11 +125,76 @@ HWND D3D11Client::clbkCreateRenderWindow()
     return hWnd;
 }
 
+// The video driver's shader cache (NVIDIA: %LOCALAPPDATA%\NVIDIA\DXCache\<per program>.nvph). The driver maps the whole
+// file into the process when the device is made, and the file only grows (each new shader adds to it, the file doubling:
+// 256, 512, 1024 MB). In a 32-bit Orbiter a 1 GB cache takes half the address space and later allocations fail.
+// After the device is made, the cache files it mapped are written to Modules\D3D11Client\drivercache.txt; at the next
+// start, before the device, a file over DriverCacheMB is moved to ...\NVIDIA\DXCache_Orbiter_old (replacing the copy
+// there): the driver starts a new small one and fills it again with the shaders it meets.
+static const wchar_t* kCacheList = L"Modules\\D3D11Client\\drivercache.txt";
+static void TrimDriverCache()
+{
+    if (g_cfg.driverCacheMB <= 0) return;
+    FILE* f = _wfopen(kCacheList, L"r, ccs=UTF-8");
+    if (!f) return;
+    wchar_t line[MAX_PATH];
+    while (fgetws(line, MAX_PATH, f)) {
+        size_t n = wcslen(line); while (n && (line[n - 1] == L'\n' || line[n - 1] == L'\r')) line[--n] = 0;
+        if (!n) continue;
+        WIN32_FILE_ATTRIBUTE_DATA fa;
+        if (!GetFileAttributesExW(line, GetFileExInfoStandard, &fa)) continue;
+        const unsigned long long sz = ((unsigned long long)fa.nFileSizeHigh << 32) | fa.nFileSizeLow;
+        if (sz <= (unsigned long long)g_cfg.driverCacheMB << 20) continue;
+        const std::wstring src = line, dir = src.substr(0, src.find_last_of(L'\\'));
+        const std::wstring old = dir.substr(0, dir.find_last_of(L'\\')) + L"\\DXCache_Orbiter_old";
+        CreateDirectoryW(old.c_str(), nullptr);
+        const std::wstring dst = old + src.substr(src.find_last_of(L'\\'));
+        const bool ok = MoveFileExW(src.c_str(), dst.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
+        LOGC("driver shader cache %u MB (over %d): %s", (unsigned)(sz >> 20), g_cfg.driverCacheMB,
+             ok ? "set aside, the driver starts a new one" : "could not be moved (in use?)");
+    }
+    fclose(f);
+}
+
+// the driver's cache files mapped into the process: their names for the next start, their size in the log
+static void NoteDriverCache()
+{
+    wchar_t la[MAX_PATH] = {};
+    if (!GetEnvironmentVariableW(L"LOCALAPPDATA", la, MAX_PATH)) return;
+    std::vector<std::wstring> files; unsigned long long total = 0;
+    MEMORY_BASIC_INFORMATION mi; const void* lastBase = nullptr;
+    for (const char* a = nullptr; VirtualQuery(a, &mi, sizeof mi); a = (const char*)mi.BaseAddress + mi.RegionSize) {
+        if (mi.State != MEM_FREE && mi.Type == MEM_MAPPED && mi.AllocationBase != lastBase) {
+            lastBase = mi.AllocationBase;
+            wchar_t fn[MAX_PATH] = {};
+            if (GetMappedFileNameW(GetCurrentProcess(), mi.AllocationBase, fn, MAX_PATH)) {
+                const std::wstring s = fn; const size_t k = s.find(L"\\NVIDIA\\DXCache\\");
+                if (k != std::wstring::npos) {
+                    const std::wstring p = std::wstring(la) + s.substr(k);
+                    if (std::find(files.begin(), files.end(), p) == files.end()) {
+                        files.push_back(p);
+                        WIN32_FILE_ATTRIBUTE_DATA fa;
+                        if (GetFileAttributesExW(p.c_str(), GetFileExInfoStandard, &fa)) total += fa.nFileSizeLow;
+                    }
+                }
+            }
+        }
+        if ((const char*)mi.BaseAddress + mi.RegionSize < (const char*)mi.BaseAddress) break;
+    }
+    if (files.empty()) return;
+    CreateDirectoryA("Modules\\D3D11Client", nullptr);
+    if (FILE* f = _wfopen(kCacheList, L"w, ccs=UTF-8")) { for (auto& p : files) fwprintf(f, L"%s\n", p.c_str()); fclose(f); }
+    LOGC("driver shader cache: %u file(s), %u MB mapped (set aside at the next start above %d MB)",
+         (unsigned)files.size(), (unsigned)(total >> 20), g_cfg.driverCacheMB);
+}
+
 bool D3D11Client::CreateDevice()
 {
+    TrimDriverCache();
     D3D_FEATURE_LEVEL fl = D3D_FEATURE_LEVEL_11_0, got;
     HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, &fl, 1, D3D11_SDK_VERSION, &dev, &got, &ctx);
     if (FAILED(hr)) { LOGC("D3D11CreateDevice failed 0x%08x", (unsigned)hr); return false; }
+    NoteDriverCache();
     ComPtr<IDXGIDevice> dxd; dev.As(&dxd);
     ComPtr<IDXGIAdapter> ad; dxd->GetAdapter(&ad);
     DXGI_ADAPTER_DESC add; ad->GetDesc(&add);
@@ -151,7 +252,7 @@ bool D3D11Client::CreateDevice()
         D3D11_BUFFER_DESC d = { (size + 15) & ~15u, D3D11_USAGE_DYNAMIC, D3D11_BIND_CONSTANT_BUFFER, D3D11_CPU_ACCESS_WRITE, 0, 0 };
         dev->CreateBuffer(&d, nullptr, &b);
     };
-    cb(cbObj, 512); cb(cbGrp, 256); cb(cbFrame, 512);
+    cb(cbObj, 1024); cb(cbGrp, 256); cb(cbFrame, 512);     // cbObj: the planet tiles need more than 512
     // the shadow map
     {
         D3D11_TEXTURE2D_DESC st = { SHADOW_N, SHADOW_N, 1, 1, DXGI_FORMAT_R32_TYPELESS, {1, 0}, D3D11_USAGE_DEFAULT, D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE, 0, 0 };
@@ -201,9 +302,13 @@ bool D3D11Client::CreateDevice()
         dev->CreateQuery(&qd, &qDis[f]);
         qd.Query = D3D11_QUERY_TIMESTAMP;
         for (int i = 0; i < 4; i++) dev->CreateQuery(&qd, &qTs[f][i]);
+        for (int i = 0; i < kMarks; i++) dev->CreateQuery(&qd, &qMk[f][i]);
     }
     return true;
 }
+
+static ComPtr<ID3DBlob> CompileFile(const std::string& path, const char* entry, const char* target);
+ComPtr<ID3DBlob> D3D11Client::CompileShaderFile(const char* file, const char* entry, const char* target) { return CompileFile(shaderDir + file, entry, target); }
 
 static ComPtr<ID3DBlob> CompileFile(const std::string& path, const char* entry, const char* target)
 {
@@ -293,6 +398,7 @@ void D3D11Client::clbkDestroyRenderWindow(bool fastclose)
     for (Planet* p : planets) delete p;
     planets.clear();
     FxRelease();
+    ExhaustRelease();
     for (PStream* s : streams) delete s;     // the vessels are gone by now
     streams.clear();
     if (ctx) { ctx->ClearState(); ctx->Flush(); }
@@ -336,10 +442,20 @@ static Surf* MakeSurf(ID3D11Device* dev, UINT w, UINT h, DWORD attrib)
     D3D11_TEXTURE2D_DESC td = { w, h, 1, 1, DXGI_FORMAT_B8G8R8A8_TYPELESS, {1, 0}, D3D11_USAGE_DEFAULT,
                                 D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET, 0, 0 };
     D3D11_SHADER_RESOURCE_VIEW_DESC sd = {}; sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB; sd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D; sd.Texture2D.MipLevels = 1;
-    // a surface without alpha starts opaque black (its alpha stays 1: the drawing writes colour only); with alpha, clear
-    std::vector<DWORD> init((size_t)w * h, (attrib & OAPISURFACE_ALPHA) ? 0u : 0xFF000000u);
-    D3D11_SUBRESOURCE_DATA id = { init.data(), w * 4, 0 };
-    if (dev && w && h && SUCCEEDED(dev->CreateTexture2D(&td, &id, &s->tex))) dev->CreateShaderResourceView(s->tex.Get(), &sd, &s->srv);
+    // a surface without alpha starts opaque black (its alpha stays 1: the drawing writes colour only); with alpha, clear.
+    // Cleared on the GPU: no CPU copy of the whole surface (a big one does not fit the 32-bit process's address space)
+    if (dev && w && h && SUCCEEDED(dev->CreateTexture2D(&td, nullptr, &s->tex))) {
+        dev->CreateShaderResourceView(s->tex.Get(), &sd, &s->srv);
+        ComPtr<ID3D11DeviceContext> c; dev->GetImmediateContext(&c);
+        D3D11_RENDER_TARGET_VIEW_DESC rd = {}; rd.Format = DXGI_FORMAT_B8G8R8A8_UNORM; rd.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+        ComPtr<ID3D11RenderTargetView> rtv;
+        if (c && SUCCEEDED(dev->CreateRenderTargetView(s->tex.Get(), &rd, &rtv))) {
+            const float k[4] = { 0, 0, 0, (attrib & OAPISURFACE_ALPHA) ? 0.0f : 1.0f };
+            c->ClearRenderTargetView(rtv.Get(), k);
+        }
+    } else if (dev && w && h) LOGC("surface %ux%u not made (attrib 0x%X)", w, h, attrib);
+    if (g_traceAlloc && (size_t)w * h * 4 >= (1u << 20)) LOGC("trace: surface %ux%u attrib 0x%X (%.1f MB)", w, h, attrib, w * h * 4 / 1048576.0);
+    if (s->tex) { s->counted = true; g_surfLive++; g_surfMB += w * (double)h * 4 / 1048576.0; }
     return s;
 }
 
@@ -357,6 +473,7 @@ SURFHANDLE D3D11Client::clbkLoadTexture(const char* fname, DWORD flags)
     if (!srv) { LOGC("texture not loaded: %s", fname); return nullptr; }
     Surf* s = new Surf; s->srv = srv; s->w = w; s->h = h; s->name = key; s->immutable = true;
     texCache[key] = s;
+    if (g_traceAlloc && (size_t)w * h >= (512u << 10)) LOGC("trace: texture %s %ux%u", fname, w, h);
     return (SURFHANDLE)s;
 }
 
@@ -374,6 +491,7 @@ bool D3D11Client::clbkReleaseSurface(SURFHANDLE surf)
     if (--s->refs > 0) return true;
     if (!s->name.empty()) texCache.erase(s->name);
     dirty.erase(s);
+    if (s->counted) { g_surfLive--; g_surfMB -= s->w * (double)s->h * 4 / 1048576.0; }
     delete s;
     return true;
 }
@@ -519,24 +637,56 @@ MESHHANDLE D3D11Client::clbkGetMesh(VISHANDLE vis, UINT idx)
     return (MESHHANDLE)vv->mesh[idx];
 }
 
+void D3D11Client::AddVisual(OBJHANDLE h)
+{
+    if (!h || visuals.count(h)) return;
+    VesselVis* vv = new VesselVis;
+    vv->hObj = h; vv->v = oapiGetVesselInterface(h);
+    vv->CreateMeshes();
+    visuals[h] = vv;
+    RegisterVisObject(h, (VISHANDLE)vv);
+    vv->registered = true;
+}
+
+void D3D11Client::RemoveVisual(OBJHANDLE h)
+{
+    auto it = visuals.find(h);
+    if (it == visuals.end()) return;
+    VesselVis* vv = it->second;
+    visuals.erase(it);
+    if (vv->registered) UnregisterVisObject(h);
+    delete vv;
+}
+
+void D3D11Client::clbkNewVessel(OBJHANDLE hVessel) { AddVisual(hVessel); }
+
+void D3D11Client::clbkDeleteVessel(OBJHANDLE hVessel)
+{
+    RemoveVisual(hVessel);
+    {   // what the modules sent for it (jets, wakes, heat): gone with it
+        std::lock_guard<std::mutex> lk(g_ext.mx);
+        for (auto it = g_ext.jets.begin(); it != g_ext.jets.end();) it = it->first.h == hVessel ? g_ext.jets.erase(it) : std::next(it);
+        for (auto it = g_ext.wakes.begin(); it != g_ext.wakes.end();) it = it->first.h == hVessel ? g_ext.wakes.erase(it) : std::next(it);
+        for (auto it = g_ext.heat.begin(); it != g_ext.heat.end();) it = it->first.h == hVessel ? g_ext.heat.erase(it) : std::next(it);
+    }
+    WakeForget(hVessel);
+}
+
 void D3D11Client::ScanVessels()
 {
-    // new vessels get a visual; vessels that left the simulation lose it
+    // a fallback for the callbacks: new vessels get a visual; vessels that left (or whose handle now belongs to another
+    // vessel) lose theirs
     std::map<OBJHANDLE, bool> alive;
     for (DWORD i = 0; i < oapiGetVesselCount(); i++) {
         OBJHANDLE h = oapiGetVesselByIndex((int)i);
         if (!h) continue;
         alive[h] = true;
-        if (visuals.count(h)) continue;
-        VesselVis* vv = new VesselVis;
-        vv->hObj = h; vv->v = oapiGetVesselInterface(h);
-        vv->CreateMeshes();
-        visuals[h] = vv;
-        RegisterVisObject(h, (VISHANDLE)vv);
-        vv->registered = true;
+        auto it = visuals.find(h);
+        if (it != visuals.end() && it->second->v != oapiGetVesselInterface(h)) RemoveVisual(h);
+        AddVisual(h);
     }
     for (auto it = visuals.begin(); it != visuals.end();) {
-        if (!alive.count(it->first)) { delete it->second; it = visuals.erase(it); }
+        if (!alive.count(it->first)) { OBJHANDLE h = it->first; ++it; RemoveVisual(h); }
         else ++it;
     }
 }
@@ -549,12 +699,20 @@ void D3D11Client::clbkRenderScene()
     if (!dev || !sc || !shadersOk) return;     // a shader that failed to compile is in Orbiter.log; nothing is drawn
     frameNo++;
     if (testMode) diagFrames = (frameNo >= 300 && frameNo < 302) ? 1 : 0;
+    if (testMode) { TestScript(); void FxTestFrame(); FxTestFrame(); }   // FxTest.cpp: effects without a player
+    if (g_traceFrames > 0) {     // the memory frame by frame after a scripted action, when it moved by 2 MB or more
+        static size_t last = 0;
+        PROCESS_MEMORY_COUNTERS_EX pm = {}; pm.cb = sizeof pm; GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pm, sizeof pm);
+        if (pm.PrivateUsage > last + (2u << 20) || pm.PrivateUsage + (2u << 20) < last) { char b[48]; sprintf_s(b, "frame %u", frameNo); LogMemory(b); last = pm.PrivateUsage; }
+        g_traceFrames--;
+    }
     FlushDirty();         // surfaces drawn on since the last frame (MFDs, displays) to their textures
     BeginScreenLayer();   // the 2D layer the HUD and the info boxes draw into after this call
     if ((frameNo & 31) == 0) ScanVessels();
     UINT fi = frameNo % 4;
     ctx->Begin(qDis[fi].Get());
     ctx->End(qTs[fi][0].Get());
+    GpuMark(fi, 0);
 
     VECTOR3 cp; oapiCameraGlobalPos(&cp);
     MATRIX3 cr; oapiCameraRotationMatrix(&cr);
@@ -570,7 +728,9 @@ void D3D11Client::clbkRenderScene()
     { XMFLOAT2 j = Jitter(); proj.r[2] = XMVectorSet(j.x, j.y, 0, 1); }   // TAA: the sub-pixel offset of this frame
 
     FxFrame(this, cp, cr, proj, oapiGetSimStep());   // effects' compute work (waves, spray) before the scene
+    GpuMark(fi, 1);
     RenderShadows(cp);
+    GpuMark(fi, 2);
     D3D11_VIEWPORT vp = { 0, 0, (float)RW, (float)RH, 0, 1 };    // the scene's size (TAA render scale)
     ctx->RSSetViewports(1, &vp);
     float clr[4] = { 0, 0, 0, 1 };
@@ -593,6 +753,7 @@ void D3D11Client::clbkRenderScene()
         ctx->Draw(3, 0);
     }
     RenderStars(cr, proj, starVis);
+    GpuMark(fi, 3);
 
     // planets, the farthest first (one reverse-Z depth range holds them all; the order only helps early depth rejection)
     std::vector<std::pair<double, Planet*>> order;
@@ -602,10 +763,9 @@ void D3D11Client::clbkRenderScene()
     int tiles = 0;
     for (auto& o : order) { o.second->Render(ctx.Get(), cp, cr, proj, tanY, (int)H); tiles += o.second->tilesDrawn; }
     for (Planet* p : planets) p->Purge(frameNo);
-    // the liquid over the terrain only: its refraction sees the bed, never the vessels (they come next, and their parts
-    // under the surface are dimmed by the liquid in the mesh shader: no foreground leaks into the liquid)
-    RenderLiquid(cp, cr, proj, tanY);
+    SaveLiquidBed();     // the bed under a liquid, before the vessels go into the depth (waves fade on the shore, not at a leg)
     ctx->End(qTs[fi][1].Get());
+    GpuMark(fi, 4);
 
     // vessels: opaque groups, then the transparent ones
     if (mvRTV) {         // the opaque vessels also write their motion vectors
@@ -614,14 +774,42 @@ void D3D11Client::clbkRenderScene()
         ID3D11RenderTargetView* rt2[2] = { hdrRTV.Get(), mvRTV.Get() };
         ctx->OMSetRenderTargets(2, rt2, dsv.Get());
     }
-    for (auto& kv : visuals) RenderVessel(kv.second, cp, cr, proj, false);
+    // the camera's own vessel seen from inside (a cockpit, a helmet with its visor layers) comes last, after the air and
+    // the effects: its near meshes must not end the other vessels' or the sky's rays (as D3D9 draws the cockpit)
+    OBJHANDLE own = oapiCameraInternal() ? oapiGetFocusObject() : nullptr;
+    for (auto& kv : visuals) if (kv.first != own) RenderVessel(kv.second, cp, cr, proj, false);
     if (mvRTV) ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
-    for (auto& kv : visuals) RenderVessel(kv.second, cp, cr, proj, true);
-    FxRenderTransparent(this, cp, cr, proj);      // spray and mist over the liquid
+    RenderAO(proj);      // the folds and the contacts darken (before the liquid and the air: those are not)
+    GpuMark(fi, 5);
+    // the liquid over the terrain and the opaque vessels: what stands in it is seen through its surface (refracted along
+    // the bent ray, dimmed by the column, under the waves' Fresnel and mirror); what stands out of it hides it by depth
+    RenderLiquid(cp, cr, proj, tanY);
+    GpuMark(fi, 6);
+    for (auto& kv : visuals) if (kv.first != own) RenderVessel(kv.second, cp, cr, proj, true);
+    FxRenderTransparent(this, cp, cr, proj);      // the air (sky, aerial perspective) from the depth
+    GpuMark(fi, 7);
+    ExhaustRender(this, cp, cr, proj, oapiGetSimStep());   // glow, shimmer, plumes, GPU particles
     ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
     RenderAr(cp, cr, proj);                       // the helmet display's markers and paths, against the scene's depth
     UpdateRenderParticles(cp, cr, proj, oapiGetSimStep());
+    RenderRain(cp, cr, proj);                     // rain (Titan; Fx.cfg Rain = mm/h)
+    RenderUnderwater(cp, cr, proj);               // the camera inside a liquid: its column over everything
+    GpuMark(fi, 8);
+    if (own && visuals.count(own)) {
+        ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
+        D3D11_VIEWPORT ovp = { 0, 0, (float)RW, (float)RH, 0, 1 };
+        ctx->RSSetViewports(1, &ovp);
+        ID3D11SamplerState* oss[3] = { sampAniso.Get(), sampClamp.Get(), sampShadow.Get() };
+        ctx->PSSetSamplers(0, 3, oss);
+        ctx->PSSetShaderResources(7, 1, shadowSRV.GetAddressOf());
+        ctx->VSSetConstantBuffers(0, 1, cbFrame.GetAddressOf()); ctx->PSSetConstantBuffers(0, 1, cbFrame.GetAddressOf());
+        ownPass = true;
+        RenderVessel(visuals[own], cp, cr, proj, false);
+        RenderVessel(visuals[own], cp, cr, proj, true);
+        ownPass = false;
+    }
     ctx->End(qTs[fi][2].Get());
+    GpuMark(fi, 9);
 
     // the single-sampled image (resolve / TAA), tone mapping (+ FXAA) into the back buffer
     {
@@ -629,9 +817,11 @@ void D3D11Client::clbkRenderScene()
         ID3D11ShaderResourceView* img = FinishScene(cp, Vt * proj, Vt * projNoJit);
         ToneMapAndAA(img);
     }
+    GpuMark(fi, 10);
     // 2D panels (drawn now on the GPU); the HUD and the MFDs come through the Sketchpad after this call returns
     Render2DOverlay();
     ctx->End(qTs[fi][3].Get());
+    GpuMark(fi, 11);
     ctx->End(qDis[fi].Get());
 
     if (frameNo >= 4) {
@@ -641,6 +831,9 @@ void D3D11Client::clbkRenderScene()
             UINT64 t[4]; bool ok = true;
             for (int i = 0; i < 4; i++) ok = ok && ctx->GetData(qTs[pf][i].Get(), &t[i], 8, 0) == S_OK;
             if (ok) for (int i = 0; i < 3; i++) passMs[i] = 0.9 * passMs[i] + 0.1 * (double)(t[i + 1] - t[i]) * 1000.0 / dj.Frequency;
+            UINT64 m[kMarks]; bool okm = true;
+            for (int i = 0; i < kMarks; i++) okm = okm && ctx->GetData(qMk[pf][i].Get(), &m[i], 8, 0) == S_OK;
+            if (okm) for (int i = 1; i < kMarks; i++) markMs[i] = 0.9 * markMs[i] + 0.1 * (double)(m[i] - m[i - 1]) * 1000.0 / dj.Frequency;
         }
     }
     // self-check: a line in Orbiter.log every 10 s, a screenshot 15 s after the start
@@ -650,6 +843,10 @@ void D3D11Client::clbkRenderScene()
         size_t q; { std::lock_guard<std::mutex> lk(loadMx); q = loadQ.size(); }
         LOGC("fps %.0f | GPU ms: planets %.2f, vessels %.2f, post %.2f | tiles drawn %d, load queue %zu | vessels %zu",
              oapiGetFrameRate(), passMs[0], passMs[1], passMs[2], tiles, q, visuals.size());
+        LOGC("GPU ms by pass: fx compute %.2f, shadows %.2f, sky %.2f, planets %.2f, vessels opaque %.2f, liquid %.2f, "
+             "transparent + air %.2f, exhaust/AR/particles %.2f, own vessel %.2f, resolve + post %.2f, 2D %.2f",
+             markMs[1], markMs[2], markMs[3], markMs[4], markMs[5], markMs[6], markMs[7], markMs[8], markMs[9], markMs[10], markMs[11]);
+        LogMemory("now");     // a leak shows as a steady climb from one of these lines to the next
     }
 }
 
@@ -660,7 +857,12 @@ bool D3D11Client::clbkDisplayFrame()
     CallRenderProcs();    // the modules' HUD procs (gcCore RegisterRenderProc)
     CompositeScreenLayer();
     LARGE_INTEGER now; QueryPerformanceCounter(&now);
-    if (!shotDone && (now.QuadPart - tStart.QuadPart) / (double)qpf.QuadPart > 15.0) {
+    static double shotT = -1;      // test runs: D3D11CLIENT_TEST_SHOT = seconds to the shot (15 by default)
+    if (shotT < 0) {
+        char v[16] = {}; double FxTestShotTime(); const double cfgT = FxTestShotTime();
+        shotT = GetEnvironmentVariableA("D3D11CLIENT_TEST_SHOT", v, sizeof v) ? std::max(atof(v), 1.0) : cfgT > 0 ? std::max(cfgT, 1.0) : 15.0;
+    }
+    if (!shotDone && (now.QuadPart - tStart.QuadPart) / (double)qpf.QuadPart > shotT) {
         shotDone = true;
         CreateDirectoryA("Modules\\D3D11Client\\shots", nullptr);
         SaveShot("Modules\\D3D11Client\\shots\\start.png");
@@ -780,7 +982,7 @@ void D3D11Client::UpdateFrameCB(const VECTOR3& cp, const XMMATRIX& invVP)
     for (Planet* p : planets) {
         if (!p->liq.has || !g_cfg.liquids) continue;
         VECTOR3 q; oapiGetGlobalPos(p->hObj, &q);
-        const double Rl = p->R + p->liq.level, alt = length(cp - q) - Rl;
+        const double dc = length(cp - q), Rl = LiquidLevelFor(p->R + p->liq.level, dc), alt = dc - Rl;
         if (alt < 0 || alt > 300000) continue;
         const VECTOR3 c = q - cp; const LiquidCfg& L = p->liq;
         f.liq0 = { (float)c.x, (float)c.y, (float)c.z, (float)Rl };
@@ -829,4 +1031,96 @@ void D3D11Client::RenderShadows(const VECTOR3& cp)
         RenderVessel(kv.second, cp, _M(1, 0, 0, 0, 1, 0, 0, 0, 1), XMMatrixIdentity(), false, &LVP);
     }
     shadowOn = true;
+}
+
+// the process's memory (a 32-bit process: the address space runs out before the RAM): committed private bytes and the
+// largest free block of addresses (what a big allocation needs)
+void LogMemory(const char* when)
+{
+    PROCESS_MEMORY_COUNTERS_EX pm = {}; pm.cb = sizeof pm;
+    GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pm, sizeof pm);
+    SIZE_T freeTotal = 0, freeMax = 0, img = 0, map = 0, prv = 0, rsv = 0; MEMORY_BASIC_INFORMATION mi;
+    for (const char* a = nullptr; VirtualQuery(a, &mi, sizeof mi); a = (const char*)mi.BaseAddress + mi.RegionSize) {
+        if (mi.State == MEM_FREE) { freeTotal += mi.RegionSize; freeMax = std::max(freeMax, mi.RegionSize); }
+        else if (mi.State == MEM_RESERVE) rsv += mi.RegionSize;
+        else if (mi.Type == MEM_IMAGE) img += mi.RegionSize;
+        else if (mi.Type == MEM_MAPPED) map += mi.RegionSize;
+        else prv += mi.RegionSize;
+        if ((const char*)mi.BaseAddress + mi.RegionSize < (const char*)mi.BaseAddress) break;
+    }
+    // the address space by kind: the modules' code (image), mapped files and views, committed private memory, and the
+    // ranges only reserved (driver heaps, thread stacks); the client's own surfaces and their CPU copies
+    LOGC("memory %s: private %u MB, address space free %u MB, largest free block %u MB | used: image %u, mapped %u, "
+         "private %u, reserved %u MB | client surfaces %ld (%.0f MB on the GPU), CPU copies %ld (%.0f MB)", when,
+         (unsigned)(pm.PrivateUsage >> 20), (unsigned)(freeTotal >> 20), (unsigned)(freeMax >> 20),
+         (unsigned)(img >> 20), (unsigned)(map >> 20), (unsigned)(prv >> 20), (unsigned)(rsv >> 20),
+         g_surfLive, g_surfMB, g_dibLive, g_dibMB);
+    // once a run, when mapped views take much of the address space: the biggest ones and the file behind each (none: a
+    // section without a file, as a driver's memory shared with the GPU)
+    static bool listed = false;
+    if (!listed && map > (256u << 20)) {
+        listed = true;
+        std::map<const void*, SIZE_T> byBase;
+        for (const char* a = nullptr; VirtualQuery(a, &mi, sizeof mi); a = (const char*)mi.BaseAddress + mi.RegionSize) {
+            if (mi.State != MEM_FREE && mi.Type == MEM_MAPPED) byBase[mi.AllocationBase] += mi.RegionSize;
+            if ((const char*)mi.BaseAddress + mi.RegionSize < (const char*)mi.BaseAddress) break;
+        }
+        std::vector<std::pair<SIZE_T, const void*>> v;
+        for (auto& e : byBase) v.push_back({ e.second, e.first });
+        std::sort(v.begin(), v.end(), [](auto& x, auto& y) { return x.first > y.first; });
+        SIZE_T anon = 0; int nAnon = 0;
+        for (auto& e : v) { char fn[MAX_PATH] = {}; if (!GetMappedFileNameA(GetCurrentProcess(), (LPVOID)e.second, fn, MAX_PATH)) { anon += e.first; nAnon++; } }
+        LOGC("memory: %zu mapped views, %d of them without a file (%u MB)", v.size(), nAnon, (unsigned)(anon >> 20));
+        for (size_t i = 0; i < v.size() && i < 15; i++) {
+            char fn[MAX_PATH] = {};
+            GetMappedFileNameA(GetCurrentProcess(), (LPVOID)v[i].second, fn, MAX_PATH);
+            LOGC("memory:   mapped %6.1f MB at %p  %s", v[i].first / 1048576.0, v[i].second, fn[0] ? fn : "(no file)");
+        }
+    }
+}
+
+// ------------------------------------------------------------------------------------------ test runs: a script of actions
+// D3D11CLIENT_TEST_SCRIPT (set by tools/run_test.ps1 -Script, test runs only): "t action args; ...", t in seconds of
+// system time from the first frame. Actions: lift <vessel> <metres> (into the air over where it stands), cam <vessel>
+// in|out (the camera on it, inside or outside), focus <vessel>. Each is logged as it runs.
+void D3D11Client::TestScript()
+{
+    static bool parsed = false; static double t0 = 0;
+    struct Act { double t; std::string what, name; double arg; bool done; };
+    static std::vector<Act> acts;
+    if (!parsed) {
+        parsed = true; t0 = oapiGetSysTime();
+        char buf[1024] = {};
+        if (!GetEnvironmentVariableA("D3D11CLIENT_TEST_SCRIPT", buf, sizeof buf)) return;
+        std::string s = buf;
+        for (size_t i = 0; i < s.size();) {
+            size_t j = s.find(';', i); if (j == std::string::npos) j = s.size();
+            char what[32] = {}, name[128] = {}, arg[32] = {}; double t = 0;
+            if (sscanf(s.substr(i, j - i).c_str(), "%lf %31s %127s %31s", &t, what, name, arg) >= 3)
+                acts.push_back({ t, what, name, !strcmp(arg, "in") ? 1.0 : !strcmp(arg, "out") ? 0.0 : atof(arg), false });
+            i = j + 1;
+        }
+        LOGC("test script: %u actions", (unsigned)acts.size());
+    }
+    const double t = oapiGetSysTime() - t0;
+    for (Act& a : acts) {
+        if (a.done || t < a.t) continue;
+        a.done = true;
+        OBJHANDLE h = oapiGetVesselByName(const_cast<char*>(a.name.c_str()));
+        if (!h) { LOGC("test script: t %.1f %s - no vessel %s", t, a.what.c_str(), a.name.c_str()); continue; }
+        if (a.what == "lift") {
+            VESSEL* v = oapiGetVesselInterface(h);
+            VESSELSTATUS2 vs; memset(&vs, 0, sizeof vs); vs.version = 2;
+            v->GetStatusEx(&vs);
+            const double r = length(vs.rpos);
+            if (r > 0) vs.rpos = vs.rpos * ((r + a.arg) / r);
+            vs.status = 0;
+            v->DefSetStateEx(&vs);
+        }
+        else if (a.what == "cam") oapiCameraAttach(h, a.arg > 0.5 ? 0 : 1);
+        else if (a.what == "focus") oapiSetFocusObject(h);
+        LOGC("test script: t %.1f %s %s %g", t, a.what.c_str(), a.name.c_str(), a.arg);
+        LogMemory("after the action");
+        g_traceAlloc = true; g_traceFrames = 60;
+    }
 }

@@ -61,10 +61,10 @@ public:
     void Frame(D3D11Client* gc, const VECTOR3& camPos);    // before the scene: tables, constants, the light (b4, t8, t9)
     void Render(D3D11Client* gc, const VECTOR3& camPos, const MATRIX3& camRot, const XMMATRIX& proj);   // after the opaque scene
     void Release();
+    void BindLight(ID3D11DeviceContext* ctx);              // the current planet's medium and tables for the client
 
 private:
     PlanetAtmosphere* Get(D3D11Client* gc, Planet* p);   // nullptr: no air
-    void BindLight(ID3D11DeviceContext* ctx);              // the current planet's medium and tables for the client
     void LogDepth(D3D11Client* gc, float nearPlane);       // a check in Orbiter.log: the scene depth this pass reads
     void UpdateExposure(const VECTOR3& camPos);            // the eye's adaptation to the light at the camera
 
@@ -73,6 +73,17 @@ private:
     AtmoTableShaders tables;
     ComPtr<ID3D11Buffer> cbPass, cbSpace;
     ComPtr<ID3D11BlendState> bsDual;
+    // the sky's light around the camera as spherical harmonics (fx_sky_sh.hlsl): t13 for the client's shaders
+    ComPtr<ID3D11ComputeShader> csSH; ComPtr<ID3D11Buffer> shBuf; ComPtr<ID3D11UnorderedAccessView> shUAV; ComPtr<ID3D11ShaderResourceView> shSRV;
+    bool shValid = false;
+    void UpdateSkySH(ID3D11DeviceContext* ctx, const VECTOR3& camPos);
+    // the aerial-perspective volume inside the air (fx_atmo.hlsl CSVol): columns x rows x slices, the columns' whole rays
+    ComPtr<ID3D11ComputeShader> csVol;
+    ComPtr<ID3D11Texture3D> apL, apT; ComPtr<ID3D11Texture2D> endL, endT;
+    ComPtr<ID3D11UnorderedAccessView> apLU, apTU, endLU, endTU;
+    ComPtr<ID3D11ShaderResourceView> apLS, apTS, endLS, endTS;
+    UINT volW = 0, volH = 0, sceneW = 0, sceneH = 0;
+    bool EnsureVolume(ID3D11Device* dev, UINT w, UINT h);
     std::map<Planet*, std::unique_ptr<PlanetAtmosphere>> planets;
     PlanetAtmosphere* current = nullptr;    // the planet whose light the client's shaders get this frame
     VECTOR3 sunPos = { 0, 0, 0 };

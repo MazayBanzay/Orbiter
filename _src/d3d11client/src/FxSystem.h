@@ -10,6 +10,7 @@ public:
     void Frame(D3D11Client* gc, const VECTOR3& camPos, const MATRIX3& camRot, const XMMATRIX& proj, double simDt);
     void RenderTransparent(D3D11Client* gc, const VECTOR3& camPos, const MATRIX3& camRot, const XMMATRIX& proj);
     void Release();
+    void BindLight(D3D11Client* gc) { if (atmoOk) atmo.BindLight(gc->Ctx()); }
     const WaveField& Waves() const { return waves; }
 
 private:

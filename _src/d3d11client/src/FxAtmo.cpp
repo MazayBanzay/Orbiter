@@ -13,8 +13,9 @@ struct MediaCB    // = cbuffer FxAtmoMedia (fx_atmo_light.hlsli)
 };
 struct PassCB     // = cbuffer AtmoPass (fx_atmo.hlsl)
 {
-    XMFLOAT4 row0, row1, row2, tan, cam, sun;
+    XMFLOAT4 row0, row1, row2, tan, cam, sun, vol, grid;
 };
+const UINT AP_CELL = 12, AP_SLICES = 64;     // the aerial-perspective volume: a column per 12 x 12 pixels, 64 slices
 
 const int TW = 256, TH = 64, IW = 64, IH = 32, MSN = 64;   // = FX_TW, FX_TH, FX_IW, FX_IH (fx_atmo_light.hlsli), MS_N
 
@@ -261,6 +262,15 @@ bool Atmosphere::Init(D3D11Client* gc)
     auto b2 = FxCompile("fx_atmo_lut.hlsl", "CSMS", "cs_5_0");
     auto b3 = FxCompile("fx_atmo_lut.hlsl", "CSIrr", "cs_5_0");
     if (!bv || !bp || !b1 || !b2 || !b3) return false;
+    if (auto bc = FxCompile("fx_atmo.hlsl", "CSVol", "cs_5_0")) dev->CreateComputeShader(bc->GetBufferPointer(), bc->GetBufferSize(), nullptr, &csVol);
+    LOGC("atmosphere: aerial-perspective volume %s", csVol ? "on" : "NOT available (the pass marches every pixel)");
+    if (auto bs = FxCompile("fx_sky_sh.hlsl", "CS", "cs_5_0")) {
+        dev->CreateComputeShader(bs->GetBufferPointer(), bs->GetBufferSize(), nullptr, &csSH);
+        D3D11_BUFFER_DESC sb = { 10 * 16, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, 0, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, 16 };
+        dev->CreateBuffer(&sb, nullptr, &shBuf);
+        if (shBuf) { dev->CreateUnorderedAccessView(shBuf.Get(), nullptr, &shUAV); dev->CreateShaderResourceView(shBuf.Get(), nullptr, &shSRV); }
+    }
+    LOGC("atmosphere: sky light from the real sky (spherical harmonics) %s", csSH && shUAV && shSRV ? "on" : "NOT available");
     dev->CreateVertexShader(bv->GetBufferPointer(), bv->GetBufferSize(), nullptr, &vs);
     dev->CreatePixelShader(bp->GetBufferPointer(), bp->GetBufferSize(), nullptr, &ps);
     dev->CreateComputeShader(b1->GetBufferPointer(), b1->GetBufferSize(), nullptr, &tables.trans);
@@ -289,6 +299,8 @@ void Atmosphere::Release()
     planets.clear();
     current = nullptr;
     vs.Reset(); ps.Reset(); tables = {}; cbPass.Reset(); cbSpace.Reset(); bsDual.Reset();
+    csVol.Reset(); apL.Reset(); apT.Reset(); endL.Reset(); endT.Reset(); apLU.Reset(); apTU.Reset(); endLU.Reset(); endTU.Reset();
+    apLS.Reset(); apTS.Reset(); endLS.Reset(); endTS.Reset(); volW = volH = sceneW = sceneH = 0;
     g_fxAtmo.active = false;
 }
 
@@ -307,8 +319,31 @@ PlanetAtmosphere* Atmosphere::Get(D3D11Client* gc, Planet* p)
     return r;
 }
 
+// the sky around the camera, every frame: its light on any surface near the camera's height (FxSkyLight)
+void Atmosphere::UpdateSkySH(ID3D11DeviceContext* ctx, const VECTOR3& cp)
+{
+    shValid = false;
+    if (!current || !current->tablesReady || !csSH || !shUAV) return;
+    VECTOR3 pp; oapiGetGlobalPos(current->planet->hObj, &pp);
+    if (length(cp - pp) >= current->TopRadius()) return;      // in space: no sky
+    ctx->CSSetShader(csSH.Get(), nullptr, 0);
+    ctx->CSSetConstantBuffers(4, 1, current->cb.GetAddressOf());
+    ID3D11ShaderResourceView* srv[2] = { current->lutSRV.Get(), current->msSRV.Get() };
+    ctx->CSSetShaderResources(8, 2, srv);
+    ctx->CSSetUnorderedAccessViews(0, 1, shUAV.GetAddressOf(), nullptr);
+    ctx->Dispatch(1, 1, 1);
+    ID3D11UnorderedAccessView* nu = nullptr; ID3D11ShaderResourceView* ns[2] = {};
+    ctx->CSSetUnorderedAccessViews(0, 1, &nu, nullptr);
+    ctx->CSSetShaderResources(8, 2, ns);
+    ctx->CSSetShader(nullptr, nullptr, 0);
+    shValid = true;
+}
+
 void Atmosphere::BindLight(ID3D11DeviceContext* ctx)
 {
+    ID3D11ShaderResourceView* sh = shValid ? shSRV.Get() : nullptr;
+    ctx->PSSetShaderResources(13, 1, &sh);
+    ctx->VSSetShaderResources(13, 1, &sh);
     ID3D11Buffer* cb = current ? current->cb.Get() : cbSpace.Get();
     ID3D11ShaderResourceView* srv[2] = { current ? current->lutSRV.Get() : nullptr, current ? current->msSRV.Get() : nullptr };
     ctx->VSSetConstantBuffers(4, 1, &cb);
@@ -331,6 +366,7 @@ void Atmosphere::Frame(D3D11Client* gc, const VECTOR3& cp)
         double rel = (length(cp - pp) - p->R) / p->R;   // the nearest relative to its size
         if (rel < 20 && rel < best) { best = rel; current = a; }
     }
+    UpdateSkySH(ctx, cp);
     BindLight(ctx);
     g_fxAtmo.active = true;
     g_fxAtmo.starVis = current ? current->StarVisibility(cp, sunPos) : 1.0f;
@@ -355,6 +391,7 @@ void Atmosphere::UpdateExposure(const VECTOR3& cp)
     auto lum = [](const VECTOR3& e) { return 0.2126 * e.x + 0.7152 * e.y + 0.0722 * e.z; };
     if (current) {
         VECTOR3 E = current->LightAt(cp, sunPos, false), En = current->LightAt(cp, sunPos, true);
+        for (int i = 0; i < 3; i++) g_fxAtmo.light[i] = (float)E.data[i];
         double Y = lum(E), Ynoon = lum(En);
         target = std::clamp(1.0 / std::max(Y, 1e-9), 1.0, std::max(1.0, 1.5 / std::max(Ynoon, 1e-9)));
         if (Ynoon > 1e-9) {
@@ -414,6 +451,28 @@ void Atmosphere::LogDepth(D3D11Client* gc, float nearPlane)
     }
 }
 
+// the volume's textures for a scene of w x h pixels (made again when the size changes)
+bool Atmosphere::EnsureVolume(ID3D11Device* dev, UINT w, UINT h)
+{
+    if (!csVol) return false;
+    if (w == sceneW && h == sceneH && apLS) return true;
+    sceneW = w; sceneH = h; volW = (w + AP_CELL - 1) / AP_CELL; volH = (h + AP_CELL - 1) / AP_CELL;
+    apL.Reset(); apT.Reset(); endL.Reset(); endT.Reset(); apLU.Reset(); apTU.Reset(); endLU.Reset(); endTU.Reset();
+    apLS.Reset(); apTS.Reset(); endLS.Reset(); endTS.Reset();
+    D3D11_TEXTURE3D_DESC d3 = { volW, volH, AP_SLICES, 1, DXGI_FORMAT_R16G16B16A16_FLOAT, D3D11_USAGE_DEFAULT,
+                                D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, 0, 0 };
+    D3D11_TEXTURE2D_DESC d2 = { volW, volH, 1, 1, DXGI_FORMAT_R16G16B16A16_FLOAT, {1, 0}, D3D11_USAGE_DEFAULT,
+                                D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, 0, 0 };
+    if (FAILED(dev->CreateTexture3D(&d3, nullptr, &apL)) || FAILED(dev->CreateTexture3D(&d3, nullptr, &apT)) ||
+        FAILED(dev->CreateTexture2D(&d2, nullptr, &endL)) || FAILED(dev->CreateTexture2D(&d2, nullptr, &endT))) return false;
+    dev->CreateUnorderedAccessView(apL.Get(), nullptr, &apLU); dev->CreateShaderResourceView(apL.Get(), nullptr, &apLS);
+    dev->CreateUnorderedAccessView(apT.Get(), nullptr, &apTU); dev->CreateShaderResourceView(apT.Get(), nullptr, &apTS);
+    dev->CreateUnorderedAccessView(endL.Get(), nullptr, &endLU); dev->CreateShaderResourceView(endL.Get(), nullptr, &endLS);
+    dev->CreateUnorderedAccessView(endT.Get(), nullptr, &endTU); dev->CreateShaderResourceView(endT.Get(), nullptr, &endTS);
+    LOGC("atmosphere: aerial-perspective volume %ux%ux%u for %ux%u pixels", volW, volH, AP_SLICES, w, h);
+    return apLU && apTU && endLU && endTU && apLS && apTS && endLS && endTS;
+}
+
 void Atmosphere::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj)
 {
     if (!gc->depthSRV) return;
@@ -441,6 +500,11 @@ void Atmosphere::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, c
     std::sort(list.begin(), list.end(), [](auto& a, auto& b) { return a.first > b.first; });
     gc->ResolveDepth();     // MSAA: depthSRV is resolved only on request (the liquid does it, but only near a liquid)
     LogDepth(gc, P._43);
+    UINT dw = 1, dh = 1;     // the scene's size (the depth the pass reads)
+    {
+        ComPtr<ID3D11Resource> r; gc->depthSRV->GetResource(&r);
+        ComPtr<ID3D11Texture2D> t; if (r && SUCCEEDED(r.As(&t))) { D3D11_TEXTURE2D_DESC td; t->GetDesc(&td); dw = td.Width; dh = td.Height; }
+    }
 
     ComPtr<ID3D11RenderTargetView> rtv; ComPtr<ID3D11DepthStencilView> dsv;
     ctx->OMGetRenderTargets(1, &rtv, &dsv);
@@ -467,12 +531,35 @@ void Atmosphere::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, c
         k.tan = { tanX, tanY, P._43, 0 };
         k.cam = { (float)rc, (float)alt, 0, 0 };
         k.sun = { 1.0f, 64.0f, P._31, P._32 };           // the Sun's disc, its radiance capped; TAA's sub-pixel offset
+        // inside this planet's air (its light is the frame's): the rays marched per column once, in the volume
+        const bool useVol = a == current && alt < a->media.top && EnsureVolume(gc->Dev(), dw, dh);
+        k.vol = { useVol ? 1.0f : 0.0f, 1.0f / dw, 1.0f / dh, (float)AP_SLICES };
+        k.grid = { (float)volW, (float)volH, (float)AP_SLICES, 0 };
         D3D11_MAPPED_SUBRESOURCE m;
         ctx->Map(cbPass.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &m); memcpy(m.pData, &k, sizeof k); ctx->Unmap(cbPass.Get(), 0);
         ID3D11ShaderResourceView* srv[2] = { a->lutSRV.Get(), a->msSRV.Get() };
+        if (useVol) {
+            ID3D11ShaderResourceView* none4[4] = {};
+            ctx->PSSetShaderResources(1, 4, none4);
+            ctx->CSSetShader(csVol.Get(), nullptr, 0);
+            ctx->CSSetConstantBuffers(3, 1, cbPass.GetAddressOf());
+            ctx->CSSetConstantBuffers(4, 1, a->cb.GetAddressOf());
+            ctx->CSSetShaderResources(8, 2, srv);
+            ID3D11UnorderedAccessView* u[4] = { apLU.Get(), apTU.Get(), endLU.Get(), endTU.Get() };
+            ctx->CSSetUnorderedAccessViews(0, 4, u, nullptr);
+            ctx->Dispatch((volW + 7) / 8, (volH + 7) / 8, 1);
+            ID3D11UnorderedAccessView* nu[4] = {}; ID3D11ShaderResourceView* ns[2] = {};
+            ctx->CSSetUnorderedAccessViews(0, 4, nu, nullptr);
+            ctx->CSSetShaderResources(8, 2, ns);
+            ctx->CSSetShader(nullptr, nullptr, 0);
+            ID3D11ShaderResourceView* v[4] = { apLS.Get(), apTS.Get(), endLS.Get(), endTS.Get() };
+            ctx->PSSetShaderResources(1, 4, v);
+            ctx->PSSetSamplers(1, 1, gc->sampClamp.GetAddressOf());
+        }
         ctx->PSSetShaderResources(8, 2, srv);
         ctx->PSSetConstantBuffers(4, 1, a->cb.GetAddressOf());
         ctx->Draw(3, 0);
+        if (useVol) { ID3D11ShaderResourceView* none4[4] = {}; ctx->PSSetShaderResources(1, 4, none4); }
     }
 
     // back to the current planet's light for what follows

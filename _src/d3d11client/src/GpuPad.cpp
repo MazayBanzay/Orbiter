@@ -108,7 +108,7 @@ PipeState::PipeState(ID3D11DeviceContext* ctx) : c(ctx)
     c->IAGetVertexBuffers(0, 1, &vb, &vbStride, &vbOff); c->IAGetIndexBuffer(&ib, &ibFmt, &ibOff);
     c->OMGetBlendState(&bs, bf, &mask); c->OMGetDepthStencilState(&dss, &ref); c->RSGetState(&rs);
     c->PSGetShaderResources(0, 16, srv); c->PSGetSamplers(0, 16, smp);
-    c->PSGetConstantBuffers(0, 6, pcb); c->VSGetConstantBuffers(0, 6, vcb);
+    c->PSGetConstantBuffers(0, 8, pcb); c->VSGetConstantBuffers(0, 8, vcb);
 }
 
 PipeState::~PipeState()
@@ -122,7 +122,7 @@ PipeState::~PipeState()
     c->IASetVertexBuffers(0, 1, &vb, &vbStride, &vbOff); c->IASetIndexBuffer(ib, ibFmt, ibOff);
     c->OMSetBlendState(bs, bf, mask); c->OMSetDepthStencilState(dss, ref); c->RSSetState(rs);
     c->PSSetShaderResources(0, 16, srv); c->PSSetSamplers(0, 16, smp);
-    c->PSSetConstantBuffers(0, 6, pcb); c->VSSetConstantBuffers(0, 6, vcb);
+    c->PSSetConstantBuffers(0, 8, pcb); c->VSSetConstantBuffers(0, 8, vcb);
     auto rel = [](IUnknown* p) { if (p) p->Release(); };
     for (auto* p : rtv) rel(p);
     rel(dsv); rel(vs); rel(ps); rel(il); rel(vb); rel(ib); rel(bs); rel(dss); rel(rs);

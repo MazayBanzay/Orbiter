@@ -165,6 +165,7 @@ void D3D11Client::ToneMapAndAA(ID3D11ShaderResourceView* src)
 {
     bool fxaa = g_cfg.aa == AA_FXAA;
     ID3D11ShaderResourceView* nul = nullptr;
+    ID3D11ShaderResourceView* bloom = RenderBloom(src);     // the glow, added in the post pass (t1)
     D3D11_VIEWPORT ovp = { 0, 0, (float)W, (float)H, 0, 1 };
     ctx->RSSetViewports(1, &ovp);
     ctx->OMSetRenderTargets(1, fxaa ? ldrRTV.GetAddressOf() : bbRTV.GetAddressOf(), nullptr);
@@ -174,8 +175,11 @@ void D3D11Client::ToneMapAndAA(ID3D11ShaderResourceView* src)
     ctx->VSSetShader(vsPost.Get(), nullptr, 0);
     ctx->PSSetShader(psPost.Get(), nullptr, 0);
     ctx->PSSetShaderResources(0, 1, &src);
+    ctx->PSSetShaderResources(1, 1, &bloom);
+    ctx->PSSetSamplers(1, 1, sampClamp.GetAddressOf());
     FullScreen(ctx.Get());
     ctx->PSSetShaderResources(0, 1, &nul);
+    ctx->PSSetShaderResources(1, 1, &nul);
     if (!fxaa) return;
     AACB c = {}; c.p = { 0, 0, 1.0f / W, 1.0f / H };
     D3D11_MAPPED_SUBRESOURCE ms;

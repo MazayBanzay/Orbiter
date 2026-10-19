@@ -4,6 +4,7 @@
 #include "Client.h"
 #include "gcCoreAPI.h"
 #include "Wake.h"
+#include "Exhaust.h"
 
 ExtState g_ext;
 
@@ -109,9 +110,10 @@ DLLCLBK void AtmoFX_SetHeatSource(OBJHANDLE h, int id, double x, double y, doubl
 }
 
 DLLCLBK void AtmoFX_SetFoam(OBJHANDLE, int, const double*, double, double, double) {}
-DLLCLBK void AtmoFX_SetDirt(OBJHANDLE, double, double, double, double, double) {}
-DLLCLBK void AtmoFX_Emit(OBJHANDLE, int, const double*, const double*, double, double, double, int, int, double, double, double) {}
-DLLCLBK void AtmoFX_Box(OBJHANDLE, int, const double*, const double*) {}
+void DirtSet(OBJHANDLE h, double amount, double r, double g, double b, double topY);    // Mesh.cpp
+DLLCLBK void AtmoFX_SetDirt(OBJHANDLE h, double amount, double r, double g, double b, double topY) { DirtSet(h, amount, r, g, b, topY); }
+DLLCLBK void AtmoFX_Emit(OBJHANDLE h, int id, const double* p, const double* v, double cone, double spread, double kgps, int kind, int ground, double wet, double life, double jetJ) { ExhaustEmit(h, id, p, v, cone, spread, kgps, kind, ground, wet, life, jetJ); }
+DLLCLBK void AtmoFX_Box(OBJHANDLE h, int id, const double* c, const double* half) { ExhaustBox(h, id, c, half); }
 DLLCLBK void AtmoFX_Mark(OBJHANDLE, int, const double*, const double*, double, double, double, int, double) {}
 DLLCLBK int AtmoFX_MarkCount(OBJHANDLE) { return 0; }
 DLLCLBK int AtmoFX_MarkGet(OBJHANDLE, int, double*, char*, int) { return 0; }

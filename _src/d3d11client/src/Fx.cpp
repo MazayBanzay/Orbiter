@@ -68,3 +68,5 @@ void FxRenderTransparent(D3D11Client* gc, const VECTOR3& camPos, const MATRIX3& 
 void FxRelease() { fx.Release(); }
 
 const FxWaveView& FxWaves() { return fx.Waves().View(); }
+
+void FxBindLight(D3D11Client* gc) { fx.BindLight(gc); }

@@ -24,11 +24,17 @@ void ClientCfg::Load()
         else if (k == "Liquids") liquids = v != 0;
         else if (k == "Shadows") shadows = v != 0;
         else if (k == "MicroTextures") microTex = v != 0;
+        else if (k == "GroundDetail") groundDetail = v != 0;
         else if (k == "Tessellation") tess = v != 0;
+        else if (k == "TerrainNormals") terrainNormals = v != 0;
+        else if (k == "Geomorph") geomorph = v != 0;
         else if (k == "Exposure") exposure = (float)v;
         else if (k == "StatsLog") statsLog = v != 0;
         else if (k == "AntiAliasing") aa = std::clamp((int)v, 0, 5);
         else if (k == "RenderScale") renderScale = std::clamp((float)v, 0.5f, 1.0f);
+        else if (k == "DriverCacheMB") driverCacheMB = std::max((int)v, 0);
+        else if (k == "AmbientOcclusion") ao = v != 0;
+        else if (k == "Bloom") bloom = v != 0;
     }
     fclose(f);
 }
@@ -46,8 +52,14 @@ void ClientCfg::Save() const
     fprintf(f, "Liquids = %d        ; liquid surfaces (Titan's seas)\n", liquids ? 1 : 0);
     fprintf(f, "Shadows = %d        ; shadows (when available)\n", shadows ? 1 : 0);
     fprintf(f, "MicroTextures = %d  ; close-up surface detail from Config\\MicroTex.cfg\n", microTex ? 1 : 0);
+    fprintf(f, "GroundDetail = %d   ; ground material near the camera (Huygens-based on Titan)\n", groundDetail ? 1 : 0);
     fprintf(f, "Tessellation = %d   ; ground relief geometry near the camera (0: shading detail only)\n", tess ? 1 : 0);
+    fprintf(f, "TerrainNormals = %d ; per-pixel terrain normals from the elevation data\n", terrainNormals ? 1 : 0);
+    fprintf(f, "Geomorph = %d       ; terrain detail levels blend smoothly instead of popping\n", geomorph ? 1 : 0);
     fprintf(f, "StatsLog = %d       ; fps and GPU times in Orbiter.log every 10 s\n", statsLog ? 1 : 0);
+    fprintf(f, "Bloom = %d          ; the bright parts glow softly (the Sun in the haze, glints, lamps)\n", bloom ? 1 : 0);
+    fprintf(f, "AmbientOcclusion = %d ; darker folds of the ground and under the vessels (from the depth)\n", ao ? 1 : 0);
+    fprintf(f, "DriverCacheMB = %d ; the video driver's shader cache for Orbiter: set aside at start above this (0: never)\n", driverCacheMB);
     fprintf(f, "AntiAliasing = %d   ; 0 off, 1 MSAA 2x, 2 MSAA 4x, 3 MSAA 8x, 4 FXAA, 5 TAA (applies at the next start)\n", aa);
     fprintf(f, "RenderScale = %.2f  ; TAA: scene resolution 0.5..1 of the window, upsampled by TAAU (next start)\n", renderScale);
     fclose(f);

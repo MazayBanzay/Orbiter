@@ -1,7 +1,7 @@
 ﻿# Test run of the D3D11 client: Orbiter's NG server, minimised (no focus change), no sound (XRSound left out for the run),
 # the client loaded from the command line. Afterwards Orbiter_NG.cfg and "(Current state).scn" are put back as they were.
 # -Set "Key = value", ...: Client.cfg keys for this run only (e.g. -Set "MicroTextures = 0")
-param([string]$Scenario = "(Current state)", [int]$Seconds = 45, [int]$AA = -1, [string[]]$Set = @())
+param([string]$Scenario = "(Current state)", [int]$Seconds = 45, [int]$AA = -1, [string[]]$Set = @(), [string]$Script = "")
 $orb = "C:\Games\Orbiter-2024"
 # never alongside the user's own Orbiter: the restore at the end would overwrite their cfg and state
 # one test at a time across all sessions: a named mutex queues them (released when this script's process ends)
@@ -31,6 +31,7 @@ try {
     (Get-Content -LiteralPath $cfg) | Where-Object { $_ -notmatch '^\s*XRSound\s*$' -and $_ -notmatch '^\s*D3D11Client\s*$' } | Set-Content -LiteralPath $cfg -Encoding ascii
     Copy-Item -LiteralPath (Join-Path $orb ("Scenarios\" + $Scenario + ".scn")) -Destination (Join-Path $orb "Scenarios\Tests\D3D11_test.scn") -Force
     $env:D3D11CLIENT_TEST = "1"     # the client keeps its window hidden and inactive
+    if ($Script) { $env:D3D11CLIENT_TEST_SCRIPT = $Script }   # timed actions in the run (Client.cpp: TestScript)
     $p = Start-Process -FilePath (Join-Path $orb "Modules\Server\Orbiter.exe") -WorkingDirectory $orb `
         -ArgumentList "-p D3D11Client -s `"Tests\D3D11_test`" --maxsystime=$Seconds -x" -WindowStyle Minimized -PassThru
     if (-not $p.WaitForExit(($Seconds + 120) * 1000)) { Stop-Process -Id $p.Id -Force; "killed (hang)" }
@@ -44,6 +45,7 @@ try {
     "log: " + (Join-Path $logs "$stamp.log")
 } finally {
     Remove-Item Env:D3D11CLIENT_TEST -ErrorAction SilentlyContinue
+    Remove-Item Env:D3D11CLIENT_TEST_SCRIPT -ErrorAction SilentlyContinue
     Copy-Item -LiteralPath $csBak -Destination $cs -Force
     Copy-Item -LiteralPath $cfgBak -Destination $cfg -Force
     if ($hadCcfg) { Copy-Item -LiteralPath $ccfgBak -Destination $ccfg -Force }

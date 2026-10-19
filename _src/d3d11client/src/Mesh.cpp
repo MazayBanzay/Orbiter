@@ -1,4 +1,6 @@
 // Device meshes from Orbiter's mesh templates, vessel visuals, animations, vessel rendering.
+#include <mutex>
+#include <map>
 #include "Client.h"
 
 static const DWORD SPEC_DEF = (DWORD)-1, SPEC_INH = (DWORD)-2;
@@ -40,6 +42,7 @@ bool DevMesh::Build(ID3D11Device* dev, MESHHANDLE src)
     }
     if (allV.empty() || allI.empty()) return false;
     if (allI.size() & 1) allI.push_back(0);
+    { extern bool g_traceAlloc; if (g_traceAlloc) LOGC("trace: mesh %u vertices, %u indices (%.1f MB)", (UINT)allV.size(), (UINT)allI.size(), (allV.size() * sizeof(NTVERTEX) + allI.size() * 2) / 1048576.0); }
     D3D11_BUFFER_DESC bd = { (UINT)(allV.size() * sizeof(NTVERTEX)), D3D11_USAGE_DEFAULT, D3D11_BIND_VERTEX_BUFFER, 0, 0, 0 };
     D3D11_SUBRESOURCE_DATA sd = { allV.data(), 0, 0 };
     if (FAILED(dev->CreateBuffer(&bd, &sd, &vb))) return false;
@@ -193,7 +196,38 @@ void VesselVis::UpdateAnimations()
 }
 
 // ------------------------------------------------------------------------------------------ rendering
-struct MeshCB { XMFLOAT4X4 wvp, w; XMFLOAT4 sun, diff, amb, spec, emis, flags; XMFLOAT4X4 curNJ, prevNJ; };
+struct MeshCB { XMFLOAT4X4 wvp, w; XMFLOAT4 sun, diff, amb, spec, emis, flags; XMFLOAT4X4 curNJ, prevNJ; XMFLOAT4 maps, maps2; };
+
+// a texture's companion maps, named as D3D9Client names them next to it (<name>_norm.dds, ...), loaded once per texture
+struct MatMaps { ComPtr<ID3D11ShaderResourceView> m[5]; };     // _norm, _spec, _rghn, _metl, _emis
+static std::map<std::string, MatMaps> g_matMaps;
+static ID3D11Device* g_matDev = nullptr;
+static const MatMaps* MapsFor(ID3D11Device* dev, ID3D11DeviceContext* ctx, const Surf* s)
+{
+    if (!s || s->name.empty()) return nullptr;
+    if (dev != g_matDev) { g_matMaps.clear(); g_matDev = dev; }
+    auto it = g_matMaps.find(s->name);
+    if (it != g_matMaps.end()) return &it->second;
+    MatMaps& mm = g_matMaps[s->name];
+    std::string base = s->name;
+    size_t dot = base.find_last_of('.');
+    if (dot != std::string::npos) base = base.substr(0, dot);
+    static const char* suf[5] = { "_norm", "_spec", "_rghn", "_metl", "_emis" };
+    static const bool srgb[5] = { false, true, false, false, true };
+    int found = 0;
+    for (int k = 0; k < 5; k++) {
+        const std::string f = base + suf[k] + ".dds";
+        for (const char* dir : { "Textures2\\", "Textures\\" }) {
+            const std::string p = std::string(dir) + f;
+            if (GetFileAttributesA(p.c_str()) == INVALID_FILE_ATTRIBUTES) continue;
+            mm.m[k] = LoadDDSFile(dev, ctx, p.c_str(), srgb[k]);
+            if (mm.m[k]) { found++; break; }
+        }
+    }
+    if (found) LOGC("materials: %s with %s%s%s%s%s", s->name.c_str(), mm.m[0] ? "normal " : "", mm.m[1] ? "specular " : "",
+                    mm.m[2] ? "smoothness " : "", mm.m[3] ? "metalness " : "", mm.m[4] ? "emission" : "");
+    return &mm;
+}
 
 static OBJHANDLE FindSun()
 {
@@ -201,10 +235,26 @@ static OBJHANDLE FindSun()
     return nullptr;
 }
 
+// the world's dirt on a vessel (AtmoFX_SetDirt, the modules: amount 0..1, the dirt's albedo, topY in the vessel frame,
+// +y up): drawn in mesh.hlsl (DirtCover) - thick below topY, ragged above it, a light dusting on the surfaces facing up
+namespace {
+    struct Dirt { double amount, r, g, b, topY; };
+    std::mutex dirtMx;
+    std::map<OBJHANDLE, Dirt> dirt;
+    ComPtr<ID3D11Buffer> dirtCB; ID3D11Device* dirtDev = nullptr;
+}
+void DirtSet(OBJHANDLE h, double amount, double r, double g, double b, double topY)
+{
+    std::lock_guard<std::mutex> lk(dirtMx);
+    if (!h) return;
+    if (amount <= 0) { dirt.erase(h); return; }
+    dirt[h] = { std::min(amount, 1.0), r, g, b, topY };
+}
+
 void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj, bool alphaPass, const XMMATRIX* lightVP)
 {
     if (!vv->v) return;
-    if (!alphaPass) vv->UpdateAnimations();
+    if (!alphaPass && !mirrorPass) vv->UpdateAnimations();
     const bool shadowPass = lightVP != nullptr;
     VECTOR3 gp; vv->v->GetGlobalPos(gp);
     MATRIX3 R; vv->v->GetRotationMatrix(R);
@@ -216,7 +266,7 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
     VECTOR3 sp = _V(0, 0, 0); if (hSun) oapiGetGlobalPos(hSun, &sp);
     VECTOR3 sd = sp - gp; sd = sd / length(sd);
     XMMATRIX V(cr.m11, cr.m12, cr.m13, 0, cr.m21, cr.m22, cr.m23, 0, cr.m31, cr.m32, cr.m33, 0, 0, 0, 0, 1);
-    XMMATRIX VP = shadowPass ? *lightVP : V * proj;
+    XMMATRIX VP = shadowPass ? *lightVP : mirrorPass ? mirrorM * V * proj : V * proj;   // the liquid's mirror: the view reflected in its plane
     bool internal = oapiCameraInternal() && oapiGetFocusObject() == vv->hObj;
     bool vc = oapiCockpitMode() == COCKPIT_VIRTUAL;
     if (internal && !shadowPass && diagFrames > 0) {
@@ -231,7 +281,27 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
     ctx->PSSetShader(shadowPass ? nullptr : psMesh.Get(), nullptr, 0);
     ctx->VSSetConstantBuffers(1, 1, cbObj.GetAddressOf());
     ctx->PSSetConstantBuffers(1, 1, cbObj.GetAddressOf());
-    ctx->RSSetState(shadowPass ? rsShadow.Get() : rsBack.Get());
+    ctx->RSSetState(shadowPass ? rsShadow.Get() : mirrorPass ? rsMirror.Get() : rsBack.Get());   // mirrored: the winding turns
+    if (!shadowPass) {     // this vessel's dirt (b7), or none
+        if (dirtDev != dev.Get()) { dirtCB.Reset(); dirtDev = dev.Get(); }
+        if (!dirtCB) { D3D11_BUFFER_DESC bd = { 80, D3D11_USAGE_DYNAMIC, D3D11_BIND_CONSTANT_BUFFER, D3D11_CPU_ACCESS_WRITE, 0, 0 }; dev->CreateBuffer(&bd, nullptr, &dirtCB); }
+        XMFLOAT4 dc[5] = {};
+        {
+            std::lock_guard<std::mutex> lk(dirtMx);
+            auto it = dirt.find(vv->hObj);
+            if (it != dirt.end()) {
+                const Dirt& d = it->second;
+                dc[0] = { (float)rel.x, (float)rel.y, (float)rel.z, (float)d.amount };
+                dc[1] = { (float)R.m11, (float)R.m21, (float)R.m31, 0 };
+                dc[2] = { (float)R.m12, (float)R.m22, (float)R.m32, (float)d.topY };
+                dc[3] = { (float)R.m13, (float)R.m23, (float)R.m33, 0 };
+                dc[4] = { (float)d.r, (float)d.g, (float)d.b, 0 };
+            }
+        }
+        D3D11_MAPPED_SUBRESOURCE dm;
+        if (dirtCB && SUCCEEDED(ctx->Map(dirtCB.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &dm))) { memcpy(dm.pData, dc, sizeof dc); ctx->Unmap(dirtCB.Get(), 0); }
+        ctx->PSSetConstantBuffers(7, 1, dirtCB.GetAddressOf());
+    }
     ctx->OMSetBlendState(bsAlpha.Get(), nullptr, ~0u);
     ctx->OMSetDepthStencilState(shadowPass ? dsShadow.Get() : alphaPass ? dsRead.Get() : dsWrite.Get(), 0);
 
@@ -240,7 +310,7 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
         if (!m || !m->vb) continue;
         WORD mode = vv->v->GetMeshVisibilityMode(mi);
         bool show = internal ? ((mode & MESHVIS_COCKPIT) || ((mode & MESHVIS_VC) && vc)) : (mode & MESHVIS_EXTERNAL) != 0;
-        if (shadowPass) show = (mode & MESHVIS_EXTERNAL) != 0;     // the shadow is cast by the outside
+        if (shadowPass || mirrorPass) show = (mode & MESHVIS_EXTERNAL) != 0;     // the shadow and the reflection: the outside
         if (!show) continue;
         VECTOR3 ofs = _V(0, 0, 0); vv->v->GetMeshOffset(mi, ofs);
         VECTOR3 t = rel + mul(R, ofs);
@@ -258,7 +328,7 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
             XMMATRIX W = XMLoadFloat4x4(&g.xf) * W0;
             MeshCB c;
             XMStoreFloat4x4(&c.wvp, XMMatrixTranspose(W * VP));
-            if (!shadowPass) {
+            if (!shadowPass && !mirrorPass) {
                 XMMATRIX cur = W * XMLoadFloat4x4(&curVPNoJit);
                 XMStoreFloat4x4(&c.curNJ, XMMatrixTranspose(cur));
                 if (g.hasPrev) XMStoreFloat4x4(&c.prevNJ, XMMatrixTranspose(XMLoadFloat4x4(&g.prevWVP))); else c.prevNJ = c.curNJ;
@@ -276,6 +346,13 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
             // seen by the eye as it is: the eye's adaptation to a dim scene (the FX exposure) must not brighten it
             const bool unlit = (g.usrFlag & 4) != 0;
             c.flags = { s && s->srv ? 1.0f : 0.0f, (float)internal, unlit ? 1.0f : 0.0f, internal ? 1.0f : 0.0f };
+            // the texture's material maps (t1..t5)
+            const MatMaps* mm = (!shadowPass && s && s->srv) ? MapsFor(dev.Get(), ctx.Get(), s) : nullptr;
+            ID3D11ShaderResourceView* msrv[5] = {};
+            if (mm) for (int k = 0; k < 5; k++) msrv[k] = mm->m[k].Get();
+            c.maps = { msrv[0] ? 1.0f : 0.0f, msrv[1] ? 1.0f : 0.0f, msrv[2] ? 1.0f : 0.0f, msrv[3] ? 1.0f : 0.0f };
+            c.maps2 = { msrv[4] ? 1.0f : 0.0f, 0, 0, 0 };
+            if (!shadowPass) ctx->PSSetShaderResources(1, 5, msrv);
             D3D11_MAPPED_SUBRESOURCE ms;
             ctx->Map(cbObj.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms); memcpy(ms.pData, &c, sizeof c); ctx->Unmap(cbObj.Get(), 0);
             ctx->PSSetShaderResources(0, 1, &srv);
@@ -297,7 +374,11 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
                          vv->v->GetName(), mi, (UINT)(&g - &m->grp[0]), g.nv, cov, mnz, behind, (int)g.mtrl, mt.diffuse.r, mt.diffuse.g, mt.diffuse.b, mt.diffuse.a,
                          s ? s->name.c_str() : "-", g.usrFlag);
             }
-            ctx->DrawIndexed(g.ni, g.ib0, g.vb0);
+            if (ownPass && (g.usrFlag & 4)) {     // an overlay layer of the cockpit (the visor's plates): seen, not in the way
+                ctx->OMSetDepthStencilState(dsRead.Get(), 0);
+                ctx->DrawIndexed(g.ni, g.ib0, g.vb0);
+                ctx->OMSetDepthStencilState(alphaPass ? dsRead.Get() : dsWrite.Get(), 0);
+            } else ctx->DrawIndexed(g.ni, g.ib0, g.vb0);
         }
     }
 }

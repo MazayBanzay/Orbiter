@@ -709,6 +709,7 @@ bool D3D11Client::EnsureDIB(Surf* s)
     bi.bmiHeader.biPlanes = 1; bi.bmiHeader.biBitCount = 32; bi.bmiHeader.biCompression = BI_RGB;
     s->dib = CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, &s->bits, nullptr, 0);
     if (!s->dib) return false;
+    { extern long g_dibLive; extern double g_dibMB; g_dibLive++; g_dibMB += s->w * (double)s->h * 4 / 1048576.0; }
     s->dc = CreateCompatibleDC(nullptr);
     s->oldBmp = SelectObject(s->dc, s->dib);
     memset(s->bits, 0, (size_t)s->w * s->h * 4);
@@ -778,7 +779,10 @@ void D3D11Client::Readback(Surf* s)
 void Surf::FreeDIB()
 {
     if (dc) { SelectObject(dc, oldBmp); DeleteDC(dc); dc = nullptr; }
-    if (dib) { DeleteObject(dib); dib = nullptr; bits = nullptr; }
+    if (dib) {
+        extern long g_dibLive; extern double g_dibMB; g_dibLive--; g_dibMB -= w * (double)h * 4 / 1048576.0;
+        DeleteObject(dib); dib = nullptr; bits = nullptr;
+    }
 }
 
 void D3D11Client::MarkDirty(Surf* s) { if (s && s != screen) { FixGdiAlpha(s); dirty.insert(s); } }

@@ -6,6 +6,8 @@
 #include "D3D11Hud.h"
 #include "HudAr.h"
 
+extern bool g_traceAlloc;     // Client.cpp: test runs log big allocations
+
 namespace {
 
 struct HV
@@ -280,6 +282,7 @@ D3D11Hud::Canvas CanvasCreate(int w, int h, unsigned flags)
 {
     D3D11Client* cl = g_client;
     if (!cl || w <= 0 || h <= 0 || !Init()) return nullptr;
+    { if (g_traceAlloc) LOGC("trace: D3D11Hud canvas %dx%d flags %u", w, h, flags); }
     CanvasT* c = new CanvasT; c->w = w; c->h = h; c->flags = flags;
     const DWORD attrib = OAPISURFACE_TEXTURE | OAPISURFACE_RENDERTARGET | OAPISURFACE_NOMIPMAPS | ((flags & (D3D11Hud::ALPHA | D3D11Hud::LIGHT)) ? OAPISURFACE_ALPHA : 0);
     c->out = (Surf*)cl->clbkCreateSurfaceEx(w, h, attrib);

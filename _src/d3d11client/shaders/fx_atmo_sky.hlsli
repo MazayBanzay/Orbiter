@@ -61,14 +61,14 @@ void FxMarch(float3 org, float3 d, float tc0, float K, float t0, float t1, int N
 
 // the sky seen from wp (camera-centred global frame) towards dir, on screen (pi * radiance; a white surface under the
 // Sun = 1), the ground below the horizon included; 0 outside the air
-float3 FxSkyRadiance(float3 wp, float3 dir, int NS)
+float3 FxSkyRadianceEx(float3 wp, float3 dir, int NS, bool aboveOnly)
 {
     float R = mCentre.w, Rt = mGeo.x;
     float3 org = wp - mCentre.xyz;
     // a mirror's ray below the local horizon would meet the surface itself (a steep wave): taken at the horizon
     float3 up = normalize(org);
     float du = dot(dir, up);
-    if (du < 0.01) dir = normalize(dir + up * (0.01 - du));
+    if (aboveOnly && du < 0.01) dir = normalize(dir + up * (0.01 - du));
     float tc0 = -dot(org, dir);
     float3 cx = cross(org, dir);
     float K = dot(cx, cx) - R * R;
@@ -88,5 +88,7 @@ float3 FxSkyRadiance(float3 wp, float3 dir, int NS)
     }
     return L * FX_PI;
 }
+
+float3 FxSkyRadiance(float3 wp, float3 dir, int NS) { return FxSkyRadianceEx(wp, dir, NS, true); }
 
 #endif

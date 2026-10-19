@@ -47,7 +47,13 @@ struct ClientCfg
     float renderScale = 1;   // TAA only: the scene's resolution / the window's (TAAU upsamples)
     bool liquids = true, shadows = true, statsLog = true;
     bool microTex = false;   // planet micro textures (Config\MicroTex.cfg): close-up surface detail
-    bool tess = true;        // the ground relief's tessellation (off: normal detail only)
+    bool groundDetail = true;     // ground material from the Huygens data near the camera (normal, parallax, shadows)
+    bool tess = false;       // the ground relief's tessellation (the detail is baked into the tiles now)
+    bool terrainNormals = true;   // per-pixel normals from the full elevation data (off: the mesh's vertex normals)
+    bool geomorph = true;         // terrain LOD levels blend smoothly (CDLOD-style morphing; off: they pop)
+    int driverCacheMB = 128;
+    bool ao = true;               // ambient occlusion from the depth (Ssao.cpp)
+    bool bloom = true;            // the bright parts glow (Bloom.cpp)      // the video driver's shader cache file for Orbiter: set aside at start when bigger (0: never)
     void Load();
     void Save() const;
 };
@@ -71,7 +77,7 @@ extern ExtState g_ext;
 
 // the FX atmosphere (FxAtmo.cpp): when active it draws the sky and the aerial perspective itself (after the opaque
 // scene, from the depth) and gives the light at each point through fx_atmo_light.hlsli (t8, b4, set in FxFrame)
-struct FxAtmoState { bool active = false; float starVis = 1; float exposure = 1; float white[3] = { 1, 1, 1 }; };   // exposure, white: the eye's adaptation to the light (FxFrame)   // exposure: the eye's adaptation (FxFrame)
+struct FxAtmoState { bool active = false; float starVis = 1; float exposure = 1; float white[3] = { 1, 1, 1 }; float light[3] = { 1, 1, 1 }; };   // exposure, white: the eye's adaptation (FxFrame); light: on a level surface at the camera
 inline FxAtmoState g_fxAtmo;      // one instance for the whole DLL (C++17 inline variable); filled in FxAtmo.cpp (FxFrame)
 
 // ---------------------------------------------------------------- surfaces and textures (SURFHANDLE)
@@ -91,6 +97,7 @@ struct Surf
     ComPtr<ID3D11ShaderResourceView> srvLin; ComPtr<ID3D11RenderTargetView> rtvLin;
     bool gpuNewer = false;
     bool cpuPref = false;      // GDI asked for it (a DC): its Sketchpads stay on the DIB
+    bool counted = false;      // in the client's surface count (Client.cpp: LogMemory)
     void FreeDIB();
     ~Surf() { FreeDIB(); }
 };
@@ -98,6 +105,10 @@ struct Surf
 ComPtr<ID3D11ShaderResourceView> LoadDDSFile(ID3D11Device* dev, ID3D11DeviceContext* ctx, const char* path, bool srgb, UINT* w = nullptr, UINT* h = nullptr);
 ComPtr<ID3D11ShaderResourceView> LoadDDSMemory(ID3D11Device* dev, const BYTE* data, size_t size, bool srgb, UINT* w = nullptr, UINT* h = nullptr);
 bool ReadFileBytes(const char* path, std::vector<BYTE>& out);
+
+// the liquid's level radius as drawn for a camera at distance dc from the centre: a camera on the level or up to 0.5 m
+// under it sees the surface 5 cm below its eye (Orbiter keeps the camera on the surface over the liquid)
+inline double LiquidLevelFor(double Rl, double dc) { return (dc < Rl + 0.05 && dc > Rl - 0.5) ? dc - 0.05 : Rl; }
 
 // the pipeline as it was, put back when this goes out of scope (2D work runs in the middle of the frame; GpuPad.cpp)
 struct PipeState
@@ -109,7 +120,7 @@ struct PipeState
     D3D11_PRIMITIVE_TOPOLOGY top = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
     ID3D11Buffer* vb = nullptr; UINT vbStride = 0, vbOff = 0; ID3D11Buffer* ib = nullptr; DXGI_FORMAT ibFmt = DXGI_FORMAT_UNKNOWN; UINT ibOff = 0;
     ID3D11BlendState* bs = nullptr; float bf[4] = {}; UINT mask = 0; ID3D11DepthStencilState* dss = nullptr; UINT ref = 0; ID3D11RasterizerState* rs = nullptr;
-    ID3D11ShaderResourceView* srv[16] = {}; ID3D11SamplerState* smp[16] = {}; ID3D11Buffer* pcb[6] = {}; ID3D11Buffer* vcb[6] = {};
+    ID3D11ShaderResourceView* srv[16] = {}; ID3D11SamplerState* smp[16] = {}; ID3D11Buffer* pcb[8] = {}; ID3D11Buffer* vcb[8] = {};
     explicit PipeState(ID3D11DeviceContext* ctx);
     ~PipeState();
 };
@@ -200,10 +211,16 @@ struct Tile
     Tile* child[4] = {};
     std::atomic<int> state{ 0 };        // 0 new, 1 queued, 2 ready, 3 failed
     ComPtr<ID3D11ShaderResourceView> tex;   // own surface texture (null: use an ancestor's)
+    ComPtr<ID3D11ShaderResourceView> mask;  // own liquid mask (alpha 0 = liquid; null: an ancestor's)
+    ComPtr<ID3D11ShaderResourceView> nmap;  // normals from its own elevation (257x257, planet frame; null: an ancestor's)
+    ComPtr<ID3D11ShaderResourceView> hor[2];  // horizon sines in 8 directions (E, NE, N, NW / W, SW, S, SE), 65x65, with nmap
     std::shared_ptr<std::vector<float>> elev;   // 259x259 [m], own or interpolated from the parent
     bool ownElev = false;
+    bool hasDetail = false;             // the ground detail is baked into its mesh (Planet::Load)
+    ComPtr<ID3D11ShaderResourceView> mat;   // the layered ground material baked once (albedo factor, wetness, detail normal)
     int elevLvl = 0;                    // level of the elevation data this tile's mesh comes from (own or an ancestor's)
     ComPtr<ID3D11Buffer> vb;
+    ComPtr<ID3D11Buffer> vbM;           // per vertex: the offset to where the parent's coarser mesh has it (LOD morphing)
     VECTOR3 centre;                     // planet frame [m], origin of the vertices
     double radius = 0;                  // bounding sphere
     double minlat, maxlat, minlng, maxlng;
@@ -241,6 +258,10 @@ public:
     bool relief = false;                // height layers <level>_h.dds for levels A and B: tessellated ground relief
     // ground classes (Config\OrbiterCrew\Ground\<name>.cfg/.bin, what suits and wheels stand on): weights texture
     ComPtr<ID3D11ShaderResourceView> groundTex; double gLat = 0, gLon = 0, gStep = 0; int gW = 0, gH = 0;
+    std::vector<BYTE> groundCpu;        // the class weights (RGBA8, gW x gH) for the tile geometry
+    struct HLayer { UINT N = 0; std::vector<std::vector<uint16_t>> mip; };   // a relief layer on the CPU (RGBA16 mips)
+    HLayer relCpu[2];
+    double ReliefCpu(Tile* t, const VECTOR3& lp, double elev, double slope, int mipA, int mipB);
     std::atomic<int> micState{ 0 };    // 0 not loaded, 1 loading, 2 ready, 3 failed
     std::thread micThread;
     ~Planet();
@@ -250,6 +271,7 @@ public:
     double R;
     int maxLevel = 18;
     int tilesDrawn = 0, tilesLoaded = 0;
+    bool deepOk = true;     // this frame may split past the data (the last frame's tiles and the load queue within budget)
     // the loader (worker thread)
     void Load(Tile* t);
     bool HasSurf(int lvl, int ilat, int ilng);
@@ -272,6 +294,10 @@ private:
     DWORD frame = 0;
     double micFade[3] = {};             // micro levels' fade-out distances this frame [m] (0: off)
     void MicroLoad();
+    ComPtr<ID3D11ShaderResourceView> gmat[2];   // ground material: <body>_ground_cobbles.dds, _sand.dds
+    int gmatState = 0;                  // 0 not tried, 2 loaded, 3 none
+    void BakeTile(Tile* t, ID3D11DeviceContext* ctx);
+    int bakesThisFrame = 0;
     void LoadGround();
     XMFLOAT4 units[4] = {}; int nUnits = 0;    // landed units near the camera this frame (camera-centred, flat radius)
     double MeshElev(double lng, double lat, int* lvl, double* fine, bool* own);   // test runs: our surface there
@@ -367,6 +393,20 @@ public:
     bool ShadersOk() const { return shadersOk; }
     bool IsScreen(const Surf* s) const { return s == screen; }
     bool GpuSurface(Surf* s) const;
+    void TestScript();      // test runs: D3D11CLIENT_TEST_SCRIPT actions (Client.cpp)
+    // the liquid's mirror (Liquid.cpp): the vessels drawn reflected in its plane into their own target
+    bool mirrorPass = false; XMMATRIX mirrorM = XMMatrixIdentity();
+    bool ownPass = false;      // the camera's own vessel from inside, drawn last; its overlay layers write no depth
+    // the view from inside a liquid (Liquid.cpp)
+    ComPtr<ID3D11VertexShader> uwVS; ComPtr<ID3D11PixelShader> uwPS; ComPtr<ID3D11BlendState> uwBlend; ComPtr<ID3D11Buffer> uwCB;
+    void RenderUnderwater(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);
+    ComPtr<ID3DBlob> CompileShaderFile(const char* file, const char* entry, const char* target);
+    void RenderAO(const XMMATRIX& proj);     // Ssao.cpp: ambient occlusion over the opaque scene
+    ID3D11ShaderResourceView* RenderBloom(ID3D11ShaderResourceView* src);   // Bloom.cpp: the glow for the post pass
+    ComPtr<ID3D11RasterizerState> rsMirror;
+    ComPtr<ID3D11Texture2D> reflTex, reflDepth; ComPtr<ID3D11RenderTargetView> reflRTV; ComPtr<ID3D11ShaderResourceView> reflSRV;
+    ComPtr<ID3D11DepthStencilView> reflDSV; ComPtr<ID3D11Buffer> mirrorCB; UINT reflW = 0, reflH = 0;
+    bool RenderMirror(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj, const VECTOR3& base, const VECTOR3& up);
     ComPtr<ID3D11Buffer> wakeCB; ComPtr<ID3D11ShaderResourceView> kelvinSRV;   // the liquid's wakes (Liquid.cpp, Wake.cpp)
     void DumpSurface(Surf* s, const char* path);    // diagnostics (Ipi.cpp)
     void RenderAr(const VECTOR3& cam, const MATRIX3& cr, const XMMATRIX& proj);   // Ar.cpp: markers and paths in the scene
@@ -387,6 +427,7 @@ public:
     ComPtr<ID3D11ShaderResourceView> whiteTex;
     // the tile loader
     void QueueTile(Planet* p, Tile* t);
+    size_t LoadQueueSize() { std::lock_guard<std::mutex> lk(loadMx); return loadQ.size(); }
     std::mutex loadMx;
     std::condition_variable loadCv;
     std::deque<std::pair<Planet*, Tile*>> loadQ;
@@ -448,6 +489,8 @@ public:
     OBJHANDLE taaRefBody = nullptr;
     VECTOR3 taaPrevRel = { 0, 0, 0 };
     void RenderLiquid(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj, float tanY);
+    void SaveLiquidBed();
+    void RenderRain(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);   // Titan's methane rain (Rain.cpp)     // the terrain's depth alone (after the planets, before the vessels): the liquid's bed (Liquid.cpp)
     ComPtr<ID3D11Buffer> liqVB, liqIB;
     UINT liqIdx = 0;
     ComPtr<ID3D11Texture2D> hdrCopy;
@@ -488,6 +531,11 @@ private:
     // timing
     ComPtr<ID3D11Query> qDis[4], qTs[4][4];
     double passMs[3] = {};
+    // the frame's GPU time pass by pass (GpuMark: a timestamp after each; the stats line every 10 s)
+    static const int kMarks = 12;
+    ComPtr<ID3D11Query> qMk[4][kMarks];
+    double markMs[kMarks] = {};
+    void GpuMark(UINT fi, int k) { if (qMk[fi][k]) ctx->End(qMk[fi][k].Get()); }
     LARGE_INTEGER qpf, tStart, tLog;
     bool shotDone = false;
     // the 2D layer
@@ -513,6 +561,14 @@ private:
     bool CreateDevice();
     bool CreateShaders();
     void ScanVessels();
+    void AddVisual(OBJHANDLE h);
+    void RemoveVisual(OBJHANDLE h);
+public:
+    // vessels come and go at once (a suit putting on its jet pack deletes the pack's vessel in the middle of a frame):
+    // their visuals and everything kept for them go with them, never a pointer left to a deleted VESSEL
+    void clbkNewVessel(OBJHANDLE hVessel) override;
+    void clbkDeleteVessel(OBJHANDLE hVessel) override;
+private:
     void RenderVessel(VesselVis* vv, const VECTOR3& camPos, const MATRIX3& camRot, const XMMATRIX& proj, bool alphaPass, const XMMATRIX* lightVP = nullptr);
     // shadows: one map from the Sun around the focus object
     void RenderShadows(const VECTOR3& cp);
