@@ -1,0 +1,17 @@
+LIBRARY D3D9Client
+EXPORTS
+    gcBindCoreMethod=D3D11Client.gcBindCoreMethod
+    gcGetCoreAPI=D3D11Client.gcGetCoreAPI
+    AtmoFX_SetJet=D3D11Client.AtmoFX_SetJet
+    AtmoFX_SetWake=D3D11Client.AtmoFX_SetWake
+    AtmoFX_SetHeatSource=D3D11Client.AtmoFX_SetHeatSource
+    AtmoFX_SetFoam=D3D11Client.AtmoFX_SetFoam
+    AtmoFX_SetDirt=D3D11Client.AtmoFX_SetDirt
+    AtmoFX_Emit=D3D11Client.AtmoFX_Emit
+    AtmoFX_Box=D3D11Client.AtmoFX_Box
+    AtmoFX_Mark=D3D11Client.AtmoFX_Mark
+    AtmoFX_MarkCount=D3D11Client.AtmoFX_MarkCount
+    AtmoFX_MarkGet=D3D11Client.AtmoFX_MarkGet
+    AtmoFX_MarkPut=D3D11Client.AtmoFX_MarkPut
+    AtmoFX_HudFrame=D3D11Client.AtmoFX_HudFrame
+    AtmoFX_HudMarker=D3D11Client.AtmoFX_HudMarker

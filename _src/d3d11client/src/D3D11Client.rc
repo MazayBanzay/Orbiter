@@ -1,0 +1,33 @@
+#include <windows.h>
+#include "resource.h"
+
+// Orbiter's Launchpad lists a DLL in Modules\Plugin as a graphics engine when string 1001 reads "Graphics engines"
+STRINGTABLE
+BEGIN
+    1000 "D3D11Client: our own Direct3D 11 graphics client (vessels, planet tiles with elevation, atmospheres, liquids)."
+    1001 "Graphics engines"
+END
+
+IDD_ADVANCED DIALOGEX 0, 0, 236, 206
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "D3D11Client - Advanced"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "Terrain detail (-2 coarser .. +2 finer)", -1, 10, 12, 150, 10
+    EDITTEXT        IDC_ADV_LOD, 170, 10, 56, 12, ES_AUTOHSCROLL
+    LTEXT           "Texture anisotropy (1..16)", -1, 10, 30, 150, 10
+    EDITTEXT        IDC_ADV_ANISO, 170, 28, 56, 12, ES_AUTOHSCROLL
+    LTEXT           "Atmospheric haze (1 = per planet data)", -1, 10, 48, 150, 10
+    EDITTEXT        IDC_ADV_HAZE, 170, 46, 56, 12, ES_AUTOHSCROLL
+    LTEXT           "Exposure (brightness)", -1, 10, 66, 150, 10
+    EDITTEXT        IDC_ADV_EXPOSURE, 170, 64, 56, 12, ES_AUTOHSCROLL
+    AUTOCHECKBOX    "Liquid surfaces (Titan's seas)", IDC_ADV_LIQUIDS, 10, 86, 200, 10
+    AUTOCHECKBOX    "Shadows", IDC_ADV_SHADOWS, 10, 100, 200, 10
+    AUTOCHECKBOX    "FPS and GPU times in Orbiter.log", IDC_ADV_STATS, 10, 114, 200, 10
+    LTEXT           "Anti-aliasing (next start)", -1, 10, 134, 150, 10
+    COMBOBOX        IDC_ADV_AA, 120, 132, 106, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "TAA render scale, % (50..100: upsampled)", -1, 10, 152, 160, 10
+    EDITTEXT        IDC_ADV_SCALE, 170, 150, 56, 12, ES_AUTOHSCROLL
+    DEFPUSHBUTTON   "OK", IDOK, 118, 182, 52, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 176, 182, 52, 14
+END

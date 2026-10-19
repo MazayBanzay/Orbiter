@@ -133,3 +133,12 @@ __pycache__/
 
 # design renders and previews stay local (not in the public repository)
 /Tantra_Design/**/*.png
+
+# --- our own D3D11 graphics client (sources, shaders, shim, tools, developer docs) and its planet configs ---
+# build outputs and the user's own client settings stay local
+!/_src/
+/_src/*
+!/_src/d3d11client/
+/_src/d3d11client/build/
+!/Config/D3D11Client/
+/Config/D3D11Client/Client.cfg

@@ -1,0 +1,11 @@
+// D3D11Client resources
+#define IDD_ADVANCED      300
+#define IDC_ADV_LOD       301
+#define IDC_ADV_ANISO     302
+#define IDC_ADV_HAZE      303
+#define IDC_ADV_EXPOSURE  304
+#define IDC_ADV_LIQUIDS   305
+#define IDC_ADV_SHADOWS   306
+#define IDC_ADV_STATS     307
+#define IDC_ADV_AA        308
+#define IDC_ADV_SCALE     309
