@@ -244,7 +244,9 @@ bool D3D11Client::CreateDevice()
     D3D11_SAMPLER_DESC s = {}; s.Filter = D3D11_FILTER_ANISOTROPIC; s.MaxAnisotropy = std::clamp(g_cfg.aniso, 1, 16);
     s.AddressU = s.AddressV = s.AddressW = D3D11_TEXTURE_ADDRESS_WRAP; s.MaxLOD = D3D11_FLOAT32_MAX;
     // a smaller scene (TAAU) samples the textures as the output resolution would: a negative mip bias
-    if (g_cfg.aa == 5 && g_cfg.renderScale < 0.999f) s.MipLODBias = log2f(std::clamp(g_cfg.renderScale, 0.5f, 1.0f));
+    // TAA averages jittered frames: the textures one level sharper (the bias DLSS and FSR prescribe: log2(scale) - 1), or the
+    // detail is averaged away
+    if (g_cfg.aa == 5) s.MipLODBias = log2f(std::clamp(g_cfg.renderScale, 0.5f, 1.0f)) - 1.0f;
     dev->CreateSamplerState(&s, &sampAniso);
     s.AddressU = s.AddressV = s.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
     dev->CreateSamplerState(&s, &sampClamp);
@@ -252,10 +254,11 @@ bool D3D11Client::CreateDevice()
         D3D11_BUFFER_DESC d = { (size + 15) & ~15u, D3D11_USAGE_DYNAMIC, D3D11_BIND_CONSTANT_BUFFER, D3D11_CPU_ACCESS_WRITE, 0, 0 };
         dev->CreateBuffer(&d, nullptr, &b);
     };
-    cb(cbObj, 1024); cb(cbGrp, 256); cb(cbFrame, 512);     // cbObj: the planet tiles need more than 512
+    cb(cbObj, 1024); cb(cbGrp, 256); cb(cbFrame, 1024);     // cbObj: the planet tiles need more than 512
     // the shadow map
     {
-        D3D11_TEXTURE2D_DESC st = { SHADOW_N, SHADOW_N, 1, 1, DXGI_FORMAT_R32_TYPELESS, {1, 0}, D3D11_USAGE_DEFAULT, D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE, 0, 0 };
+        // four cascades in one atlas, 2 x 2 tiles of SHADOW_N (RenderShadows)
+        D3D11_TEXTURE2D_DESC st = { 2 * SHADOW_N, 2 * SHADOW_N, 1, 1, DXGI_FORMAT_R32_TYPELESS, {1, 0}, D3D11_USAGE_DEFAULT, D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE, 0, 0 };
         dev->CreateTexture2D(&st, nullptr, &shadowTex);
         D3D11_DEPTH_STENCIL_VIEW_DESC sdv = {}; sdv.Format = DXGI_FORMAT_D32_FLOAT; sdv.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
         dev->CreateDepthStencilView(shadowTex.Get(), &sdv, &shadowDSV);
@@ -267,7 +270,7 @@ bool D3D11Client::CreateDevice()
         D3D11_DEPTH_STENCIL_DESC sd2 = {}; sd2.DepthEnable = TRUE; sd2.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL; sd2.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
         dev->CreateDepthStencilState(&sd2, &dsShadow);
         D3D11_RASTERIZER_DESC rs2 = {}; rs2.FillMode = D3D11_FILL_SOLID; rs2.CullMode = D3D11_CULL_NONE; rs2.DepthClipEnable = TRUE;
-        rs2.DepthBias = 200; rs2.SlopeScaledDepthBias = 2.0f;
+        rs2.DepthBias = 0; rs2.SlopeScaledDepthBias = 1.5f; rs2.DepthBiasClamp = 0.002f;   // + the normal offset in the shader
         dev->CreateRasterizerState(&rs2, &rsShadow);
     }
     UINT white = 0xFFFFFFFF;
@@ -563,6 +566,45 @@ int D3D11Client::clbkMeshMaterial(DEVMESHHANDLE hMesh, DWORD matidx, MATERIAL* m
     return 0;
 }
 
+// oapiSetMaterialEx / oapiMeshMaterialEx: the material's parts one by one (a module recolours its glow this way: the
+// jet pack's chambers by the wall's temperature). Emission is D3D9's "emission2": output = max(lit, emission)
+int D3D11Client::clbkSetMeshMaterialEx(DEVMESHHANDLE hMesh, DWORD matidx, MatProp prp, const oapi::FVECTOR4* in)
+{
+    DevMesh* m = (DevMesh*)hMesh;
+    if (!m || !in) return 2;
+    if (matidx >= m->mtrl.size()) return 4;
+    MATERIAL& t = m->mtrl[matidx];
+    switch (prp) {
+    case Diffuse:  t.diffuse = { in->r, in->g, in->b, in->a }; break;
+    case Ambient:  t.ambient = { in->r, in->g, in->b, t.ambient.a }; break;
+    case Specular: t.specular = { in->r, in->g, in->b, t.specular.a }; t.power = in->a; break;
+    case Light:    t.emissive = { in->r, in->g, in->b, t.emissive.a }; break;
+    case Emission:
+        if (m->emis2.size() < m->mtrl.size()) m->emis2.resize(m->mtrl.size(), XMFLOAT4(0, 0, 0, 0));
+        m->emis2[matidx] = { in->r, in->g, in->b, 1 };
+        break;
+    default: return 3;     // reflectivity, smoothness, metalness, Fresnel, heat: not kept per material here
+    }
+    return 0;
+}
+
+int D3D11Client::clbkMeshMaterialEx(DEVMESHHANDLE hMesh, DWORD matidx, MatProp prp, oapi::FVECTOR4* out)
+{
+    DevMesh* m = (DevMesh*)hMesh;
+    if (!m || !out) return 2;
+    if (matidx >= m->mtrl.size()) return 4;
+    const MATERIAL& t = m->mtrl[matidx];
+    switch (prp) {
+    case Diffuse:  *out = oapi::FVECTOR4(t.diffuse.r, t.diffuse.g, t.diffuse.b, t.diffuse.a); break;
+    case Ambient:  *out = oapi::FVECTOR4(t.ambient.r, t.ambient.g, t.ambient.b, 1.0f); break;
+    case Specular: *out = oapi::FVECTOR4(t.specular.r, t.specular.g, t.specular.b, (float)t.power); break;
+    case Light:    *out = oapi::FVECTOR4(t.emissive.r, t.emissive.g, t.emissive.b, 1.0f); break;
+    case Emission: { XMFLOAT4 e = matidx < m->emis2.size() ? m->emis2[matidx] : XMFLOAT4(0, 0, 0, 0); *out = oapi::FVECTOR4(e.x, e.y, e.z, 1.0f); break; }
+    default: return 3;
+    }
+    return 0;
+}
+
 int D3D11Client::clbkGetMeshGroup(DEVMESHHANDLE hMesh, DWORD grpidx, GROUPREQUESTSPEC* grs)
 {
     DevMesh* m = (DevMesh*)hMesh;
@@ -787,6 +829,7 @@ void D3D11Client::clbkRenderScene()
     GpuMark(fi, 6);
     for (auto& kv : visuals) if (kv.first != own) RenderVessel(kv.second, cp, cr, proj, true);
     FxRenderTransparent(this, cp, cr, proj);      // the air (sky, aerial perspective) from the depth
+    RenderClouds(cp, cr, proj);                   // cloud layers over it, the air in front of them included (Clouds.cpp)
     GpuMark(fi, 7);
     ExhaustRender(this, cp, cr, proj, oapiGetSimStep());   // glow, shimmer, plumes, GPU particles
     ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
@@ -930,7 +973,7 @@ bool D3D11Client::clbkSplashLoadMsg(const char* msg, int line)
 }
 
 // ------------------------------------------------------------------------------------------ per-frame constants: the atmosphere
-struct FrameCB { XMFLOAT4X4 invVP; XMFLOAT4 sunDir, sky0, sky1, amb, sun, up, planet, hazeRGB; XMFLOAT4X4 lightVP; XMFLOAT4 shadow, adapt, liq0, liq1, liq2; };
+struct FrameCB { XMFLOAT4X4 invVP; XMFLOAT4 sunDir, sky0, sky1, amb, sun, up, planet, hazeRGB; XMFLOAT4X4 lightVP; XMFLOAT4 shadow, adapt, liq0, liq1, liq2; XMFLOAT4X4 lightVP2; XMFLOAT4X4 casc[4]; XMFLOAT4 cascFar, cascTex; };
 
 void D3D11Client::UpdateFrameCB(const VECTOR3& cp, const XMMATRIX& invVP)
 {
@@ -973,7 +1016,9 @@ void D3D11Client::UpdateFrameCB(const VECTOR3& cp, const XMMATRIX& invVP)
     }
     if (g_fxAtmo.active) { skyOn = false; starVis = g_fxAtmo.starVis; f.amb.w = 0; }   // the FX pass draws sky and haze
     f.hazeRGB.w = g_cfg.exposure * (g_fxAtmo.active ? g_fxAtmo.exposure : 1.0f);
-    f.lightVP = lightVP;
+    f.lightVP = lightVP; f.lightVP2 = lightVP2;
+    for (int i = 0; i < 4; i++) f.casc[i] = casc[i];
+    f.cascFar = { cascFar[0], cascFar[1], cascFar[2], cascFar[3] }; f.cascTex = { cascTex[0], cascTex[1], cascTex[2], cascTex[3] };
     f.shadow = { shadowOn ? 1.0f : 0.0f, 1.0f / SHADOW_N, 0, 0 };
     // the eye's adaptation: the colour balance per channel and the brightness factor (1 without the FX atmosphere)
     if (g_fxAtmo.active) f.adapt = { g_fxAtmo.white[0], g_fxAtmo.white[1], g_fxAtmo.white[2], g_fxAtmo.exposure };
@@ -997,39 +1042,74 @@ void D3D11Client::UpdateFrameCB(const VECTOR3& cp, const XMMATRIX& invVP)
 }
 
 // ------------------------------------------------------------------------------------------ shadows
+// Cascaded shadow maps, after the DirectX SDK's CascadedShadowMaps11 and "Common Techniques to Improve Shadow Depth Maps":
+// four cascades over the view's depth (0.3..300 m, practical split scheme), each a 2048 tile of one 4096 atlas. A cascade
+// is fitted to its slice of the view frustum by a bounding sphere (its size does not change as the camera turns) and its
+// centre is moved in whole texels of a light frame fixed to the world (the shadows do not crawl as the camera moves).
+// The casters are the vessels; the bias is slope-scaled in the rasteriser and a normal offset of a texel or so in the
+// shader (common.hlsli ShadowAtN) - no acne on surfaces turned from the light, no gap at the feet.
 void D3D11Client::RenderShadows(const VECTOR3& cp)
 {
     shadowOn = false;
     ID3D11ShaderResourceView* nul = nullptr;
     ctx->PSSetShaderResources(7, 1, &nul);
-    OBJHANDLE hf = oapiGetFocusObject();
-    if (!g_cfg.shadows || !hf || !visuals.count(hf)) return;
-    VECTOR3 fp; oapiGetGlobalPos(hf, &fp);
+    if (!g_cfg.shadows || visuals.empty()) return;
     VECTOR3 sp = _V(0, 0, 0);
     for (DWORD i = 0; i < oapiGetGbodyCount(); i++) { OBJHANDLE h = oapiGetGbodyByIndex(i); if (oapiGetObjectType(h) == OBJTP_STAR) { oapiGetGlobalPos(h, &sp); break; } }
-    VECTOR3 L = sp - fp; L = L / length(L);
-    double rs = std::clamp(oapiGetSize(hf) * 4.0, 25.0, 400.0);
-    // light frame around the focus (camera-centred global coordinates), the box centred on the focus
-    VECTOR3 c = fp - cp;
-    XMVECTOR Lv = XMVectorSet((float)L.x, (float)L.y, (float)L.z, 0);
-    XMVECTOR upv = fabs(L.y) < 0.9 ? XMVectorSet(0, 1, 0, 0) : XMVectorSet(1, 0, 0, 0);
-    XMVECTOR eye = XMVectorSet((float)c.x, (float)c.y, (float)c.z, 1) + Lv * 2000.0f;
-    XMMATRIX LV = XMMatrixLookToLH(eye, -Lv, upv);
-    XMMATRIX LP = XMMatrixOrthographicLH((float)(2 * rs), (float)(2 * rs), 1.0f, 4000.0f);
-    XMVECTOR ctr = XMVector3TransformCoord(XMVectorSet((float)c.x, (float)c.y, (float)c.z, 1), LV);
-    float sx = XMVectorGetX(ctr), sy = XMVectorGetY(ctr);
-    XMMATRIX snap = XMMatrixTranslation(-sx, -sy, 0);   // the box centred on the focus
-    XMMATRIX LVP = LV * snap * LP;
-    XMStoreFloat4x4(&lightVP, XMMatrixTranspose(LVP));
-    D3D11_VIEWPORT vp = { 0, 0, (float)SHADOW_N, (float)SHADOW_N, 0, 1 };
-    ctx->RSSetViewports(1, &vp);
+    VECTOR3 L = sp - cp; L = L / length(L);
+    // the light's frame, fixed to the world (not to the camera): u, v across the light, L along it
+    VECTOR3 a = fabs(L.y) < 0.9 ? _V(0, 1, 0) : _V(1, 0, 0);
+    VECTOR3 u = crossp(a, L); u = u / length(u);
+    VECTOR3 v = crossp(L, u);
+    MATRIX3 cr; oapiCameraRotationMatrix(&cr);
+    const double tanY = tan(oapiCameraAperture()), tanX = tanY * W / (double)H;
+    const double nearD = 0.3, farD = 300.0, lambda = 0.85;
+    double split[5]; split[0] = nearD;
+    for (int i = 1; i <= 4; i++) {
+        const double f = i / 4.0;
+        split[i] = lambda * nearD * pow(farD / nearD, f) + (1 - lambda) * (nearD + (farD - nearD) * f);
+    }
+    const double back = 300.0;          // casters up to this far towards the Sun from a cascade's centre
     ctx->ClearDepthStencilView(shadowDSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
     ctx->OMSetRenderTargets(0, nullptr, shadowDSV.Get());
-    for (auto& kv : visuals) {
-        VECTOR3 vp2; oapiGetGlobalPos(kv.first, &vp2);
-        if (length(vp2 - fp) > rs + oapiGetSize(kv.first)) continue;
-        RenderVessel(kv.second, cp, _M(1, 0, 0, 0, 1, 0, 0, 0, 1), XMMatrixIdentity(), false, &LVP);
+    for (int ci = 0; ci < 4; ci++) {
+        // the slice's bounding sphere (camera-centred): centre on the view axis, radius to the far corners
+        const double z0 = split[ci], z1 = split[ci + 1];
+        const double k2 = tanX * tanX + tanY * tanY;
+        // the centre on the axis that minimises the radius to the near and far corner rings
+        double zc = 0.5 * (z0 + z1) + 0.5 * (z1 * z1 - z0 * z0) * k2 / (z1 - z0) * 0.5;
+        zc = std::clamp(zc, z0, z1);
+        double r = std::max(sqrt((z1 - zc) * (z1 - zc) + z1 * z1 * k2), sqrt((zc - z0) * (zc - z0) + z0 * z0 * k2));
+        r = ceil(r * 16.0) / 16.0;      // quantised: the tile's scale stays the same frame to frame
+        VECTOR3 fwd = _V(cr.m13, cr.m23, cr.m33);
+        VECTOR3 c = fwd * zc;
+        // its centre moved in whole texels of the world-fixed light frame (double: the global position is ~1e11 m)
+        const double texel = 2 * r / SHADOW_N;
+        VECTOR3 cg = cp + c;
+        const double cu = dotp(cg, u), cv = dotp(cg, v);
+        const double su = floor(cu / texel) * texel, sv = floor(cv / texel) * texel;
+        c = c + u * (su - cu) + v * (sv - cv);
+        XMVECTOR Lv = XMVectorSet((float)L.x, (float)L.y, (float)L.z, 0);
+        XMVECTOR uv = XMVectorSet((float)v.x, (float)v.y, (float)v.z, 0);
+        XMVECTOR eye = XMVectorSet((float)c.x, (float)c.y, (float)c.z, 1) + Lv * (float)back;
+        XMMATRIX LV = XMMatrixLookToLH(eye, -Lv, uv);
+        XMMATRIX LP = XMMatrixOrthographicLH((float)(2 * r), (float)(2 * r), 0.0f, (float)(back + r));
+        XMMATRIX LVP = LV * LP;
+        XMStoreFloat4x4(&casc[ci], XMMatrixTranspose(LVP));
+        cascFar[ci] = (float)z1; cascTex[ci] = (float)texel;
+        D3D11_VIEWPORT vp = { (float)((ci & 1) * SHADOW_N), (float)((ci >> 1) * SHADOW_N), (float)SHADOW_N, (float)SHADOW_N, 0, 1 };
+        ctx->RSSetViewports(1, &vp);
+        for (auto& kv : visuals) {
+            VECTOR3 q; oapiGetGlobalPos(kv.first, &q);
+            VECTOR3 d = (q - cp) - c;
+            const double along = dotp(d, L);
+            VECTOR3 across = d - L * along;
+            const double sz = oapiGetSize(kv.first);
+            if (length(across) > r + sz || along > back + sz || along < -(r + sz)) continue;
+            RenderVessel(kv.second, cp, _M(1, 0, 0, 0, 1, 0, 0, 0, 1), XMMatrixIdentity(), false, &LVP);
+        }
     }
+    lightVP = casc[0]; lightVP2 = casc[1];
     shadowOn = true;
 }
 
@@ -1103,6 +1183,12 @@ void D3D11Client::TestScript()
         LOGC("test script: %u actions", (unsigned)acts.size());
     }
     const double t = oapiGetSysTime() - t0;
+    {   // "orbit <vessel> <deg/s>": the external camera turns round its target from then on (TAA checks in motion)
+        static double orbitRate = 0, lastT = -1;
+        for (Act& a : acts) if (a.done && a.what == "orbit") orbitRate = a.arg;
+        if (orbitRate != 0 && lastT >= 0) oapiCameraRotAzimuth(orbitRate * PI / 180 * (t - lastT));
+        lastT = t;
+    }
     for (Act& a : acts) {
         if (a.done || t < a.t) continue;
         a.done = true;

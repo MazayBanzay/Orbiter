@@ -205,6 +205,8 @@ static ID3D11Device* g_matDev = nullptr;
 static const MatMaps* MapsFor(ID3D11Device* dev, ID3D11DeviceContext* ctx, const Surf* s)
 {
     if (!s || s->name.empty()) return nullptr;
+    static int off = -1; if (off < 0) { char v[4] = {}; off = GetEnvironmentVariableA("D3D11CLIENT_NOMAPS", v, 4) && v[0] == '1'; }   // test runs: A/B
+    if (off) return nullptr;
     if (dev != g_matDev) { g_matMaps.clear(); g_matDev = dev; }
     auto it = g_matMaps.find(s->name);
     if (it != g_matMaps.end()) return &it->second;
@@ -351,10 +353,22 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
             ID3D11ShaderResourceView* msrv[5] = {};
             if (mm) for (int k = 0; k < 5; k++) msrv[k] = mm->m[k].Get();
             c.maps = { msrv[0] ? 1.0f : 0.0f, msrv[1] ? 1.0f : 0.0f, msrv[2] ? 1.0f : 0.0f, msrv[3] ? 1.0f : 0.0f };
-            c.maps2 = { msrv[4] ? 1.0f : 0.0f, 0, 0, 0 };
+            // skin: the texture's name (a head, a face, a hand) - its light scatters under the surface (mesh.hlsl)
+            bool skin = false;
+            if (s && !s->name.empty()) { std::string ln = s->name; for (char& ch : ln) ch = (char)tolower((unsigned char)ch); skin = ln.find("skin") != std::string::npos; }
+            c.maps2 = { msrv[4] ? 1.0f : 0.0f, skin ? 1.0f : 0.0f, 0, 0 };
             if (!shadowPass) ctx->PSSetShaderResources(1, 5, msrv);
             D3D11_MAPPED_SUBRESOURCE ms;
             ctx->Map(cbObj.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms); memcpy(ms.pData, &c, sizeof c); ctx->Unmap(cbObj.Get(), 0);
+            if (!shadowPass) {     // the material's emission set by a module (oapiSetMaterialEx Emission), b8
+                static ComPtr<ID3D11Buffer> emCB; static ID3D11Device* emDev = nullptr;
+                if (emDev != dev.Get()) { emCB.Reset(); emDev = dev.Get(); }
+                if (!emCB) { D3D11_BUFFER_DESC bd = { 16, D3D11_USAGE_DYNAMIC, D3D11_BIND_CONSTANT_BUFFER, D3D11_CPU_ACCESS_WRITE, 0, 0 }; dev->CreateBuffer(&bd, nullptr, &emCB); }
+                const XMFLOAT4 e2 = (g.mtrl != SPEC_DEF && g.mtrl < m->emis2.size()) ? m->emis2[g.mtrl] : XMFLOAT4(0, 0, 0, 0);
+                D3D11_MAPPED_SUBRESOURCE em;
+                if (emCB && SUCCEEDED(ctx->Map(emCB.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &em))) { memcpy(em.pData, &e2, sizeof e2); ctx->Unmap(emCB.Get(), 0); }
+                ctx->PSSetConstantBuffers(8, 1, emCB.GetAddressOf());
+            }
             ctx->PSSetShaderResources(0, 1, &srv);
             if (!shadowPass) ctx->OMSetBlendState((g.usrFlag & 8) ? bsAdd.Get() : bsAlpha.Get(), nullptr, ~0u);   // FLAG 8: added
             // diagnostics (test runs): in the cockpit view, the groups whose box covers much of the screen near the camera

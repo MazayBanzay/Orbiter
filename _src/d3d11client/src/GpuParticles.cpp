@@ -37,6 +37,10 @@ const double JET_RATE_GPU = 2.0;
 struct Landing { double due; VECTOR3 l; double r, amp; };
 std::vector<Landing> landings;
 bool sceneCopy = false;
+// crown splashes asked for this frame (Wake.cpp, on an impact)
+struct CrownReq { OBJHANDLE body; VECTOR3 g; double r, U; };
+std::mutex crownMx;
+std::vector<CrownReq> crowns;
 void ForeseeLanding(const ExScene& sc, const VECTOR3& p, const VECTOR3& v, double m, double s0)
 {
     if (sc.Rliq <= 0 || landings.size() > 600) return;
@@ -111,6 +115,53 @@ bool GpuParticles::Init(D3D11Client* gc)
     if (FAILED(dev->CreateBlendState(&bd, &bsPremul))) return false;
     needInit = true;
     return true;
+}
+
+// a crown splash (Marston, Vakarelski & Thoroddsen 2012, a disc hitting a liquid; Gilou et al.): above a Weber number
+// rho U^2 D / sigma of ~140 the splash sheet's rim breaks into fingers (Rayleigh-Plateau, driven by Rayleigh-Taylor
+// as the rim decelerates) whose tips pinch off into drops. A step on Titan's methane: We ~ 470 x 1^2 x 0.15 / 0.017
+// ~ 4000 - a broken crown. The sheet leaves at about the impact speed, steeply (60-80 deg); the fingers ~2-3 capillary
+// wavelengths apart (methane's capillary length sqrt(sigma / rho g) ~5 mm on Titan: finer than water's on Earth); the
+// drops about the rim's thickness (0.3-3 mm); in the low gravity they rise ~U^2 / 2g and fall slowly
+void ParticlesCrown(OBJHANDLE body, const VECTOR3& gpos, double radius, double speed)
+{
+    std::lock_guard<std::mutex> lk(crownMx);
+    if (crowns.size() < 32) crowns.push_back({ body, gpos, radius, speed });
+}
+
+void GpuParticles::SpawnCrowns(ExScene& sc)
+{
+    std::vector<CrownReq> list;
+    { std::lock_guard<std::mutex> lk(crownMx); list.swap(crowns); }
+    if (!sc.hBody || sc.Rliq <= 0) return;
+    const double g = sc.GM / (sc.Rliq * sc.Rliq);
+    const double lc = sqrt(sc.sigma / (sc.rhoL * g));                       // capillary length
+    for (const CrownReq& c : list) {
+        if (c.body != sc.hBody) continue;
+        const double D = std::max(2 * c.r, 0.05), U0 = std::max(c.U, 0.2);
+        const double We = sc.rhoL * U0 * U0 * D / std::max(sc.sigma, 1e-4);
+        if (We < 140) continue;                                               // the rim stays whole: a ring, no drops
+        VECTOR3 p0 = sc.ToLocal(c.g);
+        p0.y = sc.Rliq - length(sc.aP) + 0.01;                                // on the level
+        const double R0 = 0.5 * D;
+        const int nF = (int)std::clamp(2 * 3.14159265 * R0 / (2.5 * 2 * 3.14159265 * lc), 8.0, 36.0);
+        const int perF = (int)std::clamp(2 + log10(We / 140) * 2, 2.0, 7.0);
+        const double ph = Rnd() * 6.2831853;
+        for (int f = 0; f < nF; f++) {
+            const double azF = ph + 6.2831853 * f / nF;
+            for (int k = 0; k < perF; k++) {
+                const double az = azF + U(-0.08, 0.08);
+                const VECTOR3 rad = _V(cos(az), 0, sin(az));
+                const double sp = U0 * U(0.6, 1.4) * (k == 0 ? 1.15 : 1.0);         // the finger's tip fastest
+                const double el = U(58, 82) * RAD;
+                const VECTOR3 v0 = rad * (sp * cos(el)) + _V(0, sp * sin(el), 0);
+                const VECTOR3 p = p0 + rad * (R0 * U(0.95, 1.25));
+                const double d = std::clamp(1.2e-3 * U(0.3, 1.7) * pow(140 / We, 0.15) * 3, 3e-4, 3e-3);
+                Push(sc, p, v0, d, sc.rhoL, d, 0.9, 12, sc.Rliq - length(sc.aP), Flags(LOOK_DROP, ALB_DROP, F_LIQUID));
+                ForeseeLanding(sc, p, v0, sc.rhoL * 0.52 * d * d * d * 2e4, 0.03);
+            }
+        }
+    }
 }
 
 void GpuParticles::Release()
@@ -447,6 +498,7 @@ void GpuParticles::Update(D3D11Client* gc, ExScene& sc, const std::vector<ExJet>
         }
         for (auto it = jetAcc.begin(); it != jetAcc.end();) { if (sc.simt - it->second.t > 1.0) it = jetAcc.erase(it); else ++it; }
         for (auto& kv : sources) SpawnSource(sc, kv.first.h, kv.second, fj);
+        SpawnCrowns(sc);
         UpdateBoxes(sc);
     }
     spawnedLast = (UINT)spawn.size();

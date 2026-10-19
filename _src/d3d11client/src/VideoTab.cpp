@@ -35,6 +35,7 @@ void ClientCfg::Load()
         else if (k == "DriverCacheMB") driverCacheMB = std::max((int)v, 0);
         else if (k == "AmbientOcclusion") ao = v != 0;
         else if (k == "Bloom") bloom = v != 0;
+        else if (k == "Sharpen") sharpen = std::clamp((float)v, 0.0f, 1.0f);
     }
     fclose(f);
 }
@@ -57,6 +58,7 @@ void ClientCfg::Save() const
     fprintf(f, "TerrainNormals = %d ; per-pixel terrain normals from the elevation data\n", terrainNormals ? 1 : 0);
     fprintf(f, "Geomorph = %d       ; terrain detail levels blend smoothly instead of popping\n", geomorph ? 1 : 0);
     fprintf(f, "StatsLog = %d       ; fps and GPU times in Orbiter.log every 10 s\n", statsLog ? 1 : 0);
+    fprintf(f, "Sharpen = %.2f     ; adaptive sharpening of the fine detail, 0 off .. 1\n", sharpen);
     fprintf(f, "Bloom = %d          ; the bright parts glow softly (the Sun in the haze, glints, lamps)\n", bloom ? 1 : 0);
     fprintf(f, "AmbientOcclusion = %d ; darker folds of the ground and under the vessels (from the depth)\n", ao ? 1 : 0);
     fprintf(f, "DriverCacheMB = %d ; the video driver's shader cache for Orbiter: set aside at start above this (0: never)\n", driverCacheMB);

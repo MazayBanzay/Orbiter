@@ -3,6 +3,8 @@
 // storms). The drops: up to 9.5 mm (Lorenz 1993: larger break up), falling slowly in the dense, low-gravity air
 // (~0.5 m/s at 1 mm, ~1.6 m/s at the largest) - rain on Titan drifts down more than it streaks.
 // Rate: Config\D3D11Client\Fx.cfg "Rain = <mm per hour>" (0: none, the default); D3D11CLIENT_RAIN overrides it (tests).
+// Where: "RainArea = <lat> <lon> <radius km> <fade km>" - only round that point (default: our Kraken Mare site, 59.33 N
+// 40.49 E, 60 km, fading over the last 15: the northern polar seas, where Cassini saw summer rain - Dhingra et al. 2019).
 // Drawn procedurally (shaders\rain.hlsl) in a 40 m box round the camera, locked to the ground; the drops that fall into
 // a liquid ring its surface (the wave field, Wake.cpp).
 #include "Client.h"
@@ -15,6 +17,7 @@ namespace {
     ComPtr<ID3D11Buffer> rnCB; ComPtr<ID3D11BlendState> rnBS;
     bool rnTried = false;
     double rnRate = -1;                       // mm/h
+    double rnLat = 59.3335, rnLon = 40.49, rnRad = 60.0, rnFade = 15.0;   // the rain's area [deg, deg, km, km]
     OBJHANDLE rnBody = nullptr; VECTOR3 rnA = { 0, 0, 0 }, rnE1, rnUp, rnE2;   // the anchor (planet frame) and its axes
     unsigned rnRng = 0x2545F491u;
     double U01() { rnRng ^= rnRng << 13; rnRng ^= rnRng >> 17; rnRng ^= rnRng << 5; return (rnRng & 0xFFFFFF) / 16777216.0; }
@@ -26,20 +29,24 @@ namespace {
         for (const char* fn : { "Config\\D3D11Client\\Fx.cfg", "Config\\D3D11Client\\Client.cfg" })   // (Client.cfg: test runs' -Set)
             if (FILE* f = fopen(fn, "r")) {
                 char line[256];
-                while (fgets(line, sizeof line, f)) { double v; if (sscanf(line, " Rain = %lf", &v) == 1) rnRate = std::max(0.0, v); }
+                while (fgets(line, sizeof line, f)) {
+                    double v, a, b, c, d;
+                    if (sscanf(line, " Rain = %lf", &v) == 1) rnRate = std::max(0.0, v);
+                    if (sscanf(line, " RainArea = %lf %lf %lf %lf", &a, &b, &c, &d) == 4) { rnLat = a; rnLon = b; rnRad = std::max(c, 0.1); rnFade = std::max(d, 0.01); }
+                }
                 fclose(f);
             }
         char e[32] = {};
         if (GetEnvironmentVariableA("D3D11CLIENT_RAIN", e, sizeof e)) rnRate = std::max(0.0, atof(e));
-        LOGC("rain: %.2f mm/h on Titan (Config\\D3D11Client\\Fx.cfg Rain)", rnRate);
+        LOGC("rain: %.2f mm/h on Titan within %.0f km of %.3f N %.3f E (Config\\D3D11Client\\Fx.cfg Rain, RainArea)", rnRate, rnRad, rnLat, rnLon);
         return rnRate;
     }
 }
 
 void D3D11Client::RenderRain(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj)
 {
-    const double I = RainRate();
-    if (I <= 0) return;
+    const double I0 = RainRate();
+    if (I0 <= 0) return;
     OBJHANDLE hP = oapiCameraProxyGbody();
     if (!hP) return;
     char nm[32] = ""; oapiGetObjectName(hP, nm, 31);
@@ -49,6 +56,18 @@ void D3D11Client::RenderRain(const VECTOR3& cp, const MATRIX3& cr, const XMMATRI
     const double R = oapiGetSize(hP);
     const VECTOR3 cP = tmul(Rp, cp - pp);                        // the camera, planet frame
     if (length(cP) - R > 3000) return;                           // rain is near the ground
+    // only over its area: the great-circle distance from the area's centre, faded at its edge
+    double I = 0;
+    {
+        double lng, lat, rad; oapiGlobalToEqu(hP, cp, &lng, &lat, &rad);
+        const double la0 = rnLat * RAD, lo0 = rnLon * RAD;
+        const double c = sin(lat) * sin(la0) + cos(lat) * cos(la0) * cos(lng - lo0);
+        const double dkm = R * acos(std::clamp(c, -1.0, 1.0)) / 1000.0;
+        I = I0 * std::clamp((rnRad - dkm) / rnFade, 0.0, 1.0);
+        static double tLog = -1e9; const double now = oapiGetSysTime();
+        if (now - tLog > 30) { tLog = now; LOGC("rain: %.1f km from the area's centre, %.2f mm/h here", dkm, I); }
+    }
+    if (I <= 0) return;
     if (rnDev != dev.Get()) { rnDev = dev.Get(); rnVS.Reset(); rnPS.Reset(); rnCB.Reset(); rnBS.Reset(); rnTried = false; rnBody = nullptr; }
     if (!rnVS && !rnTried) {
         rnTried = true;

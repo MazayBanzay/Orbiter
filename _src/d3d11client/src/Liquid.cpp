@@ -320,6 +320,16 @@ void D3D11Client::RenderLiquid(const VECTOR3& cp, const MATRIX3& cr, const XMMAT
         ctx->PSSetShaderResources(11, 2, rd);
     }
     ctx->DrawIndexed(liqIdx, 0, 0);
+    // the surface's own depth (depth only, no colour): what comes after - the air's perspective, rain, particles - ends
+    // at the liquid, not at the bed under it or the sky behind its far edge (a dark line at the sea's horizon)
+    {
+        ID3D11ShaderResourceView* nul0[7] = {};
+        ctx->PSSetShaderResources(0, 7, nul0);         // the depth may not stay bound for reading while it is written
+        ctx->OMSetRenderTargets(0, nullptr, dsv.Get());
+        ctx->OMSetDepthStencilState(dsWrite.Get(), 0);
+        ctx->PSSetShader(nullptr, nullptr, 0);
+        ctx->DrawIndexed(liqIdx, 0, 0);
+    }
     ID3D11ShaderResourceView* nul[7] = {};
     ctx->PSSetShaderResources(0, 7, nul);
     ctx->PSSetShaderResources(11, 2, nul);

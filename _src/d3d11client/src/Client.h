@@ -53,7 +53,8 @@ struct ClientCfg
     bool geomorph = true;         // terrain LOD levels blend smoothly (CDLOD-style morphing; off: they pop)
     int driverCacheMB = 128;
     bool ao = true;               // ambient occlusion from the depth (Ssao.cpp)
-    bool bloom = true;            // the bright parts glow (Bloom.cpp)      // the video driver's shader cache file for Orbiter: set aside at start when bigger (0: never)
+    bool bloom = true;            // the bright parts glow (Bloom.cpp)
+    float sharpen = 0.4f;         // adaptive sharpening after the tone curve (post.hlsl), 0 off .. 1      // the video driver's shader cache file for Orbiter: set aside at start when bigger (0: never)
     void Load();
     void Save() const;
 };
@@ -103,7 +104,7 @@ struct Surf
 };
 
 ComPtr<ID3D11ShaderResourceView> LoadDDSFile(ID3D11Device* dev, ID3D11DeviceContext* ctx, const char* path, bool srgb, UINT* w = nullptr, UINT* h = nullptr);
-ComPtr<ID3D11ShaderResourceView> LoadDDSMemory(ID3D11Device* dev, const BYTE* data, size_t size, bool srgb, UINT* w = nullptr, UINT* h = nullptr);
+ComPtr<ID3D11ShaderResourceView> LoadDDSMemory(ID3D11Device* dev, const BYTE* data, size_t size, bool srgb, UINT* w = nullptr, UINT* h = nullptr, bool genMips = true);
 bool ReadFileBytes(const char* path, std::vector<BYTE>& out);
 
 // the liquid's level radius as drawn for a camera at distance dc from the centre: a camera on the level or up to 0.5 m
@@ -159,6 +160,7 @@ struct DevMesh
 {
     std::vector<DGroup> grp;
     std::vector<MATERIAL> mtrl;
+    std::vector<XMFLOAT4> emis2;   // oapiSetMaterialEx(Emission) per material: output = max(lit, it), as D3D9 (a module's glow)
     std::vector<SURFHANDLE> tex;   // [0] = none
     ComPtr<ID3D11Buffer> vb, ib;
     bool Build(ID3D11Device* dev, MESHHANDLE src);
@@ -271,6 +273,7 @@ public:
     double R;
     int maxLevel = 18;
     int tilesDrawn = 0, tilesLoaded = 0;
+    std::atomic<float> elevLow{ 0.0f };   // the lowest ground of the loaded elevation tiles (skirts of the tiles without data reach it)
     bool deepOk = true;     // this frame may split past the data (the last frame's tiles and the load queue within budget)
     // the loader (worker thread)
     void Load(Tile* t);
@@ -327,6 +330,8 @@ public:
     bool clbkSetMeshTexture(DEVMESHHANDLE hMesh, DWORD texidx, SURFHANDLE tex) override;
     int clbkSetMeshMaterial(DEVMESHHANDLE hMesh, DWORD matidx, const MATERIAL* mat) override;
     int clbkMeshMaterial(DEVMESHHANDLE hMesh, DWORD matidx, MATERIAL* mat) override;
+    int clbkSetMeshMaterialEx(DEVMESHHANDLE hMesh, DWORD matidx, MatProp prp, const oapi::FVECTOR4* in) override;
+    int clbkMeshMaterialEx(DEVMESHHANDLE hMesh, DWORD matidx, MatProp prp, oapi::FVECTOR4* out) override;
     bool clbkSetMeshProperty(DEVMESHHANDLE hMesh, DWORD property, DWORD value) override { return false; }
     int clbkVisEvent(OBJHANDLE hObj, VISHANDLE vis, DWORD msg, DWORD_PTR context) override;
     MESHHANDLE clbkGetMesh(VISHANDLE vis, UINT idx) override;
@@ -490,6 +495,7 @@ public:
     VECTOR3 taaPrevRel = { 0, 0, 0 };
     void RenderLiquid(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj, float tanY);
     void SaveLiquidBed();
+    void RenderClouds(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);   // volumetric cloud layers (Clouds.cpp)
     void RenderRain(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);   // Titan's methane rain (Rain.cpp)     // the terrain's depth alone (after the planets, before the vessels): the liquid's bed (Liquid.cpp)
     ComPtr<ID3D11Buffer> liqVB, liqIB;
     UINT liqIdx = 0;
@@ -578,7 +584,8 @@ private:
     ComPtr<ID3D11SamplerState> sampShadow;
     ComPtr<ID3D11DepthStencilState> dsShadow;
     ComPtr<ID3D11RasterizerState> rsShadow;
-    XMFLOAT4X4 lightVP;
+    XMFLOAT4X4 lightVP, lightVP2;     // (the first two cascades; the shaders read casc)
+    XMFLOAT4X4 casc[4] = {}; float cascFar[4] = {}, cascTex[4] = {};   // the shadow cascades: light VP, far end [m], texel [m]
     bool shadowOn = false;
     static const UINT SHADOW_N = 2048;
     void SaveShot(const char* path);

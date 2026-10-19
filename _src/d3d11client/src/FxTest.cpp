@@ -4,6 +4,8 @@
 //   splash  - drops and wet clods thrown up and back, as a wheel through the shallows
 //   jet     - a 800 N hydrogen jet straight down from 1 m (ground ejecta, or the cavity, spray and mist over a liquid)
 //   dirt    - the tholin film on the vessel up to 0.5 m
+//   orbit   - the external camera pulled out to ~2000 km
+//   sky     - the external camera turned up to the sky (clouds)
 //   heat    - two hot nozzles (800 K over the air) on the back unit: their glow and the shimmer of the air
 // Also "TestShot = <s>" (the screenshot's time; D3D11CLIENT_TEST_SHOT wins) in Config\D3D11Client\Client.cfg.
 #include "Client.h"
@@ -34,6 +36,13 @@ static std::string FxTestKey(const char* key)
     return val;
 }
 
+// a test-only number from Client.cfg (0 when absent): debug views (AtmoDbg)
+double FxTestNum(const char* key)
+{
+    std::string v = FxTestKey(key);
+    return v.empty() ? 0 : atof(v.c_str());
+}
+
 double FxTestShotTime()
 {
     std::string v = FxTestKey("TestShot");
@@ -42,14 +51,22 @@ double FxTestShotTime()
 
 void FxTestFrame()
 {
-    static bool parsed = false, dust = false, splash = false, jet = false, dirt = false, heat = false;
+    static bool parsed = false, dust = false, splash = false, jet = false, dirt = false, heat = false, sky = false, orbit = false;
     if (!parsed) {
         parsed = true;
         std::string v = FxTestKey("FxTest");
         for (auto& ch : v) ch = (char)tolower(ch);
         dust = v.find("dust") != std::string::npos; splash = v.find("splash") != std::string::npos;
-        jet = v.find("jet") != std::string::npos; dirt = v.find("dirt") != std::string::npos; heat = v.find("heat") != std::string::npos;
+        jet = v.find("jet") != std::string::npos; dirt = v.find("dirt") != std::string::npos; heat = v.find("heat") != std::string::npos; sky = v.find("sky") != std::string::npos; orbit = v.find("orbit") != std::string::npos;
         if (!v.empty()) LOGC("fx test: %s", v.c_str());
+    }
+    if (orbit) {      // the external camera pulled out to ~2000 km (from the scenario's few metres), once, after 3 s
+        static bool done = false;
+        if (!done && oapiGetSimTime() > 3) { done = true; oapiCameraScaleDist(5.0e5); LOGC("fx test: camera out to orbit"); }
+    }
+    if (sky) {        // the camera turned up to the sky (the external camera's polar angle), once, after 3 s
+        static bool done = false;
+        if (!done && oapiGetSimTime() > 3) { done = true; oapiCameraRotPolar(1.2); LOGC("fx test: camera up to the sky"); }
     }
     if (!dust && !splash && !jet && !dirt && !heat) return;
     OBJHANDLE h = oapiGetFocusObject();

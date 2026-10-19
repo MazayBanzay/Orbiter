@@ -473,6 +473,8 @@ bool Atmosphere::EnsureVolume(ID3D11Device* dev, UINT w, UINT h)
     return apLU && apTU && endLU && endTU && apLS && apTS && endLS && endTS;
 }
 
+double FxTestNum(const char* key);
+
 void Atmosphere::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj)
 {
     if (!gc->depthSRV) return;
@@ -529,7 +531,8 @@ void Atmosphere::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, c
         k.row1 = { (float)cr.m21, (float)cr.m22, (float)cr.m23, 0 };
         k.row2 = { (float)cr.m31, (float)cr.m32, (float)cr.m33, 0 };
         k.tan = { tanX, tanY, P._43, 0 };
-        k.cam = { (float)rc, (float)alt, 0, 0 };
+        static const float dbg = (float)FxTestNum("AtmoDbg");     // test runs: 1 = what each pixel's ray ends on
+        k.cam = { (float)rc, (float)alt, dbg, 0 };
         k.sun = { 1.0f, 64.0f, P._31, P._32 };           // the Sun's disc, its radiance capped; TAA's sub-pixel offset
         // inside this planet's air (its light is the frame's): the rays marched per column once, in the volume
         const bool useVol = a == current && alt < a->media.top && EnsureVolume(gc->Dev(), dw, dh);

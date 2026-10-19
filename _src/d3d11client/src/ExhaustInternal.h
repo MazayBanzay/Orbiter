@@ -94,6 +94,7 @@ private:
     double Rnd();                    // 0..1
     double U(double a, double b) { return a + (b - a) * Rnd(); }
     void SpawnJet(ExScene& sc, const ExJet& j, JetAcc& acc, std::vector<XMFLOAT4>& impacts);
+    void SpawnCrowns(ExScene& sc);   // crown splashes of impacts (ParticlesCrown)
     void SpawnSource(ExScene& sc, OBJHANDLE h, Source& s, std::vector<XMFLOAT4>& freeJets);
     void Push(const ExScene& sc, const VECTOR3& pLocal, const VECTOR3& vLocal, double d, double rhoP, double s0, double a0,
               double life, double gyLocal, UINT flags, const VECTOR3& ug0 = _V(0, 0, 0), double tg = 1);

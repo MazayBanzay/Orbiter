@@ -336,15 +336,17 @@ VSOut VS(uint vid : SV_VertexID, uint inst : SV_InstanceID)
         R = normalize(DirToWorld(float3(1, 0, 0))); U = normalize(DirToWorld(float3(0, 0, 1)));
         wp += upW * 0.03;
     } else if (look == LOOK_DROP) {
-        // a streak: the drop's path over the frame's exposure, across the view
+        // one drop, drawn as its streak over the frame's exposure along its velocity (as real-time spray and rain are
+        // drawn): never under ~a pixel wide - a drop smaller than that keeps its share of the light (opacity d / width)
         float3 vw = DirToWorld(q.v);
         float3 vp = vw - dot(vw, V) * V;
         float L = length(vp) * dCamU.w;
         R = L > 1e-5 ? vp / length(vp) : dCamR.xyz;
         U = normalize(cross(V, R));
+        s = max(0.5 * q.d, 0.7 * dist / max(dGeo.w, 1));
         sx = s + 0.5 * L; sy = s;
         wp -= vw * (0.5 * dCamU.w);
-        a *= s / sx;                                    // the same drops spread along the streak
+        a *= sqrt(saturate(q.d / (2 * s))) * sqrt(s / sx);
     } else {
         float ang = q.seed * 6.2832 + ((q.flags & F_HARD) ? q.age * (2 + 6 * frac(q.seed * 13.7)) : 0);   // clods tumble
         float cs = cos(ang), sn = sin(ang);
@@ -408,15 +410,13 @@ float4 PS(VSOut i) : SV_Target
         float3 upW = normalize(float3(dM0.y, dM1.y, dM2.y));
         float ph = HG(i.misc.w, dot(V, Lsun));          // scattering angle: the light along -Lsun, out along -V
         if (look == LOOK_DROP) {
-            // one sprite is a cluster of drops, not a ball: fine specks inside a soft streak (seen as droplets, never bokeh)
-            float sp = ExNoise(float3(i.uv * 14.0 + seed * 31.0, seed * 7.0 + t * 0.2));
-            float sp2 = ExNoise(float3(i.uv * 29.0 + seed * 17.0, seed * 3.0));
-            float speck = saturate(smoothstep(0.58, 0.78, sp) + 0.6 * smoothstep(0.62, 0.8, sp2));
-            a *= pow(saturate(1 - r2), 1.2) * (0.15 + 0.85 * speck);
-            // clear drops: their phase function (a veil glowing with the Sun behind it), the sky and the ground they
-            // reflect, and the Sun's tiny mirror image in some of them - a sparkle that comes and goes as they turn
-            float glint = pow(saturate(dot(reflect(V, N), Lsun)), 300) * step(0.8, frac(seed * 91.7 + t * 2.3));
-            c = alb * (i.sun * ph + 0.6 * (i.sky + i.gnd)) + i.sun * glint * 6;
+            // a clear drop's streak: a capsule (rounded ends), a bright core where it refracts the sky behind it and
+            // mirrors the Sun (a glint that comes and goes as it tumbles), the sky and the ground round its rim
+            float across = abs(d.y), along = abs(d.x);
+            a *= pow(saturate(1 - across * across), 1.5) * saturate((1 - along) * 5);
+            float core = pow(saturate(1 - across), 4);
+            float glint = step(0.7, frac(seed * 91.7 + t * 1.7)) * pow(saturate(dot(reflect(V, N), Lsun) * 0.5 + 0.5), 8);
+            c = alb * (0.9 * i.sky + 0.35 * i.gnd + i.sun * ph * 0.3) * (0.75 + 0.5 * core) + i.sun * glint * core * 3;
         } else {
             // the outline torn by a finer octave (no round sprite edges); mist and fog thinner per sprite, more of them
             float n2 = ExNoise(float3(i.uv * 7.0 + seed * 13.1, seed * 5.7 + t * 0.05));

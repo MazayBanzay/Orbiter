@@ -14,6 +14,9 @@ bool WakeField(D3D11Client* c, OBJHANDLE body, double levelRadius, const VECTOR3
 
 void WakeSet(OBJHANDLE hv, int id, const double* pos, double radius, double strength);   // AtmoFX_SetWake
 void WakeRipple(OBJHANDLE body, const VECTOR3& gpos, double radius, double amp);         // a drop, a splash
-void WakeForget(OBJHANDLE hv);       // a vessel deleted: its nodes go (their hollows are not filled: the vessel is gone)
+void WakeForget(OBJHANDLE hv);
+// a crown splash where something hits the liquid (GpuParticles.cpp): global point on the level, the part's radius, its
+// speed into the liquid [m/s]
+void ParticlesCrown(OBJHANDLE body, const VECTOR3& gpos, double radius, double speed);       // a vessel deleted: its nodes go (their hollows are not filled: the vessel is gone)
 int WakeSources(OBJHANDLE body, double levelRadius, const VECTOR3& cam, WakeSrc* out, int maxN);
 ComPtr<ID3D11ShaderResourceView> WakeLoadKelvin(ID3D11Device* dev);

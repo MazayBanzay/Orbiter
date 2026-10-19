@@ -140,7 +140,15 @@ void WakeSet(OBJHANDLE hv, int id, const double* pos, double radius, double stre
     }
     Node& n = nodes[key];
     n.pos = _V(pos[0], pos[1], pos[2]); n.r = radius; n.s = std::min(strength, 1.0); n.dead = false;
-    if (strength > 1.0) { n.impulse = true; n.amp = std::min(strength, 4.0); }
+    if (strength > 1.0) {
+        n.impulse = true; n.amp = std::min(strength, 4.0);
+        // the impact's crown (a step, a wheel or a hull going in): its speed from the strength (2..3 -> ~1..1.5 m/s)
+        if (oapiIsVessel(hv)) {
+            VESSEL* v = oapiGetVesselInterface(hv);
+            VECTOR3 g; v->Local2Global(n.pos, g);
+            ParticlesCrown(v->GetSurfaceRef(), g, radius, 0.5 * std::min(strength, 4.0));
+        }
+    }
 }
 
 void WakeForget(OBJHANDLE hv)

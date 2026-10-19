@@ -1,6 +1,7 @@
 // Minimal DDS loader: DXT1/3/5, ATI1/ATI2 (BC4/BC5), DX10 headers, 32/24-bit uncompressed. Mip chains as stored;
-// uncompressed textures without mips get them generated.
+// textures without mips get them generated (uncompressed: box filtered; DXT1/3/5: decoded, filtered, encoded again).
 #include "Client.h"
+#include <climits>
 
 namespace {
 #pragma pack(push, 1)
@@ -34,6 +35,147 @@ size_t BlockBytes(DXGI_FORMAT f)
     default: return 0;
     }
 }
+// ---- the mips a DXT texture was saved without (D3D9's D3DX makes them on load; without them a texture shimmers and looks
+// dirty at a distance): the top level decoded, halved by 2x2 boxes, each level encoded again (bounding-box endpoints)
+void Rgb565(uint16_t c, int* o) { o[0] = ((c >> 11) & 31) * 255 / 31; o[1] = ((c >> 5) & 63) * 255 / 63; o[2] = (c & 31) * 255 / 31; }
+uint16_t To565(const int* c) { return (uint16_t)(((c[0] * 31 + 127) / 255) << 11 | ((c[1] * 63 + 127) / 255) << 5 | ((c[2] * 31 + 127) / 255)); }
+
+void DecodeColour(const BYTE* b, BYTE px[16][4], bool bc1)
+{
+    uint16_t c0 = (uint16_t)(b[0] | b[1] << 8), c1 = (uint16_t)(b[2] | b[3] << 8);
+    int p[4][4]; Rgb565(c0, p[0]); Rgb565(c1, p[1]); p[0][3] = p[1][3] = 255;
+    for (int k = 0; k < 3; k++) {
+        if (c0 > c1 || !bc1) { p[2][k] = (2 * p[0][k] + p[1][k]) / 3; p[3][k] = (p[0][k] + 2 * p[1][k]) / 3; }
+        else { p[2][k] = (p[0][k] + p[1][k]) / 2; p[3][k] = 0; }
+    }
+    p[2][3] = 255; p[3][3] = (c0 > c1 || !bc1) ? 255 : 0;
+    uint32_t idx = b[4] | b[5] << 8 | b[6] << 16 | (uint32_t)b[7] << 24;
+    for (int i = 0; i < 16; i++) { const int* q = p[(idx >> (2 * i)) & 3]; for (int k = 0; k < 4; k++) px[i][k] = (BYTE)q[k]; }
+}
+
+void EncodeColour(const BYTE px[16][4], BYTE* out, bool bc1Alpha)
+{
+    int mn[3] = { 255, 255, 255 }, mx[3] = { 0, 0, 0 }; bool any = false, holes = false;
+    for (int i = 0; i < 16; i++) {
+        if (bc1Alpha && px[i][3] < 128) { holes = true; continue; }
+        any = true;
+        for (int k = 0; k < 3; k++) { mn[k] = std::min(mn[k], (int)px[i][k]); mx[k] = std::max(mx[k], (int)px[i][k]); }
+    }
+    if (!any) { memset(out, 0, 4); out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 0; memset(out + 4, 0xFF, 4); return; }
+    for (int k = 0; k < 3; k++) { int in = (mx[k] - mn[k]) / 16; mx[k] -= in; mn[k] += in; }
+    uint16_t c0 = To565(mx), c1 = To565(mn);
+    const bool three = bc1Alpha && holes;
+    if (three ? c0 > c1 : c0 < c1) std::swap(c0, c1);
+    int p[4][3]; Rgb565(c0, p[0]); Rgb565(c1, p[1]);
+    for (int k = 0; k < 3; k++) {
+        if (!three) { p[2][k] = (2 * p[0][k] + p[1][k]) / 3; p[3][k] = (p[0][k] + 2 * p[1][k]) / 3; }
+        else { p[2][k] = (p[0][k] + p[1][k]) / 2; p[3][k] = 0; }
+    }
+    uint32_t idx = 0;
+    for (int i = 0; i < 16; i++) {
+        int best = 0, bd = INT_MAX;
+        if (three && px[i][3] < 128) best = 3;
+        else if (c0 != c1) for (int j = 0; j < (three ? 3 : 4); j++) {
+            int d = 0; for (int k = 0; k < 3; k++) { int e = px[i][k] - p[j][k]; d += e * e; }
+            if (d < bd) { bd = d; best = j; }
+        }
+        idx |= (uint32_t)best << (2 * i);
+    }
+    out[0] = (BYTE)c0; out[1] = (BYTE)(c0 >> 8); out[2] = (BYTE)c1; out[3] = (BYTE)(c1 >> 8);
+    out[4] = (BYTE)idx; out[5] = (BYTE)(idx >> 8); out[6] = (BYTE)(idx >> 16); out[7] = (BYTE)(idx >> 24);
+}
+
+void DecodeAlphaBC3(const BYTE* b, BYTE px[16][4])
+{
+    int a[8]; a[0] = b[0]; a[1] = b[1];
+    if (a[0] > a[1]) for (int k = 1; k < 7; k++) a[k + 1] = ((7 - k) * a[0] + k * a[1]) / 7;
+    else { for (int k = 1; k < 5; k++) a[k + 1] = ((5 - k) * a[0] + k * a[1]) / 5; a[6] = 0; a[7] = 255; }
+    uint64_t bits = 0; for (int k = 0; k < 6; k++) bits |= (uint64_t)b[2 + k] << (8 * k);
+    for (int i = 0; i < 16; i++) px[i][3] = (BYTE)a[(bits >> (3 * i)) & 7];
+}
+
+void EncodeAlphaBC3(const BYTE px[16][4], BYTE* out)
+{
+    int a0 = 0, a1 = 255;
+    for (int i = 0; i < 16; i++) { a0 = std::max(a0, (int)px[i][3]); a1 = std::min(a1, (int)px[i][3]); }
+    out[0] = (BYTE)a0; out[1] = (BYTE)a1;
+    uint64_t bits = 0;
+    if (a0 > a1) {
+        int a[8]; a[0] = a0; a[1] = a1; for (int k = 1; k < 7; k++) a[k + 1] = ((7 - k) * a0 + k * a1) / 7;
+        for (int i = 0; i < 16; i++) {
+            int best = 0, bd = INT_MAX;
+            for (int j = 0; j < 8; j++) { int d = abs(px[i][3] - a[j]); if (d < bd) { bd = d; best = j; } }
+            bits |= (uint64_t)best << (3 * i);
+        }
+    }
+    for (int k = 0; k < 6; k++) out[2 + k] = (BYTE)(bits >> (8 * k));
+}
+
+// the average of four texels; a colour channel of an sRGB texture averaged as light (in linear), as DirectXTex does:
+// the mips keep the texture's brightness instead of darkening with the distance
+BYTE Avg4(BYTE a, BYTE b, BYTE c, BYTE d, bool srgb)
+{
+    if (!srgb) return (BYTE)((a + b + c + d + 2) / 4);
+    static float lin[256]; static bool init = false;
+    if (!init) { for (int i = 0; i < 256; i++) { float v = i / 255.0f; lin[i] = v <= 0.04045f ? v / 12.92f : powf((v + 0.055f) / 1.055f, 2.4f); } init = true; }
+    float l = 0.25f * (lin[a] + lin[b] + lin[c] + lin[d]);
+    float v = l <= 0.0031308f ? l * 12.92f : 1.055f * powf(l, 1 / 2.4f) - 0.055f;
+    return (BYTE)std::clamp((int)(v * 255 + 0.5f), 0, 255);
+}
+
+// the full chain for a BC1/2/3 top level stored alone; false: not such a format (the caller keeps the one level)
+bool BuildBlockMips(DXGI_FORMAT fmt, const BYTE* top, UINT W, UINT H, std::vector<std::vector<BYTE>>& levels)
+{
+    const bool bc1 = fmt == DXGI_FORMAT_BC1_UNORM || fmt == DXGI_FORMAT_BC1_UNORM_SRGB;
+    const bool bc2 = fmt == DXGI_FORMAT_BC2_UNORM || fmt == DXGI_FORMAT_BC2_UNORM_SRGB;
+    const bool bc3 = fmt == DXGI_FORMAT_BC3_UNORM || fmt == DXGI_FORMAT_BC3_UNORM_SRGB;
+    if (!bc1 && !bc2 && !bc3) return false;
+    const bool srgbF = fmt == DXGI_FORMAT_BC1_UNORM_SRGB || fmt == DXGI_FORMAT_BC2_UNORM_SRGB || fmt == DXGI_FORMAT_BC3_UNORM_SRGB;
+    static int off = -1; if (off < 0) { char v[4] = {}; off = GetEnvironmentVariableA("D3D11CLIENT_NOMIPGEN", v, 4) && v[0] == '1'; }   // test runs: A/B
+    if (off) return false;
+    const size_t bb = bc1 ? 8 : 16;
+    const UINT bw = (W + 3) / 4, bh = (H + 3) / 4;
+    std::vector<BYTE> img((size_t)W * H * 4);
+    for (UINT by = 0; by < bh; by++) for (UINT bx = 0; bx < bw; bx++) {
+        const BYTE* b = top + ((size_t)by * bw + bx) * bb;
+        BYTE px[16][4];
+        DecodeColour(b + (bb - 8), px, bc1);
+        if (bc2) for (int i = 0; i < 16; i++) px[i][3] = (BYTE)(((b[i / 2] >> ((i & 1) * 4)) & 15) * 17);
+        if (bc3) DecodeAlphaBC3(b, px);
+        for (int i = 0; i < 16; i++) {
+            UINT x = bx * 4 + (i & 3), y = by * 4 + (i >> 2);
+            if (x < W && y < H) memcpy(&img[((size_t)y * W + x) * 4], px[i], 4);
+        }
+    }
+    UINT w = W, h = H;
+    levels.clear();
+    levels.emplace_back(top, top + (size_t)bw * bh * bb);
+    while (w > 1 || h > 1) {
+        UINT nw = std::max(1u, w / 2), nh = std::max(1u, h / 2);
+        std::vector<BYTE> n((size_t)nw * nh * 4);
+        for (UINT y = 0; y < nh; y++) for (UINT x = 0; x < nw; x++) for (int c = 0; c < 4; c++) {
+            UINT x0 = std::min(w - 1, x * 2), x1 = std::min(w - 1, x * 2 + 1), y0 = std::min(h - 1, y * 2), y1 = std::min(h - 1, y * 2 + 1);
+            const BYTE a0 = img[((size_t)y0 * w + x0) * 4 + c], a1 = img[((size_t)y0 * w + x1) * 4 + c], a2 = img[((size_t)y1 * w + x0) * 4 + c], a3 = img[((size_t)y1 * w + x1) * 4 + c];
+            n[((size_t)y * nw + x) * 4 + c] = Avg4(a0, a1, a2, a3, srgbF && c < 3);
+        }
+        img = std::move(n); w = nw; h = nh;
+        const UINT cw = (w + 3) / 4, ch = (h + 3) / 4;
+        std::vector<BYTE> enc((size_t)cw * ch * bb);
+        for (UINT by = 0; by < ch; by++) for (UINT bx = 0; bx < cw; bx++) {
+            BYTE px[16][4];
+            for (int i = 0; i < 16; i++) {
+                UINT x = std::min(w - 1, bx * 4 + (i & 3)), y = std::min(h - 1, by * 4 + (i >> 2));
+                memcpy(px[i], &img[((size_t)y * w + x) * 4], 4);
+            }
+            BYTE* o = &enc[((size_t)by * cw + bx) * bb];
+            if (bc2) { for (int i = 0; i < 8; i++) o[i] = (BYTE)(((px[2 * i][3] + 8) / 17) | (((px[2 * i + 1][3] + 8) / 17) << 4)); }
+            if (bc3) EncodeAlphaBC3(px, o);
+            EncodeColour(px, o + (bb - 8), bc1);
+        }
+        levels.push_back(std::move(enc));
+    }
+    return true;
+}
 }  // namespace
 
 static ComPtr<ID3D11ShaderResourceView> CreateTexture2D(ID3D11Device* dev, UINT W, UINT H, DXGI_FORMAT fmt, const void* data, UINT pitch);
@@ -42,10 +184,10 @@ ComPtr<ID3D11ShaderResourceView> LoadDDSFile(ID3D11Device* dev, ID3D11DeviceCont
 {
     std::vector<BYTE> f;
     if (!ReadFileBytes(path, f)) return nullptr;
-    return LoadDDSMemory(dev, f.data(), f.size(), srgb, ow, oh);
+    return LoadDDSMemory(dev, f.data(), f.size(), srgb, ow, oh, false);   // meshes' textures: as stored (D3D9 shows a texture saved without mips at its full level: the full detail up close)
 }
 
-ComPtr<ID3D11ShaderResourceView> LoadDDSMemory(ID3D11Device* dev, const BYTE* fdata, size_t fsize, bool srgb, UINT* ow, UINT* oh)
+ComPtr<ID3D11ShaderResourceView> LoadDDSMemory(ID3D11Device* dev, const BYTE* fdata, size_t fsize, bool srgb, UINT* ow, UINT* oh, bool genMips)
 {
     struct View { const BYTE* p; size_t n; const BYTE* data() const { return p; } size_t size() const { return n; } } f{ fdata, fsize };
     if (f.size() < 128 || memcmp(f.data(), "DDS ", 4) != 0) return nullptr;
@@ -100,6 +242,13 @@ ComPtr<ID3D11ShaderResourceView> LoadDDSMemory(ID3D11Device* dev, const BYTE* fd
         if (!used) return nullptr;
         // block formats need sizes in whole blocks at the top level
         if ((W & 3) || (H & 3)) { if (W >= 4 && H >= 4) return nullptr; }
+        std::vector<std::vector<BYTE>> gen;      // a DXT texture saved without mips: they are made here
+        if (genMips && used == 1 && W >= 8 && H >= 8 && BuildBlockMips(fmt, f.data() + off, W, H, gen)) {
+            sd.clear();
+            UINT w2 = W;
+            for (auto& l : gen) { sd.push_back({ l.data(), (UINT)(std::max<UINT>(1, (w2 + 3) / 4) * bb), 0 }); w2 = std::max(1u, w2 / 2); }
+            used = (UINT)gen.size();
+        }
         D3D11_TEXTURE2D_DESC td = { W, H, used, 1, fmt, {1, 0}, D3D11_USAGE_IMMUTABLE, D3D11_BIND_SHADER_RESOURCE, 0, 0 };
         ComPtr<ID3D11Texture2D> tex;
         if (FAILED(dev->CreateTexture2D(&td, sd.data(), &tex))) return nullptr;

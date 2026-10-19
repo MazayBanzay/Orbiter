@@ -10,7 +10,7 @@ cbuffer Obj : register(b1)
     float4x4 gCurNJ;    // this frame's WVP without the TAA jitter
     float4x4 gPrevNJ;   // last frame's
     float4 gMaps;       // the texture's companion maps, as D3D9Client names them (1 = there): x _norm, y _spec, z _rghn, w _metl
-    float4 gMaps2;      // x _emis
+    float4 gMaps2;      // x _emis; y 1 = skin (light scattered under the surface)
 };
 Texture2D tNorm : register(t1);     // tangent space normal: +x along u, +y along v
 Texture2D tSpecM : register(t2);    // specular colour
@@ -22,6 +22,10 @@ cbuffer Mirror : register(b6)
 {
     float4 gMirN;       // the liquid's mirror pass: the plane's normal; w: 1 = on (parts under the plane are cut)
     float4 gMirP;       // a point of the plane (camera-centred)
+};
+cbuffer Emis2 : register(b8)
+{
+    float4 gEmis2;      // the material's emission2 set by a module (oapiSetMaterialEx Emission), w = 1 once set: it multiplies the emission map
 };
 cbuffer Dirt : register(b7)
 {
@@ -110,10 +114,32 @@ float3 PerturbNormal(float3 n, float3 wp, float2 uv, float2 txy)
     if (m < 1e-20) return n;
     float im = rsqrt(m);
     float tz = sqrt(saturate(1 - dot(txy, txy)));
-    return normalize(T * im * txy.x + B * im * txy.y + n * tz);
+    float3 r = T * im * txy.x + B * im * txy.y + n * tz;
+    return dot(r, r) > 1e-12 ? normalize(r) : n;
+}
+
+// specular anti-aliasing (Kaplanyan & Hoffman 2016): how much the normal turns across the pixel, as extra roughness
+// (squared). A normal-mapped or curved glossy surface would otherwise sparkle - dots no MSAA sample can smooth
+float SpecAAKernel(float3 n)
+{
+    float3 du = ddx(n), dv = ddy(n);
+    return min(0.5 * (dot(du, du) + dot(dv, dv)), 0.18);
 }
 
 float D_GGX_M(float nh, float a) { float a2 = a * a; float d = nh * nh * (a2 - 1) + 1; return a2 / (3.14159265 * d * d + 1e-7); }
+
+// what a glossy surface mirrors: the sky's light above the horizon, the lit ground below it (sun on it plus the sky's
+// light, albedo ~0.2), with a horizon line as sharp as the surface is smooth - a visor or a polished plate reads as glass
+// and metal by that line; the sky's harmonics alone gave it one flat colour (2026-10-19)
+float3 EnvReflect(float3 R, float3 wp, float rough)
+{
+    float3 up = gUp.xyz;
+    float h = dot(R, up);
+    float3 sky = SkyLight(R, wp);
+    float3 gnd = 0.2 * (SunLight(wp) * saturate(dot(up, gSunM.xyz)) + SkyLight(up, wp));
+    float wdt = 0.015 + 0.35 * rough;
+    return lerp(gnd, sky * (1.0 + 0.6 * saturate(1 - h * 4)), smoothstep(-wdt, wdt, h));   // the sky brighter near the horizon
+}
 
 PSOut PS(VSOut i, bool front : SV_IsFrontFace)
 {
@@ -137,7 +163,7 @@ PSOut PS(VSOut i, bool front : SV_IsFrontFace)
         float2 t = tNorm.Sample(sAniso, i.uv).rg * 2 - 1;
         n = PerturbNormal(n, i.wp, i.uv, t * (1 - dirtK * 0.7));
     }
-    float sunSh = ShadowAt(i.wp);
+    float sunSh = ShadowAtN(i.wp, normalize(i.n));     // the geometric normal: the offset against acne
     if (gMaps.z > 0.5 || gMaps.w > 0.5) {
         // the material maps (as D3D9Client's): smoothness and metalness -> GGX for the Sun, the sky's harmonics for the
         // light around (diffuse by the normal, specular by the mirrored direction, rough ones blurred by the SH anyway)
@@ -145,6 +171,7 @@ PSOut PS(VSOut i, bool front : SV_IsFrontFace)
         float metal = gMaps.w > 0.5 ? tMetl.Sample(sAniso, i.uv).r : 0.0;
         smooth *= 1 - dirtK; metal *= 1 - dirtK;
         float rough = max(1 - smooth, 0.06), a = rough * rough;
+        a = sqrt(saturate(a * a + SpecAAKernel(n)));     // the normal's spread within the pixel widens the lobe
         float3 F0 = lerp(float3(0.04, 0.04, 0.04), base.rgb, metal);
         float3 albedo = base.rgb * (1 - metal);
         float3 H = normalize(V + L);
@@ -154,21 +181,28 @@ PSOut PS(VSOut i, bool front : SV_IsFrontFace)
         float3 spec = D_GGX_M(nh, a) * G * Fs / (4 * nl0 * nv + 1e-4);
         float3 sun = SunLight(i.wp) * sunSh;
         float3 fill = (FxActive() ? 0.02 / max(gHazeRGB.w * gAdapt.rgb, 1e-3) : 0.02) * gMAmb.rgb;
-        float3 Fa = F0 + (max(1 - rough, F0) - F0) * pow(1 - nv, 5);      // Fresnel for the light around (rough: less)
-        float3 col = albedo * (nl0 * sun + SkyLight(n, i.wp) + fill) + spec * nl0 * sun * 3.14159265
-                   + Fa * SkyLight(reflect(-V, n), i.wp)
+        float3 Fa = F0 + (max(1 - rough, F0) - F0) * pow(saturate(1 - nv), 5);      // Fresnel for the light around (rough: less)
+        // skin (the texture's name says so: gMaps2.y): light scattered under it - the lit side's edge softens and
+        // warms (red wraps furthest round the terminator, blue least), as the light comes back out reddened
+        float3 dif = nl0.xxx;
+        if (gMaps2.y > 0.5) { float d0 = dot(n, L); dif = saturate((d0 + float3(0.45, 0.22, 0.15)) / float3(1.45, 1.22, 1.15)); }
+        float3 col = albedo * (dif * sun + SkyLight(n, i.wp) + fill) + spec * nl0 * sun * 3.14159265
+                   + Fa * EnvReflect(reflect(-V, n), i.wp, rough)
                    + gEmis.rgb * tex.rgb / max(gAdapt.w * gAdapt.rgb, 1e-4);
-        if (gMaps2.x > 0.5) col += tEmisM.Sample(sAniso, i.uv).rgb / max(gAdapt.w * gAdapt.rgb, 1e-4);
+        // the emission map as D3D9 shows it: max(lit, map x emission2) - emission2 the module's glow colour (the jet pack's
+        // chambers: 0 when cold), 1 when no module sets it
+        if (gMaps2.x > 0.5) col = max(col, tEmisM.Sample(sAniso, i.uv).rgb * (gEmis2.w > 0.5 ? gEmis2.rgb : 1.0) / max(gAdapt.w * gAdapt.rgb, 1e-4));
+        if (NotFinite(col)) col = 0; col = max(col, 0);     // never a negative or NaN colour (it would spread through the resolve)
         o.c = float4(ApplyHaze(col, i.wp), base.a);
         return o;
     }
     float nl = saturate(dot(n, L)) * sunSh;
     float3 col = base.rgb * (nl * SunLight(i.wp) + SkyLight(n, i.wp) + (FxActive() ? 0.02 / max(gHazeRGB.w * gAdapt.rgb, 1e-3) : 0.02) * gMAmb.rgb) + gEmis.rgb * tex.rgb / max(gAdapt.w * gAdapt.rgb, 1e-4);   // the faint fill: neutral and constant on screen under the eye's adaptation; the emission through the texture, as D3D9 lights it
-    if (gMaps2.x > 0.5) col += tEmisM.Sample(sAniso, i.uv).rgb / max(gAdapt.w * gAdapt.rgb, 1e-4);
     float4 specM = gMaps.y > 0.5 ? tSpecM.Sample(sAniso, i.uv) : float4(1, 1, 1, 1);    // the specular map scales the material's
     if (gSpec.w > 0 || gMaps.y > 0.5) {
         float3 H = normalize(V + L);
         float pw = gSpec.w > 0 ? gSpec.w : 20;
+        { float a2 = 2 / (pw + 2) + SpecAAKernel(n); pw = max(2 / a2 - 2, 1); }   // the same for the Phong lobe
         float3 sc = (gSpec.w > 0 ? gSpec.rgb : float3(1, 1, 1)) * specM.rgb;
         col += sc * (1 - dirtK) * pow(saturate(dot(n, H)), max(pw, 1)) * nl * SunLight(i.wp);
         // the sky in the glossy surface (the sky light's harmonics in the mirrored direction: a soft reflection), by
@@ -184,6 +218,8 @@ PSOut PS(VSOut i, bool front : SV_IsFrontFace)
     }
     // under the liquid (seen from above it): the light goes down to the point and back up the refracted view ray
     // (as the D3D9 fork: exp(-ext (d + d / cos t)) per channel), the dark liquid body over what is lost
+    if (gMaps2.x > 0.5) col = max(col, tEmisM.Sample(sAniso, i.uv).rgb * (gEmis2.w > 0.5 ? gEmis2.rgb : 1.0) / max(gAdapt.w * gAdapt.rgb, 1e-4));   // D3D9: max(lit, map x emission2)
+    if (NotFinite(col)) col = 0; col = max(col, 0);
     o.c = float4(ApplyHaze(col, i.wp), base.a);
     return o;
 }

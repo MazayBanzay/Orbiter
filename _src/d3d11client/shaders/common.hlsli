@@ -17,23 +17,46 @@ cbuffer Frame : register(b0)
     float4 gLiq0;       // the liquid under the camera: its planet's centre from the camera; w: the level's radius (0: none)
     float4 gLiq1;       // its in-scattered colour; w: extinction [1/m]
     float4 gLiq2;       // its channel weights; w: 1 = on
+    float4x4 gLightVP2; // (unused: the cascades below)
+    float4x4 gCasc[4];  // camera-centred global -> each shadow cascade (atlas tiles 2 x 2)
+    float4 gCascFar;    // each cascade's far end, view distance [m]
+    float4 gCascTex;    // each cascade's texel [m] (the normal offset)
 };
+// a NaN or an infinity, tested on the bits (the compiler drops isnan() under its default float rules)
+bool NotFinite(float3 v) { return any((asuint(v) & 0x7FFFFFFF) >= 0x7F800000); }
 Texture2D<float> tShadow : register(t7);
 SamplerComparisonState sShadow : register(s2);
 #include "fx_atmo_light.hlsli"     // the FX atmosphere's light (t8, b4): FxActive(), FxSunLight(wp), FxSkyLight(n, wp)
 
-// the Sun's visibility at wp: 3x3 PCF in the shadow map (1 outside it)
-float ShadowAt(float3 wp)
+// the Sun's visibility at wp (camera-centred) through the cascaded shadow maps (Client.cpp RenderShadows): the cascade by
+// the view distance, the point moved along the surface normal by a texel and a half of that cascade (normal offset: no
+// self-shadowing acne, no light leaking at contacts), 3x3 hardware-compared taps; across the last 10 % of a cascade it
+// blends into the next (no seam); beyond the last, lit
+float CascadeTap(int ci, float3 p)
 {
-    if (gShadow.x < 0.5) return 1;
-    float4 p = mul(float4(wp, 1), gLightVP);
-    float2 uv = p.xy * float2(0.5, -0.5) + 0.5;
-    if (any(uv < 0) || any(uv > 1) || p.z > 1) return 1;
+    float4 q = mul(float4(p, 1), gCasc[ci]);
+    float2 uv = q.xy * float2(0.5, -0.5) + 0.5;
+    if (any(uv < 0.001) || any(uv > 0.999) || q.z > 1) return 1;
+    const float t = gShadow.y;                       // 1 / SHADOW_N: a texel of a tile
+    float2 a = (float2(ci & 1, ci >> 1) + uv) * 0.5;  // in the atlas
     float s = 0;
     [unroll] for (int y = -1; y <= 1; y++) [unroll] for (int x = -1; x <= 1; x++)
-        s += tShadow.SampleCmpLevelZero(sShadow, uv + float2(x, y) * gShadow.y, p.z);
+        s += tShadow.SampleCmpLevelZero(sShadow, a + float2(x, y) * t * 0.5, q.z);
     return s / 9;
 }
+float ShadowAtN(float3 wp, float3 n)
+{
+    if (gShadow.x < 0.5) return 1;
+    float d = length(wp);
+    int ci = d < gCascFar.x ? 0 : d < gCascFar.y ? 1 : d < gCascFar.z ? 2 : d < gCascFar.w ? 3 : 4;
+    if (ci > 3) return 1;
+    float far = gCascFar[ci], near = ci > 0 ? gCascFar[ci - 1] : 0;
+    float s = CascadeTap(ci, wp + n * gCascTex[ci] * 1.5);
+    float bl = saturate((d - lerp(near, far, 0.9)) / max(far - lerp(near, far, 0.9), 1e-3));
+    if (bl > 0) s = lerp(s, ci < 3 ? CascadeTap(ci + 1, wp + n * gCascTex[min(ci + 1, 3)] * 1.5) : 1, bl);
+    return s;
+}
+float ShadowAt(float3 wp) { return ShadowAtN(wp, float3(0, 0, 0)); }
 
 float3 SkyColour(float3 dir)
 {

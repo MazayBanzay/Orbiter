@@ -153,25 +153,36 @@ PSOut PS(VSOut i)
     if (!MakeRay(i.ndc, r)) discard;
     float dz = tDepth.Load(int3(i.pos.xy, 0));
     float tS = dz > 0 ? r.rl * aTan.z / dz : 1e30;   // reverse Z, infinite far plane: depth = near / view z
-    // the liquid's surface (it writes no depth): an end of the ray like the scene's
-    if (gLiq2.w > 0.5) {
-        float3 cL = gLiq0.xyz; float bL = dot(r.d, cL), discL = bL * bL - (dot(cL, cL) - gLiq0.w * gLiq0.w);
-        if (discL > 0) { float tL = bL - sqrt(discL); if (tL > 0) tS = min(tS, tL); }
-    }
+    // (the liquid's surface writes its own depth since 2026-10-19 - Liquid.cpp: the sphere's intersection here, in floats
+    //  from the planet's centre (~2.5e6 m: squares ~6e12), lost its precision near the sea's horizon - a dark line)
     bool opaque = r.tO < min(r.t1, min(tS, r.tG));
     bool scene = !opaque && tS < min(r.t1, r.tG);
     bool ground = !opaque && !scene && r.tG < r.t1;
     const float tEnd = min(min(r.t1, r.tO), r.tG);
     float t1 = min(tEnd, tS);
+    if (aCam.z > 0.5 && aCam.z < 2.5) {         // test view (AtmoDbg): red the scene's distance (log, 1 m .. 100 km), green the ground
+        float3 c = 0;           // fill, blue the sky; 2: blue the volume's column end (0 = its ray ends on the ground)
+        if (scene) c.r = saturate(log10(max(tS, 1)) / 5);
+        if (ground) c.g = 1;
+        if (!scene && !ground && !opaque) c.b = aCam.z > 1.5 ? 0 : 1;
+        if (aCam.z > 1.5 && aVol.x > 0.5) c.b = dot(tEndT.SampleLevel(sClamp, i.pos.xy * aVol.yz, 0).rgb, 1.0 / 3);
+        if (!scene && !ground && !opaque && r.K < 0 && r.tc0 > 0) c = float3(1, 0, 1);   // sky rays that dip below R
+        o.add = float4(c * 0.03, 0); o.mul = float4(0, 0, 0, 1);
+        return o;
+    }
     if (t1 <= r.t0) discard;
 
-    if (aVol.x > 0.5) {         // inside the air: the column's march at this distance
+    if (aCam.z > 3.5 && scene) {   // AtmoDbg 4: the scene without the air; 5: the air's transmittance over the scene (grey)
+        if (aCam.z < 4.5) discard;
+    }
+    if (aVol.x > 0.5 && abs(aCam.z - 3) > 0.5) {         // inside the air (AtmoDbg 3: every pixel marches): the column's march at this distance
         float2 uv = i.pos.xy * aVol.yz;
         if (scene) {
             float u = pow(saturate((tS - r.t0) / max(tEnd - r.t0, 1e-3)), 1.0 / 3.0);
             float3 w = float3(uv, u * (aVol.w - 1) / aVol.w + 0.5 / aVol.w);
             o.add = float4(tApL.SampleLevel(sClamp, w, 0).rgb, 0);
             o.mul = float4(min(tApT.SampleLevel(sClamp, w, 0).rgb, 1), 1);
+            if (aCam.z > 4.5) { o.add = float4(dot(o.mul.rgb, 1.0 / 3) * 0.05 * float3(1, 1, 1), 0); o.mul = float4(0, 0, 0, 1); }
         } else {
             o.add = float4(tEndL.SampleLevel(sClamp, uv, 0).rgb, 0);
             o.mul = float4(min(tEndT.SampleLevel(sClamp, uv, 0).rgb, 1), 1);

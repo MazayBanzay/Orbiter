@@ -227,7 +227,7 @@ float4 Shade(VSOut i)
     if (gMicF.w > 0) Micro(i, alb, n);
     float sunVis = 1, skyOcc = 1;
     if (gGm.w > 0) GroundDetail(i, alb, n, sunVis, skyOcc);
-    float nl = saturate(dot(n, gSunDir.xyz)) * ShadowAt(i.wp) * sunVis;
+    float nl = saturate(dot(n, gSunDir.xyz)) * ShadowAtN(i.wp, normalize(i.n)) * sunVis;
     float3 col = alb * (nl * SunLight(i.wp) + SkyLight(n, i.wp) * skyOcc);
     if (gSky0.w < 0.5 && !FxActive()) col += alb * 0.05 * smoothstep(-0.05, 0.1, dot(n, gSunDir.xyz));   // seen from space: a soft terminator
     return float4(ApplyHaze(col, i.wp), 1);

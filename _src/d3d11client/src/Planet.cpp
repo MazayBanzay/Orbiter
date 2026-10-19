@@ -501,6 +501,12 @@ void Planet::Load(Tile* t)
     }
     // skirts hang below the edges (they hide the cracks against coarser neighbours)
     double drop = (t->maxlat - t->minlat) * R * 0.02 + 20.0;
+    // a tile without elevation data (none of its own, none above it) lies at the mean radius; where the data's coverage
+    // ends (Titan: loose tiles round the site only, the ground there 617 m down) it stands over its neighbours by hundreds
+    // of metres, and through the gap under its edge the sky showed: a slit round the horizon. Its skirts reach down to
+    // the lowest loaded ground (and the liquid's level): the coverage's edge is a wall of ground, not a hole
+    if (own && t->elev) { float lo = elevLow.load(); while (emin < lo && !elevLow.compare_exchange_weak(lo, (float)emin)) {} }
+    if (!t->elev) drop = std::max(drop, 30.0 - std::min({ (double)elevLow.load(), liq.has ? liq.level : 0.0, 0.0 }));
     int base = (G + 1) * (G + 1);
     auto skirt = [&](int dst, int i, int j) {
         TileVertex s = v[i * (G + 1) + j];
