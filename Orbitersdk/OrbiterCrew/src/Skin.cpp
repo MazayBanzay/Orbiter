@@ -1,8 +1,12 @@
 // OrbiterCrew - skinned crew member meshes (see Skin.h).
 #include "Skin.h"
+#include <gcCoreAPI.h>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <fstream>
+#include <cstdlib>
+#include <iterator>
 
 namespace ocrew
 {
@@ -114,47 +118,59 @@ namespace ocrew
 
 	bool Skin::Load(const std::string& skinFile)
 	{
-		std::ifstream f(ConfigPath(skinFile + ".skin"));
+		// the whole file read at once and parsed in place (2026-10-18): the stream's token-by-token >> took seconds on a
+		// several-MB skin and froze the start
+		const auto t0 = std::chrono::steady_clock::now();
+		std::ifstream f(ConfigPath(skinFile + ".skin"), std::ios::binary);
 		if (!f) { oapiWriteLogV("OrbiterCrew: cannot open Config\\%s.skin", skinFile.c_str()); return false; }
-		std::string tok;
-		while (f >> tok)
+		const std::string buf((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+		const char* p = buf.c_str(); const char* const end = p + buf.size();
+		auto skip = [&] { while (p < end && static_cast<unsigned char>(*p) <= ' ') ++p; };
+		auto word = [&] { skip(); const char* s = p; while (p < end && static_cast<unsigned char>(*p) > ' ') ++p; return std::string(s, p); };
+		auto inum = [&] { skip(); char* e = nullptr; const long v = std::strtol(p, &e, 10); p = e > p ? e : p + 1; return static_cast<int>(v); };
+		auto fnum = [&] { skip(); char* e = nullptr; const float v = std::strtof(p, &e); p = e > p ? e : p + 1; return v; };
+		while (true)
 		{
-			if (tok == "MESH") f >> meshName;
-			else if (tok == "LIDREST") f >> lidRest;
+			skip(); if (p >= end) break;
+			const std::string tok = word();
+			if (tok == "MESH") meshName = word();
+			else if (tok == "LIDREST") lidRest = fnum();
 			else if (tok == "BONES")
 			{
-				int n; f >> n; bones.resize(n);
+				const int n = inum(); bones.resize(n);
 				for (auto& b : bones)
 				{
-					f >> b.name >> b.parent;
-					for (float& v : b.R0) f >> v;
-					for (float& v : b.T0) f >> v;
+					b.name = word(); b.parent = inum();
+					for (float& v : b.R0) v = fnum();
+					for (float& v : b.T0) v = fnum();
 				}
 			}
 			else if (tok == "LABEL")
 			{
-				int gi; std::string name; f >> gi >> name;
+				const int gi = inum(); std::string name = word();
 				if (static_cast<int>(groups.size()) <= gi) groups.resize(gi + 1);
 				groups[gi].label = name;
 			}
 			else if (tok == "MORPH")
 			{
-				Morph m; int n; f >> m.name >> m.group >> n; m.idx.resize(n); m.d.resize(n * 6);
-				for (int k = 0; k < n; ++k) { f >> m.idx[k]; for (int c = 0; c < 6; ++c) f >> m.d[k * 6 + c]; }
+				Morph m; m.name = word(); m.group = inum(); const int n = inum(); m.idx.resize(n); m.d.resize(n * 6);
+				for (int k = 0; k < n; ++k) { m.idx[k] = inum(); for (int c = 0; c < 6; ++c) m.d[k * 6 + c] = fnum(); }
 				morphs.push_back(std::move(m));
 			}
 			else if (tok == "GROUP")
 			{
-				int gi, nv; f >> gi >> nv;
+				const int gi = inum(), nv = inum();
 				if (static_cast<int>(groups.size()) <= gi) groups.resize(gi + 1);
 				auto& g = groups[gi]; g.b.resize(nv * 4); g.w.resize(nv * 4);
 				for (int v = 0; v < nv; ++v)
 				{
-					for (int k = 0; k < 4; ++k) f >> g.b[v * 4 + k];
-					for (int k = 0; k < 4; ++k) f >> g.w[v * 4 + k];
+					for (int k = 0; k < 4; ++k) g.b[v * 4 + k] = static_cast<unsigned short>(inum());
+					for (int k = 0; k < 4; ++k) g.w[v * 4 + k] = fnum();
 				}
 			}
 		}
+		oapiWriteLogV("OrbiterCrew: skin %s read in %.0f ms (%.1f MB)", skinFile.c_str(),
+			std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(), buf.size() / 1048576.0);
 		if (bones.empty()) { oapiWriteLogV("OrbiterCrew: no skeleton in %s.skin", skinFile.c_str()); return false; }
 
 		for (int i = 0; i < static_cast<int>(bones.size()); ++i)
@@ -171,6 +187,35 @@ namespace ocrew
 				for (int k = 0; k < 4; ++k) if (g.b[v * 4 + k] == headBone || g.b[v * 4 + k] == neck) hw += g.w[v * 4 + k];
 				g.head[v] = hw > 0.5f;
 			}
+		}
+		{
+			std::vector<char> morphed(groups.size(), 0);
+			for (const auto& m : morphs) if (m.group >= 0 && m.group < static_cast<int>(groups.size())) morphed[m.group] = 1;
+			size_t nr = 0, vr = 0, vall = 0;
+			for (size_t gi = 0; gi < groups.size(); ++gi)
+			{
+				auto& g = groups[gi]; g.rigid = -1;
+				const size_t nv = g.w.size() / 4; vall += nv;
+				if (!nv || morphed[gi] || g.label == "Hair") continue;
+				int bone = -1; bool ok = true;
+				for (size_t v = 0; v < nv && ok; ++v)
+				{
+					if (g.head[v]) { ok = false; break; }
+					int bv = -1; float wsum = 0;
+					for (int k = 0; k < 4; ++k)
+					{
+						const float w = g.w[v * 4 + k];
+						if (w <= 1e-4f) continue;
+						if (bv >= 0 && g.b[v * 4 + k] != bv) { ok = false; break; }
+						bv = g.b[v * 4 + k]; wsum += w;
+					}
+					if (bv < 0 || wsum < 0.999f || wsum > 1.001f || (bone >= 0 && bv != bone)) ok = false;
+					bone = bv;
+				}
+				if (ok && bone >= 0 && bone < static_cast<int>(bones.size())) { g.rigid = bone; ++nr; vr += nv; }
+			}
+			oapiWriteLogV("OrbiterCrew: skin %s: %d of %d groups rigid (%d of %d vertices moved by a group matrix, not per vertex)",
+				skinFile.c_str(), static_cast<int>(nr), static_cast<int>(groups.size()), static_cast<int>(vr), static_cast<int>(vall));
 		}
 		return true;
 	}
@@ -211,8 +256,12 @@ namespace ocrew
 	void Skin::Attach(VESSEL* vessel, VISHANDLE vis, UINT meshIdx)
 	{
 		if (!Loaded()) return;
+		const auto t0 = std::chrono::steady_clock::now();
 		dev = vessel->GetDevMesh(vis, meshIdx);
+		ves = vessel->GetHandle(); this->meshIdx = meshIdx; forceNext = true;
+		for (auto& g : groups) g.setValid = false;
 		MESHHANDLE tmpl = oapiLoadMeshGlobal(meshName.c_str());
+		const double tLoad = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 		if (!dev || !tmpl) { dev = nullptr; oapiWriteLogV("OrbiterCrew: no device mesh for %s", meshName.c_str()); return; }
 		for (DWORD gi = 0; gi < groups.size(); ++gi)
 		{
@@ -231,6 +280,8 @@ namespace ocrew
 		SetupHair();
 		FindHands();
 		MeasureFingers();
+		oapiWriteLogV("OrbiterCrew: skin %s attached in %.0f ms (the mesh template %.0f ms)", meshName.c_str(),
+			std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(), tLoad);
 	}
 
 	// the hands at rest, for the arms that reach the ship's controls (SeatArms): the palm's normal is where the fingers
@@ -321,8 +372,12 @@ namespace ocrew
 		}
 	}
 
+	double Skin::perfUs = 0, Skin::perfEditUs = 0; int Skin::perfN = 0;
+
 	void Skin::Apply(const Pose& pose)
 	{
+		struct PerfScope { std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+			~PerfScope() { Skin::perfUs += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count(); ++Skin::perfN; } } perfScope;
 		last = pose;
 		const size_t nb = bones.size(), np = (std::min)(nb, pose.q.size() / 4);
 		S.assign(nb * 12, 0.0f);   // per bone: 3x3 rotation + translation of (pose * rest^-1)
@@ -355,10 +410,14 @@ namespace ocrew
 		}
 		if (!dev) return;
 		if (hair.driven && headBone >= 0) StepHair(&S[headBone * 12]);
+		// a figure deformed only every n-th call (SetEvery): the bone matrices above stay current for Point()
+		if (!forceNext && every > 1 && (++applyN % static_cast<unsigned>(every)) != 0) return;
+		forceNext = false;
 		for (DWORD gi = 0; gi < groups.size(); ++gi)
 		{
 			auto& g = groups[gi];
 			if (g.base.empty()) continue;
+			if (g.rigid >= 0 && RigidSet(gi, g)) continue;   // one matrix for the whole group
 			if (g.hidden)   // a part not worn (e.g. the jet pack): all its vertices collapse to one point, nothing is drawn
 			{
 				if (g.hiddenDone) continue;
@@ -417,8 +476,53 @@ namespace ocrew
 			}
 			GROUPEDITSPEC ges{};
 			ges.flags = GRPEDIT_VTXCRD | GRPEDIT_VTXNML; ges.Vtx = g.work.data(); ges.nVtx = static_cast<DWORD>(g.work.size());
+			const auto te = std::chrono::steady_clock::now();
 			oapiEditMeshGroup(dev, gi, &ges);
+			perfEditUs += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - te).count();
 		}
+	}
+
+	bool Skin::RigidSet(DWORD gi, Group& g)
+	{
+		static gcCore2* core = nullptr; static bool tried = false;
+		if (!tried) { tried = true; core = gcGetCoreInterface(); }
+		if (!core || !ves) { g.rigid = -1; return false; }
+		const float* s = &S[g.rigid * 12];
+		float m[12];   // R (3x3 row-major) then T: p' = R p + T
+		if (g.hidden)   // not worn: all of it into one point (the bone's joint), nothing drawn, no shadow
+		{
+			for (int i = 0; i < 9; ++i) m[i] = 0;
+			const float* T0 = bones[g.rigid].T0;
+			for (int r = 0; r < 3; ++r) m[9 + r] = s[r * 3] * T0[0] + s[r * 3 + 1] * T0[1] + s[r * 3 + 2] * T0[2] + s[9 + r];
+		}
+		else if (g.moved)   // a movable part: its rest-pose turn first, then the bone (p' = Rs (Rm p + Tm) + Ts)
+		{
+			const float* M = g.move;
+			for (int r = 0; r < 3; ++r)
+			{
+				for (int c = 0; c < 3; ++c) m[r * 3 + c] = s[r * 3] * M[c] + s[r * 3 + 1] * M[3 + c] + s[r * 3 + 2] * M[6 + c];
+				m[9 + r] = s[r * 3] * M[9] + s[r * 3 + 1] * M[10] + s[r * 3 + 2] * M[11] + s[9 + r];
+			}
+		}
+		else for (int i = 0; i < 12; ++i) m[i] = s[i];
+		if (g.setValid)
+		{
+			float d = 0; for (int i = 0; i < 12; ++i) d = (std::max)(d, std::abs(m[i] - g.setM[i]));
+			if (d < 1e-6f) return true;   // where it is already
+		}
+		// the client's row-vector convention: v' = v M, M = [R^T 0; T 1]
+		const oapi::FMATRIX4 M(m[0], m[3], m[6], 0, m[1], m[4], m[7], 0, m[2], m[5], m[8], 0, m[9], m[10], m[11], 1);
+		const auto te = std::chrono::steady_clock::now();
+		const int rc = core->SetMatrix(gcCore::MatrixId::GROUP, ves, meshIdx, gi, &M);
+		perfEditUs += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - te).count();
+		if (rc != 0)
+		{
+			oapiWriteLogV("OrbiterCrew: %s group %d (%s): no group matrix (code %d) - skinned per vertex", meshName.c_str(), static_cast<int>(gi), g.label.c_str(), rc);
+			g.rigid = -1; return false;
+		}
+		for (int i = 0; i < 12; ++i) g.setM[i] = m[i];
+		g.setValid = true;
+		return true;
 	}
 
 	void Skin::SetupHair()
@@ -498,17 +602,31 @@ namespace ocrew
 		for (auto& g : groups)
 		{
 			if (!HasPrefix(g.label, prefix)) continue;
-			found = true; g.moved = true;
+			found = true; g.moved = true; forceNext = true;
 			for (int i = 0; i < 9; ++i) g.move[i] = R[i];
 			for (int i = 0; i < 3; ++i) g.move[9 + i] = T[i];
 		}
 		return found;
 	}
 
+	bool Skin::SetHeat(int mtrl, double x)
+	{
+		if (!dev || mtrl < 0) return false;
+		const oapi::FVECTOR4 v(static_cast<float>(std::clamp(x, 0.0, 1.0)), 0.0f, 0.0f, 0.0f);
+		return oapiSetMaterialEx(dev, static_cast<DWORD>(mtrl), SpecialFX, &v) == 0;
+	}
+
+	int Skin::SetGlow(int mtrl, float r, float g, float b)
+	{
+		if (!dev || mtrl < 0) return -1;
+		const oapi::FVECTOR4 v(r, g, b, 1.0f);
+		return oapiSetMaterialEx(dev, static_cast<DWORD>(mtrl), Emission, &v);
+	}
+
 	bool Skin::SetPartHidden(const char* prefix, bool hide)
 	{
 		bool found = false;
-		for (auto& g : groups) if (HasPrefix(g.label, prefix)) { found = true; g.hidden = hide; }
+		for (auto& g : groups) if (HasPrefix(g.label, prefix)) { found = true; if (g.hidden != hide) forceNext = true; g.hidden = hide; }
 		return found;
 	}
 

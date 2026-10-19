@@ -80,7 +80,10 @@ namespace ocrew
 		const double tMove = in.grounded ? Smooth(0.03, 0.6 * walk.speed, speed) : (in.floating ? 0.0 : wMove);
 		// suit: blend by the clips' own speeds (unchanged). Coverall: walking (no Shift) is the walk clip at any speed up
 		// to the top walking speed; the run takes over only above it - never a half-walk, half-run mix while walking
-		const double tRunSuit = Smooth(1.3 * walk.speed, 0.9 * run.speed, speed);
+		// a heavy suit (in.heavy): its speeds are scaled down by its class, so the clips' speeds are too - the run still
+		// takes over, and the stride (below) is the same at the matching speed: a slower, heavier cadence, not short steps
+		const double hk = 1.0 - std::clamp(in.heavy, 0.0, 0.6);
+		const double tRunSuit = Smooth(1.3 * walk.speed * hk, 0.9 * run.speed * hk, speed);
 		const double top = in.walkTop > 0 ? in.walkTop : walk.speed;
 		const double tRunCov = Smooth(1.04 * top, 1.04 * top + 0.6, speed);
 		const double tRun = Lerp(tRunSuit, tRunCov, 1 - suitW);
@@ -88,7 +91,7 @@ namespace ocrew
 		wRun = Follow(wRun, tRun, 0.30, dt);
 
 		strideVar = Follow(strideVar, strideVarTarget, 0.4, dt);
-		const double vref = Lerp(walk.speed, run.speed, wRun);
+		const double vref = Lerp(walk.speed, run.speed, wRun) * hk;
 		// stride ~ sqrt(speed) around the clip's own speed, as people do: faster means longer steps and quicker cadence.
 		// Coverall: below the clip speed the step shortens too, instead of the same stride at a floating, slow cadence
 		// (the suit keeps its full stride and its own layer)
@@ -156,8 +159,27 @@ namespace ocrew
 			skin.Turn(pOut, bLowerBack, AX_UP, F(upr * std::atan2(sh.z, sh.x)));     // + turns the face to the right
 			skin.Reattach(pOut, pIdle, bSpine1, bNeck1, F(upr));
 		}
+		// a couch: the upright seated body leans back about the hips (its thighs go up and its shins forward with it), the
+		// thighs and the shins set to the couch's angles; then the seat's roll and pitch (a couch rolls in a drum that
+		// pitches: the innermost first). Before the hands: they reach the controls from the final pose
+		if (upr > 1e-3 && (in.seatLean != 0 || in.seatPitch != 0 || in.seatRoll != 0))
+		{
+			skin.Turn(pOut, bHips, AX_LAT, F(-upr * in.seatLean));                                       // + pitches the top forward
+			skin.Turn(pOut, bLUpLeg, AX_LAT, F(upr * in.seatThigh)); skin.Turn(pOut, bRUpLeg, AX_LAT, F(upr * in.seatThigh));
+			skin.Turn(pOut, bLLeg, AX_LAT, F(upr * in.seatShin)); skin.Turn(pOut, bRLeg, AX_LAT, F(upr * in.seatShin));
+			// the hip joints are 0.13 m in front of the back's surface: the body lifted off the couch along the back's normal,
+			// so the back lies on it and the head on the headrest (laid at the hips point, they sank into it - the user, 2026-10-09)
+			if (in.seatLean > 0)
+			{
+				const float up = F(upr * 0.13 * std::sin(in.seatLean)), fw = F(upr * 0.13 * std::cos(in.seatLean));
+				for (size_t i = 1; i < pOut.t.size(); i += 3) { pOut.t[i] += up; pOut.t[i + 1] += fw; }
+			}
+			skin.Turn(pOut, bHips, AX_FWD, F(upr * in.seatRoll));                                         // + rolls the top to the left
+			skin.Turn(pOut, bHips, AX_LAT, F(-upr * in.seatPitch));                                      // nose up: the top goes back
+		}
 
-		const double rest = (1 - wMove) * (1 - lyingW) * (1 - seatW);   // lying limp or seated: no weight shifts on the feet
+		wornW = Follow(wornW, in.worn ? 1.0 : 0.0, 0.2, dt);
+		const double rest = (1 - wMove) * (1 - lyingW) * (1 - seatW) * (1 - wornW);   // lying limp, seated, worn: no weight shifts on the feet
 
 		// ---- breathing: chest and shoulders; deeper with effort and fatigue ----
 		breathPhase += 6.2832 * in.breathRate / 60.0 * dt;
@@ -186,11 +208,37 @@ namespace ocrew
 		suitW = Follow(suitW, in.suited ? 1.0 : 0.0, 0.5, dt);
 		if (suitW > 1e-3)
 		{
-			skin.Turn(pOut, bLArm, AX_FWD, F(-0.13 * suitW)); skin.Turn(pOut, bRArm, AX_FWD, F(0.13 * suitW));     // left arm is on -x
-			skin.Turn(pOut, bLUpLeg, AX_FWD, F(-0.035 * suitW)); skin.Turn(pOut, bRUpLeg, AX_FWD, F(0.035 * suitW));
-			skin.Turn(pOut, bLFoot, AX_FWD, F(0.035 * suitW)); skin.Turn(pOut, bRFoot, AX_FWD, F(-0.035 * suitW));  // soles stay flat
+			// a heavy suit's walls hold her arms and legs a little apart inside it. Rev. S of the Pantsir (HEAVY_SUIT.md) is built
+			// round her own limbs (the sleeves on her arm bones, the legs on hers): the arms only clear the thigh plates (~11 deg
+			// out), each leg only clears the inner thigh plates (~3.5 deg) - wider legs made it walk bow-legged. The weight stays
+			// in the pace (the class's WalkFactor), the deeper knee at each footfall and the lower footfall
+			const double hv = std::clamp(in.heavy / 0.3, 0.0, 1.5);
+			// a suit whose mesh is built round a set stance gives it in its class (the Pantsir: the sleeves on arms 32 deg out at
+			// the shoulder, the legs ~6 deg - its plates meet without crossing only there); the clip's own hang is subtracted
+			const double armOut = in.armOutDeg >= 0 ? in.armOutDeg * RAD : 0.13 + 0.06 * hv;
+			const double legOut = in.legOutDeg >= 0 ? in.legOutDeg * RAD : 0.035 + 0.025 * hv;
+			skin.Turn(pOut, bLArm, AX_FWD, F(-armOut * suitW)); skin.Turn(pOut, bRArm, AX_FWD, F(armOut * suitW));     // left arm is on -x
+			// the forearm back towards the body (the sleeve's elbow bends the forearm in: Pantsir 32 deg upper arm, 12 forearm)
+			const double faIn = in.foreArmInDeg * RAD * suitW;
+			skin.Turn(pOut, bLForeArm, AX_FWD, F(faIn)); skin.Turn(pOut, bRForeArm, AX_FWD, F(-faIn));
+			skin.Turn(pOut, bLUpLeg, AX_FWD, F(-legOut * suitW)); skin.Turn(pOut, bRUpLeg, AX_FWD, F(legOut * suitW));
+			skin.Turn(pOut, bLFoot, AX_FWD, F(legOut * suitW)); skin.Turn(pOut, bRFoot, AX_FWD, F(-legOut * suitW));  // soles stay flat
 			if (in.grounded && std::floor(before * 2) != std::floor(phase * 2) && !settling)
-				crouchV += suitW * (0.25 + 0.12 * (std::min)(speed, 6.0));                                                 // the step lands: knees give
+				crouchV += suitW * (0.25 + 0.12 * (std::min)(speed, 6.0)) * (1 + 2 * (1 - hk));                            // the step lands: knees give (deeper in a heavy suit)
+			// a heavy suit carries its weight low: knees always a little bent (the hips lower), the trunk forward over them,
+			// and on the move the weight goes from one leg to the other - the trunk rolls over the stance leg at each step,
+			// the shoulders swing less (the drives hold the arms). Feet stay planted: only the hips drop, the trunk rolls
+			if (in.grounded && !in.lying && hv > 0.01)
+			{
+				const double w = suitW * (std::min)(hv, 1.0), kb = 0.11 * w;
+				skin.Turn(pOut, bLUpLeg, AX_LAT, F(-kb)); skin.Turn(pOut, bLLeg, AX_LAT, F(2 * kb)); skin.Turn(pOut, bLFoot, AX_LAT, F(-kb));
+				skin.Turn(pOut, bRUpLeg, AX_LAT, F(-kb)); skin.Turn(pOut, bRLeg, AX_LAT, F(2 * kb)); skin.Turn(pOut, bRFoot, AX_LAT, F(-kb));
+				skin.Shift(pOut, _V(0, -(THIGH + SHIN) * (1 - std::cos(kb)), 0));
+				skin.Turn(pOut, bLowerBack, AX_LAT, F(0.06 * w + 0.5 * kb));
+				const double roll = 0.045 * w * wMove * std::sin(2 * PI * phase);   // contacts at phase 0 and 0.5: over one leg, then the other
+				skin.Turn(pOut, bLowerBack, AX_FWD, F(roll));
+				skin.Turn(pOut, bNeck1, AX_FWD, F(-0.6 * roll));                     // the head stays level
+			}
 		}
 
 		// ---- coverall: the suit's motion (same clips), lighter - she carries no suit: arms half as far out,
@@ -327,6 +375,26 @@ namespace ocrew
 		Spring rs{ roll, rollV }; rs.Step(in.grounded ? rollTarget : 0.0, 7, dt); roll = rs.x; rollV = rs.v;
 		skin.Turn(pOut, bLowerBack, AX_LAT, F(pitch));
 		skin.TurnAll(pOut, SOLES, AX_FWD, F(roll));
+
+		// ---- a worn machine (the Atlant): her legs are in its leg shells, her knees on its knees - the thighs and the
+		// shins take its lines, the trunk leans and rolls with its pelvis about her hips; the feet stay level on its
+		// stirrups. All about the model axes: the hips' turn moves the legs too, so the thighs take it back
+		// (thigh -(th + p), knee +(th - sh), foot +sh: the sole's total pitch 0) ----
+		if (wornW > 1e-3)
+		{
+			const double w = wornW, p = in.wornPitch, r = in.wornRoll;
+			skin.Turn(pOut, bHips, AX_LAT, F(w * p));
+			skin.Turn(pOut, bHips, AX_FWD, F(w * r));
+			for (int sd = 0; sd < 2; ++sd)
+			{
+				const int up = sd ? bRUpLeg : bLUpLeg, lo = sd ? bRLeg : bLLeg, ft = sd ? bRFoot : bLFoot;
+				const double th = in.wornThigh[sd], sh = in.wornShin[sd];
+				skin.Turn(pOut, up, AX_FWD, F(-w * r));                 // the legs stay upright under the rolled pelvis
+				skin.Turn(pOut, up, AX_LAT, F(-w * (th + p)));
+				skin.Turn(pOut, lo, AX_LAT, F(w * (th - sh)));
+				skin.Turn(pOut, ft, AX_LAT, F(w * sh));
+			}
+		}
 
 		// ---- down on the ground (fallen, unconscious, dead): limp, not the standing pose laid flat ----
 		// arms fall out to the sides with soft elbows, legs a little apart with the knees eased and the feet rolled out,

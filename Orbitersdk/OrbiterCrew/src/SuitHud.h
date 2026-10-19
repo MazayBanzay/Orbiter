@@ -14,6 +14,7 @@
 namespace ocrew
 {
 	struct Suit;
+	class Frame;
 	// the suit computer's language (Config\OrbiterCrew\OrbiterCrew.cfg, LANGUAGE): a Russian text in the display's language
 	const char* SuitTr(const char* ru);
 	bool SuitEnglish();
@@ -28,6 +29,8 @@ namespace ocrew
 	struct HudData
 	{
 		Suit* life{};   // the suit itself (power, loads, equipment, servo, economy): read and switched by the display
+		Frame* frame{}; // the amplifier frame when worn: «СОЕДИНЕНИЯ» reads its cassette and switches its link to the suit
+		double liftKg{}, heldKg{};       // what she lifts now (the frame's, the suit's, her own) and the weight she holds
 		// person
 		std::string name, role;
 		int state{};                     // 0 ok, 1 unconscious, 2 dead
@@ -44,6 +47,7 @@ namespace ocrew
 		double n2{}, n2Dv{}; int rcs{};  // 0 safe on the ground, 1 ready, 2 no power
 		// helmet
 		bool shadeDown{}, lampsOn{}, boost{};
+		int lampMode{ 1 };               // the lamps' beam: 0 flood, 1 work, 2 spot
 		double shade{};                  // the sun shade's position, 0 up .. 1 down
 		bool firstPerson{};              // the view is from her eyes (the visor effects apply)
 		// jet pack
@@ -57,8 +61,14 @@ namespace ocrew
 		int jetMode{};                   // 0 manual, 1 height hold, 2 landing
 		bool jetAssist{ true };          // false: hands-on, no compensation
 		double jetHover{};               // s: how long the fuel left would hold her hovering here
+		// the pack's working state, always on the display: which pack (0 the light «Наплечный», 1 the impeller «Вихрь»), the
+		// turbine running, the rotors' speed, the rocket share (boost / pods), the turbine's power left by the heat, the
+		// share of the full thrust the fans can give in this air
+		int jetModel{}; bool jetTurbine{};
+		double jetFanLvl{}, jetRocket{}, jetHeat{ 1 }, jetFanAuth{}; bool jetForsazh{}; int jetChFault{};
 		// autopilot (Autopilot::Mode) and what it says; its commanded acceleration, horizon frame
 		int apMode{}; std::string apStatus; VECTOR3 apCmd{};
+		bool apGoal{}; double apGoalLat{}, apGoalLng{};   // ПЕРЕЛЁТ's set-down point (conformal pad and gates)
 		// inside the suit, and the wind (Orbiter's own: ground speed minus air speed, horizon frame x east z north)
 		double tInC{ 22 }; VECTOR3 wind{};
 		// radiation (from the radiation model when present: radValid): dose rate Sv/h, the dose taken Sv; the suit's field
@@ -116,12 +126,13 @@ namespace ocrew
 		// every step, after the head is aimed; with the display's data the whole HUD is drawn into the light layer
 		void HelmetFrame(VESSEL* v, VISHANDLE vis, const HelmetView& hv, const HudData* d = nullptr);
 		Suit* life{};                          // the suit of the last frame (the switches act on it)
+		Frame* frame{};                        // the frame of the last frame (the link switch acts on it)
 		UINT plateIdx{ static_cast<UINT>(-1) }; bool onVisor{}; VISHANDLE plateVis{};
 		VESSEL* plateOwner{};    // the body the plate was added to (a new body - standing up, coming out - adds its own)
 		// the visor's modulator: the photonic layer in the glass that dims the outside light locally (behind the panels, along
 		// the visor's edges, over the sun, the whole view when the shade is down) - drawn into its own texture each step
 		SURFHANDLE modSrf{}; int modW{}, modH{}; DEVMESHHANDLE modDm{}; bool modLogged{};
-		double modKey[7]{}; bool modKeyed{};   // what the modulator drew last: drawn again only when that changes
+		double modKey[8]{}; bool modKeyed{};   // what the modulator drew last: drawn again only when that changes
 		// the sun's spot: a small sprite of its own (group 0), set on the sun's line every frame with the plate - it never
 		// trails behind a turn of the head; its texture is drawn once (and again only when its density changes)
 		SURFHANDLE sunSrf{}; DEVMESHHANDLE sunDm{}; double sunAmp{ -1 };
@@ -144,6 +155,9 @@ namespace ocrew
 		// the time it takes, logged every 5 s (ms per redraw; redraws per second)
 		double perfDraw{}, perfShader{}, perfMod{}, perfT0{ -1 }; int perfN{}, perfModN{};
 		int horizonMode{};       // the pitch ladder: 0 auto (in flight and in space, not on foot), 1 always, 2 off
+		bool synth{ true };      // «СИНТЕТИКА»: the terrain's contour lines drawn on the ground by the AtmoFX client
+		int hudMarks[8]{};       // the conformal markers now set in the client (0 none, else the type + 1)
+		void ConformalHud(VESSEL* v, const HudData& d);
 		int hudScale{ 2 };
 		// at a machine's post: its state this frame; the page МАШИНА comes up while she is there, the one before comes back
 		MpuState mpu{}; bool onMpu{}; int rpageBeforeMpu{ -1 }; OBJHANDLE mpuPerson{};
@@ -158,11 +172,13 @@ namespace ocrew
 		void SavePrefs() const;
 		void SaveLanguage(bool english) const;   // LANGUAGE in Config\OrbiterCrew\OrbiterCrew.cfg (shared with the crew's menu)
 		bool lightLive{}, drawingLight{};   // the HUD goes through the light layer (the VC HUD texture stays empty)
-		void PlaceVisor(VESSEL* v);            // the plate over the camera's own frame (position, axes, aperture) as it is now
+		void PlaceVisor(VESSEL* v);
+		void HideVisor(VESSEL* v);
+		static constexpr double MOD_MARGIN = 1.3;   // the modulator's plate against the view (its picture in the inner part)            // the plate over the camera's own frame (position, axes, aperture) as it is now
 		void Click(double x, double y);        // a left click in the view, pixels of the HUD surface
 		bool mouseWasDown{};
 		// requests for the crew member: an autopilot button (AP_*) and the target it applies to; -1 = none
-		enum { AP_ALT = 100, AP_LAND = 101, AP_SHADE = 102, AP_LAMP = 103, AP_MANUAL = 104, AP_FIELD = 105, AP_STOP = 106, AP_FINE = 107 };
+		enum { AP_ALT = 100, AP_LAND = 101, AP_SHADE = 102, AP_LAMP = 103, AP_MANUAL = 104, AP_FIELD = 105, AP_STOP = 106, AP_FINE = 107, AP_LAMPMODE = 108, AP_HELMET = 109 };
 		int TakeRequest() { const int r = request; request = -1; return r; }
 		OBJHANDLE SelectedTarget() const { return sel; }
 		int AlarmLevel() const { int l = 0; for (const auto& a : alerts) if (a.active && !a.ack) l = (std::max)(l, a.level); return l; }   // for the alarm tone
@@ -171,7 +187,7 @@ namespace ocrew
 
 		enum Mode { EVA, FLIGHT, RDV, SYS };
 		enum LPage { L_LOCAL, L_ORBIT, L_POWER, L_OPTS, L_COUNT };
-		enum RPage { R_TARGETS, R_TRANSFER, R_LANDING, R_APPROACH, R_DOCK, R_BODY, R_FLIGHT, R_MACHINE };
+		enum RPage { R_TARGETS, R_TRANSFER, R_LANDING, R_APPROACH, R_DOCK, R_BODY, R_FLIGHT, R_MACHINE, R_LINKS };
 		enum { AP_CRUISE = 200 };   // + 0..3: height -10 -1 +1 +10 m; + 10..14: speed -5 -1 stop +1 +5 m/s
 
 		struct Target
@@ -195,6 +211,7 @@ namespace ocrew
 		// ---- ui state (saved) ----
 		int pal{ 1 }, mode{ FLIGHT }, lpage{ L_LOCAL }, rpage{ R_TARGETS }, zoom{ 1 };
 		bool autoMode{ true }, openL{ true }, openR{ true };
+		int pzTab{ 1 };   // the heavy suit's own panel «ПАНЦИРЬ»: 0 data, 1 radiator, 2 drives, 3 field, 4 damage
 		// ---- nav state ----
 		std::vector<Target> targets;
 		OBJHANDLE sel{};
@@ -215,7 +232,7 @@ namespace ocrew
 		double lastRR{ -1 };
 
 		// what can be clicked, from the last frame (pixels)
-		enum HitKind { H_LTAB, H_RTAB, H_LFOLD, H_RFOLD, H_TGT, H_AP, H_PAL, H_ZOOM, H_MODE, H_NVG, H_NEXT, H_BRIGHT, H_LOOK, H_ACK, H_SUIT, H_RES, H_HORIZON, H_MPU, H_LANG };
+		enum HitKind { H_LTAB, H_RTAB, H_LFOLD, H_RFOLD, H_TGT, H_AP, H_PAL, H_ZOOM, H_MODE, H_NVG, H_NEXT, H_BRIGHT, H_LOOK, H_ACK, H_SUIT, H_RES, H_HORIZON, H_MPU, H_LANG, H_LINK, H_PZTAB, H_SYNTH };
 		struct Hit { double x0, y0, x1, y1; int kind, arg; };
 		std::vector<Hit> hits;
 		int request{ -1 };
@@ -227,6 +244,7 @@ namespace ocrew
 		// caution & warning: what is wrong now (and was), acknowledged or not; newest first
 		struct Alert { std::string key, tile, text; int level{}; double t0{}; bool ack{}, active{}, seen{}; };
 		std::vector<Alert> alerts;
+		std::string alertSig;            // the raised ones as last logged
 		void Alerts(const HudData& d);
 		// radiation: dose rate (uSv/h) and the dose of this outing (uSv)
 		double doseRate{}, dose{}, lastDoseT{ -1 };
@@ -237,7 +255,7 @@ namespace ocrew
 		// the ranging relief for the IR view: the ground around her out to ~300 m (rings x sectors), from the elevation
 		// data - what an active ranger sees where there is no light at all (the night side of Io)
 		struct Relief { OBJHANDLE body{}; double lat{}, lng{}, t{ -1 }; int nr{}, na{}; std::vector<double> lat_, lng_, rad_; } relief;
-		bool nvg{}, gcTried{}, gcOk{}; SURFHANDLE nvSrf{}; void* nvCam{}; int nvW{}, nvH{}; std::string nvNote;
+		bool nvg{}, gcTried{}, gcOk{}; SURFHANDLE nvSrf{}; void* nvCam{}; int nvW{}, nvH{}, nvTick{}; std::string nvNote;
 		void NightVision(oapi::Sketchpad* skp, VESSEL* v, double W, double H, double SW, double SH);   // W x H the view, SW x SH the surface
 		HudText glyphs;
 		bool glyphsTried{};

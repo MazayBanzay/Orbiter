@@ -4,6 +4,8 @@
 #include <cmath>
 #include <fstream>
 #include <sstream>
+#include <set>
+#include <string>
 
 namespace ocrew
 {
@@ -18,11 +20,11 @@ namespace ocrew
 	{
 		auto no = [&](const char* r) { if (reason) *reason = r; return false; };
 		if (p < 6.3) return no(Tr("вакуум", "vacuum"));
-		if (ppO2 < 16) return no(Tr("мало кислорода", "too little oxygen"));
-		if (ppO2 > 60) return no(Tr("избыток кислорода", "too much oxygen"));
-		if (ppCO2 > 1.0) return no(Tr("много CO2", "too much CO2"));
-		if (T < 243) return no(Tr("слишком холодно", "too cold"));
-		if (T > 323) return no(Tr("слишком жарко", "too hot"));
+		if (ppO2 < 16) return no(Tr("pO2 низкое", "pO2 low"));
+		if (ppO2 > 60) return no(Tr("pO2 высокое", "pO2 high"));
+		if (ppCO2 > 1.0) return no(Tr("pCO2 высокое", "pCO2 high"));
+		if (T < 243) return no(Tr("температура низкая", "temperature low"));
+		if (T > 323) return no(Tr("температура высокая", "temperature high"));
 		return true;
 	}
 
@@ -51,6 +53,27 @@ namespace ocrew
 		char name[256]; oapiGetObjectName(ref, name, 256);
 		a.body = name;
 		a.p = v->GetAtmPressure() / 1000; a.T = v->GetAtmTemperature();
+		// the air's temperature as the gas law gives it from Orbiter's own pressure and density: a body without an
+		// atmosphere model of its own (Titan: the SATSAT module) gets Orbiter's default 288 K whatever its cfg says, while
+		// p and rho come from its AtmPressure0 / AtmDensity0 - p/(rho R) is the temperature those mean (Titan 146 kPa,
+		// 5.43 kg/m3, R 285.92: 94 K; the user 2026-10-18: the suit showed the air +15 C over -179 C ground). Bodies with
+		// a model (Earth, Mars, Venus) give a T that agrees with their p and rho: nothing changes there
+		if (const ATMCONST* ac = oapiGetPlanetAtmConstants(ref))
+		{
+			const double pPa = v->GetAtmPressure(), rho = v->GetAtmDensity();
+			if (pPa > 1 && rho > 1e-9 && ac->R > 1)
+			{
+				const double tGas = pPa / (rho * ac->R);
+				if (std::isfinite(tGas) && tGas > 2 && tGas < 3000 && std::abs(tGas - a.T) > 5)
+				{
+					static std::set<std::string> told;
+					if (told.insert(a.body).second)
+						oapiWriteLogV("OrbiterCrew: %s: Orbiter gives the air %.1f K, its p/(rho R) %.1f K (%.1f kPa, %.3f kg/m3, R %.2f) - the latter taken",
+							name, a.T, tGas, pPa / 1000, rho, ac->R);
+					a.T = tGas;
+				}
+			}
+		}
 		if (auto it = mix.find(a.body); it != mix.end()) { a.ppO2 = a.p * it->second.o2; a.ppCO2 = a.p * it->second.co2; }
 		return a;
 	}
@@ -67,24 +90,101 @@ namespace ocrew
 			optDark += 0.13 * sv * (1 - optDark) - optDark * dt / (6 * 3600) * (radRate < 1e-3 ? 1.0 : 0.2);
 			optDark = std::clamp(optDark, 0.0, 0.95);
 		}
+		// the helmet's front: equalise, then move (needs power; a dead suit leaves it where it is)
+		if (power && dt > 0)
+		{
+			if (helmetOpen && helmetPos < 1)
+			{
+				if (helmetEq < 2.0) helmetEq += dt;
+				else helmetPos = (std::min)(1.0, helmetPos + dt / 4.0);
+			}
+			else if (!helmetOpen && helmetPos > 0)
+			{
+				helmetPos = (std::max)(0.0, helmetPos - dt / 4.0);   // latched at 0: the cabin's air shut in, the regulator goes on
+			}
+			if (!helmetOpen) helmetEq = 0;
+		}
 		const double heatMax = econ ? 0.5 * heatMaxW : heatMaxW, coolMax = econ ? 0.5 * coolMaxW : coolMaxW, life = econ ? 0.75 * lifeW : lifeW;
 
 		// heat to move: her own heat, what leaks in (+) or out (-) through the insulation, and the equipment's heat the
 		// cooling loop takes (the loop barely moves it without power)
 		if (pOut > pMaxOutKPa) breached = true;   // the outside pressure crushes the shell: it does not come back
+		// heat and cold damage (both suits): the outer structure follows its balance over ~10 min - the leak from the inside
+		// against the radiation and the gas outside; above the onset the heat damage grows e-fold per 60 K (30 min to burn
+		// through at the onset, ~4 min at +120 K); the seals below their cold limit crack as the joints work
+		if (dt > 0)
+		{
+			const double out = -Leak(tEnv), eA = shellEps * 5.670e-8 * shellArea, hA = 6 * std::sqrt((std::max)(0.0, pOut) / 101.3) * shellArea;
+			double lo = 1, hi = 2000;   // eA (Ts^4 - Te^4) + hA (Ts - Te) = what leaks out (+) or in (-)
+			for (int i = 0; i < 40; ++i) { const double m = 0.5 * (lo + hi); (eA * (std::pow(m, 4) - std::pow(tEnv, 4)) + hA * (m - tEnv) > out ? hi : lo) = m; }
+			tShell += (0.5 * (lo + hi) - tShell) * (1 - std::exp(-dt / 600));
+			tSeal = tShell + (tIn - tShell) * sealDepth;
+			const double cold = coldK > 0 ? coldK : tMin - 40;
+			coldSeal = tSeal < cold + 20;
+			if (tSeal < cold)   // the joints flexing: standing still a quarter of the walking rate
+			{
+				const double flex = 0.25 + 0.75 * std::clamp((bodyHeatW - 80) / 250, 0.0, 1.0);
+				dmgSeal = (std::min)(1.0, dmgSeal + flex * std::exp((cold - tSeal) / 25) / 7200 * dt);
+			}
+			const double onset = damageK > 0 ? damageK : tMax + 70;
+			if (tShell > onset)
+			{
+				const double r = std::exp((tShell - onset) / 60) / 1800;
+				dmgIns = (std::min)(1.0, dmgIns + r * dt);
+				if (tShell > onset + 80) dmgSeal = (std::min)(1.0, dmgSeal + 0.7 * r * dt);
+			}
+			if (dmgIns > 0.4) fieldFail = true;                    // the coils' cryostat gone: they quench
+			if (dmgIns > 0.6) drivesFail = true;                   // the drives' windings and bearings
+			if (copHotK > 300 && tRad > copHotK + 250) coolFail = true;   // the radiator's loop past its fluid's limit: it boils dry
+			if (dmgSeal >= 1) breached = true;
+			if (dmgSeal > 0.2 && !breached) o2 = (std::max)(0.0, o2 - 0.0006 * dmgSeal * dt);   // the seals leak the tank down
+		}
 		const double qEq = (power ? gEq : 0.2 * gEq) * (tEq - tIn);
-		const double net = bodyHeatW + Conductance() * (tEnv - 295) + qEq;
+		// the legs' node: in the melt it heats fast; out, it cools towards the surroundings over a couple of minutes
+		double legLeak = 0;
+		if (dt > 0)
+		{
+			if (immersion > 0.005)
+			{
+				const double A = 2 * (0.03 + 0.35 * immersion);
+				tLeg += 400 * A * (meltK - tLeg) * dt / 5000;
+			}
+			else tLeg += (tEnv - tLeg) * (1 - std::exp(-dt / 120));
+			tLeg = (std::min)(tLeg, meltK);
+			if (tLeg > tEnv + 20)   // the legs hotter than the rest: their share of the shell leaks the difference inward
+			{
+				auto rad = [](double T) { const double Ti = 295; return (T * T + Ti * Ti) * (T + Ti) / (4.0 * 500.0 * 500.0 * 500.0); };
+				legLeak = conductance * 0.1 * ((std::max)(1.0, rad(tLeg)) * (tLeg - 295) - (std::max)(1.0, rad(tEnv)) * (tEnv - 295)) * (1 + 8 * (std::max)(dmgLeg, dmgLegOut));
+			}
+			{   // both suits: the boots' outer shell takes the contact up to its own limit (contactK: the heavy suit +1200 C on a
+				// brief contact); the seals under the insulation follow the outer shell with the class's soak time (sealDepth of
+				// the way out) and burn through past the materials' onset - a short step into the melt is survived, standing in it is not
+				const double onset = damageK > 0 ? damageK : tMax + 70, contact = contactK > 0 ? contactK : onset;
+				// where the seals settle: the insulation passes heat by radiation, so T^4 runs linear through it (hotter towards the
+				// hot side than a straight line: 1450 K outside, the seals 0.6 of the way in sit near 1150 K)
+				const double tIn0 = std::pow(std::pow(tLeg, 4) + (std::pow(tIn, 4) - std::pow(tLeg, 4)) * sealDepth, 0.25);
+				tLegIn += (tIn0 - tLegIn) * (1 - std::exp(-dt / (std::max)(1.0, legSoak)));
+				if (tLeg > contact) dmgLegOut = (std::min)(1.0, dmgLegOut + (std::min)(0.2, std::exp((tLeg - contact) / 60) / 1800) * dt);
+				if (tLegIn > onset) dmgLeg = (std::min)(1.0, dmgLeg + (std::min)(0.2, std::exp((tLegIn - onset) / 60) / 1800) * dt);
+				if (dmgLegOut >= 1) dmgLeg = (std::min)(1.0, dmgLeg + 0.05 * dt);   // the outer shell gone: the melt at the seals
+				if (dmgLeg >= 1) breached = true;   // the leg seals burnt through: the shell is open at the legs
+			}
+		}
+		const double net = bodyHeatW + Leak(tEnv) + legLeak + qEq;
 		double residual = net;
 		thermalW = driveW = heatW = 0;
 		double q = 0;   // heat the control would move, W (+ cooling, - heating)
-		if (power) { q = net > 0 ? (std::min)(net, coolMax) : -(std::min)(-net, heatMax); thermalW = q > 0 ? q / copCool : -q; }
+		const double cop = coolFail ? 0.0 : CopAt(tEnv);   // (class 2: falls with the heat outside, to nothing past the radiator's limit)
+		if (power) { q = net > 0 ? (cop > 0.02 ? (std::min)(net, coolMax) : 0.0) : -(std::min)(-net, heatMax); thermalW = q > 0 ? q / cop : -q; }
 		// load shedding, decided on what is asked (not on what is left - no flapping): the derating and the restart first
 		shedField = shedLamps = shedDrives = overload = false;
 		if (power && (tEq > EQ_LIMIT || restartT > 0)) { shedField = shedDrives = true; if (restartT > 0) shedLamps = true; }
+		if (fieldFail) shedField = true;
+		if (drivesFail) shedDrives = true;
 		if (power)
 		{
-			double ask = life + thermalW + (drivesOn && !shedDrives ? driveDemandW : 0) + (shedLamps ? 0 : lampW) + (fieldOn && !shedField ? fieldW : 0);
-			if (ask > supplyW && fieldOn && !shedField) { shedField = overload = true; ask -= fieldW; }
+			double ask = life + thermalW + (drivesOn && !shedDrives ? driveDemandW : 0) + (shedLamps ? 0 : lampW) + (fieldOn && !shedField ? FieldW() : 0);
+			if (ask > supplyW && fieldOn && !shedField) { shedField = overload = true; ask -= FieldW(); }
 			if (ask > supplyW && lampW > 0 && !shedLamps) { shedLamps = overload = true; ask -= lampW; }
 			if (ask > supplyW && drivesOn && !shedDrives) { shedDrives = overload = true; ask -= driveDemandW; }
 			if (ask > supplyW && thermalW > 0)   // what is left over the limit comes off the thermal control, not off the O2 and sorbent
@@ -96,30 +196,59 @@ namespace ocrew
 			residual = net - q; heatW = q;
 			if (drivesOn && !shedDrives) driveW = driveDemandW;
 		}
+		// the radiator and the compressor (for the sounds and the display): the radiator follows its work over a minute
+		{
+			const double load = q > 0 && coolMax > 0 ? q / coolMax : 0.0;
+			compStrain = q > 0 && coolMax > 0 ? thermalW / (coolMax / copCool) : 0.0;
+			const double target = q > 0 ? tEnv + 20 + 80 * load : tEnv;
+			if (dt > 0) tRad += (target - tRad) * (1 - std::exp(-dt / 60));
+		}
+		// the evaporator takes what the pump could not (heat coming in): water boiled off, no power needed beyond a valve
+		evapW = 0;
+		if (dt > 0 && residual > 5 && evap > 0 && evapMaxW > 0 && !breached)
+		{
+			evapW = (std::min)({ residual, evapMaxW, evap * 2.26e6 / dt });
+			evap = (std::max)(0.0, evap - evapW * dt / 2.26e6);
+			residual -= evapW; heatW += evapW;
+		}
 		// inside: held at the set point while the control keeps up; what it cannot move warms or cools the inside
+		// her body against the inside: the heat it gives the garment and the air at the set point is what the control
+		// takes away; the inside colder or hotter than that draws heat from her or gives it to her (~15 W/K, skin to the
+		// garment) - what reaches her is this, not the control's shortfall itself (the shortfall goes into the inside)
+		double toBody = gBody * (tIn - tSet);
 		if (std::abs(residual) < 5 && power) tIn += (tSet - tIn) * (1 - std::exp(-dt / 90));
-		else tIn += residual * dt / cIn;
-		tIn = std::clamp(tIn, 200.0, 400.0);
-		drawW = power ? life + thermalW + driveW + (shedLamps ? 0 : lampW) + (fieldOn && !shedField ? fieldW : 0) : 0;
+		else tIn += (residual - toBody) * dt / cIn;
+		tIn = std::clamp(tIn, 150.0, 400.0);
+		drawW = power ? life + thermalW + driveW + (shedLamps ? 0 : lampW) + (fieldOn && !shedField ? FieldW() : 0) : 0;
 		batt = (std::max)(0.0, batt - drawW * dt);
 		// the equipment: its losses (more near the supply's limit), the drives' heat, the outside through the shell; the
 		// cooling loop takes qEq. Too hot: it shuts down - as a flat battery
-		const double losses = power ? 0.10 * drawW + 0.25 * driveW + 0.5 * (std::max)(0.0, drawW - 0.8 * supplyW) : 0;
+		// (the field's coils add their own: fieldHeat of their draw - at full field in the heat this is what trips it first)
+		const double losses = power ? 0.10 * drawW + 0.25 * driveW + 0.5 * (std::max)(0.0, drawW - 0.8 * supplyW) + (fieldOn && !shedField ? fieldHeat * FieldW() : 0) : 0;
 		tEq += (losses - qEq + gEqOut * (tEnv - tEq)) * dt / cEq;
 		tEq = std::clamp(tEq, 150.0, 900.0);
 		if (power && tEq > EQ_TRIP) tripped = true;
+		if (tEq < EQ_COLD) coldTrip = true; else if (coldTrip && tEq > EQ_COLDBACK) coldTrip = false;
 
 		if (breached)   // the shell is open: the gas outside fills the helmet within seconds, the tank bleeds out
 		{
 			ppO2 += (ventPpO2 - ppO2) * (1 - std::exp(-dt / 3)); ppCO2 += (ventPpCO2 - ppCO2) * (1 - std::exp(-dt / 3));
 			o2 = (std::max)(0.0, o2 - 0.01 * dt);
-			return residual;
+			return toBody;
+		}
+		// the head out in the air (the front open): its heat goes with the outside - ~1.2 W/K of the face and the scalp
+		// against the air at 35 C skin; it reaches her body, the suit's control cannot take it
+		if (HelmetCracked()) toBody += 1.2 * helmetPos * (tEnv - 308);
+		if (HelmetCracked() || helmetEq > 0)   // the seal cracked: the outside's own air at her face, nothing of the suit's gas loop
+		{
+			ppO2 += (ventPpO2 - ppO2) * (1 - std::exp(-dt / 2)); ppCO2 += (ventPpCO2 - ppCO2) * (1 - std::exp(-dt / 2));
+			return toBody;
 		}
 		if (vent && power)   // breathable air around: the fan breathes it in, the tank and the sorbent rest
 		{
 			ppO2 += (ventPpO2 - ppO2) * (1 - std::exp(-dt / 10));
 			ppCO2 += (ventPpCO2 - ppCO2) * (1 - std::exp(-dt / 20));
-			return residual;
+			return toBody;
 		}
 		if (power && o2 > 0) { o2 = (std::max)(0.0, o2 - o2Use * dt); ppO2 = pressure; }
 		else ppO2 = (std::max)(0.0, ppO2 - o2Use * dt * KPaPerKg(0.032, volume));
@@ -130,7 +259,7 @@ namespace ocrew
 			ppCO2 += (0.05 - ppCO2) * (1 - std::exp(-dt / 20));   // the fans scrub the helmet down within a minute
 		}
 		else ppCO2 += co2Made * dt * KPaPerKg(0.044, volume);
-		return residual;
+		return toBody;
 	}
 
 	void Body::Step(double dt, double activityW, double ppO2, double ppCO2, double ambientP, bool suited, double heatW)
@@ -177,8 +306,11 @@ namespace ocrew
 
 		const double load = std::clamp((met - 90) / (AerobicMax() - 90), 0.0, 1.2);
 		const double stress = 1 - reserve;
-		pulse = 62 + 110 * load + 25 * Fatigue() + 30 * stress;
-		breath = 13 + 27 * load + 10 * Fatigue() + (ppCO2 > 1 ? 4 * (ppCO2 - 1) : 0);
+		// heat strain: ~10 beats/min and faster breathing per degree of core over 37.3 C (the heart pushes blood to the skin)
+		const double hot = (std::max)(0.0, c - 37.3);
+		pulse = 62 + 110 * load + 25 * Fatigue() + 30 * stress + 11 * hot;
+		breath = 13 + 27 * load + 10 * Fatigue() + (ppCO2 > 1 ? 4 * (ppCO2 - 1) : 0) + 2.5 * hot;
+		if (c > 39.0) wbal = (std::max)(0.0, wbal - (c - 39.0) * dt / 300);   // past 39 C: the strength goes
 		if (state == UNCONSCIOUS) breath = (std::min)(breath, 8.0);
 
 		if (exposed) warning = "VACUUM - NO SUIT";

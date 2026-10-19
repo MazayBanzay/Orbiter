@@ -1,0 +1,60 @@
+BEGIN_DESC
+Io, day side: the heavy suit "Pantsir" (class 2, Orbitersdk/OrbiterCrew/HEAVY_SUIT.md) against the plain "Karkas".
+Pantsir: 130 kg (the servos carry it), 4 g/cm2 shield + tantalum liner, a field of up to 2 kW in steps, 20 kWh battery, 2.5 kW supply.
+FIELD (top right of the suit computer) steps OFF -> 25 -> 50 -> 75 -> 100 %: watch the dose rate against the battery hours.
+Here (Io surface ~1.5 Sv/h): field off ~330 mSv/h; 25 % ~24 mSv/h (28 h); 50 % ~14 mSv/h (16 h); 100 % ~8 mSv/h (8-9 h).
+Above ~75 % little is gained: the bremsstrahlung (~3 mSv/h) only the mass and the liner stop.
+THERMAL CONTROL panel: "Heat limit" - the hottest surroundings the suit holds with the present loads (it floats: the field is shed
+first over the supply, the coils heat the equipment); the evaporator (6 kg of water, up to 1 kW) buys time past it.
+Kaira Rean stands beside her in the light "Karkas" with its 600 W field (~23 mSv/h) for comparison.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52001.7000
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Niza_Krit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Niza_Krit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 50.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Niza_Krit:OrbiterCrew\AstronavigatorPantsir
+  STATUS Landed Io
+  POS -45.0000000 0.0000000
+  HEADING 270.00
+  ALT 0.989
+  AFCMODE 7
+  NAME Niza Krit
+  ROLE Spe
+  SEX female
+  SUIT 1
+  SUIT_CLASS Pantsir
+  FIELD 1
+  FIELD_LEVEL 0.5
+END
+Kaira_Rean:OrbiterCrew\Astronavigator
+  STATUS Landed Io
+  POS -45.0000800 0.0000300
+  HEADING 300.00
+  ALT 0.930
+  AFCMODE 7
+  NAME Kaira Rean
+  ROLE Eng
+  SEX female
+  SUIT 1
+  FIELD 1
+END
+END_SHIPS

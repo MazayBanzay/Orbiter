@@ -1,0 +1,50 @@
+BEGIN_DESC
+OrbiterCrew. TEST: the jet pack M1 Ђ√ексаї on her back on the Moon, the right capsule's outboard chamber damaged (JET_DAMAGE 1). G unfolds; the left capsule is throttled to match - she flies level on half thrust; the helmet shows the fault, the damaged half of the nozzle stays dark.
+“≈—“: ранец ћ1 Ђ√ексаї надет, Ћуна; у правой капсулы повреждена внешн€€ камера (JET_DAMAGE 1). G Ч раскрыть; лева€ капсула дросселируетс€ до правой Ч полЄт ровный на половинной т€ге; на шлеме отказ, повреждЄнна€ половина сопла не светитс€.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52006.7547855787
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Moon
+  POS -33.4100000 41.1300000
+  HEADING 180.00
+  ALT 0.930
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+  NAME Niza Krit
+  ROLE astronavigator
+  SEX female
+  SUIT 1
+  SUIT_O2 1.0
+  SUIT_WATER 2.0
+  SUIT_SORBENT 0.0
+  SUIT_BATTERY 6.0
+  SUIT_N2 1.5
+  SUIT_SERVO 1
+  JETPACK 1
+  JET_FUEL 13
+  JET_MODEL 3
+  JET_DAMAGE 1
+END
+END_SHIPS

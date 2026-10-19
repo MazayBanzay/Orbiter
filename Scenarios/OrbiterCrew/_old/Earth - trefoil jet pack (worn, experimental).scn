@@ -1,0 +1,58 @@
+BEGIN_DESC
+OrbiterCrew. EXPERIMENTAL: the modular jet pack "“рилистник" on the KSC runway - ЂЌаплечныйї's core with an atmo kit: an arm a side with a gondola (the capsule pod under its hub, three ducted fans round it). Already on her back; the honeycomb "—оты" lies 3 m west for comparison.
+Ё —ѕ≈–»ћ≈Ќ“: модульный ранец Ђ“рилистникї на полосе KSC Ч сердечник ЂЌаплечногої с атмо-китом: по рычагу на борт с гондолой (капсула под ступицей, три канальных вентил€тора вокруг). –анец надет; Ђ—отыї лежат в 3 м к западу дл€ сравнени€.
+G starts the power unit and spreads the arms (5 s to idle; walk at idle), G again stops it; landing = back to idle. Space / Ctrl climb and sink, J height hold, C landing, W/S A/D Q/E steer, Shift full vector.
+G Ч запуск энергоблока, рычаги раскрываютс€ (5 с до холостых, на холостых можно ходить), G ещЄ раз Ч останов; посадка = переход на холостые. Space / Ctrl вверх и вниз, J удержание высоты, C посадка, W/S A/D Q/E управление, Shift полный вектор.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 58710.6
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Earth
+  POS -80.6945000 28.6150000
+  HEADING 0.00
+  ALT 0.930
+  AFCMODE 7
+  NAME Niza Krit
+  ROLE astronavigator
+  SEX female
+  SUIT 1
+  SUIT_O2 1.0
+  SUIT_WATER 2.0
+  SUIT_SORBENT 0.0
+  SUIT_BATTERY 6.0
+  SUIT_N2 1.5
+  SUIT_SERVO 1
+  JETPACK 1
+  JET_FUEL 32
+  JET_MODEL 2
+END
+JetPack2:OrbiterCrew\JetPackFan
+  STATUS Landed Earth
+  POS -80.6945307 28.6150000
+  HEADING 90.00
+  ALT 0.240
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+END
+END_SHIPS

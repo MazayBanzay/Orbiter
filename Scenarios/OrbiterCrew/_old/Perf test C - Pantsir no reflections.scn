@@ -1,0 +1,42 @@
+BEGIN_DESC
+Io: Niza Krit in the heavy suit "Pantsir" WITHOUT reflection maps (compare with B).
+Performance test: one crew member, fixed external camera. Run ~20 s, do not move, then close.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52001.7000
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Niza_Krit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Niza_Krit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 50.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Niza_Krit:OrbiterCrew\AstronavigatorPantsirNR
+  STATUS Landed Io
+  POS -45.0000000 0.0000000
+  HEADING 270.00
+  ALT 0.989
+  AFCMODE 7
+  NAME Niza Krit
+  ROLE Spe
+  SEX female
+  SUIT 1
+  SUIT_CLASS Pantsir
+  FIELD 1
+  FIELD_LEVEL 0.5
+END
+END_SHIPS

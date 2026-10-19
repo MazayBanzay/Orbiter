@@ -94,11 +94,11 @@ namespace ocrew
 		return e;
 	}
 
-	double Radiation::Dose(const RadEnv& e, double areal, double fieldFactor)
+	double Radiation::Dose(const RadEnv& e, double areal, double fieldFactor, double brems)
 	{
 		const double x = (std::max)(0.0, areal - 0.3);
 		const double f = (std::max)(1.0, fieldFactor);
-		const double el = e.electrons * (std::exp(-x / 0.35) / f + 0.01 * std::exp(-x / 15));   // bremsstrahlung is not deflected
+		const double el = e.electrons * (std::exp(-x / 0.35) / f + 0.01 * brems * std::exp(-x / 15));   // bremsstrahlung is not deflected
 		const double pr = e.protons * std::exp(-x / 12) / f;
 		const double gc = e.gcr * (std::max)(0.6, 1 - 0.03 * x) / (f > 1 ? 1.5 : 1.0);
 		return el + pr + gc;

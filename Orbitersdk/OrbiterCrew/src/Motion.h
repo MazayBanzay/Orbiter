@@ -32,6 +32,9 @@ namespace ocrew
 		double breathRate{ 13 };       // breaths per minute
 		double walkTop{};              // top walking speed (no Shift), m/s; coverall: pure walk clip up to it
 		bool suited{};                 // space suit: arms out, wider stance, heavy footfall
+		double heavy{};                // a heavy suit class (1 - its WalkFactor; Pantsir 0.3): the same stride at a slower
+		                               // cadence, the run blended in at its lower speeds, a deeper knee at each footfall
+		double armOutDeg{ -1 }, legOutDeg{ -1 }, foreArmInDeg{};   // the suit mesh's own rest stance (class ArmOutDeg / LegOutDeg); -1: by heavy
 		double bound{};                // 0..1 servo boost bounding
 		bool floating{};               // free fall in space (not a jump): neutral body posture
 		VECTOR3 thrustAcc{};           // acceleration from thrusters, vessel frame (m/s^2): the limbs lag behind it
@@ -42,6 +45,14 @@ namespace ocrew
 		double seatT{};                // 0..1 through sitting down / standing up
 		HandTarget hand[2];            // seated: where the left / right hand rests or what it holds (the ship's, model frame)
 		bool hold{};                   // standing, the hands on hand[] all the same (a thing in her hands)
+		// a couch (OcInteriorExt::SeatPose) and a moving seat (OcInterior::Zone), rad: the body leaned back about the hips
+		// (0 an upright chair), the thighs turned down and the shins turned down from where the lean puts them; the seat's
+		// pitch (+ nose up) and roll (+ the top to the left), all about the hips
+		double seatLean{}, seatThigh{}, seatShin{}, seatPitch{}, seatRoll{};
+		// a machine she wears (OcInteriorExt::Worn, the Atlant): its legs move hers - the thigh and the shin lines from
+		// straight down (rad, + forward; [0] left), the trunk with its pelvis (pitch + forward, roll + the top to the left)
+		bool worn{};
+		double wornThigh[2]{}, wornShin[2]{}, wornPitch{}, wornRoll{};
 		double heading{};              // rad, + to the right: the whole figure turned about the vertical through the origin
 		                               // (inside a ship the vessel keeps the ship's orientation; she turns in her pose)
 	};
@@ -85,6 +96,7 @@ namespace ocrew
 		double blinkIn{ 2.5 }, blinkT{ -1 };   // seconds to the next blink; time into the current one (-1: eyes open)
 		std::mt19937 rng;
 		double seatW{};                        // 0 .. 1: the seat clips over the standing ones
+		double wornW{};                        // 0 .. 1: her legs in the worn machine's
 		Pose pIdle, pWalk, pRun, pLoco, pOut, pSeat;
 		SeatArms arms;                         // seated: the hands on the ship's controls
 	};

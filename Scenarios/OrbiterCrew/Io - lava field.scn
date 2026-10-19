@@ -1,0 +1,51 @@
+BEGIN_DESC
+Io, early dawn (the Sun ~3 deg up in the east): the heavy suit "Pantsir" (class 2) on the frost plain ~5 m from the front of an active pahoehoe lobe, southern margin of the Prometheus flow field (1.785 S, 153.616 W).
+Ahead (NE): the lobe's breakout toes (minutes old, ~800-1100 C, glowing), behind them crust hours old: 1 m in ~780 C (4 mm crust), 5 m in ~490 C (4 cm), 15 m in ~380 C (9 cm), 100 m in ~260 C (a day old, 24 cm). Glowing cooling cracks on the crust, a lava tube with glowing skylights runs up NE to a small lava shield (~95 m) with a crusted lava lake in its summit pit.
+Temperatures: 1-D cooling model of 1450 K basalt in vacuum (Tantra_Design/io_lava, Config/Io/LavaField). Tiles: Textures/Io Surf/Mask/Elev (procedural relief on the real site; elevation every 2.7 m).
+Pantsir nominal is +430 C, the floating limit ~550-600 C: walk in and watch THERMAL CONTROL.
+The Prometheus plume (vent ~70 km W, drawn by the IoLava\LavaField object): a ballistic SO2 gas-and-frost umbrella 80 km high and 320 km across, optically thin - a faint bluish canopy overhead, brightest looking towards the Sun; at dawn it is sunlit before the ground. No smoke billows anywhere: in vacuum every grain flies a parabola. Jupiter is below the horizon on this side of Io.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52003.3209
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Niza_Krit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Niza_Krit
+  MODE Extern
+  POS 3.0 -160.0 20.0
+  TRACKMODE TargetRelative
+  FOV 50.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Niza_Krit:OrbiterCrew\AstronavigatorPantsir
+  STATUS Landed Io
+  POS -153.6163973 -1.7852770
+  HEADING 45.00
+  ALT 0.989
+  AFCMODE 7
+  NAME Niza Krit
+  ROLE Spe
+  SEX female
+  SUIT 1
+  SUIT_CLASS Pantsir
+  FIELD 1
+  FIELD_LEVEL 0.5
+END
+LavaField:IoLava\LavaField
+  STATUS Landed Io
+  POS -153.6146803 -1.7834350
+  HEADING 0.00
+  AFCMODE 7
+END
+END_SHIPS

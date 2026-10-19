@@ -1,0 +1,42 @@
+BEGIN_DESC
+OrbiterCrew. The NEW suit type on the KSC runway Suit_T10 WITH the set «Бор»: borazon plates (chest in two belts, abdomen lames, the pelvic lame under the hip ring, shoulders, arms, legs, the helmet's crown and brow). +10.5 kg, shield +0.9 g/cm2, conductance x0.9.
+Новый тип скафандра на полосе KSC Suit_T10 С набором «Бор»: боразоновые пластины (грудь двумя поясами, ламели живота, тазовая ламель под поясом, плечи, руки, ноги, макушка и надбровная дуга шлема). +10,5 кг, защита +0,9 г/см2, теплопроводность x0,9.
+Walk: W/S, A/D turn, Q/E side step, Shift servo run, Space jump, F use, K suit, L lamps, Shift+L beam, H helmet display.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 58710.6
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+NizaKrit:OrbiterCrew\AstronavigatorT2
+  STATUS Landed Earth
+  POS -80.6945000 28.6150000
+  HEADING 0.00
+  ALT 0.930
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+  NAME Niza Krit
+  ROLE astronavigator
+  SEX female
+  SUIT 1
+  SUIT_SET Boron
+END
+END_SHIPS

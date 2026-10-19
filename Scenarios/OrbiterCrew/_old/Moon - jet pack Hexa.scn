@@ -1,0 +1,56 @@
+BEGIN_DESC
+OrbiterCrew. the jet pack M1 «Гекса» lies two metres in front of her near Brighton Beach, full (13 kg). Walk up, press B; G unfolds it (the telescope and the screw hinges, 3 s).
+Ранец М1 «Гекса» лежит в двух метрах перед ней у Brighton Beach, полный (13 кг). Подойдите, нажмите B; G — раскрыть (телескоп и винтовые шарниры, 3 с).
+Jet pack: Space/Ctrl thrust up/down, Shift+Space full, W/S thrust vector, A/D turn, Q/E sideways; the nozzles glow with the thrust and cool down after it.
+Ранец: Пробел/Ctrl тяга больше/меньше, Shift+Пробел полная, W/S вектор, A/D поворот, Q/E вбок; сопла раскаляются от тяги и остывают после.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52006.7547855787
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Moon
+  POS -33.4100000 41.1300000
+  HEADING 180.00
+  ALT 0.930
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+  NAME Niza Krit
+  ROLE astronavigator
+  SEX female
+  SUIT 1
+  SUIT_O2 1.0
+  SUIT_WATER 2.0
+  SUIT_SORBENT 0.0
+  SUIT_BATTERY 6.0
+  SUIT_N2 1.5
+  SUIT_SERVO 1
+END
+JetPack1:OrbiterCrew\JetPackHexa
+  STATUS Landed Moon
+  POS -33.4100000 41.1300660
+  HEADING 0.00
+  ALT 0.260
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+END
+END_SHIPS

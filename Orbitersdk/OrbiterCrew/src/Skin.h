@@ -1,6 +1,9 @@
 // OrbiterCrew - skinned crew member meshes.
 // A skin is a skeleton plus four bone weights per vertex of an Orbiter mesh; the mesh is deformed on the CPU
-// and written into the device mesh every frame. Data files are produced by Tantra_Design/blender/export_skin.py:
+// and written into the device mesh every frame - but a rigid group (all its vertices on one bone, weight 1: the suit's
+// plates, the helmet, the back block) is not: its group matrix is set instead (gcCore SetMatrix, applied by the
+// client's shaders), nothing per vertex (2026-10-18: two suits' 107k vertices re-skinned and re-sent each frame took
+// ~40 % of the main thread). Data files are produced by Tantra_Design/blender/export_skin.py:
 //   Config\<skin>.skin      bones (rest model matrices, Orbiter frame) + weights per mesh vertex
 //   Config\<clips>\*.clip   model-space bone poses per frame; locomotion clips are in-place loops
 // Poses are model-space (quaternion w,x,y,z + joint position per bone), so pose edits act on whole subtrees.
@@ -39,12 +42,14 @@ namespace ocrew
 
 		void Attach(VESSEL* vessel, VISHANDLE vis, UINT meshIdx);
 		void Detach() { dev = nullptr; }
+		// deform only every n-th Apply (the pose is still taken each time): a figure not in focus, far or out of view
+		void SetEvery(int n) { every = n < 1 ? 1 : n; }
 		bool Attached() const { return dev != nullptr; }
 
 		// deform the device mesh into this pose
 		void Apply(const Pose& pose);
 		// first person: collapse the head (hair, face, lashes) so the camera does not see it from inside
-		void SetHideHead(bool hide) { hideHead = hide; }
+		void SetHideHead(bool hide) { if (hide != hideHead) forceNext = true; hideHead = hide; }
 		// hair on springs (the group labelled "Hair"): call every step with the body's acceleration in the model frame
 		// (not counting the animation, which the skin measures itself) and gravity; without calls the hair stays rigid
 		void SetHairDrive(double dt, const VECTOR3& bodyAccel, double g);
@@ -72,6 +77,14 @@ namespace ocrew
 		bool SetPartTransform(const char* prefix, const float R[9], const float T[3]);
 		// hide (collapse) every group whose label starts with 'prefix', e.g. "Jet" while the pack is not worn
 		bool SetPartHidden(const char* prefix, bool hide);
+		// incandescence of one material (0-based index in the mesh) through its _heat map: D3D9Client adds the glow
+		// saturate(heat.g - 1 + x^3) (dull red .. orange .. white); x 0..1. False if not attached
+		bool SetHeat(int mtrl, double x);
+		// the same glow through the emission map (_emis) and the material's emission colour - both D3D9Client shaders
+		// draw it (the _heat path only the Metalness one). Returns oapiSetMaterialEx's code (0 = done; -1 not attached)
+		int SetGlow(int mtrl, float r, float g, float b);
+		// timing of Apply over all skins (DebugLog perf line): microseconds and calls since the last read
+		static double perfUs, perfEditUs; static int perfN;
 
 		// fingers: a skin with phalanx bones (Tantra_Design/blender/finger_rig.py) has them after the bones the clips carry;
 		// those are posed from their parents, each turned by its curl about its own rest x axis (+ closes into the palm)
@@ -104,7 +117,10 @@ namespace ocrew
 			std::string label;                  // mesh group label (LABEL lines in the .skin)
 			bool moved{}; float move[12]{};     // rest-pose transform of a movable part: R (3x3) then T (last 3), p' = R p + T
 			bool hidden{}, hiddenDone{};        // part not shown (collapsed once)
+			int rigid{ -1 };                    // all its vertices on this bone, weight 1: moved by its group matrix
+			float setM[12]{}; bool setValid{};  // the group matrix last set (R 3x3 row-major, then T)
 		};
+		bool RigidSet(DWORD gi, Group& g);   // the rigid group's matrix from the pose; false: not done (the vertices then)
 
 		std::vector<BoneInfo> bones;
 		std::vector<Group> groups;
@@ -130,6 +146,8 @@ namespace ocrew
 		std::string meshName;
 		double lidRest{};
 		DEVMESHHANDLE dev{};
+		OBJHANDLE ves{}; UINT meshIdx{};      // the vessel and its mesh the device mesh is (the group matrices go there)
+		int every{ 1 }; unsigned applyN{}; bool forceNext{ true };
 		bool hideHead{};
 		int headBone{ -1 };
 		std::vector<float> S;   // last skin matrices, 12 floats per bone

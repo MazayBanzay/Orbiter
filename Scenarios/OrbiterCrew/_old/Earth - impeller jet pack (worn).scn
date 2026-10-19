@@ -1,0 +1,58 @@
+BEGIN_DESC
+OrbiterCrew. The honeycomb jet pack "—оты" on the KSC runway: the astronavigator in her suit, the honeycomb pack already on her back (G starts the power unit, then Space up), the light "Ќаплечный" 3 m west (it cannot lift her on Earth: T/W 0.77).
+—отовый ранец Ђ—отыї на полосе KSC: астронавигатор в скафандре, сотовый ранец уже надет (G Ч запуск энергоблока, затем Space вверх), лЄгкий ЂЌаплечныйї в 3 м к западу (на «емле он еЄ не поднимет).
+B next to a pack: put it on. Soty: G starts its power unit and spreads the wings (5 s to idle; walk at idle), G again stops it; landing = back to idle. Space / Ctrl climb and sink, J height hold, C landing, W/S A/D Q/E steer, Shift full vector.
+B у ранца: надеть. Ђ—отыї: G Ч запуск энергоблока, крыль€ раскрываютс€ (5 с до холостых, на холостых можно ходить), G ещЄ раз Ч останов; посадка = переход на холостые. Space / Ctrl вверх и вниз, J удержание высоты, C посадка, W/S A/D Q/E управление, Shift полный вектор.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 58710.6
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Earth
+  POS -80.6945000 28.6150000
+  HEADING 0.00
+  ALT 0.930
+  AFCMODE 7
+  NAME Niza Krit
+  ROLE astronavigator
+  SEX female
+  SUIT 1
+  SUIT_O2 1.0
+  SUIT_WATER 2.0
+  SUIT_SORBENT 0.0
+  SUIT_BATTERY 6.0
+  SUIT_N2 1.5
+  SUIT_SERVO 1
+  JETPACK 1
+  JET_FUEL 20
+  JET_MODEL 1
+END
+JetPack2:OrbiterCrew\JetPack
+  STATUS Landed Earth
+  POS -80.6945307 28.6150000
+  HEADING 90.00
+  ALT 0.240
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+END
+END_SHIPS

@@ -1,0 +1,81 @@
+BEGIN_DESC
+Io, evening (the Sun ~12 deg up in the west, sunset in ~1.4 h): the heavy suit "Pantsir" (class 2) on the frost plain ~5 m from the front of an active pahoehoe lobe, southern margin of the Prometheus flow field (1.785 S, 153.616 W), facing west.
+The Sun goes down behind the Prometheus plume (vent ~70 km W, lng 155.8 W): a ballistic SO2 gas-and-frost umbrella 80 km high, optically thin and scattering forward, so it is brightest now, looking into the Sun. At the vent the Sun stands ~2 deg higher than here.
+Behind her (NE): the glowing breakout toes, glassy fresh crust with glowing cooling cracks, a lava tube with skylights up to a small lava shield (~95 m) with a crusted lava lake. Temperatures: 1-D cooling model of 1450 K basalt in vacuum (Tantra_Design/io_lava, Config/Io/LavaField). Pantsir nominal is +430 C, the floating limit ~550-600 C.
+~9 m SSW, on the frost plain out of the lava's heat: the EMPU, headlights off, and Kaira Rean in the Suit_T10 (set Boron) with the Hexa flight module, facing the volcano. Jupiter is below the horizon on this side of Io (no eclipse).
+Morning version: "Io - Pantsir lava field".
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52004.1296
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Niza_Krit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Niza_Krit
+  MODE Extern
+  POS 3.0 -160.0 20.0
+  TRACKMODE TargetRelative
+  FOV 50.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Niza_Krit:OrbiterCrew\AstronavigatorPantsir
+  STATUS Landed Io
+  POS -153.6163973 -1.7852770
+  HEADING 275.00
+  ALT 0.989
+  AFCMODE 7
+  NAME Niza Krit
+  ROLE Spe
+  SEX female
+  SUIT 1
+  SUIT_CLASS Pantsir
+  FIELD 1
+  FIELD_LEVEL 0.5
+END
+LavaField:IoLava\LavaField
+  STATUS Landed Io
+  POS -153.6146803 -1.7834350
+  HEADING 0.00
+  AFCMODE 7
+END
+EMPU-1:EMPU
+  STATUS Landed Io
+  POS -153.6165390 -1.7855222
+  HEADING 32.56
+  ALT 0.880
+  CELLS 0.900 0.900 0.900 -1.000
+  PARK 1
+  HEADLIGHTS 0
+END
+KairaRean:OrbiterCrew\AstronavigatorT2
+  STATUS Landed Io
+  POS -153.6166492 -1.7855222
+  HEADING 31.93
+  ALT 0.930
+  AFCMODE 7
+  NAME Kaira Rean
+  ROLE astronavigator
+  SEX female
+  SUIT 1
+  SUIT_SET Boron
+  SUIT_O2 1.0
+  SUIT_WATER 2.0
+  SUIT_SORBENT 0.0
+  SUIT_BATTERY 6.0
+  SUIT_N2 1.5
+  SUIT_SERVO 1
+  JETPACK 1
+  JET_FUEL 13
+  JET_MODEL 3
+END
+END_SHIPS

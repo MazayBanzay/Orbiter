@@ -1,0 +1,42 @@
+BEGIN_DESC
+TEST: the same place and time WITHOUT the IoLava effects object. Walk up the lava lobe or the shield.
+If she no longer sinks into the relief, the IoLava object breaks the ground under her feet.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 52003.3209
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship Niza_Krit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET Niza_Krit
+  MODE Extern
+  POS 3.0 -160.0 20.0
+  TRACKMODE TargetRelative
+  FOV 50.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+Niza_Krit:OrbiterCrew\AstronavigatorPantsir
+  STATUS Landed Io
+  POS -153.6163973 -1.7852770
+  HEADING 45.00
+  ALT 0.989
+  AFCMODE 7
+  NAME Niza Krit
+  ROLE Spe
+  SEX female
+  SUIT 1
+  SUIT_CLASS Pantsir
+  FIELD 1
+  FIELD_LEVEL 0.5
+END
+END_SHIPS

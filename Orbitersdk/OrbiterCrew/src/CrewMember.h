@@ -15,6 +15,7 @@
 #pragma once
 #include "Autopilot.h"
 #include "JetPack.h"
+#include "Frame.h"
 #include "LifeSupport.h"
 #include "Person.h"
 #include "Radiation.h"
@@ -70,6 +71,7 @@ namespace ocrew
 		void clbkVisualDestroyed(VISHANDLE vis, int refcount) override;
 		int clbkConsumeDirectKey(char* kstate) override;
 		int clbkConsumeBufferedKey(DWORD key, bool down, char* kstate) override;
+		void clbkRCSMode(int mode) override;    // the N2 RCS: rotation / translation, said in her line
 		void clbkPreStep(double simt, double simdt, double mjd) override;
 		bool clbkDrawHUD(int mode, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp) override;
 		bool clbkLoadGenericCockpit() override;   // none: her eyes are the empty VC, in the suit and out of it
@@ -118,6 +120,8 @@ namespace ocrew
 		bool& suitOn; bool& suitFromScenario; double& suitMass;
 		Suit& suit;
 		JetPack& jet;
+		Frame& frame;                  // the amplifier frame (who.worn.frame)
+		bool frameFlatSaid{};
 		SuitHud& hud;
 		Autopilot& ap;
 		Air air;
@@ -152,11 +156,33 @@ namespace ocrew
 		void GroundContactCheck(double dt);
 		void Fall(double impact, const char* why, Body::Contact c = Body::ON_BACK);
 		double fallenT{};
+		// molten lava under a crust that cannot hold her (Config\<body>\LavaField, HEAVY_SUIT.md): how deep her feet are in
+		// the melt now and where they settle (buoyancy: lava ~2600 kg/m3 against ~1100 - she does not go under)
+		double sink{}, sinkTarget{}; int lastFootfalls{};
 		void TakePack(OBJHANDLE which = nullptr);   // which: that one (F at it), else the nearest within reach
 		void DropHeld(bool throwIt);                // X: what she holds put down before her; Shift+X: thrown
+		void DoffFrame();                           // X with empty hands: the amplifier frame off, standing before her
+		bool DonFrame(const OcHeld& h);             // F at a standing frame: on (its cassette in h.data)
 		void DropPack();
 		double ShellHalf() const { return jet.ShellHalfHeight(); }
 		void SetupRcs();
+		// Titan (2026-10-18, the Titan session's plan): cold dense air without oxygen - the soles puff up the damp organic
+		// sand (low, slow, settling in seconds); a valve's vent (water or gas) flash-freezes into ice crystals there and in
+		// vacuum. IceVent: model frame, kgps the vent's flow, for seconds (the suit's purge / emergency opening calls it)
+		bool titanEnv{};
+		PSTREAM_HANDLE stepDust{}, iceStream{};
+		double stepDustLvl{}, stepPuff{}, iceLvl{}, iceT{};
+		double stepKick{}; bool stepJetOn{};   // the footfall's puff through the AtmoFX client: the boot's down speed, the "jet" running
+		void IceVent(const VECTOR3& pos, const VECTOR3& dir, double kgps, double seconds);
+		void UpdateTitanFx(double dt);
+		// what the suit's N2 thrusters leave in the air, through the AtmoFX client's free particles (AtmoFXPart): nothing in
+		// vacuum (clear nitrogen), a CO2-frost puff on Mars, a faint water wisp on Earth; on Titan the jet is warmer than the
+		// air - no condensate, the air shimmers over the nozzle (AtmoFXHeat). The ice vent's crystals the same way. Orbiter's
+		// particle streams (their ground shadows the client draws as squares) only without the client
+		struct RcsFx { THRUSTER_HANDLE th; VECTOR3 pos, dir; bool heat; };
+		std::vector<RcsFx> rcsFx;
+		VECTOR3 icePos{}, iceDir{}; double iceKgps{};
+		void UpdateRcsFx();
 		void UpdateRcs(bool free);
 		double RcsDeltaV() const;
 		bool hudHidden{};   // we switched Orbiter's HUD off (no suit, generic cockpit)
@@ -174,6 +200,7 @@ namespace ocrew
 		// F - the action (user 2026-10-03: F everywhere): what is within reach - a ship's lift or airlock, later
 		// a seat, a terminal, a door inside
 		OBJHANDLE useShip{}; int useId{ -1 }, useKind{}; std::string useHint; double useScan{};
+		bool useFallback{};   // the exit offered from anywhere aboard (OcInteriorExt::ExitAnywhere): context actions go first
 		void FindUse(double dt);
 	public:
 		// inside a ship (user 2026-10-03: the person walks inside with her own body): the body hangs on the ship's
@@ -246,7 +273,9 @@ namespace ocrew
 		std::vector<std::vector<NTVERTEX>> heldVtx;   // the thing's mesh in its own frame, per group
 		double HeldWeight() const;                    // kg it weighs here (mass x g / 9.81)
 		double LiftLimit() const;                     // kg she can lift here and now (the suit's servos help)
-		double CarryLimit() const { return LiftLimit() / 3; }
+		double CarryLimit() const;                    // kg she carries: as much as she lifts (slower and dearer near it - HeldSlow, HoldW)
+		double HoldW() const;                         // W her body pays for holding what she holds (the drives take most of it)
+		double LocalG() const;                        // the gravity where she stands (a ship's interior gives its own), m/s^2
 		double HeldSlow() const;                      // her walking speed's factor under it (1: none)
 		void HeldMeshMake(); void HeldMeshDrop();
 		void HeldTargets(HandTarget hand[2]) const;   // her hands on it (model frame)
@@ -288,7 +317,9 @@ namespace ocrew
 	public:
 		bool fovSet{};                       // her default view angle given once
 		static constexpr double kViewAperture = 35.0 * PI / 180.0;   // half the vertical field: 70 deg
-		static constexpr double kMarkRange = 8.0;    // the Alt marks, m from her eyes (the user, 2026-10-08: «чуть дальше ... с 5 метров»)
+		double seatPoseLogT{};    // (DebugLog: the couch's angles every 2 s)
+		double seatViewPitch{};   // the seat's own pitch (a drum, OcInterior::Zone): her view pitches with it, rad
+		static constexpr double kMarkRange = 50.0;   // the Alt marks, m from her eyes
 		static constexpr double kCamMinDist = 2.0;   // the outside view's least distance, m (D3D9's near plane outside: 1 m)
 		// inside a cabin the view from behind her is a view from inside (the user's choice, 2026-10-07): D3D9 cuts away all
 		// within 1 m of an outside camera, the walls with it; from inside its near plane is 0.1 m. F1 there: her eyes <->
@@ -328,10 +359,22 @@ namespace ocrew
 
 		// helmet: sun shade (V) and lamps (L)
 		double shade{}, shadeTarget{};        // 0 raised over the crown .. 1 lowered over the visor
+		// a helmet whose upper part lifts on a hinge (the heavy suit's V1, HEAVY_SUIT.md): the mesh groups "HelmCap..." turned
+		// about HelmCapHinge (rest pose, model frame) round HelmCapAxis by HelmCapOpen degrees at full open (body cfg)
+		VECTOR3 capHinge{}, capAxis{ 1, 0, 0 };
+		double capOpen{};
+		// parts that can get red-hot (HEAVY_SUIT.md): their material indices in the suit mesh (body cfg HeatCeram, HeatSole,
+		// HeatRad; -1 none) - ceramic at the surroundings' temperature, the soles at the ground's, the fins at the radiator's
+		int heatMtrl[3]{ -1, -1, -1 };
 		bool lampOn{};
 		SpotLight* lamps[2]{};
 		BEACONLIGHTSPEC lampGlow[2]{};          // the lamp glass itself, glowing when the lamps are on
-		VECTOR3 lampGlowPos[2]{}, lampGlowCol{ 1.0, 0.96, 0.85 };
+		BEACONLIGHTSPEC lampHalo[2]{};          // its soft halo round it (seen from outside; larger the harder it drives)
+		VECTOR3 lampGlowPos[2]{}, lampGlowCol{ 1.0, 0.96, 0.85 }, lampHaloCol{ 0.55, 0.52, 0.45 };
+		// the beam (the user, 2026-10-16: the spot wider, the setting on the suit's display, it takes charge): LED behind a TIR
+		// lens, 40 mm aperture - 0 flood, 1 work, 2 spot (LAMP_MODE in the scenario; Shift+L or the display's button)
+		int lampMode{ 1 }, lampModeSet{ -1 };
+		void LampModeNext();
 		void UpdateHelmet(double dt, Figure& fig);
 	};
 }

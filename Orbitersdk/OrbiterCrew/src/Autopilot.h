@@ -23,6 +23,8 @@ namespace ocrew
 		OBJHANDLE Target() const { return tgt; }
 		const std::string& Status() const { return status; }
 		VECTOR3 CmdHorizon() const { return cmdH; }          // commanded acceleration, horizon frame (for the map)
+		// ПЕРЕЛЁТ's set-down point (the helmet HUD's pad and gates)
+		bool GoalLatLng(VESSEL* v, double& lat, double& lng) { double d, n, e; return mode == TRANSFER && tgt && Goal(v, lat, lng, d, n, e); }
 
 		// manual: the pilot is steering on the autopilot's axes this step (takes over)
 		void Step(VESSEL* v, JetPack& jet, double dt, double g, bool landed, bool canFly, bool manual, FlightInput& in);

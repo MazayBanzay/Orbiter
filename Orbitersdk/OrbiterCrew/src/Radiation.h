@@ -27,7 +27,7 @@ namespace ocrew
 	public:
 		RadEnv Sample(const VESSEL* v, double ambientKPa, double g) const;
 		// dose rate (Sv/h) behind 'areal' g/cm^2 of passive shielding and an active field that divides the
-		// charged components by 'fieldFactor' (1 = no field)
-		static double Dose(const RadEnv& e, double areal, double fieldFactor);
+		// charged components by 'fieldFactor' (1 = no field); 'brems': a high-Z liner's share of the bremsstrahlung left
+		static double Dose(const RadEnv& e, double areal, double fieldFactor, double brems = 1.0);
 	};
 }

@@ -82,6 +82,7 @@ typedef OBJHANDLE (*ocExitTo_t)(int id, const char* vesselName, const VESSELSTAT
 // saves the person's place in the interior frame and moves the attachment in the ship frame.
 // Inside, Orbiter's physics does not act on the person (no ship inertia; the ship gives the felt gravity). Whether one
 // may walk is the ship's: CanWalk = 0 (with a reason) holds her where she stands (takeoff, landing, anamezon drive...).
+struct OcWorn;    // below: the pose a worn machine gives her
 struct OcCabin;   // below: the air, the dose and the supplies of a cabin
 struct OcHand;    // below: where a seated person's hand rests or holds
 // Context actions (CONTEXT_ACTIONS.md, the user's decision 2026-10-07): the things on a ship or a machine a person can act
@@ -144,6 +145,22 @@ struct OcInteriorExt {
     // The ceiling over a point, interior frame: its height (y) there; a very large value: none. For the view from behind
     // the person inside (the camera keeps 0.15 m under it). NULL: the camera keeps within 0.2 m over her eyes
     double (*Ceiling)(void* ctx, const VECTOR3* at);
+    // The posture of seatId when it is not an upright chair (a couch): degrees from the seat's horizontal - the back (90 an
+    // upright chair, 40 a couch), the thighs up from the hips (0 level), the shins down from the knees (90 straight down).
+    // The hips stay where Seat() puts them; the whole body leans about them. A seat in a moving part (OcInterior::Zone
+    // at the hips: zone -> ship, the identity at rest) pitches and rolls the seated body with it, and her view pitches
+    // with it. 1 = given; NULL / 0: an upright chair
+    int (*SeatPose)(void* ctx, int seatId, double* backDeg, double* thighDeg, double* shinDeg);
+    // A vehicle one steps on and off (the MPU, a rover), as in the simulators: 1 = with nothing else in reach, F aboard
+    // takes the nearest OC_EXIT item (it is offered as the hint) wherever she stands; context actions and items in
+    // reach still come first. 2 = the same, but no hint is shown for it (a machine one wears: the exit is obvious).
+    // Non-zero also makes F1 aboard Orbiter's outside view (no cabin to look round from behind her).
+    // NULL / 0: an exit only within its own radius (a ship)
+    int (*ExitAnywhere)(void* ctx);
+    // A machine she wears (an exoskeleton: the Atlant), every frame while she is held at its post (ocCarry): its legs move
+    // hers, its pelvis her trunk, her hands on its grips (OcWorn below; size set by OrbiterCrew). 1 = given; NULL / 0: she
+    // stands as at any post
+    int (*Worn)(void* ctx, int personId, struct OcWorn* out);
 };
 // A hand target, interior frame. pos: the point where the middle of the palm touches the thing (on the top of a ball, on
 // the surface of a handle facing the palm); palm: unit normal out of the palm, into the thing; fwd: unit direction of
@@ -158,6 +175,15 @@ struct OcHand {
     double radius;              // OC_GRIP_HANDLE: the handle's radius (pos on its surface). OrbiterCrew turns the hand round
                                 // the handle's axis (palm x fwd) to her forearm; the thumb stays on the side the ship gave
     double elbowMinY;           // interior y the elbow keeps above (an armrest's top + the forearm); 0: no limit
+};
+// The pose a worn machine gives her body (interior frame, as OcHand). thigh, shin: [0] left, [1] right - the angle of the
+// hip->knee and the knee->ankle lines from straight down in the ship's frame, rad, + forward (her knees on its knees);
+// pitch: the trunk leaned with its pelvis, + forward; roll: + the top to the left. hand: the grips (on = 0: her own arms)
+struct OcWorn {
+    int size;
+    double thigh[2], shin[2];
+    double pitch, roll;
+    struct OcHand hand[2];
 };
 typedef void (*ocSetInteriorExt_t)(OBJHANDLE ship, const OcInteriorExt* ext);
 
@@ -203,7 +229,7 @@ typedef int (*ocSuitWorn_t)(int id);
 // back (ocTake). She holds it in both hands before her (a plug: in her right), it is seen there, its mass is on her body;
 // its weight here (mass x local g / 9.81) is against what she can lift (the suit's servos help) and slows her walk.
 // mesh: a mesh name (Meshes\..., its own frame: x right, y up, z forward, its middle at 0) or empty: a box of dims (m)
-enum OcHeldKind { OC_HELD_NONE = 0, OC_HELD_CELL = 1, OC_HELD_PLUG = 2, OC_HELD_OTHER = 3 };
+enum OcHeldKind { OC_HELD_NONE = 0, OC_HELD_CELL = 1, OC_HELD_PLUG = 2, OC_HELD_OTHER = 3, OC_HELD_FRAME = 4 };   // FRAME: the amplifier frame standing empty (F: put it on)
 // owner, data (added 2026-10-07; an older caller's smaller size is taken as it is): whose thing it is and what it is to
 // its owner (e.g. "TVehicles", "cell 3 charge 0.82") - kept with it when she puts it down (X: put down, Shift+X: throw)
 // and picks it up again (F); the owner reads them back through ocHeldOf

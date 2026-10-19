@@ -1,0 +1,16 @@
+; OrbiterCrew protection kit "Boron" (Bor): borazon plates over the new suit type (Tantra_Design/blender/boron_layout.py)
+; put on / taken off in a compartment or the MPU where a kit is (later); now the scenario's SUIT_KIT line puts it on.
+; The plates: solid binderless nanotwinned cBN (B-10 enriched) 4 mm on a hydrogenated BNNT backing, 6 mm BN aerogel under:
+; chest (two belts), 4 abdomen lames + the pelvic lame under the hip ring, the ring's insert, shoulders, forearms,
+; thighs, knees, shins, the helmet's crown and brow. ~0.39 m2 x ~25 kg/m2 + frames.
+Title = Boron
+Mass = 10.5          ; kg added to the suit
+; radiation: the plates (2.5 g/cm2) lie over the front of the organs that carry ~70 % of the tissue-weighted dose
+; (lungs, breasts, stomach, colon, marrow of the sternum and pelvis, liver, bladder, gonads), the back is the pack's;
+; from the front hemisphere only: ~0.35 x 2.5 = +0.9 g/cm2 as the suit's one effective areal density.
+; (Their boron-10 also takes the slowed neutrons; the game's dose model has no neutron term.)
+ShieldGcm2 = 0.9     ; g/cm2 added
+; heat: the plates stand off on 6 mm BN aerogel over ~20 % of the shell - that share's leak halved; the polished amber
+; absorbs more sunlight than the white layer, but the aerogel passes little of it inward
+ConductanceMul = 0.9
+AlphaAdd = 0.02      ; sunlight absorptance added to the white shell's 0.20

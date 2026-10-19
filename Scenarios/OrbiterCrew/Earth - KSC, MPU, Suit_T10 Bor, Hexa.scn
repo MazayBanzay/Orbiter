@@ -1,0 +1,58 @@
+BEGIN_DESC
+OrbiterCrew. Niza Krit in the suit Suit_T10 with the set «Бор» (borazon plates) and the flight module («Модуль полёта») on her back, next to the MPU: the KSC runway, breathable air: on Earth the module lifts her only on the «форсаж» (Shift). G unfolds the module, F at the MPU's door gets in.
+Низа Крит в скафандре Suit_T10 с набором «Бор» (боразоновые пластины) и ранцем М1 «Гекса» на спине, рядом с МПУ: полоса KSC, воздух пригоден для дыхания: на Земле «Гекса» поднимает только на форсаже (Shift). G - раскрыть ранец, F у двери МПУ - войти.
+Walk: W/S, A/D turn, Q/E side step, Shift servo run, Space jump, F use, K suit, L lamps, Shift+L beam, H helmet display.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 58710.6
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+MPU-1:MPU
+  STATUS Landed Earth
+  POS -80.6946240 28.6150000
+  HEADING 90.00
+  ALT 0.880
+  CELLS 0.900 0.900 0.900 -1.000
+  PARK 1
+END
+NizaKrit:OrbiterCrew\AstronavigatorT2
+  STATUS Landed Earth
+  POS -80.6946240 28.6150360
+  HEADING 180.00
+  ALT 0.930
+  AFCMODE 7
+  NAME Niza Krit
+  ROLE astronavigator
+  SEX female
+  SUIT 1
+  SUIT_SET Boron
+  SUIT_O2 1.0
+  SUIT_WATER 2.0
+  SUIT_SORBENT 0.0
+  SUIT_BATTERY 6.0
+  SUIT_N2 1.5
+  SUIT_SERVO 1
+  JETPACK 1
+  JET_FUEL 13
+  JET_MODEL 3
+END
+END_SHIPS

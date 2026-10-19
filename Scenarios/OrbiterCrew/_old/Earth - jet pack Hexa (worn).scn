@@ -1,0 +1,56 @@
+BEGIN_DESC
+OrbiterCrew. The jet pack M1 «Гекса» on her back at the KSC runway. On Earth it lifts her only on the «форсаж» (Shift: 2 x 500 N a capsule, ~30 s of fuel). G unfolds it.
+Ранец М1 «Гекса» надет, полоса KSC. На Земле поднимает только на форсаже (Shift: 2 x 500 Н на капсулу, ~30 с топлива). G — раскрыть.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 58710.6
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship NizaKrit
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET NizaKrit
+  MODE Extern
+  POS 4.0 -20.0 10.0
+  TRACKMODE TargetRelative
+  FOV 40.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+NizaKrit:OrbiterCrew\Astronavigator
+  STATUS Landed Earth
+  POS -80.6945000 28.6150000
+  HEADING 0.00
+  ALT 0.930
+  AFCMODE 7
+  NAME Niza Krit
+  ROLE astronavigator
+  SEX female
+  SUIT 1
+  SUIT_O2 1.0
+  SUIT_WATER 2.0
+  SUIT_SORBENT 0.0
+  SUIT_BATTERY 6.0
+  SUIT_N2 1.5
+  SUIT_SERVO 1
+  JETPACK 1
+  JET_FUEL 13
+  JET_MODEL 3
+END
+JetPack2:OrbiterCrew\JetPack
+  STATUS Landed Earth
+  POS -80.6945307 28.6150000
+  HEADING 90.00
+  ALT 0.240
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+END
+END_SHIPS
