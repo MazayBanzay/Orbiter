@@ -1,6 +1,7 @@
 # Test run of the D3D11 client: Orbiter's NG server, minimised (no focus change), no sound (XRSound left out for the run),
 # the client loaded from the command line. Afterwards Orbiter_NG.cfg and "(Current state).scn" are put back as they were.
-param([string]$Scenario = "(Current state)", [int]$Seconds = 45, [int]$AA = -1)
+# -Set "Key = value", ...: Client.cfg keys for this run only (e.g. -Set "MicroTextures = 0")
+param([string]$Scenario = "(Current state)", [int]$Seconds = 45, [int]$AA = -1, [string[]]$Set = @())
 $orb = "C:\Games\Orbiter-2024"
 # never alongside the user's own Orbiter: the restore at the end would overwrite their cfg and state
 if (Get-Process -Name Orbiter, Orbiter_ng -ErrorAction SilentlyContinue) { "Orbiter is running - test skipped"; exit 2 }
@@ -19,6 +20,11 @@ try {
         $lines = @(); if ($hadCcfg) { $lines = Get-Content -LiteralPath $ccfg | Where-Object { $_ -notmatch '^\s*AntiAliasing' } }
         ($lines + "AntiAliasing = $AA") | Set-Content -LiteralPath $ccfg -Encoding ascii
     }
+    foreach ($kv in $Set) {   # further keys for this run only
+        $k = ($kv -split '=')[0].Trim()
+        $lines = @(); if (Test-Path -LiteralPath $ccfg) { $lines = Get-Content -LiteralPath $ccfg | Where-Object { $_ -notmatch ('^\s*' + $k + '\s*=') } }
+        ($lines + $kv) | Set-Content -LiteralPath $ccfg -Encoding ascii
+    }
     (Get-Content -LiteralPath $cfg) | Where-Object { $_ -notmatch '^\s*XRSound\s*$' -and $_ -notmatch '^\s*D3D11Client\s*$' } | Set-Content -LiteralPath $cfg -Encoding ascii
     Copy-Item -LiteralPath (Join-Path $orb ("Scenarios\" + $Scenario + ".scn")) -Destination (Join-Path $orb "Scenarios\Tests\D3D11_test.scn") -Force
     $env:D3D11CLIENT_TEST = "1"     # the client keeps its window hidden and inactive
@@ -26,10 +32,17 @@ try {
         -ArgumentList "-p D3D11Client -s `"Tests\D3D11_test`" --maxsystime=$Seconds -x" -WindowStyle Minimized -PassThru
     if (-not $p.WaitForExit(($Seconds + 120) * 1000)) { Stop-Process -Id $p.Id -Force; "killed (hang)" }
     "exit code: " + $p.ExitCode
+    # this run's own copy of the log (other sessions' runs overwrite Orbiter.log) and of the shot
+    $logs = Join-Path $PSScriptRoot "logs"; New-Item -ItemType Directory -Force -Path $logs | Out-Null
+    $stamp = (Get-Date -Format "HHmmss") + "_" + ($Scenario -replace '[^A-Za-z0-9]', '_')
+    Copy-Item -LiteralPath (Join-Path $orb "Orbiter.log") -Destination (Join-Path $logs "$stamp.log") -Force
+    $shot = Join-Path $orb "Modules\D3D11Client\shots\start.png"
+    if (Test-Path $shot) { Copy-Item -LiteralPath $shot -Destination (Join-Path $logs "$stamp.png") -Force }
+    "log: " + (Join-Path $logs "$stamp.log")
 } finally {
     Remove-Item Env:D3D11CLIENT_TEST -ErrorAction SilentlyContinue
     Copy-Item -LiteralPath $csBak -Destination $cs -Force
     Copy-Item -LiteralPath $cfgBak -Destination $cfg -Force
     if ($hadCcfg) { Copy-Item -LiteralPath $ccfgBak -Destination $ccfg -Force }
-    elseif ($AA -ge 0) { Set-Content -LiteralPath $ccfg -Value "; D3D11Client settings (written by a test run; Launchpad > Video > Advanced rewrites it)" -Encoding ascii }
+    elseif ($AA -ge 0 -or $Set.Count) { Set-Content -LiteralPath $ccfg -Value "; D3D11Client settings (written by a test run; Launchpad > Video > Advanced rewrites it)" -Encoding ascii }
 }

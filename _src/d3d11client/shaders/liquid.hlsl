@@ -2,6 +2,7 @@
 // refraction with the apparent depth walked along the bent ray in the scene depth, Beer-Lambert per channel for the
 // column under each pixel, the liquid's own colour scattered in, the Sun's glint (GGX), the haze.
 #include "common.hlsli"
+#include "fx_atmo_sky.hlsli"     // the FX atmosphere's sky in the mirror
 
 cbuffer Liquid : register(b1)
 {
@@ -13,10 +14,29 @@ cbuffer Liquid : register(b1)
     float4 gColour;   // w: extinction [1/m]
     float4 gWts;      // w: refractive index
     float4 gLMisc;    // x: time
+    float4 gWA;       // the wave field (FxWaves): its frame's origin from the camera; w: cell size [m]
+    float4 gWE1, gWE2;   // its axes; w: the window's first cell (i0, j0)
+    float4 gWN;       // x: cells per side, y: 1 = on
 };
 Texture2D tScene : register(t0);
 Texture2D<float> tDepth : register(t1);
+Texture2D<float4> tWave : register(t2);   // slopes gx, gz, height, laplacian per cell (periodic)
+SamplerState sWrap : register(s0);
 SamplerState sClamp : register(s1);
+
+// the wave field at wp (weighted 0 outside its window, faded over the last 32 cells)
+float4 WaveAt(float3 wp, out float wgt)
+{
+    wgt = 0;
+    if (gWN.y < 0.5) return 0;
+    float3 d = wp - gWA.xyz;
+    float2 q = float2(dot(d, gWE1.xyz), dot(d, gWE2.xyz)) / gWA.w;    // in cells
+    float2 rel = q - float2(gWE1.w, gWE2.w);
+    float e = min(min(rel.x, gWN.x - rel.x), min(rel.y, gWN.x - rel.y));
+    wgt = saturate(e / 32);
+    if (wgt <= 0) return 0;
+    return tWave.SampleLevel(sWrap, q / gWN.x, 0) * wgt;
+}
 
 struct VSOut { float4 pos : SV_Position; float3 wp : WPOS; float3 n : NORMAL; };
 
@@ -31,8 +51,10 @@ VSOut VS(float2 g : POSITION)
     float3 d = gLUp.xyz * (-2 * sin(phi * 0.5) * sin(phi * 0.5)) + t * sin(phi);   // unit direction minus up
     float3 wp = gBase.xyz + gBase.w * d;
     VSOut o;
-    o.wp = wp;
     o.n = normalize(gLUp.xyz * cos(phi) + t * sin(phi));
+    float ww; float4 wv = WaveAt(wp, ww);
+    wp += o.n * wv.z;                                  // the wave's height
+    o.wp = wp;
     o.pos = mul(float4(wp, 1), gVP);
     return o;
 }
@@ -55,13 +77,16 @@ float4 PS(VSOut i) : SV_Target
     float tm = gLMisc.x;
     float2 sl = float2(sin(q.x * 2.1 + tm * 1.3) + sin(q.y * 3.7 - tm * 0.9), sin(q.y * 2.7 + tm * 1.1) + sin(q.x * 4.3 + tm * 0.7)) * 0.004;
     float3 n = normalize(up + t1 * sl.x + t2 * sl.y);
+    float ww; float4 wv = WaveAt(i.wp, ww);            // the wave field's slopes inside its window
+    if (ww > 0) n = normalize(lerp(n, normalize(up - wv.x * gWE1.xyz - wv.y * gWE2.xyz), ww));
 
     float dist = length(i.wp);
     float3 V = -i.wp / dist;
     float nv = saturate(dot(n, V)) + 1e-4;
     float F0 = pow((gWts.w - 1) / (gWts.w + 1), 2);
     float F = F0 + (1 - F0) * pow(1 - nv, 5);
-    float3 refl = SkyColour(reflect(-V, n));
+    float3 R = reflect(-V, n);
+    float3 refl = FxActive() ? FxSkyRadiance(i.wp, R, 12) : SkyColour(R);
 
     // refraction: walk the bent ray to the bed seen in the depth buffer
     float tw, th2; tScene.GetDimensions(tw, th2);

@@ -23,6 +23,7 @@ void ClientCfg::Load()
         else if (k == "Haze") haze = (float)v;
         else if (k == "Liquids") liquids = v != 0;
         else if (k == "Shadows") shadows = v != 0;
+        else if (k == "MicroTextures") microTex = v != 0;
         else if (k == "Exposure") exposure = (float)v;
         else if (k == "StatsLog") statsLog = v != 0;
         else if (k == "AntiAliasing") aa = std::clamp((int)v, 0, 5);
@@ -43,6 +44,7 @@ void ClientCfg::Save() const
     fprintf(f, "Exposure = %.2f     ; overall brightness\n", exposure);
     fprintf(f, "Liquids = %d        ; liquid surfaces (Titan's seas)\n", liquids ? 1 : 0);
     fprintf(f, "Shadows = %d        ; shadows (when available)\n", shadows ? 1 : 0);
+    fprintf(f, "MicroTextures = %d  ; close-up surface detail from Config\\MicroTex.cfg\n", microTex ? 1 : 0);
     fprintf(f, "StatsLog = %d       ; fps and GPU times in Orbiter.log every 10 s\n", statsLog ? 1 : 0);
     fprintf(f, "AntiAliasing = %d   ; 0 off, 1 MSAA 2x, 2 MSAA 4x, 3 MSAA 8x, 4 FXAA, 5 TAA (applies at the next start)\n", aa);
     fprintf(f, "RenderScale = %.2f  ; TAA: scene resolution 0.5..1 of the window, upsampled by TAAU (next start)\n", renderScale);
@@ -189,6 +191,7 @@ static INT_PTR CALLBACK AdvProc(HWND h, UINT m, WPARAM w, LPARAM l)
         sprintf_s(s, "%.2f", g_cfg.exposure); SetDlgItemTextA(h, IDC_ADV_EXPOSURE, s);
         CheckDlgButton(h, IDC_ADV_LIQUIDS, g_cfg.liquids ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(h, IDC_ADV_SHADOWS, g_cfg.shadows ? BST_CHECKED : BST_UNCHECKED);
+        CheckDlgButton(h, IDC_ADV_MICRO, g_cfg.microTex ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(h, IDC_ADV_STATS, g_cfg.statsLog ? BST_CHECKED : BST_UNCHECKED);
         for (const char* t : { "Off", "MSAA 2x", "MSAA 4x", "MSAA 8x", "FXAA (post)", "TAA (temporal)" }) SendDlgItemMessageA(h, IDC_ADV_AA, CB_ADDSTRING, 0, (LPARAM)t);
         SendDlgItemMessageA(h, IDC_ADV_AA, CB_SETCURSEL, g_cfg.aa, 0);
@@ -202,6 +205,7 @@ static INT_PTR CALLBACK AdvProc(HWND h, UINT m, WPARAM w, LPARAM l)
             GetDlgItemTextA(h, IDC_ADV_EXPOSURE, s, 32); g_cfg.exposure = std::clamp((float)atof(s), 0.2f, 5.0f);
             g_cfg.liquids = IsDlgButtonChecked(h, IDC_ADV_LIQUIDS) == BST_CHECKED;
             g_cfg.shadows = IsDlgButtonChecked(h, IDC_ADV_SHADOWS) == BST_CHECKED;
+            g_cfg.microTex = IsDlgButtonChecked(h, IDC_ADV_MICRO) == BST_CHECKED;
             g_cfg.statsLog = IsDlgButtonChecked(h, IDC_ADV_STATS) == BST_CHECKED;
             g_cfg.aa = std::clamp((int)SendDlgItemMessageA(h, IDC_ADV_AA, CB_GETCURSEL, 0, 0), 0, 5);
             GetDlgItemTextA(h, IDC_ADV_SCALE, s, 32); g_cfg.renderScale = std::clamp((float)atof(s) / 100.0f, 0.5f, 1.0f);

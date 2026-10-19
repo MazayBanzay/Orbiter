@@ -55,7 +55,11 @@ static int __cdecl SketchpadVersion(oapi::Sketchpad*) { return 1; }
 static SURFHANDLE __cdecl LoadSurface(const char* fname, DWORD flags) { return g_client ? g_client->clbkLoadTexture(fname, flags) : nullptr; }
 static gcCore::PickGround __cdecl ScanScreen(int, int) { gcCore::PickGround p; memset(&p, 0, sizeof p); return p; }
 static gcCore::PickGround __cdecl GetTileData(HPLANETMGR, double, double, int) { gcCore::PickGround p; memset(&p, 0, sizeof p); return p; }
-static void* __cdecl Null() { return nullptr; }   // methods not provided yet: return 0 / NULL (all of them __cdecl, so harmless)
+static void* __cdecl Null() { return nullptr; }
+}  // namespace gc
+gcIPInterface* __cdecl IpiCreate(const char* file, const char* PSEntry, const char* VSEntry, const char* ppf);   // Ipi.cpp
+void __cdecl IpiRelease(gcIPInterface* p);
+namespace gc {   // methods not provided yet: return 0 / NULL (all of them __cdecl, so harmless)
 
 }  // namespace gc
 
@@ -70,6 +74,8 @@ DLLCLBK void gcBindCoreMethod(void** ppFnc, const char* name)
         { "LoadSurface", (void*)gc::LoadSurface },
         { "ScanScreen", (void*)gc::ScanScreen },
         { "GetTileData", (void*)gc::GetTileData },
+        { "CreateIPInterface", (void*)IpiCreate },
+        { "ReleaseIPInterface", (void*)IpiRelease },
     };
     auto it = table.find(name);
     *ppFnc = it != table.end() ? it->second : (void*)gc::Null;

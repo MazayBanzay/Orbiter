@@ -46,6 +46,7 @@ struct ClientCfg
     int aa = 2;          // 0 off, 1-3 MSAA 2/4/8x, 4 FXAA, 5 TAA
     float renderScale = 1;   // TAA only: the scene's resolution / the window's (TAAU upsamples)
     bool liquids = true, shadows = true, statsLog = true;
+    bool microTex = false;   // planet micro textures (Config\MicroTex.cfg): close-up surface detail
     void Load();
     void Save() const;
 };
@@ -69,8 +70,8 @@ extern ExtState g_ext;
 
 // the FX atmosphere (FxAtmo.cpp): when active it draws the sky and the aerial perspective itself (after the opaque
 // scene, from the depth) and gives the light at each point through fx_atmo_light.hlsli (t8, b4, set in FxFrame)
-struct FxAtmoState { bool active = false; float starVis = 1; };
-extern FxAtmoState g_fxAtmo;      // defined and filled in FxAtmo.cpp (FxFrame)
+struct FxAtmoState { bool active = false; float starVis = 1; float exposure = 1; };   // exposure: the eye's adaptation (FxFrame)
+inline FxAtmoState g_fxAtmo;      // one instance for the whole DLL (C++17 inline variable); filled in FxAtmo.cpp (FxFrame)
 
 // ---------------------------------------------------------------- surfaces and textures (SURFHANDLE)
 struct Surf
@@ -85,6 +86,10 @@ struct Surf
     DWORD ckey = 0; bool hasKey = false;   // colour key for blits
     // the CPU side for 2D drawing (Draw.cpp)
     HBITMAP dib = nullptr; HDC dc = nullptr; void* bits = nullptr; HGDIOBJ oldBmp = nullptr;
+    // gamma-space views for the modules' image processing (Ipi.cpp); gpuNewer: the GPU wrote it after the DIB
+    ComPtr<ID3D11ShaderResourceView> srvLin; ComPtr<ID3D11RenderTargetView> rtvLin;
+    bool gpuNewer = false;
+    bool cpuPref = false;      // GDI asked for it (a DC): its Sketchpads stay on the DIB
     void FreeDIB();
     ~Surf() { FreeDIB(); }
 };
@@ -92,6 +97,21 @@ struct Surf
 ComPtr<ID3D11ShaderResourceView> LoadDDSFile(ID3D11Device* dev, ID3D11DeviceContext* ctx, const char* path, bool srgb, UINT* w = nullptr, UINT* h = nullptr);
 ComPtr<ID3D11ShaderResourceView> LoadDDSMemory(ID3D11Device* dev, const BYTE* data, size_t size, bool srgb, UINT* w = nullptr, UINT* h = nullptr);
 bool ReadFileBytes(const char* path, std::vector<BYTE>& out);
+
+// the pipeline as it was, put back when this goes out of scope (2D work runs in the middle of the frame; GpuPad.cpp)
+struct PipeState
+{
+    ID3D11DeviceContext* c;
+    ID3D11RenderTargetView* rtv[4] = {}; ID3D11DepthStencilView* dsv = nullptr;
+    UINT nvp = 0; D3D11_VIEWPORT vp[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
+    ID3D11VertexShader* vs = nullptr; ID3D11PixelShader* ps = nullptr; ID3D11InputLayout* il = nullptr;
+    D3D11_PRIMITIVE_TOPOLOGY top = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
+    ID3D11Buffer* vb = nullptr; UINT vbStride = 0, vbOff = 0; ID3D11Buffer* ib = nullptr; DXGI_FORMAT ibFmt = DXGI_FORMAT_UNKNOWN; UINT ibOff = 0;
+    ID3D11BlendState* bs = nullptr; float bf[4] = {}; UINT mask = 0; ID3D11DepthStencilState* dss = nullptr; UINT ref = 0; ID3D11RasterizerState* rs = nullptr;
+    ID3D11ShaderResourceView* srv[16] = {}; ID3D11SamplerState* smp[16] = {}; ID3D11Buffer* pcb[6] = {}; ID3D11Buffer* vcb[6] = {};
+    explicit PipeState(ID3D11DeviceContext* ctx);
+    ~PipeState();
+};
 
 // ---------------------------------------------------------------- particle streams (Particles.cpp)
 struct PVert { XMFLOAT3 p; XMFLOAT2 uv; XMFLOAT4 c; };
@@ -181,6 +201,7 @@ struct Tile
     ComPtr<ID3D11ShaderResourceView> tex;   // own surface texture (null: use an ancestor's)
     std::shared_ptr<std::vector<float>> elev;   // 259x259 [m], own or interpolated from the parent
     bool ownElev = false;
+    int elevLvl = 0;                    // level of the elevation data this tile's mesh comes from (own or an ancestor's)
     ComPtr<ID3D11Buffer> vb;
     VECTOR3 centre;                     // planet frame [m], origin of the vertices
     double radius = 0;                  // bounding sphere
@@ -211,6 +232,13 @@ public:
     Planet(OBJHANDLE h);
     AtmCfg atm;
     LiquidCfg liq;
+    // micro textures (Config\MicroTex.cfg, D3D9Client's format): three detail levels tiled in metres over the ground;
+    // loaded on their own thread the first time the camera comes near the surface
+    struct MicroLevel { std::string file; double reso = 0; double L = 0; ComPtr<ID3D11ShaderResourceView> srv; XMFLOAT4 mean = { 0.5f, 0.5f, 0.5f, 0.5f }; };
+    MicroLevel mic[3];
+    bool micCfg = false, micNormals = false;
+    std::atomic<int> micState{ 0 };    // 0 not loaded, 1 loading, 2 ready, 3 failed
+    std::thread micThread;
     ~Planet();
     void Render(ID3D11DeviceContext* ctx, const VECTOR3& camPos, const MATRIX3& camRot, const XMMATRIX& proj, float tanHalfY, int screenH);
     OBJHANDLE hObj;
@@ -238,6 +266,10 @@ private:
     // per frame
     MATRIX3 Rp; VECTOR3 Pp; VECTOR3 camGlobal; MATRIX3 camR; XMMATRIX P;
     DWORD frame = 0;
+    double micFade[3] = {};             // micro levels' fade-out distances this frame [m] (0: off)
+    void MicroLoad();
+    double MeshElev(double lng, double lat, int* lvl, double* fine, bool* own);   // test runs: our surface there
+    void ElevCheck(const VECTOR3& camPos);
 };
 
 // ---------------------------------------------------------------- the client
@@ -321,6 +353,16 @@ public:
     void CallRenderProcs();
     void LoadShim();
     ID3D11DeviceContext* Ctx() { return ctx.Get(); }
+    bool RunIPI(class ImageProcessing* p, DWORD blendop);    // Ipi.cpp
+    bool SurfGpuViews(Surf* s);
+    bool SurfToGpu(Surf* s);            // its DIB drawing sent up first; the gamma-space views made
+    void SurfGpuWritten(Surf* s) { dirty.erase(s); }
+    const std::string& ShaderDir() const { return shaderDir; }
+    bool ShadersOk() const { return shadersOk; }
+    bool IsScreen(const Surf* s) const { return s == screen; }
+    bool GpuSurface(Surf* s) const;
+    void DumpSurface(Surf* s, const char* path);    // diagnostics (Ipi.cpp)
+    bool DiagFrame() const { return diagFrames != 0; }
     // shared render state for the scene parts
     ComPtr<ID3D11VertexShader> vsMesh, vsPlanet;
     ComPtr<ID3D11PixelShader> psMesh, psPlanet;
@@ -458,6 +500,7 @@ private:
     std::string loadGroup;
     bool testMode = false;
     bool shadersOk = false;
+    int diagFrames = 0;      // test runs: log the cockpit view's covering groups for a few frames
 
     bool CreateDevice();
     bool CreateShaders();

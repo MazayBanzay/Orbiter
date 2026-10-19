@@ -219,6 +219,11 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
     XMMATRIX VP = shadowPass ? *lightVP : V * proj;
     bool internal = oapiCameraInternal() && oapiGetFocusObject() == vv->hObj;
     bool vc = oapiCockpitMode() == COCKPIT_VIRTUAL;
+    if (internal && !shadowPass && diagFrames > 0) {
+        VECTOR3 cpos; oapiCameraGlobalPos(&cpos);
+        VECTOR3 lc = tmul(R, cpos - gp);
+        LOGC("diag cockpit: vessel %s camera at %.3f %.3f %.3f (vessel frame), cockpit mode %d, meshes %zu", vv->v->GetName(), lc.x, lc.y, lc.z, oapiCockpitMode(), vv->mesh.size());
+    }
 
     ctx->IASetInputLayout(ilMesh.Get());
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -267,10 +272,32 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
             c.emis = { mt.emissive.r, mt.emissive.g, mt.emissive.b, mt.emissive.a };
             Surf* s = g.tex && g.tex < m->tex.size() ? (Surf*)m->tex[g.tex] : nullptr;
             ID3D11ShaderResourceView* srv = s && s->srv ? s->srv.Get() : whiteTex.Get();
-            c.flags = { s && s->srv ? 1.0f : 0.0f, (float)internal, 0, 0 };
+            // the mesh file's FLAG (UsrFlag) 4: not lit. In the cockpit such a group (a display, the helmet's light layer) is
+            // seen by the eye as it is: the eye's adaptation to a dim scene (the FX exposure) must not brighten it
+            const bool unlit = (g.usrFlag & 4) != 0;
+            const float adapt = g_fxAtmo.active && g_fxAtmo.exposure > 0 ? g_fxAtmo.exposure : 1.0f;
+            c.flags = { s && s->srv ? 1.0f : 0.0f, (float)internal, unlit ? 1.0f : 0.0f, internal ? 1.0f / adapt : 1.0f };
             D3D11_MAPPED_SUBRESOURCE ms;
             ctx->Map(cbObj.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms); memcpy(ms.pData, &c, sizeof c); ctx->Unmap(cbObj.Get(), 0);
             ctx->PSSetShaderResources(0, 1, &srv);
+            if (!shadowPass) ctx->OMSetBlendState((g.usrFlag & 8) ? bsAdd.Get() : bsAlpha.Get(), nullptr, ~0u);   // FLAG 8: added
+            // diagnostics (test runs): in the cockpit view, the groups whose box covers much of the screen near the camera
+            if (internal && !shadowPass && diagFrames > 0 && !g.vtx.empty()) {
+                XMMATRIX WVPd = W * VP;
+                float mnx = 1e9f, mny = 1e9f, mxx = -1e9f, mxy = -1e9f, mnz = 1e9f; int behind = 0;
+                for (size_t k = 0; k < g.vtx.size(); k += std::max<size_t>(1, g.vtx.size() / 64)) {
+                    XMVECTOR c = XMVector4Transform(XMVectorSet(g.vtx[k].x, g.vtx[k].y, g.vtx[k].z, 1), WVPd);
+                    float w = XMVectorGetW(c);
+                    if (w <= 0) { behind++; continue; }
+                    float x = XMVectorGetX(c) / w, y = XMVectorGetY(c) / w;
+                    mnx = std::min(mnx, x); mxx = std::max(mxx, x); mny = std::min(mny, y); mxy = std::max(mxy, y); mnz = std::min(mnz, w);
+                }
+                float cov = std::max(0.0f, std::min(mxx, 1.0f) - std::max(mnx, -1.0f)) * std::max(0.0f, std::min(mxy, 1.0f) - std::max(mny, -1.0f)) / 4.0f;
+                if (cov > 0.3f || behind > 0)
+                    LOGC("diag cockpit: vessel %s mesh %u grp %u nv %u cover %.2f nearest %.3f m behind %d mtrl %d diff %.2f %.2f %.2f a %.2f tex %s usr 0x%x",
+                         vv->v->GetName(), mi, (UINT)(&g - &m->grp[0]), g.nv, cov, mnz, behind, (int)g.mtrl, mt.diffuse.r, mt.diffuse.g, mt.diffuse.b, mt.diffuse.a,
+                         s ? s->name.c_str() : "-", g.usrFlag);
+            }
             ctx->DrawIndexed(g.ni, g.ib0, g.vb0);
         }
     }

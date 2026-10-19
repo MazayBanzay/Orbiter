@@ -9,3 +9,4 @@
 #define IDC_ADV_STATS     307
 #define IDC_ADV_AA        308
 #define IDC_ADV_SCALE     309
+#define IDC_ADV_MICRO     310

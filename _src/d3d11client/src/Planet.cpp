@@ -125,11 +125,118 @@ Planet::Planet(OBJHANDLE h) : hObj(h)
     };
     readLiquid("Config\\GC\\" + name + ".atm.cfg", "AtmoFX_Liquid");
     readLiquid("Config\\D3D11Client\\" + name + ".cfg", "Liquid");
-    LOGC("planet %s: R %.0f km, max level %d, archives: surf %s, elev %s%s%s", name.c_str(), R / 1000, maxLevel,
-         surfTree ? "yes" : "no", elevTree ? "yes" : "no", atm.has ? ", atmosphere" : "", liq.has ? ", liquid" : "");
+    // micro textures: this body's block in Config\MicroTex.cfg (BODY, NORMALS, LEVEL 0..2 <texture> <pixels per metre>)
+    if (FILE* f = fopen("Config\\MicroTex.cfg", "r")) {
+        char line[512];
+        bool mine = false; int found = 0;
+        while (fgets(line, sizeof line, f)) {
+            char* cm = strstr(line, "//"); if (cm) *cm = 0;
+            char kw[32], a[256]; int i; double r;
+            if (sscanf(line, " %31s", kw) != 1) continue;
+            if (!strcmp(kw, "BODY")) { mine = sscanf(line, " %*s %255s", a) == 1 && !_stricmp(a, name.c_str()); continue; }
+            if (!mine) continue;
+            if (!strcmp(kw, "NORMALS") && sscanf(line, " %*s %d", &i) == 1) micNormals = i != 0;
+            else if (!strcmp(kw, "LEVEL") && sscanf(line, " %*s %d %255s %lf", &i, a, &r) == 3 && i >= 0 && i < 3 && r > 0) {
+                mic[i].file = a; mic[i].reso = r; found |= 1 << i;
+            }
+        }
+        fclose(f);
+        micCfg = found == 7;
+    }
+    LOGC("planet %s: R %.0f km, max level %d, archives: surf %s, elev %s%s%s%s", name.c_str(), R / 1000, maxLevel,
+         surfTree ? "yes" : "no", elevTree ? "yes" : "no", atm.has ? ", atmosphere" : "", liq.has ? ", liquid" : "",
+         micCfg ? ", micro textures" : "");
 }
 
-Planet::~Planet() { for (Tile* t : root) FreeTile(t); }
+Planet::~Planet()
+{
+    if (micThread.joinable()) micThread.join();
+    for (Tile* t : root) FreeTile(t);
+}
+
+// ------------------------------------------------------------------------------------------ micro textures
+// The mean texel of a block-compressed DDS (BC1/BC3), from its first mip of 64x64 or less: the shader makes the detail
+// relative to it, so the ground keeps its average colour. Linear when the texture is sampled as sRGB.
+static XMFLOAT4 DdsMean(const std::vector<BYTE>& f, bool srgb)
+{
+    XMFLOAT4 r = { 0.5f, 0.5f, 0.5f, 0.5f };
+    if (f.size() < 148 || memcmp(f.data(), "DDS ", 4) != 0) return r;
+    auto U32 = [&](size_t o) { uint32_t v; memcpy(&v, f.data() + o, 4); return v; };
+    auto U16 = [&](size_t o) { uint16_t v; memcpy(&v, f.data() + o, 2); return (uint32_t)v; };
+    UINT H = U32(12), W = U32(16), mips = (U32(8) & 0x20000) && U32(28) ? U32(28) : 1;
+    uint32_t fcc = U32(84);
+    size_t off = 128; int bc = 0;
+    if (U32(80) & 4) {
+        if (fcc == MAKEFOURCC('D', 'X', 'T', '1')) bc = 1;
+        else if (fcc == MAKEFOURCC('D', 'X', 'T', '4') || fcc == MAKEFOURCC('D', 'X', 'T', '5')) bc = 3;
+        else if (fcc == MAKEFOURCC('D', 'X', '1', '0')) {
+            uint32_t x = U32(128); off = 148;
+            if (x == DXGI_FORMAT_BC1_UNORM || x == DXGI_FORMAT_BC1_UNORM_SRGB) bc = 1;
+            else if (x == DXGI_FORMAT_BC3_UNORM || x == DXGI_FORMAT_BC3_UNORM_SRGB) bc = 3;
+        }
+    }
+    if (!bc) return r;
+    const size_t bb = bc == 1 ? 8 : 16;
+    auto lin = [&](double c) { return srgb ? (c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)) : c; };
+    UINT w = W, h = H;
+    for (UINT m = 0; m < mips; m++) {
+        size_t bw = std::max(1u, (w + 3) / 4), bh = std::max(1u, (h + 3) / 4), sz = bw * bh * bb;
+        if (off + sz > f.size()) break;
+        if (m + 1 < mips && (w > 64 || h > 64)) { off += sz; w = std::max(1u, w / 2); h = std::max(1u, h / 2); continue; }
+        double sum[4] = {}; size_t n = 0;
+        for (size_t k = 0; k < bw * bh; k++) {
+            size_t o = off + k * bb;
+            double al[8] = { 1, 1, 1, 1, 1, 1, 1, 1 }; uint64_t ai = 0;
+            if (bc == 3) {
+                double a0 = f[o] / 255.0, a1 = f[o + 1] / 255.0;
+                al[0] = a0; al[1] = a1;
+                if (f[o] > f[o + 1]) for (int j = 1; j < 7; j++) al[j + 1] = ((7 - j) * a0 + j * a1) / 7;
+                else { for (int j = 1; j < 5; j++) al[j + 1] = ((5 - j) * a0 + j * a1) / 5; al[6] = 0; al[7] = 1; }
+                for (int j = 0; j < 6; j++) ai |= (uint64_t)f[o + 2 + j] << (8 * j);
+                o += 8;
+            }
+            uint32_t c0 = U16(o), c1 = U16(o + 2), idx = U32(o + 4);
+            double p[4][4];
+            auto unpack = [](uint32_t c, double* d) { d[0] = ((c >> 11) & 31) / 31.0; d[1] = ((c >> 5) & 63) / 63.0; d[2] = (c & 31) / 31.0; d[3] = 1; };
+            unpack(c0, p[0]); unpack(c1, p[1]);
+            bool four = bc == 3 || c0 > c1;
+            for (int ch = 0; ch < 3; ch++) {
+                p[2][ch] = four ? (2 * p[0][ch] + p[1][ch]) / 3 : (p[0][ch] + p[1][ch]) / 2;
+                p[3][ch] = four ? (p[0][ch] + 2 * p[1][ch]) / 3 : 0;
+            }
+            p[2][3] = 1; p[3][3] = four ? 1 : 0;
+            for (int t = 0; t < 16; t++) {
+                const double* c = p[(idx >> (2 * t)) & 3];
+                for (int ch = 0; ch < 3; ch++) sum[ch] += lin(c[ch]);
+                sum[3] += bc == 3 ? al[(ai >> (3 * t)) & 7] : c[3];
+                n++;
+            }
+        }
+        if (n) r = { (float)(sum[0] / n), (float)(sum[1] / n), (float)(sum[2] / n), (float)(sum[3] / n) };
+        break;
+    }
+    return r;
+}
+
+// the micro loader thread's work: the three levels (sRGB colour, or linear when they carry normals in .ag)
+void Planet::MicroLoad()
+{
+    ID3D11Device* dev = g_client->Dev();
+    int ok = 0;
+    for (MicroLevel& l : mic) {
+        std::vector<BYTE> b;
+        std::string p = "Textures\\" + l.file;
+        UINT w = 0, h = 0;
+        if (ReadFileBytes(p.c_str(), b)) l.srv = LoadDDSMemory(dev, b.data(), b.size(), !micNormals, &w, &h);
+        if (!l.srv || !w) { LOGC("planet %s: micro texture %s not loaded", name.c_str(), p.c_str()); continue; }
+        l.L = w / l.reso;
+        l.mean = DdsMean(b, !micNormals);
+        LOGC("planet %s: micro texture %s, %u px, repeats every %.1f m, mean %.3f %.3f %.3f %.3f", name.c_str(), l.file.c_str(),
+             w, l.L, l.mean.x, l.mean.y, l.mean.z, l.mean.w);
+        ok++;
+    }
+    micState = ok == 3 ? 2 : 3;
+}
 
 void Planet::FreeTile(Tile* t)
 {
@@ -229,6 +336,7 @@ void Planet::Load(Tile* t)
         } else e.reset();
     }
     t->elev = e; t->ownElev = own;
+    t->elevLvl = own ? t->lvl : (t->parent ? t->parent->elevLvl : 0);
 
     // the mesh: 65x65 nodes from the elevation (every 4th sample), positions relative to the tile centre
     const int G = 64;
@@ -288,7 +396,7 @@ void Planet::Load(Tile* t)
 }
 
 // ------------------------------------------------------------------------------------------ rendering
-struct PlanetCB { XMFLOAT4X4 wvp; XMFLOAT4 sunL, uv, misc; XMFLOAT4X4 w, rot; };
+struct PlanetCB { XMFLOAT4X4 wvp; XMFLOAT4 sunL, uv, misc; XMFLOAT4X4 w, rot; XMFLOAT4 mic[3], micM[3], micF, micC; };
 
 void Planet::Render(ID3D11DeviceContext* ctx, const VECTOR3& camPos, const MATRIX3& camRot, const XMMATRIX& proj, float tanHalfY, int screenH)
 {
@@ -307,6 +415,18 @@ void Planet::Render(ID3D11DeviceContext* ctx, const VECTOR3& camPos, const MATRI
         OBJHANDLE h = oapiGetGbodyByIndex(i);
         if (oapiGetObjectType(h) == OBJTP_STAR) { VECTOR3 sp; oapiGetGlobalPos(h, &sp); sunL = tmul(Rp, sp - Pp); sunL = sunL / length(sunL); break; }
     }
+    // micro textures: loaded when the camera first comes down to 100 km; each level fades out where its texels shrink
+    // to 1/16 pixel (the mip chain has flattened it by then), the coarsest within 25 km
+    for (double& fd : micFade) fd = 0;
+    if (micCfg && g_cfg.microTex) {
+        if (micState == 0 && length(cpl) - R < 100e3) { micState = 1; micThread = std::thread([this] { MicroLoad(); }); }
+        if (micState == 2) {
+            double pxs = screenH / (2.0 * tanHalfY);
+            for (int k = 0; k < 3; k++) micFade[k] = std::min(16.0 * pxs / mic[k].reso, 25e3);
+            ID3D11ShaderResourceView* ms[3] = { mic[0].srv.Get(), mic[1].srv.Get(), mic[2].srv.Get() };
+            ctx->PSSetShaderResources(1, 3, ms);
+        }
+    }
     g_client->Ctx()->IASetInputLayout(g_client->ilPlanet.Get());
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     ctx->IASetIndexBuffer(g_client->tileIB.Get(), DXGI_FORMAT_R32_UINT, 0);
@@ -318,6 +438,7 @@ void Planet::Render(ID3D11DeviceContext* ctx, const VECTOR3& camPos, const MATRI
     ctx->OMSetBlendState(g_client->bsOpaque.Get(), nullptr, ~0u);
     ctx->OMSetDepthStencilState(g_client->dsWrite.Get(), 0);
     for (Tile* t : root) Traverse(t, ctx, cpl, camRot, proj, tanHalfY, screenH, sunL);
+    if (frame % 300 == 150 && getenv("D3D11CLIENT_TEST")) ElevCheck(camPos);
 }
 
 void Planet::Traverse(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, const MATRIX3& camRot, const XMMATRIX& proj, float tanHalfY, int screenH, const VECTOR3& sunL)
@@ -355,7 +476,9 @@ void Planet::Traverse(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, con
             int cl = t->lvl + 1, ci = t->ilat * 2 + (k >> 1), cj = t->ilng * 2 + (k & 1);
             if (HasSurf(cl, ci, cj) || HasElev(cl, ci, cj)) { any = true; break; }
         }
-        split = any;
+        // past the deepest elevation data two more levels: the mesh (every 4th sample) then reaches the data's full
+        // resolution, so the ground lies where Orbiter's physics puts it (vessels neither float nor sink)
+        split = any || (t->elev && t->lvl < t->elevLvl + 2);
     }
     if (split) {
         bool ready = true;
@@ -395,6 +518,18 @@ void Planet::Draw(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, const V
     XMStoreFloat4x4(&c.w, XMMatrixTranspose(Wm));
     XMMATRIX Rx = RotToXM(Rp);
     XMStoreFloat4x4(&c.rot, XMMatrixTranspose(Rx));
+    // micro textures: the tile centre in repeats of each level (double, only the fraction goes to the GPU), so the
+    // shader's tile-local position continues the same planet-fixed pattern across all tiles
+    double fmax = std::max({ micFade[0], micFade[1], micFade[2] });
+    bool mOn = fmax > 0 && length(t->centre - cpl) - t->radius < fmax;
+    for (int k = 0; k < 3; k++) {
+        double inv = mOn ? 1.0 / mic[k].L : 0;
+        VECTOR3 q = t->centre * inv;
+        c.mic[k] = { (float)(q.x - floor(q.x)), (float)(q.y - floor(q.y)), (float)(q.z - floor(q.z)), (float)inv };
+        c.micM[k] = mic[k].mean;
+    }
+    c.micF = { (float)micFade[0], (float)micFade[1], (float)micFade[2], mOn ? (micNormals ? 2.0f : 1.0f) : 0.0f };
+    c.micC = { (float)t->centre.x, (float)t->centre.y, (float)t->centre.z, 0 };
     D3D11_MAPPED_SUBRESOURCE ms;
     ctx->Map(g_client->cbObj.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms); memcpy(ms.pData, &c, sizeof c); ctx->Unmap(g_client->cbObj.Get(), 0);
     UINT stride = sizeof(TileVertex), off = 0;
@@ -402,6 +537,64 @@ void Planet::Draw(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, const V
     ctx->PSSetShaderResources(0, 1, &srv);
     ctx->DrawIndexed(g_client->tileIdxCount, 0, 0);
     tilesDrawn++;
+}
+
+// test runs: the surface under the focus object and the camera as Orbiter's physics has it against our drawn mesh
+double Planet::MeshElev(double lng, double lat, int* lvl, double* fine, bool* own)
+{
+    Tile* t = root[lng < 0 ? 0 : 1];
+    if (!t || t->state != 2) return 0;
+    for (;;) {
+        int k = (lat < 0.5 * (t->minlat + t->maxlat) ? 2 : 0) | (lng < 0.5 * (t->minlng + t->maxlng) ? 0 : 1);
+        Tile* c = t->child[k];
+        if (!c || c->state != 2 || c->lastUsed != frame) break;
+        t = c;
+    }
+    *lvl = t->lvl; *own = t->ownElev;
+    if (!t->elev) { *fine = 0; return 0; }
+    const std::vector<float>& e = *t->elev;
+    double fi = (lat - t->minlat) / (t->maxlat - t->minlat), fj = (lng - t->minlng) / (t->maxlng - t->minlng);
+    auto bil = [&](double r, double c, int step) {
+        int r0 = std::clamp((int)r, 0, 256 / step - 1), c0 = std::clamp((int)c, 0, 256 / step - 1);
+        double a = r - r0, b = c - c0;
+        auto E = [&](int i, int j) { return (double)e[(1 + i * step) * 259 + 1 + j * step]; };
+        return (E(r0, c0) * (1 - b) + E(r0, c0 + 1) * b) * (1 - a) + (E(r0 + 1, c0) * (1 - b) + E(r0 + 1, c0 + 1) * b) * a;
+    };
+    *fine = bil(fi * 256, fj * 256, 1);
+    return bil(fi * 64, fj * 64, 4);     // the mesh takes every 4th sample
+}
+
+void Planet::ElevCheck(const VECTOR3& camPos)
+{
+    OBJHANDLE hf = oapiGetFocusObject();
+    if (!hf) return;
+    VECTOR3 gp; oapiGetGlobalPos(hf, &gp);
+    double lng, lat, rad;
+    oapiGlobalToEqu(hObj, gp, &lng, &lat, &rad);
+    if (rad - R > 50e3) return;
+    int lvl = 0; double fine = 0; bool own = false;
+    double mesh = MeshElev(lng, lat, &lvl, &fine, &own);
+    double phys = oapiSurfaceElevation(hObj, lng, lat);
+    double clng, clat, crad; int cl = 0; double cf = 0; bool co = false;
+    oapiGlobalToEqu(hObj, camPos, &clng, &clat, &crad);
+    double cm = MeshElev(clng, clat, &cl, &cf, &co);
+    LOGC("elev check %s: focus at %.5f %.5f, %.2f m over R | physics surface %.2f m | drawn tile lvl %d (%s elev): full-res %.2f m, mesh %.2f m | camera %.2f m over R, %.2f m over our mesh (lvl %d), physics there %.2f m",
+         name.c_str(), lng * 180 / PI_, lat * 180 / PI_, rad - R, phys, lvl, own ? "own" : "interpolated", fine, mesh,
+         crad - R, crad - R - cm, cl, oapiSurfaceElevation(hObj, clng, clat));
+    // along the view, level with the ground: our drawn surface against the physics one
+    VECTOR3 cd; oapiCameraGlobalDir(&cd);
+    VECTOR3 up = camPos - Pp; up = up / length(up);
+    VECTOR3 hd = cd - up * dotp(cd, up);
+    if (length(hd) < 1e-6) return;
+    hd = hd / length(hd);
+    char buf[1024]; int n = sprintf_s(buf, "elev view %s:", name.c_str());
+    for (double d : { 1e3, 2e3, 4e3, 8e3, 16e3, 32e3, 64e3 }) {
+        double l2, b2, r2; int lv = 0; double fn = 0; bool ow = false;
+        oapiGlobalToEqu(hObj, camPos + hd * d, &l2, &b2, &r2);
+        double m = MeshElev(l2, b2, &lv, &fn, &ow);
+        n += sprintf_s(buf + n, sizeof buf - n, " | %.0f km: phys %.0f, ours %.0f (lvl %d%s)", d / 1000, oapiSurfaceElevation(hObj, l2, b2), m, lv, ow ? "" : " i");
+    }
+    LOGC("%s", buf);
 }
 
 // tiles unused for a while go (never one the loader still holds)

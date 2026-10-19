@@ -18,6 +18,7 @@ Launchpad → Video → **Advanced** (`ClientCfg::Save`, `VideoTab.cpp:34-50`; �
 | `Exposure` | `exposure` | 1 | 0.2…5 | тон-маппинг (`gHazeRGB.w`, `post.hlsl:13`) |
 | `Liquids` | `liquids` | 1 | 0/1 | проход жидкости (`Liquid.cpp`, `RenderLiquid`) |
 | `Shadows` | `shadows` | 1 | 0/1 | проход теней (`Client.cpp:779`) |
+| `MicroTextures` | `microTex` | 1 | 0/1 (флажок «Surface micro textures») | микротекстуры поверхности (`Config\MicroTex.cfg`), каждый кадр (`Planet::Render`) |
 | `StatsLog` | `statsLog` | 1 | 0/1 | строка `fps … GPU ms …` раз в 10 с (`Client.cpp:639`) |
 | `AntiAliasing` | `aa` | 2 | 0 выкл., 1/2/3 MSAA 2/4/8×, 4 FXAA, 5 TAA (выпадающий список) | цели сцены и проходы сглаживания — **только при создании окна** (`AA.cpp`); при чтении ограничивается 0…5 |
 | `RenderScale` | `renderScale` | 1 | 0.5…1 (поле «TAA render scale, %», 50…100) | только для TAA: сцена рендерится в `RW×RH` меньше окна и масштабируется TAAU — ⚠ добавлено сессией сглаживания во время написания, при следующем запуске |
@@ -29,6 +30,15 @@ Launchpad → Video → **Advanced** (`ClientCfg::Save`, `VideoTab.cpp:34-50`; �
 `fullscreen` (= окно без рамки на весь основной монитор), `novsync`, `winw/winh` (меньше 800×600 → рабочая область
 рабочего стола) — `VideoTab.cpp:94-163`. ⚠ `deviceidx` пока **не используется** при создании устройства:
 `D3D11CreateDevice(nullptr, …)` берёт адаптер по умолчанию (`Client.cpp:95`).
+
+## 1a. `Config\MicroTex.cfg` — микротекстуры поверхности (формат D3D9Client, только чтение)
+
+Блоки `BODY <имя>`, `NORMALS 0|1`, `LEVEL 0..2 <текстура в Textures\> <пикселей на метр>`; комментарии `//`. Читается в
+конструкторе `Planet` (блок принимается, если есть все три уровня). Текстуры грузятся отдельным потоком (`Planet::MicroLoad`),
+когда камера впервые опускается ниже 100 км: `NORMALS 1` — линейно (нормаль в `.a/.g`, яркость в `.b`), `NORMALS 0` —
+sRGB (цвет). Период повтора уровня = ширина текстуры / разрешение (м). Средний тексел уровня считается на CPU из мипа
+≤ 64² (BC1/BC3) — шейдер берёт деталь относительно него, так что средний цвет поверхности не меняется. В лог:
+`planet <имя>: micro texture <файл>, <px> px, repeats every <м> m, mean …`.
 
 ## 2. `Config\D3D11Client\<Планета>.cfg` — атмосфера и жидкость
 

@@ -333,9 +333,13 @@ void D3D11Client::LoaderMain()
 static Surf* MakeSurf(ID3D11Device* dev, UINT w, UINT h, DWORD attrib)
 {
     Surf* s = new Surf; s->w = w; s->h = h; s->attrib = attrib;
-    D3D11_TEXTURE2D_DESC td = { w, h, 1, 1, DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, {1, 0}, D3D11_USAGE_DEFAULT,
+    D3D11_TEXTURE2D_DESC td = { w, h, 1, 1, DXGI_FORMAT_B8G8R8A8_TYPELESS, {1, 0}, D3D11_USAGE_DEFAULT,
                                 D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET, 0, 0 };
-    if (dev && w && h && SUCCEEDED(dev->CreateTexture2D(&td, nullptr, &s->tex))) dev->CreateShaderResourceView(s->tex.Get(), nullptr, &s->srv);
+    D3D11_SHADER_RESOURCE_VIEW_DESC sd = {}; sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB; sd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D; sd.Texture2D.MipLevels = 1;
+    // a surface without alpha starts opaque black (its alpha stays 1: the drawing writes colour only); with alpha, clear
+    std::vector<DWORD> init((size_t)w * h, (attrib & OAPISURFACE_ALPHA) ? 0u : 0xFF000000u);
+    D3D11_SUBRESOURCE_DATA id = { init.data(), w * 4, 0 };
+    if (dev && w && h && SUCCEEDED(dev->CreateTexture2D(&td, &id, &s->tex))) dev->CreateShaderResourceView(s->tex.Get(), &sd, &s->srv);
     return s;
 }
 
@@ -544,6 +548,7 @@ void D3D11Client::clbkRenderScene()
 {
     if (!dev || !sc || !shadersOk) return;     // a shader that failed to compile is in Orbiter.log; nothing is drawn
     frameNo++;
+    if (testMode) diagFrames = (frameNo >= 300 && frameNo < 302) ? 1 : 0;
     FlushDirty();         // surfaces drawn on since the last frame (MFDs, displays) to their textures
     BeginScreenLayer();   // the 2D layer the HUD and the info boxes draw into after this call
     if ((frameNo & 31) == 0) ScanVessels();
@@ -761,7 +766,7 @@ void D3D11Client::UpdateFrameCB(const VECTOR3& cp, const XMMATRIX& invVP)
         f.hazeRGB = { (float)a.hazeRGB.x, (float)a.hazeRGB.y, (float)a.hazeRGB.z, 0 };
     }
     if (g_fxAtmo.active) { skyOn = false; starVis = g_fxAtmo.starVis; f.amb.w = 0; }   // the FX pass draws sky and haze
-    f.hazeRGB.w = g_cfg.exposure;
+    f.hazeRGB.w = g_cfg.exposure * (g_fxAtmo.active ? g_fxAtmo.exposure : 1.0f);
     f.lightVP = lightVP;
     f.shadow = { shadowOn ? 1.0f : 0.0f, 1.0f / SHADOW_N, 0, 0 };
     D3D11_MAPPED_SUBRESOURCE ms;

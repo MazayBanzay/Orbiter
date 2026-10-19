@@ -6,7 +6,7 @@ cbuffer Obj : register(b1)
     float4x4 gW;        // to the camera-centred global frame
     float4 gSunM;       // direction to the Sun (global)
     float4 gDiff, gMAmb, gSpec, gEmis;   // spec.w = power
-    float4 gFlags;      // x: texture
+    float4 gFlags;      // x: texture, y: cockpit mesh, z: 1 = not lit (the group's flag 4: a display, a light), w: brightness factor of an unlit group
     float4x4 gCurNJ;    // this frame's WVP without the TAA jitter
     float4x4 gPrevNJ;   // last frame's
 };
@@ -33,13 +33,17 @@ PSOut PS(VSOut i, bool front : SV_IsFrontFace)
 {
     PSOut o;
     o.mv = (i.cc.xy / i.cc.w - i.pc.xy / i.pc.w) * float2(0.5, -0.5);   // uv now - uv then
-    float4 base = gDiff;
-    if (gFlags.x > 0) base *= tDiff.Sample(sAniso, i.uv);
+    float4 tex = gFlags.x > 0 ? tDiff.Sample(sAniso, i.uv) : float4(1, 1, 1, 1);
+    float4 base = gDiff * tex;
+    if (gFlags.z > 0.5) {      // not lit: its own colour (a display, a lamp); the cockpit's ones keep their brightness to the eye
+        o.c = float4((base.rgb + gEmis.rgb * tex.rgb) * gFlags.w, base.a);
+        return o;
+    }
     float3 n = normalize(i.n);
     float3 V = normalize(-i.wp);
     float3 L = gSunM.xyz;
     float nl = saturate(dot(n, L)) * ShadowAt(i.wp);
-    float3 col = base.rgb * (nl * SunLight(i.wp) + SkyLight(n, i.wp) + 0.02 * gMAmb.rgb) + gEmis.rgb;
+    float3 col = base.rgb * (nl * SunLight(i.wp) + SkyLight(n, i.wp) + (FxActive() ? 0.02 / max(gHazeRGB.w, 1.0) : 0.02) * gMAmb.rgb) + gEmis.rgb * tex.rgb;   // the fill stays constant on screen under the eye's adaptation   // the emission through the texture, as D3D9 lights it
     if (gSpec.w > 0) {
         float3 H = normalize(V + L);
         col += gSpec.rgb * pow(saturate(dot(n, H)), max(gSpec.w, 1)) * nl * SunLight(i.wp);

@@ -28,7 +28,7 @@ void D3D11Client::CreateLiquid()
     dev->CreateBuffer(&bd, &sd, &liqIB);
     // the scene's copy; the depth views (depthSRV single-sampled, dsvRO read-only) come from the client (Client.cpp,
     // they depend on the anti-aliasing mode)
-    D3D11_TEXTURE2D_DESC td = { W, H, 1, 1, DXGI_FORMAT_R16G16B16A16_FLOAT, {1, 0}, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0 };
+    D3D11_TEXTURE2D_DESC td = { SceneW(), SceneH(), 1, 1, DXGI_FORMAT_R16G16B16A16_FLOAT, {1, 0}, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0 };
     dev->CreateTexture2D(&td, nullptr, &hdrCopy);
     dev->CreateShaderResourceView(hdrCopy.Get(), nullptr, &hdrCopySRV);
 }
@@ -42,6 +42,9 @@ struct LiquidCB
     XMFLOAT4 colour;        // in-scattered colour; w: extinction [1/m]
     XMFLOAT4 wts;           // channel weights; w: refractive index
     XMFLOAT4 misc;          // x: time, y: depth reconstruction n (near plane)
+    XMFLOAT4 wA;            // the wave field (FxWaves): its frame's origin from the camera; w: cell size [m]
+    XMFLOAT4 wE1, wE2;      // its axes; w: the window's first cell (i0, j0)
+    XMFLOAT4 wN;            // x: cells per side, y: 1 = on
 };
 
 void D3D11Client::RenderLiquid(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj, float tanY)
@@ -79,6 +82,12 @@ void D3D11Client::RenderLiquid(const VECTOR3& cp, const MATRIX3& cr, const XMMAT
     c.colour = { (float)L.colour.x, (float)L.colour.y, (float)L.colour.z, (float)L.ext };
     c.wts = { (float)L.wts.x, (float)L.wts.y, (float)L.wts.z, (float)L.index };
     c.misc = { (float)fmod(oapiGetSimTime(), 10000.0), 0.1f, 0, 0 };
+    const FxWaveView& wv = FxWaves();
+    bool waves = wv.on && wv.planet == lp && wv.slopes;
+    c.wA = { (float)wv.anchor.x, (float)wv.anchor.y, (float)wv.anchor.z, (float)wv.dx };
+    c.wE1 = { (float)wv.e1.x, (float)wv.e1.y, (float)wv.e1.z, (float)wv.i0 };
+    c.wE2 = { (float)wv.e2.x, (float)wv.e2.y, (float)wv.e2.z, (float)wv.j0 };
+    c.wN = { (float)wv.n, waves ? 1.0f : 0.0f, 0, 0 };
     D3D11_MAPPED_SUBRESOURCE ms;
     ctx->Map(cbObj.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms); memcpy(ms.pData, &c, sizeof c); ctx->Unmap(cbObj.Get(), 0);
 
@@ -95,10 +104,14 @@ void D3D11Client::RenderLiquid(const VECTOR3& cp, const MATRIX3& cr, const XMMAT
     ctx->PSSetShader(psLiquid.Get(), nullptr, 0);
     ctx->VSSetConstantBuffers(1, 1, cbObj.GetAddressOf());
     ctx->PSSetConstantBuffers(1, 1, cbObj.GetAddressOf());
-    ID3D11ShaderResourceView* srv[2] = { hdrCopySRV.Get(), depthSRV.Get() };
-    ctx->PSSetShaderResources(0, 2, srv);
+    ID3D11ShaderResourceView* wsrv = waves ? wv.slopes : nullptr;     // the wave field's slopes and heights (t2)
+    ID3D11ShaderResourceView* srv[3] = { hdrCopySRV.Get(), depthSRV.Get(), wsrv };
+    ctx->PSSetShaderResources(0, 3, srv);
+    ctx->VSSetShaderResources(2, 1, &wsrv);
+    ctx->VSSetSamplers(0, 1, sampAniso.GetAddressOf());
     ctx->DrawIndexed(liqIdx, 0, 0);
-    ID3D11ShaderResourceView* nul[2] = {};
-    ctx->PSSetShaderResources(0, 2, nul);
+    ID3D11ShaderResourceView* nul[3] = {};
+    ctx->PSSetShaderResources(0, 3, nul);
+    ctx->VSSetShaderResources(2, 1, nul);
     ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
 }

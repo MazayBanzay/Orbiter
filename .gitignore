@@ -140,5 +140,6 @@ __pycache__/
 /_src/*
 !/_src/d3d11client/
 /_src/d3d11client/build/
+/_src/d3d11client/tools/logs/
 !/Config/D3D11Client/
 /Config/D3D11Client/Client.cfg
