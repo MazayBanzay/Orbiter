@@ -19,6 +19,7 @@
 
 #include "TantraEntryForecast.h"
 #include "TantraGuidance.h"
+#include "TantraWorker.h"
 
 #include <string>
 #include <vector>
@@ -42,6 +43,7 @@ constexpr double kMarginK = 100.0;                // K under each zone's limit (
 constexpr double kAoaNose = 40.0;                 // deg: НОСОМ
 constexpr double kTurnLead = 120.0;               // s: the turn to the burn attitude starts this long before the burn
 constexpr double kLead = 150.0;                   // s: the earliest burn from now
+constexpr double kEvalStale = 2.0;                // s of sim time: a background evaluation older than this asks for the next at once
 constexpr double kAttTol = 5.0;                   // deg: the hull on its attitude
 constexpr double kTermNear = 0.9;                 // of kTermTrig: from here the forecast checks the trigger every second, as in flight
 constexpr double kTermTrig = 0.8;                 // the braking starts when the level reaching the alignment is this share of the usable
@@ -181,6 +183,9 @@ class Reentry {
 public:
     // ---- every step (clbkPreStep) ----
     void Step(const ReentryState& st, double sysNow);
+    // the plan and the regulator's forecasts on the ship's background thread (TantraWorker); none: at once (the tests)
+    void SetPool(work::Pool* p) { pool_ = p; }
+    bool Planning() const { return planJob_.Busy(); }   // a plan is being made (the screen: «расчёт…»)
     const ReentryCmd& Cmd() const { return cmd_; }
     bool Engaged() const { return mode_ == guidance::kAuto || mode_ == guidance::kHold; }
     // ---- the ship's bases (the site list) ----
@@ -234,7 +239,14 @@ public:
 
 private:
     PlanIn MakeIn(bool scan) const;
-    void Replan(bool scan);
+    void Replan(bool scan);                       // asks for a plan from where the ship is now (TakeResults adopts it)
+    struct PlanOut { ReentryPlan P; double t0 = 0.0; };          // the plan and the sim time it starts at
+    struct EvalOut { Reg g; double t0 = 0.0; };                  // the regulator's evaluation and the sim time of its inputs
+    void Adopt(const PlanOut& o);
+    void TakeResults();
+    work::Pool* pool_ = nullptr;
+    work::Async<PlanOut> planJob_;
+    work::Async<EvalOut> evalJob_;
     void Tick(double now);
     std::vector<Check> BuildChecks() const;
     void SetPhase(int p);

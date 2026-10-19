@@ -166,10 +166,11 @@ constexpr double kBankAlt[4] = {60.0, 80.0, 100.0, 120.0};          // НОСО�
 
 // phase 4 (coasting down, the stern regimes): the look-ahead only - the braking may start above the air; 5 the entry: the
 // forecasts' candidates once an evaluation; 7 the braking, then the alignment; 8 (handed over) the alignment holds 150 m/s down
-void Regulate(Reg& g, const RegIn& in, int phase) {
+// (2026-10-16) split for the background: RegEval - the look-ahead and the forecasts (heavy, once an evaluation); RegLevel -
+// the level from them (every step). Regulate = both, as the planner's own simulation runs them.
+void RegEval(Reg& g, const RegIn& in, int phase) {
     const double gCap = in.gLim * kG0, aUse = AUse(in);
-    if (in.t >= g.nextEval) {
-        g.nextEval = in.t + in.evalDt;
+    {
         Look k; k.m = in.m; k.aUse = aUse; k.gCap = gCap; k.air = in.air; k.b = in.body;
         if (in.regime == kRNose && phase == 5) { k.glide = true; k.bank = std::fabs(g.bank); k.crest = kCrestOf[g.wing]; }
         if (!g.align) g.lTerm = TermLevel(in.h, in.va, in.gam, k, g.lTerm);
@@ -220,7 +221,10 @@ void Regulate(Reg& g, const RegIn& in, int phase) {
             g.fcOk = best.ok; g.fcHot = best.hot; g.fcMargin = best.margin; g.fcG = best.g;
         }
     }
-    // the level
+}
+
+void RegLevel(Reg& g, const RegIn& in, int phase) {
+    const double gCap = in.gLim * kG0, aUse = AUse(in);
     double L = 0.0; int lim = kRLimNone;
     if (in.regime == kRStern && (phase == 5 || phase == 7) && !g.align) {
         L = g.lHeat; if (L > 0) lim = kRLimHeat;
@@ -245,6 +249,18 @@ void Regulate(Reg& g, const RegIn& in, int phase) {
     // the plant's stern: under tSafe (the limiter cuts the power above it too)
     if (L > 0 && in.sternT > in.tSafe - 50.0) { L *= Clamp((in.tSafe - in.sternT) / 50.0, 0.0, 1.0); lim = kRLimStern; }
     g.level = Clamp(L, 0.0, 1.0); g.lim = g.level > 0 || lim == kRLimG ? lim : kRLimNone;
+}
+
+void Regulate(Reg& g, const RegIn& in, int phase) {
+    if (in.t >= g.nextEval) { g.nextEval = in.t + in.evalDt; RegEval(g, in, phase); }
+    RegLevel(g, in, phase);
+}
+
+// the evaluation's outcome handed back to the frame (Reentry::Step merges it into reg_)
+void MergeEval(Reg& to, const Reg& from) {
+    to.lHeat = from.lHeat; to.lTerm = from.lTerm;
+    to.bank = from.bank; to.bankSign = from.bankSign; to.wing = from.wing;
+    to.fcOk = from.fcOk; to.fcHot = from.fcHot; to.fcMargin = from.fcMargin; to.fcG = from.fcG;
 }
 
 // the burn's tail-off: the level that lowers the periapsis to its target in about 2 s (sens: m of periapsis per m/s, retrograde)
@@ -600,17 +616,37 @@ PlanIn Reentry::MakeIn(bool scan) const {
     return in;
 }
 
+// (2026-10-16) the plan on the background thread: the inputs copied now, the result adopted by TakeResults with the sim
+// time it starts at (its burn time is absolute, so the wait does not move it); without a thread it is adopted at once
 void Reentry::Replan(bool scan) {
-    plan_ = PlanReentry(MakeIn(scan));
-    planT_ = st_.simt;
+    const PlanIn in = MakeIn(scan);
+    const double t0 = st_.simt;
+    planJob_.Request(pool_, [in, t0] { PlanOut o; o.P = PlanReentry(in); o.t0 = t0; return o; });
+    TakeResults();
+}
+
+void Reentry::Adopt(const PlanOut& o) {
+    plan_ = o.P;
+    planT_ = o.t0;
     if (mode_ == guidance::kIdle || phase_ <= 1) {
         tBurnAbs_ = std::isfinite(plan_.tBurn) ? planT_ + plan_.tBurn : kNaN;
         hpT_ = plan_.hpT;
     }
+    if (checkT_ >= 0) checks_ = BuildChecks();    // ВЗВЕСТИ's checks read the plan that has come
+}
+
+void Reentry::TakeResults() {
+    PlanOut p;
+    if (planJob_.Take(&p)) Adopt(p);
+    EvalOut e;
+    if (evalJob_.Take(&e)) {
+        MergeEval(reg_, e.g);
+        if (st_.simt - e.t0 > kEvalStale) reg_.nextEval = -1e9;   // late under time warp: the next one at once
+    }
 }
 
 void Reentry::Tick(double now) {
-    if (checkT_ >= 0 && now - checkT_ > checks_.size() * guidance::kCheckDt + 0.3) {
+    if (checkT_ >= 0 && !planJob_.Busy() && now - checkT_ > checks_.size() * guidance::kCheckDt + 0.3) {
         checkT_ = -1;
         const Check* bad = nullptr;
         for (const Check& c : checks_) if (!c.ok) { bad = &c; break; }
@@ -644,6 +680,7 @@ std::vector<Check> Reentry::BuildChecks() const {
 void Reentry::Step(const ReentryState& st, double now) {
     const bool first = !have_;
     st_ = st; have_ = true;
+    TakeResults();
     {
         PlanIn tmp = MakeIn(false);
         el_ = guidance::Elems(tmp.r, tmp.v, st.planet.mu, st.planet.R);
@@ -692,7 +729,7 @@ void Reentry::Step(const ReentryState& st, double now) {
     switch (phase_) {
         case 1: {                                 // the countdown to the burn; the plan from where the ship is now and then
             c.attitude = false;
-            if (st.simt - planT_ > kReplanDt) Replan(false);
+            if (st.simt - planT_ > kReplanDt && !planJob_.Busy()) Replan(false);
             if (std::isfinite(tBurnAbs_) && tBurnAbs_ - st.simt <= kTurnLead) { SetPhase(2); Note(L"Разворот на торможение: кормой по скорости", kOk); }
             break;
         }
@@ -724,7 +761,7 @@ void Reentry::Step(const ReentryState& st, double now) {
     }
     if (phase_ == 4) {                            // to the entry attitude, coasting
         if (regime_ == kRNose) setAtt(kAttNose, kAoaNose, 0.0); else setAtt(kAttStern, 0, 0);
-        if (st.simt - planT_ > kReplanDt) Replan(false);
+        if (st.simt - planT_ > kReplanDt && !planJob_.Busy()) Replan(false);
     }
     if (phase_ >= 5 || (phase_ == 4 && regime_ != kRNose && st.vU < 0.0)) {
         RegIn in;
@@ -748,17 +785,32 @@ void Reentry::Step(const ReentryState& st, double now) {
         double hot = 1e9;
         for (int z = 0; z < kZones; ++z) if (st.skinLim[z] > 0) hot = (std::min)(hot, st.skinLim[z] - kMarginK - st.skinT[z]);
         in.hotMargin = hot; in.sternT = st.sternT; in.tSafe = st.tSafe; in.t = st.simt; in.evalDt = 1.0;
-        Regulate(reg_, in, phase_);
+        // the evaluation (the look-ahead, the forecasts) on the background thread with its own copies of the air and the skin;
+        // the level below from the newest one (without a thread it is ready at once)
+        auto evaluate = [&](int ph) {
+            if (in.t < reg_.nextEval || evalJob_.Busy()) return;
+            reg_.nextEval = in.t + in.evalDt;
+            const ts::Air air = st_.air; const dm::Model skin = st_.skin; const RegIn ci = in; const Reg g0 = reg_; const double t0 = st.simt;
+            evalJob_.Request(pool_, [air, skin, ci, g0, ph, t0] {
+                RegIn i = ci; i.air = &air; i.skin = &skin; EvalOut o; o.g = g0; o.t0 = t0;
+                RegEval(o.g, i, ph);
+                return o;
+            });
+            EvalOut e;
+            if (evalJob_.Take(&e)) MergeEval(reg_, e.g);
+        };
+        evaluate(phase_);
+        RegLevel(reg_, in, phase_);
         const double mach = st.mach > 0 ? st.mach : va / kSoundPlan;
         if ((phase_ == 5 || phase_ == 4) && regime_ != kRNose && reg_.lTerm >= kTermTrig) {
             SetPhase(7); reg_.braking = true;
             Note(L"Торможение с " + Km(st.alt) + L" при " + Fmt(va, 0) + L" м/с" + (st.alt > kEI ? L" — выше атмосферы" : L""), kOk);
-            Regulate(reg_, in, phase_);
+            evaluate(phase_); RegLevel(reg_, in, phase_);
         } else if (phase_ == 5 && regime_ == kRNose && ((mach < kFlipMach && st.alt < kFlipH) || reg_.lTerm >= kTermTrig * 0.9)) {
             SetPhase(6); Note(L"Разворот кормой вниз с " + Km(st.alt) + L", М " + Fmt(mach, 1), kOk);
         } else if (phase_ == 6 && (aimed(Unit(vAirL) * -1.0) || phT_ > 2 * kFlipT)) {
             SetPhase(7); reg_.nextEval = -1e9; reg_.braking = true; in.regime = kRStern;
-            Note(L"Торможение с " + Km(st.alt) + L" при " + Fmt(va, 0) + L" м/с", kOk); Regulate(reg_, in, phase_);
+            Note(L"Торможение с " + Km(st.alt) + L" при " + Fmt(va, 0) + L" м/с", kOk); evaluate(phase_); RegLevel(reg_, in, phase_);
         } else if (phase_ == 7 && st.alt <= kHandH) {
             SetPhase(8); c.handover = true;
             Note(L"ВХОД ПОСАДКИ: " + Km(st.alt) + L", " + Fmt(st.vU, 0) + L" м/с верт., " + Fmt(std::hypot(st.vE, st.vN), 0) +
@@ -777,7 +829,7 @@ void Reentry::Step(const ReentryState& st, double now) {
         const double ls = aFull > 0 ? reg_.level * use / aFull : 0.0;
         c.march = ls; c.pods = in.aPods > 0 ? ls : 0.0; c.lim = noMass && reg_.level > 0 ? kRLimMass : reg_.lim;
         if (reg_.lim == kRLimStern && !warnedStern_) { warnedStern_ = true; Note(L"Корма установки " + Fmt(st.sternT, 0) + L" К у предела " + Fmt(st.tSafe, 0) + L" К — тяга снижена", kWarn); }
-        if (phase_ >= 5 && phase_ <= 7 && st.simt - planT_ > kReplanDt) Replan(false);
+        if (phase_ >= 5 && phase_ <= 7 && st.simt - planT_ > kReplanDt && !planJob_.Busy()) Replan(false);
     }
 }
 
@@ -821,7 +873,9 @@ void Reentry::Start(double now) {
         for (int z = 0; z < kZones; ++z) { peakT_[z] = st_.skinT[z]; warnedHot_[z] = false; }
     }
     if (el_.peri >= kEI && !std::isfinite(tBurnStart_)) {
-        if (!std::isfinite(tBurnAbs_) || tBurnAbs_ < st_.simt - 5.0) { Replan(false); if (!std::isfinite(tBurnAbs_)) tBurnAbs_ = st_.simt + kLead; }
+        // a stale burn time is dropped before the new plan is asked for: on the background thread it comes a moment later, and
+        // the earliest burn holds the countdown until then (the stale one would have fired the burn at once)
+        if (!std::isfinite(tBurnAbs_) || tBurnAbs_ < st_.simt - 5.0) { tBurnAbs_ = kNaN; Replan(false); if (!std::isfinite(tBurnAbs_)) tBurnAbs_ = st_.simt + kLead; }
         SetPhase(tBurnAbs_ - st_.simt <= kTurnLead ? 2 : 1);
         log_.Add(TLabel(), L"ПУСК · " + std::wstring(kRegimes[regime_]) + L" · " + SiteName() + L" · импульс через " + Clock(tBurnAbs_ - st_.simt), kOk);
     } else {

@@ -88,6 +88,23 @@ void Cockpit::Init(VESSEL4* v, UINT mesh, CockpitHost* host, int launchMfdMode) 
     bank_.Add(static_cast<DWORD>(cb::kMfdTex[1]), MFD_MAP);
     bank_.Add(static_cast<DWORD>(cb::kMfdTex[2]), MFD_ORBIT);
     bank_.Add(static_cast<DWORD>(cb::kMfdTex[3]), launchMfdMode >= 0 ? launchMfdMode : MFD_HSI);
+    // the view screen (as in «Тантра»): each zone's camera 1 m ahead of the nose tip (the hull never in the picture), aimed
+    // as the generator projected the zone from the design eye; the drum turns them (Step)
+    view_.Init(v_);
+    for (int z = 0; z < 3; ++z) {
+        const cb::ScreenZone& q = cb::kScreenZones[z];
+        // along the ship's axis (pitch 0; the user 2026-10-09 «камера показывает мимо полосы»): the runway ahead sits in
+        // the middle zone's middle; the zone's own pitch is only where the screen hangs before the eye
+        const double y = q.yaw * kDeg, p = 0.0;
+        zoneDir_[z] = _V(std::sin(y) * std::cos(p), std::sin(p), std::cos(y) * std::cos(p));
+        zoneUp_[z] = _V(-std::sin(y) * std::sin(p), std::cos(p), -std::cos(y) * std::sin(p));
+        const int h = z == 1 ? 480 : 400;
+        view_.AddZone(mesh_, static_cast<DWORD>(q.slot), static_cast<int>(h * q.aspect + 0.5), h, _V(0, 0.25, 14.6), zoneDir_[z], zoneUp_[z], q.vfov);
+        view_.SetZoneGroup(z, static_cast<DWORD>(cb::kScreenGroup[z]));
+        if (z != 1) view_.SetZoneOnDemand(z, true);                      // the sides: a camera only while looked at
+    }
+    view_.SetRefreshHz(30.0);
+    view_.SetOn(true);
 }
 
 void Cockpit::OnVisual(VISHANDLE vis) {
@@ -100,10 +117,11 @@ void Cockpit::OnVisual(VISHANDLE vis) {
         if (shipSurf_) oapiSetTexture(dm, cb::kShipTex, shipSurf_);
     }
     bank_.OnVisualCreated(vis);
+    view_.OnVisualCreated(vis);
     drawT_ = 1.0;
 }
 
-void Cockpit::OnVisualGone() { bank_.OnVisualDestroyed(); }
+void Cockpit::OnVisualGone() { bank_.OnVisualDestroyed(); view_.OnVisualDestroyed(); }
 
 VECTOR3 Cockpit::At(int module, int i) const {
     const VECTOR3 p = module < 2 ? pts_[module][i] : dpts_[i];
@@ -201,11 +219,20 @@ void Cockpit::Step(double dt, double frameZ) {
         const VECTOR3 up = pts_[0][kUp] - pts_[0][kEye];
         if (std::fabs(up.x) > 0.01) { if (up.x * roll_ < 0) rollSign_ = -rollSign_; rollChecked_ = true; }
     }
-    VECTOR3 F, W; v_->GetForceVector(F); v_->GetWeightVector(W);
+    // the felt acceleration = the measured one minus gravity (what the couch pushes with): at rest on the ground or held it is
+    // the weight's opposite, on the run the thrust adds; smoothed 0,4 s against the steps' and the contacts' noise
+    VECTOR3 W; v_->GetWeightVector(W);
     const double m = v_->GetMass();
-    VECTOR3 f = (F - W) / m;
-    if ((v_->GroundContact() || v_->GetAttachmentStatus(v_->GetAttachmentHandle(true, 0))) && length(f) < 0.5) f = -W / m;   // landed or held: the support carries the weight
-    felt_ = f;
+    VECTOR3 vg; v_->GetGlobalVel(vg);
+    VECTOR3 f = -W / m;
+    if (vPrevOk_ && dt > 1e-4 && dt < 0.5) {
+        MATRIX3 R; v_->GetRotationMatrix(R);
+        const VECTOR3 a = tmul(R, (vg - vPrev_) / dt);
+        if (length(a) < 100.0) f = a - W / m;
+    }
+    vPrev_ = vg; vPrevOk_ = true;
+    fFilt_ = fFilt_ + (f - fFilt_) * Clamp(dt / 0.4, 0.0, 1.0);
+    f = felt_ = fFilt_;
     double drumT = drum_, rollT = 0.0;
     const double fyz = std::hypot(f.y, f.z), fn = length(f) / 9.81;
     if (fyz > 0.8) {
@@ -216,13 +243,21 @@ void Cockpit::Step(double dt, double frameZ) {
         const double c = std::cos(drum_ * kDeg), s = std::sin(drum_ * kDeg);
         rollT = Clamp(std::atan2(f.x, f.y * c + f.z * s) / kDeg, -15.0, 15.0);
     }
-    drum_ = Approach(drum_, drumT, 12.0, dt);
+    drum_ = Approach(drum_, drumT, 8.0, dt);
     roll_ = Approach(roll_, rollT, 15.0, dt);
     v_->SetAnimation(drumAnim_, Clamp(0.5 + drumSign_ * drum_ / kDrumRange, 0.0, 1.0));
     v_->SetAnimation(rollAnim_, Clamp(0.5 + rollSign_ * roll_ / kRollRange, 0.0, 1.0));
     Quads(false);
     Camera(false);
     bank_.Step();
+    {   // the screen's cameras: fixed to the ship at the nose (the view from the nose, the drum never turns it - the user,
+        // 2026-10-09); the viewer and whether anyone sees it
+        for (int z = 0; z < 3; ++z) view_.SetZoneView(z, _V(0, 0.25, 14.6), zoneDir_[z], zoneUp_[z]);
+        view_.SetShift(_V(0, 0, -frameZ_));
+        view_.SetHost(viewer_);
+        view_.SetViewerPresent(present_);
+        view_.Frame();
+    }
     drawT_ += dt;
     if (drawT_ > 0.25) { drawT_ = 0; Draw(); }
 }
@@ -321,50 +356,49 @@ void Cockpit::Draw() {
             oapi::Brush* b = oapiCreateBrush(c); oapi::Brush* ob = skp->SetBrush(b);
             skp->Rectangle(x0, y0, x1, y1); skp->SetBrush(ob); oapiReleaseBrush(b);
         };
-        auto text = [&](int x, int y, const char* s, DWORD col) { skp->SetTextColor(col); skp->Text(x, y, s, static_cast<int>(std::strlen(s))); };
+        int align = 0;                                                     // 0 left, 1 centre (the glyph atlas: Cyrillic in cp1251)
+        double px = 16.0;
+        auto text = [&](int x, int y, const char* s, int col) { glyphs_.DrawA(skp, x, y + 2, s, px > 18 ? 2 : 1, col, px, align); };
         if (which == 0) {
             fill(0, 0, cb::kLblW, cb::kLblH, 0x1A1814);
-            skp->SetFont(fLbl_);
-            skp->SetTextAlign(oapi::Sketchpad::CENTER, oapi::Sketchpad::TOP);
+            align = 1; px = 15.0;
             const int cols = cb::kLblW / cb::kLblCW;
             for (int mi = 0; mi < 4; ++mi)
                 for (int b = 0; b < 15; ++b) {
                     const int cell = mi * 15 + b, x = (cell % cols) * cb::kLblCW, y = (cell / cols) * cb::kLblCH;
                     const char* s = bank_.Label(mi, b);
-                    if (s && *s) text(x + cb::kLblCW / 2, y + 6, s, 0xE0E6E2);
+                    if (s && *s) text(x + cb::kLblCW / 2, y + 6, s, 2);
                 }
         } else {
             for (int pl = 0; pl < 2; ++pl) {
                 const int x0 = pl * 512, w = cb::kShipScrW, h = cb::kShipScrH;
                 fill(x0, 0, x0 + w, h, 0x07140A);
-                skp->SetTextAlign(oapi::Sketchpad::LEFT, oapi::Sketchpad::TOP);
-                skp->SetFont(fTitle_);
+                align = 0; px = 21.0;
                 char t[128];
                 std::snprintf(t, sizeof t, "%s  ·  режим: %s", KeyName(pl, page_[pl]), host_->ModeName());
-                text(x0 + 14, 8, t, 0xE8F0EA);
-                skp->SetFont(fPage_);
+                text(x0 + 14, 8, t, 2);
+                px = 17.0;
                 char lines[9][96];
                 const int n = host_->PageLines(pl, page_[pl], lines, 9);
-                for (int i = 0; i < n; ++i) text(x0 + 14, 46 + i * 26, lines[i], 0x6AC5A8);
+                for (int i = 0; i < n; ++i) text(x0 + 14, 46 + i * 26, lines[i], 0);
                 const char* lbl[2] = {nullptr, nullptr};
                 const int nb = host_->PageButtons(pl, page_[pl], lbl);
                 for (int b = 0; b < nb; ++b) {
                     const int bx0 = x0 + (b == 0 ? 12 : w / 2 + 6), bx1 = x0 + (b == 0 ? w / 2 - 6 : w - 12), by0 = static_cast<int>(h * 0.76), by1 = h - 10;
                     fill(bx0, by0, bx1, by1, 0x2A4A1C);
-                    skp->SetTextAlign(oapi::Sketchpad::CENTER, oapi::Sketchpad::TOP);
-                    text((bx0 + bx1) / 2, by0 + 18, lbl[b], 0xF0F4F0);
-                    skp->SetTextAlign(oapi::Sketchpad::LEFT, oapi::Sketchpad::TOP);
+                    align = 1; px = 19.0;
+                    text((bx0 + bx1) / 2, by0 + 20, lbl[b], 2);
+                    align = 0;
                 }
-                skp->SetFont(fKey_);
-                skp->SetTextAlign(oapi::Sketchpad::CENTER, oapi::Sketchpad::TOP);
+                align = 1; px = 12.0;
                 for (int k = 0; k < 12; ++k) {
                     const int kx = x0 + (k % 8) * 64, ky = 352 + (k / 8) * 40;
                     const bool lit = host_->KeyLit(pl, k);
                     fill(kx, ky, kx + 64, ky + 32, lit ? 0x2E7A3A : 0x26221E);
                     if (k == page_[pl]) { fill(kx, ky, kx + 64, ky + 3, 0x40C0F0); fill(kx, ky + 29, kx + 64, ky + 32, 0x40C0F0); }
-                    text(kx + 32, ky + 8, kKeys[pl][k], lit ? 0xE8FFF0 : 0xA0A8A4);
+                    text(kx + 32, ky + 8, kKeys[pl][k], lit ? 2 : 6);
                 }
-                skp->SetTextAlign(oapi::Sketchpad::LEFT, oapi::Sketchpad::TOP);
+                align = 0;
             }
         }
         skp->SetPen(oldPen);

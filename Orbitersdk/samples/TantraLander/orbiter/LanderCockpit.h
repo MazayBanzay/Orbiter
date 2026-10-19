@@ -14,6 +14,8 @@
 #pragma once
 #include "Orbitersdk.h"
 #include "ShipMfd.h"
+#include "ViewScreen.h"
+#include "TantraGlyphs.h"
 
 namespace tantra::lander {
 
@@ -35,7 +37,10 @@ public:
     void Start() { bank_.Start(); }                          // clbkPostCreation
     void OnVisual(VISHANDLE vis);                            // clbkVisualCreated: the screens' surfaces into the mesh
     void OnVisualGone();
-    void Shutdown() { bank_.Shutdown(); }
+    void Shutdown() { bank_.Shutdown(); view_.Shutdown(); }
+    // the view screen's viewer every step: a person's body in focus inside the lander (gcAPI renders for the focus only),
+    // nullptr = the lander itself; present = someone sees the screen (no cameras otherwise)
+    void SetViewer(OBJHANDLE body, bool present) { viewer_ = body; present_ = present; }
     bool LoadVC(int id);                                     // the Orbiter VC (the lander in focus)
     void Step(double dt, double frameZ);
     bool Mouse(int id, int event, const VECTOR3& p);         // a VC click
@@ -71,6 +76,10 @@ private:
     UINT mesh_ = 0;
     shipview::MfdBank bank_;                                 // the 4 Orbiter MFDs (0 К НАВ-1, 1 К НАВ-2, 2 2-й НАВ-1, 3 2-й НАВ-2)
     SURFHANDLE lblSurf_ = nullptr, shipSurf_ = nullptr;
+    shipview::ViewScreen view_;                              // the view screen: three cameras at the nose, turning with the drum
+    VECTOR3 zoneDir_[3] = {}, zoneUp_[3] = {};
+    OBJHANDLE viewer_ = nullptr; bool present_ = false;
+    TantraGlyphs glyphs_;                                    // the screens' text (cp1251)
     UINT drumAnim_ = 0, rollAnim_ = 0;
     VECTOR3 pts_[2][kPts] = {};               // per module, carried by the roll (a child of the drum)
     VECTOR3 dpts_[3] = {};                    // the drum's: the mode switch, the axis centre, the centre + up
@@ -78,12 +87,13 @@ private:
     double drumSign_ = 1, rollSign_ = -1;     // the animation state per degree (Orbiter's rotation sense, checked live)
     bool drumChecked_ = false, rollChecked_ = false;
     VECTOR3 felt_ = {0, 9.81, 0};
+    VECTOR3 fFilt_ = {0, 9.81, 0}, vPrev_ = {0, 0, 0}; bool vPrevOk_ = false;   // the felt's filter, the last global velocity
     double frameZ_ = 0;
     int pos_ = 0;                             // the VC position (the camera's pilot)
     bool loaded_ = false;
     VECTOR3 lastLook_ = {0, 0, 1};
     double quadDrum_ = 1e9, quadRoll_ = 1e9, quadZ_ = 1e9;
-    int page_[2] = {6, 0};                    // the ship MFDs' pages: the commander's ШАССИ, the second's НАКОП
+    int page_[2] = {0, 0};                    // the ship MFDs' pages: the commander's М1 (the lever, the thrust), the second's НАКОП
     double drawT_ = 1.0;
     oapi::Font* fLbl_ = nullptr;
     oapi::Font* fKey_ = nullptr;

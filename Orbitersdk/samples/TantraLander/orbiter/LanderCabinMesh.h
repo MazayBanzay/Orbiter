@@ -4,11 +4,11 @@
 
 namespace tantra::lander::cabin {
 
-constexpr int kGroupCount = 50;
-enum Grp { G_drum_wall = 0, G_drum_caps = 1, G_drum_hatch_rim = 2, G_drum_floor = 3, G_screen_frame = 4, G_pedestal = 5, G_mode_switch = 6, G_mode_pointer = 7, G_drum_supports = 8, G_drum_bearings = 9, G_couch_K = 10, G_insert_K = 11, G_roll_bearing_K = 12, G_yoke_K = 13, G_yoke_btn_K = 14, G_yoke_screen_K = 15, G_console_K = 16, G_levers_K = 17, G_lever_knob_K = 18, G_cursor_K = 19, G_panel_K = 20, G_panel_lip_K = 21, G_mfd_bezel_K = 22, G_mfd_0 = 23, G_mfd_btn_0 = 24, G_mfd_1 = 25, G_mfd_btn_1 = 26, G_ship_bezel_K = 27, G_ship_screen_K = 28, G_ship_keys_K = 29, G_couch_2 = 30, G_insert_2 = 31, G_roll_bearing_2 = 32, G_yoke_2 = 33, G_yoke_btn_2 = 34, G_yoke_screen_2 = 35, G_console_2 = 36, G_levers_2 = 37, G_lever_knob_2 = 38, G_cursor_2 = 39, G_panel_2 = 40, G_panel_lip_2 = 41, G_mfd_bezel_2 = 42, G_mfd_2 = 43, G_mfd_btn_2 = 44, G_mfd_3 = 45, G_mfd_btn_3 = 46, G_ship_bezel_2 = 47, G_ship_screen_2 = 48, G_ship_keys_2 = 49 };
+constexpr int kGroupCount = 53;
+enum Grp { G_drum_wall = 0, G_drum_caps = 1, G_drum_hatch_rim = 2, G_drum_floor = 3, G_screen_0 = 4, G_screen_1 = 5, G_screen_2 = 6, G_screen_frame = 7, G_pedestal = 8, G_mode_switch = 9, G_mode_pointer = 10, G_drum_supports = 11, G_drum_bearings = 12, G_couch_K = 13, G_insert_K = 14, G_roll_bearing_K = 15, G_yoke_K = 16, G_yoke_btn_K = 17, G_yoke_screen_K = 18, G_console_K = 19, G_levers_K = 20, G_lever_knob_K = 21, G_cursor_K = 22, G_panel_K = 23, G_panel_lip_K = 24, G_mfd_bezel_K = 25, G_mfd_0 = 26, G_mfd_btn_0 = 27, G_mfd_1 = 28, G_mfd_btn_1 = 29, G_ship_bezel_K = 30, G_ship_screen_K = 31, G_ship_keys_K = 32, G_couch_2 = 33, G_insert_2 = 34, G_roll_bearing_2 = 35, G_yoke_2 = 36, G_yoke_btn_2 = 37, G_yoke_screen_2 = 38, G_console_2 = 39, G_levers_2 = 40, G_lever_knob_2 = 41, G_cursor_2 = 42, G_panel_2 = 43, G_panel_lip_2 = 44, G_mfd_bezel_2 = 45, G_mfd_2 = 46, G_mfd_btn_2 = 47, G_mfd_3 = 48, G_mfd_btn_3 = 49, G_ship_bezel_2 = 50, G_ship_screen_2 = 51, G_ship_keys_2 = 52 };
 // the drum turns about the lateral axis (Orbiter X) through kDrumC; the pilots' modules roll about Z through kRollRef[p]
 constexpr double kDrumC[3] = {0.0000, 0.5500, 6.9500};
-constexpr unsigned kDrumGroups[] = {G_drum_wall, G_drum_caps, G_drum_hatch_rim, G_drum_floor, G_screen_frame, G_pedestal, G_mode_switch, G_mode_pointer, G_roll_bearing_K, G_roll_bearing_2};
+constexpr unsigned kDrumGroups[] = {G_drum_wall, G_drum_caps, G_drum_hatch_rim, G_drum_floor, G_screen_0, G_screen_1, G_screen_2, G_screen_frame, G_pedestal, G_mode_switch, G_mode_pointer, G_roll_bearing_K, G_roll_bearing_2};
 constexpr unsigned kModuleGroups[2][19] = {{G_couch_K, G_insert_K, G_yoke_K, G_yoke_btn_K, G_yoke_screen_K, G_console_K, G_levers_K, G_lever_knob_K, G_cursor_K, G_panel_K, G_panel_lip_K, G_mfd_bezel_K, G_ship_bezel_K, G_ship_screen_K, G_ship_keys_K, G_mfd_0, G_mfd_btn_0, G_mfd_1, G_mfd_btn_1}, {G_couch_2, G_insert_2, G_yoke_2, G_yoke_btn_2, G_yoke_screen_2, G_console_2, G_levers_2, G_lever_knob_2, G_cursor_2, G_panel_2, G_panel_lip_2, G_mfd_bezel_2, G_mfd_2, G_mfd_btn_2, G_ship_bezel_2, G_ship_screen_2, G_ship_keys_2, G_mfd_3, G_mfd_btn_3}};
 constexpr int kModuleCount[2] = {19, 19};
 constexpr double kRollRef[2][3] = {{-0.6200, 0.6700, 6.8000}, {0.6200, 0.6700, 6.8000}};
@@ -45,5 +45,11 @@ constexpr double kGrip[2][2][3] = {{{-0.4600, 0.4603, 6.9745}, {-0.4300, 0.3607,
 constexpr double kHubN[2][3] = {{-0.6200, 0.6163, 5.9849}, {0.6200, 0.6163, 5.9849}};
 constexpr double kMarch[2][3] = {{-1.0300, 0.2450, 6.9350}, {1.0300, 0.2450, 6.9350}};
 constexpr double kDrumFloorY = -0.4500, kDrumHatch[3] = {-1.5000, 0.5500, 6.9500}, kDrumHatchR = 0.42;   // the drum's floor; its axial hatch (left end)
+// the view screen (as in «Тантра»): three zones, each a ShipView camera (yaw, pitch deg in the built drum, Orbiter frame;
+// vfov deg; aspect w/h; the texture slot), projected from the design eye kScrEye; the cameras turn with the drum
+struct ScreenZone { double yaw, pitch, vfov, aspect; int slot; };
+constexpr ScreenZone kScreenZones[3] = {{-58.592, 18.761, 47.877, 1.0350, 9}, {0.000, 13.554, 65.537, 1.1732, 10}, {58.592, 18.761, 47.877, 1.0350, 11}};
+constexpr int kScreenGroup[3] = {G_screen_0, G_screen_1, G_screen_2};
+constexpr double kScrEye[3] = {0.0000, 0.5800, 6.3600};
 
 }  // namespace tantra::lander::cabin

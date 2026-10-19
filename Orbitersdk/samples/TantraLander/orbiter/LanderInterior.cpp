@@ -12,6 +12,8 @@
 namespace cb = tantra::lander::cabin;
 
 namespace tantra::lander {
+
+constexpr double kHipUp = 0.03;   // the hips point above the cushion (the user 2026-10-09: «провален ещё немного»)
 namespace {
 
 inline LanderInterior* Self(void* c) { return static_cast<LanderInterior*>(c); }
@@ -28,6 +30,7 @@ void LanderInterior::Init(VESSEL4* v, UINT cabinMesh, Cockpit* cockpit, const Ho
     ext_.size = sizeof(OcInteriorExt);
     ext_.Origin = cOrigin; ext_.CanWalk = cCanWalk; ext_.Seated = cSeated; ext_.Click = cClick;
     ext_.SeatHands = cSeatHands; ext_.SeatGauges = cSeatGauges; ext_.Ceiling = cCeiling;
+    ext_.SeatPose = cSeatPose;                                           // the couch: lying back, the knees up («Экипаж»)
 }
 
 void LanderInterior::Register() {
@@ -60,14 +63,14 @@ void LanderInterior::Step(double dt, double frameZ, int crewSeed) {
     static const char* name[2] = {"Командир", "Второй пилот"};
     static const char* role[2] = {"командир", "второй пилот"};
     static const double age[2] = {40, 34}, kg[2] = {78, 70};
-    int id[2] = {0, 0};
-    for (int k = n - 1; k >= 0; --k) {
-        id[k] = api_.CreatePerson(name[k], role[k], age[k], kg[k]);
-        if (!id[k]) continue;
-        api_.SetAboard(id[k], v_->GetHandle());
-        if (!api_.SitAt(id[k], v_->GetHandle(), k)) oapiWriteLogV("Gran interior: %s not seated (try %d)", name[k], seedTries_);
-    }
-    if (id[0] || id[n - 1]) {
+    // one person per step (a second ocSitAt in the same frame put both pilots into couch 1): the second pilot first, the
+    // commander a step later
+    const int k = n - 1 - seedDone_;
+    const int id = api_.CreatePerson(name[k], role[k], age[k], kg[k]);
+    if (!id) return;
+    api_.SetAboard(id, v_->GetHandle());
+    if (!api_.SitAt(id, v_->GetHandle(), k)) oapiWriteLogV("Gran interior: %s not seated in couch %d (try %d)", name[k], k, seedTries_);
+    if (++seedDone_ >= n) {
         seeded_ = true;
         oapiWriteLogV("Gran interior: %d pilot(s) seated at the start", n);
     }
@@ -83,6 +86,14 @@ int LanderInterior::HelmFocused() const {
         if (seatPerson_[s] && api_.Info(seatPerson_[s], &in) && in.vessel == f) return s;
     }
     return -1;
+}
+
+OBJHANDLE LanderInterior::ViewerBody() const {
+    if (!reg_ || !api_.ShipOf || !api_.PersonOfBody) return nullptr;
+    const OBJHANDLE f = oapiGetFocusObject();
+    if (!f || f == v_->GetHandle()) return nullptr;
+    const int id = api_.PersonOfBody(f);
+    return id && api_.ShipOf(id) == v_->GetHandle() ? f : nullptr;
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -131,7 +142,7 @@ int LanderInterior::cItem(void* c, int i, OcItem* out) {
     if (i < 0 || i > 1 || !out) return 0;
     *out = OcItem{};
     out->id = i; out->kind = OC_HELM;                                    // both couches steer (the commander, the second pilot)
-    out->pos = t->ck_->Hip(i); out->dir = t->ck_->Facing(i); out->radius = 1.4;
+    out->pos = t->ck_->Hip(i) + t->ck_->Up(i) * kHipUp; out->dir = t->ck_->Facing(i); out->radius = 1.4;
     std::snprintf(out->label, sizeof out->label, "%s", kSeatLabel[i]);
     return 1;
 }
@@ -142,7 +153,7 @@ void LanderInterior::cUse(void*, int, int) {}
 void LanderInterior::cSeat(void* c, int id, VECTOR3* pos, VECTOR3* dir) {
     const LanderInterior* t = Self(c);
     if (id < 0 || id > 1) return;
-    if (pos) *pos = t->ck_->Hip(id);
+    if (pos) *pos = t->ck_->Hip(id) + t->ck_->Up(id) * kHipUp;
     if (dir) *dir = t->ck_->Facing(id);
 }
 
@@ -201,5 +212,14 @@ int LanderInterior::cSeatGauges(void* c, int seatId, int, OcGauge* out, int max)
 }
 
 double LanderInterior::cCeiling(void*, const VECTOR3*) { return cb::kDrumC[1] + 1.05; }
+
+// the pilots' couches: the back 40° from the couch's horizontal, the thighs 45° up, the shins 50° down (the ergonomics, v10)
+int LanderInterior::cSeatPose(void*, int seatId, double* backDeg, double* thighDeg, double* shinDeg) {
+    if (seatId < 0 || seatId > 1) return 0;
+    if (backDeg) *backDeg = 40.0;
+    if (thighDeg) *thighDeg = 45.0;
+    if (shinDeg) *shinDeg = 50.0;
+    return 1;
+}
 
 }  // namespace tantra::lander

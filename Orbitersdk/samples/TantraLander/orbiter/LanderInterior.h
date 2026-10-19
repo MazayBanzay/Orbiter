@@ -31,6 +31,7 @@ public:
     // the pilot at the helm has the focus (his body is Orbiter's focus, the Orbiter window in front): the vessel then
     // reads his keys itself; -1 none, else the seat 0 / 1
     int HelmFocused() const;
+    OBJHANDLE ViewerBody() const;              // the focus is a person's body inside this lander (else nullptr)
 
 private:
     static ATTACHMENTHANDLE cAttach(void* c);
@@ -50,6 +51,7 @@ private:
     static void cSeatHands(void* c, int seatId, int personId, OcHand* left, OcHand* right);
     static int cSeatGauges(void* c, int seatId, int personId, OcGauge* out, int max);
     static double cCeiling(void* c, const VECTOR3* at);
+    static int cSeatPose(void* c, int seatId, double* backDeg, double* thighDeg, double* shinDeg);
 
     VESSEL4* v_ = nullptr;
     UINT cabin_ = 0;
@@ -62,7 +64,7 @@ private:
     bool reg_ = false, seeded_ = false;
     int seatPerson_[2] = {0, 0};
     double frameZ_ = 0, seedT_ = 0;
-    int seedTries_ = 0;
+    int seedTries_ = 0, seedDone_ = 0;
 };
 
 }  // namespace tantra::lander

@@ -53,7 +53,7 @@ Tantra:Tantra
   OC_PERSON 2
   NAME Erg Noor
   ROLE Capt
-  SEX female
+  SEX male
   PHYS 44.0 0.000 82.00 48.00 60.0
   CLASS OrbiterCrew\Astronavigator
   STAMINA 1.000000
@@ -81,7 +81,7 @@ Tantra:Tantra
   OC_PERSON 3
   NAME Pel Lin
   ROLE Spe
-  SEX female
+  SEX male
   PHYS 36.0 0.000 74.00 48.00 60.0
   CLASS OrbiterCrew\Astronavigator
   STAMINA 1.000000
@@ -108,7 +108,7 @@ Tantra:Tantra
   OC_PERSON 4
   NAME Pur Hiss
   ROLE APhy
-  SEX female
+  SEX male
   PHYS 52.0 0.000 80.00 48.00 60.0
   CLASS OrbiterCrew\Astronavigator
   STAMINA 1.000000
@@ -162,7 +162,7 @@ Tantra:Tantra
   OC_PERSON 6
   NAME Eon Tal
   ROLE Bio
-  SEX female
+  SEX male
   PHYS 38.0 0.000 76.00 48.00 60.0
   CLASS OrbiterCrew\Astronavigator
   STAMINA 1.000000
@@ -216,7 +216,7 @@ Tantra:Tantra
   OC_PERSON 8
   NAME Kay Ber
   ROLE Eng
-  SEX female
+  SEX male
   PHYS 33.0 0.000 75.00 48.00 60.0
   CLASS OrbiterCrew\Astronavigator
   STAMINA 1.000000
@@ -280,7 +280,7 @@ Niza_Krit:OrbiterCrew\Astronavigator
   NAME Niza Krit
   ROLE Spe
   SEX female
-  PHYS 0.0 1.740 62.00 48.00 60.0
+  PHYS 0.0 1.740 62.00 48.00 100.0
   CLASS OrbiterCrew\Astronavigator
   STAMINA 1.000000
   DOSE 0.00000 0.00000

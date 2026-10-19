@@ -450,7 +450,15 @@ bool TantraDisplays::Touch(int screen, double u, double v) {
     return r;
 }
 
+void TantraDisplays::StartPlanning() {
+    pool_.Start();
+    asc_.SetPool(&pool_);
+    land_.SetPool(&pool_);
+    rent_.SetPool(&pool_);
+}
+
 void TantraDisplays::Shutdown() {
+    pool_.Stop();                              // joins the planning thread: nothing of ours runs after the ship is gone
     for (SURFHANDLE& s : s_) if (s) { oapiDestroySurface(s); s = nullptr; }
     if (eng_) { oapiDestroySurface(eng_); eng_ = nullptr; }
 }

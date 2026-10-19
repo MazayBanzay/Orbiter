@@ -42,7 +42,7 @@ public:
     enum Screen { kLeft = 0, kRight = 1, kCentre = 2, kRiserR = 3, kRiserL = 4, kKeys = 5, kWingL = 6, kWingR = 7, kScreens = 8 };
     enum Mode { M_MFD, M_FLUID, M_PLANT, M_CREW, M_LIFTS, M_POSE, M_HULL, M_SET, M_OFF, M_COUNT };
 
-    void Init(Tantra* ship, UINT vcMeshIdx) { t_ = ship; vcMesh_ = vcMeshIdx; }
+    void Init(Tantra* ship, UINT vcMeshIdx) { t_ = ship; vcMesh_ = vcMeshIdx; StartPlanning(); }
     void OnVisual(VISHANDLE vis);              // create the surfaces and put them into the texture slots
     void Step(double dt);                      // redraw (about 5 Hz; at once after a touch)
     bool Touch(int screen, double u, double v);// u right, v down, 0..1 over the screen
@@ -148,6 +148,11 @@ private:
     tantra::guidance::BellyLand belly_;        // ПОСАДКА ЛЁЖА (TantraBellyLand)
     double blGearT_ = -1e9;                    // the belly autopilot asked for the gear then (system time; once per 3 s)
     tantra::reentry::Reentry rent_;            // СХОД (TantraReentry)
+    // (2026-10-16) the planning off the frame (TantraWorker): the autopilots' plans and the forecasts run on this thread, on
+    // copies of their inputs; declared after them, Shutdown (the ship's destructor) stops it before anything goes
+    tantra::work::Pool pool_;
+    tantra::work::Async<tantra::thermalscreen::Forecast> thermFcJob_;   // ТЕПЛО's entry forecast (ThermalStep)
+    void StartPlanning();
     double rnSitesT_ = -1e9, rnWingT_ = -1e9;  // СХОД: the bases' list read then (sim time); a wing step asked then (system time)
     OBJHANDLE rnRef_ = nullptr;                // the surface the bases' list is of
     int rnHand_ = 0;                           // the handover to ПОСАДКА НА КОРМУ: 0 none, 1 its check runs, 2 started

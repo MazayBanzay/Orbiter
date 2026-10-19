@@ -19,6 +19,7 @@
 // drawn a few times a second and may be hidden, the guidance sees every step.
 #pragma once
 
+#include "TantraWorker.h"
 #include <deque>
 #include <limits>
 #include <string>
@@ -211,6 +212,9 @@ public:
     // ---- every step (clbkPreStep) ----
     void Step(const AscentState& st, double sysNow);
     const AscentCmd& Cmd() const { return cmd_; }
+    // the plan on the ship's background thread (TantraWorker; none: at once); the live flight never waits for it
+    void SetPool(work::Pool* p) { pool_ = p; }
+    bool Planning() const { return planJob_.Busy(); }
     bool Engaged() const { return fl_.mode == kAuto || fl_.mode == kHold || fl_.mode == kAbort; }
     // ---- the keys (sysNow: the system time - the checks and the confirmations run in it) ----
     bool Editable() const { return fl_.mode == kIdle && !armed_ && checkT_ < 0; }
@@ -252,7 +256,10 @@ public:
     std::wstring TLabel() const;                  // Т−00:00 on the stand, Т+mm:ss
 
 private:
-    void Replan();
+    void Replan();                                // asks for the plan (TakePlan adopts it)
+    void TakePlan();
+    work::Pool* pool_ = nullptr;
+    work::Async<AscentPlan> planJob_;
     void Retarget();                              // after a target key: the plan, and in flight the live targets
     void FixInc();
     void Tick(double now);                        // the mockup's uiTick: the check's verdict
@@ -341,6 +348,8 @@ class Landing {
 public:
     void Step(const LandState& st, double sysNow);
     const LandCmd& Cmd() const { return cmd_; }
+    void SetPool(work::Pool* p) { pool_ = p; }    // the plan on the ship's background thread (as Ascent)
+    bool Planning() const { return planJob_.Busy(); }
     bool Engaged() const { return fl_.mode == kAuto || fl_.mode == kHold || fl_.mode == kGoAround; }
     // ---- the keys ----
     bool Editable() const { return fl_.mode == kIdle && !armed_ && checkT_ < 0; }
@@ -376,7 +385,10 @@ public:
     std::wstring TLabel() const;
 
 private:
-    void Replan();
+    void Replan();                                // asks for the plan (TakePlan adopts it)
+    void TakePlan();
+    work::Pool* pool_ = nullptr;
+    work::Async<LandPlan> planJob_;
     void Tick(double now);
     std::vector<Check> BuildChecks() const;
     int PhaseFromState() const;

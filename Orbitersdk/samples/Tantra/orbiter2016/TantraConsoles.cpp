@@ -588,10 +588,14 @@ void TantraDisplays::ThermalStep() {
     thermTrackT_ = simt;
     tantra::thermalscreen::View v; FillThermalView(v);
     thermScr_.Track(v);
-    if (thermScr_.Entry() && syst - thermFcT_ >= 1.0) {
+    // (2026-10-16) the forecast on the background thread (TantraWorker) from copies (the air's table above is Orbiter's - read
+    // here, on the frame's thread); the screen takes it when it comes
+    if (thermScr_.Entry() && syst - thermFcT_ >= 1.0 && !thermFcJob_.Busy()) {
         thermFcT_ = syst;
         tantra::thermalscreen::ForecastIn in;
         in.path = v.path; in.skin = t->damage_;
-        thermScr_.SetForecast(tantra::thermalscreen::RunForecast(in));
+        thermFcJob_.Request(&pool_, [in] { return tantra::thermalscreen::RunForecast(in); });
     }
+    tantra::thermalscreen::Forecast fc;
+    if (thermFcJob_.Take(&fc) && thermScr_.Entry()) thermScr_.SetForecast(fc);
 }

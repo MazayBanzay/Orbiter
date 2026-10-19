@@ -15,6 +15,7 @@
 #include "LanderMesh.h"
 #include "LanderCabinMesh.h"
 #include "LanderCockpit.h"
+#include "LanderInterior.h"
 #include "../core/LanderCore.h"
 #include "../core/LanderSpec.h"
 
@@ -113,6 +114,8 @@ const char* kModeKey[ln::kModeCount] = {"1", "2", "3", "4", "5", "6", "7", "8"};
 }  // namespace
 
 // ==============================================================================================================================
+static int gLaunchMfd = -1;                   // the «GRAN START» MFD mode (registered in InitModule)
+
 class Gran : public VESSEL4, public ln::CockpitHost {
 public:
     // the launch MFD's side
@@ -127,7 +130,7 @@ public:
     const ln::Snapshot& Snap() const { return core_.S(); }
     int Mode() const { return mode_; }
     Gran(OBJHANDLE h, int fmodel) : VESSEL4(h, fmodel) {}
-    ~Gran() { if (font_) oapiReleaseFont(font_); }
+    ~Gran() { interior_.Unregister(); cockpit_.Shutdown(); if (font_) oapiReleaseFont(font_); }
     void clbkSetClassCaps(FILEHANDLE cfg) override;
     void clbkLoadStateEx(FILEHANDLE scn, void* vs) override;
     void clbkSaveState(FILEHANDLE scn) override;
@@ -138,8 +141,8 @@ public:
     bool clbkDrawHUD(int mode, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp) override;
     bool clbkLoadVC(int id) override { return cockpit_.LoadVC(id); }
     bool clbkVCMouseEvent(int id, int event, VECTOR3& p) override { return cockpit_.Mouse(id, event, p); }
-    bool clbkVCRedrawEvent(int id, int event, SURFHANDLE surf) override { return cockpit_.Redraw(id, event, surf); }
-    void clbkMFDMode(int, int) override { cockpit_.MfdMode(); }
+    void clbkVisualCreated(VISHANDLE vis, int) override { cockpit_.OnVisual(vis); }
+    void clbkVisualDestroyed(VISHANDLE, int) override { cockpit_.OnVisualGone(); }
     // the cabin's side
     bool KeyLit(int pilot, int key) const override;
     int PageLines(int pilot, int key, char out[][96], int max) const override;
@@ -194,6 +197,9 @@ private:
     MESHHANDLE cabinTpl_ = nullptr;
     ln::Cockpit cockpit_;
     ln::Flight lastF_;                        // the sensors' last reading (the radar page)
+    ln::LanderInterior interior_;             // the cabin for OrbiterCrew: the person inside, as in «Тантра»
+    void HelmKeys(double dt);                 // the seated pilot's keys (the focus is his body)
+    unsigned helmPrev_ = 0, helmAtt_ = 0; bool helmSurf_ = false;
     double sepV_ = 2.5;                       // m/s the separation speed (the user: in space 2–3 m/s, set in the launch MFD)
 };
 
@@ -267,7 +273,35 @@ void Gran::clbkSetClassCaps(FILEHANDLE) {
     CreateControlSurface3(AIRCTRL_AILERON, mm::kElevonArea, 1.2, _V(-mm::kElevonPos[0], mm::kElevonPos[1], mm::kElevonPos[2]), AIRCTRL_AXIS_XPOS, 0.6);
     CreateControlSurface3(AIRCTRL_AILERON, mm::kElevonArea, 1.2, _V(mm::kElevonPos[0], mm::kElevonPos[1], mm::kElevonPos[2]), AIRCTRL_AXIS_XNEG, 0.6);
     DefineAnimations();
-    cockpit_.Init(this, cabin_, cabinTpl_, this);
+    cockpit_.Init(this, cabin_, this, gLaunchMfd);
+    {
+        ln::LanderInterior::Host h;
+        h.ctx = this;
+        h.MayWalk = [](void* c) { Gran* g = static_cast<Gran*>(c); return g->GroundContact() || g->Attached(); };
+        h.Gauges = [](void* c, OcGauge* out, int max) {
+            Gran* g = static_cast<Gran*>(c);
+            int n = 0;
+            auto put = [&](const char* lbl, const char* val, int st) {
+                if (n >= max || out[n].size < int(sizeof(OcGauge))) return;
+                std::snprintf(out[n].label, sizeof out[n].label, "%s", lbl); std::snprintf(out[n].value, sizeof out[n].value, "%s", val);
+                out[n].frac = -1; out[n].state = st; ++n;
+            };
+            char b[24];
+            const double h = g->GetAltitude(ALTMODE_GROUND);
+            if (h < 10000) std::snprintf(b, sizeof b, "%.0f м", h); else std::snprintf(b, sizeof b, "%.1f км", h / 1000);
+            put("ВЫСОТА", b, 0);
+            std::snprintf(b, sizeof b, "%.0f м/с", g->GetAirspeed()); put("СКОРОСТЬ", b, 0);
+            const double gs = length(g->cockpit_.Felt()) / 9.81;
+            std::snprintf(b, sizeof b, "%.1f g", gs); put("ПЕРЕГРУЗКА", b, gs > 4.0 ? 2 : gs > 2.5 ? 1 : 0);
+            std::snprintf(b, sizeof b, "%s", ln::ModeRu(g->mode_)); put("РЕЖИМ", b, 0);
+            const ln::Snapshot& s = g->core_.S();
+            std::snprintf(b, sizeof b, "%.0f %%  %.0f кН", g->GetThrusterGroupLevel(THGROUP_MAIN) * 100.0, s.thrustMarch / 1e3);
+            put("МАРШ", b, 0);
+            std::snprintf(b, sizeof b, "%.1f т", s.argonKg / 1e3); put("АРГОН", b, s.argonKg < 5e3 ? 2 : s.argonKg < 12e3 ? 1 : 0);
+            return n;
+        };
+        interior_.Init(this, cabin_, &cockpit_, h);
+    }
     SetTouch();
     // the cradle of «Тантра» («TLANDER», TantraPort::DefineHangar: up, forward); ShiftCG carries it with the frame
     att_ = CreateAttachment(true, _V(0, mm::kBellyMinY, 0), _V(0, -1, 0), _V(0, 0, 1), "TLANDER");
@@ -323,6 +357,7 @@ void Gran::clbkLoadStateEx(FILEHANDLE scn, void* vs) {
         else if (!_strnicmp(line, "FIN", 3)) { int v = 0; std::sscanf(line + 3, "%d", &v); finCmd_ = v != 0; finPos_ = finCmd_ ? 1.0 : 0.0; }
         else if (!_strnicmp(line, "SEPV", 4)) std::sscanf(line + 4, "%lf", &sepV_);
         else if (!_strnicmp(line, "HATCH", 5)) { int v = 0; std::sscanf(line + 5, "%d", &v); hatchCmd_ = v != 0; hatchPos_ = hatchCmd_ ? 1.0 : 0.0; }
+        else if (!_strnicmp(line, "OCSEED", 6)) { int v = 0; std::sscanf(line + 6, "%d", &v); interior_.SetSeeded(v != 0); }
         else ParseScenarioLineEx(line, vs);
     }
     mode_ = std::clamp(mode_, 0, ln::kModeCount - 1);
@@ -347,9 +382,12 @@ void Gran::clbkSaveState(FILEHANDLE scn) {
     oapiWriteScenario_int(scn, const_cast<char*>("FIN"), finCmd_ ? 1 : 0);
     oapiWriteScenario_int(scn, const_cast<char*>("HATCH"), hatchCmd_ ? 1 : 0);
     std::snprintf(buf, sizeof buf, "%.1f", sepV_); oapiWriteScenario_string(scn, const_cast<char*>("SEPV"), buf);
+    if (interior_.Seeded()) oapiWriteScenario_int(scn, const_cast<char*>("OCSEED"), 1);   // the pilots were seated (their bodies are saved)
 }
 
 void Gran::clbkPostCreation() {
+    cockpit_.Start();
+    interior_.Register();
     SetPropellantMass(argon_, core_.Prop().ArgonKg());
     SetEmptyMass(core_.Prop().MassKg() - core_.Prop().ArgonKg());
     UpdateCG(true);
@@ -482,6 +520,7 @@ void Gran::clbkPreStep(double, double simdt, double) {
     ln::Inputs in;
     in.mode = mode_; in.master = true; in.crew = crew_; in.preEntry = preEntry_;
     Sensors(in.f, simdt);
+    HelmKeys(simdt);
     in.p.march = GetThrusterGroupLevel(THGROUP_MAIN);
     in.p.collective = GetThrusterGroupLevel(THGROUP_HOVER);
     in.p.hHold = hHold_;
@@ -499,7 +538,12 @@ void Gran::clbkPreStep(double, double simdt, double) {
     Animate(simdt);
     UpdateCG(false);
     SetTouch();
+    {   // the view screen's viewer: a person inside in focus, or the lander itself (its VC)
+        const OBJHANDLE body = interior_.ViewerBody();
+        cockpit_.SetViewer(body, oapiCameraInternal() && (body || oapiGetFocusObject() == GetHandle()));
+    }
     cockpit_.Step(simdt, frameZ_);
+    interior_.Step(simdt, frameZ_, crew_);
 }
 
 void Gran::Apply(double dt) {
@@ -632,6 +676,72 @@ int Gran::clbkConsumeBufferedKey(DWORD key, bool down, char* kstate) {
     return 0;
 }
 
+// the helm from the couch (as «Тантра»'s SeatKeys): the focus is the seated pilot's body, Orbiter feeds the numpad to it,
+// so the lander reads the keys itself while the Orbiter window is in front. Numpad: + / - the marches (Ctrl: full / zero,
+// * zero), 0 / . the cups (the hover lever); 2 / 8 pitch, 4 / 6 and 1 / 3 as the lander's own (hover: the tilt and the
+// yaw; flight: the elevons and the attitude thrusters). The lander's letter keys stay the lander's (with it in focus);
+// from the couch: the ship's MFD pages (gear, fin, hatch, afterburner, emergency, hover height) and the mode switch.
+void Gran::HelmKeys(double dt) {
+    auto release = [this]() {
+        for (int g = THGROUP_ATT_PITCHUP; g <= THGROUP_ATT_BACK; g++)
+            if (helmAtt_ & (1u << g)) SetThrusterGroupLevel(THGROUP_TYPE(g), 0.0);
+        helmAtt_ = 0;
+        if (helmSurf_) { SetControlSurfaceLevel(AIRCTRL_ELEVATOR, 0.0); SetControlSurfaceLevel(AIRCTRL_AILERON, 0.0); helmSurf_ = false; }
+    };
+    // the lander itself in focus (a seated pilot: OrbiterCrew keeps no body, the focus is the ship): Orbiter's own keys
+    // drive the levers, the surfaces and the RCS; the stick's numbers come by clbkConsumeDirectKey. Here only a body in
+    // focus inside (the user 2026-10-09 «рули не работают»: this read VK_NUMPAD* - nothing with NumLock off - and zeroed
+    // the elevator every step over Orbiter's own input)
+    if (oapiGetFocusObject() == GetHandle() || interior_.HelmFocused() < 0) {
+        release(); helmPrev_ = 0;
+        if (oapiGetFocusObject() != GetHandle()) numPitch_ = numBank_ = numYaw_ = 0;
+        return;
+    }
+    // the numpad by both its codes: NumLock on (VK_NUMPAD*) and off (the navigation keys)
+    auto held = [](int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; };
+    auto num = [&](int vk, int alt) { return held(vk) || held(alt); };
+    const bool ctrl = held(VK_CONTROL);
+    enum { kPlus = 1, kMinus = 2, kStar = 4 };
+    const unsigned now = (held(VK_ADD) ? kPlus : 0) | (held(VK_SUBTRACT) ? kMinus : 0) | (held(VK_MULTIPLY) ? kStar : 0);
+    const unsigned edge = now & ~helmPrev_;
+    helmPrev_ = now;
+    double thr = GetThrusterGroupLevel(THGROUP_MAIN);
+    const double thr0 = thr;
+    if (ctrl && (edge & kPlus)) thr = 1.0;
+    else if (ctrl && (edge & kMinus)) thr = 0.0;
+    else if (!ctrl && (now & kPlus)) thr += 0.3 * dt;
+    else if (!ctrl && (now & kMinus)) thr -= 0.3 * dt;
+    if (edge & kStar) thr = 0.0;
+    thr = Clamp(thr, 0.0, 1.0);
+    if (thr != thr0) SetThrusterGroupLevel(THGROUP_MAIN, thr);
+    double hov = GetThrusterGroupLevel(THGROUP_HOVER);
+    if (num(VK_NUMPAD0, VK_INSERT)) hov += 0.3 * dt;
+    if (num(VK_DECIMAL, VK_DELETE)) hov -= 0.3 * dt;
+    SetThrusterGroupLevel(THGROUP_HOVER, Clamp(hov, 0.0, 1.0));
+    // the stick: the hover's tilt and yaw (Sensors reads these), in flight also the elevons and the attitude thrusters
+    numPitch_ = (num(VK_NUMPAD2, VK_DOWN) ? 1.0 : 0.0) - (num(VK_NUMPAD8, VK_UP) ? 1.0 : 0.0);
+    numBank_ = (num(VK_NUMPAD6, VK_RIGHT) ? 1.0 : 0.0) - (num(VK_NUMPAD4, VK_LEFT) ? 1.0 : 0.0);
+    numYaw_ = (num(VK_NUMPAD3, VK_NEXT) ? 1.0 : 0.0) - (num(VK_NUMPAD1, VK_END) ? 1.0 : 0.0);
+    if (HoverMode()) { release(); return; }
+    const double k = ctrl ? 0.3 : 1.0;
+    SetControlSurfaceLevel(AIRCTRL_ELEVATOR, k * numPitch_);
+    SetControlSurfaceLevel(AIRCTRL_AILERON, k * numBank_);
+    helmSurf_ = true;
+    struct K { double v; THGROUP_TYPE pos, neg; };
+    const K att[] = {{numPitch_, THGROUP_ATT_PITCHUP, THGROUP_ATT_PITCHDOWN}, {numBank_, THGROUP_ATT_BANKRIGHT, THGROUP_ATT_BANKLEFT},
+                     {numYaw_, THGROUP_ATT_YAWRIGHT, THGROUP_ATT_YAWLEFT}};
+    unsigned set = 0;
+    if (GetAttitudeMode() == RCS_ROT)
+        for (const K& a : att) {
+            if (a.v == 0.0) continue;
+            const THGROUP_TYPE g = a.v > 0 ? a.pos : a.neg;
+            SetThrusterGroupLevel(g, k); set |= 1u << g;
+        }
+    for (int g = THGROUP_ATT_PITCHUP; g <= THGROUP_ATT_BACK; g++)
+        if ((helmAtt_ & ~set) & (1u << g)) SetThrusterGroupLevel(THGROUP_TYPE(g), 0.0);
+    helmAtt_ = set;
+}
+
 int Gran::clbkConsumeDirectKey(char* kstate) {
     // the numpad as the hover's stick (Orbiter's own: 2/8 pitch, 4/6 bank, 1/3 yaw); read, not consumed
     numPitch_ = (KEYDOWN(kstate, OAPI_KEY_NUMPAD2) ? 1.0 : 0.0) - (KEYDOWN(kstate, OAPI_KEY_NUMPAD8) ? 1.0 : 0.0);
@@ -682,16 +792,24 @@ int Gran::PageLines(int pilot, int key, char out[][96], int max) const {
     };
     auto tanks = [&]() { L("баки: нос %.0f, корма %.0f, крыло %.0f кг", s.tankKg[0], s.tankKg[1], s.tankKg[2]); };
     if (pilot == 0) switch (key) {
-        case 0: case 1:
+        case 0: case 1: {
             L("состояние: %s", ln::StateRu(s.unit[key].state)); L("%s", s.unit[key].why);
-            L("тяга %.0f кН (рукоять МАРШ)", s.thrust[key] / 1e3);
-            L("поле %.1f Тл, обмотка %.1f К", s.B[key], s.coilT[key]); L("запас по току %.0f %%", s.margin[key] * 100.0);
-            L("УВТ: тангаж %.1f°, рыскание %.1f°", s.tvcP[key], s.tvcY[key]); break;
+            L("рукоять МАРШ %.0f %%  ·  тяга %.0f кН", GetThrusterGroupLevel(THGROUP_MAIN) * 100.0, s.thrust[key] / 1e3);
+            const bool marches = mode_ == ln::kTransition || mode_ == ln::kFlight || mode_ == ln::kRunway;
+            if (marches) L("маршевые по рукояти: Num+ / Num-, Ctrl полный / ноль");
+            else L("в режиме «%s» маршевые не работают: переход, полёт, полоса", ln::ModeRu(mode_));
+            L("поле %.1f Тл, обмотка %.1f К, запас по току %.0f %%", s.B[key], s.coilT[key], s.margin[key] * 100.0);
+            L("УВТ: тангаж %.1f°, рыскание %.1f°", s.tvcP[key], s.tvcY[key]);
+            L("аргон %.0f кг, расход %.1f кг/с", s.argonKg, s.argonFlow); tanks(); break;
+        }
         case 2: case 3: {
             const int r = key == 2 ? 1 : 0;
             L("ряд %s: %s", key == 2 ? "передний" : "задний", ln::StateRu(s.row[r].state)); L("%s", s.row[r].why);
-            L("чаши: тяга %.0f кН, Т/В %.2f", s.thrustLift / 1e3, s.twNominal);
-            L("высота висения %.0f м (рукоять ЧАШИ)", hHold_); break;
+            L("рукоять ЧАШИ %.0f %%  ·  тяга чаш %.0f кН, Т/В %.2f", GetThrusterGroupLevel(THGROUP_HOVER) * 100.0, s.thrustLift / 1e3, s.twNominal);
+            L("чаши: Num0 / Num. ; режимы висение, переход, верт. посадка, захват");
+            L("высота висения %.0f м", hHold_);
+            L("%s", s.decision);
+            L("аргон %.0f кг, расход %.1f кг/с", s.argonKg, s.argonFlow); break;
         }
         case 4:
             L("РСУ: %s", ln::StateRu(s.rcs.state)); L("%s", s.rcs.why);
@@ -750,12 +868,15 @@ int Gran::PageLines(int pilot, int key, char out[][96], int max) const {
 
 int Gran::PageButtons(int pilot, int key, const char* lbl[2]) const {
     if (pilot == 0) switch (key) {
+        case 0: case 1: lbl[0] = "МАРШ +10 %"; lbl[1] = "МАРШ -10 %"; return 2;
+        case 2: lbl[0] = "ЧАШИ +10 %"; lbl[1] = "ЧАШИ -10 %"; return 2;
+        case 3: lbl[0] = "ВЫСОТА +5 м"; lbl[1] = "ВЫСОТА -5 м"; return 2;
         case 5: lbl[0] = ab_ ? "ФОРСАЖ ВЫКЛ" : "ФОРСАЖ ВКЛ"; return 1;
         case 6: lbl[0] = "ВЫПУСТИТЬ"; lbl[1] = "УБРАТЬ"; return 2;
         case 7: lbl[0] = "ПОДНЯТЬ"; lbl[1] = "СЛОЖИТЬ"; return 2;
         case 8: lbl[0] = "ОТКРЫТЬ"; lbl[1] = "ЗАКРЫТЬ"; return 2;
         case 10: lbl[0] = emerg_ ? "АВАР. ВЫКЛ" : "АВАР. ВКЛ"; return 1;
-        case 11: lbl[0] = "ВЫСОТА +5 м"; lbl[1] = "ВЫСОТА -5 м"; return 2;
+        case 11: lbl[0] = "РЕЖИМ ДАЛЬШЕ"; lbl[1] = "РЕЖИМ НАЗАД"; return 2;
         default: return 0;
     }
     switch (key) {
@@ -767,12 +888,15 @@ int Gran::PageButtons(int pilot, int key, const char* lbl[2]) const {
 
 void Gran::PagePress(int pilot, int key, int b) {
     if (pilot == 0) switch (key) {
+        case 0: case 1: SetThrusterGroupLevel(THGROUP_MAIN, Clamp(GetThrusterGroupLevel(THGROUP_MAIN) + (b == 0 ? 0.1 : -0.1), 0.0, 1.0)); break;
+        case 2: SetThrusterGroupLevel(THGROUP_HOVER, Clamp(GetThrusterGroupLevel(THGROUP_HOVER) + (b == 0 ? 0.1 : -0.1), 0.0, 1.0)); break;
+        case 3: hHold_ = b == 0 ? hHold_ + 5.0 : std::max(0.0, hHold_ - 5.0); break;
         case 5: ab_ = !ab_; break;
         case 6: gearCmd_ = b == 0 ? 1 : 0; break;
         case 7: finCmd_ = b == 1; break;
         case 8: hatchCmd_ = b == 0; break;
         case 10: emerg_ = !emerg_; break;
-        case 11: hHold_ = b == 0 ? hHold_ + 5.0 : std::max(0.0, hHold_ - 5.0); break;
+        case 11: ModeStep(b == 0 ? 1 : -1); break;
         default: break;
     }
     else switch (key) {
@@ -904,7 +1028,6 @@ private:
     const char* last_ = "";
 };
 
-static int gLaunchMfd = -1;
 DLLCLBK void InitModule(HINSTANCE) {
     static char name[] = "GRAN START";
     MFDMODESPECEX spec;

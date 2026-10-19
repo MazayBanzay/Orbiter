@@ -5,6 +5,7 @@
 #include "MeshLayout.h"
 #include "TantraCrew.h"
 #include "PanelLayout.h"
+#include "TantraPerf.h"
 
 #include <algorithm>
 #include <cmath>
@@ -927,8 +928,11 @@ void TantraInterior::Step(double dt) {
     const double rdt = oapiGetSysStep() / (oapiGetTimeAcceleration() > 10.0 ? 4.0 : 1.0);   // the screens' timers: real time, rarer over x10
     ILiftStep(dt);
     PanelLights();
+    TANTRA_PERF("int-lift");                                             // (2026-10-16) the interior's blocks in «Tantra perf»
     mfds_.Step();
+    TANTRA_PERF("int-mfds");
     if (touch_.Step) touch_.Step(touch_.ctx, dt);
+    TANTRA_PERF("int-touch");
     for (int k = 0; k < 2; k++) {                                        // the elbow displays: ~1 s to sink / rise
         const double d = sideTarget_[k] - sidePos_[k];
         if (d == 0.0) continue;
@@ -940,8 +944,10 @@ void TantraInterior::Step(double dt) {
         panelT_ = 0.1;
         for (int a : pareas_) console_.Redraw(console_.ctx, a);
     }
+    TANTRA_PERF("int-panels");
     if ((statusT_ -= rdt) <= 0.0) { statusT_ = 0.25; DrawStatus(); }   // (real time: the screens as at x1 whatever the warp)
     if ((cabScrT_ -= rdt) <= 0.0) { cabScrT_ = 0.25; DrawCabStatus(); }
+    TANTRA_PERF("int-status");
     if (panel_.Cabin) {                                                  // the cabin's panel where the cabin is; door B's leaves
         double out = 0.0, down = 0.0; int ag = 0; panel_.Cabin(panel_.ctx, &out, &down, &ag);
         v_->SetAnimation(cabOutAnim_, out);

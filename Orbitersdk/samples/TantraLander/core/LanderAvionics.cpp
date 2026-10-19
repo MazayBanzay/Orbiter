@@ -211,9 +211,13 @@ void Avionics::Step(const AvIn& in, AvOut& out) {
         break;
     }
     case kRunway:
+        // the runway: the marches by the lever (the takeoff run, the go-around), the УВТ by the stick; the automat's glide is
+        // the landing's (the lever at zero)
+        for (int i = 0; i < kMarch; ++i) { out.thr[i] = in.p.march; out.tvcY[i] = in.p.yaw * kTvcMax; out.tvcP[i] = in.p.pitch * kTvcMax; }
         out.flap = kRunwayFlap;
         out.elevon = automat ? std::clamp(57.3 * (1.0 * f.pitch + 1.0 * f.pitchRate), -25.0, 25.0) : -in.p.pitch * 25.0;
-        decision = automat ? "автомат посадки на полосу: глиссада атака 18°, ~105 м/с без тяги, щиток 10°" : "посадка на полосу вручную";
+        decision = in.p.march > 0.02 ? "полоса: маршевые по рукояти (разбег / уход на второй круг)"
+                 : automat ? "автомат посадки на полосу: глиссада атака 18°, ~105 м/с без тяги, щиток 10°" : "посадка на полосу вручную";
         break;
     case kDock:
         Hover(in, out, false);

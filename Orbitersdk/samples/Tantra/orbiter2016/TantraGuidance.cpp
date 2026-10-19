@@ -652,14 +652,22 @@ void Ascent::Retarget() {
 
 void Ascent::FixInc() { const double lat = std::fabs(SiteLat()); tg_.inc = Clamp(tg_.inc, lat, 180 - lat); }
 
+// (2026-10-16) the plan on the background thread (TantraWorker) from copies; the live flight (NewFlight) does not wait for it
 void Ascent::Replan() {
     FixInc();
-    plan_ = PlanAscent(tg_, st_.lat, st_.alt, st_.planet, Model());
+    const Targets tg = tg_; const double lat = st_.lat, alt = st_.alt; const Planet pl = st_.planet; const ShipModel sm = Model();
+    planJob_.Request(pool_, [tg, lat, alt, pl, sm] { return PlanAscent(tg, lat, alt, pl, sm); });
+    TakePlan();
     if (fl_.mode == kIdle) NewFlight();
 }
 
+void Ascent::TakePlan() {
+    if (!planJob_.Take(&plan_)) return;
+    if (checkT_ >= 0) checks_ = BuildChecks();    // ВЗВЕСТИ's checks read the plan that has come
+}
+
 void Ascent::Tick(double now) {
-    if (checkT_ >= 0 && now - checkT_ > checks_.size() * kCheckDt + 0.3) {
+    if (checkT_ >= 0 && !planJob_.Busy() && now - checkT_ > checks_.size() * kCheckDt + 0.3) {
         checkT_ = -1;
         const Check* bad = nullptr;
         for (const Check& c : checks_) if (!c.ok) { bad = &c; break; }
@@ -692,6 +700,7 @@ std::vector<Check> Ascent::BuildChecks() const {
 void Ascent::Step(const AscentState& st, double now) {
     const bool first = !have_;
     st_ = st; have_ = true;
+    TakePlan();
     if (first) {
         Replan();
         Note(st.contact ? L"Корабль на столе. Задайте цель и нажмите ВЗВЕСТИ" : L"Задайте цель и нажмите ВЗВЕСТИ", kOk);
@@ -913,11 +922,17 @@ void Landing::Replan() {
         const Alloc a = AllocL(s.Fcmd, PodsAvail(s));
         s.Fm = a.Fm; s.Fp = a.Fp; s.B = s.Breq = a.B;
     }
-    plan_ = PlanLanding(s);
+    planJob_.Request(pool_, [s] { return PlanLanding(s); });   // (2026-10-16) on the background thread, as Ascent
+    TakePlan();
+}
+
+void Landing::TakePlan() {
+    if (!planJob_.Take(&plan_)) return;
+    if (checkT_ >= 0) checks_ = BuildChecks();
 }
 
 void Landing::Tick(double now) {
-    if (checkT_ >= 0 && now - checkT_ > checks_.size() * kCheckDt + 0.3) {
+    if (checkT_ >= 0 && !planJob_.Busy() && now - checkT_ > checks_.size() * kCheckDt + 0.3) {
         checkT_ = -1;
         const Check* bad = nullptr;
         for (const Check& c : checks_) if (!c.ok) { bad = &c; break; }
@@ -942,6 +957,7 @@ std::vector<Check> Landing::BuildChecks() const {
 void Landing::Step(const LandState& st, double now) {
     const bool first = !have_;
     st_ = st; have_ = true;
+    TakePlan();
     // the wind's plane: along the wind (the mockup's x), across it; with no wind the line to the point
     wind_ = std::hypot(st.windE, st.windN);
     if (wind_ > 0.5) { aE_ = st.windE / wind_; aN_ = st.windN / wind_; }

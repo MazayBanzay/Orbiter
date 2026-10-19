@@ -119,11 +119,22 @@ struct LiveShip {
     }
 };
 
-static void LiveRun(const World& w, const Ship& sh, int regime, double inc, int site) {
-    std::printf("\n== живой автопилот: %s, %s, %s ==\n", w.name, sh.name, U8(kRegimes[regime]).c_str());
+// (2026-10-16) threaded: the plan and the regulator's forecasts on a real background thread (TantraWorker), the steps paced
+// at ~0.5 ms of wall time per 0.1 s (a time warp of ~x200: the results come late in sim time, harder than in the game)
+static void Pace(bool on) {
+    if (!on) return;
+    const auto t = std::chrono::steady_clock::now();
+    while (std::chrono::steady_clock::now() - t < std::chrono::microseconds(500)) {}
+}
+
+static void LiveRun(const World& w, const Ship& sh, int regime, double inc, int site, bool threaded = false) {
+    std::printf("\n== живой автопилот: %s, %s, %s%s ==\n", w.name, sh.name, U8(kRegimes[regime]).c_str(), threaded ? ", ФОНОВЫЙ ПОТОК" : "");
+    work::Pool pool;
+    if (threaded) pool.Start();
     LiveShip S; S.w = w; S.pl = w.pl; Orbit(w.pl, inc, &S.r, &S.v); S.m = sh.m; S.argon = sh.argon; S.iron = sh.iron;
     S.noseI = Mul(S.v, -1 / Ln(S.v));
     Reentry ap;
+    ap.SetPool(threaded ? &pool : nullptr);
     std::vector<Site> sites;
     if (site >= 0) sites.push_back({L"цель", 0.0, 0.0});
     double sys = 0.0;
@@ -136,7 +147,8 @@ static void LiveRun(const World& w, const Ship& sh, int regime, double inc, int 
         sites[0].lat = Ph.latHand; sites[0].lon = Ph.lonHand;
         ap.SetSites(sites); ap.StepSite(+1);
     }
-    ap.Arm(sys); for (int i = 0; i < 60; ++i) { sys += 0.1; ap.Step(S.State(regime), sys); }
+    if (threaded) while (ap.Planning()) ap.Step(S.State(regime), sys);   // the site's plan comes first, as on the screen
+    ap.Arm(sys); for (int i = 0; i < 60 || (threaded && ap.Checking()); ++i) { sys += 0.1; ap.Step(S.State(regime), sys); Pace(threaded); }
     check(ap.Armed(), "ВЗВЕСТИ: готовность подтверждена");
     if (!ap.Armed()) { for (const Check& c : ap.ChecksShown()) std::printf("    [%s] %s\n", c.ok ? "+" : "-", U8(c.t).c_str()); return; }
     ap.Start(sys); ap.Start(sys + 0.5);
@@ -147,6 +159,7 @@ static void LiveRun(const World& w, const Ship& sh, int regime, double inc, int 
     for (int k = 0; k < int(4 * 3600 / dt) && !hand; ++k) {
         const ReentryState st = S.State(regime);
         sys += dt;
+        Pace(threaded);
         ap.Step(st, sys);
         const ReentryCmd& c = ap.Cmd();
         if (c.handover) { hand = true; break; }
@@ -277,6 +290,7 @@ int main() {
     // the live autopilot: КОРМОЙ · ТЯГА on the Earth (52 kt, with the site) and on Mars (15 kt)
     LiveRun(Earth(), kFull, kRStern, 51.6, 0);
     LiveRun(Mars(), kLight, kRStern, 25.0, -1);
+    LiveRun(Earth(), kFull, kRStern, 51.6, 0, true);
     std::printf("\n%s (%d)\n", fails ? "FAILED" : "ALL OK", fails);
     return fails ? 1 : 0;
 }

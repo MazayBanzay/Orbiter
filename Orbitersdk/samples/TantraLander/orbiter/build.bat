@@ -14,8 +14,8 @@ set DES=%ORB%\Tantra_Design\lander_mesh\out
 if not exist "%OUT%" mkdir "%OUT%"
 
 cl /nologo /O2 /MD /EHsc /std:c++17 /W3 /LD /D_CRT_SECURE_NO_WARNINGS /wd4828 /Zc:strictStrings- ^
- /source-charset:utf-8 /execution-charset:windows-1251 /I"%SDK%\include" /Fo"%OUT%\\" /Fe"%OUT%\TantraLander.dll" ^
- "%ROOT%TantraLander.cpp" "%ROOT%LanderCockpit.cpp" "%ROOT%..\core\LanderCore.cpp" "%ROOT%..\core\LanderPropulsion.cpp" "%ROOT%..\core\LanderAvionics.cpp" ^
+ /source-charset:utf-8 /execution-charset:windows-1251 /I"%SDK%\include" /I"%SDK%\samples\ShipView" /I"%SDK%\samples\Tantra\orbiter2016" /Fo"%OUT%\\" /Fe"%OUT%\TantraLander.dll" ^
+ "%ROOT%TantraLander.cpp" "%ROOT%LanderCockpit.cpp" "%ROOT%LanderInterior.cpp" "%SDK%\samples\ShipView\ShipMfd.cpp" "%SDK%\samples\ShipView\ViewScreen.cpp" "%ROOT%..\core\LanderCore.cpp" "%ROOT%..\core\LanderPropulsion.cpp" "%ROOT%..\core\LanderAvionics.cpp" ^
  /link /LIBPATH:"%SDK%\lib" orbiter.lib Orbitersdk.lib kernel32.lib user32.lib gdi32.lib
 if errorlevel 1 (echo BUILD FAILED & exit /b 1)
 
