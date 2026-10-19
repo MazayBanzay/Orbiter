@@ -44,6 +44,12 @@ PSOut PS(VSOut i)
     if (t1 <= 0) discard;
     float dz = tDepth.Load(int3(i.pos.xy, 0));
     float tS = dz > 0 ? rl * aTan.z / dz : 1e30;     // reverse Z, infinite far plane: depth = near / view z
+    // the liquid's surface (it writes no depth: the vessels' parts below it stay visible through it): an end of the ray
+    // like the scene's - the air up to it, the liquid's colour behind (never the ground fill below over it)
+    if (gLiq2.w > 0.5) {
+        float3 cL = gLiq0.xyz; float bL = dot(d, cL), discL = bL * bL - (dot(cL, cL) - gLiq0.w * gLiq0.w);
+        if (discL > 0) { float tL = bL - sqrt(discL); if (tL > 0) tS = min(tS, tL); }
+    }
     float tG = 1e30;                                 // inside the air: the ground (R - 1 km) where no tile is drawn
     if (alt < Rt - R) {
         float disG = -K - 1000 * (2 * R - 1000);
@@ -61,7 +67,7 @@ PSOut PS(VSOut i)
     if (t1 <= t0) discard;
 
     float3 L, T, fwd;
-    FxMarch(org, d, tc0, K, t0, t1, 32, L, T, fwd);
+    FxMarch(org, d, tc0, K, t0, t1, 48, L, T, fwd);
     if (ground) {   // beyond the drawn tiles: the ground lit by the Sun and the sky
         float q = K + (t1 - tc0) * (t1 - tc0);
         float r = sqrt(max(R * R + q, 1));

@@ -10,7 +10,7 @@ Texture2D tMS : register(t1);
 RWTexture2D<float4> uOut : register(u0);
 
 static const float FX_PI = 3.14159265;
-static const int MS_N = 32;
+static const int MS_N = 64;
 
 float3 FxRayleigh(float h) { return mRay.rgb * FxRayDensity(h); }
 float3 FxMieScatter(float h) { return mMieSca.rgb * FxMieDensity(h); }
@@ -24,8 +24,7 @@ float3 PhaseMie(float c)   // Cornette-Shanks, per channel g
 
 float3 MSLookup(float r, float muS)
 {
-    float xr = saturate((r - mCentre.w) / (mGeo.x - mCentre.w));
-    return FxBilinear(tMS, float2((muS * 0.5 + 0.5) * (MS_N - 1), xr * (MS_N - 1)), int2(0, 0), int2(MS_N, MS_N)).rgb;
+    return FxBilinear(tMS, float2((muS * 0.5 + 0.5) * (MS_N - 1), FxAltX(r) * (MS_N - 1)), int2(0, 0), int2(MS_N, MS_N)).rgb;
 }
 
 // distance along d from p to the top of the air, and to the ground (-1: misses it)
@@ -94,7 +93,7 @@ void CSMS(uint3 g : SV_GroupID, uint t : SV_GroupIndex)
 {
     float R = mCentre.w, top = mGeo.x;
     float muS = g.x / (float)(MS_N - 1) * 2 - 1;
-    float r = R + (top - R) * g.y / (float)(MS_N - 1);
+    float r = FxAltR(g.y / (float)(MS_N - 1));
     r = clamp(r, R + 1, top - 1);
     float3 sunD = float3(sqrt(max(1 - muS * muS, 0)), muS, 0);
     float3 p0 = float3(0, r, 0);
@@ -164,7 +163,7 @@ void CSIrr(uint3 g : SV_GroupID, uint t : SV_GroupIndex)
 {
     float R = mCentre.w, top = mGeo.x;
     float muS = g.x / (float)(FX_IW - 1) * 2 - 1;
-    float r = clamp(R + (top - R) * g.y / (float)(FX_IH - 1), R + 1, top - 1);
+    float r = clamp(FxAltR(g.y / (float)(FX_IH - 1)), R + 1, top - 1);
     float3 sunD = float3(sqrt(max(1 - muS * muS, 0)), muS, 0);
     // cosine-weighted directions over the upper hemisphere: E = pi * mean(L)
     float u = (t + 0.5) / 64.0, ph = t * 2.3999632, s = sqrt(u);

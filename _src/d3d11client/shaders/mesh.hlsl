@@ -6,7 +6,7 @@ cbuffer Obj : register(b1)
     float4x4 gW;        // to the camera-centred global frame
     float4 gSunM;       // direction to the Sun (global)
     float4 gDiff, gMAmb, gSpec, gEmis;   // spec.w = power
-    float4 gFlags;      // x: texture, y: cockpit mesh, z: 1 = not lit (the group's flag 4: a display, a light), w: brightness factor of an unlit group
+    float4 gFlags;      // x: texture, y: cockpit mesh, z: 1 = not lit (the group's flag 4: a display, a light), w: 1 = seen as it is (cockpit)
     float4x4 gCurNJ;    // this frame's WVP without the TAA jitter
     float4x4 gPrevNJ;   // last frame's
 };
@@ -36,17 +36,35 @@ PSOut PS(VSOut i, bool front : SV_IsFrontFace)
     float4 tex = gFlags.x > 0 ? tDiff.Sample(sAniso, i.uv) : float4(1, 1, 1, 1);
     float4 base = gDiff * tex;
     if (gFlags.z > 0.5) {      // not lit: its own colour (a display, a lamp); the cockpit's ones keep their brightness to the eye
-        o.c = float4((base.rgb + gEmis.rgb * tex.rgb) * gFlags.w, base.a);
+        float3 c = base.rgb + gEmis.rgb * tex.rgb;
+        if (gFlags.w > 0.5) c /= max(gAdapt.w * gAdapt.rgb, 1e-4);   // in the cockpit: as it is, not adapted
+        o.c = float4(c, base.a);
         return o;
     }
     float3 n = normalize(i.n);
     float3 V = normalize(-i.wp);
     float3 L = gSunM.xyz;
     float nl = saturate(dot(n, L)) * ShadowAt(i.wp);
-    float3 col = base.rgb * (nl * SunLight(i.wp) + SkyLight(n, i.wp) + (FxActive() ? 0.02 / max(gHazeRGB.w, 1.0) : 0.02) * gMAmb.rgb) + gEmis.rgb * tex.rgb;   // the fill stays constant on screen under the eye's adaptation   // the emission through the texture, as D3D9 lights it
+    float3 col = base.rgb * (nl * SunLight(i.wp) + SkyLight(n, i.wp) + (FxActive() ? 0.02 / max(gHazeRGB.w * gAdapt.rgb, 1e-3) : 0.02) * gMAmb.rgb) + gEmis.rgb * tex.rgb;   // the faint fill: neutral and constant on screen under the eye's adaptation; the emission through the texture, as D3D9 lights it
     if (gSpec.w > 0) {
         float3 H = normalize(V + L);
         col += gSpec.rgb * pow(saturate(dot(n, H)), max(gSpec.w, 1)) * nl * SunLight(i.wp);
+    }
+    // below the liquid's level (seen from above it): through the column of liquid along the view ray, as the liquid
+    // pass shows its bed - Beer-Lambert per channel and the liquid's own colour scattered in
+    if (gLiq2.w > 0.5) {
+        float Rl = gLiq0.w;
+        float3 c = gLiq0.xyz;
+        if (length(i.wp - c) < Rl) {
+            float dist = length(i.wp);
+            float3 d = i.wp / dist;
+            float b = dot(d, c), disc = b * b - (dot(c, c) - Rl * Rl);
+            float tIn = disc > 0 ? b - sqrt(disc) : 0;           // where the ray enters the liquid
+            float path = max(dist - max(tIn, 0), 0);
+            float3 tr = exp(-gLiq1.w * gLiq2.rgb * path);
+            float3 up = normalize(-c);
+            col = col * tr + gLiq1.rgb * SkyLight(up, i.wp) * 0.35 * (1 - tr);
+        }
     }
     o.c = float4(ApplyHaze(col, i.wp), base.a);
     return o;

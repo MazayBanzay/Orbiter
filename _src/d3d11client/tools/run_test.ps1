@@ -1,9 +1,12 @@
-# Test run of the D3D11 client: Orbiter's NG server, minimised (no focus change), no sound (XRSound left out for the run),
+﻿# Test run of the D3D11 client: Orbiter's NG server, minimised (no focus change), no sound (XRSound left out for the run),
 # the client loaded from the command line. Afterwards Orbiter_NG.cfg and "(Current state).scn" are put back as they were.
 # -Set "Key = value", ...: Client.cfg keys for this run only (e.g. -Set "MicroTextures = 0")
 param([string]$Scenario = "(Current state)", [int]$Seconds = 45, [int]$AA = -1, [string[]]$Set = @())
 $orb = "C:\Games\Orbiter-2024"
 # never alongside the user's own Orbiter: the restore at the end would overwrite their cfg and state
+# one test at a time across all sessions: a named mutex queues them (released when this script's process ends)
+$runLock = New-Object System.Threading.Mutex($false, "Local\D3D11ClientTestRun")
+try { if (-not $runLock.WaitOne([TimeSpan]::FromMinutes(15))) { "another test is still running - test skipped"; exit 2 } } catch [System.Threading.AbandonedMutexException] { }
 if (Get-Process -Name Orbiter, Orbiter_ng -ErrorAction SilentlyContinue) { "Orbiter is running - test skipped"; exit 2 }
 $cs = Join-Path $orb "Scenarios\(Current state).scn"
 $cfg = Join-Path $orb "Orbiter_NG.cfg"

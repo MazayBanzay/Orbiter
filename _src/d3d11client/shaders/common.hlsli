@@ -12,6 +12,11 @@ cbuffer Frame : register(b0)
     float4 gHazeRGB;    // spectral weights of the extinction; w: exposure
     float4x4 gLightVP;  // camera-centred global -> shadow map
     float4 gShadow;     // x: on, y: texel
+    float4 gAdapt;      // the eye's adaptation: rgb the colour balance (applied in the tone mapping), w the brightness
+                        // factor included in gHazeRGB.w; things seen as they are (the HUD, displays) divide both out
+    float4 gLiq0;       // the liquid under the camera: its planet's centre from the camera; w: the level's radius (0: none)
+    float4 gLiq1;       // its in-scattered colour; w: extinction [1/m]
+    float4 gLiq2;       // its channel weights; w: 1 = on
 };
 Texture2D<float> tShadow : register(t7);
 SamplerComparisonState sShadow : register(s2);

@@ -275,8 +275,7 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
             // the mesh file's FLAG (UsrFlag) 4: not lit. In the cockpit such a group (a display, the helmet's light layer) is
             // seen by the eye as it is: the eye's adaptation to a dim scene (the FX exposure) must not brighten it
             const bool unlit = (g.usrFlag & 4) != 0;
-            const float adapt = g_fxAtmo.active && g_fxAtmo.exposure > 0 ? g_fxAtmo.exposure : 1.0f;
-            c.flags = { s && s->srv ? 1.0f : 0.0f, (float)internal, unlit ? 1.0f : 0.0f, internal ? 1.0f / adapt : 1.0f };
+            c.flags = { s && s->srv ? 1.0f : 0.0f, (float)internal, unlit ? 1.0f : 0.0f, internal ? 1.0f : 0.0f };
             D3D11_MAPPED_SUBRESOURCE ms;
             ctx->Map(cbObj.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms); memcpy(ms.pData, &c, sizeof c); ctx->Unmap(cbObj.Get(), 0);
             ctx->PSSetShaderResources(0, 1, &srv);

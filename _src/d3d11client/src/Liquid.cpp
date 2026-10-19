@@ -4,6 +4,7 @@
 // Level, extinction, colour, index: Config\GC\<planet>.atm.cfg (AtmoFX_Liquid*) or Config\D3D11Client\<planet>.cfg.
 #include "Client.h"
 #include "FxInternal.h"
+#include "Wake.h"
 
 static const int LR = 256, LS = 256;          // rings, segments
 const std::vector<Planet*>* g_fxPlanets = nullptr;
@@ -81,7 +82,9 @@ void D3D11Client::RenderLiquid(const VECTOR3& cp, const MATRIX3& cr, const XMMAT
     c.e2 = { (float)e2.x, (float)e2.y, (float)e2.z, 0 };
     c.colour = { (float)L.colour.x, (float)L.colour.y, (float)L.colour.z, (float)L.ext };
     c.wts = { (float)L.wts.x, (float)L.wts.y, (float)L.wts.z, (float)L.index };
-    c.misc = { (float)fmod(oapiGetSimTime(), 10000.0), 0.1f, 0, 0 };
+    static float dbg = -1;
+    if (dbg < 0) { char v[8] = {}; dbg = GetEnvironmentVariableA("D3D11CLIENT_LIQDBG", v, sizeof v) ? (float)atoi(v) : 0.0f; }
+    c.misc = { (float)fmod(oapiGetSimTime(), 10000.0), 0.1f, dbg, 0 };
     const FxWaveView& wv = FxWaves();
     bool waves = wv.on && wv.planet == lp && wv.slopes;
     c.wA = { (float)wv.anchor.x, (float)wv.anchor.y, (float)wv.anchor.z, (float)wv.dx };
@@ -109,9 +112,29 @@ void D3D11Client::RenderLiquid(const VECTOR3& cp, const MATRIX3& cr, const XMMAT
     ctx->PSSetShaderResources(0, 3, srv);
     ctx->VSSetShaderResources(2, 1, &wsrv);
     ctx->VSSetSamplers(0, 1, sampAniso.GetAddressOf());
+    // the wakes: their sources (b5) and the Kelvin table (t3)
+    {
+        if (!wakeCB) {
+            D3D11_BUFFER_DESC bd = { sizeof(XMFLOAT4) * (WAKE_MAX * 3 + 1), D3D11_USAGE_DYNAMIC, D3D11_BIND_CONSTANT_BUFFER, D3D11_CPU_ACCESS_WRITE, 0, 0 };
+            dev->CreateBuffer(&bd, nullptr, &wakeCB);
+            kelvinSRV = WakeLoadKelvin(dev.Get());
+        }
+        WakeSrc src[WAKE_MAX];
+        int nw = WakeSources(lp->hObj, Rl, cp, src, WAKE_MAX);
+        if (!kelvinSRV) for (int k = 0; k < nw; k++) if (src[k].b.w < 0.5f) src[k].a.y = 0;   // no table: no Kelvin wake
+        D3D11_MAPPED_SUBRESOURCE wm;
+        if (wakeCB && SUCCEEDED(ctx->Map(wakeCB.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &wm))) {
+            memcpy(wm.pData, src, sizeof(WakeSrc) * nw);
+            XMFLOAT4 cnt = { (float)nw, 0, 0, 0 };
+            memcpy((BYTE*)wm.pData + sizeof(XMFLOAT4) * WAKE_MAX * 3, &cnt, sizeof cnt);
+            ctx->Unmap(wakeCB.Get(), 0);
+        }
+        ctx->PSSetConstantBuffers(5, 1, wakeCB.GetAddressOf());
+        ctx->PSSetShaderResources(3, 1, kelvinSRV.GetAddressOf());
+    }
     ctx->DrawIndexed(liqIdx, 0, 0);
-    ID3D11ShaderResourceView* nul[3] = {};
-    ctx->PSSetShaderResources(0, 3, nul);
+    ID3D11ShaderResourceView* nul[4] = {};
+    ctx->PSSetShaderResources(0, 4, nul);
     ctx->VSSetShaderResources(2, 1, nul);
     ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
 }

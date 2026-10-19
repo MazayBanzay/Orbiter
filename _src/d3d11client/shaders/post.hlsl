@@ -10,7 +10,7 @@ VSOut VS(uint id : SV_VertexID)
 }
 float4 PS(VSOut i) : SV_Target
 {
-    float3 c = tHDR.Load(int3(i.pos.xy, 0)).rgb * gHazeRGB.w;   // exposure (Advanced)
+    float3 c = tHDR.Load(int3(i.pos.xy, 0)).rgb * gHazeRGB.w * gAdapt.rgb;   // exposure (Advanced, the eye's), colour balance
     c = c / (1 + max(c - 0.8, 0) * 0.5);
     return float4(c, 1);
 }

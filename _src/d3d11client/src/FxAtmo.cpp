@@ -16,7 +16,7 @@ struct PassCB     // = cbuffer AtmoPass (fx_atmo.hlsl)
     XMFLOAT4 row0, row1, row2, tan, cam, sun;
 };
 
-const int TW = 256, TH = 64, IW = 64, IH = 16, MSN = 32;   // = FX_TW, FX_TH, FX_IW, FX_IH (fx_atmo_light.hlsli), MS_N
+const int TW = 256, TH = 64, IW = 64, IH = 32, MSN = 64;   // = FX_TW, FX_TH, FX_IW, FX_IH (fx_atmo_light.hlsli), MS_N
 
 VECTOR3 SunGlobal()
 {
@@ -226,7 +226,7 @@ VECTOR3 PlanetAtmosphere::LightAt(const VECTOR3& cp, const VECTOR3& sunPos, bool
     VECTOR3 Ts = Bilinear(cpuTrans, TW, TH, (d - dmin) / std::max(dmax - dmin, 1e-3) * (TW - 1), rho / Hh * (TH - 1));
     double cosH = -sqrt(std::max(1 - (R / r) * (R / r), 0.0));
     if (mu < cosH) Ts = _V(0, 0, 0);
-    VECTOR3 E = Bilinear(cpuIrr, IW, IH, (mu * 0.5 + 0.5) * (IW - 1), (r - R) / (top - R) * (IH - 1));
+    VECTOR3 E = Bilinear(cpuIrr, IW, IH, (mu * 0.5 + 0.5) * (IW - 1), sqrt(std::clamp((r - R) / (top - R), 0.0, 1.0)) * (IH - 1));   // = FxAltX
     return Ts * std::max(mu, 0.0) + E;
 }
 
@@ -343,20 +343,36 @@ void Atmosphere::Frame(D3D11Client* gc, const VECTOR3& cp)
 template<class S> static auto SetExposure(S& s, float e, int) -> decltype(s.exposure = e, void()) { s.exposure = e; }
 template<class S> static void SetExposure(S&, float, long) {}     // the client has no exposure hook yet
 
+// the colour balance: the eye adapts partly to the colour of the light (von Kries, ~55 %: Titan's red light still looks
+// warm, not grey). gain = w^-k with w the light's chromaticity (luminance 1), normalised so the light's own luminance
+// stays; computed from the noon light at this place (the day's colour, not the twilight's)
+static const double ADAPT_K = 0.55;
+
 void Atmosphere::UpdateExposure(const VECTOR3& cp)
 {
     double target = 1;
+    VECTOR3 gainT = _V(1, 1, 1);
+    auto lum = [](const VECTOR3& e) { return 0.2126 * e.x + 0.7152 * e.y + 0.0722 * e.z; };
     if (current) {
-        auto lum = [](const VECTOR3& e) { return 0.2126 * e.x + 0.7152 * e.y + 0.0722 * e.z; };
-        double Y = lum(current->LightAt(cp, sunPos, false)), Ynoon = lum(current->LightAt(cp, sunPos, true));
+        VECTOR3 E = current->LightAt(cp, sunPos, false), En = current->LightAt(cp, sunPos, true);
+        double Y = lum(E), Ynoon = lum(En);
         target = std::clamp(1.0 / std::max(Y, 1e-9), 1.0, std::max(1.0, 1.5 / std::max(Ynoon, 1e-9)));
+        if (Ynoon > 1e-9) {
+            VECTOR3 w = En / Ynoon, a, g;
+            for (int i = 0; i < 3; i++) { double wi = std::max(w.data[i], 1e-4); g.data[i] = pow(wi, -ADAPT_K); a.data[i] = pow(wi, 1 - ADAPT_K); }
+            const double ya = lum(a);
+            gainT = g / std::max(ya, 1e-6);
+            for (int i = 0; i < 3; i++) gainT.data[i] = std::clamp(gainT.data[i], 0.05, 20.0);
+        }
     }
     LARGE_INTEGER now, f; QueryPerformanceCounter(&now); QueryPerformanceFrequency(&f);
     double dt = lastT.QuadPart ? (now.QuadPart - lastT.QuadPart) / (double)f.QuadPart : 1e3;
     lastT = now;
     double k = 1 - exp(-dt / 1.5);       // in log space: the eye adapts by ratios
     exposure = exp(log(exposure) + (log(target) - log(exposure)) * k);
+    for (int i = 0; i < 3; i++) white.data[i] = exp(log(white.data[i]) + (log(gainT.data[i]) - log(white.data[i])) * k);
     SetExposure(g_fxAtmo, (float)exposure, 0);
+    for (int i = 0; i < 3; i++) g_fxAtmo.white[i] = (float)white.data[i];
 }
 
 // a check in Orbiter.log, once, 12 s into the session: the scene depth this pass reads (5 points across the screen)
@@ -393,8 +409,8 @@ void Atmosphere::LogDepth(D3D11Client* gc, float nearPlane)
         VECTOR3 up = cp - pp; double alt = length(up) - current->planet->R; up = up / length(up);
         VECTOR3 sd = sunPos - pp; sd = sd / length(sd);
         VECTOR3 E = current->LightAt(cp, sunPos, false), En = current->LightAt(cp, sunPos, true);
-        LOGC("atmosphere pass: %s, camera altitude %.0f m, Sun elevation %.1f deg, light %.3g %.3g %.3g (noon %.3g %.3g %.3g), exposure %.2f, stars %.2f",
-             current->planet->name.c_str(), alt, asin(std::clamp(dotp(up, sd), -1.0, 1.0)) * DEG, E.x, E.y, E.z, En.x, En.y, En.z, exposure, g_fxAtmo.starVis);
+        LOGC("atmosphere pass: %s, camera altitude %.0f m, Sun elevation %.1f deg, light %.3g %.3g %.3g (noon %.3g %.3g %.3g), exposure %.2f, colour balance %.2f %.2f %.2f, stars %.2f",
+             current->planet->name.c_str(), alt, asin(std::clamp(dotp(up, sd), -1.0, 1.0)) * DEG, E.x, E.y, E.z, En.x, En.y, En.z, exposure, white.x, white.y, white.z, g_fxAtmo.starVis);
     }
 }
 

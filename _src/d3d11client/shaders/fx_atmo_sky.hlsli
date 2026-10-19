@@ -8,7 +8,7 @@
 Texture2D tFxMS : register(t9);     // multiple scattering per unit scattering, (r, muS), 32 x 32
 
 static const float FX_PI = 3.14159265;
-static const int FX_MSN = 32;
+static const int FX_MSN = 64;
 
 float FxPhaseRayleigh(float c) { return 3.0 / (16.0 * FX_PI) * (1 + c * c); }
 float3 FxPhaseMie(float c)          // Cornette-Shanks, per channel g
@@ -18,8 +18,7 @@ float3 FxPhaseMie(float c)          // Cornette-Shanks, per channel g
 }
 float3 FxMSLookup(float r, float muS)
 {
-    float xr = saturate((r - mCentre.w) / (mGeo.x - mCentre.w));
-    return FxBilinear(tFxMS, float2((muS * 0.5 + 0.5) * (FX_MSN - 1), xr * (FX_MSN - 1)), int2(0, 0), int2(FX_MSN, FX_MSN)).rgb;
+    return FxBilinear(tFxMS, float2((muS * 0.5 + 0.5) * (FX_MSN - 1), FxAltX(r) * (FX_MSN - 1)), int2(0, 0), int2(FX_MSN, FX_MSN)).rgb;
 }
 
 // The air along d from org (from the planet centre) between t0 and t1, the samples crowded at the ray's lowest point.
@@ -47,7 +46,7 @@ void FxMarch(float3 org, float3 d, float tc0, float K, float t0, float t1, int N
         float tm = 0.5 * (ta + tb), dt = tb - ta;
         float q = K + (tm - tc0) * (tm - tc0);
         float r = sqrt(max(R * R + q, 1));
-        float h = q / (r + R);
+        float h = max(q / (r + R), -2000.0);   // no air lies deeper (Titan's seas -617 m): a ray never samples the planet's inside
         float muS = dot(org + d * tm, mSunDir.xyz) / r;
         float3 sr = mRay.rgb * FxRayDensity(h), sm = mMieSca.rgb * FxMieDensity(h);
         float3 st = max(FxExtinction(h), 1e-12);
@@ -66,6 +65,10 @@ float3 FxSkyRadiance(float3 wp, float3 dir, int NS)
 {
     float R = mCentre.w, Rt = mGeo.x;
     float3 org = wp - mCentre.xyz;
+    // a mirror's ray below the local horizon would meet the surface itself (a steep wave): taken at the horizon
+    float3 up = normalize(org);
+    float du = dot(dir, up);
+    if (du < 0.01) dir = normalize(dir + up * (0.01 - du));
     float tc0 = -dot(org, dir);
     float3 cx = cross(org, dir);
     float K = dot(cx, cx) - R * R;

@@ -77,5 +77,6 @@ private:
     PlanetAtmosphere* current = nullptr;    // the planet whose light the client's shaders get this frame
     VECTOR3 sunPos = { 0, 0, 0 };
     double exposure = 1;
+    VECTOR3 white = { 1, 1, 1 };     // the colour balance (UpdateExposure)
     LARGE_INTEGER lastT = {};
 };

@@ -21,7 +21,12 @@ cbuffer FxAtmoMedia : register(b4)
 };
 Texture2D tFxLut : register(t8);   // rows 0..63: transmittance to the top (256 wide); rows 64..79, columns 0..63: sky irradiance
 
-static const int FX_TW = 256, FX_TH = 64, FX_IW = 64, FX_IH = 16;
+static const int FX_TW = 256, FX_TH = 64, FX_IW = 64, FX_IH = 32;
+
+// the altitude coordinate of the irradiance and multiple-scattering tables: sqrt of the height fraction, so the rows crowd
+// near the ground where the air is (Titan: half the rows below 175 km of 700)
+float FxAltX(float r) { return sqrt(saturate((r - mCentre.w) / (mGeo.x - mCentre.w))); }
+float FxAltR(float x) { return mCentre.w + (mGeo.x - mCentre.w) * x * x; }
 
 bool FxActive() { return mGeo.z > 0.5; }
 
@@ -78,8 +83,7 @@ float3 FxTransToSun(float r, float muS)
 // sky irradiance on a horizontal surface at (r, muS), the Sun's irradiance = 1
 float3 FxIrradiance(float r, float muS)
 {
-    float xr = saturate((r - mCentre.w) / (mGeo.x - mCentre.w));
-    return FxBilinear(tFxLut, float2((muS * 0.5 + 0.5) * (FX_IW - 1), xr * (FX_IH - 1)), int2(0, FX_TH), int2(FX_IW, FX_IH)).rgb;
+    return FxBilinear(tFxLut, float2((muS * 0.5 + 0.5) * (FX_IW - 1), FxAltX(r) * (FX_IH - 1)), int2(0, FX_TH), int2(FX_IW, FX_IH)).rgb;
 }
 
 // ---- the light at a point wp (camera-centred global frame)

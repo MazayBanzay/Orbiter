@@ -19,6 +19,6 @@ float4 PS(VSOut i) : SV_Target
     float4 t = tTex.Sample(sClamp, i.uv);
     float a = t.a * i.c.a;
     if (gPFlags.x > 0.5) return float4(t.rgb * a, a);           // emissive: added
-    float3 col = t.rgb * (SunLight(i.wp) * 0.6 + SkyLight(float3(0, 0, 0), i.wp) + 0.05);   // diffuse: the light around
+    float3 col = t.rgb * (SunLight(i.wp) * 0.6 + SkyLight(float3(0, 0, 0), i.wp) + (FxActive() ? 0.05 / max(gHazeRGB.w * gAdapt.rgb, 1e-3) : 0.05));   // diffuse: the light around
     return float4(ApplyHaze(col, i.wp), a);
 }

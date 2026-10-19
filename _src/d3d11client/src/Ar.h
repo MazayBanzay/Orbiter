@@ -5,3 +5,6 @@
 
 // a world-space path: lng, lat [rad], alt above the local ground [m] per point; n = 0 removes it
 void ArSetPath(int id, OBJHANDLE body, const double* lngLatAlt, int n, float widthPx, DWORD col, unsigned flags);
+
+// the helmet display's terrain contours for this body (AtmoFX_HudFrame TERRAIN): colour and step [m]; false: off
+bool ArTerrainOn(OBJHANDLE body, float* rgb, float* step);

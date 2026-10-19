@@ -218,6 +218,74 @@ static XMFLOAT4 DdsMean(const std::vector<BYTE>& f, bool srgb)
     return r;
 }
 
+// ground classes of a detailed site (gen_titan_ground.py): a header cfg and one byte per cell (north to south rows,
+// west to east columns, square cells around CenterLat/Lon). Made into an RGBA8 weights texture with its mips, sand,
+// cobbles, ice bedrock, wet margin in r, g, b, a (liquid counts as sand: nothing of the relief is drawn under it)
+void Planet::LoadGround()
+{
+    std::string base = "Config\\OrbiterCrew\\Ground\\" + name;
+    FILE* f = fopen((base + ".cfg").c_str(), "r");
+    if (!f) return;
+    char line[256];
+    while (fgets(line, sizeof line, f)) {
+        char* sc = strchr(line, ';'); if (sc) *sc = 0;
+        char k[64]; double v;
+        if (sscanf(line, " %63[A-Za-z] = %lf", k, &v) != 2) continue;
+        if (!strcmp(k, "CenterLat")) gLat = v * PI_ / 180; else if (!strcmp(k, "CenterLon")) gLon = v * PI_ / 180;
+        else if (!strcmp(k, "StepM")) gStep = v; else if (!strcmp(k, "W")) gW = (int)v; else if (!strcmp(k, "H")) gH = (int)v;
+    }
+    fclose(f);
+    std::vector<BYTE> b;
+    if (gW <= 0 || gH <= 0 || gStep <= 0 || !ReadFileBytes((base + ".bin").c_str(), b) || b.size() < (size_t)gW * gH) { gW = 0; return; }
+    std::vector<std::vector<BYTE>> lv(1, std::vector<BYTE>((size_t)gW * gH * 4, 0));
+    for (size_t i = 0; i < (size_t)gW * gH; i++) {
+        int c = b[i]; int ch = c == 1 ? 1 : c == 2 ? 2 : c == 3 ? 3 : 0;
+        lv[0][i * 4 + ch] = 255;
+    }
+    int w = gW, h = gH;
+    while (w > 1 || h > 1) {
+        int w2 = std::max(1, w / 2), h2 = std::max(1, h / 2);
+        std::vector<BYTE> n((size_t)w2 * h2 * 4);
+        const std::vector<BYTE>& s = lv.back();
+        for (int y = 0; y < h2; y++) for (int x = 0; x < w2; x++) for (int c = 0; c < 4; c++) {
+            int x0 = std::min(2 * x, w - 1), x1 = std::min(2 * x + 1, w - 1), y0 = std::min(2 * y, h - 1), y1 = std::min(2 * y + 1, h - 1);
+            n[((size_t)y * w2 + x) * 4 + c] = (BYTE)((s[((size_t)y0 * w + x0) * 4 + c] + s[((size_t)y0 * w + x1) * 4 + c] +
+                                                      s[((size_t)y1 * w + x0) * 4 + c] + s[((size_t)y1 * w + x1) * 4 + c] + 2) / 4);
+        }
+        lv.push_back(std::move(n)); w = w2; h = h2;
+    }
+    std::vector<D3D11_SUBRESOURCE_DATA> sd;
+    w = gW;
+    for (auto& l : lv) { sd.push_back({ l.data(), (UINT)w * 4, 0 }); w = std::max(1, w / 2); }
+    D3D11_TEXTURE2D_DESC td = { (UINT)gW, (UINT)gH, (UINT)lv.size(), 1, DXGI_FORMAT_R8G8B8A8_UNORM, {1, 0}, D3D11_USAGE_IMMUTABLE, D3D11_BIND_SHADER_RESOURCE, 0, 0 };
+    ComPtr<ID3D11Texture2D> tex;
+    if (FAILED(g_client->Dev()->CreateTexture2D(&td, sd.data(), &tex))) { gW = 0; return; }
+    g_client->Dev()->CreateShaderResourceView(tex.Get(), nullptr, &groundTex);
+    LOGC("planet %s: ground classes %dx%d cells of %.0f m around %.4f %.4f", name.c_str(), gW, gH, gStep, gLat * 180 / PI_, gLon * 180 / PI_);
+}
+
+// a relief height layer: DDS with a DX10 header, R16G16B16A16_UNORM, its mip chain stored (export_titan_heights.py)
+static ComPtr<ID3D11ShaderResourceView> LoadHeight16(ID3D11Device* dev, const std::vector<BYTE>& f)
+{
+    if (f.size() < 148 || memcmp(f.data(), "DDS ", 4) != 0) return nullptr;
+    auto U32 = [&](size_t o) { uint32_t v; memcpy(&v, f.data() + o, 4); return v; };
+    if (U32(84) != MAKEFOURCC('D', 'X', '1', '0') || U32(128) != DXGI_FORMAT_R16G16B16A16_UNORM) return nullptr;
+    UINT H = U32(12), W = U32(16), mips = std::max(1u, U32(28));
+    std::vector<D3D11_SUBRESOURCE_DATA> sd;
+    size_t o = 148; UINT w = W, h = H;
+    for (UINT m = 0; m < mips; m++) {
+        size_t sz = (size_t)w * h * 8;
+        if (o + sz > f.size()) return nullptr;
+        sd.push_back({ f.data() + o, w * 8, 0 });
+        o += sz; w = std::max(1u, w / 2); h = std::max(1u, h / 2);
+    }
+    D3D11_TEXTURE2D_DESC td = { W, H, mips, 1, DXGI_FORMAT_R16G16B16A16_UNORM, {1, 0}, D3D11_USAGE_IMMUTABLE, D3D11_BIND_SHADER_RESOURCE, 0, 0 };
+    ComPtr<ID3D11Texture2D> tex; ComPtr<ID3D11ShaderResourceView> srv;
+    if (FAILED(dev->CreateTexture2D(&td, sd.data(), &tex))) return nullptr;
+    dev->CreateShaderResourceView(tex.Get(), nullptr, &srv);
+    return srv;
+}
+
 // the micro loader thread's work: the three levels (sRGB colour, or linear when they carry normals in .ag)
 void Planet::MicroLoad()
 {
@@ -231,10 +299,16 @@ void Planet::MicroLoad()
         if (!l.srv || !w) { LOGC("planet %s: micro texture %s not loaded", name.c_str(), p.c_str()); continue; }
         l.L = w / l.reso;
         l.mean = DdsMean(b, !micNormals);
+        std::string ph = p.substr(0, p.size() - 4) + "_h.dds";
+        std::vector<BYTE> bh;
+        if (p.size() > 4 && ReadFileBytes(ph.c_str(), bh)) l.h = LoadHeight16(dev, bh);
+        if (l.h) LOGC("planet %s: relief layer %s", name.c_str(), ph.c_str());
         LOGC("planet %s: micro texture %s, %u px, repeats every %.1f m, mean %.3f %.3f %.3f %.3f", name.c_str(), l.file.c_str(),
              w, l.L, l.mean.x, l.mean.y, l.mean.z, l.mean.w);
         ok++;
     }
+    relief = mic[0].h && mic[1].h;
+    if (relief) LoadGround();
     micState = ok == 3 ? 2 : 3;
 }
 
@@ -396,7 +470,36 @@ void Planet::Load(Tile* t)
 }
 
 // ------------------------------------------------------------------------------------------ rendering
-struct PlanetCB { XMFLOAT4X4 wvp; XMFLOAT4 sunL, uv, misc; XMFLOAT4X4 w, rot; XMFLOAT4 mic[3], micM[3], micF, micC; };
+static double g_relPxs = 1000;     // pixels per radian this frame (the relief's tessellation)
+struct PlanetCB { XMFLOAT4X4 wvp; XMFLOAT4 sunL, uv, misc; XMFLOAT4X4 w, rot; XMFLOAT4 mic[3], ground[3], micF, micC;
+                  XMFLOAT4 tes, elev, relief, micI[2], units[4]; };
+static_assert(sizeof(PlanetCB) <= 512, "cbObj is 512 bytes");
+
+// the relief's tessellation stages (planet.hlsl VST/HS/DS), compiled on first use for the current device
+static struct { ID3D11Device* dev = nullptr; ComPtr<ID3D11VertexShader> vs; ComPtr<ID3D11HullShader> hs; ComPtr<ID3D11DomainShader> ds; } g_tess;
+static bool TessReady()
+{
+    ID3D11Device* dev = g_client->Dev();
+    if (g_tess.dev == dev) return g_tess.ds != nullptr;
+    g_tess.dev = dev; g_tess.vs.Reset(); g_tess.hs.Reset(); g_tess.ds.Reset();
+    std::string f = g_client->ShaderDir() + "planet.hlsl";
+    std::wstring wf(f.begin(), f.end());
+    auto comp = [&](const char* e, const char* t) -> ComPtr<ID3DBlob> {
+        ComPtr<ID3DBlob> code, err;
+        if (FAILED(D3DCompileFromFile(wf.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, e, t, D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &code, &err))) {
+            LOGC("planet relief: %s failed: %s", e, err ? (const char*)err->GetBufferPointer() : "?");
+            return nullptr;
+        }
+        return code;
+    };
+    auto v = comp("VST", "vs_5_0"), h = comp("HS", "hs_5_0"), d = comp("DS", "ds_5_0");
+    if (!v || !h || !d) return false;
+    dev->CreateVertexShader(v->GetBufferPointer(), v->GetBufferSize(), nullptr, &g_tess.vs);
+    dev->CreateHullShader(h->GetBufferPointer(), h->GetBufferSize(), nullptr, &g_tess.hs);
+    dev->CreateDomainShader(d->GetBufferPointer(), d->GetBufferSize(), nullptr, &g_tess.ds);
+    LOGC("planet relief: tessellation ready");
+    return g_tess.ds != nullptr;
+}
 
 void Planet::Render(ID3D11DeviceContext* ctx, const VECTOR3& camPos, const MATRIX3& camRot, const XMMATRIX& proj, float tanHalfY, int screenH)
 {
@@ -422,9 +525,31 @@ void Planet::Render(ID3D11DeviceContext* ctx, const VECTOR3& camPos, const MATRI
         if (micState == 0 && length(cpl) - R < 100e3) { micState = 1; micThread = std::thread([this] { MicroLoad(); }); }
         if (micState == 2) {
             double pxs = screenH / (2.0 * tanHalfY);
+            g_relPxs = pxs;
             for (int k = 0; k < 3; k++) micFade[k] = std::min(16.0 * pxs / mic[k].reso, 25e3);
-            ID3D11ShaderResourceView* ms[3] = { mic[0].srv.Get(), mic[1].srv.Get(), mic[2].srv.Get() };
-            ctx->PSSetShaderResources(1, 3, ms);
+            if (relief) { micFade[0] = 120; micFade[1] = 2500; micFade[2] = 0; }   // cobbles to 120 m, rills to 2.5 km
+            else for (double& fd : micFade) fd = 0;      // the old colour-only detail is retired (it smeared)
+            ID3D11ShaderResourceView* ms[6] = { mic[0].srv.Get(), mic[1].srv.Get(), mic[2].srv.Get(), mic[0].h.Get(), mic[1].h.Get(), groundTex.Get() };
+            ctx->PSSetShaderResources(1, 6, ms);
+            ctx->DSSetShaderResources(1, 6, ms);
+            ID3D11SamplerState* ss[2] = { g_client->sampAniso.Get(), g_client->sampClamp.Get() };
+            ctx->DSSetSamplers(0, 2, ss);
+            // landed units near the camera: the ground stays flat under them (they stand where the physics puts them)
+            nUnits = 0;
+            if (relief) {
+                std::vector<std::pair<double, XMFLOAT4>> u;
+                for (DWORD i = 0; i < oapiGetVesselCount(); i++) {
+                    OBJHANDLE hv = oapiGetVesselByIndex(i);
+                    VECTOR3 gp; oapiGetGlobalPos(hv, &gp);
+                    VECTOR3 rel = gp - camGlobal;
+                    double d = length(rel);
+                    if (d > 400 || length(gp - Pp) - R > 5000) continue;
+                    float r = (float)std::clamp(oapiGetSize(hv) * 0.8, 0.5, 15.0);
+                    u.push_back({ d, XMFLOAT4((float)rel.x, (float)rel.y, (float)rel.z, r) });
+                }
+                std::sort(u.begin(), u.end(), [](auto& a, auto& b) { return a.first < b.first; });
+                for (auto& x : u) { if (nUnits == 4) break; units[nUnits++] = x.second; }
+            }
         }
     }
     g_client->Ctx()->IASetInputLayout(g_client->ilPlanet.Get());
@@ -438,6 +563,8 @@ void Planet::Render(ID3D11DeviceContext* ctx, const VECTOR3& camPos, const MATRI
     ctx->OMSetBlendState(g_client->bsOpaque.Get(), nullptr, ~0u);
     ctx->OMSetDepthStencilState(g_client->dsWrite.Get(), 0);
     for (Tile* t : root) Traverse(t, ctx, cpl, camRot, proj, tanHalfY, screenH, sunL);
+    ctx->HSSetShader(nullptr, nullptr, 0); ctx->DSSetShader(nullptr, nullptr, 0);
+    ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     if (frame % 300 == 150 && getenv("D3D11CLIENT_TEST")) ElevCheck(camPos);
 }
 
@@ -526,15 +653,53 @@ void Planet::Draw(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, const V
         double inv = mOn ? 1.0 / mic[k].L : 0;
         VECTOR3 q = t->centre * inv;
         c.mic[k] = { (float)(q.x - floor(q.x)), (float)(q.y - floor(q.y)), (float)(q.z - floor(q.z)), (float)inv };
-        c.micM[k] = mic[k].mean;
     }
     c.micF = { (float)micFade[0], (float)micFade[1], (float)micFade[2], mOn ? (micNormals ? 2.0f : 1.0f) : 0.0f };
     c.micC = { (float)t->centre.x, (float)t->centre.y, (float)t->centre.z, 0 };
+    // the relief: per-tile reach of the two layers (uniform branches in the shaders), the cells' whole repeats
+    double near_ = length(t->centre - cpl) - t->radius;
+    bool rOn = mOn && relief;
+    double rc = length(t->centre);
+    c.tes = { (float)(g_relPxs), 16.0f, 80.0f, 0.0f };
+    c.elev = { (float)(rc - R), (float)rc, (float)liq.level, liq.has ? 1.0f : 0.0f };
+    c.relief = { rOn ? 1.0f : 0.0f, rOn && near_ < micFade[0] ? 1.0f : 0.0f, rOn && near_ < micFade[1] ? 1.0f : 0.0f, (float)nUnits };
+    for (int k = 0; k < 2; k++) {
+        double inv = rOn ? 1.0 / mic[k].L : 0;
+        VECTOR3 q = t->centre * inv;
+        auto wh = [](double v) { double f = floor(v); return (float)(f - 4096.0 * floor(f / 4096.0)); };
+        c.micI[k] = { wh(q.x), wh(q.y), wh(q.z), 0 };
+    }
+    for (int k = 0; k < 4; k++) c.units[k] = units[k];
+    // the ground classes: the tile centre in the site's grid (metres east/north) and the grid's axes in the planet frame
+    c.ground[0] = { 0, 0, 0, 0 };
+    if (rOn && groundTex) {
+        double r = length(t->centre), lat = asin(t->centre.y / r), lon = atan2(t->centre.z, t->centre.x);
+        const double Rg = 2575e3;
+        double dl = lon - gLon; dl -= 2 * PI_ * floor((dl + PI_) / (2 * PI_));
+        double gx = Rg * cos(gLat) * dl, gy = Rg * (lat - gLat);
+        double ex = Rg * cos(gLat) / (r * cos(lat)), ny = Rg / r;      // grid metres per metre along east / north
+        VECTOR3 e = _V(-sin(lon), 0, cos(lon)) * ex, n = _V(-sin(lat) * cos(lon), cos(lat), -sin(lat) * sin(lon)) * ny;
+        c.ground[0] = { (float)gx, (float)gy, (float)(1.0 / (gW * gStep)), (float)(1.0 / (gH * gStep)) };
+        c.ground[1] = { (float)e.x, (float)e.y, (float)e.z, 1 };
+        c.ground[2] = { (float)n.x, (float)n.y, (float)n.z, 0 };
+    }
+    bool tess = rOn && near_ < 80 && g_cfg.tess && TessReady();
+    if (tess) {
+        ctx->VSSetShader(g_tess.vs.Get(), nullptr, 0);
+        ctx->HSSetShader(g_tess.hs.Get(), nullptr, 0); ctx->DSSetShader(g_tess.ds.Get(), nullptr, 0);
+        ctx->HSSetConstantBuffers(1, 1, g_client->cbObj.GetAddressOf()); ctx->DSSetConstantBuffers(1, 1, g_client->cbObj.GetAddressOf());
+        ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST);
+    } else {
+        ctx->VSSetShader(g_client->vsPlanet.Get(), nullptr, 0);
+        ctx->HSSetShader(nullptr, nullptr, 0); ctx->DSSetShader(nullptr, nullptr, 0);
+        ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    }
     D3D11_MAPPED_SUBRESOURCE ms;
     ctx->Map(g_client->cbObj.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms); memcpy(ms.pData, &c, sizeof c); ctx->Unmap(g_client->cbObj.Get(), 0);
     UINT stride = sizeof(TileVertex), off = 0;
     ctx->IASetVertexBuffers(0, 1, t->vb.GetAddressOf(), &stride, &off);
     ctx->PSSetShaderResources(0, 1, &srv);
+    if (tess) ctx->DSSetShaderResources(0, 1, &srv);
     ctx->DrawIndexed(g_client->tileIdxCount, 0, 0);
     tilesDrawn++;
 }

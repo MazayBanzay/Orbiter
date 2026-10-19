@@ -24,6 +24,7 @@ void ClientCfg::Load()
         else if (k == "Liquids") liquids = v != 0;
         else if (k == "Shadows") shadows = v != 0;
         else if (k == "MicroTextures") microTex = v != 0;
+        else if (k == "Tessellation") tess = v != 0;
         else if (k == "Exposure") exposure = (float)v;
         else if (k == "StatsLog") statsLog = v != 0;
         else if (k == "AntiAliasing") aa = std::clamp((int)v, 0, 5);
@@ -45,6 +46,7 @@ void ClientCfg::Save() const
     fprintf(f, "Liquids = %d        ; liquid surfaces (Titan's seas)\n", liquids ? 1 : 0);
     fprintf(f, "Shadows = %d        ; shadows (when available)\n", shadows ? 1 : 0);
     fprintf(f, "MicroTextures = %d  ; close-up surface detail from Config\\MicroTex.cfg\n", microTex ? 1 : 0);
+    fprintf(f, "Tessellation = %d   ; ground relief geometry near the camera (0: shading detail only)\n", tess ? 1 : 0);
     fprintf(f, "StatsLog = %d       ; fps and GPU times in Orbiter.log every 10 s\n", statsLog ? 1 : 0);
     fprintf(f, "AntiAliasing = %d   ; 0 off, 1 MSAA 2x, 2 MSAA 4x, 3 MSAA 8x, 4 FXAA, 5 TAA (applies at the next start)\n", aa);
     fprintf(f, "RenderScale = %.2f  ; TAA: scene resolution 0.5..1 of the window, upsampled by TAAU (next start)\n", renderScale);

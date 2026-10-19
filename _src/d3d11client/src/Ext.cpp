@@ -3,6 +3,7 @@
 // from Modules\D3D11Client\) passes the lookups to D3D11Client.dll, so no module needs to change.
 #include "Client.h"
 #include "gcCoreAPI.h"
+#include "Wake.h"
 
 ExtState g_ext;
 
@@ -96,9 +97,7 @@ DLLCLBK void AtmoFX_SetJet(OBJHANDLE h, int id, const double* exitPos, const dou
 
 DLLCLBK void AtmoFX_SetWake(OBJHANDLE h, int id, const double* pos, double r, double depth)
 {
-    std::lock_guard<std::mutex> lk(g_ext.mx);
-    ExtState::Wake& w = g_ext.wakes[{ h, id }];
-    w.pos = _V(pos[0], pos[1], pos[2]); w.r = r; w.depth = depth; w.t = Now();
+    WakeSet(h, id, pos, r, depth);     // the liquid's wave sources (Wake.cpp)
 }
 
 DLLCLBK void AtmoFX_SetHeatSource(OBJHANDLE h, int id, double x, double y, double z, double r, double dT)
@@ -117,8 +116,7 @@ DLLCLBK void AtmoFX_Mark(OBJHANDLE, int, const double*, const double*, double, d
 DLLCLBK int AtmoFX_MarkCount(OBJHANDLE) { return 0; }
 DLLCLBK int AtmoFX_MarkGet(OBJHANDLE, int, double*, char*, int) { return 0; }
 DLLCLBK void AtmoFX_MarkPut(OBJHANDLE, const double*, const char*) {}
-DLLCLBK void AtmoFX_HudFrame(int, double, double, double, double) {}
-DLLCLBK void AtmoFX_HudMarker(int, OBJHANDLE, double, double, double, int, double, double) {}
+// AtmoFX_HudFrame, AtmoFX_HudMarker: Ar.cpp (drawn in the scene)
 
 // the HUD render procs of the modules, on the main window's 2D layer
 void D3D11Client::CallRenderProcs()

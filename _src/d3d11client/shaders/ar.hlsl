@@ -17,7 +17,7 @@ VOut VS(VIn v)
     float2 sc = c.xy / c.w * gScr.xy * 0.5, sd = d.xy / d.w * gScr.xy * 0.5;
     float2 dir = sd - sc; float L = length(dir);
     dir = L > 1e-4 ? dir / L : float2(1, 0);
-    float2 n = float2(-dir.y, dir.x);
+    float2 n = float2(-dir.y, dir.x) * (v.end > 0.5 ? -1 : 1);     // the same side from both ends
     float ext = v.hw + gScr.z + 1;                  // the ribbon's half extent: the line, its glow, a pixel for the edge
     float2 off = n * v.side * ext - dir * ext;      // this end pushed outwards (round-ish caps)
     o.pos = c + float4(off / (gScr.xy * 0.5) * c.w, 0, 0);
@@ -31,5 +31,5 @@ float4 PS(VOut i) : SV_Target
     float core = saturate(i.hw + 0.5 - d);
     float glow = gScr.z > 0 ? 0.35 * exp(-3 * saturate((d - i.hw) / gScr.z)) * saturate(1 - (d - i.hw) / gScr.z) : 0;
     float k = max(core, glow) * gScr.w / max(gHazeRGB.w, 1e-4);
-    return float4(i.col.rgb * k, 1);
+    return float4(i.col.rgb * k / max(gAdapt.rgb, 1e-4), 1);     // its own colour on screen, whatever the eye's balance
 }

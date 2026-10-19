@@ -23,6 +23,49 @@ Texture2D<float> tDepth : register(t1);
 Texture2D<float4> tWave : register(t2);   // slopes gx, gz, height, laplacian per cell (periodic)
 SamplerState sWrap : register(s0);
 SamplerState sClamp : register(s1);
+Texture2D tKelvin : register(t3);         // the Kelvin wake in units of its wavelength: rg = slope along / across (0.5 = 0)
+// the wakes (Wake.cpp): a: wavelength, slope amplitude, radius, time / front; b: centre from the camera, w the kind
+// (0 Kelvin, 1 rings around a part, 2 a packet after an impulse); f: the direction of motion
+cbuffer Wakes : register(b5)
+{
+    float4 gWk[96];
+    float4 gWkN;      // x: the number of sources
+};
+
+// the slope of the surface from all wakes at wp (a vector in the tangent plane: the normal is up - slope)
+float3 WakeSlope(float3 wp, float3 up)
+{
+    float3 sv = 0;
+    int n = (int)gWkN.x;
+    [loop] for (int k = 0; k < n; k++) {
+        float4 a = gWk[k * 3], b = gWk[k * 3 + 1], f = gWk[k * 3 + 2];
+        float3 d = wp - b.xyz; d -= up * dot(d, up);
+        if (b.w < 0.5) {                    // Kelvin: x across, y behind, in units of the wavelength
+            float3 fw = f.xyz, side = cross(up, fw);
+            float u = -dot(d, fw), v = dot(d, side), lam = a.x;
+            float2 tc = float2(v / (13 * lam) * 0.5 + 0.5, u / (32 * lam));
+            if (any(tc < 0) || any(tc > 1)) continue;
+            float2 sl = (tKelvin.SampleLevel(sClamp, tc, 0).rg * 2 - 1) * a.y;
+            float fade = saturate(u / max(a.z, 0.3)) * saturate((1 - tc.y) / 0.25);
+            sv += (fw * sl.x + side * sl.y) * fade;
+        } else {
+            float r = length(d);
+            float3 rad = d / max(r, 1e-3);
+            float R0 = a.z, lam = a.x;
+            if (b.w < 1.5) {                // rings running out at ~0.25 m/s around a bobbing part
+                if (r > R0 * 7 + 3) continue;
+                float ph = 6.2832 * (r - 0.25 * a.w) / lam;
+                float env = exp(-max(r - R0, 0) / (3 * R0 + 0.5)) * saturate((r - 0.8 * R0) / (0.2 * R0 + 0.05));
+                sv += rad * (a.y * env * cos(ph));
+            } else {                        // a packet: a ring of a few wavelengths at the front
+                float x = (r - a.z) / lam;
+                if (abs(x) > 3) continue;
+                sv += rad * (a.y * exp(-x * x * 1.5) * cos(6.2832 * x));
+            }
+        }
+    }
+    return sv;
+}
 
 // the wave field at wp (weighted 0 outside its window, faded over the last 32 cells)
 float4 WaveAt(float3 wp, out float wgt)
@@ -77,8 +120,7 @@ float4 PS(VSOut i) : SV_Target
     float tm = gLMisc.x;
     float2 sl = float2(sin(q.x * 2.1 + tm * 1.3) + sin(q.y * 3.7 - tm * 0.9), sin(q.y * 2.7 + tm * 1.1) + sin(q.x * 4.3 + tm * 0.7)) * 0.004;
     float3 n = normalize(up + t1 * sl.x + t2 * sl.y);
-    float ww; float4 wv = WaveAt(i.wp, ww);            // the wave field's slopes inside its window
-    if (ww > 0) n = normalize(lerp(n, normalize(up - wv.x * gWE1.xyz - wv.y * gWE2.xyz), ww));
+    n = normalize(n - WakeSlope(i.wp, up));           // the wakes of the bodies in the liquid
 
     float dist = length(i.wp);
     float3 V = -i.wp / dist;
@@ -117,5 +159,10 @@ float4 PS(VSOut i) : SV_Target
     float nl = saturate(dot(n, L)) * ShadowAt(i.wp);
     float glint = D_GGX(saturate(dot(n, Hh)), 0.0064) * F0 * nl / (4 * nv + 1e-3);
     float3 col = lerp(refr, refl, F) + glint * SunLight();
+    // diagnostics (test runs, D3D11CLIENT_LIQDBG): 1 the mirror only, 2 Fresnel, 3 the refraction only, 4 the bed's depth
+    if (gLMisc.z > 0.5) {
+        float3 dbg = gLMisc.z < 1.5 ? refl : gLMisc.z < 2.5 ? F.xxx / max(gHazeRGB.w * gAdapt.rgb, 1e-4) : gLMisc.z < 3.5 ? refr : (saturate(path / 20)).xxx / max(gHazeRGB.w * gAdapt.rgb, 1e-4);
+        return float4(dbg, 1);
+    }
     return float4(ApplyHaze(col, i.wp), 1);
 }

@@ -602,6 +602,9 @@ void D3D11Client::clbkRenderScene()
     int tiles = 0;
     for (auto& o : order) { o.second->Render(ctx.Get(), cp, cr, proj, tanY, (int)H); tiles += o.second->tilesDrawn; }
     for (Planet* p : planets) p->Purge(frameNo);
+    // the liquid over the terrain only: its refraction sees the bed, never the vessels (they come next, and their parts
+    // under the surface are dimmed by the liquid in the mesh shader: no foreground leaks into the liquid)
+    RenderLiquid(cp, cr, proj, tanY);
     ctx->End(qTs[fi][1].Get());
 
     // vessels: opaque groups, then the transparent ones
@@ -614,8 +617,9 @@ void D3D11Client::clbkRenderScene()
     for (auto& kv : visuals) RenderVessel(kv.second, cp, cr, proj, false);
     if (mvRTV) ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
     for (auto& kv : visuals) RenderVessel(kv.second, cp, cr, proj, true);
-    RenderLiquid(cp, cr, proj, tanY);      // over the opaque scene, reading its colour and depth
     FxRenderTransparent(this, cp, cr, proj);      // spray and mist over the liquid
+    ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
+    RenderAr(cp, cr, proj);                       // the helmet display's markers and paths, against the scene's depth
     UpdateRenderParticles(cp, cr, proj, oapiGetSimStep());
     ctx->End(qTs[fi][2].Get());
 
@@ -724,7 +728,7 @@ bool D3D11Client::clbkSplashLoadMsg(const char* msg, int line)
 }
 
 // ------------------------------------------------------------------------------------------ per-frame constants: the atmosphere
-struct FrameCB { XMFLOAT4X4 invVP; XMFLOAT4 sunDir, sky0, sky1, amb, sun, up, planet, hazeRGB; XMFLOAT4X4 lightVP; XMFLOAT4 shadow; };
+struct FrameCB { XMFLOAT4X4 invVP; XMFLOAT4 sunDir, sky0, sky1, amb, sun, up, planet, hazeRGB; XMFLOAT4X4 lightVP; XMFLOAT4 shadow, adapt, liq0, liq1, liq2; };
 
 void D3D11Client::UpdateFrameCB(const VECTOR3& cp, const XMMATRIX& invVP)
 {
@@ -769,6 +773,21 @@ void D3D11Client::UpdateFrameCB(const VECTOR3& cp, const XMMATRIX& invVP)
     f.hazeRGB.w = g_cfg.exposure * (g_fxAtmo.active ? g_fxAtmo.exposure : 1.0f);
     f.lightVP = lightVP;
     f.shadow = { shadowOn ? 1.0f : 0.0f, 1.0f / SHADOW_N, 0, 0 };
+    // the eye's adaptation: the colour balance per channel and the brightness factor (1 without the FX atmosphere)
+    if (g_fxAtmo.active) f.adapt = { g_fxAtmo.white[0], g_fxAtmo.white[1], g_fxAtmo.white[2], g_fxAtmo.exposure };
+    else f.adapt = { 1, 1, 1, 1 };
+    // the liquid the camera is over (as RenderLiquid picks it): the vessels' parts below its level are seen through it
+    for (Planet* p : planets) {
+        if (!p->liq.has || !g_cfg.liquids) continue;
+        VECTOR3 q; oapiGetGlobalPos(p->hObj, &q);
+        const double Rl = p->R + p->liq.level, alt = length(cp - q) - Rl;
+        if (alt < 0 || alt > 300000) continue;
+        const VECTOR3 c = q - cp; const LiquidCfg& L = p->liq;
+        f.liq0 = { (float)c.x, (float)c.y, (float)c.z, (float)Rl };
+        f.liq1 = { (float)L.colour.x, (float)L.colour.y, (float)L.colour.z, (float)L.ext };
+        f.liq2 = { (float)L.wts.x, (float)L.wts.y, (float)L.wts.z, 1 };
+        break;
+    }
     D3D11_MAPPED_SUBRESOURCE ms;
     ctx->Map(cbFrame.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms); memcpy(ms.pData, &f, sizeof f); ctx->Unmap(cbFrame.Get(), 0);
     ctx->VSSetConstantBuffers(0, 1, cbFrame.GetAddressOf());

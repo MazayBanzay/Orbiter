@@ -47,6 +47,7 @@ struct ClientCfg
     float renderScale = 1;   // TAA only: the scene's resolution / the window's (TAAU upsamples)
     bool liquids = true, shadows = true, statsLog = true;
     bool microTex = false;   // planet micro textures (Config\MicroTex.cfg): close-up surface detail
+    bool tess = true;        // the ground relief's tessellation (off: normal detail only)
     void Load();
     void Save() const;
 };
@@ -70,7 +71,7 @@ extern ExtState g_ext;
 
 // the FX atmosphere (FxAtmo.cpp): when active it draws the sky and the aerial perspective itself (after the opaque
 // scene, from the depth) and gives the light at each point through fx_atmo_light.hlsli (t8, b4, set in FxFrame)
-struct FxAtmoState { bool active = false; float starVis = 1; float exposure = 1; };   // exposure: the eye's adaptation (FxFrame)
+struct FxAtmoState { bool active = false; float starVis = 1; float exposure = 1; float white[3] = { 1, 1, 1 }; };   // exposure, white: the eye's adaptation to the light (FxFrame)   // exposure: the eye's adaptation (FxFrame)
 inline FxAtmoState g_fxAtmo;      // one instance for the whole DLL (C++17 inline variable); filled in FxAtmo.cpp (FxFrame)
 
 // ---------------------------------------------------------------- surfaces and textures (SURFHANDLE)
@@ -234,9 +235,12 @@ public:
     LiquidCfg liq;
     // micro textures (Config\MicroTex.cfg, D3D9Client's format): three detail levels tiled in metres over the ground;
     // loaded on their own thread the first time the camera comes near the surface
-    struct MicroLevel { std::string file; double reso = 0; double L = 0; ComPtr<ID3D11ShaderResourceView> srv; XMFLOAT4 mean = { 0.5f, 0.5f, 0.5f, 0.5f }; };
+    struct MicroLevel { std::string file; double reso = 0; double L = 0; ComPtr<ID3D11ShaderResourceView> srv, h; XMFLOAT4 mean = { 0.5f, 0.5f, 0.5f, 0.5f }; };
     MicroLevel mic[3];
     bool micCfg = false, micNormals = false;
+    bool relief = false;                // height layers <level>_h.dds for levels A and B: tessellated ground relief
+    // ground classes (Config\OrbiterCrew\Ground\<name>.cfg/.bin, what suits and wheels stand on): weights texture
+    ComPtr<ID3D11ShaderResourceView> groundTex; double gLat = 0, gLon = 0, gStep = 0; int gW = 0, gH = 0;
     std::atomic<int> micState{ 0 };    // 0 not loaded, 1 loading, 2 ready, 3 failed
     std::thread micThread;
     ~Planet();
@@ -268,6 +272,8 @@ private:
     DWORD frame = 0;
     double micFade[3] = {};             // micro levels' fade-out distances this frame [m] (0: off)
     void MicroLoad();
+    void LoadGround();
+    XMFLOAT4 units[4] = {}; int nUnits = 0;    // landed units near the camera this frame (camera-centred, flat radius)
     double MeshElev(double lng, double lat, int* lvl, double* fine, bool* own);   // test runs: our surface there
     void ElevCheck(const VECTOR3& camPos);
 };
@@ -361,7 +367,9 @@ public:
     bool ShadersOk() const { return shadersOk; }
     bool IsScreen(const Surf* s) const { return s == screen; }
     bool GpuSurface(Surf* s) const;
+    ComPtr<ID3D11Buffer> wakeCB; ComPtr<ID3D11ShaderResourceView> kelvinSRV;   // the liquid's wakes (Liquid.cpp, Wake.cpp)
     void DumpSurface(Surf* s, const char* path);    // diagnostics (Ipi.cpp)
+    void RenderAr(const VECTOR3& cam, const MATRIX3& cr, const XMMATRIX& proj);   // Ar.cpp: markers and paths in the scene
     bool DiagFrame() const { return diagFrames != 0; }
     // shared render state for the scene parts
     ComPtr<ID3D11VertexShader> vsMesh, vsPlanet;
