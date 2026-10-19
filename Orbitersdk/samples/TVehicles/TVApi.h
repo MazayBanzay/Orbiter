@@ -29,16 +29,21 @@ typedef double (*tvDraw_t)(OBJHANDLE vehicle, double wantW, double dt);   // ene
 #include <cstring>
 inline void tvHeldCell(OcHeld* h, double charge01) {
     std::memset(h, 0, sizeof *h); h->size = sizeof(OcHeld); h->kind = OC_HELD_CELL; h->massKg = 80.0;
-    h->dims[0] = 0.30; h->dims[1] = 0.30; h->dims[2] = 0.32;
+    h->dims[0] = 0.38; h->dims[1] = 0.42; h->dims[2] = 0.27;
+    std::snprintf(h->mesh, sizeof h->mesh, "%s", "MPU\\BatteryCellHeld");
     std::snprintf(h->label, sizeof h->label, "энергоячейка %.0f %%", charge01 * 100.0);
     std::snprintf(h->owner, sizeof h->owner, "%s", "TVehicles"); std::snprintf(h->data, sizeof h->data, "cell %.6f", charge01);
 }
-inline void tvHeldPlug(OcHeld* h) {
+// the plug's data: "cable <station name>" - after a load the station finds its cable in her hands by it
+inline void tvHeldPlug(OcHeld* h, const char* station = nullptr) {
     std::memset(h, 0, sizeof *h); h->size = sizeof(OcHeld); h->kind = OC_HELD_PLUG; h->massKg = 2.0;
     h->dims[0] = 0.10; h->dims[1] = 0.10; h->dims[2] = 0.16;
     std::snprintf(h->label, sizeof h->label, "%s", "вилка кабеля");
-    std::snprintf(h->owner, sizeof h->owner, "%s", "TVehicles"); std::snprintf(h->data, sizeof h->data, "%s", "cable");
+    std::snprintf(h->owner, sizeof h->owner, "%s", "TVehicles");
+    if (station && station[0]) std::snprintf(h->data, sizeof h->data, "cable %s", station);
+    else std::snprintf(h->data, sizeof h->data, "%s", "cable");
 }
+inline bool tvIsPlugData(const char* data) { return !std::strncmp(data, "cable", 5) && (data[5] == 0 || data[5] == ' '); }
 // hand it over: 1 if she has it (or OrbiterCrew is too old to show hands - then it is only ours), 0 refused (too heavy here,
 // hands busy, seated...: OrbiterCrew says why)
 inline int tvHandOver(OcApi& api, int person, const OcHeld* h) { return api.Give ? api.Give(person, h) : 1; }

@@ -6,9 +6,12 @@ constexpr int kLampInMat = 16;   // the cabin's lamps (0-based material): off / 
 constexpr int kTermTex = 1, kYokeScrTex = 2;   // 1-based mesh textures replaced by the drawn surfaces
 constexpr double kTermC[3] = {-0.0000, 1.6456, 3.7724}, kTermR[3] = {1.0000, 0.0000, -0.0000}, kTermU[3] = {-0.0000, 0.7880, 0.6157}, kTermN[3] = {-0.0000, 0.6157, -0.7880};
 constexpr double kTermSW = 0.560, kTermSH = 0.560, kTermRecess = 0.025;   // the screen; the keys at +-(SW/2 + 0.065) across, 0.225 - k*0.09 up
-constexpr int kLadderGrp[4] = {94, 0, 0, 0};
+constexpr int kCellDoorGrp[4][4] = {{96, 97, 98, 0}, {99, 100, 101, 0}, {102, 103, 104, 0}, {105, 106, 107, 0}};  // individually animated battery access covers
+constexpr int kCellDoorN[4] = {3, 3, 3, 3};
+constexpr int kCellPackGrp[4] = {108, 109, 110, 111};  // removable battery cartridges
+constexpr int kLadderGrp[4] = {95, 0, 0, 0};
 constexpr int kLadderN = 1;
 constexpr double kLadderHinge[3] = {0.0, 0.590, -4.300};   // folds about x
-constexpr int kYokeGrp[8] = {88, 89, 90, 91, 93, 0, 0, 0};
+constexpr int kYokeGrp[8] = {89, 90, 91, 92, 94, 0, 0, 0};
 constexpr int kYokeN = 5;
 }  // namespace empu

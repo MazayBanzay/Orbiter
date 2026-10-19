@@ -21,5 +21,6 @@ constexpr int kStepsGrp[4] = {72, 0, 0, 0};
 constexpr int kStepsN = 1;
 constexpr double kStepsStow[3] = {0.200, 0.450, 0.000};   // stowed: their offset from the deployed pose
 constexpr int kTowBarGrp = 73;   // the tow bar: vertex z (orbiter) = -t (0..1), x / y the tube's offset
+constexpr int kCellPackGrp[4] = {86, 87, 88, 89};  // removable battery cartridges
 constexpr double kHitchF[3] = {0.0, 0.060, 4.550}, kHitchR[3] = {0.0, 0.060, -4.550};   // the coupling pins
 }  // namespace mpu

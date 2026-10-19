@@ -16,6 +16,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <map>
+#include <string>
 #include <vector>
 
 namespace {
@@ -30,6 +31,7 @@ std::vector<Station*>& Stations() { static std::vector<Station*> v; return v; }
 std::map<int, TvCarry>& Carry() { static std::map<int, TvCarry> m; return m; }
 std::map<OBJHANDLE, VECTOR3>& Sockets() { static std::map<OBJHANDLE, VECTOR3> m; return m; }
 void Sync(int person);   // below: what she carries, as OrbiterCrew sees her hands
+Station* PluggedStation(OBJHANDLE v);
 
 class Station : public VESSEL4 {
 public:
@@ -41,15 +43,17 @@ public:
 
     void clbkSetClassCaps(FILEHANDLE cfg) override {
         (void)cfg;
-        SetSize(2.0);
-        SetEmptyMass(900.0 + st::kCells * kCellMass);
-        SetPMI(_V(0.6, 0.4, 0.6));
-        SetCrossSections(_V(1.8, 1.3, 3.5));
+        SetSize(3.0);
+        SetEmptyMass(3200.0 + st::kCells * kCellMass);                   // the 300 kW cabinet, the drum, the rack, the pad
+        SetPMI(_V(1.6, 1.2, 1.4));
+        SetCrossSections(_V(3.4, 9.0, 6.5));
         mesh_ = oapiLoadMeshGlobal("TVehicles\\Station");
         meshIdx_ = AddMesh(mesh_);
         const double m = GetEmptyMass(), k = m * 9.81 / 0.01, c = 2.0 * std::sqrt(k * m);
-        TOUCHDOWNVTX t[4] = {{_V(0.0, st::kGround, 0.5), k, c, 3.0, 3.0}, {_V(-0.7, st::kGround, -0.3), k, c, 3.0, 3.0},
-                             {_V(0.7, st::kGround, -0.3), k, c, 3.0, 3.0}, {_V(0.0, st::kGround + 2.4, 0.0), k, c, 3.0, 3.0}};
+        // the pad's corners on the ground (it lies on it), the roof as the fourth point
+        TOUCHDOWNVTX t[4] = {{_V(0.5 * (st::kPad[0] + st::kPad[1]), st::kGround, st::kPad[3]), k, c, 3.0, 3.0},
+                             {_V(st::kPad[0], st::kGround, st::kPad[2]), k, c, 3.0, 3.0},
+                             {_V(st::kPad[1], st::kGround, st::kPad[2]), k, c, 3.0, 3.0}, {_V(0.0, st::kGround + 2.9, 0.0), k, c, 3.0, 3.0}};
         SetTouchdownPoints(t, 4);
         att_ = CreateAttachment(false, _V(0, 0, 0), _V(0, 0, 1), _V(0, 1, 0), "OCINT");
         for (int g : {st::kCableGrp, st::kPlugGrp}) RestCopy(g);
@@ -69,11 +73,11 @@ public:
         registered_ = true;
         if (api_.SetInteriorExt) {
             ext_ = OcInteriorExt{}; ext_.size = sizeof(OcInteriorExt);
-            ext_.OuterWalls = [](void*, const VECTOR3* from, VECTOR3* to, double r, double) {   // the cabinet: a box
-                const double x0 = 0.85 + r, z0 = 0.45 + r;
-                if (std::fabs(to->x) < x0 && std::fabs(to->z) < z0) { if (std::fabs(from->x) >= x0) to->x = from->x; else to->z = from->z; }
+            ext_.OuterWalls = [](void*, const VECTOR3* from, VECTOR3* to, double r, double) {   // the units on the pad: a box
+                auto in = [r](double x, double z) { return x > st::kSolid[0] - r && x < st::kSolid[1] + r && z > st::kSolid[2] - r && z < st::kSolid[3] + r; };
+                if (in(to->x, to->z)) { if (!in(from->x, to->z)) to->x = from->x; else if (!in(to->x, from->z)) to->z = from->z; else { to->x = from->x; to->z = from->z; } }
             };
-            ext_.NodeCount = [](void*) { return 2; };
+            ext_.NodeCount = [](void*) { return 1 + st::kCells; };      // the drum, and each slot of the rack (the one she looks at)
             ext_.Node = &Station::cNode;
             ext_.Actions = &Station::cActions;
             ext_.Begin = [](void* c, int node, int act, int person) {
@@ -84,7 +88,7 @@ public:
             ext_.End = [](void* c, int node, int act, int person, int done) {
                 if (!done) return;
                 OcAction a[4]; const int n = cActions(c, node, person, a, 4);
-                for (int i = 0; i < n; ++i) if (a[i].id == act && a[i].available) { cUse(c, act, person); return; }
+                for (int i = 0; i < n; ++i) if (a[i].id == act && a[i].available) { UseAt(c, node, act, person); return; }
             };
             api_.SetInteriorExt(GetHandle(), &ext_);
         }
@@ -97,6 +101,9 @@ public:
                 std::vector<double> v(st::kCells, -1.0);
                 std::sscanf(line + 5, "%lf %lf %lf %lf %lf %lf", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]);
                 for (int k = 0; k < st::kCells; ++k) cell_[k] = v[k] < 0 ? -1.0 : Clamp(v[k], 0, 1) * kCellJ;
+            } else if (!std::strncmp(line, "PLUGGED", 7)) {         // the vehicle the cable was in (Restore finds it)
+                const char* n = line + 7; while (*n == ' ') ++n;
+                pendingPlug_ = n;
             } else ParseScenarioLineEx(line, vs);
         }
     }
@@ -105,11 +112,14 @@ public:
         char b[160] = "", t[24];
         for (int k = 0; k < st::kCells; ++k) { std::snprintf(t, sizeof t, " %.3f", cell_[k] < 0 ? -1.0 : cell_[k] / kCellJ); std::strcat(b, t); }
         oapiWriteScenario_string(scn, const_cast<char*>("CELLS"), b + 1);
+        // the cable in a vehicle's socket; the cable in her hands she keeps herself (OrbiterCrew HELD_DATA "cable <us>")
+        if (plugged_ && oapiIsVessel(plugged_)) oapiWriteScenario_string(scn, const_cast<char*>("PLUGGED"), oapiGetVesselInterface(plugged_)->GetName());
     }
 
     void clbkPreStep(double simt, double simdt, double mjd) override {
         (void)simt; (void)mjd;
         if (simdt <= 0) return;
+        Restore(simdt);
         // the input: first the cable, then the rack's cells (the emptiest first)
         double spare = kInputW - cableW_;
         cableW_ = 0.0;
@@ -147,11 +157,38 @@ public:
     void clbkVisualCreated(VISHANDLE vis, int) override { dev_ = GetDevMesh(vis, meshIdx_); drawn_ = -1; }
     void clbkVisualDestroyed(VISHANDLE, int) override { dev_ = nullptr; }
 
+    // After a load: the cable back into the vehicle's socket it was in (once that vehicle has registered its socket), and
+    // back to the person whose hands hold our plug (OrbiterCrew restores what she held before the first step).
+    void Restore(double dt) {
+        if (restoreT_ > 5.0) return;
+        restoreT_ += dt;
+        if (!pendingPlug_.empty()) {
+            OBJHANDLE v = oapiGetVesselByName(const_cast<char*>(pendingPlug_.c_str()));
+            if (!v) pendingPlug_.clear();
+            else if (Sockets().count(v)) {
+                if (!plugged_ && !cablePerson_ && !PluggedStation(v)) { plugged_ = v; oapiWriteLogV("TVehicles: the cable back in %s", pendingPlug_.c_str()); }
+                pendingPlug_.clear();
+            }
+        }
+        if (adopted_ || !api_.Ok() || !api_.PersonOfBody || !api_.HeldOf) return;
+        adopted_ = true;
+        for (DWORD i = 0; i < oapiGetVesselCount(); ++i) {
+            const int p = api_.PersonOfBody(oapiGetVesselByIndex(i));
+            if (!p) continue;
+            OcHeld h{}; h.size = sizeof h;
+            if (!api_.HeldOf(p, &h) || std::strcmp(h.owner, "TVehicles") || !tvIsPlugData(h.data) || h.data[5] != ' ' || std::strcmp(h.data + 6, GetName())) continue;
+            if (!cablePerson_ && !plugged_ && !Carry().count(p)) {
+                cablePerson_ = p; Carry()[p] = {TV_CABLE, GetHandle(), 0.0};
+                oapiWriteLogV("TVehicles: the cable back in the hands of person %d", p);
+            } else tvTakeBack(api_, p);                                  // our cable is elsewhere now: her plug is let go
+        }
+    }
+
     // ---- the registry's side (called by the exports) ----
     void ReelIn(int person) { if (cablePerson_ == person) { cablePerson_ = 0; oapiWriteLogV("TVehicles: the cable let go - back on the reel"); } }
     int TakeCable(int person) {
         if (cablePerson_ || plugged_) return 0;
-        OcHeld h; tvHeldPlug(&h);
+        OcHeld h; tvHeldPlug(&h, GetName());
         if (!tvHandOver(api_, person, &h)) return 0;
         cablePerson_ = person; Carry()[person] = {TV_CABLE, GetHandle(), 0.0};
         return 1;
@@ -167,7 +204,7 @@ public:
         if (plugged_ != v) return false;
         plugged_ = nullptr;
         if (person) {                                                   // into her hands; no person: back on the reel
-            OcHeld h; tvHeldPlug(&h);
+            OcHeld h; tvHeldPlug(&h, GetName());
             if (!tvHandOver(api_, person, &h)) { plugged_ = v; return false; }   // her hands are busy: it stays plugged
             cablePerson_ = person; Carry()[person] = {TV_CABLE, GetHandle(), 0.0};
         }
@@ -222,12 +259,39 @@ private:
     }
     // context nodes: the reel (take / return the cable) and the rack (take a cell / put one on charge); the action ids are the
     // old item ids, so cUse does the work
+    // the slots' nodes: ids kNodeSlot0 + k, at the cartridge's front face - the one she looks at is the one she works
+    enum { kNodeReel = 1, kNodeSlot0 = 10 };
     static int cNode(void* c, int i, OcNode* o) {
         const bool en = static_cast<Station*>(c)->api_.English();
         o->reach = 1.6; o->inside = 0;
-        if (i == 0) { o->id = 1; o->pos = _V(0.45, 0.05, 0.88); std::snprintf(o->label, sizeof o->label, "%s", en ? "cable reel (15 m)" : "катушка кабеля (15 м)"); return 1; }
-        if (i == 1) { o->id = 2; o->pos = _V(-0.30, -0.20, 0.77); std::snprintf(o->label, sizeof o->label, "%s", en ? "cell rack" : "стеллаж ячеек"); return 1; }
+        if (i == 0) { o->id = kNodeReel; o->pos = _V(st::kReel[0], st::kReel[1], st::kReel[2]); std::snprintf(o->label, sizeof o->label, "%s", en ? "cable drum (15 m)" : "кабельный барабан (15 м)"); return 1; }
+        const int k = i - 1;
+        if (k >= 0 && k < st::kCells) {
+            o->id = kNodeSlot0 + k; o->reach = 1.4;
+            o->pos = _V(st::kCellPos[k][0], st::kCellPos[k][1], st::kCellPos[k][2] + 0.14);
+            std::snprintf(o->label, sizeof o->label, en ? "rack slot %d" : "гнездо стеллажа %d", k + 1);
+            return 1;
+        }
         return 0;
+    }
+    // a slot's action: the cell from this slot into her hands, or hers into this empty slot
+    static void UseAt(void* c, int node, int act, int person) {
+        Station* s = static_cast<Station*>(c);
+        const int k = node - kNodeSlot0;
+        if (node == kNodeReel || k < 0 || k >= st::kCells) { cUse(c, act, person); return; }
+        Sync(person);
+        auto& carry = Carry();
+        if (act == kItemTakeCell && s->cell_[k] >= 0) {
+            OcHeld h; tvHeldCell(&h, s->cell_[k] / kCellJ);
+            if (!tvHandOver(s->api_, person, &h)) return;                    // too heavy here / hands busy: OrbiterCrew said so
+            carry[person] = {TV_CELL, s->GetHandle(), s->cell_[k]}; s->cell_[k] = -1.0; s->drawn_ = -1;
+            s->SetEmptyMass(s->GetEmptyMass() - kCellMass);
+            oapiWriteLogV("TVehicles: person %d took the cell of slot %d (%.0f %%)", person, k + 1, carry[person].energyJ / kCellJ * 100.0);
+        } else if (act == kItemPutCell && s->cell_[k] < 0 && carry.count(person) && carry[person].kind == TV_CELL) {
+            s->cell_[k] = carry[person].energyJ; carry.erase(person); tvTakeBack(s->api_, person); s->drawn_ = -1;
+            s->SetEmptyMass(s->GetEmptyMass() + kCellMass);
+            oapiWriteLogV("TVehicles: person %d put a cell into slot %d", person, k + 1);
+        }
     }
     static int cActions(void* c, int node, int person, OcAction* out, int max) {
         Station* s = static_cast<Station*>(c);
@@ -236,7 +300,7 @@ private:
         auto& carry = Carry();
         const bool carries = carry.count(person) && carry[person].kind != TV_NOTHING;
         const bool busy = carries || tvHolding(s->api_, person);
-        if (node == 1) {
+        if (node == kNodeReel) {
             const bool en = s->api_.English();
             const char* take = en ? "take the cable" : "взять кабель";
             if (s->cablePerson_ == person) tvAct(out, n, max, kItemCable, en ? "put the cable back on the reel" : "вернуть кабель на катушку", true, nullptr, 0.8);
@@ -245,15 +309,16 @@ private:
             else tvAct(out, n, max, kItemCable, take, !busy, en ? "hands busy" : "руки заняты", 0.8);
             return n;
         }
-        if (node == 2) {
-            const int k = s->Fullest();
+        const int k = node - kNodeSlot0;
+        if (k >= 0 && k < st::kCells) {
             const bool en = s->api_.English();
-            if (k >= 0) std::snprintf(b, sizeof b, en ? "take a cell (%.0f %%)" : "взять ячейку (%.0f %%)", s->cell_[k] / kCellJ * 100.0);
-            else std::snprintf(b, sizeof b, "%s", en ? "take a cell" : "взять ячейку");
-            tvAct(out, n, max, kItemTakeCell, b, k >= 0 && !busy, k < 0 ? (en ? "no cells" : "ячеек нет") : (en ? "hands busy" : "руки заняты"), 1.2);
-            int freeBay = -1; for (int j = 0; j < st::kCells; ++j) if (s->cell_[j] < 0) { freeBay = j; break; }
-            const bool hasCell = carries && carry[person].kind == TV_CELL;
-            tvAct(out, n, max, kItemPutCell, en ? "put the cell on charge" : "поставить ячейку на зарядку", hasCell && freeBay >= 0, !hasCell ? (en ? "no cell in hand" : "в руках нет ячейки") : (en ? "no free bay" : "нет свободного места"), 1.2);
+            if (s->cell_[k] >= 0) {
+                std::snprintf(b, sizeof b, en ? "take the cell (%.0f %%)" : "взять ячейку (%.0f %%)", s->cell_[k] / kCellJ * 100.0);
+                tvAct(out, n, max, kItemTakeCell, b, !busy, en ? "hands busy" : "руки заняты", 1.2);
+            } else {
+                const bool hasCell = carries && carry[person].kind == TV_CELL;
+                tvAct(out, n, max, kItemPutCell, en ? "put the cell on charge" : "поставить ячейку на зарядку", hasCell, en ? "no cell in hand" : "в руках нет ячейки", 1.2);
+            }
             return n;
         }
         return 0;
@@ -275,18 +340,19 @@ private:
         if (!state && drawn_ == 0) return;
         drawn_ = state;
         Grp* cab = Find(st::kCableGrp); Grp* plug = Find(st::kPlugGrp);
+        // only the real vertices move: the rest are the corners of the culling box (build_station.py) and stay put
         const VECTOR3 d = B - A; const double L = (std::max)(length(d), 1e-3);
         const VECTOR3 e3 = d / L; VECTOR3 e1 = crossp(e3, _V(0, 1, 0)); if (length(e1) < 1e-3) e1 = _V(1, 0, 0); e1 = unit(e1);
         const VECTOR3 e2 = crossp(e3, e1);
         const double sag = state ? 0.06 * L : 0.0;
-        for (size_t k = 0; k < cab->rest.size(); ++k) {
+        for (size_t k = 0; k < (std::min)(cab->rest.size(), (size_t)st::kCableVtx); ++k) {
             const NTVERTEX& v0 = cab->rest[k]; NTVERTEX& v = cab->work[k];
             const double t = v0.z;
             const VECTOR3 p = state ? A + d * t + e1 * v0.x + e2 * v0.y - _V(0, sag * 4.0 * t * (1.0 - t), 0) : A;
             v.x = (float)p.x; v.y = (float)p.y; v.z = (float)p.z;
         }
         Push(*cab);
-        for (size_t k = 0; k < plug->rest.size(); ++k) {
+        for (size_t k = 0; k < (std::min)(plug->rest.size(), (size_t)st::kPlugVtx); ++k) {
             const NTVERTEX& v0 = plug->rest[k]; NTVERTEX& v = plug->work[k];
             const VECTOR3 p = B + e1 * v0.x + e2 * v0.y + e3 * v0.z;
             v.x = (float)p.x; v.y = (float)p.y; v.z = (float)p.z;
@@ -309,6 +375,8 @@ private:
     double cell_[st::kCells];
     int cablePerson_ = 0, drawn_ = -1;
     OBJHANDLE plugged_ = nullptr;
+    std::string pendingPlug_;                       // PLUGGED from the scenario, until Restore finds the vehicle
+    double restoreT_ = 0.0; bool adopted_ = false;
     double cableW_ = 0.0;
     OcApi api_; OcInterior fns_{}; OcInteriorExt ext_{}; ATTACHMENTHANDLE att_ = nullptr; bool registered_ = false;
 };
@@ -330,7 +398,7 @@ void Sync(int person) {
         Carry()[person] = {TV_CELL, it != Carry().end() ? it->second.station : nullptr, Clamp(std::atof(h.data + 5), 0.0, 1.0) * kCellJ};
         return;
     }
-    if (ours && !std::strcmp(h.data, "cable") && it != Carry().end() && it->second.kind == TV_CABLE) return;
+    if (ours && tvIsPlugData(h.data) && it != Carry().end() && it->second.kind == TV_CABLE) return;
     if (it == Carry().end()) return;
     if (it->second.kind == TV_CABLE) if (Station* s = StationOf(it->second.station)) s->ReelIn(person);
     Carry().erase(it);

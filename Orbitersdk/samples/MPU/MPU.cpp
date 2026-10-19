@@ -28,10 +28,31 @@ protected:
     // O2 0.84, CO2 1.0, water vapour 1.8 kg a day and 100 W of heat at rest - scaled by their pulse (OrbiterCrew). Life
     // support: the O2 regulator from the tank (keeps 21 kPa, passive - works without power), N2 make-up (keeps 99 kPa), the
     // CO2 absorber (a fan, powered; its cartridge used up by what it takes), the dehumidifier (powered). Heat: the people,
-    // the electronics, the lamps; the hull (multi-layer insulation, UA 15 W/K) to its skin's temperature - the air outside, or in vacuum
-    // the Sun and the night sky; the thermostat (21 C): an electric heater up to 4 kW, the coolant loop to the radiators up
-    // to 6 kW (pumps 15 % of it). All the powered parts draw from the cells; with the cells empty they stop.
-    static constexpr double kCabV = 34.0, kRgas = 8.314, kCabHeatCap = 3.0e5, kHullUA = 15.0, kTset = 294.15;
+    // the electronics, the lamps; the hull (HullUA below: 15 W/K in vacuum, ~30 W/K in a dense gas) to its skin's temperature -
+    // the air outside, or in vacuum the Sun and the night sky; the thermostat (21 C): an electric heater up to 12 kW (the user,
+    // 2026-10-18: Titan's cold dense nitrogen takes ~7 kW), the coolant loop to the radiators up to 6 kW (pumps 15 % of it).
+    // All the powered parts draw from the cells; with the cells empty they stop.
+    // The hull's insulation (the user, 2026-10-18, for Titan): multi-layer insulation (MLI) works only in vacuum - in a gas the
+    // gas between its foils carries the heat and it is no better than its spacers. Under it a 4 cm blanket of silica aerogel
+    // (real, flown: k ~0.004 W/mK in vacuum, its gas part held down by the 20-100 nm pores - half the free gas's at about
+    // 60 kPa; the free gas ~0.018 W/mK: nitrogen at the blanket's ~200 K mean on Titan, air at room temperature 0.026). Over ~60 m2 of cabin, plus the frame's struts (6 W/K) and the windows (~3 m2, double: 4 W/K by radiation in
+    // vacuum, ~8 W/K with the gas between and on them). Outside the hull in a gas: free convection, h ~2.5 (rho/1.2)^(2/3) W/m2K
+    // (Titan's 5.3 kg/m3: ~7). Vacuum 15 W/K; Earth ~30; Mars ~20; Titan ~36 (200 K across: ~7 kW)
+    static constexpr double kCabV = 34.0, kRgas = 8.314, kCabHeatCap = 3.0e5, kTset = 294.15;
+    static constexpr double kHeatMax = 12000.0, kCabArea = 60.0;             // W of heating; m2 of insulated cabin
+    double HullUA() const {                                                 // W/K through the hull to its skin, at the outside's pressure
+        const double p = (std::max)(0.0, GetAtmPressure()), gas = p / (p + 1.0);     // MLI lost from ~1 Pa
+        const double kAero = 0.004 + 0.018 * p / (p + 6.0e4);                         // aerogel: solid + radiation, its pores' gas part
+        const double blanket = 5.0 + (kCabArea * kAero / 0.04 - 5.0) * gas;          // MLI 5 W/K in vacuum -> the aerogel alone in gas
+        const double windows = 4.0 + 4.0 * gas, struts = 6.0;
+        double UA = blanket + windows + struts;
+        const double rho = (std::max)(0.0, GetAtmDensity());
+        if (rho > 1e-3 || CabinWet() > 0.0) {                                      // the outer film: the gas's, or a liquid's boiling one
+            const double w = CabinWet(), hA = (2.5 * std::pow(rho / 1.2, 2.0 / 3.0) * (1.0 - w) + 300.0 * w) * kCabArea;
+            UA = 1.0 / (1.0 / UA + 1.0 / hA);
+        }
+        return UA * HullUAFactor();                                         // the floor's insulation burns with the belly (TVHeat.h)
+    }
     static constexpr double kO2TankMol = 1562.0, kN2TankMol = 714.0, kAbsorbMol = 909.0;   // 50 kg O2, 20 kg N2, 40 kg of CO2 taken
     double nO2_ = 296.0, nN2_ = 1096.0, nCO2_ = 0.56, nH2O_ = 16.7, cabT_ = kTset;
     double o2Tank_ = kO2TankMol, n2Tank_ = kN2TankMol, absorb_ = kAbsorbMol;
@@ -49,7 +70,7 @@ protected:
             ++people_; activity_ += Clamp(in.pulse > 1.0 ? in.pulse / 70.0 : 1.0, 0.6, 3.0);
         }
     }
-    double qGain_ = 0.0, qHull_ = 0.0, skinLast_ = 0.0, sinLast_ = 0.0;     // the last step's inside gains, hull flow, outside skin temperature, Sun
+    double hullUA_ = 15.0, qGain_ = 0.0, qHull_ = 0.0, skinLast_ = 0.0, sinLast_ = 0.0;     // the last step's inside gains, hull flow, outside skin temperature, Sun
     double SkinT() {                                                        // what the hull's insulation faces outside
         OBJHANDLE sun = oapiGetGbodyByIndex(0), ref = GetSurfaceRef(); VECTOR3 sp, me, upG;
         oapiGetGlobalPos(sun, &sp); GetGlobalPos(me); GlobalRot(_V(0, 1, 0), upG);
@@ -62,7 +83,8 @@ protected:
         // vacuum: the white hull's radiative balance (absorbs 0.2 of the sunlight on a third of its surface, radiates at 0.85),
         // the ground below it (half the sky) and the black sky (the rest)
         const double SIG = 5.670e-8, flux = 3.828e26 / (4.0 * PI * dist * dist);
-        const double tg = tt.known ? tt.ground : 100.0 + 290.0 * std::pow((std::max)(0.0, sinE), 0.5);
+        double tg = tt.known ? tt.ground : 100.0 + 290.0 * std::pow((std::max)(0.0, sinE), 0.5);
+        tg = (std::max)(tg, HeatGroundK());                                   // a lava field's glow under it (TVChassis HeatStep)
         const double q = (sinE > 0.0 ? 0.2 * flux * 0.3 : 0.0) + 0.5 * 0.95 * SIG * std::pow(tg, 4) + 0.5 * SIG * std::pow(2.7, 4);
         return skinLast_ = std::pow(q / (0.85 * SIG), 0.25);
     }
@@ -74,6 +96,7 @@ protected:
         // person aboard with it. Every part is now bounded by what there is to move, the heat solved exactly
         const int ns = (int)Clamp(std::ceil(dt / 5.0), 1.0, 120.0);
         const double h = dt / ns, skin = SkinT();
+        hullUA_ = HullUA();
         double wSum = 0.0, hSum = 0.0, cSum = 0.0;
         for (int i = 0; i < ns; ++i) { wSum += CabinStep(h, skin); hSum += heatW_; cSum += coolW_; }
         heatW_ = hSum / ns; coolW_ = cSum / ns; lifeW_ = wSum / ns;
@@ -108,12 +131,13 @@ protected:
         // up to 4 kW of heating, 6 kW of cooling). dT/dt = (q - UA T + heat - cool) / C, solved exactly in the regime the cabin
         // is in: it relaxes to that regime's equilibrium with its time constant
         const double lamps = light_ == kLightFull ? 250.0 : light_ == kLightStandby ? 30.0 : 0.0;
-        const double q = activity_ * 100.0 + 600.0 + lamps + kHullUA * skin, UA = kHullUA, K = 1500.0, C = kCabHeatCap;
+        // the hull's insulation: the floor's burns with the belly (heat damage, TVHeat.h) - up to x5
+        const double UA = hullUA_, q = activity_ * 100.0 + 600.0 + lamps + UA * skin, K = 1500.0, C = kCabHeatCap;
         double Teq = q / UA, tau = C / UA;                                    // no heater, no cooler
         if (power) {
             if (Teq < kTset - 0.5) {                                          // heating
                 const double Th = (q + K * (kTset - 0.5)) / (UA + K);
-                if (K * (kTset - 0.5 - Th) > 4000.0) Teq = (q + 4000.0) / UA; else { Teq = Th; tau = C / (UA + K); }
+                if (K * (kTset - 0.5 - Th) > kHeatMax) Teq = (q + kHeatMax) / UA; else { Teq = Th; tau = C / (UA + K); }
             } else if (Teq > kTset + 0.5) {                                   // cooling
                 const double Tc = (q + K * (kTset + 0.5)) / (UA + K);
                 if (K * (Tc - kTset - 0.5) > 6000.0) Teq = (q - 6000.0) / UA; else { Teq = Tc; tau = C / (UA + K); }
@@ -121,7 +145,7 @@ protected:
         }
         qGain_ = activity_ * 100.0 + 600.0 + lamps; qHull_ = UA * (skin - cabT_);   // the heat in (W) and through the hull (negative: out)
         cabT_ = Teq + (cabT_ - Teq) * std::exp(-dt / tau);
-        heatW_ = power ? Clamp(K * (kTset - 0.5 - cabT_), 0.0, 4000.0) : 0.0;
+        heatW_ = power ? Clamp(K * (kTset - 0.5 - cabT_), 0.0, kHeatMax) : 0.0;
         coolW_ = power ? Clamp(K * (cabT_ - kTset - 0.5), 0.0, 6000.0) : 0.0;
         w += 600.0 + lamps + heatW_ + 0.15 * coolW_;
         return w;
@@ -171,22 +195,89 @@ protected:
             inside = pid && api_.ShipOf(pid) == GetHandle();
         }
         const bool power = CellsSum() > 1.0;
-        const double vol = inside && power ? Clamp(0.18 + 0.6 * (heatW_ + coolW_) / 4000.0, 0.0, 0.8) : 0.0;
+        const double vol = inside && power ? Clamp(0.18 + 0.6 * (heatW_ + coolW_) / 6000.0, 0.0, 0.8) : 0.0;
         if (vol > 0.01) snd_->PlayWav(kSndHvac, true, (float)vol);
         else if (snd_->IsWavPlaying(kSndHvac)) snd_->StopWav(kSndHvac);
     }
+    // the warm, damp cabin air let out (the airlock's cycle, a hole in the hull) into a cold outside freezes at once: a puff of
+    // ice crystals (its water, its CO2 on Titan). In a dense cold gas (Titan, 147 kPa) it hangs low and slow and settles over
+    // ~9 s; in vacuum or a thin air it flashes out fast and thin. Orbiter's default particle (soft white)
+    PSTREAM_HANDLE puffSt_ = nullptr, leakSt_ = nullptr;
+    double puffLv_ = 0.0, leakLv_ = 0.0, puffT_ = 0.0, shimT_ = 9.0; int ventMode_ = -1;
+    void Vents(double dt) {
+        const double p = GetAtmPressure();
+        const int mode = p > 1.0e4 ? 2 : 1;
+        // the AtmoFX client flies the crystals (free particles: the body's gravity and gas); Orbiter's streams only without it
+        const bool client = AtmoFXPart::Available();
+        if (client && (puffSt_ || leakSt_)) { for (PSTREAM_HANDLE* h : {&puffSt_, &leakSt_}) if (*h) { DelExhaustStream(*h); *h = nullptr; } ventMode_ = -1; }
+        if (!client && mode != ventMode_) {
+            for (PSTREAM_HANDLE* h : {&puffSt_, &leakSt_}) if (*h) { DelExhaustStream(*h); *h = nullptr; }
+            PARTICLESTREAMSPEC dense = {0, 0.35, 30.0, 0.8, 0.5, 9.0, 0.6, 3.0, PARTICLESTREAMSPEC::DIFFUSE,
+                                        PARTICLESTREAMSPEC::LVL_LIN, 0, 1, PARTICLESTREAMSPEC::ATM_FLAT, 1, 1, nullptr};
+            PARTICLESTREAMSPEC thin = {0, 0.20, 60.0, 6.0, 0.8, 1.2, 2.0, 0.0, PARTICLESTREAMSPEC::DIFFUSE,
+                                       PARTICLESTREAMSPEC::LVL_LIN, 0, 1, PARTICLESTREAMSPEC::ATM_FLAT, 1, 1, nullptr};
+            PARTICLESTREAMSPEC& sp = mode == 2 ? dense : thin;
+            puffSt_ = AddParticleStream(&sp, _V(0.0, kDeckY + 1.0, -4.35), _V(0.0, 0.2, -1.0), &puffLv_);
+            leakSt_ = AddParticleStream(&sp, _V(1.50, kDeckY + 1.4, 0.0), _V(1.0, 0.3, 0.0), &leakLv_);
+            ventMode_ = mode;
+        }
+        // the cabin's skin in a gas: warmer than the air by what leaks out through the hull over its outer film - on Titan
+        // ~7 kW over ~400 W/K: ~17 K, the air shimmers over the roof (the AtmoFX client; id 10)
+        if (shimT_ += dt, shimT_ > 0.5) {
+            shimT_ = 0.0;
+            const double rho = (std::max)(0.0, GetAtmDensity()), hA = 2.5 * std::pow(rho / 1.2, 2.0 / 3.0) * kCabArea;
+            const double over = p > 50.0 && hA > 1.0 ? -qHull_ / hA : 0.0;
+            AtmoFXHeat::Set(GetHandle(), 10, _V(0.0, kDeckY + 2.0, 0.0), 2.5, over > 2.0 ? over : 0.0);
+        }
+        // the air's temperature by the gas law from Orbiter's pressure and density (a body without an atmosphere model of its
+        // own - Titan - gets Orbiter's default 288 K from GetAtmTemperature, and the cabin's moisture would never freeze there)
+        double tAir = GetAtmTemperature();
+        if (OBJHANDLE ar = GetAtmRef())
+            if (const ATMCONST* ac = oapiGetPlanetAtmConstants(ar)) {
+                const double rho = GetAtmDensity();
+                if (p > 1.0 && rho > 1e-9 && ac->R > 1.0) tAir = p / (rho * ac->R);
+            }
+        const bool cold = p < 100.0 || tAir < 263.0;                               // the vented moisture freezes
+        puffT_ = (std::max)(0.0, puffT_ - dt);
+        puffLv_ = cold && puffT_ > 0.0 ? Clamp(puffT_ / 1.5, 0.3, 1.0) : 0.0;
+        leakLv_ = cold && hullLeak_ > 0.0 && CabP() > 1.1 * p ? Clamp(hullLeak_ / 10.0e-4, 0.2, 1.0) : 0.0;
+        if (!client) return;
+        puffLv_ = leakLv_ = 0.0;
+        // what freezes out of the vented cabin air: its water, and its CO2 where the air is colder than its frost point
+        // (~140 K: Titan) - as a mass share of that air
+        const double mCab = nO2_ * 0.032 + nN2_ * 0.028 + nCO2_ * 0.044 + nH2O_ * 0.018;   // kg of air in the cabin
+        const double wIce = mCab > 0.0 ? (nH2O_ * 0.018 + (tAir < 140.0 ? nCO2_ * 0.044 : 0.0)) / mCab : 0.0;
+        const bool thin = p < 1000.0;                                              // vacuum, a thin air: they fly with the expanding gas
+        // the airlock's cycle (AirlockPass): 10 % of the lock's 9 m3 of the cabin's air out over 1.5 s; the valve's jet carries
+        // the crystals in a dense gas, in vacuum they leave at the gas's expansion speed (~600 m/s) and sublimate over ~30 s
+        const double puffAir = cold && puffT_ > 0.0 ? mCab * 0.1 * 9.0 / kCabV / 1.5 : 0.0;   // kg/s
+        const VECTOR3 dP = unit(_V(0.0, 0.2, -1.0)), dL = unit(_V(1.0, 0.3, 0.0));
+        AtmoFXPart::Emit(GetHandle(), 8200, _V(0.0, kDeckY + 1.0, -4.35), dP * (thin ? 600.0 : 100.0), thin ? 0.6 : 0.3, 0.6,
+                         puffAir * wIce, AtmoFXPart::ICE, 0, 0.0, thin ? 30.0 : 0.0, thin ? 0.0 : puffAir * 315.0);
+        // the hull's hole: the air out choked while the cabin's pressure is over twice the outside's (as Leak)
+        double md = 0.0;
+        if (cold && hullLeak_ > 0.0) {
+            const double pc = CabP();
+            if (pc > p) md = pc > 1.9 * p ? 1.415e-3 * hullLeak_ * pc : 0.6 * hullLeak_ * std::sqrt(2.0 * 1.2 * (pc - p));
+        }
+        AtmoFXPart::Emit(GetHandle(), 8201, _V(1.50, kDeckY + 1.4, 0.0), dL * (thin ? 600.0 : 200.0), thin ? 0.6 : 0.25, 0.6,
+                         md * wIce, AtmoFXPart::ICE, 0, 0.0, thin ? 30.0 : 0.0, thin ? 0.0 : md * 315.0);
+    }
     void AirlockPass() {
+        puffT_ = 1.5;                                                             // the cycle's vented air: the crystals' puff
         Sfx(kSndAirlock, 1.0);                                                    // through the outer hatch: the airlock cycled, 10 % of its air lost
         const double k = 1.0 - 0.1 * 9.0 / kCabV;
         nO2_ *= k; nN2_ *= k; nCO2_ *= k; nH2O_ *= k;
     }
     bool ModuleLoad(const char* line) override {
+        if (!std::strncmp(line, "HEADLIGHTS", 10)) { int p = 1; std::sscanf(line + 10, "%d", &p); heads_ = p != 0; return true; }   // headlights on at load
         if (!std::strncmp(line, "LANG", 4)) { ru_ = std::strstr(line + 4, "ru") != nullptr; return true; }     // the terminal's language
         if (std::strncmp(line, "CABIN", 5)) return false;
         std::sscanf(line + 5, "%lf %lf %lf %lf %lf %lf %lf %lf", &nO2_, &nN2_, &nCO2_, &nH2O_, &cabT_, &o2Tank_, &n2Tank_, &absorb_);
         return true;
     }
     void ModuleSave(FILEHANDLE scn) override {
+        if (heads_) oapiWriteScenario_int(scn, const_cast<char*>("HEADLIGHTS"), 1);
         if (!cab_) return;
         char b[200]; std::snprintf(b, sizeof b, "%.2f %.2f %.3f %.2f %.2f %.1f %.1f %.1f", nO2_, nN2_, nCO2_, nH2O_, cabT_, o2Tank_, n2Tank_, absorb_);
         oapiWriteScenario_string(scn, const_cast<char*>("CABIN"), b);
@@ -292,7 +383,7 @@ protected:
         fns_.Ground = cab_ ? &MPU::cGroundE : &MPU::cGround;
         fns_.Walls = cab_ ? &MPU::cWallsE : &MPU::cWalls;
         fns_.Gravity = &TVChassis::cGravity;
-        fns_.Count = [](void* c) { return Self(c)->ChassisItemCount() + (Self(c)->cab_ ? 2 + kSeatsN : 5); };
+        fns_.Count = [](void* c) { return Self(c)->ChassisItemCount() + (Self(c)->cab_ ? 4 + kSeatsN : 5); };
         fns_.Item = cab_ ? &MPU::cItemE : &MPU::cItem;
         fns_.Use = cab_ ? &MPU::cUseE : &MPU::cUse;
         if (cab_) fns_.Seat = &MPU::cSeatE;
@@ -305,6 +396,7 @@ protected:
             if (cab_) { ext_.Seated = &MPU::cSeatedE; ext_.SeatHands = &MPU::cSeatHandsE; }
             if (!cab_) ext_.SeatGauges = &MPU::cSeatGaugesE;     // Э.МПУ: on the glass instead (the user: «не внизу»)
             ext_.OuterWalls = &TVChassis::cOuterWalls;
+            ext_.ExitAnywhere = &TVChassis::cExitAnywhere;       // F aboard with nothing in reach: step off (the simulators' way)
             if (cab_) { ext_.Click = &MPU::cClickE; ext_.Ceiling = &MPU::cCeilingE; }
             ext_.NodeCount = [](void* c) { return Self(c)->NodeCountE(); };
             ext_.Node = [](void* c, int i, OcNode* o) { return Self(c)->NodeE(i, o) ? 1 : 0; };
@@ -354,7 +446,7 @@ protected:
             out->id = kItemPost; out->kind = OC_TERMINAL; out->pos = _V(0.0, kDeckY + 1.0, 3.6); out->dir = _V(0, 0, 1); out->radius = 1.0;
             std::snprintf(out->label, sizeof out->label, "%s", m->driver_ ? m->L("отойти от пульта", "step back from the post") : m->L("встать за пульт МПУ", "take the MPU's post"));
         } else if (i == 4) {
-            out->id = kItemDown; out->kind = OC_EXIT; out->pos = _V(-1.7, kDeckY + 1.0, 2.5); out->dir = _V(-1, 0, 0); out->radius = 0.9;
+            out->id = kItemDown; out->kind = OC_EXIT; out->pos = _V(-1.7, kDeckY + 0.55, 0.0); out->dir = _V(-1, 0, 0); out->radius = 2.6;
             std::snprintf(out->label, sizeof out->label, "%s", m->L("сойти с МПУ", "step off the MPU"));
         } else return 0;
         return 1;
@@ -378,17 +470,8 @@ protected:
             else if (!m->driver_) m->driver_ = personId;
         } else if (id == kItemDown) {
             if (m->driver_ == personId) m->driver_ = 0;
-            OBJHANDLE ref = m->GetSurfaceRef();
-            if (!ref || !m->api_.ExitTo) return;
-            VECTOR3 gp;
-            m->Local2Global(kStepFoot, gp);
-            double lng, lat, rad, hdg;
-            oapiGlobalToEqu(ref, gp, &lng, &lat, &rad);
-            oapiGetHeading(m->GetHandle(), &hdg);
-            VESSELSTATUS2 vs;
-            std::memset(&vs, 0, sizeof vs);
-            vs.version = 2; vs.rbody = ref; vs.status = 1; vs.arot.x = 10.0;     // Orbiter stands the body on its own points
-            vs.surf_lng = lng; vs.surf_lat = lat; vs.surf_hdg = hdg - PI05;
+            VESSELSTATUS2 vs;                                                     // down beside her, clear of the body
+            if (!m->api_.ExitTo || !m->ExitStatus(personId, nullptr, vs)) return;
             std::string name = in.name;
             for (char& ch : name) if (ch == ' ') ch = '_';
             m->api_.ExitTo(personId, name.c_str(), &vs);
@@ -484,7 +567,7 @@ protected:
         auto T2 = [en](const char* ru, const char* e) { return en ? e : ru; };
         add(T2("СКОРОСТЬ", "SPEED"), -1.0, kmh > lim + 2.0 ? 1 : 0, back ? T2("Н %.0f км/ч", "R %.0f km/h") : T2("%.0f км/ч", "%.0f km/h"), kmh);
         add(T2("ПРЕДЕЛ", "LIMIT"), -1.0, 0, T2("%.0f км/ч", "%.0f km/h"), lim);
-        add(T2("ЗАРЯД", "CHARGE"), m->batt_, m->batt_ < 0.15 ? 2 : m->batt_ < 0.30 ? 1 : 0, "%.0f %%", m->batt_ * 100.0);
+        add(T2("ЗАРЯД", "CHARGE"), m->batt_, m->batt_ < 0.15 ? 2 : m->batt_ < 0.40 ? 1 : 0, "%.0f %%", m->batt_ * 100.0);
         if (m->chargeW_ > 1.0) add(T2("ЗАРЯДКА", "CHARGING"), -1.0, 0, T2("%+.0f кВт", "%+.0f kW"), m->chargeW_ * 1e-3);
         else add(T2("МОЩНОСТЬ", "POWER"), -1.0, 0, T2("%+.0f кВт", "%+.0f kW"), m->powerW_ * 1e-3);
         const double rk = m->RangeKm();
@@ -493,7 +576,27 @@ protected:
         const double pit = m->GetPitch() * DEG, rol = m->GetBank() * DEG;
         add(T2("КРЕН / ТАНГАЖ", "ROLL / PITCH"), -1.0, std::fabs(rol) > 15.0 || std::fabs(pit) > 20.0 ? 1 : 0, T2("%+.0f° / %+.0f°", "%+.0f / %+.0f"), rol, pit);
         if (m->hullLeak_ > 0.0) add(T2("ТЕЧЬ", "LEAK"), -1.0, 2, T2("%.1f см²", "%.1f cm2"), m->hullLeak_ * 1e4);
-        { int bad = 0; for (double h : m->wheelHp_) bad += h < 0.7; if (bad) add(T2("КОЛЁСА", "WHEELS"), -1.0, 1, T2("повреждено %d", "%d damaged"), bad); }
+        { int bad = 0; for (int i = 0; i < mpu::kWheels; ++i) bad += m->WheelHealth(i) < 0.7; if (bad) add(T2("КОЛЁСА", "WHEELS"), -1.0, 1, T2("повреждено %d", "%d damaged"), bad); }
+        if (m->Floating()) add(T2("НА ПЛАВУ", "AFLOAT"), -1.0, 2, "%s", T2("хода нет, сносит", "no drive, drifting"));
+        else if (m->BuoyFrac() > 0.0) add(T2("БРОД", "WADING"), -1.0, m->BuoyFrac() > 0.6 ? 1 : 0, T2("%.1f м, всплыв. %.0f %%", "%.1f m, lift %.0f %%"), m->WadeDepth(), m->BuoyFrac() * 100.0);
+        if (m->FloodV() > 0.01) add(T2("ЗАТОПЛЕНИЕ", "FLOODING"), m->FloodV() / 55.0, 2, T2("%.1f м³", "%.1f m3"), m->FloodV());
+        if (m->HeatAlarm() || m->HeatGroundK() > 400.0) {                         // the heat (TVHeat.h): tyres, belly, motors, the melt
+            int hot = 0, melt = 0, burnt = 0; double dT = 0.0, motMax = 0.0, motD = 0.0;
+            for (int i = 0; i < mpu::kWheels; ++i) {
+                if (m->tyreT_[i] > m->tyreT_[hot]) hot = i;
+                dT = (std::max)(dT, m->tyreDmg_[i]); melt += m->InMelt(i); burnt += m->motDmg_[i] >= 0.5;
+                motMax = (std::max)(motMax, m->motTi_[i]); motD = (std::max)(motD, m->motDmg_[i]);
+            }
+            const double tt = m->tyreT_[hot], ton = m->tyreSpec_.onsetK;
+            add(T2("ШИНЫ", "TYRES"), -1.0, dT > 0.0 || tt > ton ? 2 : tt > ton - 150.0 ? 1 : 0, dT > 0.005 ? T2("%.0f °C ожог %.0f %%", "%.0f C burnt %.0f %%") : T2("%.0f °C", "%.0f C"), tt - 273.15, dT * 100.0);
+            const double bt = m->bellyT_, bon = m->bellySpec_.onsetK;
+            add(T2("ДНИЩЕ", "BELLY"), -1.0, m->bellyDmg_ > 0.0 || bt > bon ? 2 : bt > bon - 60.0 ? 1 : 0, m->bellyDmg_ > 0.005 ? T2("%.0f °C ожог %.0f %%", "%.0f C burnt %.0f %%") : T2("%.0f °C", "%.0f C"), bt - 273.15, m->bellyDmg_ * 100.0);
+            if (motMax > 433.0 || motD > 0.0) {
+                if (burnt) add(T2("МОТОРЫ", "MOTORS"), -1.0, 2, T2("%.0f °C, сгорело %d", "%.0f C, %d burnt"), motMax - 273.15, burnt);
+                else add(T2("МОТОРЫ", "MOTORS"), -1.0, motD > 0.0 || m->motTrip_ ? 2 : 1, m->motTrip_ ? T2("%.0f °C ОТКЛ", "%.0f C TRIPPED") : T2("%.0f °C", "%.0f C"), motMax - 273.15);
+            }
+            if (melt) add(T2("РАСПЛАВ", "MELT"), -1.0, 2, T2("колёс %d", "%d wheels"), melt);
+        }
         if (m->lastHitT_ > 0.0) add(T2("НАЕЗД", "HIT"), -1.0, 2, "%s", T2("человек", "a person"));
         else if (m->park_) add(T2("ТОРМОЗ", "BRAKE"), -1.0, 1, "%s", T2("стояночный", "parking"));
         else if (m->brakeHeld_) add(T2("ТОРМОЗ", "BRAKE"), -1.0, 0, "%s", T2("тормоз", "on"));
@@ -506,9 +609,13 @@ protected:
         if (i < m->ChassisItemCount()) return m->ChassisItem(i, out) ? 1 : 0;
         i -= m->ChassisItemCount();
         *out = OcItem{};
-        if (i == 0) {                                            // from outside: the stern door, at the foot of its stairs
-            out->id = kItemHatchOut; out->kind = OC_AIRLOCK; out->pos = _V(0.0, -0.9, -5.40); out->dir = _V(0, 0, 1); out->radius = 2.0;
-            std::snprintf(out->label, sizeof out->label, "%s", m->L("войти в шлюз Э.МПУ", "enter the EMPU's airlock"));
+        if (i == 0) {                                            // from outside: anywhere round it (as the MPU), into the airlock
+            // three points deep under the hull, as the MPU's: from the ground each reaches ~4.2 m round
+            out->id = kItemHatchOut; out->kind = OC_AIRLOCK; out->pos = _V(0.0, -8.0, 0.0); out->dir = _V(0, 0, 1); out->radius = 8.25;
+            std::snprintf(out->label, sizeof out->label, "%s", m->L("войти в Э.МПУ (шлюз)", "enter the EMPU (airlock)"));
+        } else if (i == 2 + kSeatsN || i == 3 + kSeatsN) {          // the other two entry points, fore and aft
+            out->id = kItemHatchOut; out->kind = OC_AIRLOCK; out->pos = _V(0.0, -8.0, i == 2 + kSeatsN ? 2.6 : -2.6); out->dir = _V(0, 0, 1); out->radius = 8.25;
+            std::snprintf(out->label, sizeof out->label, "%s", m->L("войти в Э.МПУ (шлюз)", "enter the EMPU (airlock)"));
         } else if (i == 1) {                                     // inside the airlock: out through the stern door
             out->id = kItemHatchIn; out->kind = OC_EXIT; out->pos = _V(0.0, kDeckY + 1.0, -4.00); out->dir = _V(0, 0, -1); out->radius = 0.8;
             std::snprintf(out->label, sizeof out->label, "%s", m->L("выйти наружу", "go outside"));
@@ -720,6 +827,8 @@ protected:
         if (!k) return;
         oapi::Brush* bg = oapiCreateBrush(Rgb(6, 14, 10));
         oapi::Brush* fill = oapiCreateBrush(Ink(0.85));
+        oapi::Brush* fillWarn = oapiCreateBrush(Rgb(255, 180, 60));
+        oapi::Brush* fillAlarm = oapiCreateBrush(Rgb(255, 70, 60));
         oapi::Pen* pen = oapiCreatePen(1, 2, Ink(0.9));
         oapi::Pen* thin = oapiCreatePen(1, 1, Ink(0.45));
         const DWORD warn = Rgb(255, 180, 60), alarm = Rgb(255, 70, 60);
@@ -767,7 +876,13 @@ protected:
                 const int x = x0 + c * 72;
                 std::snprintf(b, sizeof b, Tl("яч %d", "cell %d"), c + 1); Txt(k, x, 48, b);
                 if (cell_[c] < 0) Txt(k, x, 74, Tl("нет", "none"));
-                else { std::snprintf(b, sizeof b, "%.0f %%", cell_[c] / kCellJ * 100.0); Txt(k, x, 74, b); Bar(k, x, 100, 62, 14, cell_[c] / kCellJ, fill); }
+                else {
+                    const double level = Clamp(cell_[c] / kCellJ, 0.0, 1.0);
+                    TC(level < 0.15 ? alarm : level < 0.40 ? warn : Ink());
+                    std::snprintf(b, sizeof b, "%.0f %%", level * 100.0); Txt(k, x, 74, b);
+                    Bar(k, x, 100, 62, 14, level, level < 0.15 ? fillAlarm : level < 0.40 ? fillWarn : fill);
+                    TC(Ink());
+                }
             }
             std::snprintf(b, sizeof b, Tl("всего %.0f кВт·ч (%.0f %%)", "total %.0f kWh (%.0f %%)"), CellsSum() / 3.6e6, batt_ * 100.0); Txt(k, x0, 140, b);
             std::snprintf(b, sizeof b, Tl("отбор %+.0f кВт", "draw %+.0f kW"), powerW_ * 1e-3); Txt(k, x0, 172, b);
@@ -831,18 +946,43 @@ protected:
             TF(0);
             static const char* Wr[8] = {"ПЛ1", "ПП1", "ПЛ2", "ПП2", "ЗЛ1", "ЗП1", "ЗЛ2", "ЗП2"};
             static const char* We[8] = {"FL1", "FR1", "FL2", "FR2", "RL1", "RR1", "RL2", "RR2"};
-            for (int i = 0; i < mpu::kWheels; ++i) {
+            for (int i = 0; i < mpu::kWheels; ++i) {                                           // three rows a wheel: slip; rut or melt, health; the tyre's heat
                 const int x = x0 + (i % 2) * 150, y = 46 + (i / 2) * 62;
                 TC(slip_[i] > 0.25 ? warn : Ink());
                 std::snprintf(b, sizeof b, Tl("%s букс %.0f%%", "%s slip %.0f%%"), (ru_ ? Wr : We)[i], std::fabs(slip_[i]) * 100.0); Txt(k, x, y, b);
-                TC(wheelHp_[i] < 0.15 ? alarm : wheelHp_[i] < 0.7 ? warn : Ink());
-                std::snprintf(b, sizeof b, Tl("%.0f см  цел %.0f%%", "%.0f cm  ok %.0f%%"), sink_[i] * 100.0, wheelHp_[i] * 100.0); Txt(k, x, y + 24, b);
+                const double hp = WheelHealth(i);
+                TC(InMelt(i) || hp < 0.15 ? alarm : hp < 0.7 ? warn : Ink());
+                if (InMelt(i)) std::snprintf(b, sizeof b, Tl("РАСПЛАВ %.0f см", "MELT %.0f cm"), meltSink_[i] * 100.0);
+                else std::snprintf(b, sizeof b, Tl("%.0f см  цел %.0f%%", "%.0f cm  ok %.0f%%"), sink_[i] * 100.0, hp * 100.0);
+                Txt(k, x, y + 19, b);
+                const double tc = tyreT_[i] - 273.15;
+                TC(tyreDmg_[i] > 0.0 || tyreT_[i] > tyreSpec_.onsetK ? alarm : tyreT_[i] > tyreSpec_.onsetK - 150.0 ? warn : Ink(0.8));
+                if (tyreDmg_[i] > 0.005) std::snprintf(b, sizeof b, Tl("шина %.0f° ож %.0f%%", "tyre %.0fC brn %.0f%%"), tc, tyreDmg_[i] * 100.0);
+                else std::snprintf(b, sizeof b, Tl("шина %.0f°", "tyre %.0f C"), tc);
+                Txt(k, x, y + 38, b);
             }
+            const double bc = bellyT_ - 273.15;                                                // the belly and the ground it sees
+            TC(bellyDmg_ > 0.0 || bellyT_ > bellySpec_.onsetK ? alarm : bellyT_ > bellySpec_.onsetK - 60.0 ? warn : Ink());
+            if (bellyDmg_ > 0.005) std::snprintf(b, sizeof b, Tl("днище %.0f°  ожог %.0f%%  грунт %.0f°", "belly %.0f C  burnt %.0f%%  gnd %.0f C"), bc, bellyDmg_ * 100.0, bellyRadK_ - 273.15);
+            else std::snprintf(b, sizeof b, Tl("днище %.0f°   грунт %.0f°", "belly %.0f C   ground %.0f C"), bc, bellyRadK_ - 273.15);
+            Txt(k, x0, 296, b);
             TC(Ink());
-            std::snprintf(b, sizeof b, Tl("сцепл. с грунтом %.2f", "grip %.2f"), muEff_); Txt(k, x0, 300, b);
-            std::snprintf(b, sizeof b, Tl("клиренс %+.2f м", "ride height %+.2f m"), ride_); Txt(k, x0, 326, b);
-            std::snprintf(b, sizeof b, Tl("крен %+.1f°  тангаж %+.1f°", "roll %+.1f  pitch %+.1f"), GetBank() * DEG, GetPitch() * DEG); Txt(k, x0, 352, b);
-            std::snprintf(b, sizeof b, Tl("стояночный %s   трап %s", "parking %s   ladder %s"), park_ ? Tl("вкл", "on") : Tl("выкл", "off"), ladderWant_ ? Tl("на стоянке", "when parked") : Tl("убран", "stowed")); Txt(k, x0, 378, b);
+            std::snprintf(b, sizeof b, Tl("сцепл. с грунтом %.2f", "grip %.2f"), muEff_); Txt(k, x0, 320, b);
+            std::snprintf(b, sizeof b, Tl("клиренс %+.2f м", "ride height %+.2f m"), ride_); Txt(k, x0, 344, b);
+            std::snprintf(b, sizeof b, Tl("крен %+.1f°  тангаж %+.1f°", "roll %+.1f  pitch %+.1f"), GetBank() * DEG, GetPitch() * DEG); Txt(k, x0, 368, b);
+            std::snprintf(b, sizeof b, Tl("стояночный %s   трап %s", "parking %s   ladder %s"), park_ ? Tl("вкл", "on") : Tl("выкл", "off"), ladderWant_ ? Tl("на стоянке", "when parked") : Tl("убран", "stowed")); Txt(k, x0, 392, b);
+            if (bellyStage_ > 0) {                                                             // what the burning belly took
+                static const char* sr[5] = {"", "днище: инверторы - тяга 50%", "днище: батарея закорачивает", "днище: силовая проводка - хода нет", "ДНИЩЕ ПРОГОРЕЛО"};
+                static const char* se[5] = {"", "belly: inverters - drive 50%", "belly: battery shorting", "belly: harness - no drive", "BELLY BURNT THROUGH"};
+                TC(alarm); Txt(k, x0, 420, (ru_ ? sr : se)[bellyStage_ > 4 ? 4 : bellyStage_]); TC(Ink());
+            }
+            { double cl = 0.0; for (double c : clog_) cl = (std::max)(cl, c);                  // Titan's damp sand in the mesh
+              if (cl > 0.05) { TC(cl > 0.5 ? warn : Ink()); std::snprintf(b, sizeof b, Tl("налип песка до %.0f %%", "sand stuck up to %.0f %%"), cl * 100.0); Txt(k, x0, 444, b); TC(Ink()); } }
+            if (BuoyFrac() > 0.0 || FloodV() > 0.01) {                                         // in the sea
+                if (Floating()) std::snprintf(b, sizeof b, Tl("НА ПЛАВУ, хода нет%s", "AFLOAT, no drive%s"), FloodV() > 0.01 ? Tl(", ЗАТОПЛЕНИЕ", ", FLOODING") : "");
+                else std::snprintf(b, sizeof b, Tl("брод %.1f м, всплытие %.0f %%%s", "wading %.1f m, lift %.0f %%%s"), WadeDepth(), BuoyFrac() * 100.0, FloodV() > 0.01 ? Tl(", ЗАТОПЛЕНИЕ", ", FLOODING") : "");
+                TC(Floating() || FloodV() > 0.01 ? alarm : BuoyFrac() > 0.5 ? warn : Ink()); Txt(k, x0, 466, b); TC(Ink());
+            }
         } else if (page_ == kPgMot) {                                                      // the traction motors
             Txt(k, x0, 12, Tl("МОТОРЫ ТЯГИ", "TRACTION MOTORS"));
             TF(0);
@@ -858,8 +998,11 @@ protected:
                 k->SetPen(pen); k->SetBrush(nullptr); k->Rectangle(x, y + 22, x + 134, y + 34);
                 const double hf = Clamp((tc - 20.0) / 180.0, 0.0, 1.0);
                 if (hf > 0.0) { oapi::Brush* hb = oapiCreateBrush(col); k->SetBrush(hb); k->Rectangle(x + 2, y + 24, x + 2 + (int)(130 * hf), y + 32); k->SetBrush(nullptr); oapiReleaseBrush(hb); }
-                TC(Ink(0.85));
-                std::snprintf(b, sizeof b, Tl("%.0f%%  %+.0f кВт", "%.0f%%  %+.0f kW"), Clamp(fI_[i] / (kFmotor / 8.0) * 100.0, 0.0, 999.0), pI_[i] * 1e-3); Txt(k, x, y + 38, b);
+                TC(motDmg_[i] > 0.0 ? alarm : Ink(0.85));
+                if (motDmg_[i] >= 0.5) std::snprintf(b, sizeof b, "%s", Tl("СГОРЕЛ", "BURNT OUT"));
+                else if (motDmg_[i] > 0.005) std::snprintf(b, sizeof b, Tl("%.0f%%  ожог %.0f%%", "%.0f%%  burnt %.0f%%"), Clamp(fI_[i] / (kFmotor / 8.0) * 100.0, 0.0, 999.0), motDmg_[i] * 100.0);
+                else std::snprintf(b, sizeof b, Tl("%.0f%%  %+.0f кВт", "%.0f%%  %+.0f kW"), Clamp(fI_[i] / (kFmotor / 8.0) * 100.0, 0.0, 999.0), pI_[i] * 1e-3);
+                Txt(k, x, y + 38, b);
                 mech += pI_[i];
             }
             TC(Ink());
@@ -903,7 +1046,7 @@ protected:
             Txt(k, x0, kTH - 18, b);
         }
         oapiReleaseSketchpad(k);
-        oapiReleaseBrush(bg); oapiReleaseBrush(fill); oapiReleasePen(pen); oapiReleasePen(thin);
+        oapiReleaseBrush(bg); oapiReleaseBrush(fill); oapiReleaseBrush(fillWarn); oapiReleaseBrush(fillAlarm); oapiReleasePen(pen); oapiReleasePen(thin);
     }
     // the yoke's screen (256 x 160, turning with the yoke): the speed and the limit, the heading, the charge and the range;
     // the route's arrow and distance when one is chosen; over the four buttons below it their legends, lit when on
@@ -914,6 +1057,7 @@ protected:
         if (!k) return;
         const DWORD warn = Rgb(255, 148, 40), alarm = Rgb(255, 70, 70);
         oapi::Pen* pen = oapiCreatePen(1, 2, Ink()); oapi::Brush* fill = oapiCreateBrush(Ink(0.9));
+        oapi::Brush* fillWarn = oapiCreateBrush(warn); oapi::Brush* fillAlarm = oapiCreateBrush(alarm);
         k->SetBackgroundMode(oapi::Sketchpad::BK_TRANSPARENT); k->SetPen(pen); k->SetBrush(nullptr);
         char b[64];
         const bool back = speed_ < -0.3; const double lim = (back ? kVreverse : vCap_) * 3.6, kmh = std::fabs(speed_) * 3.6;
@@ -925,10 +1069,10 @@ protected:
         double hdg; oapiGetHeading(GetHandle(), &hdg);
         std::snprintf(b, sizeof b, "%03.0f", hdg * DEG); TA(oapi::Sketchpad::RIGHT, oapi::Sketchpad::TOP); Txt(k, 248, 10, b);
         // the charge
-        TA(oapi::Sketchpad::LEFT, oapi::Sketchpad::TOP); TC(batt_ < 0.15 ? alarm : batt_ < 0.3 ? warn : Ink());
+        TA(oapi::Sketchpad::LEFT, oapi::Sketchpad::TOP); TC(batt_ < 0.15 ? alarm : batt_ < 0.40 ? warn : Ink());
         std::snprintf(b, sizeof b, "%.0f %%", batt_ * 100.0); Txt(k, 8, 70, b);
         k->Rectangle(60, 72, 160, 86);
-        if (batt_ > 0) { k->SetBrush(fill); k->Rectangle(62, 74, 62 + (int)(96 * Clamp(batt_, 0.0, 1.0)), 84); k->SetBrush(nullptr); }
+        if (batt_ > 0) { k->SetBrush(batt_ < 0.15 ? fillAlarm : batt_ < 0.40 ? fillWarn : fill); k->Rectangle(62, 74, 62 + (int)(96 * Clamp(batt_, 0.0, 1.0)), 84); k->SetBrush(nullptr); }
         const double rk = RangeKm(); TC(Ink());
         if (rk >= 0) { std::snprintf(b, sizeof b, Tl("%.0f км", "%.0f km"), rk); TA(oapi::Sketchpad::RIGHT, oapi::Sketchpad::TOP); Txt(k, 248, 70, b); }
         // the route: an arrow towards the target off her nose, its distance
@@ -943,6 +1087,7 @@ protected:
             std::snprintf(b, sizeof b, dist < 1e4 ? Tl("%.2f км", "%.2f km") : Tl("%.0f км", "%.0f km"), dist * 1e-3); TA(oapi::Sketchpad::CENTER, oapi::Sketchpad::TOP); Txt(k, cx, 96, b);
         }
         if (hullLeak_ > 0.0) { TC(alarm); TA(oapi::Sketchpad::LEFT, oapi::Sketchpad::TOP); Txt(k, 8, 96, Tl("ТЕЧЬ", "LEAK")); }
+        if (HeatAlarm()) { TC(alarm); TA(oapi::Sketchpad::LEFT, oapi::Sketchpad::TOP); Txt(k, 60, 96, Tl("ЖАР", "HEAT")); }   // the details: the ХОД page
         { const double mc = motT_ - 273.15;                                                 // the motors' heat, when it matters
           if (limOff_ || mc > 110.0 || motTrip_) {
               std::snprintf(b, sizeof b, Tl("МОТ %.0f°%s", "MOT %.0f%s"), mc, limOff_ ? Tl(" БЕЗ ОГР", " NO LIM") : "");
@@ -958,7 +1103,7 @@ protected:
             if (on4[i]) { k->SetBrush(fill); k->Rectangle(x - 18, 152, x + 18, 156); k->SetBrush(nullptr); }
         }
         oapiReleaseSketchpad(k);
-        oapiReleasePen(pen); oapiReleaseBrush(fill);
+        oapiReleasePen(pen); oapiReleaseBrush(fill); oapiReleaseBrush(fillWarn); oapiReleaseBrush(fillAlarm);
     }
     // a click inside the cabin: the ray against the terminal's keys and screen (vessel frame = interior frame)
     static int cClickE(void* c, const VECTOR3* o, const VECTOR3* d, int) {
@@ -1003,7 +1148,7 @@ protected:
     void Warnings() {
         alarmT_ -= oapiGetSysStep();
         OcCabin cab{}; cCabinE(this, nullptr, &cab);
-        const int bits = (motTrip_ ? 1 : 0) | (hullLeak_ > 0.0 ? 2 : 0) | (batt_ < 0.15 ? 4 : 0) | (motDerate_ < 0.9 ? 8 : 0) | (cab.ppO2 < 18.0 ? 16 : 0) | (cab.ppCO2 > 1.0 ? 32 : 0);
+        const int bits = (motTrip_ ? 1 : 0) | (hullLeak_ > 0.0 ? 2 : 0) | (batt_ < 0.15 ? 4 : 0) | (motDerate_ < 0.9 ? 8 : 0) | (cab.ppO2 < 18.0 ? 16 : 0) | (cab.ppCO2 > 1.0 ? 32 : 0) | (HeatAlarm() ? 64 : 0) | (Floating() || FloodV() > 0.01 ? 128 : 0);
         if ((bits & ~alarmBits_) && alarmT_ <= 0.0 && driver_) { Sfx(kSndAlarm, 1.0); alarmT_ = 8.0; }
         alarmBits_ = bits;
     }
@@ -1062,6 +1207,7 @@ public:
         (void)simt; (void)simdt; (void)mjd;
         if (!cab_) return;
         LightsApply();
+        Vents(oapiGetSimStep());
         Warnings();
         Displays();
         Hvac();
@@ -1121,17 +1267,9 @@ protected:
             m->AirlockPass();
         } else if (id == kItemHatchIn) {                          // out: down the stairs, at their foot, facing away
             if (m->driver_ == personId) m->driver_ = 0;
-            OBJHANDLE ref = m->GetSurfaceRef();
-            if (!ref || !m->api_.ExitTo) return;
-            VECTOR3 gp;
-            m->Local2Global(_V(0.0, -0.9, -5.70), gp);
-            double lng, lat, rad, hdg;
-            oapiGlobalToEqu(ref, gp, &lng, &lat, &rad);
-            oapiGetHeading(m->GetHandle(), &hdg);
+            const VECTOR3 stairs = _V(0.0, -0.9, -5.70);                          // the stairs' foot first; coupled behind - beside
             VESSELSTATUS2 vs;
-            std::memset(&vs, 0, sizeof vs);
-            vs.version = 2; vs.rbody = ref; vs.status = 1; vs.arot.x = 10.0;
-            vs.surf_lng = lng; vs.surf_lat = lat; vs.surf_hdg = std::fmod(hdg + PI, PI2);
+            if (!m->api_.ExitTo || !m->ExitStatus(personId, &stairs, vs)) return;
             std::string name = in.name;
             for (char& ch : name) if (ch == ' ') ch = '_';
             m->api_.ExitTo(personId, name.c_str(), &vs);
