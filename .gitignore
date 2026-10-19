@@ -130,3 +130,6 @@ __pycache__/
 
 # caches of generators (numpy archives) never go to git
 *.npz
+
+# design renders and previews stay local (not in the public repository)
+/Tantra_Design/**/*.png
