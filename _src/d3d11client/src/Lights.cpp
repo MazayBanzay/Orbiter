@@ -289,7 +289,15 @@ void D3D11Client::LightsFrame(const VECTOR3& cp)
         }
         double E = 0; VECTOR3 col = _V(0, 0, 0);
         if (g_probeOk) {
-            for (const XMFLOAT4& q : g_probePts) {
+            double wsum = 0;
+            for (int pi = 0; pi < 144; pi++) {     // the eye adapts mostly to the middle of the view: weights fall off to the edges
+                const double px = ((pi % 16) + 0.5) / 16 - 0.5, py = ((pi / 16) + 0.5) / 9 - 0.5;
+                wsum += exp(-(px * px + py * py) / (2 * 0.18 * 0.18));
+            }
+            for (int pi = 0; pi < 144; pi++) {
+                const XMFLOAT4& q = g_probePts[pi];
+                const double px = ((pi % 16) + 0.5) / 16 - 0.5, py = ((pi / 16) + 0.5) / 9 - 0.5;
+                const double pw = exp(-(px * px + py * py) / (2 * 0.18 * 0.18)) / wsum;
                 if (q.w < 0.5) continue;
                 const VECTOR3 x = _V(q.x, q.y, q.z);
                 for (const Cand& c : g_cand) {
@@ -301,7 +309,7 @@ void D3D11Client::LightsFrame(const VECTOR3& cp)
                         if (cd <= c.cosOut) continue;
                         double t = std::clamp((cd - c.cosOut) / std::max(ci - c.cosOut, 1e-4), 0.0, 1.0); t = t * t * (3 - 2 * t); a *= t * t;
                     }
-                    const double k = 0.5 * a / std::max(d2, 0.25) / 144.0;     // 0.5: the surfaces facing it half on average
+                    const double k = 0.5 * a / std::max(d2, 0.25) * pw;        // 0.5: the surfaces facing it half on average
                     E += k * (0.2126 * c.g.c.x + 0.7152 * c.g.c.y + 0.0722 * c.g.c.z);
                     col = col + _V(c.g.c.x, c.g.c.y, c.g.c.z) * k;
                 }
@@ -610,7 +618,10 @@ void D3D11Client::LightsAdaptEye(XMFLOAT4& adapt, float& exposure)
         const double cur[3] = { adapt.x, adapt.y, adapt.z };
         if (kAdaptColour) for (int i = 0; i < 3; i++) tCol.data[i] = exp(w * (log(g.data[i] / std::max(gl, 1e-6)) - log(std::max(cur[i], 1e-6))));
     }
-    const double k = 1 - exp(-dt / 1.5);
+    // at most one stop darker for the local lights (a lamp's bright patch before the helmet must not put out the world:
+    // the eye adapts partly, the user 20.10.2026), and slower than the sky's adaptation (~3 s)
+    tExp = std::max(tExp, 0.5);
+    const double k = 1 - exp(-dt / 3.0);
     kExp = exp(log(kExp) + (log(tExp) - log(kExp)) * k);
     for (int i = 0; i < 3; i++) kCol.data[i] = exp(log(kCol.data[i]) + (log(tCol.data[i]) - log(kCol.data[i])) * k);
     if ((g_frame % 600) == 300) LOGC("local lights: the eye - E local %.3g (colour %.2f %.2f %.2f), exposure x %.3f, balance x %.2f %.2f %.2f (from %.2f %.2f %.2f)",

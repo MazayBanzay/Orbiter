@@ -202,7 +202,7 @@ float4 MapAt(float2 xy, float lod)
     return tMap.SampleLevel(sClampS, float2(uv.x, 1 - uv.y), lod);
 }
 
-struct Dens { float s; float hfLow; float canopy; };
+struct Dens { float s; float hfLow; float canopy; float alb; };
 // the storm's own frame: east, north at the centre, and along the centre's vertical [m]
 float3 Local(float3 P) { return float3(dot(P, sEast.xyz), dot(P, sNorth.xyz), dot(P, sCen.xyz)); }
 float2 Rot(float2 v, float a) { float s, c; sincos(a, s, c); return float2(v.x * c - v.y * s, v.x * s + v.y * c); }
@@ -215,10 +215,13 @@ float4 ShapeAt(float3 loc, float om, float3 scale, float3 ofs, float lod)
     if (sAnim.w > 0.03) b = tShape.SampleLevel(sWrap, float3(Rot(loc.xy, -om * sAnim.z * hs), loc.z) / SHAPE_M * scale + ofs + 0.5, lod);
     return sAnim.w < 0.03 ? a : sAnim.w > 0.97 ? b : lerp(a, b, sAnim.w);
 }
-// the extinction [1/m] at the planet-frame point P; detail 0..1 (the 3D noise's share), the height fraction out
-Dens Density(float3 P, float detail, float mapLod)
+// the extinction [1/m] at the planet-frame point P; detail 0..1 (the fine erosion's share), foot: the pixel's size [m]
+// (the cells stay while they are larger than it, the noises' mips follow it); the height fraction and albedo out
+Dens Density(float3 P, float detail, float mapLod, float foot)
 {
-    Dens o; o.s = 0; o.hfLow = 0; o.canopy = 0;
+    Dens o; o.s = 0; o.hfLow = 0; o.canopy = 0; o.alb = 1;
+    float cells = saturate(1.6 - foot / 1500);
+    float shLod = clamp(log2(max(foot, 1) / 70), 0, 6);
     float h; float2 xy = MapXY(P, h);
     if (h > sHgt.w + 200 || h < -100) return o;
     float4 m = MapAt(xy, mapLod);
@@ -243,26 +246,29 @@ Dens Density(float3 P, float detail, float mapLod)
         float gS = smoothstep(0, 0.12, hf) * smoothstep(1, 0.75, hf);
         float g = lerp(gS, gC, conv);
         // the cells: towers taller than wide where convective, flat sheets where stratiform
-        float4 sh = ShapeAt(loc, om, float3(1, 1, lerp(2.5, 0.8, conv)), 0, (1 - detail) * 2);
+        float4 sh = ShapeAt(loc, om, float3(1, 1, lerp(2.5, 0.8, conv)), 0, shLod);
         float wf = sh.g * 0.625 + sh.b * 0.25 + sh.a * 0.125;
         float bc = saturate(Remap(sh.r, -(1 - wf) * lerp(0.25, 0.6, conv), 1, 0, 1)) * g;
         // the cover cuts the cells: sparse where it is low
-        float d = saturate(Remap(bc, 1 - m.r, 1, 0, 1)) * m.r;
-        d = lerp(saturate(m.r * 1.3 - 0.15) * g, d, saturate(detail * 1.5 + 0.6));   // afar: the map's own (soft) cover
+        float d = saturate(Remap(bc, 1 - m.r, 1, 0, 1)) * m.r * smoothstep(0.12, 0.3, m.r);   // no cells where the cover is ~0
+        d = lerp(saturate(m.r * 1.3 - 0.15) * g, d, cells);   // afar, past the cells' size: the map's own (soft) cover
         if (d > 0 && detail > 0.01) {
             // the edges eaten by the fine Worley: wispy at the base, billowing towards the tops
             float4 dt = tDetail.SampleLevel(sWrap, loc / DETAIL_M + float3(0, 0, sNorth.w * 0.002), 0);
             float df = dt.r * 0.625 + dt.g * 0.25 + dt.b * 0.125;
             df = lerp(df, 1 - df, saturate(hf * 4));
-            d = saturate(Remap(d, df * 0.4 * detail, 1, 0, 1));
+            d = saturate(Remap(d, df * 0.55 * detail, 1, 0, 1));
         }
+        d = saturate((d - 0.04) / 0.96);                   // no wisps of a few pixels: a cloud has a body or is not there
         s += d * eyeCut * lerp(sSig.y, sSig.x, conv);
     }
     // the rain under the convective cells: grey shafts below the base
     if (h < base && m.r > 0.6 && m.b > 0.7) {      // only under the strong cells, faint from above
-        float4 sh = ShapeAt(loc, om, float3(1.5, 1.5, 0.15), 0.37, 1);
-        float rain = saturate((m.r - 0.6) * 2.5) * saturate((m.g * sHgt.y - 7000) / 5000) * smoothstep(0.4, 0.7, sh.r);
-        s += rain * 1.8e-4 * eyeCut * smoothstep(0, base * 0.3, h + 50);
+        // rain shafts: grey (large drops scatter little back to the eye), soft-edged, columns only ~2x taller than wide
+        float4 sh = ShapeAt(loc, om, float3(1.2, 1.2, 0.5), 0.37, max(shLod, 1));
+        float rain = saturate((m.r - 0.6) * 2.5) * saturate((m.g * sHgt.y - 7000) / 5000) * smoothstep(0.45, 0.75, sh.r);
+        float sr = rain * 6e-5 * eyeCut * smoothstep(0, base * 0.3, h + 50);
+        s += sr; o.alb = 0.45;
     }
     // the cirrus canopy: smooth, thinning outwards and with height
     // its top lower where it thins (the outflow's fibres sink, the dense overcast domes up over the core)
@@ -271,7 +277,7 @@ Dens Density(float3 P, float detail, float mapLod)
     float hc = (h - cb) / (ct - cb);
     if (m.a > 0.02 && hc > 0 && hc < 1) {
         float g2 = smoothstep(0, 0.25, hc) * smoothstep(1, 0.55, hc);
-        float4 sh = ShapeAt(loc, om, float3(0.5, 0.5, 2.0), 0.61, 0);
+        float4 sh = ShapeAt(loc, om, float3(0.5, 0.5, 2.0), 0.61, max(shLod - 1, 0));
         float w = lerp(1, saturate(Remap(sh.g * 0.6 + sh.b * 0.4, 0.15, 0.85, 0, 1)), saturate(detail + 0.2) * 0.6);
         float d2 = saturate(pow(m.a, 1.5) * g2 * w * 1.15) * eyeCut;
         o.canopy = d2;
@@ -280,13 +286,13 @@ Dens Density(float3 P, float detail, float mapLod)
     o.s = s;
     return o;
 }
-float DensityLo(float3 P, float detail) { return Density(P, detail * 0.5, 1).s; }
+float DensityLo(float3 P, float detail) { return Density(P, detail * 0.5, 1, 300).s; }
 
 // the optical depth towards the Sun from P (planet frame), sP the Sun's direction (planet frame): a short march through
 // the near cloud, then the canopy's own crossing (it lies kilometres above the low clouds)
-float SunTau(float3 P, float3 sP, float detail, int taps)
+float SunTau(float3 P, float3 sP, float detail, int taps, float jit)
 {
-    float tau = 0, l = 60;
+    float tau = 0, l = 60 * (0.75 + 0.5 * jit);
     float pos = 0;
     [loop] for (int j = 0; j < taps; j++) {
         pos += l * 0.5;
@@ -379,7 +385,8 @@ MOut PSMarch(VSOut i)
     float kx = 0;
     if (rho > 2) { kx = log(rho) + 1; [unroll] for (int it = 0; it < 6; it++) kx = log(1 + rho * kx); }
     float ek = exp(kx) - 1;
-    float ign = frac(52.9829189 * frac(dot(i.pos.xy + (sP.y % 64) * float2(5.588, 7.123), float2(0.06711056, 0.00583715))));
+    // the step's dither: a hash of the pixel and the frame - no structure (the interleaved gradient's vertical stripes showed)
+    float ign = (Hash3(uint3(i.pos.xy, (uint)sP.y)) & 0xffffffu) / 16777216.0;
 
     float3 dP = ToPlanet(d);
     float3 sunP = ToPlanet(gSunDir.xyz);
@@ -400,9 +407,15 @@ MOut PSMarch(VSOut i)
         else { t = t0 + L * u; dt = L / N; }
         float3 P = camP + dP * t;
         float foot = t * 0.0015;                                // ~the half-res pixel at 60 degrees
-        float detail = saturate(1 - t / sP.w) * saturate(1.5 - foot / 60);
-        Dens D = Density(P, detail, clamp(log2(max(foot * 2 / (2 * sEast.w / 2048), 1)), 0, 6));   // the map's mip by the pixel
+        float detail = saturate(1 - t / sP.w) * saturate(1.5 - foot / 40);
+        // the noise prefiltered to what the step can resolve (no cell smaller than a third of the step: no sparkle)
+        float fp = max(foot, dt / 3);
+        float mlod = clamp(log2(max(fp * 2 / (2 * sEast.w / 2048), 1)), 0, 6);   // the map's mip by the pixel
+        Dens D = Density(P, detail, mlod, fp);
         if (D.s <= 1e-7) continue;
+        // inside the cloud: two more samples across the step (its extinction averaged, the light taken once)
+        float sA = Density(camP + dP * (t - dt * 0.33), detail, mlod, fp).s, sB = Density(camP + dP * (t + dt * 0.33), detail, mlod, fp).s;
+        D.s = (D.s + sA + sB) / 3;
         if (!lit) {         // the light at the cloud's first point (it hardly changes across one cloud)
             float3 wp = d * t;
             sunC = FxActive() ? FxSunLight(wp) : SunLight(wp);
@@ -411,7 +424,7 @@ MOut PSMarch(VSOut i)
             ambDn = FxActive() ? FxSkyLight(-up, wp) : SkyLight(-up, wp) * 0.3;
             lit = true;
         }
-        float tauS = SunTau(P, sunP, detail, detail > 0.05 ? 5 : 3);
+        float tauS = SunTau(P, sunP, detail, detail > 0.05 ? 5 : 3, frac(ign + k * 0.618034));
         // multiple scattering (Wrenninge 2013): each octave a weaker extinction, a flatter phase
         // plus the light diffused through the whole cloud: a thick cloud's transmission ~ 1 / (1 + 0.75 tau (1 - g)) (two-
         // stream), ~15 % through tau 50 - its inside is grey, not black
@@ -426,7 +439,7 @@ MOut PSMarch(VSOut i)
         float3 S = sunC * msS + amb;
         float a = exp(-D.s * dt);
         // energy-conserving step (Hillaire 2016): the in-scattered light integrated across the step
-        Lc += T * S * (1 - a);
+        Lc += T * S * (1 - a) * D.alb;
         tw += T * (1 - a) * t; twS += T * (1 - a);
         if (tFront < 0 && T < 0.97) tFront = t;
         T *= a;
@@ -470,7 +483,8 @@ TOut PSTemporal(VSOut i)
     }
     // the box from the mean and the spread (variance clipping) - tighter than min/max, still lets the grain average
     m1 /= 9; float4 sd = sqrt(max(m2 / 9 - m1 * m1, 0));
-    mn = max(mn, m1 - 1.25 * sd); mx = min(mx, m1 + 1.25 * sd);
+    // the 3 x 3 min/max box, a little widened: the variance box was so tight the grain came through it
+    mn -= 0.1 * sd; mx += 0.1 * sd;
     TOut o; o.c = c; o.t = t;
     if (sTmp.x < 0.5) return o;
     float2 uv = (q + 0.5) * sSize.zw;
@@ -484,8 +498,11 @@ TOut PSTemporal(VSOut i)
     if (pc.w <= 1e-6) return o;
     float2 puv = float2(pc.x / pc.w * 0.5 + 0.5, 0.5 - pc.y / pc.w * 0.5);
     if (any(puv < 0) || any(puv > 1)) return o;
-    float4 h = clamp(tHist.SampleLevel(sClampS, puv, 0), mn, mx);
-    o.c = lerp(h, c, sTmp.y);
+    // the history is clamped only as far as the view moves (standing still it converges fully; moving, no ghosts)
+    float4 h0 = tHist.SampleLevel(sClampS, puv, 0);
+    float mv = length((puv - uv) * sSize.xy);
+    float4 h = lerp(h0, clamp(h0, mn, mx), saturate(mv * 0.7));
+    o.c = lerp(h, c, lerp(0.05, sTmp.y * 2, saturate(mv * 0.3)));
     return o;
 }
 
@@ -502,11 +519,14 @@ float4 PSComposite(VSOut i) : SV_Target
     // the four half-res texels round the pixel, weighted bilinearly and by whether their cloud lies in front of the scene
     float2 hp = uv * sSize.xy - 0.5;
     float2 f = frac(hp); int2 b = (int2)floor(hp);
+    // a 4 x 4 tent (bilinear widened by a texel each way: the half-res grain smoothed, edges kept by the depth test)
     float4 acc = 0; float wsum = 0;
-    [unroll] for (int y = 0; y < 2; y++) [unroll] for (int x = 0; x < 2; x++) {
+    [unroll] for (int y = -1; y < 3; y++) [unroll] for (int x = -1; x < 3; x++) {
         int2 q = clamp(b + int2(x, y), 0, int2(sSize.xy) - 1);
-        float wb = (x ? f.x : 1 - f.x) * (y ? f.y : 1 - f.y) + 1e-4;
-        if (tCloudT.Load(int3(q, 0)) > sceneT * 1.02) continue;     // that texel's cloud lies behind what is drawn here
+        float wx = saturate(1.5 - abs(x - f.x) * 0.75), wy = saturate(1.5 - abs(y - f.y) * 0.75);
+        float wb = wx * wy + 1e-4;
+        float tq = tCloudT.Load(int3(q, 0));
+        if (tq < 1e8 && tq > sceneT * 1.02) continue;    // that texel's cloud lies behind what is drawn here (an empty one blends)
         acc += tCloud.Load(int3(q, 0)) * wb; wsum += wb;
     }
     if (wsum < 1e-3) discard;
@@ -542,7 +562,7 @@ float4 PSShadow(VSOut i) : SV_Target
         float hj = lerp(sHgt.x, top, (j + 0.5) / 4);
         if (hj <= h) continue;
         float s = (hj - h) / muS;
-        tau += Density(P + sunP * s, detail, 1).s * (top - sHgt.x) / 4 / muS;
+        tau += Density(P + sunP * s, detail, 1, 200).s * (top - sHgt.x) / 4 / muS;
     }
     float hc = 0.5 * (sHgt.z + sHgt.w);
     float hq; float4 mc = MapAt(MapXY(P + sunP * ((hc - h) / muS), hq), 1);

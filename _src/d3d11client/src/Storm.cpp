@@ -1,4 +1,4 @@
-// Earth's storm: one tropical cyclone, volumetric (shaders\storm.hlsl, Config\D3D11Client\Storm.cfg). A system of its
+﻿// Earth's storm: one tropical cyclone, volumetric (shaders\storm.hlsl, Config\D3D11Client\Storm.cfg). A system of its
 // own, written from scratch; Titan's clouds (Clouds.cpp) are not touched or shared.
 //   - the 3D noises are made once on the GPU (compute), the weather map round the centre is redrawn as the storm turns;
 //   - RenderStormShadow (before the air): the clouds' shadow multiplied into what is drawn;
@@ -256,7 +256,7 @@ namespace {
             k.pr1 = { (float)Q.m21, (float)Q.m22, (float)Q.m23, (float)prev.ppRel.y };
             k.pr2 = { (float)Q.m31, (float)Q.m32, (float)Q.m33, (float)prev.ppRel.z };
         }
-        k.tmp = { hist ? 1.0f : 0.0f, 0.1f, 0, 0 };
+        k.tmp = { hist ? 1.0f : 0.0f, 0.08f, 0, 0 };
         D3D11_MAPPED_SUBRESOURCE ms;
         if (SUCCEEDED(ctx->Map(sCB.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms))) { memcpy(ms.pData, &k, sizeof k); ctx->Unmap(sCB.Get(), 0); }
         cpuHalf = half;

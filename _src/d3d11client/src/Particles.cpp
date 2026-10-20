@@ -100,7 +100,10 @@ void PStream::Update(double dt)
         acc -= interval * (0.5 + Rnd());                             // (the stock's random spacing)
         const double back = std::max(acc, 0.0);                      // born that long ago within this step
         const double dvs = spec.v0 * spec.srcspread;
-        const VECTOR3 dv = _V(Rnd() - 0.5, Rnd() - 0.5, Rnd() - 0.5) * dvs;
+        // the spread: along the stream as the stock has it, across it a third (a plume opens at a few degrees; the
+        // stock's isotropic kick threw a DG's 8 m contrail puffs sideways at up to 19 m/s - puffs beside the trail)
+        VECTOR3 dv = _V(Rnd() - 0.5, Rnd() - 0.5, Rnd() - 0.5) * dvs;
+        if (spec.v0 > 0) { const VECTOR3 ax = vr / spec.v0; const double al = dotp(dv, ax); dv = ax * al + (dv - ax * al) * 0.33; }
         P p;
         p.vel = vv + vr + dv;
         p.pos = src + (vr + dv) * back;
