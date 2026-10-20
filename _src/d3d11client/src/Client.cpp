@@ -630,14 +630,14 @@ oapi::ParticleStream* D3D11Client::clbkCreateParticleStream(PARTICLESTREAMSPEC* 
 oapi::ParticleStream* D3D11Client::clbkCreateExhaustStream(PARTICLESTREAMSPEC* pss, OBJHANDLE hVessel, const double* lvl, const VECTOR3* ref, const VECTOR3* dir)
 {
     PStream* s = new PStream(this, pss); streams.push_back(s);
-    s->Attach(hVessel, ref, dir, lvl);
+    s->Attach(hVessel, ref, dir, lvl); s->engine = true;
     return s;
 }
 
 oapi::ParticleStream* D3D11Client::clbkCreateExhaustStream(PARTICLESTREAMSPEC* pss, OBJHANDLE hVessel, const double* lvl, const VECTOR3& ref, const VECTOR3& dir)
 {
     PStream* s = new PStream(this, pss); streams.push_back(s);
-    s->Attach(hVessel, ref, dir, lvl);
+    s->Attach(hVessel, ref, dir, lvl); s->engine = true;
     return s;
 }
 

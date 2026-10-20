@@ -16,7 +16,7 @@ const int NX = 128, NY = 64, NZ = 128, NSRC = 8;
 struct CB
 {
     XMFLOAT4 n, dt; XMINT4 shift; XMFLOAT4 amb, sun, phys;
-    XMFLOAT4 src[NSRC * 3];
+    XMFLOAT4 src[NSRC * 4];
     XMFLOAT4 o, e1, e2, e3;
     XMFLOAT4X4 vp;
 };
@@ -26,15 +26,16 @@ struct Vol { ComPtr<ID3D11Texture3D> t; ComPtr<ID3D11ShaderResourceView> srv; Co
 struct SmokeFx
 {
     bool tried = false, ok = false;
-    double h = 0.2, eps = 0.4; int iters = 30; bool on = true;
-    ComPtr<ID3D11ComputeShader> csAdv, csCurl, csForce, csDiv, csJac, csProj, csLight;
+    double h = 0.2, h0 = 0.2, eps = 0.4; int iters = 30; bool on = true;
+    ComPtr<ID3D11ComputeShader> csAdv, csCurl, csForce, csDiv, csJac, csProj, csLight, csOcc;
     ComPtr<ID3D11VertexShader> vs; ComPtr<ID3D11PixelShader> ps, psShim;
     ComPtr<ID3D11Buffer> cb; ComPtr<ID3D11BlendState> bs; ComPtr<ID3D11SamplerState> samp;
-    Vol vel[2], den[2], curl, div, pr[2], light;
+    Vol vel[2], den[2], curl, div, pr[2], light, occ;
     bool fresh = true;                 // cleared on the next update
     bool have = false;                 // a box is placed
     int ox = 0, oy = 0, oz = 0;        // the box's corner in the local frame [cells]
     VECTOR3 aP0 = { 0, 0, 0 };         // the local frame it was placed in
+    std::map<std::pair<OBJHANDLE, int>, VECTOR3> lastExit;   // each source's exit last frame (local frame)
     double lastSrc = -1e9, decay = 0;  // when a source last ran; the visible mass's decay [1/s]
     CB k = {};
     bool live = false;
@@ -56,7 +57,7 @@ struct SmokeFx
             char key[64]; double v;
             if (sscanf(line, " %63[A-Za-z0-9] = %lf", key, &v) != 2) continue;
             if (!strcmp(key, "Smoke")) on = v != 0;
-            else if (!strcmp(key, "SmokeCell")) h = std::clamp(v, 0.05, 1.0);
+            else if (!strcmp(key, "SmokeCell")) h = h0 = std::clamp(v, 0.05, 1.0);
             else if (!strcmp(key, "SmokeConfine")) eps = std::clamp(v, 0.0, 2.0);
             else if (!strcmp(key, "SmokeIters")) iters = std::clamp((int)v, 4, 120) & ~1;
         }
@@ -73,7 +74,7 @@ struct SmokeFx
         auto csh = [&](const char* e, ComPtr<ID3D11ComputeShader>& s) { auto b = FxCompile("smoke.hlsl", e, "cs_5_0"); return b && SUCCEEDED(dev->CreateComputeShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &s)); };
         auto bv = FxCompile("smoke.hlsl", "VSDraw", "vs_5_0"), bp = FxCompile("smoke.hlsl", "PSDraw", "ps_5_0"), bs2 = FxCompile("smoke.hlsl", "PSShimmer", "ps_5_0");
         if (!csh("CSAdvect", csAdv) || !csh("CSCurl", csCurl) || !csh("CSForces", csForce) || !csh("CSDiv", csDiv) ||
-            !csh("CSJacobi", csJac) || !csh("CSProject", csProj) || !csh("CSLight", csLight) || !bv || !bp ||
+            !csh("CSJacobi", csJac) || !csh("CSProject", csProj) || !csh("CSLight", csLight) || !csh("CSOcc", csOcc) || !bv || !bp ||
             FAILED(dev->CreateVertexShader(bv->GetBufferPointer(), bv->GetBufferSize(), nullptr, &vs)) ||
             FAILED(dev->CreatePixelShader(bp->GetBufferPointer(), bp->GetBufferSize(), nullptr, &ps)) || !bs2 ||
             FAILED(dev->CreatePixelShader(bs2->GetBufferPointer(), bs2->GetBufferSize(), nullptr, &psShim))) { LOGC("smoke flow: shaders FAILED"); return false; }
@@ -85,7 +86,7 @@ struct SmokeFx
                 MakeVol(dev, pr[i], NX, NY, NZ, DXGI_FORMAT_R32_FLOAT);
         }
         r = r && MakeVol(dev, curl, NX, NY, NZ, DXGI_FORMAT_R16G16B16A16_FLOAT) && MakeVol(dev, div, NX, NY, NZ, DXGI_FORMAT_R32_FLOAT) &&
-            MakeVol(dev, light, NX / 2, NY / 2, NZ / 2, DXGI_FORMAT_R16G16_FLOAT);
+            MakeVol(dev, light, NX / 2, NY / 2, NZ / 2, DXGI_FORMAT_R16G16_FLOAT) && MakeVol(dev, occ, NX / 8, NY / 8, NZ / 8, DXGI_FORMAT_R16G16_FLOAT);
         if (!r) { LOGC("smoke flow: volumes FAILED"); return false; }
         D3D11_BLEND_DESC bd = {};
         bd.RenderTarget[0] = { TRUE, D3D11_BLEND_ONE, D3D11_BLEND_INV_SRC_ALPHA, D3D11_BLEND_OP_ADD, D3D11_BLEND_ZERO, D3D11_BLEND_ONE, D3D11_BLEND_OP_ADD, D3D11_COLOR_WRITE_ENABLE_ALL };
@@ -112,13 +113,13 @@ struct SmokeFx
         ID3D11ShaderResourceView* sr[5] = {}; int i = 0;
         for (auto v : srv) if (i < 5) sr[i++] = v;
         ctx->CSSetShaderResources(0, 5, sr);
-        ID3D11UnorderedAccessView* u[5] = {};
+        ID3D11UnorderedAccessView* u[6] = {};
         for (auto& p : uav) u[p.first] = p.second;
-        ctx->CSSetUnorderedAccessViews(0, 5, u, nullptr);
+        ctx->CSSetUnorderedAccessViews(0, 6, u, nullptr);
         ctx->CSSetShader(s, nullptr, 0);
         ctx->Dispatch(gx, gy, gz);
-        ID3D11UnorderedAccessView* nu[5] = {}; ID3D11ShaderResourceView* ns[5] = {};
-        ctx->CSSetUnorderedAccessViews(0, 5, nu, nullptr);
+        ID3D11UnorderedAccessView* nu[6] = {}; ID3D11ShaderResourceView* ns[5] = {};
+        ctx->CSSetUnorderedAccessViews(0, 6, nu, nullptr);
         ctx->CSSetShaderResources(0, 5, ns);
     }
 
@@ -137,6 +138,10 @@ struct SmokeFx
         VESSEL* v = oapiGetVesselInterface(f);
         VECTOR3 fg; v->GetGlobalPos(fg);
         const VECTOR3 fl = sc.ToLocal(fg);
+        {   // the cell by the focus's size: the box ~6 of its radii across (a suit: 0.2 m cells, 26 m; the DG: ~0.5 m, 60 m)
+            const double hw = std::clamp(std::max(h0, 6 * oapiGetSize(f) / NX), h0, 2.0);
+            if (fabs(hw - h) > 1e-6 * hw) { h = hw; have = false; }
+        }
         const double Rground = length(fg - sc.pp) - v->GetAltitude(ALTMODE_GROUND);
         double gyL = Rground - length(sc.aP);
         if (sc.Rliq > 0) gyL = std::max(gyL, sc.Rliq - length(sc.aP));
@@ -172,14 +177,24 @@ struct SmokeFx
             const double focal = 0.5 * gc->SceneH() / std::max(oapiCameraAperture() > 0 ? tan(oapiCameraAperture()) : 1.0, 1e-3);
             k.phys = { (float)ws, (float)(1.0 / std::max(sc.rhoG, 1e-3)), (float)(2.3e-4 * sc.rhoG), (float)focal };
         }
-        for (int i = 0; i < NSRC; i++) { k.src[3 * i] = {}; k.src[3 * i + 1] = {}; k.src[3 * i + 2] = {}; }
-        for (size_t i = 0; i < src.size() && i < NSRC; i++) {
-            const SmokeSrc& s = src[i];
-            const VECTOR3 e = sc.ToLocal(s.eg) - O, d = Unit(sc.DirToLocal(s.dg));
-            k.src[3 * i] = F4(e, s.rExit);
-            k.src[3 * i + 1] = F4(d, s.kJ);
-            k.src[3 * i + 2] = { (float)s.mVis, (float)s.zFull, (float)s.inject, (float)s.Tex };
+        for (int i = 0; i < NSRC * 4; i++) k.src[i] = {};
+        std::map<std::pair<OBJHANDLE, int>, VECTOR3> seen;
+        std::vector<SmokeSrc> top(src.begin(), src.end());   // the strongest eight (by momentum)
+        std::sort(top.begin(), top.end(), [](const SmokeSrc& a, const SmokeSrc& b) { return a.kJ > b.kJ; });
+        for (size_t i = 0; i < top.size() && i < NSRC; i++) {
+            const SmokeSrc& s = top[i];
+            const VECTOR3 el = sc.ToLocal(s.eg), e = el - O, d = Unit(sc.DirToLocal(s.dg));
+            k.src[4 * i] = F4(e, s.rExit);
+            k.src[4 * i + 1] = F4(d, s.kJ);
+            k.src[4 * i + 2] = { (float)s.mVis, (float)s.zFull, (float)s.inject, (float)s.Tex };
+            // where its exit was a frame ago (the local frame): the mass is laid along the way, a step per half cell
+            auto it = lastExit.find({ s.h, s.id });
+            VECTOR3 ep = it != lastExit.end() && length(it->second - el) < 20 ? it->second : el;
+            const int K = std::clamp((int)ceil(length(el - ep) / (0.5 * h)), 1, 16);
+            k.src[4 * i + 3] = F4(ep - O, K);
+            seen[{ s.h, s.id }] = el;
         }
+        lastExit.swap(seen);
         // camera-centred drawing frame
         const VECTOR3 e1 = mul(sc.Rp, sc.a1), e2 = mul(sc.Rp, sc.aU), e3 = mul(sc.Rp, sc.a2);
         k.o = F4(sc.LocalToGlobal(O) - sc.cp, 48);
@@ -205,6 +220,7 @@ struct SmokeFx
             ctx->CopyResource(vel[1].t.Get(), vel[0].t.Get());
         }
         Pass(ctx, csLight.Get(), { nullptr, den[0].srv.Get() }, { { 4, light.uav.Get() } }, NX / 16, NY / 16, NZ / 16);
+        Pass(ctx, csOcc.Get(), { vel[1].srv.Get(), den[0].srv.Get() }, { { 5, occ.uav.Get() } }, NX / 32, NY / 32, NZ / 32);
         ctx->CSSetShader(nullptr, nullptr, 0);
         live = true;
     }
@@ -220,12 +236,12 @@ struct SmokeFx
         ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         ctx->VSSetShader(vs.Get(), nullptr, 0); ctx->PSSetShader(ps.Get(), nullptr, 0);
         ctx->VSSetConstantBuffers(5, 1, cb.GetAddressOf()); ctx->PSSetConstantBuffers(5, 1, cb.GetAddressOf());
-        ID3D11ShaderResourceView* s[2] = { den[0].srv.Get(), light.srv.Get() };
-        ctx->PSSetShaderResources(22, 2, s);
+        ID3D11ShaderResourceView* s[4] = { den[0].srv.Get(), light.srv.Get(), nullptr, occ.srv.Get() };
+        ctx->PSSetShaderResources(22, 4, s);
         ctx->PSSetSamplers(3, 1, samp.GetAddressOf());
         ctx->Draw(36, 0);
-        ID3D11ShaderResourceView* n[2] = {};
-        ctx->PSSetShaderResources(22, 2, n);
+        ID3D11ShaderResourceView* n[4] = {};
+        ctx->PSSetShaderResources(22, 4, n);
     }
 
     void Shimmer(D3D11Client* gc)
@@ -234,20 +250,20 @@ struct SmokeFx
         ID3D11DeviceContext* ctx = gc->Ctx();
         ctx->VSSetShader(vs.Get(), nullptr, 0); ctx->PSSetShader(psShim.Get(), nullptr, 0);
         ctx->VSSetConstantBuffers(5, 1, cb.GetAddressOf()); ctx->PSSetConstantBuffers(5, 1, cb.GetAddressOf());
-        ID3D11ShaderResourceView* s = vel[1].srv.Get();
-        ctx->PSSetShaderResources(24, 1, &s);
+        ID3D11ShaderResourceView* s[2] = { vel[1].srv.Get(), occ.srv.Get() };
+        ctx->PSSetShaderResources(24, 2, s);
         ctx->PSSetSamplers(3, 1, samp.GetAddressOf());
         ctx->Draw(36, 0);
-        ID3D11ShaderResourceView* n = nullptr;
-        ctx->PSSetShaderResources(24, 1, &n);
+        ID3D11ShaderResourceView* n[2] = {};
+        ctx->PSSetShaderResources(24, 2, n);
     }
 
     void Release()
     {
-        csAdv.Reset(); csCurl.Reset(); csForce.Reset(); csDiv.Reset(); csJac.Reset(); csProj.Reset(); csLight.Reset();
+        csAdv.Reset(); csCurl.Reset(); csForce.Reset(); csDiv.Reset(); csJac.Reset(); csProj.Reset(); csLight.Reset(); csOcc.Reset();
         vs.Reset(); ps.Reset(); psShim.Reset(); cb.Reset(); bs.Reset(); samp.Reset();
         for (int i = 0; i < 2; i++) { vel[i] = Vol(); den[i] = Vol(); pr[i] = Vol(); }
-        curl = Vol(); div = Vol(); light = Vol();
+        curl = Vol(); div = Vol(); light = Vol(); occ = Vol();
         tried = ok = have = live = false; fresh = true;
     }
 };

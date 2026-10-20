@@ -141,6 +141,8 @@ public:
     double acc = 0;
     unsigned flameNext = 0;     // the next of its thruster's flames to emit from (Particles.cpp)
     VECTOR3 lastSrc = { 0, 0, 0 }; bool hasLast = false;   // the source's place at the last frame's emission (a trail without gaps)
+    bool engine = false;        // an exhaust stream (AddExhaustStream): hidden while the 3D flow carries its vessel's exhaust
+    OBJHANDLE Ref() const { return hRef; }
     void Update(double dt);
     double LevelAlpha(double L) const;
     bool Expired() const { return !level && ps.empty(); }

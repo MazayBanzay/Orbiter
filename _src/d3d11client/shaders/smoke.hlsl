@@ -17,7 +17,8 @@ cbuffer Smoke : register(b5)
     float4 kAmb;        // x the ground's height in the box [m] (y), y gravity [m/s2], z ambient temperature [K], w time [s]
     float4 kSun;        // the Sun's direction in the box's frame; w extinction per kg [m2/kg]
     float4 kPhys;       // x the visible mass's settling speed [m/s], y 1 / the air's density [m3/kg], z the air's n - 1, w focal [px]
-    float4 kSrc[NSRC * 3];   // per source: (exit in the box [m], exit radius) (direction, k = sqrt(J / rho)) (visible mass [kg/s], z_full, inject length, excess T)
+    float4 kSrc[NSRC * 4];   // per source: (exit in the box [m], exit radius) (direction, k = sqrt(J / rho)) (visible mass [kg/s], z_full, inject length, excess T)
+                             //   (the exit a frame ago [m], sub-positions along the way)
     // drawing
     float4 kO;          // the box's corner from the camera (global); w: steps
     float4 kE1, kE2, kE3;   // the box's axes (global); w: its size along them [m]
@@ -34,6 +35,7 @@ RWTexture3D<float> uDen : register(u1);
 RWTexture3D<float4> uCurl : register(u2);
 RWTexture3D<float> uOut : register(u3);
 RWTexture3D<float2> uLight : register(u4);
+RWTexture3D<float2> uOcc : register(u5);
 SamplerState sLin3 : register(s3);
 
 int3 Dim() { return int3(kN.xyz); }
@@ -110,10 +112,31 @@ void CSForces(uint3 id : SV_DispatchThreadID)
     v.w *= exp(-dt * kDt.z);
     // the engines
     for (int s = 0; s < kShift.w; s++) {
-        float4 a = kSrc[3 * s], b = kSrc[3 * s + 1], m = kSrc[3 * s + 2];
+        float4 a = kSrc[4 * s], b = kSrc[4 * s + 1], m = kSrc[4 * s + 2], pv = kSrc[4 * s + 3];
+        float Li = m.z;
+        // its visible mass: formed over 0..z_full with the share (z / z_full)^2 (pdf 2 z / z_full^2) across the jet's
+        // Gaussian; what forms beyond the injected length is put in over its last three cells. The nozzle moved during
+        // the frame: the mass is laid along the whole way it went (one slab per frame left gaps - beads - on a fast climb)
+        if (m.x > 0) {
+            int K = max((int)pv.w, 1);
+            float zf = max(m.y, h), wR = 3 * h;
+            for (int k = 0; k < K; k++) {
+                float3 e = lerp(pv.xyz, a.xyz, (k + 0.5) / K);
+                float3 d = p - e;
+                float z = dot(d, b.xyz);
+                if (z < 0 || z > Li) continue;
+                float r = length(d - z * b.xyz);
+                float bw = 0.094 * max(z, 2 * h) + a.w;
+                float sg = max(0.6 * bw, 0.6 * h);
+                if (r > 4 * sg) continue;
+                float g2 = exp(-r * r / (2 * sg * sg)) / (6.2831853 * sg * sg);
+                float dF = z < zf ? 2 * z / (zf * zf) : 0;
+                if (zf > Li && z > Li - wR) dF += (1 - (Li / zf) * (Li / zf)) / wR;
+                rho += dt * m.x * dF * g2 / K;
+            }
+        }
         float3 d = p - a.xyz;
         float z = dot(d, b.xyz);
-        float Li = m.z;
         if (z < -h || z > Li + h) continue;
         float r = length(d - z * b.xyz);
         float zc = max(z, 2 * h);
@@ -132,14 +155,6 @@ void CSForces(uint3 id : SV_DispatchThreadID)
         float3 tgt = (b.xyz + p1 * w1 + p2 * w2) * uz;
         v.xyz = lerp(v.xyz, tgt, saturate(wv * 0.6));
         v.w = max(v.w, m.w * wv);
-        // its visible mass: formed over 0..z_full with the share (z / z_full)^2 (pdf 2 z / z_full^2) across the jet's
-        // Gaussian; what forms beyond the injected length is put in at its end
-        float sg = max(0.6 * bw, 0.6 * h);
-        float g2 = exp(-r * r / (2 * sg * sg)) / (6.2831853 * sg * sg);
-        float zf = max(m.y, h);
-        float dF = z < zf && z >= 0 ? 2 * z / (zf * zf) : 0;
-        if (zf > Li && z > Li - h && z <= Li) dF += (1 - (Li / zf) * (Li / zf)) / h;
-        rho += dt * m.x * dF * g2;
     }
     rho *= exp(-dt * kDt.w);
     uVel[c] = v;
@@ -223,7 +238,39 @@ void CSLight(uint3 id : SV_DispatchThreadID)
     uLight[lc] = float2(exp(-tauS), exp(-tauU));
 }
 
+// ------------------------------------------------------------------------------------------ occupancy
+// per block of 8^3 cells (one cell wider each way: the trilinear lookups reach it): the largest mass and excess
+// temperature - the marches step finely only where there is something, and leap the empty blocks whole
+[numthreads(4, 4, 4)]
+void CSOcc(uint3 id : SV_DispatchThreadID)
+{
+    int3 b = int3(id), nb = Dim() / 8;
+    if (any(b >= nb)) return;
+    float m = 0, T = 0;
+    for (int z = -1; z <= 8; z++) for (int y = -1; y <= 8; y++) for (int x = -1; x <= 8; x++) {
+        int3 c = clamp(b * 8 + int3(x, y, z), 0, Dim() - 1);
+        m = max(m, tDen.Load(int4(c, 0)));
+        T = max(T, tVel.Load(int4(c, 0)).w);
+    }
+    uOcc[b] = float2(m, T);
+}
+
 // ------------------------------------------------------------------------------------------ drawing
+Texture3D<float2> tOccR : register(t25);
+
+// the march's next point: half a cell on where a block holds something, else the empty block's far side
+float NextT(float3 ro, float3 rd, float3 inv, float t, float step, bool forHeat, float jit, out bool full)
+{
+    float cell = 8 * kN.w;
+    float3 q = ro + rd * t;
+    int3 cc = clamp(int3(floor(q / cell)), 0, Dim() / 8 - 1);
+    float2 oc = tOccR.Load(int4(cc, 0));
+    full = forHeat ? oc.y > 0.5 : oc.x > 1e-7;
+    if (full) return t;
+    float3 lo = cc * cell, hi = lo + cell;
+    float3 tt = ((rd > 0 ? hi : lo) - q) * inv;
+    return t + max(min(tt.x, min(tt.y, tt.z)), 0) + (0.05 + 0.9 * jit) * step;
+}
 Texture3D<float> tDenR : register(t22);
 Texture3D<float2> tLightR : register(t23);
 
@@ -256,8 +303,8 @@ float4 PSDraw(VSOut i) : SV_Target
     float ta = max(max(min(t0.x, t1.x), min(t0.y, t1.y)), max(min(t0.z, t1.z), 0));
     float tb = min(min(max(t0.x, t1.x), max(t0.y, t1.y)), min(max(t0.z, t1.z), sd));
     if (tb <= ta) discard;
-    int n = (int)kO.w;
-    float ds = (tb - ta) / n;
+    // steps of half a cell (the thinnest jet the grid holds is a few cells wide: a coarser step sliced it into blocks)
+    const float ds = 0.5 * kN.w;
     float jit = frac(52.9829189 * frac(dot(i.pos.xy, float2(0.06711056, 0.00583715))) + frac(kAmb.w * 60 * 0.618034));
     // the light at the box: the Sun's (the FX atmosphere's, shadowed by the terrain at the box) and the sky's
     float3 mid = kO.xyz + 0.5 * (kE1.xyz * kE1.w + kE2.xyz * kE2.w + kE3.xyz * kE3.w);
@@ -267,9 +314,14 @@ float4 PSDraw(VSOut i) : SV_Target
     float ph = HGrel(0.75, dot(dir, gSunDir.xyz));
     const float alb = 0.97;                     // ice: it scatters what it takes
     float3 L = 0; float tr = 1;
-    [loop] for (int k = 0; k < n; k++) {
-        float t = ta + (k + jit) * ds;
+    float t = ta + jit * ds;
+    [loop] for (int k = 0; k < 700 && t < tb; k++) {
+        bool full;
+        t = NextT(ro, rd, inv, t, ds, false, jit, full);
+        if (!full) continue;
+        if (t >= tb) break;
         float3 q = ro + rd * t;
+        t += ds;
         float3 uvw = q / size;
         float m = tDenR.SampleLevel(sLin3, uvw, 0);
         if (m <= 1e-7) continue;
@@ -315,12 +367,17 @@ float4 PSShimmer(VSOut i) : SV_Target
     float ta = max(max(min(t0.x, t1.x), min(t0.y, t1.y)), max(min(t0.z, t1.z), 0));
     float tb = min(min(max(t0.x, t1.x), max(t0.y, t1.y)), min(max(t0.z, t1.z), sd));
     if (tb <= ta) discard;
-    const int n = 40;
-    float ds = (tb - ta) / n, e = kN.w;
+    const float ds = 0.5 * kN.w, e = kN.w;
     float jit = frac(52.9829189 * frac(dot(i.pos.xy, float2(0.06711056, 0.00583715))) + frac(kAmb.w * 60 * 0.618034));
     float3 a = 0;                                     // the integral of grad n along the ray (box frame) [rad]
-    [loop] for (int k = 0; k < n; k++) {
-        float3 q = ro + rd * (ta + (k + jit) * ds);
+    float t = ta + jit * ds;
+    [loop] for (int k = 0; k < 500 && t < tb; k++) {
+        bool full;
+        t = NextT(ro, rd, inv, t, ds, true, jit, full);
+        if (!full) continue;
+        if (t >= tb) break;
+        float3 q = ro + rd * t;
+        t += ds;
         float c0 = NPrime(q, size);
         if (c0 > -1e-9) continue;
         float3 gr = float3(NPrime(q + float3(e, 0, 0), size) - NPrime(q - float3(e, 0, 0), size),

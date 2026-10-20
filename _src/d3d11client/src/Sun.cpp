@@ -4,7 +4,8 @@
 // Brightness: on screen a white surface under the Sun = 1, so the disc's mean is 1 / a^2 (a: its angular radius) -
 // ~46 000 at 1 AU. The scene's FP16 target ends at 65504 (+INF turns black in post), so the whole Sun is scaled down
 // together (never clipped: the limb darkening and the spots stay) to a centre of at most SUN_CAP. Through the visor's
-// grey filter (10^-4.5) the disc is then ~1.
+// sun filter the disc is brought down to a bright white: its density over the disc (g_sunCoreD, at most welding glass
+// 10^-4.5) follows the disc's brightness on screen; round the disc the filter is a light shade (mesh.hlsl).
 // The visor's H-alpha filter (a filter group with UsrFlag 0x200, Mesh.cpp) switches this pass to the H-alpha Sun.
 #include "Client.h"
 
@@ -12,7 +13,9 @@ bool g_sunPassOn = false;       // FxAtmo.cpp: the air's pass leaves the disc to
 bool g_sunHAlphaSeen = false;   // Mesh.cpp: an H-alpha filter group was drawn (the frame before)
 bool g_sunFilterSeen = false;   // Mesh.cpp: a filter group (the visor's sun spot) was drawn (the frame before)
 int g_sunFilterCount = 0;       // ... how many of them (the log: one filter drawn twice would square its transmittance)
-float g_sunFilterT = 1.0f;      // ... its transmittance (the least of them; the spot's texture taken as opaque)
+float g_sunFilterT = 1.0f;      // ... its transmittance over the disc (the least of them; the spot's texture taken as opaque)
+float g_sunCoreD = 14.95f;     // Mesh.cpp, mesh.hlsl: the filter's density over the disc [log2] - the disc ~3 on screen through it
+float g_sunDiscRad = 0.00465f;  // ... the disc's angular radius [rad]
 
 namespace {
     const double SUN_CAP = 3.0e4;   // the disc's centre at most (the master's limit with room for the haze on top)
@@ -176,8 +179,13 @@ void D3D11Client::RenderSun(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX
             lastLog = now;
             const double E = g_cfg.exposure * (g_fxAtmo.active ? g_fxAtmo.exposure : 1.0f), centre = peak * K;
             LOGC("sun filter: %d group(s) a frame, core T %.2e | disc centre %.3g (before the air), %.1f px, exposure %.3g -> "
-                 "through the core %.3g on screen (times the air's transmittance; ~1 is white)", filterCount, filterT, centre, discPx, E, centre * filterT * E);
+                 "through the core %.3g on screen (times the air's transmittance; ~1 is white)", filterCount, filterT, centre, discPx, E, centre * filterT * E * 1.6);
         }
+        // the filter's density over the disc for the next frame: the disc's centre ~3 on screen (post.hlsl: x exposure x 1.6) -
+        // bright white with its glare, never a dark dot; at most welding glass (10^-4.5)
+        const double scr = peak * K * g_cfg.exposure * (g_fxAtmo.active ? g_fxAtmo.exposure : 1.0f) * 1.6;
+        g_sunCoreD = (float)std::clamp(log2(std::max(scr, 1e-6) / 3.0), 0.0, 14.95);
+        g_sunDiscRad = (float)a;
     }
 
     SunCB k;

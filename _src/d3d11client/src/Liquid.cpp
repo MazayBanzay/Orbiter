@@ -22,6 +22,11 @@ namespace {
     ComPtr<ID3D11Texture2D> bedTex; ComPtr<ID3D11ShaderResourceView> bedSRV;   // the terrain's depth alone (SaveLiquidBed)
     UINT bedW = 0, bedH = 0;
     bool bedSaved = false, liquidLast = false;
+    // the deep deformations in the geometry (liquid.hlsl VSCP / HS / DS): the rings tessellated where the wave field
+    // stands well off the level - only while the field is on
+    ComPtr<ID3D11VertexShader> vsLiqCP; ComPtr<ID3D11HullShader> hsLiq; ComPtr<ID3D11DomainShader> dsLiq;
+    ComPtr<ID3D11SamplerState> sampLiqClamp;
+    bool tessTried = false;
 }
 
 void D3D11Client::SaveLiquidBed()
@@ -227,7 +232,27 @@ void D3D11Client::RenderLiquid(const VECTOR3& cp, const MATRIX3& cr, const XMMAT
     const bool mirror = dc - Rl < 3000 && RenderMirror(cp, cr, proj, base, up);
     CopySceneColour(hdrCopy.Get());          // the scene so far (resolved when multisampled)
     // multisampled: a copy per sample too, and the per-sample shader
-    if (lqDev != dev.Get()) { lqDev = dev.Get(); psLiquidMS.Reset(); hdrCopyMS.Reset(); hdrCopyMSSRV.Reset(); msW = msH = msN = 0; msTried = false; }
+    if (lqDev != dev.Get()) {
+        lqDev = dev.Get(); psLiquidMS.Reset(); hdrCopyMS.Reset(); hdrCopyMSSRV.Reset(); msW = msH = msN = 0; msTried = false;
+        vsLiqCP.Reset(); hsLiq.Reset(); dsLiq.Reset(); sampLiqClamp.Reset(); tessTried = false;
+    }
+    if (!tessTried) {
+        tessTried = true;
+        auto b0 = CompileShaderFile("liquid.hlsl", "VSCP", "vs_5_0"), b1 = CompileShaderFile("liquid.hlsl", "HS", "hs_5_0"),
+             b2 = CompileShaderFile("liquid.hlsl", "DS", "ds_5_0");
+        if (b0 && b1 && b2) {
+            dev->CreateVertexShader(b0->GetBufferPointer(), b0->GetBufferSize(), nullptr, &vsLiqCP);
+            dev->CreateHullShader(b1->GetBufferPointer(), b1->GetBufferSize(), nullptr, &hsLiq);
+            dev->CreateDomainShader(b2->GetBufferPointer(), b2->GetBufferSize(), nullptr, &dsLiq);
+        }
+        D3D11_SAMPLER_DESC sd = {};
+        sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        sd.AddressU = sd.AddressV = sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sd.MaxLOD = D3D11_FLOAT32_MAX;
+        dev->CreateSamplerState(&sd, &sampLiqClamp);
+        if (!vsLiqCP || !hsLiq || !dsLiq || !sampLiqClamp) { vsLiqCP.Reset(); hsLiq.Reset(); dsLiq.Reset(); }
+        LOGC("liquid: deformations in the geometry (tessellation) %s", hsLiq ? "on" : "FAILED");
+    }
     bool msOn = false;
     if (samples > 1 && depthMSSRV) {
         if (!psLiquidMS && !msTried) {
@@ -293,6 +318,21 @@ void D3D11Client::RenderLiquid(const VECTOR3& cp, const MATRIX3& cr, const XMMAT
     ctx->PSSetShaderResources(0, 3, srv);
     ctx->VSSetShaderResources(2, 1, &wsrv);
     ctx->VSSetSamplers(0, 1, sampAniso.GetAddressOf());
+    const bool tess = waves && hsLiq && dsLiq && vsLiqCP;
+    if (tess) {
+        ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST);
+        ctx->VSSetShader(vsLiqCP.Get(), nullptr, 0);
+        ctx->HSSetShader(hsLiq.Get(), nullptr, 0);
+        ctx->DSSetShader(dsLiq.Get(), nullptr, 0);
+        ctx->HSSetConstantBuffers(1, 1, cbObj.GetAddressOf());
+        ctx->DSSetConstantBuffers(1, 1, cbObj.GetAddressOf());
+        ctx->HSSetShaderResources(2, 1, &wsrv);
+        ctx->DSSetShaderResources(2, 1, &wsrv);
+        ID3D11ShaderResourceView* bs = bedSaved ? bedSRV.Get() : nullptr;
+        ctx->DSSetShaderResources(12, 1, &bs);
+        ctx->HSSetSamplers(1, 1, sampLiqClamp.GetAddressOf());
+        ctx->DSSetSamplers(1, 1, sampLiqClamp.GetAddressOf());
+    }
     // the wakes: their sources (b5) and the Kelvin table (t3)
     {
         if (!wakeCB) {
@@ -334,5 +374,13 @@ void D3D11Client::RenderLiquid(const VECTOR3& cp, const MATRIX3& cr, const XMMAT
     ctx->PSSetShaderResources(0, 7, nul);
     ctx->PSSetShaderResources(11, 2, nul);
     ctx->VSSetShaderResources(2, 1, nul);
+    if (tess) {
+        ctx->HSSetShader(nullptr, nullptr, 0);
+        ctx->DSSetShader(nullptr, nullptr, 0);
+        ctx->HSSetShaderResources(2, 1, nul);
+        ctx->DSSetShaderResources(2, 1, nul);
+        ctx->DSSetShaderResources(12, 1, nul);
+        ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    }
     ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
 }

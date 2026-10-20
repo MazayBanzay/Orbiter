@@ -10,6 +10,7 @@
 #include "H2Chem.h"
 
 XMMATRIX g_exViewProj;
+std::set<OBJHANDLE> g_exModelled;
 bool g_exH2Flame = true;           // the hydrogen jets drawn by their chemistry here (VesselExhaust.cpp skips their 0x100 art)
 
 namespace {
@@ -26,6 +27,7 @@ struct Cfg
                                    // off: the jet pack's 0x100 art volume (VesselExhaust.cpp) as in the D3D9 fork
     double rh = 0.6;               // Earth's air: relative humidity for the condensation trail (Orbiter has no humidity)
     double condMin = 0.02;         // the least share of the plume's water above saturation that makes a trail
+    bool universal = true;         // the other ships' thrusters (no AtmoFX jet: the DG...) as the universal hydrogen exhaust
     double emis = 0.8;             // the hot metal's emissivity
     int steps = 40;                // the plume's ray-march steps
     struct TJet { double p[3], d[3], thrust, ve, T, rExit, wet; int ground; };
@@ -57,6 +59,7 @@ struct Cfg
             else if (!strcmp(key, "H2Flame")) h2Flame = v != 0;
             else if (!strcmp(key, "Humidity")) rh = std::clamp(v, 0.0, 1.0);
             else if (!strcmp(key, "CondMin")) condMin = std::clamp(v, 0.0, 1.0);
+            else if (!strcmp(key, "Universal")) universal = v != 0;
             else if (!strcmp(key, "Emissivity")) emis = std::clamp(v, 0.0, 1.0);
             else if (!strcmp(key, "Steps")) steps = std::clamp((int)v, 8, 128);
             else if (!strcmp(key, "TestJet") && test) {
@@ -285,7 +288,7 @@ bool ExhaustFx::Scene(ExScene& sc, const VECTOR3& cp, double simDt)
 
 void ExhaustFx::Collect(const ExScene& sc)
 {
-    jets.clear(); heat.clear(); smoke.clear();
+    jets.clear(); heat.clear(); smoke.clear(); g_exModelled.clear();
     steamPrev.swap(steamOn); steamOn.clear();
     {
         std::lock_guard<std::mutex> lk(g_ext.mx);
@@ -313,6 +316,31 @@ void ExhaustFx::Collect(const ExScene& sc)
         }
         for (auto& t : cfg.testHeat) { ExHeat h; h.h = f; h.g = _V(t.p[0], t.p[1], t.p[2]); h.r = t.r; h.dT = t.dT; heat.push_back(h); }
     }
+    // the other ships (no AtmoFX jet: the DG, stock vessels): each running thruster's exhaust as a universal jet - its
+    // thrust and exhaust speed from Orbiter (level x max, Isp), the exit and the gas's way from its exhaust's spec, the
+    // exit radius ~0.6 of the flame's half-width, the exhaust the jet pack's (H2-rich with water, 3000 K). Only in air
+    // (in a vacuum nothing carries it) and near the camera; its flame stays the vessel's own textured one
+    if (cfg.universal && SmokeEnabled()) {
+        std::set<OBJHANDLE> withJet; for (const ExJet& j : jets) withJet.insert(j.h);
+        for (DWORD vi = 0, nv = oapiGetVesselCount(); vi < nv; vi++) {
+            OBJHANDLE h = oapiGetVesselByIndex(vi);
+            if (!h || withJet.count(h)) continue;
+            VESSEL* v = oapiGetVesselInterface(h);
+            VECTOR3 gp; v->GetGlobalPos(gp);
+            if (length(gp - sc.cp) > 3000 + oapiGetSize(h) || v->GetAtmDensity() < 1e-3) continue;
+            for (DWORD i = 0, n = v->GetExhaustCount(); i < n; i++) {
+                EXHAUSTSPEC es = {};
+                if (!v->GetExhaustSpec(i, &es) || !es.th || !es.lpos || !es.ldir || (es.flags & 0x100)) continue;
+                const double lvl = v->GetThrusterLevel(es.th), F = lvl * v->GetThrusterMax(es.th);
+                if (lvl <= 0.01 || F < 10) continue;
+                ExJet j; j.h = h; j.id = 8000 + (int)i; j.universal = true;
+                VECTOR3 dl = *es.ldir; const double ld = length(dl); if (ld <= 0) continue; dl = dl / ld;
+                j.eg = *es.lpos - dl * es.lofs; j.dg = -dl;
+                j.thrust = F; j.ve = std::max(v->GetThrusterIsp(es.th), 500.0); j.T = 3000; j.rExit = std::max(0.6 * es.wsize, 0.03);
+                jets.push_back(j);
+            }
+        }
+    }
     // vessel frame -> global; the gas round each
     for (ExJet& j : jets) {
         VESSEL* vv = oapiGetVesselInterface(j.h);
@@ -328,6 +356,7 @@ void ExhaustFx::Collect(const ExScene& sc)
         JetGas(j, v->GetAtmPressure(), v->GetAtmDensity());
         j.yH2 = std::clamp((j.Rs / 8314.0 - 1.0 / 18) / (0.5 - 1.0 / 18), 0.0, 1.0);
         j.h2 = cfg.h2Flame && j.Rs > 450;              // lighter than water: the exhaust carries free hydrogen
+        if (j.universal) { j.yH2 = 0.92; j.h2 = true; }   // (the universal exhaust: the jet pack's composition)
         if (j.h2) H2Jet(j, v, eL, dL, sc);
     }
     for (const auto& e : steamPrev)            // a jet stopped: its steam stops (what is in the air drifts off)
@@ -428,10 +457,11 @@ void ExhaustFx::H2Jet(ExJet& j, VESSEL* v, const VECTOR3& eL, const VECTOR3& dL,
         // the 3D flow (Smoke.cpp): the jet's own flow imposed down to where it has slowed to ~30 m/s (or the ground),
         // its heat there from the mix table, the condensate formed over 0..z*
         SmokeSrc q;
-        q.eg = j.eg; q.dg = j.dg; q.rExit = j.rExit;
+        q.eg = j.eg; q.dg = j.dg; q.rExit = j.rExit; q.h = j.h; q.id = j.id;
         q.kJ = sqrt(j.thrust / std::max(ra, 1e-4));
         q.mVis = vis ? fc * W * mdot : 0.0; q.zFull = zStar;
-        q.inject = std::clamp(7 * q.kJ / 30.0, 0.3, std::min(3.0, zHit > 0 ? zHit : 3.0));
+        const double injMax = std::max(3.0, 10 * j.rExit);   // (a ship's engine: longer)
+        q.inject = std::clamp(7 * q.kJ / 30.0, 0.3, std::min(injMax, zHit > 0 ? zHit : injMax));
         {
             const double cAx = std::min(1.0, j.Lc / q.inject), u = cAx / (cAx + j.fsU);
             const int i = std::clamp((int)(u * 32 - 0.5), 0, 31);
@@ -439,6 +469,7 @@ void ExhaustFx::H2Jet(ExJet& j, VESSEL* v, const VECTOR3& eL, const VECTOR3& dL,
         }
         q.decay = life > 30 ? 0.0 : 1.0 / life;
         smoke.push_back(q);
+        g_exModelled.insert(j.h);
     } else {
         const double zS = std::min(zStar, zHit > 0 ? zHit : zStar);
         const double pv[3] = { eL.x, eL.y, eL.z }, vel[3] = { dL.x * 300, dL.y * 300, dL.z * 300 };
@@ -586,7 +617,7 @@ void ExhaustFx::DrawPlumes(D3D11Client* gc, const ExScene& sc)
     ctx->VSSetConstantBuffers(5, 1, cbPlume.GetAddressOf()); ctx->PSSetConstantBuffers(5, 1, cbPlume.GetAddressOf());
     const double Tvis = 750;       // below it the gas gives no visible light worth marching
     for (const ExJet& j : jets) {
-        if (j.T < Tvis || j.thrust <= 0) continue;
+        if (j.T < Tvis || j.thrust <= 0 || j.universal) continue;   // (a universal jet: the vessel's own flame)
         const double Ta = std::max(sc.Tg, 0.0);
         if (length(j.eg - sc.cp) > 20000) continue;
         PlumeCB k = {};
@@ -664,7 +695,10 @@ void ExhaustFx::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, co
     ctx->Begin(qDis[qi].Get()); ctx->End(qT0[qi].Get());
     {
         PipeState saved(ctx);      // everything as it was on return
-        if (partsOk) parts.Update(gc, sc, jets);
+        if (partsOk) {   // (the universal jets: no ejecta of their own - the flow carries what they move)
+            std::vector<ExJet> pj; for (const ExJet& j : jets) if (!j.universal) pj.push_back(j);
+            parts.Update(gc, sc, pj);
+        }
         SmokeUpdate(gc, sc, smoke);
         ComPtr<ID3D11RenderTargetView> rtv; ComPtr<ID3D11DepthStencilView> dsv;
         ctx->OMGetRenderTargets(1, &rtv, &dsv);

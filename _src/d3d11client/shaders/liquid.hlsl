@@ -101,6 +101,110 @@ VSOut VS(float2 g : POSITION)
     return o;
 }
 
+// ---- the deep deformations in the geometry (the jets' cavities, an impact's crater and its rebound, a hull's bow):
+// the rings' triangles are tessellated where the wave field stands more than ~1.5 cm off the level, and moved with it.
+// The ripples stay in the normals only (on the plain rings a fine field read at coarse nodes cut the shallows in rings);
+// the move fades in over 1.5 .. 4 cm of height - a function of the point alone, so neighbouring patches meet. No move
+// at the shore (as the slopes), and never through the bed.
+struct CP { float3 wp : WPOS; float3 n : NORMAL; };
+CP VSCP(float2 g : POSITION) { VSOut o = VS(g); CP c; c.wp = o.wp; c.n = o.n; return c; }
+
+float WaveH(float3 wp)
+{
+    if (gWN.y < 0.5) return 0;
+    float3 d = wp - gWA.xyz;
+    float2 q = float2(dot(d, gWE1.xyz), dot(d, gWE2.xyz)) / gWA.w;
+    float e = min(min(q.x, gWN.x - q.x), min(q.y, gWN.x - q.y));
+    float wgt = saturate(e / (0.05 * gWN.x));
+    if (wgt <= 0) return 0;
+    return tWave.SampleLevel(sClamp, q / gWN.x, 0).z * wgt;
+}
+
+// the height for the geometry: over ~2 cells (a tent of 5 taps) - a cell's noise read at the tessellated nodes stood up
+// as teeth along a crater's rim
+float WaveHs(float3 wp)
+{
+    float o = 0.75 * gWA.w;
+    float3 a = gWE1.xyz * o, b = gWE2.xyz * o;
+    return 0.4 * WaveH(wp) + 0.15 * (WaveH(wp + a) + WaveH(wp - a) + WaveH(wp + b) + WaveH(wp - b));
+}
+
+float TessTarget(float3 p) { return max(1.5 * gWA.w, length(p) * 0.004); }     // ~a cell and a half, or ~4 px
+
+// an edge's factor from its two ends only (the same for both patches that share it)
+float EdgeTess(float3 a, float3 b)
+{
+    bool sw = a.x > b.x || (a.x == b.x && (a.y > b.y || (a.y == b.y && a.z > b.z)));
+    float3 p0 = sw ? b : a, p1 = sw ? a : b;
+    float hm = 0;
+    [loop] for (int k = 0; k <= 8; k++) hm = max(hm, abs(WaveH(lerp(p0, p1, k / 8.0))));
+    if (hm < 0.015) return 1;
+    return clamp(length(p1 - p0) / TessTarget(0.5 * (p0 + p1)), 1, 64);
+}
+
+struct PC { float e[3] : SV_TessFactor; float i : SV_InsideTessFactor; };
+
+PC HSConst(InputPatch<CP, 3> ip)
+{
+    PC o; o.e[0] = o.e[1] = o.e[2] = o.i = 1;
+    if (gWN.y < 0.5) return o;
+    // only patches over the field's window, near enough to see a cavity
+    float3 c = (ip[0].wp + ip[1].wp + ip[2].wp) / 3;
+    float sz = max(length(ip[1].wp - ip[0].wp), max(length(ip[2].wp - ip[1].wp), length(ip[0].wp - ip[2].wp)));
+    if (length(c) > 400) return o;
+    float3 d = c - gWA.xyz;
+    float2 q = float2(dot(d, gWE1.xyz), dot(d, gWE2.xyz)) / gWA.w;
+    float m = sz / gWA.w + 2;
+    if (q.x < -m || q.y < -m || q.x > gWN.x + m || q.y > gWN.x + m) return o;
+    o.e[0] = EdgeTess(ip[1].wp, ip[2].wp);
+    o.e[1] = EdgeTess(ip[2].wp, ip[0].wp);
+    o.e[2] = EdgeTess(ip[0].wp, ip[1].wp);
+    // inside: a hollow may lie within the patch, away from its edges
+    float hm = 0;
+    [unroll] for (int j = 1; j <= 3; j++) [unroll] for (int i = 1; i <= 3 - j + 1; i++) {
+        float u = i / 5.0, v = j / 5.0;
+        hm = max(hm, abs(WaveH(ip[0].wp * (1 - u - v) + ip[1].wp * u + ip[2].wp * v)));
+    }
+    float fi = hm < 0.015 ? 1 : clamp(sz / TessTarget(c), 1, 64);
+    o.i = max(fi, max(o.e[0], max(o.e[1], o.e[2])));
+    return o;
+}
+
+[domain("tri")]
+[partitioning("fractional_odd")]
+[outputtopology("triangle_cw")]
+[outputcontrolpoints(3)]
+[patchconstantfunc("HSConst")]
+CP HS(InputPatch<CP, 3> ip, uint i : SV_OutputControlPointID) { return ip[i]; }
+
+float LevelH(float3 p);
+float3 WorldAt(float2 uv, float dz);
+float2 UvOf(float3 p);
+
+[domain("tri")]
+VSOut DS(PC pc, float3 b : SV_DomainLocation, const OutputPatch<CP, 3> ip)
+{
+    float3 wp = ip[0].wp * b.x + ip[1].wp * b.y + ip[2].wp * b.z;
+    float3 n = normalize(ip[0].n * b.x + ip[1].n * b.y + ip[2].n * b.z);
+    float h = WaveHs(wp);
+    float disp = h * smoothstep(0.015, 0.04, abs(h));
+    if (disp != 0 && gWN.w > 0.5) {
+        // the terrain's depth along this point's line of sight: no move at the shore, and never below the bed
+        float2 uv = UvOf(wp);
+        if (all(uv >= 0) && all(uv <= 1)) {
+            float bw, bh; tBedDepth.GetDimensions(bw, bh);
+            float shoreD = max(-LevelH(WorldAt(uv, tBedDepth.Load(int3(clamp(int2(uv * float2(bw, bh)), int2(0, 0), int2(bw, bh) - 1), 0)))), 0);
+            disp *= saturate((shoreD - 0.02) / 0.08);
+            disp = max(disp, -max(shoreD - 0.02, 0));
+        }
+    }
+    wp += n * disp;
+    VSOut o;
+    o.n = n; o.wp = wp;
+    o.pos = mul(float4(wp, 1), gVP);
+    return o;
+}
+
 float3 WorldAt(float2 uv, float dz)
 {
     // reverse-Z: depth 0 is the sky (infinitely far: w = 0) - taken 1e7 m out along the view ray, never a NaN

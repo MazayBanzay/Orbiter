@@ -9,7 +9,8 @@
 // the shader the surface's gradient.
 // The engines' jets press on it: the linearised surface condition phi_t = -g h - p / rho puts a pressure p in as a head
 // H = p / (rho g) under the same operator, h_tt = -g G*(h + H) - so a steady jet holds a hollow h = -H (its cavity) and
-// one that moves, starts or stops sends out its waves (Wake.cpp: the cavity's depth and width).
+// one that moves, starts or stops sends out its waves (Wake.cpp: the cavity's depth and width). An impact's air cavity
+// (sigma < 0) is held open by the body in it: the surface there no higher than the cavity, until it closes.
 cbuffer Field : register(b0)
 {
     float4 gP;        // x: N, y: dx [m], z: dt [s], w: damping a = alpha dt
@@ -17,7 +18,8 @@ cbuffer Field : register(b0)
     int4 gShift;      // xy: the shift in cells (Shift)
     float4 gStamp[64];   // x, y: centre [cells], z: amplitude (h: metres; kick: m/s), w: sigma [cells]; w < 0: a kick
     float4 gKer[43];     // the kernel, 13 x 13 row by row (169 values)
-    float4 gJet[8];      // the jets' pressure heads: x, y: centre [cells], z: head at the centre [m], w: sigma [cells]
+    float4 gJet[8];      // the jets' pressure heads: x, y: centre [cells], z: head at the centre [m], w: sigma [cells];
+                         // w < 0: an impact's cavity (depth z, sigma -w)
 };
 Texture2D<float2> tIn : register(t0);      // x: h now, y: h one step ago
 RWTexture2D<float2> uOut : register(u0);
@@ -32,6 +34,7 @@ float Head(float2 q)
     float H = 0;
     int nj = (int)gK.y;
     for (int k = 0; k < nj; k++) {
+        if (gJet[k].w < 0) continue;
         float2 d = (q - gJet[k].xy) / gJet[k].w;
         H += gJet[k].z * exp(-dot(d, d));
     }
@@ -73,7 +76,7 @@ void CSSim(uint3 id : SV_DispatchThreadID)
     bool nearJet = false;
     int nj = (int)gK.y;
     float2 pc = float2(p) + 0.5;
-    for (int k = 0; k < nj; k++) nearJet = nearJet || length(pc - gJet[k].xy) < 3 * gJet[k].w + 9;
+    for (int k = 0; k < nj; k++) nearJet = nearJet || (gJet[k].w > 0 && length(pc - gJet[k].xy) < 3 * gJet[k].w + 9);
     float Hc = 0;
     if (nearJet) {
         [loop] for (int j = -6; j <= 6; j++) {
@@ -86,6 +89,23 @@ void CSSim(uint3 id : SV_DispatchThreadID)
     // held only ~1/6 of it)
     float hn = (hv.x * (2 - a) - hv.y - gK.x * conv - 2 * a * Hc) / (1 + a);
     float hp = hv.x;
+    // breaking: no water wave stands steeper than ~0.6 (Stokes' limit, the 120 deg crest) - steeper, its crest spills and
+    // the energy goes into foam. As in the surf models (an eddy viscosity switched on where the surface is too steep), the
+    // cell is smoothed towards its neighbours, now and the step before alike, the more the steeper; the ordinary waves and
+    // wakes (slopes 0.1 .. 0.5) never reach it. Without it an impact's short waves piled up into spikes (slope 11)
+    {
+        float hl = At(p - int2(1, 0)).x, hr = At(p + int2(1, 0)).x, hd = At(p - int2(0, 1)).x, hu = At(p + int2(0, 1)).x;
+        float sl = length(float2(hr - hl, hu - hd)) / (2 * gP.y);
+        float br = saturate((sl - 0.6) / 0.6) * 0.5;
+        float dlt = br * (hv.x - 0.25 * (hl + hr + hd + hu));
+        hn -= dlt; hp -= dlt;
+    }
+    for (int c = 0; c < nj; c++) {       // the impacts' open cavities
+        if (gJet[c].w >= 0) continue;
+        float2 d = (pc - gJet[c].xy) / gJet[c].w;
+        float r2 = dot(d, d);
+        if (r2 < 9) hn = min(hn, -gJet[c].z * exp(-r2));
+    }
     // the sponge: waves die out before the window's edge (no reflection back in)
     float e = min(min(p.x, p.y), min(n - 1 - p.x, n - 1 - p.y));
     if (e < gK.z) { float s = pow(0.97, (gK.z - e) / gK.z * 4); hn *= s; hp *= s; }

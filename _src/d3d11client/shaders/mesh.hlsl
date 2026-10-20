@@ -148,10 +148,17 @@ PSOut PS(VSOut i, bool front : SV_IsFrontFace)
     o.mv = (i.cc.xy / i.cc.w - i.pc.xy / i.pc.w) * float2(0.5, -0.5);   // uv now - uv then
     float4 tex = gFlags.x > 0 ? tDiff.Sample(sAniso, i.uv) : float4(1, 1, 1, 1);
     float4 base = gDiff * tex;
-    if (gMaps2.z > 0.5) {      // a filter (group flag 0x100, the visor's sun spot): what lies behind times its transmittance -
-        // the texture's alpha as density, 0.7 (the spot's core) = optical density 4.5 (welding glass); blended Dest x Src
+    if (gMaps2.z > 0.5) {      // a filter (group flag 0x100, the visor's sun spot): what lies behind times its transmittance,
+        // blended Dest x Src. The texture's alpha (0.7 the spot's core) scales the density. Dense only over the Sun's disc
+        // (out to 1.5 radii): there it is what brings the disc down to a bright white (gMaps2.y [log2], Sun.cpp - at most
+        // welding glass, 10^-4.5); round it a light shade (one stop) - the spot's core is ~4 discs wide and at welding
+        // glass the sky in it went black: a black disc with a dot (2026-10-20)
         float a = saturate(tex.a * gDiff.a / 0.7);
-        float T = exp2(-14.95 * a);
+        float3 sd = normalize(gSunM.xyz), dir = normalize(i.wp);
+        float sn = length(cross(dir, sd)), px = max(fwidth(sn), 1e-6);   // sin of the angle from the Sun's centre (precise when small)
+        float rd = max(gMaps2.w, 1e-6);
+        float core = dot(dir, sd) > 0 ? 1 - smoothstep(1.3 * rd, 1.6 * rd + 1.5 * px, sn) : 0;
+        float T = exp2(-a * lerp(1.0, max(gMaps2.y, 1.0), core));
         o.c = float4(T, T, T, 1);
         return o;
     }

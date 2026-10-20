@@ -3,6 +3,7 @@
 #include "Exhaust.h"
 #include "FxInternal.h"
 #include <array>
+#include <set>
 
 extern XMMATRIX g_exViewProj;      // this frame's camera-centred global -> clip (with the TAA jitter), Exhaust.cpp
 
@@ -58,6 +59,8 @@ struct ExJet
     double flameZ = 0;                 // where the axis reaches the stoichiometric mix [m] (the box's reach; 0: no flame)
     double cond = 0, condZ = 0;        // the share of its water that condenses (Schmidt-Appleman) and where it is emitted [m]
     bool liquidBelow = false;
+    bool universal = false;            // a thruster's exhaust with no AtmoFX jet (the DG, stock ships): the universal
+                                       // hydrogen exhaust (as the jet pack's); its flame stays the vessel's own art
 };
 
 // a hot node (AtmoFX_SetHeatSource), global
@@ -74,6 +77,7 @@ void SprayRelease();             // with the device (Spray.cpp)
 struct SmokeSrc
 {
     VECTOR3 eg, dg;                    // exit and the gas's direction (global)
+    OBJHANDLE h = nullptr; int id = 0;  // its vessel and jet (its way between frames)
     double rExit = 0.04;
     double kJ = 0;                     // sqrt(momentum flux / the air's density) [m2/s]: the free jet's 7 kJ / z
     double mVis = 0;                   // visible mass formed [kg/s] (condensate; later soot)
@@ -83,6 +87,7 @@ struct SmokeSrc
     double decay = 0;                  // the visible mass's loss [1/s] (evaporation; 0 on Titan)
 };
 bool SmokeEnabled();             // Exhaust.cfg Smoke (default on)
+extern std::set<OBJHANDLE> g_exModelled;   // vessels whose exhaust the 3D flow carries this frame (their particle streams hidden)
 void SmokeUpdate(D3D11Client* gc, const ExScene& sc, const std::vector<SmokeSrc>& src);   // after the particles' update
 void SmokeRender(D3D11Client* gc);                     // in the exhaust pass (t5 depth, s3 bound)
 bool SmokeLive();                // the flow ran this frame

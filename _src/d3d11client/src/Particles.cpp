@@ -3,6 +3,8 @@
 // camera-facing quads - emissive ones added, diffuse ones blended and lit by the Sun and the sky. The client owns the
 // streams: a stream detached by its vessel ends when its last particle has gone.
 #include "Client.h"
+#include <set>
+extern std::set<OBJHANDLE> g_exModelled;   // Exhaust.cpp: vessels whose exhaust the 3D flow carries this frame
 
 static double Rnd() { return rand() / (double)RAND_MAX; }
 
@@ -153,6 +155,7 @@ void D3D11Client::UpdateRenderParticles(const VECTOR3& cp, const MATRIX3& cr, co
         for (PStream* s : streams) {
             bool emis = s->spec.ltype == PARTICLESTREAMSPEC::EMISSIVE;
             if ((pass == 1) != emis || s->ps.empty()) continue;
+            if (s->engine && g_exModelled.count(s->Ref())) continue;   // (its exhaust is the 3D flow's: Smoke.cpp)
             std::vector<PVert>& v = pverts; v.clear();
             for (auto& p : s->ps) {
                 VECTOR3 c = p.pos - cp;

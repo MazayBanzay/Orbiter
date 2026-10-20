@@ -72,6 +72,22 @@ void JetCavity(double M, double x, double r0, double g, double& head, double& si
 }
 
 std::map<OBJHANDLE, double> lowPrev;   // the vessels' lowest point over the level last frame (the impacts)
+
+// An impact's air cavity (Glasheen & McMahon 1996, discs entering water vertically): the body goes in at U and drags an
+// open cavity of about its own radius behind it, slowed by the drag of the liquid it pushes, 1/2 rho Cd pi R^2 v^2
+// (Cd ~0.8), so its depth is ln(1 + k U t) / k with k = rho Cd pi R^2 / (2 m) - down to the bed at most; the hydrostatic
+// pressure closes it at t = 2.285 sqrt(R / g) (independent of U), and the liquid then rushes in: the collapse throws up the
+// Worthington jet in the middle and runs out as rings - the field does that by itself once the cavity lets go.
+// The cavity goes along with the body (an oblique entry, a run into the liquid): its trail closes behind it.
+// What the surface shows of it: the deep air cavity's neck is narrow (R) and mostly hidden; the open crater at the level
+// holds the same volume pi R^2 L but no deeper than wide - sigma = cbrt(R^2 L), depth sigma (a height field can carry
+// walls no steeper; a narrow pit 2 m deep in it was a forest of spikes, 2026-10-20).
+// The liquid the cavity pushes aside rises round it (the crater's volume as it grows, put in as a wider hump - the cavity
+// keeps the middle down): the rim. The crown's sheet: at the entry the liquid round the final crater is thrown up at half
+// the entry speed (less for a light body: its added mass ~4/3 rho R^3 takes the momentum), at most what linear waves of
+// that width carry (2 sqrt(g sigma)); it rises, falls back and runs out as the first ring.
+struct Impact { OBJHANDLE body, hv; VECTOR3 off; double R, U, k, dMax, t0, tSeal, V; };
+std::vector<Impact> impacts;
 float g_ker[169];      // iWave's kernel for sqrt(-laplacian), 13 x 13 cells (FieldInit)
 
 // Tessendorf's iWave kernel: G(r) = sum q^2 exp(-q^2) J0(q r), then made exact where it matters: no response to a
@@ -295,9 +311,8 @@ bool WakeField(D3D11Client* c, OBJHANDLE body, double Rl, const VECTOR3& cam, do
     }
     kicks.clear();
     // things falling in (any vessel over the liquid): where its lowest touchdown point crosses the level going down, the
-    // impact. The body's disc drives the surface down at its own speed, cut by the liquid's added mass (a disc at a free
-    // surface ~ 4/3 rho R^3) for a light body, and at most sqrt(g R) - what linear waves on this grid carry (a crater as
-    // deep as the disc is wide); the rest goes up as the crown's sheet (ParticlesCrown: its drops from the Weber number)
+    // impact - its air cavity (Impact) held in the field while it opens, then let go; the crown's sheet throws its drops
+    // (ParticlesCrown: from the Weber number)
     {
         std::map<OBJHANDLE, double> seen;
         const VECTOR3 Cg = pp + mul(Rp, F.C);
@@ -333,13 +348,23 @@ bool WakeField(D3D11Client* c, OBJHANDLE body, double Rl, const VECTOR3& cam, do
             const double U = -vh.y;
             if (U < 0.3) continue;
             double glng, glat, grad; oapiGlobalToEqu(body, cen, &glng, &glat, &grad);
-            if ((Rl - oapiGetSize(body)) - oapiSurfaceElevation(body, glng, glat) < 0.05) continue;   // the shore
-            const double m = v->GetMass(), ma = 4.0 / 3.0 * RHO_LIQ * R * R * R;
-            const double V = std::min(U * m / (m + ma), sqrt(g * R));
+            const double water = (Rl - oapiGetSize(body)) - oapiSurfaceElevation(body, glng, glat);
+            if (water < 0.05) continue;                                                       // the shore
+            const double m = std::max(v->GetMass(), 1.0), k = RHO_LIQ * 0.8 * PI * R * R / (2 * m);
+            const double tSeal = 2.285 * sqrt(R / g), dMax = std::min(water - 0.02, 3.0);
+            // the footprint's offset from the vessel's centre, on the level (planet frame): the cavity follows the vessel
+            VECTOR3 q = tmul(Rp, cen - pp); q = q * (Rl / length(q));
+            VECTOR3 qv = tmul(Rp, vg - pp); qv = qv * (Rl / length(qv));
+            if (impacts.size() < 8) impacts.push_back({ body, hv, q - qv, R, U, k, dMax, oapiGetSimTime(), tSeal, 0.0 });
+            const double Lf = std::min(log(1 + k * U * tSeal) / k, dMax), sf = std::max(R, cbrt(R * R * Lf));
+            const double ma = 4.0 / 3.0 * RHO_LIQ * R * R * R, sk = 2 * sf;
+            const double vUp = std::min(0.5 * U * m / (m + ma), 2 * sqrt(g * sk));
             double x, y, depth; ToCells(cen, pp, Rp, Rl, x, y, depth);
-            add(x, y, -V, std::max(R, 1.5 * dx) / dx, true);
+            add(x, y, vUp, std::max(sk, 1.5 * dx) / dx, true);
             ParticlesCrown(body, cen, R, U);
-            LOGC("wave field: %s hits the liquid at %.2f m/s (disc %.2f m, %.0f kg): surface kicked at %.2f m/s", v->GetName(), U, R, m, V);
+            LOGC("wave field: %s hits the liquid at %.2f m/s, %.2f m/s along (disc %.2f m, %.0f kg): an air cavity %.2f m deep "
+                 "when it closes after %.2f s, a crater %.2f m deep and wide at the level, the crown thrown up at %.2f m/s",
+                 v->GetName(), U, sqrt(vh.x * vh.x + vh.z * vh.z), R, m, Lf, tSeal, sf, vUp);
         }
         lowPrev.swap(seen);
     }
@@ -350,7 +375,11 @@ bool WakeField(D3D11Client* c, OBJHANDLE body, double Rl, const VECTOR3& cam, do
     {
         struct J { double x, y, head, sig; };
         std::vector<J> js;
-        auto jet = [&](const VECTOR3& ge, const VECTOR3& gdIn, double T, double r0) {
+        double logS = 0, logU = 0, logP = 0, logH = 0, logF = 0;     // the strongest jet: its path, flow speed, pressure, cavity
+        // vgG: the vessel's velocity over the ground (global): the gas reaching the level left the nozzle a while ago, from
+        // where the nozzle was then - the far jet's centreline speed u = A / z, A = sqrt(2 M / (pi 0.0121 rho_air)), takes
+        // z^2 / 2A to the level, and the cavity lags behind the nozzle by the horizontal speed times that
+        auto jet = [&](const VECTOR3& ge, const VECTOR3& gdIn, double T, double r0, double rhoA, const VECTOR3& vgG) {
             if (T <= 0) return;
             const VECTOR3 pe = tmul(Rp, ge - pp), de = tmul(Rp, gdIn) / length(gdIn);
             const VECTOR3 up = pe / length(pe);
@@ -360,10 +389,22 @@ bool WakeField(D3D11Client* c, OBJHANDLE body, double Rl, const VECTOR3& cam, do
             if (s > 300) return;
             double head, sig; JetCavity(T * down, s, std::max(r0, 0.01), g, head, sig);
             if (head < 1e-3) return;
-            // a cavity deeper than wide is the splashing mode (its walls flap and throw the liquid off): linear waves carry
-            // walls of up to ~45 deg, so a deeper one is taken wider - the same force (head x sigma^2: the volume pushed aside)
-            if (head > 1.2 * sig) { sig = cbrt(head * sig * sig / 1.2); head = 1.2 * sig; }
-            VECTOR3 hit = pe + de * s; hit = hit * (Rl / length(hit));
+            if (T * down > logF) {    // the flow at the surface: the stagnation pressure's speed in the gas around (mixed out)
+                logF = T * down; logS = s; logH = head; logP = head * RHO_LIQ * g;
+                logU = sqrt(2 * logP / std::max(rhoA, 1e-4));
+            }
+            // a cavity deeper than its width is the penetrating, splashing mode: its walls flap and throw the liquid off, the
+            // jet wanders in it and the cavity's mean shape is about as wide (2 sigma) as deep - the same force (head x
+            // sigma^2: the volume pushed aside)
+            if (head > 2 * sig) { sig = cbrt(head * sig * sig / 2); head = 2 * sig; }
+            VECTOR3 hit = pe + de * s;
+            {
+                const VECTOR3 vp = tmul(Rp, vgG), vhz = vp - up * dotp(vp, up);
+                const double A = sqrt(2 * T * down / (PI * 0.0121 * std::max(rhoA, 1e-4)));
+                const double tFly = std::min(s * s / (2 * A), 3.0);
+                hit = hit - vhz * tFly;
+            }
+            hit = hit * (Rl / length(hit));
             double x, y, depth; ToCells(mul(Rp, hit) + pp, pp, Rp, Rl, x, y, depth);
             double sc = sig / dx;
             if (x < -3 * sc || y < -3 * sc || x > FN + 3 * sc || y > FN + 3 * sc) return;
@@ -380,10 +421,11 @@ bool WakeField(D3D11Client* c, OBJHANDLE body, double Rl, const VECTOR3& cam, do
                 if (!oapiIsVessel(kv.first.h)) continue;
                 sends.insert(kv.first.h);
                 if (j.thrust <= 0 || now - j.t > 0.5) continue;
+                if (j.ve < 100) continue;      // a sole's puff (the air squeezed from under it, a few m/s): no jet on the liquid
                 VESSEL* v = oapiGetVesselInterface(kv.first.h);
                 if (v->GetSurfaceRef() != body) continue;
-                VECTOR3 ge, gd; v->Local2Global(j.pos, ge); v->GlobalRot(j.dir, gd);
-                jet(ge, gd, j.thrust, j.rExit);
+                VECTOR3 ge, gd, vgG; v->Local2Global(j.pos, ge); v->GlobalRot(j.dir, gd); v->GetGroundspeedVector(FRAME_GLOBAL, vgG);
+                jet(ge, gd, j.thrust, j.rExit, v->GetAtmDensity(), vgG);
             }
         }
         const VECTOR3 Cg = pp + mul(Rp, F.C);
@@ -403,8 +445,9 @@ bool WakeField(D3D11Client* c, OBJHANDLE body, double Rl, const VECTOR3& cam, do
                     if (v->GetExhaustSpec(e, &es) && es.th == th) r0 = std::max(r0, 0.5 * es.wsize);
                 }
                 VECTOR3 lp, ld; v->GetThrusterRef(th, lp); v->GetThrusterDir(th, ld);
-                VECTOR3 ge, gd; v->Local2Global(lp, ge); v->GlobalRot(-ld, gd);     // the gas goes against the thrust
-                jet(ge, gd, T, r0 > 0 ? r0 : 0.1);
+                VECTOR3 ge, gd, vgG; v->Local2Global(lp, ge); v->GlobalRot(-ld, gd);     // the gas goes against the thrust
+                v->GetGroundspeedVector(FRAME_GLOBAL, vgG);
+                jet(ge, gd, T, r0 > 0 ? r0 : 0.1, v->GetAtmDensity(), vgG);
             }
         }
         {   // test runs (D3D11CLIENT_TEST_JET=1): the «Модуль полёта»'s two nozzles of 87 N, exit radius 40.5 mm, hovering
@@ -416,15 +459,36 @@ bool WakeField(D3D11Client* c, OBJHANDLE body, double Rl, const VECTOR3& cam, do
                 const VECTOR3 up = (fg - pp) / length(fg - pp), side = crossp(up, fu) / std::max(length(crossp(up, fu)), 1e-6);
                 const VECTOR3 base = pp + up * (Rl + 1.2) + side * 3.0;
                 VECTOR3 fwd = crossp(side, up);
-                for (int k = 0; k < 2; k++) jet(base + fwd * (k ? -0.3 : 0.3), -up, 87.0, 0.0405);
+                for (int k = 0; k < 2; k++) jet(base + fwd * (k ? -0.3 : 0.3), -up, 87.0, 0.0405, fv->GetAtmDensity(), _V(0, 0, 0));
             }
+        }
+        // the impacts' cavities first (sigma < 0 for the shader: a cavity the body holds open - the surface no higher than
+        // it), then the strongest jets
+        const double tNow = oapiGetSimTime();
+        for (auto it = impacts.begin(); it != impacts.end();) {
+            const double t = tNow - it->t0;
+            if (it->body != body || t > it->tSeal || t < 0) { it = impacts.erase(it); continue; }    // closed: let go
+            if (!oapiIsVessel(it->hv)) { it = impacts.erase(it); continue; }
+            const double L = std::min(log(1 + it->k * it->U * t) / it->k, it->dMax);       // the air cavity's depth
+            const double sg = std::max(it->R, cbrt(it->R * it->R * L)), H = std::min(L, sg);   // the crater at the level
+            VECTOR3 vg; oapiGetGlobalPos(it->hv, &vg);
+            VECTOR3 q = tmul(Rp, vg - pp); q = q * (Rl / length(q)); q = q + it->off; q = q * (Rl / length(q));
+            double x, y, depth; ToCells(mul(Rp, q) + pp, pp, Rp, Rl, x, y, depth);
+            const double sc = std::max(sg / dx, 1.5);
+            if (nj < 8 && H > 1e-3) cb.jet[nj++] = { (float)x, (float)y, (float)H, (float)-sc };
+            // the rim: the crater's growth dV as exp(-r^2 / (2 sg)^2) (the stamp's sigma sqrt 2 sg): amplitude dV / (4 pi sg^2)
+            const double Vc = PI * sg * sg * H;
+            add(x, y, (Vc - it->V) / (4 * PI * sg * sg), 1.41421356 * sc, false);
+            it->V = Vc;
+            ++it;
         }
         std::sort(js.begin(), js.end(), [](const J& a, const J& b) { return a.head * a.sig * a.sig > b.head * b.sig * b.sig; });
         for (const J& j : js) { if (nj >= 8) break; cb.jet[nj++] = { (float)j.x, (float)j.y, (float)j.head, (float)j.sig }; }
         static double tLogJ = -1e9;
-        if (nj > 0 && oapiGetSysTime() - tLogJ > 10) {
+        if (!js.empty() && oapiGetSysTime() - tLogJ > 10) {
             tLogJ = oapiGetSysTime();
-            LOGC("wave field: %d jets on the liquid (of %d), the strongest a cavity %.3f m deep, sigma %.2f m", nj, (int)js.size(), js[0].head, js[0].sig * dx);
+            LOGC("wave field: %d jets on the liquid; the strongest %.0f N on it, %.2f m along the jet: the flow there %.0f m/s, "
+                 "%.0f Pa -> a cavity %.2f m deep (drawn %.2f m, sigma %.2f m)", (int)js.size(), logF, logS, logU, logP, logH, js[0].head, js[0].sig * dx);
         }
     }
     // the equation's constants for this grid

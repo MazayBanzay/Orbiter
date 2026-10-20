@@ -358,12 +358,16 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
             if (s && !s->name.empty()) { std::string ln = s->name; for (char& ch : ln) ch = (char)tolower((unsigned char)ch); skin = ln.find("skin") != std::string::npos; }
             const bool filter = (g.usrFlag & 0x100) != 0;      // a filter group (the visor's sun spot): Dest x transmittance
             if (filter && !shadowPass) {   // ... over the Sun: the glare in the eye goes through it too (its transmittance, mesh.hlsl)
-                extern bool g_sunFilterSeen; extern float g_sunFilterT; extern int g_sunFilterCount;
+                extern bool g_sunFilterSeen; extern float g_sunFilterT; extern int g_sunFilterCount; extern float g_sunCoreD;
                 g_sunFilterSeen = true; g_sunFilterCount++;
-                g_sunFilterT = std::min(g_sunFilterT, exp2f(-14.95f * std::clamp(mt.diffuse.a / 0.7f, 0.0f, 1.0f)));
+                g_sunFilterT = std::min(g_sunFilterT, exp2f(-g_sunCoreD * std::clamp(mt.diffuse.a / 0.7f, 0.0f, 1.0f)));
             }
             if (filter && (g.usrFlag & 0x200) && !shadowPass) { extern bool g_sunHAlphaSeen; g_sunHAlphaSeen = true; }   // ... an H-alpha one: Sun.cpp draws the H-alpha Sun
             c.maps2 = { msrv[4] ? 1.0f : 0.0f, skin ? 1.0f : 0.0f, filter ? 1.0f : 0.0f, 0 };
+            if (filter) {   // the filter's own: y its density over the Sun's disc [log2], w the disc's angular radius (Sun.cpp, the frame before)
+                extern float g_sunCoreD, g_sunDiscRad;
+                c.maps2.y = g_sunCoreD; c.maps2.w = g_sunDiscRad;
+            }
             if (!shadowPass) ctx->PSSetShaderResources(1, 5, msrv);
             D3D11_MAPPED_SUBRESOURCE ms;
             ctx->Map(cbObj.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms); memcpy(ms.pData, &c, sizeof c); ctx->Unmap(cbObj.Get(), 0);
