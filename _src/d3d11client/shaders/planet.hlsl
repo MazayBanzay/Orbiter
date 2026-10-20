@@ -333,4 +333,5 @@ float4 ShadowDbg(VSOut i)
     float3 c = d < gCascFar.y ? float3(1, 0.4, 0.4) : d < gCascFar.z ? float3(0.4, 1, 0.4) : d < gCascFar.w ? float3(0.4, 0.4, 1) : float3(1, 1, 1);
     return float4(s * c * 0.5 / max(gHazeRGB.w * gAdapt.rgb, 1e-4), 1);
 }
-float4 PS(VSOut i) : SV_Target { if (gShadow.z > 0.5 && gShadow.z < 1.5) return ShadowDbg(i); return abs(gMisc.w - 1) < 0.5 ? TileDbg(i) : Shade(i); }
+float4 PS(VSOut i) : SV_Target { if (gShadow.z > 14.5) return float4(0.02, 0.02, 0.02, 1);   // (test runs, SHADOWDBG 15: the raster alone, for timing)
+    if (gShadow.z > 0.5 && gShadow.z < 1.5) return ShadowDbg(i); return abs(gMisc.w - 1) < 0.5 ? TileDbg(i) : Shade(i); }

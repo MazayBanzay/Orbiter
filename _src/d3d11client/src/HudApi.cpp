@@ -21,7 +21,7 @@ struct HV
 
 struct Res
 {
-    bool tried = false, ok = false;
+    bool tried = false, ok = false; unsigned gen = 0;
     ComPtr<ID3D11VertexShader> vs, fullVs; ComPtr<ID3D11PixelShader> ps, lightPs, downPs; ComPtr<ID3D11InputLayout> il;
     ComPtr<ID3D11Buffer> vb, cb; UINT vbCount = 0;
     ComPtr<ID3D11BlendState> bs[4][2], bsNone;    // [blend][alpha writable]
@@ -34,7 +34,8 @@ const float ZSTEP = 1.0f / (1 << 22);
 
 bool Init()
 {
-    if (R.tried) return R.ok;
+    if (R.tried && R.gen == g_devGen) return R.ok;
+    R = Res(); R.gen = g_devGen;     // (a new device: the old one's objects go)
     R.tried = true;
     D3D11Client* c = g_client;
     if (!c) return false;

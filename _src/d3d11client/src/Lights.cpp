@@ -52,12 +52,20 @@ ComPtr<ID3D11Texture2D> g_spotTex; ComPtr<ID3D11DepthStencilView> g_spotDSV; Com
 ComPtr<ID3D11Texture2D> g_skyTex; ComPtr<ID3D11DepthStencilView> g_skyDSV; ComPtr<ID3D11ShaderResourceView> g_skySRV;
 ComPtr<ID3D11VertexShader> g_vsFull, g_vsSpr; ComPtr<ID3D11PixelShader> g_psBeams, g_psSpr;
 ComPtr<ID3D11Buffer> g_beamCB; ComPtr<ID3D11RasterizerState> g_rsScissor;
+// the beams at half resolution (1.2 ms at full with MSAA 8x, the master's measure 20.10.2026), added back bilinearly
+ComPtr<ID3D11Texture2D> g_halfTex; ComPtr<ID3D11RenderTargetView> g_halfRTV; ComPtr<ID3D11ShaderResourceView> g_halfSRV; ComPtr<ID3D11PixelShader> g_psUp; UINT g_halfW = 0, g_halfH = 0;
 std::vector<D3D11_RECT> g_beamRect;
 // the eye's probe: 16 x 9 visible points (lights_vol.hlsl CSProbe), read back two frames later through a ring of 3
 ComPtr<ID3D11ComputeShader> g_csProbe; ComPtr<ID3D11Buffer> g_probe, g_probeSt[3]; ComPtr<ID3D11UnorderedAccessView> g_probeUAV;
 UINT g_probeN = 0; XMFLOAT4 g_probePts[144] = {}; bool g_probeOk = false;     // each beam's light: its cone's box on the screen
 int g_nLights = 0, g_nBeams = 0, g_nSpr = 0, g_nSpot = 0;
 UINT g_frame = 0;
+// the sky maps, kept from frame to frame: each its eye and axes in the planet frame (its matrix rebuilt every frame for the
+// camera of now), three of the twelve drawn again each frame (the master's measure 20.10.2026: 16 views of every vessel a
+// frame cost up to 2.8 ms)
+struct SkyMap { VECTOR3 eyeL, dL, vL; bool valid = false; };
+SkyMap g_skyMap[12]; int g_skyNext = 0; OBJHANDLE g_skyPlanet = nullptr;
+ComPtr<ID3D11VertexShader> g_vsClearZ; ComPtr<ID3D11DepthStencilState> g_dsAlways;
 double g_eLoc = 0; VECTOR3 g_eCol = { 1, 1, 1 };      // the local lights' illuminance where they light the view [Sun = 1], its colour
 
 ComPtr<ID3D11Buffer> MakeStructured(ID3D11Device* dev, UINT stride, UINT n, ComPtr<ID3D11ShaderResourceView>& srv)
@@ -128,6 +136,11 @@ void D3D11Client::LightsFrame(const VECTOR3& cp)
         if (bb) dev->CreatePixelShader(bb->GetBufferPointer(), bb->GetBufferSize(), nullptr, &g_psBeams);
         if (bsv) dev->CreateVertexShader(bsv->GetBufferPointer(), bsv->GetBufferSize(), nullptr, &g_vsSpr);
         if (bsp) dev->CreatePixelShader(bsp->GetBufferPointer(), bsp->GetBufferSize(), nullptr, &g_psSpr);
+        { auto bz = CompileShaderFile("lights_vol.hlsl", "VSClearZ", "vs_5_0"); if (bz) dev->CreateVertexShader(bz->GetBufferPointer(), bz->GetBufferSize(), nullptr, &g_vsClearZ);
+          D3D11_DEPTH_STENCIL_DESC dd = {}; dd.DepthEnable = TRUE; dd.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL; dd.DepthFunc = D3D11_COMPARISON_ALWAYS; dev->CreateDepthStencilState(&dd, &g_dsAlways);
+          for (auto& m : g_skyMap) m.valid = false; }
+        { auto bu = CompileShaderFile("lights_vol.hlsl", "PSUpsample", "ps_5_0"); if (bu) dev->CreatePixelShader(bu->GetBufferPointer(), bu->GetBufferSize(), nullptr, &g_psUp); }
+        g_halfTex.Reset(); g_halfRTV.Reset(); g_halfSRV.Reset(); g_halfW = g_halfH = 0;
         D3D11_BUFFER_DESC bc = { 16, D3D11_USAGE_DYNAMIC, D3D11_BIND_CONSTANT_BUFFER, D3D11_CPU_ACCESS_WRITE, 0, 0 };
         dev->CreateBuffer(&bc, nullptr, &g_beamCB);
         D3D11_RASTERIZER_DESC rd = {}; rd.FillMode = D3D11_FILL_SOLID; rd.CullMode = D3D11_CULL_NONE; rd.DepthClipEnable = TRUE; rd.ScissorEnable = TRUE;
@@ -340,15 +353,21 @@ void D3D11Client::LightsFrame(const VECTOR3& cp)
             cb.spotK[k] = { 2 * tanf(fov * 0.5f) / SPOT_N, nearZ, farZ, k == 0 ? (float)(g_frame & 63) : 0.0f };
             D3D11_VIEWPORT vp = { (float)((k & 1) * SPOT_N), (float)((k >> 1) * SPOT_N), (float)SPOT_N, (float)SPOT_N, 0, 1 };
             ctx->RSSetViewports(1, &vp);
+            // the casters: the vessels in the cone (not the lamp's own: a helmet lamp's own helmet, arms and body - skinned, a
+            // frame late - cut its cone down to a thin crescent; a headlight's housing is its own too). None: no map
+            std::vector<VesselVis*> cast;
+            const double tanH = tan(half);
             for (auto& kv : visuals) {
-                // not the lamp's own vessel: a helmet lamp's own helmet, arms and body (skinned, a frame late) cut its
-                // cone down to a thin crescent on the ground; a headlight's housing is its own too (as engines do: the
-                // light's owner casts no shadow from it)
                 if (kv.first == c.h) continue;
                 VECTOR3 q; oapiGetGlobalPos(kv.first, &q);
-                if (length(q - cp - c.pos) > c.range + oapiGetSize(kv.first)) continue;
-                RenderVessel(kv.second, cp, _M(1, 0, 0, 0, 1, 0, 0, 0, 1), XMMatrixIdentity(), false, &LVP);
+                const VECTOR3 rv = q - cp - c.pos;
+                const double sz = oapiGetSize(kv.first), along = dotp(rv, c.dir);
+                if (length(rv) > c.range + sz || along < -sz) continue;
+                if (length(rv - c.dir * along) > std::max(along, 0.0) * tanH + sz) continue;
+                cast.push_back(kv.second);
             }
+            if (cast.empty()) { g_nSpot--; c.tile = -1; c.g.a.z = -1; continue; }
+            for (VesselVis* vv : cast) RenderVessel(vv, cp, _M(1, 0, 0, 0, 1, 0, 0, 0, 1), XMMatrixIdentity(), false, &LVP);
         }
         ctx->OMSetRenderTargets(0, nullptr, nullptr);
     }
@@ -362,7 +381,9 @@ void D3D11Client::LightsFrame(const VECTOR3& cp)
             VECTOR3 q; oapiGetGlobalPos(h, &q); const double a = length(cp - q) - oapiGetSize(h);
             if (a < best) { best = a; hp = h; pp = q; }
         }
-        if (hp && best < 50000) {
+        double agl = best;     // the camera over the ground under it (the relief: mountains are kilometres over the mean radius)
+        if (hp) { double lng, lat, rad; oapiGlobalToEqu(hp, cp, &lng, &lat, &rad); agl = rad - oapiGetSize(hp) - oapiSurfaceElevation(hp, lng, lat); }
+        if (hp && agl < 2000) {     // near the ground only (a cabin, under a hull): higher up it costs 12 renders of the vessels for nothing (16 km: 17-40 ms, Storm_orbit 20.10.2026)
             // the maps' frame fixed to the planet (the ground turns with it: snapped in the inertial frame the texels slid over
             // everything at the planet's rotation and orbit speed - the shades trembled), and kept until the camera has moved
             // ~25 km (else the axes turn a little with every metre and the snapping moves with them)
@@ -377,34 +398,50 @@ void D3D11Client::LightsFrame(const VECTOR3& cp)
             const double R = cfg.skyR, back = 60.0, texel = 2 * R / SKY_N;
             ID3D11ShaderResourceView* nul = nullptr;
             ctx->PSSetShaderResources(21, 1, &nul);
-            ctx->ClearDepthStencilView(g_skyDSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+            if (g_skyPlanet != hp) { for (auto& m : g_skyMap) m.valid = false; g_skyPlanet = hp; }
             ctx->OMSetRenderTargets(0, nullptr, g_skyDSV.Get());
+            bool anyInvalid = false; for (auto& m : g_skyMap) anyInvalid |= !m.valid;
             for (int k = 0; k < NSKY; k++) {
-                // the zenith, 5 at 60 deg, 6 at 22 deg over the horizon
-                const double el = k == 0 ? 90 * RAD : k < 6 ? 60 * RAD : 22 * RAD;
-                const double az = k == 0 ? 0 : k < 6 ? (k - 1) * 72 * RAD : (k - 6) * 60 * RAD + 30 * RAD;
-                const VECTOR3 d = up * sin(el) + (e1 * cos(az) + e2 * sin(az)) * cos(el);
-                VECTOR3 a = fabs(dotp(d, up)) < 0.95 ? up : e1;
-                VECTOR3 u = crossp(a, d); u = u / length(u); VECTOR3 v = crossp(d, u);
-                // the centre in whole texels of the direction's frame, counted in the planet frame (no crawl over the ground)
-                const VECTOR3 uL = tmul(Rp, u), vL = tmul(Rp, v);          // the axes in the planet frame (fixed there)
-                const double cu = dotp(camL, uL), cv = dotp(camL, vL);
-                const VECTOR3 c = u * (floor(cu / texel) * texel - cu) + v * (floor(cv / texel) * texel - cv);
-                XMVECTOR eye = XMVectorSet((float)(c.x + d.x * (R + back)), (float)(c.y + d.y * (R + back)), (float)(c.z + d.z * (R + back)), 1);
-                XMMATRIX LVP = XMMatrixLookToLH(eye, XMVectorSet(-(float)d.x, -(float)d.y, -(float)d.z, 0), XMVectorSet((float)v.x, (float)v.y, (float)v.z, 0))
+                SkyMap& sm = g_skyMap[k];
+                const bool redraw = anyInvalid || (k % 4) == g_skyNext;    // three a frame, all of them at the start
+                if (redraw) {
+                    // the zenith, 5 at 60 deg, 6 at 22 deg over the horizon
+                    const double el = k == 0 ? 90 * RAD : k < 6 ? 60 * RAD : 22 * RAD;
+                    const double az = k == 0 ? 0 : k < 6 ? (k - 1) * 72 * RAD : (k - 6) * 60 * RAD + 30 * RAD;
+                    const VECTOR3 dL = upL * sin(el) + (e1L * cos(az) + e2L * sin(az)) * cos(el);
+                    VECTOR3 aL = fabs(dotp(dL, upL)) < 0.95 ? upL : e1L;
+                    VECTOR3 uL = crossp(aL, dL); uL = uL / length(uL); const VECTOR3 vL = crossp(dL, uL);
+                    // the centre in whole texels of the direction's frame, counted in the planet frame (no crawl over the ground)
+                    const double cu = dotp(camL, uL), cv = dotp(camL, vL);
+                    const VECTOR3 cL = camL + uL * (floor(cu / texel) * texel - cu) + vL * (floor(cv / texel) * texel - cv);
+                    sm.eyeL = cL + dL * (R + back); sm.dL = dL; sm.vL = vL; sm.valid = true;
+                }
+                // its matrix for the camera of now
+                const VECTOR3 eyeG = mul(Rp, sm.eyeL) + pp - cp, d = mul(Rp, sm.dL), v = mul(Rp, sm.vL);
+                XMMATRIX LVP = XMMatrixLookToLH(XMVectorSet((float)eyeG.x, (float)eyeG.y, (float)eyeG.z, 1), XMVectorSet(-(float)d.x, -(float)d.y, -(float)d.z, 0), XMVectorSet((float)v.x, (float)v.y, (float)v.z, 0))
                              * XMMatrixOrthographicLH((float)(2 * R), (float)(2 * R), 0.0f, (float)(2 * R + back));
                 XMStoreFloat4x4(&cb.skyVP[k], XMMatrixTranspose(LVP));
                 cb.skyDir[k] = { (float)d.x, (float)d.y, (float)d.z, 0 };
+                if (!redraw) continue;
                 D3D11_VIEWPORT vp = { (float)((k & 3) * SKY_N), (float)((k >> 2) * SKY_N), (float)SKY_N, (float)SKY_N, 0, 1 };
                 ctx->RSSetViewports(1, &vp);
+                // the tile cleared alone (a triangle at depth 1)
+                if (g_vsClearZ && g_dsAlways) {
+                    ctx->OMSetDepthStencilState(g_dsAlways.Get(), 0); ctx->RSSetState(rsNone.Get());
+                    ctx->IASetInputLayout(nullptr); ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                    ctx->VSSetShader(g_vsClearZ.Get(), nullptr, 0); ctx->PSSetShader(nullptr, nullptr, 0);
+                    ctx->Draw(3, 0);
+                } else ctx->ClearDepthStencilView(g_skyDSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+                const VECTOR3 cg = eyeG - d * (R + back);       // the map's centre (camera-centred)
                 for (auto& kv : visuals) {
                     VECTOR3 q; oapiGetGlobalPos(kv.first, &q);
-                    VECTOR3 rq = q - cp - c;
+                    VECTOR3 rq = q - cp - cg;
                     const double along = dotp(rq, d), sz = oapiGetSize(kv.first);
                     if (length(rq - d * along) > R * 1.42 + sz || along > R + back + sz || along < -(R + sz)) continue;
                     RenderVessel(kv.second, cp, _M(1, 0, 0, 0, 1, 0, 0, 0, 1), XMMatrixIdentity(), false, &LVP);
                 }
             }
+            g_skyNext = (g_skyNext + 1) % 4;
             ctx->OMSetRenderTargets(0, nullptr, nullptr);
             cb.skyC = { 0, 0, 0, (float)R };
             cb.skyK = { (float)texel, 1.0f / (4 * SKY_N), 0, 0 };
@@ -544,21 +581,45 @@ void D3D11Client::LightsRenderAir(const VECTOR3& cp, const MATRIX3& cr, const XM
     ctx->PSSetConstantBuffers(0, 1, cbFrame.GetAddressOf());
     ID3D11SamplerState* ss = sampShadow.Get();
     ctx->PSSetSamplers(2, 1, &ss);
-    if (g_nBeams && g_vsFull && g_psBeams) {
-        ctx->VSSetShader(g_vsFull.Get(), nullptr, 0);
-        ctx->PSSetShader(g_psBeams.Get(), nullptr, 0);
-        ctx->PSSetShaderResources(0, 1, &dsrv);
-        ctx->RSSetState(g_rsScissor.Get());
-        ctx->PSSetConstantBuffers(10, 1, g_beamCB.GetAddressOf());
-        for (size_t k = 0; k < g_beamRect.size(); k++) {
-            const D3D11_RECT& r = g_beamRect[k];
-            if (r.right <= r.left || r.bottom <= r.top) continue;
-            const XMFLOAT4 bi = { (float)k, 0, 0, 0 };
-            Upload(ctx.Get(), g_beamCB.Get(), &bi, 1);
-            ctx->RSSetScissorRects(1, &r);
-            ctx->Draw(3, 0);
+    if (g_nBeams && g_vsFull && g_psBeams && g_psUp) {
+        const UINT hw = (RW + 1) / 2, hh = (RH + 1) / 2;
+        if (hw != g_halfW || hh != g_halfH || !g_halfRTV) {
+            g_halfTex.Reset(); g_halfRTV.Reset(); g_halfSRV.Reset();
+            D3D11_TEXTURE2D_DESC td = { hw, hh, 1, 1, DXGI_FORMAT_R16G16B16A16_FLOAT, {1, 0}, D3D11_USAGE_DEFAULT, D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE, 0, 0 };
+            if (SUCCEEDED(dev->CreateTexture2D(&td, nullptr, &g_halfTex))) { dev->CreateRenderTargetView(g_halfTex.Get(), nullptr, &g_halfRTV); dev->CreateShaderResourceView(g_halfTex.Get(), nullptr, &g_halfSRV); }
+            g_halfW = hw; g_halfH = hh;
         }
-        ctx->RSSetState(rsNone.Get());
+        if (g_halfRTV && g_halfSRV) {
+            // the beams into the half-size target (each scissored to its cone's box, halved), added up there
+            const float zero[4] = { 0, 0, 0, 0 };
+            ctx->ClearRenderTargetView(g_halfRTV.Get(), zero);
+            ctx->OMSetRenderTargets(1, g_halfRTV.GetAddressOf(), nullptr);
+            D3D11_VIEWPORT hvp = { 0, 0, (float)hw, (float)hh, 0, 1 };
+            ctx->RSSetViewports(1, &hvp);
+            ctx->VSSetShader(g_vsFull.Get(), nullptr, 0);
+            ctx->PSSetShader(g_psBeams.Get(), nullptr, 0);
+            ctx->PSSetShaderResources(0, 1, &dsrv);
+            ctx->RSSetState(g_rsScissor.Get());
+            ctx->PSSetConstantBuffers(10, 1, g_beamCB.GetAddressOf());
+            for (size_t k = 0; k < g_beamRect.size(); k++) {
+                const D3D11_RECT& r = g_beamRect[k];
+                if (r.right <= r.left || r.bottom <= r.top) continue;
+                const XMFLOAT4 bi = { (float)k, 2, 0, 0 };
+                Upload(ctx.Get(), g_beamCB.Get(), &bi, 1);
+                const D3D11_RECT rh = { r.left / 2, r.top / 2, (r.right + 1) / 2, (r.bottom + 1) / 2 };
+                ctx->RSSetScissorRects(1, &rh);
+                ctx->Draw(3, 0);
+            }
+            // ... and onto the scene
+            ctx->RSSetState(rsNone.Get());
+            ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), nullptr);
+            ctx->RSSetViewports(1, &vp);
+            ctx->PSSetShader(g_psUp.Get(), nullptr, 0);
+            ctx->PSSetShaderResources(2, 1, g_halfSRV.GetAddressOf());
+            ID3D11SamplerState* sc1 = sampClamp.Get(); ctx->PSSetSamplers(1, 1, &sc1);
+            ctx->Draw(3, 0);
+            ID3D11ShaderResourceView* n1 = nullptr; ctx->PSSetShaderResources(2, 1, &n1);
+        }
     }
     if (g_nSpr && g_vsSpr && g_psSpr) {
         SpriteCB sc;

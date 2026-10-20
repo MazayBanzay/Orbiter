@@ -19,7 +19,7 @@ std::vector<Mark> marks;
 std::map<int, Path> paths;
 
 struct ArRes {
-    bool tried = false, ok = false;
+    bool tried = false, ok = false; unsigned gen = 0;
     ComPtr<ID3D11VertexShader> vs; ComPtr<ID3D11PixelShader> ps; ComPtr<ID3D11InputLayout> il;
     ComPtr<ID3D11Buffer> vb, cb; UINT vbCount = 0;
     ComPtr<ID3D11BlendState> add; ComPtr<ID3D11DepthStencilState> seen, hidden; ComPtr<ID3D11RasterizerState> rs;
@@ -29,7 +29,8 @@ bool FrameActive() { return oapiGetSysTime() - frameT < 0.5; }
 
 bool Init(D3D11Client* c)
 {
-    if (R.tried) return R.ok;
+    if (R.tried && R.gen == g_devGen) return R.ok;
+    R = ArRes(); R.gen = g_devGen;     // (a new device: the old one's objects go)
     R.tried = true;
     ID3D11Device* dev = c->Dev();
     std::string path = c->ShaderDir() + "ar.hlsl"; std::wstring wp(path.begin(), path.end());

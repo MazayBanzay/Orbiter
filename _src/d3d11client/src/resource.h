@@ -11,3 +11,4 @@
 #define IDC_ADV_SCALE     309
 #define IDC_ADV_MICRO     310
 #define IDC_ADV_AO        311
+#define IDC_ADV_DROPS     312

@@ -7,13 +7,17 @@
 // rest that bobs sends out rings. The bodies press hollows into it (Stamp, height and the step before together: no
 // kick), steps and splashes kick it (Stamp, the step before only); Shift moves the window by whole cells; Slope gives
 // the shader the surface's gradient.
+// The engines' jets press on it: the linearised surface condition phi_t = -g h - p / rho puts a pressure p in as a head
+// H = p / (rho g) under the same operator, h_tt = -g G*(h + H) - so a steady jet holds a hollow h = -H (its cavity) and
+// one that moves, starts or stops sends out its waves (Wake.cpp: the cavity's depth and width).
 cbuffer Field : register(b0)
 {
     float4 gP;        // x: N, y: dx [m], z: dt [s], w: damping a = alpha dt
-    float4 gK;        // x: g dt^2 / dx (the kernel works in cells), y: -, z: sponge width [cells], w: number of stamps
+    float4 gK;        // x: g dt^2 / dx (the kernel works in cells), y: number of jets, z: sponge width [cells], w: number of stamps
     int4 gShift;      // xy: the shift in cells (Shift)
     float4 gStamp[64];   // x, y: centre [cells], z: amplitude (h: metres; kick: m/s), w: sigma [cells]; w < 0: a kick
     float4 gKer[43];     // the kernel, 13 x 13 row by row (169 values)
+    float4 gJet[8];      // the jets' pressure heads: x, y: centre [cells], z: head at the centre [m], w: sigma [cells]
 };
 Texture2D<float2> tIn : register(t0);      // x: h now, y: h one step ago
 RWTexture2D<float2> uOut : register(u0);
@@ -21,6 +25,18 @@ RWTexture2D<float4> uSlope : register(u1);
 
 float2 At(int2 p) { int n = (int)gP.x; return (any(p < 0) || any(p >= n)) ? float2(0, 0) : tIn[p]; }
 float Ker(int i) { return gKer[i >> 2][i & 3]; }
+
+// the jets' pressure head at a cell (a Gaussian per jet: the stagnation pressure of a round jet's profile)
+float Head(float2 q)
+{
+    float H = 0;
+    int nj = (int)gK.y;
+    for (int k = 0; k < nj; k++) {
+        float2 d = (q - gJet[k].xy) / gJet[k].w;
+        H += gJet[k].z * exp(-dot(d, d));
+    }
+    return H;
+}
 
 [numthreads(16, 16, 1)]
 void CSStamp(uint3 id : SV_DispatchThreadID)
@@ -52,6 +68,16 @@ void CSSim(uint3 id : SV_DispatchThreadID)
     float conv = 0;
     [loop] for (int j = -6; j <= 6; j++) {
         [unroll] for (int i = -6; i <= 6; i++) conv += Ker((j + 6) * 13 + (i + 6)) * At(p + int2(i, j)).x;
+    }
+    // the jets: only the cells within their reach (3 sigma and the kernel's 6 cells) pay for the second sum
+    bool nearJet = false;
+    int nj = (int)gK.y;
+    float2 pc = float2(p) + 0.5;
+    for (int k = 0; k < nj; k++) nearJet = nearJet || length(pc - gJet[k].xy) < 3 * gJet[k].w + 9;
+    if (nearJet) {
+        [loop] for (int j = -6; j <= 6; j++) {
+            [loop] for (int i = -6; i <= 6; i++) conv += Ker((j + 6) * 13 + (i + 6)) * Head(pc + float2(i, j));
+        }
     }
     float a = gP.w;
     float hn = (hv.x * (2 - a) - hv.y - gK.x * conv) / (1 + a);

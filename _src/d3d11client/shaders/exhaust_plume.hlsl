@@ -11,6 +11,12 @@
 // Emission: absorption coefficient kappa = k_abs x the exhaust's partial density, radiance kappa B(T) ds (emission and
 // absorption in local thermal equilibrium), B relative to the Sun's times kE: the scene's units. Output through
 // dual-source blending: + the emitted light, x the plume's transmittance.
+// A hydrogen exhaust (H2 + H2O) has no soot and no visible Planck light: it glows by the blue continuum (220-600 nm,
+// flat maximum 440 nm), emission ~ [OH]^2 (Fiala 2015; Vanpee & Mainiero 1979). [OH] over the exhaust's share c in its
+// mix with the ambient gas comes from the chemical equilibrium of the mix (src\H2Chem.cpp): with oxygen in the air the
+// free H2 burns where c is near stoichiometric - the flame sheet stands where the mixing field puts it, wrinkled by the
+// field's eddies; without oxygen (Titan, Mars) only the hot core holds a little OH. In vacuum the frozen flow carries
+// the exit's OH outwards, its density falling as the source flow's.
 #include "exhaust_common.hlsli"
 
 cbuffer Plume : register(b5)
@@ -24,6 +30,9 @@ cbuffer Plume : register(b5)
     float4 pJet;    // rj, Lc, cell length, shock amplitude (T2/T1 - 1, weakened)
     float4 pVac;    // vacuum weight 0..1, theta_max, rho_e, level (flicker)
     float4 pAir;    // rho of the jet at the ambient pressure, spreading slope, seed, the eddies' convection speed [m/s]
+    float4 pH2;     // hydrogen: x on, y [OH] at the exit [1e20 m^-3], z the frame's exposure [s] (the shutter)
+    float4 pKc;     // the continuum's radiance per [OH]^2 [(1e20 m^-3)^2] per metre, per channel (x kE); w: the table's fs
+    float4 pOH[8];  // [OH] [1e20 m^-3] over u = c / (c + fs), 32 entries at (i + 0.5) / 32
     float4x4 pVP;
 };
 
@@ -40,9 +49,39 @@ VSOut VS(uint vid : SV_VertexID)
     return o;
 }
 
-// the gas at (r from the axis, z down the jet): absorption coefficient [1/m], temperature [K]
-void Field(float3 q, out float kappa, out float T)
+// [OH] of the mix at the exhaust's share c (the table, linear in u)
+float OHMix(float c)
 {
+    float u = c / (c + pKc.w);
+    float x = clamp(u * 32 - 0.5, 0, 31);
+    uint i = (uint)x; uint i1 = min(i + 1, 31u);
+    float a = pOH[i >> 2][i & 3], b = pOH[i1 >> 2][i1 & 3];
+    return lerp(a, b, x - i);
+}
+
+static float gShT;   // this sample's moment within the frame's exposure [s] (the pass's time + a share of the shutter)
+
+// The mean of [OH]^2 over the mixture fraction's turbulent fluctuations at this point: a Gaussian PDF of c round its
+// local value (6-point Gauss-Hermite, clipped to 0..1). The light of a turbulent flame is the mean of OH^2(c), not
+// OH^2 of the mean c: the sheet becomes a soft brush whose width is set by the fluctuations, not a sharp shell.
+// rms c'/c on the axis ~0.22, rising towards the edge where the flow is intermittent (Panchapakesan & Lumley 1993)
+float OH2Pdf(float c, float I)
+{
+    static const float x[3] = { 0.6167065, 1.8891759, 3.3242574 };     // probabilists' nodes (sqrt 2 x the physicists')
+    static const float w[3] = { 0.4088285, 0.0886157, 0.0025557 };     // weights (both sides sum to 1)
+    float s = c * I, m = 0;
+    [unroll] for (int k = 0; k < 3; k++) {
+        float a = OHMix(saturate(c + s * x[k])), b = OHMix(saturate(c - s * x[k]));
+        m += w[k] * (a * a + b * b);
+    }
+    return m;
+}
+
+// the gas at (r from the axis, z down the jet): absorption coefficient [1/m], temperature [K], mean [OH]^2
+// [(1e20 m^-3)^2]
+void Field(float3 q, out float kappa, out float T, out float oh2)
+{
+    oh2 = 0;
     float r = length(q.xy), z = q.z;
     float Te = pGas.x, Ta = pGas.y, gam = pGas.z;
     float kabs = pBox.w;
@@ -66,6 +105,28 @@ void Field(float3 q, out float kappa, out float T)
         float Tj = Te * (1 + amp * dia);
         Tair = Ta + (Tj - Ta) * saturate(c);
         ka = kabs * pAir.x * saturate(c);
+        // hydrogen: the mean field's large eddies displace the gas (resolved in time: each passes at f ~ 0.6 u_c / b;
+        // what the frame's exposure smears - f dt >> 1 near the nozzle - goes into the fluctuations' PDF instead, so
+        // the picture is the shutter's average, as a camera's), the small ones only through the PDF
+        if (pH2.x > 0.5) {
+            float zc = max(z, 0.5 * rj);
+            float caxH = min(1, Lc / zc);
+            float uc = 2 * pAir.w * caxH;                          // the axis' speed ~ ve c_axis
+            float fe = 0.6 * uc / max(b, 1e-3);                     // the energetic eddies' passage frequency [Hz]
+            float vis = 1 / (1 + fe * pH2.z);                       // the share the exposure still resolves
+            float phE = frac(gShT * fe / 64) * 64;                  // (wrapped: past f dt ~ 1 the phase is random anyway)
+            float3 nq = float3(q.xy / max(b, 1e-3) * 1.2, log(zc / max(rj, 1e-3)) / pAir.y * 0.45 - phE) + pAir.z * 13;
+            float3 wv = float3(ExNoise(nq), ExNoise(nq + float3(5.2, 1.3, 7.7)), ExNoise(nq + float3(9.1, 3.7, 2.9)));
+            wv += 0.5 * float3(ExNoise(nq * 2.1 + 3.3), ExNoise(nq * 2.1 + 8.1), ExNoise(nq * 2.1 + 1.7));
+            wv = (wv / 1.5 - 0.5) * vis;
+            float3 qw = q + float3(wv.xy * 0.8 * b, wv.z * 1.0 * b);
+            float rw = length(qw.xy), zw = max(qw.z, 0);
+            float rcw = rj * saturate(1 - zw / Lc), bw = rj + pAir.y * zw;
+            float cw = (zw < Lc ? 1 : Lc / zw) * (rw <= rcw ? 1 : exp(-pow((rw - rcw) / max(bw - rcw, 1e-4) * 1.4, 2)));
+            float eta = rw / max(bw, 1e-4);
+            float I = min(0.22 * (1 + 3 * eta * eta), 1.5) * sqrt(1 - 0.6 * vis * vis) * saturate(zw / max(rj, 1e-4));
+            oh2 = OH2Pdf(saturate(cw), I) * (1 - pVac.x);
+        }
     }
     // ---- vacuum: a source flow from just inside the exit
     float kv = 0, Tv = Ta;
@@ -79,6 +140,7 @@ void Field(float3 q, out float kappa, out float T)
         float rho = pVac.z * min(1, pow(re / max(R, 1e-6), 2)) * ang;
         kv = kabs * rho;
         Tv = max(Te * pow(max(rho / pVac.z, 1e-9), gam - 1), Ta);
+        if (pH2.x > 0.5) { float o = pH2.y * (rho / pVac.z); oh2 += o * o * pVac.x; }   // frozen: the exit's OH share carried out
     }
     kappa = lerp(ka, kv, pVac.x) * pVac.w;
     T = lerp(Tair, Tv, pVac.x);
@@ -121,10 +183,14 @@ PSOut PS(VSOut i)
     float jit = frac(52.9829189 * frac(dot(i.pos.xy, float2(0.06711056, 0.00583715))) + (pZ.w < 0 ? frac(pY.w * 60 * 0.618034) : 0));
     float3 L = 0; float tr = 1;
     float kE = pX.w;
+    // the moment within the frame's exposure (another low-discrepancy share per pixel; TAA averages the shutter)
+    gShT = fmod(pY.w, 64) + frac(jit * 1.6180339 + 0.37) * pH2.z;
     [loop] for (int k = 0; k < n; k++) {
         float t = ta + (k + jit) * ds;
-        float kap, T;
-        Field(ro + rd * t, kap, T);
+        float kap, T, oh2;
+        Field(ro + rd * t, kap, T, oh2);
+        // the blue continuum: optically thin chemiluminescence, ~ [OH]^2 (the level's flicker on the gas's density)
+        if (oh2 > 0) L += tr * kE * pKc.rgb * (oh2 * ds) * pVac.w * pVac.w;
         if (kap <= 0) continue;
         float a = exp(-kap * ds);
         L += tr * (1 - a) * kE * ExBlackbodyRel(T);     // emission of a slab in LTE: B (1 - e^-tau)

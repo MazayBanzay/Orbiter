@@ -3,6 +3,10 @@
 #pragma once
 #include "FxInternal.h"
 
+// the share of the light that reaches the camera under a storm's clouds (Storm.cpp sets it each frame; 1 = none):
+// the eye's adaptation (Atmosphere::UpdateExposure) follows it
+extern float g_stormLight;
+
 // the medium of one planet's air: Config\D3D11Client\<planet>.atmo.cfg (with sources), or clear gas from the density
 struct AtmoMedia
 {

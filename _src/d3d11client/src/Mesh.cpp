@@ -358,8 +358,8 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
             if (s && !s->name.empty()) { std::string ln = s->name; for (char& ch : ln) ch = (char)tolower((unsigned char)ch); skin = ln.find("skin") != std::string::npos; }
             const bool filter = (g.usrFlag & 0x100) != 0;      // a filter group (the visor's sun spot): Dest x transmittance
             if (filter && !shadowPass) {   // ... over the Sun: the glare in the eye goes through it too (its transmittance, mesh.hlsl)
-                extern bool g_sunFilterSeen; extern float g_sunFilterT;
-                g_sunFilterSeen = true;
+                extern bool g_sunFilterSeen; extern float g_sunFilterT; extern int g_sunFilterCount;
+                g_sunFilterSeen = true; g_sunFilterCount++;
                 g_sunFilterT = std::min(g_sunFilterT, exp2f(-14.95f * std::clamp(mt.diffuse.a / 0.7f, 0.0f, 1.0f)));
             }
             if (filter && (g.usrFlag & 0x200) && !shadowPass) { extern bool g_sunHAlphaSeen; g_sunHAlphaSeen = true; }   // ... an H-alpha one: Sun.cpp draws the H-alpha Sun

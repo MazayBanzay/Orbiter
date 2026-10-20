@@ -1,7 +1,7 @@
 // D3D11Client: ambient occlusion, ground truth style (after Jimenez et al. 2016, "Practical Realtime Strategies for
 // Accurate Indirect Occlusion"; our own code). Ssao.cpp runs it after the opaque terrain and vessels, before the liquid,
 // the air and the effects (those are never touched):
-//   CSGTAO  at half resolution: per pixel 3 slices through the view direction, each searched 4 steps both ways for its
+//   CSGTAO  at half resolution: per pixel 3 slices through the view direction, each searched 6 steps both ways for its
 //           two horizons within a small world radius (the folds of a suit, the gaps between parts, a foot or a wheel on
 //           the ground - the large scale is the sky visibility's, lights.hlsli), the visible arc integrated against the
 //           cosine of the normal: the share of the sky the near geometry leaves. A fixed per-pixel rotation (no noise
@@ -62,7 +62,7 @@ void CSGTAO(uint3 id : SV_DispatchThreadID)
     // a fixed rotation and step offset per pixel (interleaved gradient noise): the blur takes the pattern out
     float rot = frac(52.9829189 * frac(dot(float2(id.xy), float2(0.06711056, 0.00583715))));
     float jit = frac(rot * 4.7 + 0.31);
-    const int SLICES = 3, STEPS = 4;
+    const int SLICES = 3, STEPS = 6;
     float r2 = aP.w * aP.w, vis = 0;
     [unroll] for (int s = 0; s < SLICES; s++) {
         float phi = (s + rot) * (PI / SLICES);

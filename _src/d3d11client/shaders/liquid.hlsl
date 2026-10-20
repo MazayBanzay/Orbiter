@@ -69,10 +69,17 @@ float4 WaveAt(float3 wp, out float wgt)
     if (gWN.y < 0.5) return 0;
     float3 d = wp - gWA.xyz;
     float2 q = float2(dot(d, gWE1.xyz), dot(d, gWE2.xyz)) / gWA.w;    // in cells
+    // the cells under one pixel (taken before any branch): ripples finer than the pixel cannot be seen - read at one point
+    // they were a random slope each, a moire of black bands on the water seen from 50+ m (2026-10-20). Their mean slope
+    // there is ~0: they fade from 1 cell a pixel to gone at 4 (the field's heights stay)
+    const float fp = max(length(ddx(q)), length(ddy(q)));
+    const float k = saturate((4.0 - fp) / 3.0);
     float e = min(min(q.x, gWN.x - q.x), min(q.y, gWN.x - q.y));
     wgt = saturate(e / (0.05 * gWN.x));
     if (wgt <= 0) return 0;
-    return tWave.SampleLevel(sClamp, q / gWN.x, 0) * wgt;
+    float4 w = tWave.SampleLevel(sClamp, q / gWN.x, 0);
+    w.xy *= k;
+    return w * wgt;
 }
 
 struct VSOut { float4 pos : SV_Position; float3 wp : WPOS; float3 n : NORMAL; };

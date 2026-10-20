@@ -40,7 +40,8 @@ DWORD TreeArchive::Index(int lvl, int ilat, int ilng)
 
 bool TreeArchive::Read(int lvl, int ilat, int ilng, std::vector<BYTE>& out)
 {
-    std::vector<BYTE> z; DWORD size = 0;
+    static thread_local std::vector<BYTE> z;     // the compressed bytes: each loader thread's own buffer, kept
+    DWORD size = 0;
     {   // the file is shared: only the read is locked, the loader threads inflate side by side
         std::lock_guard<std::mutex> lk(m);
         DWORD i = Index(lvl, ilat, ilng);
@@ -539,7 +540,11 @@ std::string Planet::LoadStats()
 void Planet::Load(Tile* t)
 {
     ID3D11Device* dev = g_client->Dev();
-    std::vector<BYTE> b;
+    // the file bytes and the heights in floats: each loader thread's own, kept from tile to tile (a new buffer for every
+    // tile churned ~100 MB/s of 0.25-1 MB blocks through the heap - in a 32-bit process that shreds the free addresses)
+    static thread_local std::vector<BYTE> tB;
+    static thread_local std::vector<float> tE, tTmp, tSm;
+    std::vector<BYTE>& b = tB;
     double tk = NowUs();
     auto stage = [&](int k) { double n = NowUs(); g_ldUs[k] += (long long)(n - tk); tk = n; };
     // surface texture
@@ -562,35 +567,36 @@ void Planet::Load(Tile* t)
     }
     stage(2);
     // elevation: own, else the parent's quadrant interpolated
-    auto e = std::make_shared<std::vector<float>>();
-    bool own = false;
+    std::vector<float>& ef = tE;
+    bool own = false, have = false;
     std::string pe = LoosePath("Elev", t->lvl, t->ilat, t->ilng, ".elv");
-    if (FileExists(pe) && ReadFileBytes(pe.c_str(), b)) own = ParseElev(b, *e);
-    else if (elevTree && elevTree->Read(t->lvl, t->ilat, t->ilng, b)) own = ParseElev(b, *e);
+    if (FileExists(pe) && ReadFileBytes(pe.c_str(), b)) own = ParseElev(b, ef);
+    else if (elevTree && elevTree->Read(t->lvl, t->ilat, t->ilng, b)) own = ParseElev(b, ef);
+    have = own;
     if (!own) {
         Tile* p = t->parent;
         if (p && p->elev) {
-            const std::vector<float>& pe2 = *p->elev;
+            const ElevQ& pe2 = *p->elev;
             int a = (t->ilat & 1), c = (t->ilng & 1);     // a 0: northern half (upper rows), c 0: western half
             double r0 = a ? 0.0 : 0.5, c0 = c ? 0.5 : 0.0;
-            e->resize(259 * 259);
+            ef.resize(259 * 259); have = true;
             for (int i = 0; i < 259; i++) for (int j = 0; j < 259; j++) {
                 double pr = 1 + 256.0 * (r0 + 0.5 * (i - 1) / 256.0), pc = 1 + 256.0 * (c0 + 0.5 * (j - 1) / 256.0);
                 pr = std::clamp(pr, 0.0, 257.999); pc = std::clamp(pc, 0.0, 257.999);
                 int i0 = (int)pr, j0 = (int)pc; double fr = pr - i0, fc = pc - j0;
-                double v = (pe2[i0 * 259 + j0] * (1 - fc) + pe2[i0 * 259 + j0 + 1] * fc) * (1 - fr) +
-                           (pe2[(i0 + 1) * 259 + j0] * (1 - fc) + pe2[(i0 + 1) * 259 + j0 + 1] * fc) * fr;
-                (*e)[i * 259 + j] = (float)v;
+                double v = (pe2.at(i0 * 259 + j0) * (1 - fc) + pe2.at(i0 * 259 + j0 + 1) * fc) * (1 - fr) +
+                           (pe2.at((i0 + 1) * 259 + j0) * (1 - fc) + pe2.at((i0 + 1) * 259 + j0 + 1) * fc) * fr;
+                ef[i * 259 + j] = (float)v;
             }
-        } else e.reset();
+        }
     }
     // at the liquid's edge the elevation data steps 0.1 m: on a flat shore each step is a terrace metres wide, and through
     // the clear shallow liquid its edges show as teeth the size of a mesh cell (the mesh takes every 4th sample). There
     // the heights are smoothed by a wide Gaussian (sigma 5 samples, ~10 m at level 18: wider than a terrace) within 1 m of
     // the level, moving no sample more than 6 cm (units standing there stay on the physics height within that). Towards
     // the tile's edges the smoothing fades out (edge samples stay the data's: the neighbour tile's mesh meets them)
-    if (own && e && liq.has) {
-        const std::vector<float>& src = *e;
+    if (own && liq.has) {
+        const std::vector<float>& src = ef;
         bool atLevel = false;
         for (float v : src) if (fabs(v - liq.level) < 1.0) { atLevel = true; break; }
         if (atLevel) {
@@ -598,7 +604,8 @@ void Planet::Load(Tile* t)
             float wk[2 * K + 1], ws = 0;
             for (int k = -K; k <= K; k++) { wk[k + K] = (float)exp(-0.5 * k * k / 25.0); ws += wk[k + K]; }
             for (float& w : wk) w /= ws;
-            std::vector<float> tmp(259 * 259), sm(src);
+            std::vector<float>& tmp = tTmp; std::vector<float>& sm = tSm;
+            tmp.resize(259 * 259); sm.assign(src.begin(), src.end());
             for (int r = 0; r < 259; r++) for (int c = 0; c < 259; c++) {       // along the rows
                 float acc = 0;
                 for (int k = -K; k <= K; k++) acc += wk[k + K] * src[r * 259 + std::clamp(c + k, 0, 258)];
@@ -614,10 +621,26 @@ void Planet::Load(Tile* t)
                 float f = std::clamp(edge / 8.0f, 0.0f, 1.0f) * std::clamp((1.0f - dl) / 0.3f, 0.0f, 1.0f);
                 sm[r * 259 + c] = v0 + f * std::clamp(acc - v0, -0.06f, 0.06f);
             }
-            *e = std::move(sm);
+            ef.swap(sm);
         }
     }
-    t->elev = e; t->ownElev = own;
+    // the heights stay with the tile (in 16 bits) only while a child may still need them: a child without elevation data
+    // of its own is interpolated from them. Where all four children have their own, they are dropped once the mesh is made
+    // (~170 MB of floats were kept for every loaded tile on Titan)
+    bool keep = have;
+    if (have) {
+        bool all = true;
+        for (int k = 0; k < 4 && all; k++) all = HasElev(t->lvl + 1, t->ilat * 2 + (k >> 1), t->ilng * 2 + (k & 1));
+        keep = !all;
+    }
+    t->elev = keep ? ElevQ::From(ef) : nullptr;
+    if (have) {
+        static thread_local std::vector<float> tN;
+        tN.resize(65 * 65);
+        for (int i = 0; i <= 64; i++) for (int j = 0; j <= 64; j++) tN[i * 65 + j] = ef[(1 + i * 4) * 259 + 1 + j * 4];
+        t->nodes = ElevQ::From(tN);
+    } else t->nodes = nullptr;
+    t->ownElev = own; t->hasElev = have;
     t->elevLvl = own ? t->lvl : (t->parent ? t->parent->elevLvl : 0);
     stage(3);
 
@@ -625,9 +648,9 @@ void Planet::Load(Tile* t)
     const int G = 64;
     double mlat = 0.5 * (t->minlat + t->maxlat), mlng = 0.5 * (t->minlng + t->maxlng);
     auto H = [&](int i, int j) -> double {     // node (i, j) on the 65 grid, may step one node outside
-        if (!t->elev) return 0.0;
+        if (!have) return 0.0;
         int r = std::clamp(1 + i * 4, 0, 258), c = std::clamp(1 + j * 4, 0, 258);
-        return (*t->elev)[r * 259 + c];
+        return ef[r * 259 + c];
     };
     // the tile's centre at the height of its middle (at the mean radius a tile on ground 600 m below it got a 600 m
     // bounding sphere: every tile within that range counted as under the camera and split)
@@ -657,8 +680,12 @@ void Planet::Load(Tile* t)
         tv.n = { (float)nn.x, (float)nn.y, (float)nn.z };
         tv.uv = { (float)j / G, 1.0f - (float)i / G };
     }
-    // skirts hang below the edges (they hide the cracks against coarser neighbours)
-    double drop = (t->maxlat - t->minlat) * R * 0.02 + 20.0;
+    // skirts hang below the edges (they hide the cracks against coarser neighbours). A coarser neighbour's edge runs
+    // through nodes of this one's edge, so it never leaves the tile's own height range: the drop is that range (and
+    // 4 m for the coast's laying of the ground, planet.hlsl), no more - a wall hundreds of metres tall along every far
+    // tile only cost shading, drawn before the ground in front of it hid it
+    const double drop = std::min((t->maxlat - t->minlat) * R * 0.02 + 20.0, (emax - emin) + 4.0);
+    t->skirtDrop = (float)drop;
     int base = (G + 1) * (G + 1);
     auto skirt = [&](int dst, int i, int j) {
         TileVertex s = v[i * (G + 1) + j];
@@ -799,7 +826,7 @@ void Planet::Traverse(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, con
         }
         // past the deepest elevation data two more levels: the mesh (every 4th sample) then reaches the data's full
         // resolution, so the ground lies where Orbiter's physics puts it (vessels neither float nor sink)
-        split = any || (t->elev && t->lvl < t->elevLvl + 2);
+        split = any || (t->hasElev && t->lvl < t->elevLvl + 2);
     }
     if (split) {
         bool ready = true;
@@ -808,7 +835,12 @@ void Planet::Traverse(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, con
             if (c->state != 2) { ready = false; c->prio = LoadPrio(c, cpl); if (c->state == 0) g_client->QueueTile(this, c); }
         }
         if (ready) {
-            for (int k = 0; k < 4; k++) Traverse(t->child[k], ctx, cpl, camRot, proj, tanHalfY, screenH, sunL);
+            // the nearest child first (front to back: what lies behind the near ground fails the depth test before its
+            // pixel shader - the far tiles and their skirts are not shaded to be overdrawn)
+            int ord[4] = { 0, 1, 2, 3 }; double dk[4];
+            for (int k = 0; k < 4; k++) dk[k] = length(t->child[k]->centre - cpl);
+            std::sort(ord, ord + 4, [&](int a, int b) { return dk[a] < dk[b]; });
+            for (int k : ord) Traverse(t->child[k], ctx, cpl, camRot, proj, tanHalfY, screenH, sunL);
             return;
         }
         for (int k = 0; k < 4; k++) t->child[k]->lastUsed = frame;
@@ -877,7 +909,7 @@ void Planet::Draw(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, const V
     // the coast, from the masks' smoothed distance field (within 300 m: farther the coarse masks would move it): the
     // beach laid by the vertex shader, the shore's colours by the pixel shader (planet.hlsl CoastElev, CoastAlbedo)
     ID3D11ShaderResourceView* sdfv = msrc && liq.has && near_ < 300 ? msrc->sdf.Get() : nullptr;
-    const double drop = (t->maxlat - t->minlat) * R * 0.02 + 20.0;        // as the mesh's skirts hang (Planet::Load)
+    const double drop = t->skirtDrop;                                     // as the mesh's skirts hang (Planet::Load)
     c.shore = { sdfv ? msrc->sdfTexel : 0.0f, 0.04f, (float)drop, 0 };
     c.shore2 = { 0, !sdfv && msrc && liq.has && near_ < 300 ? msrc->maskClass * 1e3f : 0.0f, 0, 0 };   // no field: all land / all liquid
     ctx->VSSetShaderResources(16, 1, &sdfv);
@@ -907,8 +939,9 @@ void Planet::Draw(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, const V
     if (!vh) oapiGetViewportSize(&vw, &vh);
     double cell = (t->maxlat - t->minlat) * R / 64, pxRad = 2 * tan(oapiCameraAperture()) / (double)std::max<DWORD>(vh, 1);
     bool coarse = !fineOnly && !gOn && !shore && cell < 2.5 * pxRad * std::max(near_, 1.0);
-    if (coarse) ctx->DrawIndexed(g_client->tileIdxCount2, g_client->tileIdxCount, 0);
-    else ctx->DrawIndexed(g_client->tileIdxCount, 0, 0);
+    static const bool noSkirts = getenv("D3D11CLIENT_NOSKIRTS") != nullptr;    // measuring: the skirts' share of the raster
+    if (coarse) ctx->DrawIndexed(noSkirts ? 32 * 32 * 6 : g_client->tileIdxCount2, g_client->tileIdxCount, 0);
+    else ctx->DrawIndexed(noSkirts ? 64 * 64 * 6 : g_client->tileIdxCount, 0, 0);
     tilesDrawn++;
 }
 
@@ -924,13 +957,22 @@ double Planet::MeshElev(double lng, double lat, int* lvl, double* fine, bool* ow
         t = c;
     }
     *lvl = t->lvl; *own = t->ownElev;
-    if (!t->elev) { *fine = 0; return 0; }
-    const std::vector<float>& e = *t->elev;
     double fi = (lat - t->minlat) / (t->maxlat - t->minlat), fj = (lng - t->minlng) / (t->maxlng - t->minlng);
+    if (!t->elev) {     // the full heights dropped: the mesh's nodes are the drawn ground (the fine value the same)
+        if (!t->nodes) { *fine = 0; return 0; }
+        const ElevQ& nq = *t->nodes;
+        double r = fi * 64, c = fj * 64;
+        int r0 = std::clamp((int)r, 0, 63), c0 = std::clamp((int)c, 0, 63);
+        double a = r - r0, b = c - c0;
+        auto N = [&](int i, int j) { return (double)nq.at(i * 65 + j); };
+        *fine = (N(r0, c0) * (1 - b) + N(r0, c0 + 1) * b) * (1 - a) + (N(r0 + 1, c0) * (1 - b) + N(r0 + 1, c0 + 1) * b) * a;
+        return *fine;
+    }
+    const ElevQ& e = *t->elev;
     auto bil = [&](double r, double c, int step) {
         int r0 = std::clamp((int)r, 0, 256 / step - 1), c0 = std::clamp((int)c, 0, 256 / step - 1);
         double a = r - r0, b = c - c0;
-        auto E = [&](int i, int j) { return (double)e[(1 + i * step) * 259 + 1 + j * step]; };
+        auto E = [&](int i, int j) { return (double)e.at((1 + i * step) * 259 + 1 + j * step); };
         return (E(r0, c0) * (1 - b) + E(r0, c0 + 1) * b) * (1 - a) + (E(r0 + 1, c0) * (1 - b) + E(r0 + 1, c0 + 1) * b) * a;
     };
     *fine = bil(fi * 256, fj * 256, 1);

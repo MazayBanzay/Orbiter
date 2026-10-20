@@ -51,8 +51,10 @@ struct ClientCfg
     bool tess = false;       // the ground relief's tessellation (the detail is baked into the tiles now)
     bool terrainNormals = true;   // per-pixel normals from the full elevation data (off: the mesh's vertex normals)
     bool geomorph = true;         // terrain LOD levels blend smoothly (CDLOD-style morphing; off: they pop)
+    bool driverCacheOff = false; // the driver's disk shader cache kept out of the process (Client.cpp DriverCacheGuardBefore)
     int driverCacheMB = 600;     // above this the cache is set aside (1 GB ran Orbiter out of memory; a cold cache makes the start slow)
-    bool ao = false;              // ambient occlusion from the depth (Ssao.cpp): off - its noise drew "fur" on the suits
+    bool ao = false;              // ambient occlusion (Ssao.cpp, GTAO: the sky's light only)
+    bool visorDrops = true;       // drops on the suits' visors (VisorDrops.cpp)
     bool bloom = true;            // the bright parts glow (Bloom.cpp)
     float sharpen = 0.0f;         // adaptive sharpening after the tone curve (post.hlsl), 0 off .. 1 (MSAA needs none: it lifted the fabric grain)      // the video driver's shader cache file for Orbiter: set aside at start when bigger (0: never)
     void Load();
@@ -133,10 +135,11 @@ class PStream : public oapi::ParticleStream
 {
 public:
     PStream(oapi::GraphicsClient* gc, PARTICLESTREAMSPEC* pss);
-    struct P { VECTOR3 pos, vel, air; double size, age, life, alpha, rho; };
+    struct P { VECTOR3 pos, vel, air; double size, age, life, alpha, rho, tIn = 0; };   // tIn: the time it takes to condense (shows after it)
     PARTICLESTREAMSPEC spec;
     std::deque<P> ps;
     double acc = 0;
+    unsigned flameNext = 0;     // the next of its thruster's flames to emit from (Particles.cpp)
     VECTOR3 lastSrc = { 0, 0, 0 }; bool hasLast = false;   // the source's place at the last frame's emission (a trail without gaps)
     void Update(double dt);
     double LevelAlpha(double L) const;
@@ -203,10 +206,36 @@ struct TreeArchive
     ~TreeArchive() { if (f) fclose(f); }
 };
 
+// the device's generation: +1 each time the client makes its D3D11 device (each scenario: the render window and the
+// device are made anew). A module keeping device objects in statics remakes them when this changed - an old device's
+// shaders and buffers handed to a new device's context made a GPU exception (Xid 13) and lost the device (2026-10-20)
+extern unsigned g_devGen;
+
 struct Tile;
 class Planet;
 
 struct TileVertex { XMFLOAT3 p; XMFLOAT3 n; XMFLOAT2 uv; };
+
+// a tile's 259x259 heights kept after its load, in 16 bits over the tile's own range (base + step * q): half the bytes
+// of floats (134 KB a tile), a step of millimetres on the near, fine tiles (Planet::Load keeps them only where a child
+// may still need them to interpolate from)
+struct ElevQ
+{
+    float base = 0, step = 1;
+    std::vector<uint16_t> q;
+    float at(size_t i) const { return base + step * q[i]; }
+    static std::shared_ptr<const ElevQ> From(const std::vector<float>& e)
+    {
+        auto r = std::make_shared<ElevQ>();
+        float lo = e[0], hi = e[0];
+        for (float v : e) { lo = std::min(lo, v); hi = std::max(hi, v); }
+        r->base = lo; r->step = std::max((hi - lo) / 65535.0f, 1e-6f);
+        r->q.resize(e.size());
+        const float k = 1.0f / r->step;
+        for (size_t i = 0; i < e.size(); i++) r->q[i] = (uint16_t)std::min(65535.0f, (e[i] - lo) * k + 0.5f);
+        return r;
+    }
+};
 
 struct Tile
 {
@@ -223,8 +252,11 @@ struct Tile
     int maskClass = 0;                      // without a field: the mask round the tile all land (1), all liquid (-1)
     ComPtr<ID3D11ShaderResourceView> nmap;  // normals from its own elevation (257x257, planet frame; null: an ancestor's)
     ComPtr<ID3D11ShaderResourceView> hor[2];  // horizon sines in 8 directions (E, NE, N, NW / W, SW, S, SE), 65x65, with nmap
-    std::shared_ptr<std::vector<float>> elev;   // 259x259 [m], own or interpolated from the parent
+    std::shared_ptr<const ElevQ> elev;  // 259x259 [m], own or interpolated from the parent; null once no child needs it
     bool ownElev = false;
+    bool hasElev = false;               // it had heights at its load (kept or not)
+    std::shared_ptr<const ElevQ> nodes; // the mesh's own 65x65 node heights (every 4th sample), always kept (8 KB): what
+                                        // the drawn ground is, for the elevation checks when the full heights are dropped
     bool hasDetail = false;             // the ground detail is baked into its mesh (Planet::Load)
     ComPtr<ID3D11ShaderResourceView> mat;   // the layered ground material baked once (albedo factor, wetness, detail normal)
     int elevLvl = 0;                    // level of the elevation data this tile's mesh comes from (own or an ancestor's)
@@ -234,6 +266,7 @@ struct Tile
     double radius = 0;                  // bounding sphere
     double minlat, maxlat, minlng, maxlng;
     double emin = 0, emax = 0;
+    float skirtDrop = 20.0f;                // how far its skirts hang [m] (Planet::Load; the VS needs it too)
     DWORD lastUsed = 0;
 };
 
@@ -523,8 +556,11 @@ public:
     void RenderEarthClouds(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);   // Earth: the volumetric clouds near (EarthClouds.cpp)
     void RenderStormShadow(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);   // Earth's cyclone: its shadow on what is drawn (Storm.cpp)
     void RenderStorm(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);         // Earth's cyclone: the volumetric clouds (Storm.cpp)
+    void RenderStormRain(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);     // Earth's cyclone: its rain round the camera (StormRain.cpp)
     void RenderSun(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);    // the Sun: disc, chromosphere, corona (Sun.cpp)
     void RenderSunGlare();     // ... its glare in the eye over the finished scene (Sun.cpp)
+    void RenderVisorDropsOutside(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);   // rain drops on the suits' glass seen from outside (VisorDrops.cpp)
+    void RenderVisorDropsInside(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);    // ... on the own visor's glass: simulated, seen from the eye (VisorDrops.cpp)
     void RenderRain(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);   // Titan's methane rain (Rain.cpp)     // the terrain's depth alone (after the planets, before the vessels): the liquid's bed (Liquid.cpp)
     ComPtr<ID3D11Buffer> liqVB, liqIB;
     UINT liqIdx = 0;
@@ -572,6 +608,12 @@ private:
     ComPtr<ID3D11Query> qMk[4][kMarks];
     double markMs[kMarks] = {};
     void GpuMark(UINT fi, int k) { if (qMk[fi][k]) ctx->End(qMk[fi][k].Get()); }
+    // finer marks within two of them (the log's second line): before the AO, then after each pass of the transparent
+    // part - the Sun, the transparent vessels, the storm's shadow, the air, the storm, the clouds (the lights' last)
+    static const int kSub = 7;
+    ComPtr<ID3D11Query> qSub[4][kSub];
+    double subMs[kSub + 1] = {};
+    void GpuSub(UINT fi, int k) { if (qSub[fi][k]) ctx->End(qSub[fi][k].Get()); }
     LARGE_INTEGER qpf, tStart, tLog;
     bool shotDone = false;
     // the 2D layer

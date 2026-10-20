@@ -156,3 +156,13 @@ void SprayRender(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResourceView* d
     ctx->PSSetShaderResources(6, 1, nul);
     ctx->PSSetShaderResources(3, 1, nul);
 }
+
+// the device's resources go with the device (the render window closed between sessions): kept, the next session's device
+// was handed the old one's shaders and buffers - a GPU exception (Xid 13) and the device lost at the second scenario
+void SprayRelease()
+{
+    spVS.Reset(); spPS.Reset(); spCB.Reset(); spBuf.Reset(); spBufSRV.Reset(); spTex.Reset(); spBS.Reset();
+    spCopy.Reset(); spCopySRV.Reset(); spW = spH = 0;
+    cards.clear(); feeds.clear();
+    spTried = spOk = false;
+}

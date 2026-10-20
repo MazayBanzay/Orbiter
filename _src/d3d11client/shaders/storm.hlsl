@@ -32,7 +32,8 @@ cbuffer Storm : register(b1)
     float4 sSize;      // the half-res target: w, h, 1/w, 1/h
     float4x4 sPrevVP;  // last frame: its camera-centred global -> clip
     float4 sPr0, sPr1, sPr2;   // last frame: planet frame -> global (rows); w: the planet's centre from last frame's camera
-    float4 sTmp;       // x: history valid, y: the new frame's weight
+    float4 sTmp;       // x: history valid, y: the new frame's weight; zw: which texel of each 2 x 2 block is marched now
+    float4 sExt;       // x: sim seconds since last frame (the clouds' turn for the history)
 };
 
 Texture3D tShape : register(t0);          // 128^3 over SHAPE_M: r Perlin-Worley, g b a Worley octaves
@@ -153,7 +154,7 @@ float4 StormMap(float2 xy)
     float cov = saturate(max(max(max(eyeCu, wallC), bandC), max(stratC, cuC)));
     // tops: the eyewall to the tropopause, the bands' towers 6.5-13 km, the stratiform rain 5-7.5 km, the cumulus 1.5-4 km
     float tW = lerp(12500, sHgt.y, saturate(wall * (0.6 + 0.8 * nc)));
-    float tB = lerp(6500, 13000, saturate(bands * (0.5 + nc))) * (1 - 0.35 * smoothstep(rc, ro, r));
+    float tB = lerp(7000, 14500, saturate(bands * (0.5 + nc))) * (1 - 0.35 * smoothstep(rc, ro, r));
     float tS = lerp(5000, 7500, n);
     float tC = lerp(1500, 4200, saturate((nc - 0.45) * 3)) * (1 - 0.4 * smoothstep(rc, ro, r));
     float wSum = wallC + bandC + stratC + cuC + eyeCu + 1e-4;
@@ -234,7 +235,9 @@ Dens Density(float3 P, float detail, float mapLod, float foot)
     float eyeCut = h < 2300 ? 1 : smoothstep(eyeR * 0.9, eyeR * 1.1, rxy);
     // the low/mid layer
     // domes, not boxes: a cell's top is lower where the cover thins (the edges of a field are its low cells)
-    float base = sHgt.x, top = max(m.g * sHgt.y, base + 300);
+    // the base: not a flat cut - it wavers by ~150 m from cell to cell
+    float base = sHgt.x + (tShape.SampleLevel(sWrap, float3(loc.xy / 7000.0, 0.81), max(shLod - 1, 0)).g - 0.5) * 300;
+    float top = max(m.g * sHgt.y, base + 300);
     top = base + (top - base) * lerp(lerp(0.75, 0.3, m.b), 1, sqrt(m.r));
     float hf = (h - base) / (top - base);
     o.hfLow = hf;
@@ -242,24 +245,25 @@ Dens Density(float3 P, float detail, float mapLod, float foot)
     if (m.r > 0.02 && hf > 0 && hf < 1) {
         float conv = m.b;
         // the vertical profile: a flat base; convective - rounded tops, wider where the cover is high; stratiform - a slab
-        float gC = smoothstep(0, 0.06, hf) * (1 - smoothstep(lerp(0.35, 0.7, m.r), 1, hf));
-        float gS = smoothstep(0, 0.12, hf) * smoothstep(1, 0.75, hf);
+        float gC = smoothstep(0, 0.14, hf) * (1 - smoothstep(lerp(0.35, 0.7, m.r), 1, hf));
+        float gS = smoothstep(0, 0.2, hf) * smoothstep(1, 0.75, hf);
         float g = lerp(gS, gC, conv);
         // the cells: towers taller than wide where convective, flat sheets where stratiform
         float4 sh = ShapeAt(loc, om, float3(1, 1, lerp(2.5, 0.8, conv)), 0, shLod);
         float wf = sh.g * 0.625 + sh.b * 0.25 + sh.a * 0.125;
         float bc = saturate(Remap(sh.r, -(1 - wf) * lerp(0.25, 0.6, conv), 1, 0, 1)) * g;
         // the cover cuts the cells: sparse where it is low
-        float d = saturate(Remap(bc, 1 - m.r, 1, 0, 1)) * m.r * smoothstep(0.12, 0.3, m.r);   // no cells where the cover is ~0
+        float d = saturate(Remap(bc, 1 - m.r, 1, 0, 1)) * m.r * smoothstep(0.22, 0.4, m.r);   // no cells where the cover is low (no stray blobs)
         d = lerp(saturate(m.r * 1.3 - 0.15) * g, d, cells);   // afar, past the cells' size: the map's own (soft) cover
         if (d > 0 && detail > 0.01) {
             // the edges eaten by the fine Worley: wispy at the base, billowing towards the tops
-            float4 dt = tDetail.SampleLevel(sWrap, loc / DETAIL_M + float3(0, 0, sNorth.w * 0.002), 0);
+            float4 dt = tDetail.SampleLevel(sWrap, loc / DETAIL_M + float3(0, 0, sNorth.w * 0.0005), 0);
             float df = dt.r * 0.625 + dt.g * 0.25 + dt.b * 0.125;
             df = lerp(df, 1 - df, saturate(hf * 4));
-            d = saturate(Remap(d, df * 0.55 * detail, 1, 0, 1));
+            // eaten from the edges only (the erosion scaled by 1 - d): no islands left floating off a cloud
+            d = saturate(Remap(d, df * 0.55 * detail * (1 - d), 1, 0, 1));
         }
-        d = saturate((d - 0.04) / 0.96);                   // no wisps of a few pixels: a cloud has a body or is not there
+        d = saturate((d - 0.08) / 0.92);                   // no wisps of a few pixels: a cloud has a body or is not there
         s += d * eyeCut * lerp(sSig.y, sSig.x, conv);
     }
     // the rain under the convective cells: grey shafts below the base
@@ -273,13 +277,26 @@ Dens Density(float3 P, float detail, float mapLod, float foot)
     // the cirrus canopy: smooth, thinning outwards and with height
     // its top lower where it thins (the outflow's fibres sink, the dense overcast domes up over the core)
     // a lens like an anvil: towards its rim the base rises and the top sinks, the density fades - no sheet seen edge-on
-    float cb = sHgt.z + (sHgt.w - sHgt.z) * 0.35 * (1 - m.a), ct = sHgt.z + (sHgt.w - sHgt.z) * (0.45 + 0.55 * m.a);
+    // its top is not flat: domed over the core, broad swells from the noise, and gravity waves rippling outward
+    // (wavelength ~14 km) towards its rim; the overshooting towers of the eyewall and the bands poke through it
+    float cb = sHgt.z + (sHgt.w - sHgt.z) * 0.3 * (1 - m.a);
+    float ct = sHgt.z + (sHgt.w - sHgt.z) * (0.5 + 0.5 * m.a);
+    if (m.a > 0.02 && h > cb - 100) {
+        float swell = tShape.SampleLevel(sWrap, float3(loc.xy / 60000.0, 0.37), max(shLod - 2, 0)).r - 0.5;
+        float rim = smoothstep(0.35, 0.95, rxy / sShape.z);
+        // the gravity waves come in packets, not rings: their crests broken up by a second noise, weak
+        float pk = saturate(tShape.SampleLevel(sWrap, float3(loc.xy / 90000.0, 0.13), max(shLod - 2, 0)).g * 2 - 0.6);
+        float wave = sin(rxy / 14000.0 * 6.2831853 + swell * 9.0 + atan2(loc.y, loc.x) * 3.0) * rim * pk;
+        ct += swell * 1600 + wave * 220;
+    }
     float hc = (h - cb) / (ct - cb);
     if (m.a > 0.02 && hc > 0 && hc < 1) {
         float g2 = smoothstep(0, 0.25, hc) * smoothstep(1, 0.55, hc);
         float4 sh = ShapeAt(loc, om, float3(0.5, 0.5, 2.0), 0.61, max(shLod - 1, 0));
-        float w = lerp(1, saturate(Remap(sh.g * 0.6 + sh.b * 0.4, 0.15, 0.85, 0, 1)), saturate(detail + 0.2) * 0.6);
-        float d2 = saturate(pow(m.a, 1.5) * g2 * w * 1.15) * eyeCut;
+        // fibrous: the outflow's streaks everywhere on it (not a cotton slab), the cells under it seen through the gaps
+        float fib = saturate(Remap(sh.g * 0.6 + sh.b * 0.4, 0.2, 0.8, 0, 1));
+        float w = lerp(1, fib, 0.75);
+        float d2 = saturate(pow(m.a, 1.5) * g2 * w * 0.9) * eyeCut;
         o.canopy = d2;
         s += d2 * sSig.z;
     }
@@ -292,13 +309,16 @@ float DensityLo(float3 P, float detail) { return Density(P, detail * 0.5, 1, 300
 // the near cloud, then the canopy's own crossing (it lies kilometres above the low clouds)
 float SunTau(float3 P, float3 sP, float detail, int taps, float jit)
 {
-    float tau = 0, l = 60 * (0.75 + 0.5 * jit);
+    float tau = 0, l = 60 * (0.9 + 0.2 * jit);
     float pos = 0;
     [loop] for (int j = 0; j < taps; j++) {
         pos += l * 0.5;
         tau += DensityLo(P + sP * pos, detail) * l;
         pos += l * 0.5; l *= 2.1;
     }
+    // two long taps: the towers' shadows on the canopy and on each other at a low Sun
+    tau += DensityLo(P + sP * (pos + 2500), 0) * 3000 + DensityLo(P + sP * (pos + 7000), 0) * 6000;
+    pos += 10000;
     float h = length(P) - sCen.w;
     float muS = dot(normalize(P), sP);
     float cm = 0.5 * (sHgt.z + sHgt.w);
@@ -357,21 +377,25 @@ void StormSpan(float3 org, float3 d, out float t0, out float t1)
     t0 = first; t1 = min(last, first + 700000);
 }
 
-struct MOut { float4 c : SV_Target0; float t : SV_Target1; };
+struct MOut { float4 c : SV_Target0; float2 t : SV_Target1; };   // t: the cloud's front, the scene's distance this texel stands for
 
 MOut PSMarch(VSOut i)
 {
-    MOut o; o.c = float4(0, 0, 0, 1); o.t = 1e9;
-    float2 uv = i.uv;
+    MOut o; o.c = float4(0, 0, 0, 1); o.t = float2(1e9, 1e30);
+    // one texel of each 2 x 2 block of the half-res image a frame, in turn (the temporal pass fills the rest from the
+    // history): the march costs a quarter
+    float2 uv = (floor(i.pos.xy) * 2 + sTmp.zw + 0.5) * sSize.zw;
     float4 cc = float4(uv.x * 2 - 1, 1 - uv.y * 2, 1, 1);
     float4 wn = mul(cc, sInvVP);
     float3 d = normalize(wn.xyz / wn.w);
-    // the scene's distance: the farthest of the four full-res pixels (the composite drops the cloud in front of a hill)
+    // the scene's distance at this texel's own pixel (not the farthest of four: a texel on a near silhouette marched the
+    // fog out to the far sky and laid it, light, over the near edge - the halo); the composite matches texels by it
     float dw, dh; tDepth.GetDimensions(dw, dh);
     int2 px = int2(uv * float2(dw, dh));
-    float zmin = min(min(tDepth.Load(int3(px, 0)), tDepth.Load(int3(px + int2(1, 0), 0))), min(tDepth.Load(int3(px + int2(0, 1), 0)), tDepth.Load(int3(px + 1, 0))));
+    float zc = tDepth.Load(int3(px, 0));
     float sceneT = 1e30;
-    if (zmin > 1e-9) { float4 w = mul(float4(cc.xy, zmin, 1), sInvVP); sceneT = length(w.xyz / w.w); }
+    if (zc > 1e-9) { float4 w = mul(float4(cc.xy, zc, 1), sInvVP); sceneT = length(w.xyz / w.w); }
+    o.t.y = sceneT;
     float3 org = -mCentre.xyz;
     float t0, t1; StormSpan(org, d, t0, t1);
     t1 = min(t1, sceneT);
@@ -400,6 +424,7 @@ MOut PSMarch(VSOut i)
     float tw = 0, twS = 0;
     float3 sunC = 0, ambUp = 0, ambDn = 0; bool lit = false;
     float tFront = -1;
+    float tauUc = 0; uint nLit = 0;
     [loop] for (int k = 0; k < N; k++) {
         float u = (k + ign) / N;
         float t, dt;
@@ -413,9 +438,12 @@ MOut PSMarch(VSOut i)
         float mlod = clamp(log2(max(fp * 2 / (2 * sEast.w / 2048), 1)), 0, 6);   // the map's mip by the pixel
         Dens D = Density(P, detail, mlod, fp);
         if (D.s <= 1e-7) continue;
-        // inside the cloud: two more samples across the step (its extinction averaged, the light taken once)
-        float sA = Density(camP + dP * (t - dt * 0.33), detail, mlod, fp).s, sB = Density(camP + dP * (t + dt * 0.33), detail, mlod, fp).s;
-        D.s = (D.s + sA + sB) / 3;
+        // a long step through a cloud: two more samples across it (its extinction averaged, the light taken once); short
+        // steps near the eye need none
+        if (dt > 150) {
+            float sA = Density(camP + dP * (t - dt * 0.33), detail, mlod, fp).s, sB = Density(camP + dP * (t + dt * 0.33), detail, mlod, fp).s;
+            D.s = (D.s + sA + sB) / 3;
+        }
         if (!lit) {         // the light at the cloud's first point (it hardly changes across one cloud)
             float3 wp = d * t;
             sunC = FxActive() ? FxSunLight(wp) : SunLight(wp);
@@ -424,14 +452,16 @@ MOut PSMarch(VSOut i)
             ambDn = FxActive() ? FxSkyLight(-up, wp) : SkyLight(-up, wp) * 0.3;
             lit = true;
         }
-        float tauS = SunTau(P, sunP, detail, detail > 0.05 ? 5 : 3, frac(ign + k * 0.618034));
+        float tauS = SunTau(P, sunP, detail, detail > 0.05 ? 4 : 3, frac(ign + k * 0.618034));
         // multiple scattering (Wrenninge 2013): each octave a weaker extinction, a flatter phase
         // plus the light diffused through the whole cloud: a thick cloud's transmission ~ 1 / (1 + 0.75 tau (1 - g)) (two-
         // stream), ~15 % through tau 50 - its inside is grey, not black
         float msS = ph0 * exp(-tauS) + ph1 * 0.5 * exp(-tauS * 0.25) + 0.35 / (1 + 0.11 * tauS);
         // the sky's light: from above, shut out by the cloud over the point; the sea's below
         float3 up = normalize(P);
-        float tauU = DensityLo(P + up * 300, detail) * 300 + DensityLo(P + up * 1500, detail) * 1500;
+        // the cloud overhead: refreshed every other lit step (it changes slowly along the ray)
+        if ((nLit++ & 1) == 0) tauUc = DensityLo(P + up * 300, detail) * 300 + DensityLo(P + up * 1500, detail) * 1500;
+        float tauU = tauUc;
         float h = length(P) - sCen.w;
         if (h < sHgt.z) { float hq; tauU += MapAt(MapXY(P + up * (sHgt.z - h + 1500), hq), 2).a * sSig.z * (sHgt.w - sHgt.z) * 0.5; }
         float hfA = saturate(D.hfLow);
@@ -457,7 +487,7 @@ MOut PSMarch(VSOut i)
         La *= FX_PI;
     }
     o.c = float4(Ta * Lc + La * (1 - T), T);
-    o.t = tFront > 0 ? tFront : tc;
+    o.t.x = tFront > 0 ? tFront : tc;
     return o;
 }
 
@@ -466,33 +496,42 @@ MOut PSMarch(VSOut i)
 // point at the cloud's depth carried with the planet's rotation, into last frame's view), clamped to this frame's
 // neighbourhood (no ghosts), blended 1:9 - the grain and the hatching average out.
 Texture2D tCur : register(t4);
-Texture2D<float> tCurT : register(t5);
+Texture2D<float2> tCurT : register(t5);
 Texture2D tHist : register(t6);
-Texture2D<float> tHistT : register(t7);
-struct TOut { float4 c : SV_Target0; float t : SV_Target1; };
+Texture2D<float2> tHistT : register(t7);
+struct TOut { float4 c : SV_Target0; float2 t : SV_Target1; };
 TOut PSTemporal(VSOut i)
 {
     int2 q = int2(i.pos.xy);
-    int2 mxq = int2(sSize.xy) - 1;
-    float4 c = tCur.Load(int3(q, 0));
-    float t = tCurT.Load(int3(q, 0));
+    int2 qs = (int2(sSize.xy) + 1) / 2, mxQ = qs - 1;
+    int2 Q = min(q >> 1, mxQ);
+    bool fresh = all((q & 1) == int2(sTmp.zw));          // this texel was marched this frame
+    float4 c = tCur.Load(int3(Q, 0));
+    float2 tq2 = tCurT.Load(int3(Q, 0));
+    float t = tq2.x;
+    // the box of this frame's samples round it (3 x 3 of the quarter-res march)
     float4 mn = c, mx = c, m1 = 0, m2 = 0;
     [unroll] for (int y = -1; y <= 1; y++) [unroll] for (int x = -1; x <= 1; x++) {
-        float4 v = tCur.Load(int3(clamp(q + int2(x, y), 0, mxq), 0));
+        float4 v = tCur.Load(int3(clamp(Q + int2(x, y), 0, mxQ), 0));
         mn = min(mn, v); mx = max(mx, v); m1 += v; m2 += v * v;
     }
-    // the box from the mean and the spread (variance clipping) - tighter than min/max, still lets the grain average
     m1 /= 9; float4 sd = sqrt(max(m2 / 9 - m1 * m1, 0));
-    // the 3 x 3 min/max box, a little widened: the variance box was so tight the grain came through it
     mn -= 0.1 * sd; mx += 0.1 * sd;
-    TOut o; o.c = c; o.t = t;
-    if (sTmp.x < 0.5) return o;
     float2 uv = (q + 0.5) * sSize.zw;
+    float4 cb = tCur.SampleLevel(sClampS, uv, 0);         // this frame's coarse estimate here (no history: this)
+    TOut o; o.c = fresh ? c : cb; o.t = tq2;
+    if (sTmp.x < 0.5) return o;
     float4 cc = float4(uv.x * 2 - 1, 1 - uv.y * 2, 1, 1);
     float4 wn = mul(cc, sInvVP);
     float3 d = normalize(wn.xyz / wn.w);
     float tt = min(t, 2.0e7);
     float3 Ppl = ToPlanet(d * tt) + CamPl();
+    if (t < 1e8) {     // a cloud point: where it was last frame - turned back by the vortex's wind over the sim time since
+        float3 lc = Local(Ppl);
+        float rq = length(lc.xy) + 1;
+        float2 xy0 = Rot(lc.xy, -VortexWind(rq) / rq * sExt.x * sSig.w);
+        Ppl = sEast.xyz * xy0.x + sNorth.xyz * xy0.y + sCen.xyz * lc.z;
+    }
     float3 wp = float3(dot(sPr0.xyz, Ppl), dot(sPr1.xyz, Ppl), dot(sPr2.xyz, Ppl)) + float3(sPr0.w, sPr1.w, sPr2.w);
     float4 pc = mul(float4(wp, 1), sPrevVP);
     if (pc.w <= 1e-6) return o;
@@ -502,13 +541,16 @@ TOut PSTemporal(VSOut i)
     float4 h0 = tHist.SampleLevel(sClampS, puv, 0);
     float mv = length((puv - uv) * sSize.xy);
     float4 h = lerp(h0, clamp(h0, mn, mx), saturate(mv * 0.7));
-    o.c = lerp(h, c, lerp(0.05, sTmp.y * 2, saturate(mv * 0.3)));
+    float k = saturate(mv * 0.3);
+    // a fresh sample weighs as four frames' worth (it comes every fourth frame); the others keep the history, leaning
+    // on the coarse estimate only when moving fast
+    o.c = fresh ? lerp(h, c, lerp(0.2, 0.4, k)) : lerp(h, cb, 0.15 * k);
     return o;
 }
 
 // ------------------------------------------------------------------------------------------------ over the scene
 Texture2D tCloud : register(t4);
-Texture2D<float> tCloudT : register(t5);
+Texture2D<float2> tCloudT : register(t5);
 float4 PSComposite(VSOut i) : SV_Target
 {
     float dw, dh; tDepth.GetDimensions(dw, dh);
@@ -519,18 +561,23 @@ float4 PSComposite(VSOut i) : SV_Target
     // the four half-res texels round the pixel, weighted bilinearly and by whether their cloud lies in front of the scene
     float2 hp = uv * sSize.xy - 0.5;
     float2 f = frac(hp); int2 b = (int2)floor(hp);
-    // a 4 x 4 tent (bilinear widened by a texel each way: the half-res grain smoothed, edges kept by the depth test)
-    float4 acc = 0; float wsum = 0;
+    // a 4 x 4 tent (bilinear widened by a texel each way: the half-res grain smoothed), each texel weighted by how well
+    // the scene's distance it was marched to matches this pixel's (a joint bilateral upsample); none matching: the texel
+    // nearest in depth alone (no fog of the far sky over a near edge)
+    float4 acc = 0; float wsum = 0; float bestD = 1e9; float4 bestC = float4(0, 0, 0, 1);
+    float lp = log(min(sceneT, 1e8));
     [unroll] for (int y = -1; y < 3; y++) [unroll] for (int x = -1; x < 3; x++) {
         int2 q = clamp(b + int2(x, y), 0, int2(sSize.xy) - 1);
         float wx = saturate(1.5 - abs(x - f.x) * 0.75), wy = saturate(1.5 - abs(y - f.y) * 0.75);
         float wb = wx * wy + 1e-4;
-        float tq = tCloudT.Load(int3(q, 0));
-        if (tq < 1e8 && tq > sceneT * 1.02) continue;    // that texel's cloud lies behind what is drawn here (an empty one blends)
-        acc += tCloud.Load(int3(q, 0)) * wb; wsum += wb;
+        float2 tq = tCloudT.Load(int3(q, 0));
+        float dd = abs(log(min(tq.y, 1e8)) - lp);
+        float4 cq = tCloud.Load(int3(q, 0));
+        if (dd < bestD) { bestD = dd; bestC = cq; }
+        float wd = exp(-dd * 12);                     // 10 % apart in distance: ~0.3
+        acc += cq * wb * wd; wsum += wb * wd;
     }
-    if (wsum < 1e-3) discard;
-    float4 c = acc / wsum;
+    float4 c = wsum > 1e-3 ? acc / wsum : bestC;
     if (sP.z > 0.5 && sP.z < 1.5) return float4((1 - c.a).xxx / max(gHazeRGB.w * gAdapt.rgb, 1e-4), 0);   // StormDbg 1: opacity
     if (c.a > 0.999) discard;
     return c;

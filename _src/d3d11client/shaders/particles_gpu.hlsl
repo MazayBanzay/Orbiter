@@ -234,7 +234,9 @@ void CSSim(uint3 id : SV_DispatchThreadID)
                             q.life = q.age;
                         } else {                    // onto dry ground: a wet spot soaking in
                             q.flags = (q.flags & ~15u) | LOOK_SPOT;
-                            q.s0 = clamp(q.s0 * 0.6 + 0.03, 0.03, 0.4); q.a0 = 0.25;
+                            // a drop soaks into sand over about three of its diameters (radius 1.5 d): a 2 mm drop a ~6 mm
+                            // spot - the 3-40 cm the sprite's size gave summed thousands of drops into black bands
+                            q.s0 = clamp(1.5 * q.d, 0.002, 0.03); q.a0 = 0.25;
                             q.life = q.age + 5 + 4 * frac(q.seed * 7.3);
                         }
                         q.v = 0;
@@ -404,8 +406,18 @@ float4 PS(VSOut i) : SV_Target
     float3 V = normalize(i.wp);
     float3 Lsun = gSunDir.xyz;
     float3 c;
-    if (look == LOOK_SPOT) {          // a wet spot only darkens
+    if (look == LOOK_SPOT) {          // a wet spot only darkens (the blend: the ground behind times 1 - a)
         a *= saturate((0.70 + 0.35 * n1 - r2) * 4) * 0.5;
+        // it lies on the ground: hidden where anything stands in front of it (a wheel, the hull) - it returned before the
+        // depth test and showed through the vehicles (2026-10-20)
+        float3 sw; float sd = ExSceneDist(i.pos.xy, sw);
+        const float dist = length(i.wp);
+        if (sd < dist - max(0.1, 0.01 * dist)) discard;
+        // the darkening is the ground's own, so the air between dims it as it dims the ground (on Titan the haze lifts the
+        // far ground: a spot there was black on grey)
+        const float3 T = ApplyHaze(float3(1, 1, 1), i.wp) - ApplyHaze(float3(0, 0, 0), i.wp);
+        a *= saturate(dot(T, 1.0 / 3));
+        if (a < 0.002) discard;
         return float4(0, 0, 0, a);
     }
     if (look == LOOK_CLOD) {

@@ -18,8 +18,14 @@ bool g_tried = false;
 ID3D11ShaderResourceView* D3D11Client::RenderBloom(ID3D11ShaderResourceView* src)
 {
     if (!g_cfg.bloom || !src) return nullptr;
+    static unsigned gen = 0;
+    if (g_tried && gen != g_devGen) {     // a new device: the old one's objects go
+        g_down.Reset(); g_up.Reset(); g_add.Reset(); g_cb.Reset();
+        for (int k = 0; k < LEVELS; k++) { g_tex[k].Reset(); g_rtv[k].Reset(); g_srv[k].Reset(); g_w[k] = g_h[k] = 0; }
+        g_srcW = g_srcH = 0; g_tried = false;
+    }
     if (!g_tried) {
-        g_tried = true;
+        g_tried = true; gen = g_devGen;
         auto bd = CompileShaderFile("bloom.hlsl", "PSDown", "ps_5_0");
         auto bu = CompileShaderFile("bloom.hlsl", "PSUp", "ps_5_0");
         if (bd) dev->CreatePixelShader(bd->GetBufferPointer(), bd->GetBufferSize(), nullptr, &g_down);

@@ -176,7 +176,11 @@ bool BuildBlockMips(DXGI_FORMAT fmt, const BYTE* top, UINT W, UINT H, std::vecto
     if (off) return false;
     const size_t bb = bc1 ? 8 : 16;
     const UINT bw = (W + 3) / 4, bh = (H + 3) / 4;
-    std::vector<BYTE> img((size_t)W * H * 4);
+    // the work images are each thread's own, kept from texture to texture (the tile loaders make thousands: a fresh 1 MB
+    // and 256 KB per tile churned the heap and shredded the 32-bit address space); levels keep their buffers too
+    static thread_local std::vector<BYTE> tImg, tNext;
+    std::vector<BYTE>& img = tImg;
+    img.assign((size_t)W * H * 4, 0);
     for (UINT by = 0; by < bh; by++) for (UINT bx = 0; bx < bw; bx++) {
         const BYTE* b = top + ((size_t)by * bw + bx) * bb;
         BYTE px[16][4];
@@ -189,19 +193,22 @@ bool BuildBlockMips(DXGI_FORMAT fmt, const BYTE* top, UINT W, UINT H, std::vecto
         }
     }
     UINT w = W, h = H;
-    levels.clear();
-    levels.emplace_back(top, top + (size_t)bw * bh * bb);
+    size_t nl = 0;
+    auto next = [&]() -> std::vector<BYTE>& { if (levels.size() <= nl) levels.emplace_back(); return levels[nl++]; };
+    next().assign(top, top + (size_t)bw * bh * bb);
     while (w > 1 || h > 1) {
         UINT nw = std::max(1u, w / 2), nh = std::max(1u, h / 2);
-        std::vector<BYTE> n((size_t)nw * nh * 4);
+        std::vector<BYTE>& n = tNext;
+        n.resize((size_t)nw * nh * 4);
         for (UINT y = 0; y < nh; y++) for (UINT x = 0; x < nw; x++) for (int c = 0; c < 4; c++) {
             UINT x0 = std::min(w - 1, x * 2), x1 = std::min(w - 1, x * 2 + 1), y0 = std::min(h - 1, y * 2), y1 = std::min(h - 1, y * 2 + 1);
             const BYTE a0 = img[((size_t)y0 * w + x0) * 4 + c], a1 = img[((size_t)y0 * w + x1) * 4 + c], a2 = img[((size_t)y1 * w + x0) * 4 + c], a3 = img[((size_t)y1 * w + x1) * 4 + c];
             n[((size_t)y * nw + x) * 4 + c] = Avg4(a0, a1, a2, a3, srgbF && c < 3);
         }
-        img = std::move(n); w = nw; h = nh;
+        img.swap(n); w = nw; h = nh;
         const UINT cw = (w + 3) / 4, ch = (h + 3) / 4;
-        std::vector<BYTE> enc((size_t)cw * ch * bb);
+        std::vector<BYTE>& enc = next();
+        enc.resize((size_t)cw * ch * bb);
         for (UINT by = 0; by < ch; by++) for (UINT bx = 0; bx < cw; bx++) {
             BYTE px[16][4];
             for (int i = 0; i < 16; i++) {
@@ -213,8 +220,8 @@ bool BuildBlockMips(DXGI_FORMAT fmt, const BYTE* top, UINT W, UINT H, std::vecto
             if (bc3) EncodeAlphaBC3(px, o);
             EncodeColour(px, o + (bb - 8), bc1);
         }
-        levels.push_back(std::move(enc));
     }
+    levels.resize(nl);      // (a smaller texture than the last: the extra levels go)
     return true;
 }
 }  // namespace
@@ -308,7 +315,7 @@ ComPtr<ID3D11ShaderResourceView> LoadDDSMemory(ID3D11Device* dev, const BYTE* fd
         if (!used) return nullptr;
         // block formats need sizes in whole blocks at the top level
         if ((W & 3) || (H & 3)) { if (W >= 4 && H >= 4) return nullptr; }
-        std::vector<std::vector<BYTE>> gen;      // a DXT texture saved without mips: they are made here
+        static thread_local std::vector<std::vector<BYTE>> gen;   // a DXT texture saved without mips: they are made here (the buffers kept per thread)
         if (genMips && used == 1 && W >= 8 && H >= 8 && BuildBlockMips(fmt, f.data() + off, W, H, gen)) {
             sd.clear();
             UINT w2 = W;

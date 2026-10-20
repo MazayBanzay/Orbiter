@@ -377,6 +377,7 @@ void Atmosphere::Frame(D3D11Client* gc, const VECTOR3& cp)
 // noon sky and in space - but no further than to this place's own noon (so twilight and night stay dark: under Venus's
 // clouds the eye adapts to the ~1 % daylight, not to the night), smoothed over ~1.5 s of real time
 template<class S> static auto SetExposure(S& s, float e, int) -> decltype(s.exposure = e, void()) { s.exposure = e; }
+float g_stormLight = 1.0f;     // the share of the light under a storm's clouds at the camera (Storm.cpp; FxAtmo.h)
 template<class S> static void SetExposure(S&, float, long) {}     // the client has no exposure hook yet
 
 // the colour balance: the eye adapts partly to the colour of the light (von Kries, ~55 %: Titan's red light still looks
@@ -393,6 +394,10 @@ void Atmosphere::UpdateExposure(const VECTOR3& cp)
         VECTOR3 E = current->LightAt(cp, sunPos, false), En = current->LightAt(cp, sunPos, true);
         for (int i = 0; i < 3; i++) g_fxAtmo.light[i] = (float)E.data[i];
         double Y = lum(E), Ynoon = lum(En);
+        // under a storm's deck (Storm.cpp sets the share of the light that reaches the camera; 1 without one) the eye
+        // adapts to the dim light there, not to the clear sky's
+        const double sl = std::clamp((double)g_stormLight, 1e-3, 1.0);
+        Y *= sl; Ynoon *= sl;
         target = std::clamp(1.0 / std::max(Y, 1e-9), 1.0, std::max(1.0, 1.5 / std::max(Ynoon, 1e-9)));
         if (Ynoon > 1e-9) {
             VECTOR3 w = En / Ynoon, a, g;

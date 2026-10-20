@@ -46,11 +46,11 @@ bool ConeSpan(float3 rd, float3 p, float3 d, float c, float tmax, out float ta, 
 
 float HG(float mu, float g) { float g2 = g * g; return (1 - g2) / (12.5663706 * pow(max(1 + g2 - 2 * g * mu, 1e-4), 1.5)); }
 
-cbuffer Beam : register(b10) { float4 gBeam; };     // x: the light's index (one draw per light, scissored to its cone)
+cbuffer Beam : register(b10) { float4 gBeam; };     // x: the light's index (one draw per light, scissored to its cone); y: scene pixels per target pixel (2: half resolution)
 
 float4 PSBeams(VSOut i) : SV_Target
 {
-    int2 px = (int2)i.pos.xy;
+    int2 px = (int2)(i.pos.xy * gBeam.y);     // the scene's pixel under this half-resolution one
     float z = tDepth.Load(int3(px, 0));
     float4 c = mul(float4(i.uv * float2(2, -2) + float2(-1, 1), max(z, 1e-7), 1), gInvVP);
     float3 wp = c.xyz / c.w;
@@ -228,3 +228,11 @@ void CSProbe(uint3 id : SV_DispatchThreadID)
     if (z > 0) { float4 c = mul(float4(uv * float2(2, -2) + float2(-1, 1), z, 1), gInvVP); o = float4(c.xyz / c.w, 1); }
     uProbe[id.y * 16 + id.x] = o;
 }
+
+// the beams' half-resolution image added to the scene (bilinear: the beams are smooth)
+Texture2D tHalf : register(t2);
+SamplerState sClampB : register(s1);
+float4 PSUpsample(VSOut i) : SV_Target { return float4(tHalf.SampleLevel(sClampB, i.uv, 0).rgb, 1); }
+
+// a full-viewport triangle at depth 1 (clears one tile of the sky maps' atlas, Lights.cpp)
+float4 VSClearZ(uint id : SV_VertexID) : SV_Position { float2 p = float2((id << 1) & 2, id & 2); return float4(p * float2(2, -2) + float2(-1, 1), 1, 1); }

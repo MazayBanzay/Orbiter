@@ -22,8 +22,14 @@ bool g_tried = false;
 void D3D11Client::RenderAO(const XMMATRIX& proj)
 {
     if (!g_cfg.ao || !RW || !RH) return;
+    static unsigned gen = 0;
+    if (g_tried && gen != g_devGen) {     // a new device: the old one's objects go
+        g_csAO.Reset(); g_csBlur.Reset(); g_ps.Reset(); g_bsMul.Reset(); g_cb.Reset();
+        for (int k = 0; k < 2; k++) { g_tex[k].Reset(); g_uav[k].Reset(); g_srv[k].Reset(); }
+        g_w = g_h = 0; g_tried = false;
+    }
     if (!g_tried) {
-        g_tried = true;
+        g_tried = true; gen = g_devGen;
         auto ba = CompileShaderFile("gtao.hlsl", "CSGTAO", "cs_5_0");
         auto bb = CompileShaderFile("gtao.hlsl", "CSBlur", "cs_5_0");
         auto bp = CompileShaderFile("gtao.hlsl", "PSApply", "ps_5_0");
@@ -39,7 +45,7 @@ void D3D11Client::RenderAO(const XMMATRIX& proj)
         dev->CreateBlendState(&bd, &g_bsMul);
         D3D11_BUFFER_DESC cd = { sizeof(AoCB), D3D11_USAGE_DYNAMIC, D3D11_BIND_CONSTANT_BUFFER, D3D11_CPU_ACCESS_WRITE, 0, 0 };
         dev->CreateBuffer(&cd, nullptr, &g_cb);
-        LOGC("ambient occlusion: %s", g_csAO && g_csBlur && g_ps && g_bsMul && g_cb ? "on (GTAO, half resolution, 3 slices x 2 x 4 steps, 0.6 m, sky light only)" : "NOT available");
+        LOGC("ambient occlusion: %s", g_csAO && g_csBlur && g_ps && g_bsMul && g_cb ? "on (GTAO, half resolution, 3 slices x 2 x 6 steps, 0.6 m, sky light only)" : "NOT available");
     }
     if (!g_csAO || !g_csBlur || !g_ps || !g_bsMul || !g_cb || !vsAA) return;
     const UINT w = (RW + 1) / 2, h = (RH + 1) / 2;
@@ -60,7 +66,7 @@ void D3D11Client::RenderAO(const XMMATRIX& proj)
     AoCB c;
     c.p = { 1.0f / P._11, 1.0f / P._22, P._43, 0.6f };
     c.s = { (float)RW, (float)RH, (float)w, (float)h };
-    c.k = { 1.0f, 64.0f, dbg ? 1.0f : 0.0f, 0 };
+    c.k = { 1.0f, 256.0f, dbg ? 1.0f : 0.0f, 0 };     // (the radius on screen up to 256 pixels: near the camera 0.6 m is ~200)
     auto setCB = [&](float dx, float dy) {
         c.d = { dx, dy, 0, 0 };
         D3D11_MAPPED_SUBRESOURCE m;

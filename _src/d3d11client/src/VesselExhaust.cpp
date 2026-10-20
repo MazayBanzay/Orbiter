@@ -7,6 +7,7 @@
 #include "ExhaustInternal.h"
 
 extern XMMATRIX g_exViewProj;
+extern bool g_exH2Flame;       // Exhaust.cpp: the hydrogen jets drawn by their chemistry (the 0x100 art then not)
 
 namespace {
     struct CB { XMFLOAT4X4 wvp, toG; XMFLOAT4 cam, p, k; };
@@ -54,6 +55,8 @@ void RenderVesselExhausts(D3D11Client* gc, const VECTOR3& cp)
         for (DWORD i = 0; i < n; i++) {
             EXHAUSTSPEC es = {};
             if (!v->GetExhaustSpec(i, &es) || !es.lpos || !es.ldir || es.lsize <= 0 || es.wsize <= 0) continue;
+            // the jet pack's hydrogen chambers (0x100): their AtmoFX jets are drawn by the plume pass from the gas itself
+            if ((es.flags & 0x100) && g_exH2Flame) continue;
             double level = v->GetExhaustLevel(i);
             if (es.modulate > 0) level *= (1.0 - es.modulate) + R01() * es.modulate;
             if (level <= 0.005) continue;
@@ -75,7 +78,7 @@ void RenderVesselExhausts(D3D11Client* gc, const VECTOR3& cp)
             XMStoreFloat4x4(&k.toG, XMMatrixTranspose(M));
             k.cam = { (float)dotp(dc, sx), (float)dotp(dc, sy), (float)dotp(dc, e), (float)es.wsize };
             k.p = { (float)es.lsize, (float)std::min(level, 1.0), (float)R01(), (float)fmod(t, 1000.0) };
-            k.k = { 1.6f, 0, 0, 0 };
+            k.k = { 1.0f, 0, 0, 0 };      // as the D3D9 fork: the art's own colour on screen (the user: «как в dx9»)
             D3D11_MAPPED_SUBRESOURCE m;
             if (FAILED(ctx->Map(vxCB.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) continue;
             memcpy(m.pData, &k, sizeof k); ctx->Unmap(vxCB.Get(), 0);
@@ -95,4 +98,11 @@ void RenderVesselExhausts(D3D11Client* gc, const VECTOR3& cp)
         }
     }
     if (bound) { ID3D11ShaderResourceView* nul = nullptr; ctx->PSSetShaderResources(6, 1, &nul); }
+}
+
+// with the device (the render window closed between sessions): a new device must not get the old one's objects
+void VesselExhaustRelease()
+{
+    vxVS.Reset(); vxPS.Reset(); vxCB.Reset(); vxBS.Reset(); vxDefTex.Reset();
+    vxTried = vxOk = false;
 }

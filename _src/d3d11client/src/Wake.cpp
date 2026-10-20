@@ -5,12 +5,14 @@
 //    node is a moving hollow (depth 0.9 r s - on Titan a wading leg's bow stands ~U^2/2g high: a few cm, ramped in over 2 s): every frame it is lifted where it was and pressed where
 //    it is, so a part at rest makes nothing and a moving one makes its own bow and wake; a node that goes away lets its
 //    hollow fill and run out as waves; impulses (steps, splashes) kick the surface's velocity. The equation follows the
-//    deep-liquid dispersion, so a push sends out a train of waves, not a ring;
+//    deep-liquid dispersion, so a push sends out a train of waves, not a ring; the engines' jets press their cavities
+//    into it (JetCavity) and anything falling in kicks it by its speed (the impacts);
 //  - the Kelvin wake of a part moving faster than the waves (the linear deep-water solution for a moving pressure patch,
 //    in units of the wavelength lambda = 2 pi U^2 / g: Textures\AtmoFX\kelvin_wake.png, rg = slope along the motion and
 //    across, 0.5 = 0), summed per pixel by the liquid shader.
 #include "Wake.h"
 #include <cmath>
+#include <set>
 #include <DirectXPackedVector.h>
 using DirectX::PackedVector::XMConvertHalfToFloat;
 #include <wincodec.h>
@@ -35,7 +37,7 @@ std::vector<Kick> kicks;
 const int FN = 1024;
 struct Field
 {
-    bool tried = false, ok = false, active = false;
+    bool tried = false, ok = false, active = false; unsigned gen = 0;
     ComPtr<ID3D11ComputeShader> csStamp, csSim, csShift, csSlope;
     ComPtr<ID3D11Texture2D> hv[2], slope;
     ComPtr<ID3D11ShaderResourceView> hvSRV[2], slopeSRV;
@@ -47,7 +49,29 @@ struct Field
     double dx = 0.125, acc = 0;
 } F;
 
-struct FieldCB { float p[4], k[4]; int shift[4]; XMFLOAT4 stamp[64]; float ker[172]; };
+struct FieldCB { float p[4], k[4]; int shift[4]; XMFLOAT4 stamp[64]; float ker[172]; XMFLOAT4 jet[8]; };
+
+// the liquid (Titan's methane-ethane, as the particles take it: ExhaustInternal.h)
+const double RHO_LIQ = 520.0;
+
+// A gas jet on a liquid: the cavity it holds (Banks & Chandrasekhara 1963, the steelmaking lance on a melt). A round jet's
+// centreline stagnation pressure falls as p_c = M / (pi (0.11 z)^2) at a distance z from its nozzle (momentum M kept, the
+// Gaussian velocity profile's half-width 0.11 z - whatever the jet's density, which only moves the potential core), and at
+// most the exit's own 1/2 rho u0^2 = M / (2 pi r0^2); the cavity's floor sits where that pressure equals the liquid's head:
+// rho_l g n0 = p_c(x + n0), x the nozzle's height along the jet. The pressure's profile is u^2's Gaussian: sigma = 0.078 z.
+// Out: the head at the centre [m] and sigma [m]
+void JetCavity(double M, double x, double r0, double g, double& head, double& sigma)
+{
+    const double rg = RHO_LIQ * g, pExit = M / (2 * PI * r0 * r0);
+    auto pc = [&](double z) { return std::min(M / (PI * 0.0121 * z * z), pExit); };
+    double lo = 0, hi = 50;                          // n0: rho g n0 - p_c(x + n0) rises with n0
+    for (int i = 0; i < 40; i++) { const double m = 0.5 * (lo + hi); (rg * m < pc(x + m) ? lo : hi) = m; }
+    const double z = x + 0.5 * (lo + hi);
+    head = pc(z) / rg;
+    sigma = std::max(0.078 * z, 0.7 * r0);
+}
+
+std::map<OBJHANDLE, double> lowPrev;   // the vessels' lowest point over the level last frame (the impacts)
 float g_ker[169];      // iWave's kernel for sqrt(-laplacian), 13 x 13 cells (FieldInit)
 
 // Tessendorf's iWave kernel: G(r) = sum q^2 exp(-q^2) J0(q r), then made exact where it matters: no response to a
@@ -71,7 +95,8 @@ void BuildKernel()
 
 bool FieldInit(D3D11Client* c)
 {
-    if (F.tried) return F.ok;
+    if (F.tried && F.gen == g_devGen) return F.ok;
+    F = Field(); F.gen = g_devGen;     // (a new device: the old one's objects go)
     F.tried = true;
     ID3D11Device* dev = c->Dev();
     std::string path = c->ShaderDir() + "wavefield.hlsl"; std::wstring wp(path.begin(), path.end());
@@ -269,11 +294,144 @@ bool WakeField(D3D11Client* c, OBJHANDLE body, double Rl, const VECTOR3& cam, do
         add(x, y, -0.5 * k.amp * sqrt(g * k.r), std::max(k.r, 1.5 * dx) / dx, true);
     }
     kicks.clear();
+    // things falling in (any vessel over the liquid): where its lowest touchdown point crosses the level going down, the
+    // impact. The body's disc drives the surface down at its own speed, cut by the liquid's added mass (a disc at a free
+    // surface ~ 4/3 rho R^3) for a light body, and at most sqrt(g R) - what linear waves on this grid carry (a crater as
+    // deep as the disc is wide); the rest goes up as the crown's sheet (ParticlesCrown: its drops from the Weber number)
+    {
+        std::map<OBJHANDLE, double> seen;
+        const VECTOR3 Cg = pp + mul(Rp, F.C);
+        for (DWORD i = 0, nv = oapiGetVesselCount(); i < nv; i++) {
+            OBJHANDLE hv = oapiGetVesselByIndex(i);
+            VESSEL* v = hv ? oapiGetVesselInterface(hv) : nullptr;
+            if (!v || v->GetSurfaceRef() != body) continue;
+            VECTOR3 vg; v->GetGlobalPos(vg);
+            if (length(vg - Cg) > 0.5 * S + v->GetSize()) continue;          // outside the window
+            const DWORD nt = v->GetTouchdownPointCount();
+            if (nt == 0) continue;
+            double low = 1e9; VECTOR3 lowG = vg;
+            std::vector<VECTOR3> tg(nt);
+            std::vector<double> th(nt);
+            for (DWORD t = 0; t < nt; t++) {
+                TOUCHDOWNVTX td; v->GetTouchdownPoint(td, t);
+                v->Local2Global(td.pos, tg[t]);
+                th[t] = length(tmul(Rp, tg[t] - pp)) - Rl;
+                if (th[t] < low) { low = th[t]; lowG = tg[t]; }
+            }
+            // the footprint: the touchdown points within a fifth of its size of the lowest - their centre and spread
+            const double band = 0.2 * v->GetSize();
+            VECTOR3 cen = { 0, 0, 0 }; int nc = 0;
+            for (DWORD t = 0; t < nt; t++) if (th[t] < low + band) { cen += tg[t]; nc++; }
+            cen = cen / nc;
+            double R = 0;
+            for (DWORD t = 0; t < nt; t++) if (th[t] < low + band) R = std::max(R, length(tg[t] - cen));
+            R = std::clamp(R, 0.08, 0.5 * v->GetSize());
+            seen[hv] = low;
+            auto pv = lowPrev.find(hv);
+            if (pv == lowPrev.end() || !(pv->second > 0 && low <= 0)) continue;
+            VECTOR3 vh; v->GetGroundspeedVector(FRAME_HORIZON, vh);
+            const double U = -vh.y;
+            if (U < 0.3) continue;
+            double glng, glat, grad; oapiGlobalToEqu(body, cen, &glng, &glat, &grad);
+            if ((Rl - oapiGetSize(body)) - oapiSurfaceElevation(body, glng, glat) < 0.05) continue;   // the shore
+            const double m = v->GetMass(), ma = 4.0 / 3.0 * RHO_LIQ * R * R * R;
+            const double V = std::min(U * m / (m + ma), sqrt(g * R));
+            double x, y, depth; ToCells(cen, pp, Rp, Rl, x, y, depth);
+            add(x, y, -V, std::max(R, 1.5 * dx) / dx, true);
+            ParticlesCrown(body, cen, R, U);
+            LOGC("wave field: %s hits the liquid at %.2f m/s (disc %.2f m, %.0f kg): surface kicked at %.2f m/s", v->GetName(), U, R, m, V);
+        }
+        lowPrev.swap(seen);
+    }
+    // the engines' jets on the liquid: the modules' (AtmoFX_SetJet) and the stock thrusters of the vessels that send none,
+    // as pressure heads (JetCavity) where their axes meet the level - only from nozzles above it (a sole's puff under the
+    // liquid is no jet on it)
+    int nj = 0;
+    {
+        struct J { double x, y, head, sig; };
+        std::vector<J> js;
+        auto jet = [&](const VECTOR3& ge, const VECTOR3& gdIn, double T, double r0) {
+            if (T <= 0) return;
+            const VECTOR3 pe = tmul(Rp, ge - pp), de = tmul(Rp, gdIn) / length(gdIn);
+            const VECTOR3 up = pe / length(pe);
+            const double h = length(pe) - Rl, down = -dotp(de, up);
+            if (h <= 0 || down < 0.1) return;
+            const double s = h / down;                    // along the jet to the level
+            if (s > 300) return;
+            double head, sig; JetCavity(T * down, s, std::max(r0, 0.01), g, head, sig);
+            if (head < 1e-3) return;
+            // a cavity deeper than wide is the splashing mode (its walls flap and throw the liquid off): linear waves carry
+            // walls of up to ~45 deg, so a deeper one is taken wider - the same force (head x sigma^2: the volume pushed aside)
+            if (head > 1.2 * sig) { sig = cbrt(head * sig * sig / 1.2); head = 1.2 * sig; }
+            VECTOR3 hit = pe + de * s; hit = hit * (Rl / length(hit));
+            double x, y, depth; ToCells(mul(Rp, hit) + pp, pp, Rp, Rl, x, y, depth);
+            double sc = sig / dx;
+            if (x < -3 * sc || y < -3 * sc || x > FN + 3 * sc || y > FN + 3 * sc) return;
+            const double sc0 = sc; sc = std::clamp(sc, 1.5, 48.0);
+            head = std::min(head * (sc0 * sc0) / (sc * sc), 3.0);    // the same force over what the grid carries
+            js.push_back({ x, y, head, sc });
+        };
+        std::set<OBJHANDLE> sends;
+        const double now = oapiGetSimTime();
+        {
+            std::lock_guard<std::mutex> lj(g_ext.mx);
+            for (auto& kv : g_ext.jets) {
+                const ExtState::Jet& j = kv.second;
+                if (!oapiIsVessel(kv.first.h)) continue;
+                sends.insert(kv.first.h);
+                if (j.thrust <= 0 || now - j.t > 0.5) continue;
+                VESSEL* v = oapiGetVesselInterface(kv.first.h);
+                if (v->GetSurfaceRef() != body) continue;
+                VECTOR3 ge, gd; v->Local2Global(j.pos, ge); v->GlobalRot(j.dir, gd);
+                jet(ge, gd, j.thrust, j.rExit);
+            }
+        }
+        const VECTOR3 Cg = pp + mul(Rp, F.C);
+        for (DWORD i = 0, nv = oapiGetVesselCount(); i < nv; i++) {
+            OBJHANDLE hv = oapiGetVesselByIndex(i);
+            VESSEL* v = hv ? oapiGetVesselInterface(hv) : nullptr;
+            if (!v || sends.count(hv) || v->GetSurfaceRef() != body) continue;
+            VECTOR3 vg; v->GetGlobalPos(vg);
+            if (length(vg - Cg) > 0.5 * S + 300) continue;
+            for (DWORD t = 0, nt = v->GetThrusterCount(); t < nt; t++) {
+                THRUSTER_HANDLE th = v->GetThrusterHandleByIndex(t);
+                const double T = v->GetThrusterLevel(th) * v->GetThrusterMax(th);
+                if (T <= 0) continue;
+                double r0 = 0;      // the nozzle: half its exhaust's width
+                for (DWORD e = 0, ne = v->GetExhaustCount(); e < ne; e++) {
+                    EXHAUSTSPEC es = {};
+                    if (v->GetExhaustSpec(e, &es) && es.th == th) r0 = std::max(r0, 0.5 * es.wsize);
+                }
+                VECTOR3 lp, ld; v->GetThrusterRef(th, lp); v->GetThrusterDir(th, ld);
+                VECTOR3 ge, gd; v->Local2Global(lp, ge); v->GlobalRot(-ld, gd);     // the gas goes against the thrust
+                jet(ge, gd, T, r0 > 0 ? r0 : 0.1);
+            }
+        }
+        {   // test runs (D3D11CLIENT_TEST_JET=1): the «Модуль полёта»'s two nozzles of 87 N, exit radius 40.5 mm, hovering
+            // 1.2 m over the liquid 3 m beside the focus vessel (a headless run cannot fly it)
+            static int testJ = -1;
+            if (testJ < 0) { char e[8] = {}; testJ = GetEnvironmentVariableA("D3D11CLIENT_TEST_JET", e, sizeof e) && e[0] == '1' ? 1 : 0; }
+            if (testJ == 1) {
+                VECTOR3 fu; fv->GlobalRot(_V(0, 0, 1), fu);     // its forward
+                const VECTOR3 up = (fg - pp) / length(fg - pp), side = crossp(up, fu) / std::max(length(crossp(up, fu)), 1e-6);
+                const VECTOR3 base = pp + up * (Rl + 1.2) + side * 3.0;
+                VECTOR3 fwd = crossp(side, up);
+                for (int k = 0; k < 2; k++) jet(base + fwd * (k ? -0.3 : 0.3), -up, 87.0, 0.0405);
+            }
+        }
+        std::sort(js.begin(), js.end(), [](const J& a, const J& b) { return a.head * a.sig * a.sig > b.head * b.sig * b.sig; });
+        for (const J& j : js) { if (nj >= 8) break; cb.jet[nj++] = { (float)j.x, (float)j.y, (float)j.head, (float)j.sig }; }
+        static double tLogJ = -1e9;
+        if (nj > 0 && oapiGetSysTime() - tLogJ > 10) {
+            tLogJ = oapiGetSysTime();
+            LOGC("wave field: %d jets on the liquid (of %d), the strongest a cavity %.3f m deep, sigma %.2f m", nj, (int)js.size(), js[0].head, js[0].sig * dx);
+        }
+    }
     // the equation's constants for this grid
     const double dts = 1.0 / 60;
     cb.p[2] = (float)dts;
     cb.p[3] = (float)(0.2 * dts);                                  // damping: waves fade over ~5 s
-    cb.k[0] = (float)(g * dts * dts / dx); cb.k[2] = (float)(FN * 0.05); cb.k[3] = (float)ns;
+    cb.k[0] = (float)(g * dts * dts / dx); cb.k[1] = (float)nj; cb.k[2] = (float)(FN * 0.05); cb.k[3] = (float)ns;
     memcpy(cb.ker, g_ker, sizeof g_ker);
     if (ns > 0) Run(ctx, F.csStamp.Get(), cb, false);
     // fixed steps of 1/60 s of simulation time (at most 4 a frame; a pause stops the waves)

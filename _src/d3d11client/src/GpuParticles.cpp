@@ -387,6 +387,8 @@ void GpuParticles::SpawnSource(ExScene& sc, OBJHANDLE h, Source& s, std::vector<
     switch (s.kind) {
     case 1: add(L(CRYS_C), 1, LOOK_ICE, ALB_CRYSTAL, 917, 2e-4); break;
     case 2: add(L(FOG_C), 1, LOOK_FOG, ALB_FOG, 600, 2e-5); break;
+    // (the client's own: water condensed out of a hydrogen plume, Exhaust.cpp - ice or droplets of ~1 um radius)
+    case 4: add(L(FOG_C), 1, LOOK_FOG, ALB_FOG, 917, 2e-5); break;
     case 3: add(L(DROP_C), 1, LOOK_DROP, ALB_DROP, sc.rhoL, 2e-2); break;
     default:
         if (ground == EXG_WET) addWet(1);
@@ -408,12 +410,13 @@ void GpuParticles::SpawnSource(ExScene& sc, OBJHANDLE h, Source& s, std::vector<
         const double kc = s.kgps * G.k.frac;
         if (kc <= 0) continue;
         const double want = kc / G.M;
-        const bool longLived = !G.hard && G.k.d < 5e-5 && s.kind != 2;
+        const bool longLived = !G.hard && G.k.d < 5e-5 && s.kind != 2 && s.kind != 4;
         const double cap = (longLived ? 5.0 : std::max(30.0, 160.0 * G.k.frac)) * capK * 4.0;
         double rate = std::max(std::min(want, cap), std::min((longLived ? 5.0 : 20.0) * capK, 50.0 * want));
         // drops: each sprite one drop seen (the stream's real count is ~1e7/s: a representative few thousand per second,
         // as real-time spray is drawn), shared by the size classes
         if (s.kind == 3) rate = std::clamp(1500.0 * s.kgps, 300.0, 6000.0) * G.k.frac * capK;   // (a few seconds aloft on Titan: up to ~20k drawn at once)
+        if (s.kind == 4) rate = std::clamp(want, 40.0, 150.0) * capK;    // the condensate: a steady stream of sprites (a smooth trail)
         if (G.hard) rate = std::max(rate, kc / 0.3);
         const double m = kc / rate;
         s.acc[c] += rate * dt;
@@ -439,8 +442,13 @@ void GpuParticles::SpawnSource(ExScene& sc, OBJHANDLE h, Source& s, std::vector<
                 if (s.kind == 0 || s.kind == 3) {
                     double tau = 1.5 * m / (rho * d) / (2 * s0 * s0) * (s.kind == 3 ? 0.6 : 1.0);
                     a0 = std::min(0.9, 1 - exp(-tau)) * U(0.8, 1.1);
+                } else if (s.kind == 4) {
+                    // the condensate's optical depth by its mass: crystals of ~1 um radius, Q_ext ~ 2 at 550 nm - a mass
+                    // extinction 2 x 1.5 / (rho d) ~ 1700 m2/kg (young contrail ice, Schumann 1996)
+                    double tau = 2.0 * 1.5 * m / (917.0 * 2e-6) / (2 * s0 * s0);
+                    a0 = std::min(0.9, 1 - exp(-tau)) * U(0.8, 1.1);
                 } else a0 = G.k.a0 * U(0.7, 1.2);
-                life = s.kind == 2 ? std::max(0.2, s.life) * U(0.6, 1.3) : s.kind == 1 ? (s.life > 0 ? s.life * U(0.7, 1.3) : U(20, 40)) :
+                life = s.kind == 2 || s.kind == 4 ? std::max(0.2, s.life) * U(0.6, 1.3) : s.kind == 1 ? (s.life > 0 ? s.life * U(0.7, 1.3) : U(20, 40)) :
                        s.kind == 3 ? 30.0 : d < 2e-5 ? U(30, 70) : 40.0;
             }
             Push(sc, p, vel, d, rho, s0, a0, life, gy, fl, puff ? dir * sp : _V(0, 0, 0), puff ? s.life : 0);

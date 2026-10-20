@@ -24,6 +24,7 @@ void ClientCfg::Load()
         else if (k == "Liquids") liquids = v != 0;
         else if (k == "Shadows") shadows = v != 0;
         else if (k == "MicroTextures") microTex = v != 0;
+        else if (k == "VisorDrops") visorDrops = v != 0;
         else if (k == "GroundDetail") groundDetail = v != 0;
         else if (k == "Tessellation") tess = v != 0;
         else if (k == "TerrainNormals") terrainNormals = v != 0;
@@ -33,6 +34,7 @@ void ClientCfg::Load()
         else if (k == "AntiAliasing") aa = std::clamp((int)v, 0, 5);
         else if (k == "RenderScale") renderScale = std::clamp((float)v, 0.5f, 1.0f);
         else if (k == "DriverCacheMB") driverCacheMB = std::max((int)v, 0);
+        else if (k == "DriverCacheOff") driverCacheOff = v != 0;
         else if (k == "AmbientOcclusion") ao = v != 0;
         else if (k == "Bloom") bloom = v != 0;
         else if (k == "Sharpen") sharpen = std::clamp((float)v, 0.0f, 1.0f);
@@ -53,6 +55,7 @@ void ClientCfg::Save() const
     fprintf(f, "Liquids = %d        ; liquid surfaces (Titan's seas)\n", liquids ? 1 : 0);
     fprintf(f, "Shadows = %d        ; shadows (when available)\n", shadows ? 1 : 0);
     fprintf(f, "MicroTextures = %d  ; close-up surface detail from Config\\MicroTex.cfg\n", microTex ? 1 : 0);
+    fprintf(f, "VisorDrops = %d  ; drops on the suits' visors (rain)\n", visorDrops ? 1 : 0);
     fprintf(f, "GroundDetail = %d   ; ground material near the camera (Huygens-based on Titan)\n", groundDetail ? 1 : 0);
     fprintf(f, "Tessellation = %d   ; ground relief geometry near the camera (0: shading detail only)\n", tess ? 1 : 0);
     fprintf(f, "TerrainNormals = %d ; per-pixel terrain normals from the elevation data\n", terrainNormals ? 1 : 0);
@@ -62,6 +65,7 @@ void ClientCfg::Save() const
     fprintf(f, "Bloom = %d          ; the bright parts glow softly (the Sun in the haze, glints, lamps)\n", bloom ? 1 : 0);
     fprintf(f, "AmbientOcclusion = %d ; GTAO: the folds, gaps and contacts darken (the sky's light only)\n", ao ? 1 : 0);
     fprintf(f, "DriverCacheMB = %d ; the video driver's shader cache for Orbiter: set aside at start above this (0: never)\n", driverCacheMB);
+    fprintf(f, "DriverCacheOff = %d ; 1: the video driver's disk shader cache is not used by Orbiter (saves 256-1024 MB of the 32-bit address space)\n", driverCacheOff ? 1 : 0);
     fprintf(f, "AntiAliasing = %d   ; 0 off, 1 MSAA 2x, 2 MSAA 4x, 3 MSAA 8x, 4 FXAA, 5 TAA (applies at the next start)\n", aa);
     fprintf(f, "RenderScale = %.2f  ; TAA: scene resolution 0.5..1 of the window, upsampled by TAAU (next start)\n", renderScale);
     fclose(f);
@@ -209,6 +213,7 @@ static INT_PTR CALLBACK AdvProc(HWND h, UINT m, WPARAM w, LPARAM l)
         CheckDlgButton(h, IDC_ADV_SHADOWS, g_cfg.shadows ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(h, IDC_ADV_MICRO, g_cfg.microTex ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(h, IDC_ADV_AO, g_cfg.ao ? BST_CHECKED : BST_UNCHECKED);
+        CheckDlgButton(h, IDC_ADV_DROPS, g_cfg.visorDrops ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(h, IDC_ADV_STATS, g_cfg.statsLog ? BST_CHECKED : BST_UNCHECKED);
         for (const char* t : { "Off", "MSAA 2x", "MSAA 4x", "MSAA 8x", "FXAA (post)", "TAA (temporal)" }) SendDlgItemMessageA(h, IDC_ADV_AA, CB_ADDSTRING, 0, (LPARAM)t);
         SendDlgItemMessageA(h, IDC_ADV_AA, CB_SETCURSEL, g_cfg.aa, 0);
@@ -224,6 +229,7 @@ static INT_PTR CALLBACK AdvProc(HWND h, UINT m, WPARAM w, LPARAM l)
             g_cfg.shadows = IsDlgButtonChecked(h, IDC_ADV_SHADOWS) == BST_CHECKED;
             g_cfg.microTex = IsDlgButtonChecked(h, IDC_ADV_MICRO) == BST_CHECKED;
             g_cfg.ao = IsDlgButtonChecked(h, IDC_ADV_AO) == BST_CHECKED;
+            g_cfg.visorDrops = IsDlgButtonChecked(h, IDC_ADV_DROPS) == BST_CHECKED;
             g_cfg.statsLog = IsDlgButtonChecked(h, IDC_ADV_STATS) == BST_CHECKED;
             g_cfg.aa = std::clamp((int)SendDlgItemMessageA(h, IDC_ADV_AA, CB_GETCURSEL, 0, 0), 0, 5);
             GetDlgItemTextA(h, IDC_ADV_SCALE, s, 32); g_cfg.renderScale = std::clamp((float)atof(s) / 100.0f, 0.5f, 1.0f);

@@ -17,6 +17,7 @@ bool g_traceAlloc = false;     // test runs: log big allocations (TestScript tur
 int g_traceFrames = 0;
 void LogMemory(const char* when);
 void HangWatchStart(); void HangWatchStop();     // HangWatch.cpp
+void HeapTrackStart();     // HeapTrack.cpp: the heap by module, test runs with "HeapByModule = 1" only
 // what the client itself holds (LogMemory): the surfaces made for drawing (on the GPU) and their CPU copies (DIBs, private
 // memory of the process)
 long g_surfLive = 0, g_dibLive = 0; double g_surfMB = 0, g_dibMB = 0;
@@ -54,6 +55,7 @@ D3D11Client* g_client = nullptr;
 
 DLLCLBK void InitModule(HINSTANCE hDLL)
 {
+    HeapTrackStart();    // HeapTrack.cpp: test runs with "HeapByModule = 1" only
     g_client = new D3D11Client(hDLL);
     if (!oapiRegisterGraphicsClient(g_client)) { delete g_client; g_client = nullptr; return; }
     g_client->LoadShim();
@@ -195,13 +197,81 @@ static void NoteDriverCache()
          (unsigned)files.size(), (unsigned)(total >> 20), g_cfg.driverCacheMB);
 }
 
+// The driver's disk cache kept out of the process (DriverCacheOff = 1 in Client.cfg): the NVIDIA cache is opened by the
+// driver's NvMemMapStorage.dll with CreateFileW and mapped whole (256, 512, 1024 MB: a quarter to a half of a 32-bit
+// process's addresses, and it grows during a run - the crash in NvMemMapStorage when no free block is big enough).
+// The library is loaded here before the device (its path, as the driver loads it, noted at the previous start in
+// Modules\D3D11Client\nvmemmap.txt) and its CreateFileW import pointed at ours, which refuses *.nvph: the driver then
+// works without its disk cache, in this process only (other programs keep theirs; nothing in the system is changed).
+static const wchar_t* kMemMapList = L"Modules\\D3D11Client\\nvmemmap.txt";
+typedef HANDLE(WINAPI* CreateFileWF)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
+static CreateFileWF g_realCreateFileW = nullptr;
+static volatile LONG g_nvphRefused = 0;
+static HANDLE WINAPI NoNvphCreateFileW(LPCWSTR n, DWORD a, DWORD sh, LPSECURITY_ATTRIBUTES sa, DWORD cd, DWORD fl, HANDLE t)
+{
+    if (n) { const size_t l = wcslen(n); if (l > 5 && !_wcsicmp(n + l - 5, L".nvph")) { InterlockedIncrement(&g_nvphRefused); SetLastError(ERROR_ACCESS_DENIED); return INVALID_HANDLE_VALUE; } }
+    return g_realCreateFileW(n, a, sh, sa, cd, fl, t);
+}
+static bool PatchImport(HMODULE h, const char* dllName, const char* fn, void* to, void** real)
+{
+    auto* b = (BYTE*)h;
+    auto* nt = (IMAGE_NT_HEADERS*)(b + ((IMAGE_DOS_HEADER*)b)->e_lfanew);
+    const auto& dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    if (!dir.VirtualAddress) return false;
+    bool done = false;
+    for (auto* d = (IMAGE_IMPORT_DESCRIPTOR*)(b + dir.VirtualAddress); d->Name; d++) {
+        if (_stricmp((const char*)(b + d->Name), dllName) || !d->OriginalFirstThunk) continue;
+        auto* nm = (IMAGE_THUNK_DATA*)(b + d->OriginalFirstThunk); auto* iat = (IMAGE_THUNK_DATA*)(b + d->FirstThunk);
+        for (; nm->u1.AddressOfData; nm++, iat++) {
+            if (IMAGE_SNAP_BY_ORDINAL(nm->u1.Ordinal)) continue;
+            if (strcmp((const char*)((IMAGE_IMPORT_BY_NAME*)(b + nm->u1.AddressOfData))->Name, fn)) continue;
+            DWORD old;
+            if (!VirtualProtect(&iat->u1.Function, sizeof(void*), PAGE_READWRITE, &old)) continue;
+            if (real && !*real) *real = (void*)iat->u1.Function;
+            iat->u1.Function = (DWORD_PTR)to;
+            VirtualProtect(&iat->u1.Function, sizeof(void*), old, &old);
+            done = true;
+        }
+    }
+    return done;
+}
+static void DriverCacheGuardBefore()
+{
+    if (!g_cfg.driverCacheOff) return;
+    FILE* f = _wfopen(kMemMapList, L"r, ccs=UTF-8");
+    if (!f) { LOGC("driver shader cache: off asked, but the driver's cache library is not known yet (noted at this start, off from the next)"); return; }
+    wchar_t path[MAX_PATH] = {};
+    fgetws(path, MAX_PATH, f); fclose(f);
+    size_t n = wcslen(path); while (n && (path[n - 1] == L'\n' || path[n - 1] == L'\r')) path[--n] = 0;
+    HMODULE h = n ? LoadLibraryW(path) : nullptr;      // kept loaded: the driver gets this same module
+    if (!h) { LOGC("driver shader cache: off asked, the cache library could not be loaded (driver updated?) - the cache stays on"); return; }
+    const bool ok = PatchImport(h, "KERNEL32.dll", "CreateFileW", (void*)NoNvphCreateFileW, (void**)&g_realCreateFileW) && g_realCreateFileW;
+    LOGC("driver shader cache: %s", ok ? "off for this process (the driver's cache library may not open *.nvph)" : "off asked, the library's import was not found - the cache stays on");
+}
+static void DriverCacheGuardAfter()
+{
+    HMODULE h = GetModuleHandleW(L"NvMemMapStorage.dll");
+    if (h) {
+        wchar_t p[MAX_PATH] = {};
+        if (GetModuleFileNameW(h, p, MAX_PATH)) {
+            CreateDirectoryA("Modules\\D3D11Client", nullptr);
+            if (FILE* f = _wfopen(kMemMapList, L"w, ccs=UTF-8")) { fwprintf(f, L"%s\n", p); fclose(f); }
+        }
+    }
+    if (g_cfg.driverCacheOff) LOGC("driver shader cache: %ld cache file open(s) refused", g_nvphRefused);
+}
+
+unsigned g_devGen = 0;
 bool D3D11Client::CreateDevice()
 {
+    g_devGen++;
     TrimDriverCache();
+    DriverCacheGuardBefore();
     D3D_FEATURE_LEVEL fl = D3D_FEATURE_LEVEL_11_0, got;
     HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, &fl, 1, D3D11_SDK_VERSION, &dev, &got, &ctx);
     if (FAILED(hr)) { LOGC("D3D11CreateDevice failed 0x%08x", (unsigned)hr); return false; }
     NoteDriverCache();
+    DriverCacheGuardAfter();
     ComPtr<IDXGIDevice> dxd; dev.As(&dxd);
     ComPtr<IDXGIAdapter> ad; dxd->GetAdapter(&ad);
     DXGI_ADAPTER_DESC add; ad->GetDesc(&add);
@@ -326,6 +396,7 @@ bool D3D11Client::CreateDevice()
         qd.Query = D3D11_QUERY_TIMESTAMP;
         for (int i = 0; i < 4; i++) dev->CreateQuery(&qd, &qTs[f][i]);
         for (int i = 0; i < kMarks; i++) dev->CreateQuery(&qd, &qMk[f][i]);
+        for (int i = 0; i < kSub; i++) dev->CreateQuery(&qd, &qSub[f][i]);
     }
     return true;
 }
@@ -810,7 +881,10 @@ void D3D11Client::clbkRenderScene()
     }
     double ap = oapiCameraAperture();             // half the vertical field of view
     float tanY = (float)tan(ap);
-    float n = 0.1f;
+    // the near plane: 10 cm; from inside a vessel (a cockpit, a helmet: its liner, rim and chin bar 5-15 cm from the eye)
+    // 1.5 cm. Reverse Z with an infinite far plane stores n / z in a float: a smaller n costs no depth precision, and
+    // every pass reads n back from the projection (P._43) or its inverse (2026-10-20, the helmet view)
+    float n = oapiCameraInternal() ? 0.015f : 0.1f;
     XMMATRIX proj(1.0f / (tanY * W / H), 0, 0, 0,
                   0, 1.0f / tanY, 0, 0,
                   0, 0, 0, 1,
@@ -873,6 +947,7 @@ void D3D11Client::clbkRenderScene()
     OBJHANDLE own = oapiCameraInternal() ? oapiGetFocusObject() : nullptr;
     for (auto& kv : visuals) if (kv.first != own) RenderVessel(kv.second, cp, cr, proj, false);
     if (mvRTV) ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
+    GpuSub(fi, 0);
     RenderAO(proj);      // the folds and the contacts darken (before the liquid and the air: those are not)
     GpuMark(fi, 5);
     // the liquid over the terrain and the opaque vessels: what stands in it is seen through its surface (refracted along
@@ -880,12 +955,18 @@ void D3D11Client::clbkRenderScene()
     RenderLiquid(cp, cr, proj, tanY);
     GpuMark(fi, 6);
     RenderSun(cp, cr, proj);                      // the Sun on the sky's depth, before the air dims it (Sun.cpp)
+    GpuSub(fi, 1);
     for (auto& kv : visuals) if (kv.first != own) RenderVessel(kv.second, cp, cr, proj, true);
-    RenderStormShadow(cp, cr, proj);              // Earth's cyclone: its shadow on what is drawn, before the air (Storm.cpp)
+    RenderVisorDropsOutside(cp, cr, proj);        // rain drops on the suits' glass, before the air (VisorDrops.cpp)
+    GpuSub(fi, 2);
+    RenderStormShadow(cp, cr, proj);  GpuSub(fi, 3);              // Earth's cyclone: its shadow on what is drawn, before the air (Storm.cpp)
     FxRenderTransparent(this, cp, cr, proj);      // the air (sky, aerial perspective) from the depth
+    GpuSub(fi, 4);
     RenderStorm(cp, cr, proj);                    // Earth's cyclone: the volumetric clouds, the air in front of them (Storm.cpp)
     { void StormFrameFallback(); StormFrameFallback(); }   // its turbulence, if Orbiter does not call the client's clbkPreStep
+    GpuSub(fi, 5);
     RenderClouds(cp, cr, proj);                   // cloud layers over it, the air in front of them included (Clouds.cpp)
+    GpuSub(fi, 6);
     LightsRenderAir(cp, cr, proj);                // the headlights' beams in the air, the lenses, the beacons (Lights.cpp)
     GpuMark(fi, 7);
     ExhaustRender(this, cp, cr, proj, oapiGetSimStep());   // glow, shimmer, plumes, GPU particles
@@ -893,7 +974,9 @@ void D3D11Client::clbkRenderScene()
     RenderAr(cp, cr, proj);                       // the helmet display's markers and paths, against the scene's depth
     UpdateRenderParticles(cp, cr, proj, oapiGetSimStep());
     RenderRain(cp, cr, proj);                     // rain (Titan; Fx.cfg Rain = mm/h)
+    RenderStormRain(cp, cr, proj);                // rain under Earth's cyclone (StormRain.cpp)
     RenderUnderwater(cp, cr, proj);               // the camera inside a liquid: its column over everything
+    RenderVisorDropsInside(cp, cr, proj);         // drops on the own visor's outer face, under its tint, plates and rim (VisorDrops.cpp)
     GpuMark(fi, 8);
     if (own && visuals.count(own)) {
         ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
@@ -937,6 +1020,13 @@ void D3D11Client::clbkRenderScene()
             UINT64 m[kMarks]; bool okm = true;
             for (int i = 0; i < kMarks; i++) okm = okm && ctx->GetData(qMk[pf][i].Get(), &m[i], 8, 0) == S_OK;
             if (okm) for (int i = 1; i < kMarks; i++) markMs[i] = 0.9 * markMs[i] + 0.1 * (double)(m[i] - m[i - 1]) * 1000.0 / dj.Frequency;
+            UINT64 s[kSub]; bool oks = okm;
+            for (int i = 0; i < kSub; i++) oks = oks && ctx->GetData(qSub[pf][i].Get(), &s[i], 8, 0) == S_OK;
+            if (oks) {      // the AO; the Sun, transparent vessels, storm shadow, air, storm, clouds, lights in the air
+                const UINT64 e[kSub + 1] = { m[5], s[1], s[2], s[3], s[4], s[5], s[6], m[7] };
+                const UINT64 b[kSub + 1] = { s[0], m[6], s[1], s[2], s[3], s[4], s[5], s[6] };
+                for (int i = 0; i <= kSub; i++) subMs[i] = 0.9 * subMs[i] + 0.1 * (double)(e[i] - b[i]) * 1000.0 / dj.Frequency;
+            }
         }
     }
     // self-check: a line in Orbiter.log every 10 s, a screenshot 15 s after the start
@@ -949,9 +1039,14 @@ void D3D11Client::clbkRenderScene()
         LOGC("GPU ms by pass: fx compute %.2f, shadows %.2f, sky %.2f, planets %.2f, vessels opaque %.2f, liquid %.2f, "
              "transparent + air %.2f, exhaust/AR/particles %.2f, own vessel %.2f, resolve + post %.2f, 2D %.2f",
              markMs[1], markMs[2], markMs[3], markMs[4], markMs[5], markMs[6], markMs[7], markMs[8], markMs[9], markMs[10], markMs[11]);
+        LOGC("GPU ms within: AO %.2f | the Sun %.2f, transparent vessels %.2f, storm shadow %.2f, air %.2f, storm %.2f, clouds %.2f, lights in the air %.2f",
+             subMs[0], subMs[1], subMs[2], subMs[3], subMs[4], subMs[5], subMs[6], subMs[7]);
         std::string ls = Planet::LoadStats();
         if (!ls.empty()) LOGC("%s", ls.c_str());
         LogMemory("now");     // a leak shows as a steady climb from one of these lines to the next
+        { void HeapTrackReport(); HeapTrackReport(); }
+        static int nNow = 0;
+        if (++nNow == 2) { double FxTestNum(const char*); if (FxTestNum("MemCensus") > 0) { void LogMemoryCensus(); LogMemoryCensus(); } }   // MemCensus.cpp: who holds the address space (a ~1.5 s hitch: test runs only, -Set "MemCensus = 1")
     }
 }
 

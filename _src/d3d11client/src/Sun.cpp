@@ -11,6 +11,7 @@
 bool g_sunPassOn = false;       // FxAtmo.cpp: the air's pass leaves the disc to this pass
 bool g_sunHAlphaSeen = false;   // Mesh.cpp: an H-alpha filter group was drawn (the frame before)
 bool g_sunFilterSeen = false;   // Mesh.cpp: a filter group (the visor's sun spot) was drawn (the frame before)
+int g_sunFilterCount = 0;       // ... how many of them (the log: one filter drawn twice would square its transmittance)
 float g_sunFilterT = 1.0f;      // ... its transmittance (the least of them; the spot's texture taken as opaque)
 
 namespace {
@@ -92,7 +93,8 @@ void D3D11Client::RenderSun(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX
     static const double tOcc = FxTestNum("SunOcculter");         // ... a coronagraph's occulting disc [solar radii]
     const bool ha = g_sunHAlphaSeen || tHa;
     const double filterT = tFilt > 0 ? 0.0 : g_sunFilterSeen ? g_sunFilterT : 1.0;   // the glare through a visor's filter
-    g_sunHAlphaSeen = false; g_sunFilterSeen = false; g_sunFilterT = 1.0f;
+    const int filterCount = g_sunFilterCount;
+    g_sunHAlphaSeen = false; g_sunFilterSeen = false; g_sunFilterT = 1.0f; g_sunFilterCount = 0;
     glReady = false;
     g_sunPassOn = false;
     OBJHANDLE hS = nullptr;
@@ -168,6 +170,15 @@ void D3D11Client::RenderSun(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX
     const double mean = 1.0 / (a * a);
     const double peak = discPx < 1.5 ? mean * discPx * discPx / 0.72 : mean / (1 - 0.81 / 3);
     const double K = std::min(1.0, SUN_CAP / peak);
+    {   // the visor's sun filter in view: what of the disc reaches the screen through its core (every 5 s while it is there)
+        static ULONGLONG lastLog = 0; const ULONGLONG now = GetTickCount64();
+        if (filterCount > 0 && now - lastLog > 5000) {
+            lastLog = now;
+            const double E = g_cfg.exposure * (g_fxAtmo.active ? g_fxAtmo.exposure : 1.0f), centre = peak * K;
+            LOGC("sun filter: %d group(s) a frame, core T %.2e | disc centre %.3g (before the air), %.1f px, exposure %.3g -> "
+                 "through the core %.3g on screen (times the air's transmittance; ~1 is white)", filterCount, filterT, centre, discPx, E, centre * filterT * E);
+        }
+    }
 
     SunCB k;
     k.dir = F4(sc, a);

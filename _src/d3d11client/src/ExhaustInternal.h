@@ -46,6 +46,15 @@ struct ExJet
     // derived (Exhaust.cpp: JetGas)
     double gamma = 1.3, Rs = 3800, mdot = 0, rhoE = 0, pE = 0, Me = 1, n = 1e9, Lc = 1, rj = 0, cell = 1, shock = 1, vacW = 1;
     double hitH = -1;                  // height of the exit over the surface along the vertical (< 0: no surface reached)
+    double yH2 = 0;                    // the exhaust's free hydrogen (mass fraction; the rest water)
+    // a hydrogen exhaust (H2 + H2O, gas constant > 450 J/kg/K): no soot, no Planck light - it glows by the blue continuum
+    // (~ [OH]^2, H2Chem.h): OH in the mix with the ambient gas over the exhaust's share c (u = c / (c + fsU)), at the exit
+    bool h2 = false;
+    double fsU = 0.03;                 // the table's scale: the stoichiometric share (with oxygen), else 0.03
+    float ohMix[32] = {};              // [OH] [1e20 m^-3] over u (H2Chem::MixTable)
+    double ohE = 0;                    // [OH] at the exit [1e20 m^-3] (the vacuum source flow carries it, frozen)
+    double flameZ = 0;                 // where the axis reaches the stoichiometric mix [m] (the box's reach; 0: no flame)
+    double cond = 0, condZ = 0;        // the share of its water that condenses (Schmidt-Appleman) and where it is emitted [m]
     bool liquidBelow = false;
 };
 
@@ -58,6 +67,8 @@ void SprayFeed(const ExScene& sc, uintptr_t key, const VECTOR3& pLocal, const VE
 void SprayRender(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResourceView* depth);
 // the vessels' own exhausts (AddExhaust), volumetric (VesselExhaust.cpp): in the exhaust pass, t5/s3 bound
 void RenderVesselExhausts(D3D11Client* gc, const VECTOR3& cp);
+void SprayRelease();             // with the device (Spray.cpp)
+void VesselExhaustRelease();     // with the device (VesselExhaust.cpp)
 
 class GpuParticles
 {

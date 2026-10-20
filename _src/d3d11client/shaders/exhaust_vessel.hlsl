@@ -74,10 +74,7 @@ float4 PS(VSOut i) : SV_Target
         float3 q = cam + d * tk;
         float r = length(q.xy) / R, v = q.z / L;
         float4 tx = tExTex.SampleLevel(sExLin, float2(0.01 + 0.23 * (0.5 + 0.5 * r), saturate(v)), 0);
-        // turbulence running down the jet (cells ~R across, faster near the exit), more at its edge and tail
-        float n = ExNoise(float3(q.xy / (0.7 * R), (q.z - eP.w * 3.0 * L) / (1.2 * R)));
-        float turb = lerp(1.0, 0.55 + 0.9 * n, saturate(0.3 + 0.7 * r + 0.5 * v));
-        float w = tx.a * turb * dt;
+        float w = tx.a * dt;          // (as the D3D9 fork's ExhaustVolume.fx: the art's density alone)
         sum += w; col += tx.rgb * w;
     }
     // side-on through the axis a chord gives about the stock ribbon's own alpha there

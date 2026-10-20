@@ -13,7 +13,7 @@ namespace {
     const int CL_LVL = 8;                       // the level gathered (16 x 32 tiles of 512)
     struct LayerState {
         OBJHANDLE body = nullptr;
-        bool tried = false, ok = false;
+        bool tried = false, ok = false; unsigned gen = 0;
         std::unique_ptr<TreeArchive> tree;
         ComPtr<ID3D11Texture2D> tex; ComPtr<ID3D11ShaderResourceView> srv;
         int rows = 0, cols = 0, next = 0, sinceMips = 0;
@@ -62,7 +62,7 @@ ID3D11ShaderResourceView* CloudLayerCoverage(OBJHANDLE body, double* alt)
 // the layer's set-up and its tiles, a few each frame
 static bool LayerPrepare(ID3D11Device* dev, ID3D11DeviceContext* ctx, OBJHANDLE body)
 {
-    if (body != ls.body) { ls = LayerState(); ls.body = body; }
+    if (body != ls.body || ls.gen != g_devGen) { ls = LayerState(); ls.body = body; ls.gen = g_devGen; }   // (a new device too)
     if (!ls.tried) {
         ls.tried = true;
         const bool* has = (const bool*)oapiGetObjectParam(body, OBJPRM_PLANET_HASCLOUDS);

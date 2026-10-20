@@ -124,7 +124,7 @@ float SkyVisibility(float3 wp, float3 ng)
         float2 uv = q.xy * float2(0.5, -0.5) + 0.5;
         float v = 1;
         if (all(uv > 0.004) && all(uv < 0.996) && q.z < 1)
-            v = tSkyVis.SampleCmpLevelZero(sShadow, (float2(i & 3, i >> 2) + uv) * 0.25, q.z);
+            v = tSkyVis.SampleCmpLevelZero(sShadow, (float2(i & 3, i >> 2) + uv) * 0.25, q.z - 0.6 / (2 * gSkyC.w + 60));   // what lies within 0.6 m of the point is the GTAO's (Ssao.cpp): a body does not shade itself here - no shimmer as it moves over the maps' texels
         s += v * w; ws += w;
     }
     return ws > 0 ? lerp(1, s / ws, fade) : 1;

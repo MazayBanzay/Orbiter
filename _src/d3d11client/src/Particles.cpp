@@ -91,13 +91,34 @@ void PStream::Update(double dt)
     if (alpha < 0.01) { acc = 0; return; }
     MATRIX3 Rm; v->GetRotationMatrix(Rm);
     VECTOR3 vp, vv; v->GetGlobalPos(vp); v->GetGlobalVel(vv);
-    const VECTOR3 src = vp + mul(Rm, pos ? *pos : lpos);
-    const VECTOR3 vr = mul(Rm, dir ? *dir : ldir) * (-spec.v0);        // against the thrust's direction
+    const VECTOR3 src0 = vp + mul(Rm, pos ? *pos : lpos);
+    const VECTOR3 vr0 = mul(Rm, dir ? *dir : ldir) * (-spec.v0);       // against the thrust's direction
+    // the smoke comes out of the flames: a stream of a thruster (AddExhaustStream) shares its level with that thruster's
+    // exhausts (AddExhaust) - each of them is a flame, and the particles are born at its end, down its jet. The module's own
+    // point is kept only for a stream with no flame (the DG's hover smoke had one point under the hull, between the wings,
+    // for three engines; 2026-10-20 "дым идёт от крыльев ... только от сопел - факелов")
+    // Where the smoke shows: not at the nozzle. The hot jet mixes with the air and cools, and only where the mix saturates does
+    // its vapour condense into visible drops or ice (Schmidt-Appleman): ~30 m behind a jet engine (NASA, Minnis), a few tens
+    // of metres down an H2/O2 rocket's plume (the Apollo J-2 study). So a particle is born at the flame's end unseen and
+    // shows as it travels the mixing length - two flame lengths, not under 10 m (tIn = that length / its speed)
+    struct Flame { VECTOR3 p, d; double tIn; };
+    Flame fl[16]; int nf = 0;
+    for (DWORD k = 0, n = v->GetExhaustCount(); k < n && nf < 16; k++) {
+        EXHAUSTSPEC es = {};
+        if (!v->GetExhaustSpec(k, &es) || es.level != level || !es.lpos || !es.ldir) continue;
+        const double le = length(*es.ldir);
+        if (le <= 0) continue;
+        const VECTOR3 e = -(*es.ldir) / le;                             // down the jet
+        const VECTOR3 exitP = *es.lpos - (*es.ldir) * es.lofs;          // the nozzle's exit (as VesselExhaust.cpp draws it)
+        fl[nf++] = { vp + mul(Rm, exitP + e * es.lsize), mul(Rm, e) * spec.v0, std::max(10.0, 2.0 * es.lsize) / std::max(spec.v0, 1.0) };
+    }
     const double size0 = std::max(spec.srcsize, 1e-3), rate = std::max(spec.srcrate, 1e-3);
     double interval = spec.v0 > 10 ? std::max(0.015, size0 / (rate * (0.1 * v->GetAirspeed() + size0))) : 1.0 / rate;
     acc += dt;
     while (acc >= interval && ps.size() < 4000) {
         acc -= interval * (0.5 + Rnd());                             // (the stock's random spacing)
+        const Flame& f = nf ? fl[(flameNext++) % nf] : Flame{ src0, vr0, 0.0 };   // the flames in turn
+        const VECTOR3& src = f.p; const VECTOR3& vr = f.d;
         const double back = std::max(acc, 0.0);                      // born that long ago within this step
         const double dvs = spec.v0 * spec.srcspread;
         // the spread: along the stream as the stock has it, across it a third (a plume opens at a few degrees; the
@@ -110,7 +131,7 @@ void PStream::Update(double dt)
         p.air = vv; p.rho = rho;
         p.size = spec.srcsize + spec.growthrate * back; p.age = back;
         p.life = spec.lifetime * (0.7 + 0.6 * Rnd());
-        p.alpha = alpha;
+        p.alpha = alpha; p.tIn = f.tIn;
         ps.push_back(p);
     }
 }
@@ -136,6 +157,7 @@ void D3D11Client::UpdateRenderParticles(const VECTOR3& cp, const MATRIX3& cr, co
             for (auto& p : s->ps) {
                 VECTOR3 c = p.pos - cp;
                 double fade = 1 - p.age / p.life;
+                if (p.tIn > 0) fade *= std::clamp(p.age / p.tIn, 0.0, 1.0);    // condensing over the mixing length
                 float a = (float)(p.alpha * fade * (emis ? 1.0 : 0.6));
                 if (a < 0.004f) continue;
                 VECTOR3 r = right * p.size, u = up * p.size;
