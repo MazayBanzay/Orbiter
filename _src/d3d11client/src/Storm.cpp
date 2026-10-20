@@ -73,6 +73,8 @@ namespace {
         if (int d = (int)FxTestNum("StormDbg")) C.dbg = d;          // a test run's Client.cfg key
         if (FxTestNum("StormOff") > 0.5) C.on = false;              // a test run's A/B: the storm off
         if (FxTestNum("StormRain") > 0.5) C.rain = true;            // a test run: the rain on (Storm.cfg keeps it off for now)
+        if (FxTestNum("StormRainOff") > 0.5) C.rain = false;        // a test run's A/B: the storm without its rain
+        if (FxTestNum("StormShadowOff") > 0.5) C.shadows = false;   // ... without the clouds' shadow pass
         LOGC("storm: %s over %s at %.2f %.2f, eye %.0f km, canopy %.0f km, outer %.0f km, %d steps, physics %s",
              C.on ? "on" : "off", C.body.c_str(), C.lat, C.lon, C.eye / 1e3, C.canopy / 1e3, C.outer / 1e3, C.steps, C.physics ? "on" : "off");
     }
@@ -689,10 +691,25 @@ float StormCameraLight()
 // the rain at the camera (StormRain.cpp): its rate [mm/h] from the map read back for the physics - the convective cores
 // pour (the eyewall 40-60 mm/h, the bands 10-30), the stratiform rain drizzles, the eye is dry - and the storm's wind there
 // (global frame): the vortex's swirl (counter-clockwise in the north) with the inflow's ~20 degrees, weaker near the sea
+static bool StormAt(const VECTOR3& cp, double& mmh, VECTOR3& wind, double& alt);
 bool StormRainHere(const VECTOR3& cp, double& mmh, VECTOR3& wind, double& alt)
 {
+    if (!C.rain) { mmh = 0; wind = _V(0, 0, 0); alt = 1e9; return false; }
+    return StormAt(cp, mmh, wind, alt);
+}
+// the storm's rain and wind for the sound module (StormSound.dll): at the camera; returns 0 outside the storm
+extern "C" __declspec(dllexport) int StormSoundState(double* mmh, double* wind, double* agl)
+{
+    VECTOR3 cp; oapiCameraGlobalPos(&cp);
+    double r = 0, a = 1e9; VECTOR3 w = _V(0, 0, 0);
+    const bool ok = StormAt(cp, r, w, a);
+    if (mmh) *mmh = r; if (wind) *wind = length(w); if (agl) *agl = a;
+    return ok || length(w) > 1 ? 1 : 0;
+}
+static bool StormAt(const VECTOR3& cp, double& mmh, VECTOR3& wind, double& alt)
+{
     mmh = 0; wind = _V(0, 0, 0); alt = 1e9;
-    if (!C.on || !C.rain || cpuMap.empty() || !S.hP || oapiCameraProxyGbody() != S.hP) return false;
+    if (!C.on || cpuMap.empty() || !S.hP || oapiCameraProxyGbody() != S.hP) return false;
     VECTOR3 pp; oapiGetGlobalPos(S.hP, &pp);
     MATRIX3 Rp; oapiGetRotationMatrix(S.hP, &Rp);
     const VECTOR3 P = tmul(Rp, cp - pp);

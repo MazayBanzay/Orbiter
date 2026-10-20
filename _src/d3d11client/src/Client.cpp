@@ -95,6 +95,16 @@ bool D3D11Client::clbkGetRenderParam(DWORD prm, DWORD* value) const
 }
 
 // ------------------------------------------------------------------------------------------ window and device
+// Alt pressed and let go alone puts a window into the menu mode (WM_SYSCOMMAND SC_KEYMENU): Windows runs its own modal
+// loop until another key or a click, and Orbiter's loop - the render, the simulation - stands still (the user,
+// 2026-10-20: «при нажатии L_ALT орбитер замирает»; the crew's marks are held on Alt). The render window has no menu:
+// that command is dropped; Alt itself still reaches the modules (their keys, Alt+F4 closes as before)
+LRESULT D3D11Client::RenderWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    if (uMsg == WM_SYSCOMMAND && (wParam & 0xFFF0) == SC_KEYMENU) return 0;
+    return oapi::GraphicsClient::RenderWndProc(hWnd, uMsg, wParam, lParam);
+}
+
 HWND D3D11Client::clbkCreateRenderWindow()
 {
     hWnd = oapi::GraphicsClient::clbkCreateRenderWindow();

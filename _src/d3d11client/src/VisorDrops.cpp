@@ -2,7 +2,7 @@
 // rain's flux meets it (more on the front as she walks, all over it in flight), spread flat (surface tension 17 mN/m,
 // a capillary length of ~5 mm), merge, slide down the glass along gravity's share (the head's tilt and its jolts
 // included), are blown back at a walking pace by the dense air (4.4 x Earth's), leave beads on their trails and evaporate
-// slowly. Simulated on the GPU in the glass's own coordinates (a 1024 x 640 grid of ~0.43 mm over a sphere round the eye),
+// slowly. Simulated on the GPU in the glass's own coordinates (a 768 x 480 grid over the directions from the eye),
 // the particles' impacts sampled here from the rain's rate (Fx.cfg Rain, the same area as Rain.cpp).
 //   inside (the eye in the helmet): the drops on the glass 3-5 cm away are out of focus - soft lenses that bend and blur
 //     the scene behind them, dark rims, the Sun and the lamps through them as soft discs. Drawn after the scene and
@@ -18,7 +18,7 @@
 
 namespace {
 
-constexpr UINT GW = 1024, GH = 640, GRIDC = 16, NDROP = 4096, MAXSPAWN = 512, SCENEMIPS = 6;
+constexpr UINT GW = 768, GH = 480, GRIDC = 16, NDROP = 4096, MAXSPAWN = 512, SCENEMIPS = 5;
 constexpr double RV = 0.13;                 // the glass's sphere [m] (Suit2's VisorB: +-13.6 cm wide, 2.6 cm before the eye) ...
 constexpr double CZ = -0.10;                // ... its centre behind the eye [m]
 constexpr double AZMAX = 100 * RAD, ELTOP = 85 * RAD, ELBOT = -60 * RAD;   // the glass seen from the eye (the suit's frame)
@@ -646,8 +646,8 @@ void D3D11Client::RenderVisorDropsInside(const VECTOR3& cp, const MATRIX3& cr, c
         ctx->OMSetRenderTargets(1, &nrtv, nullptr);
         ctx->End(R.qTs[fi][5].Get());
 
-        // ---- the scene behind the glass at half size, its mips
-        const UINT sw = std::max(RW / 2, 1u), sh = std::max(RH / 2, 1u);
+        // ---- the scene behind the glass at a quarter size, its mips
+        const UINT sw = std::max(RW / 4, 1u), sh = std::max(RH / 4, 1u);   // a quarter: what is seen through a drop is blurred anyway
         if (!R.scene || R.sceneW != sw || R.sceneH != sh) {
             R.scene.Reset(); R.sceneSRV.Reset(); R.sceneRTV.Reset();
             MakeTex(dev.Get(), sw, sh, DXGI_FORMAT_R16G16B16A16_FLOAT, SCENEMIPS, false, R.scene, &R.sceneSRV, &R.sceneRTV);

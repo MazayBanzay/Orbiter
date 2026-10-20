@@ -15,7 +15,7 @@ struct DrawCB { XMFLOAT4 m0, m1, m2, camR, camU, geo; XMFLOAT4X4 vp; XMFLOAT4 al
 
 enum Look { LOOK_GRAIN = 0, LOOK_CLOD = 1, LOOK_DROP = 2, LOOK_FOG = 3, LOOK_ICE = 4, LOOK_SPOT = 5, LOOK_SPLASH = 6, LOOK_MIST = 7 };
 enum Alb { ALB_DRY = 0, ALB_WET = 1, ALB_ICEG = 2, ALB_DROP = 3, ALB_FOG = 4, ALB_CRYSTAL = 5, ALB_MIST = 6 };
-const UINT F_SETTLED = 0x100, F_LIQUID = 0x200, F_HARD = 0x400, F_GROUNDCOL = 0x800;   // GROUNDCOL: the ground's own colour at birth
+const UINT F_SETTLED = 0x100, F_LIQUID = 0x200, F_HARD = 0x400, F_GROUNDCOL = 0x800, F_COND = 0x1000;   // GROUNDCOL: the ground's own colour at birth
 UINT Flags(int look, int alb, UINT extra = 0) { return (UINT)look | ((UINT)alb << 4) | extra; }
 
 struct Cls { double d, frac, s0, a0; };
@@ -204,7 +204,7 @@ void GpuParticles::Push(const ExScene& sc, const VECTOR3& p, const VECTOR3& v, d
     if (spawn.size() >= NEW_MAX) return;
     GPart q = {};
     q.p = F3(p); q.v = F3(v); q.age = 0; q.life = (float)life;
-    q.ug0 = F3(ug0); q.tg = (float)(tg > 0 && length(ug0) > 0 ? tg : 0);
+    q.ug0 = F3(ug0); q.tg = (float)(tg > 0 && length(ug0) > 0 ? tg : 0);   // (F_COND: ug0.x its extinction cross-section)
     q.d = (float)d; q.rhoP = (float)rhoP; q.s0 = (float)s0; q.a0 = (float)std::min(a0, 1.0);
     q.gy = (float)gy; q.flags = flags; q.seed = (float)Rnd(); q.gustT = 0;
     spawn.push_back(q);
@@ -416,10 +416,30 @@ void GpuParticles::SpawnSource(ExScene& sc, OBJHANDLE h, Source& s, std::vector<
         // drops: each sprite one drop seen (the stream's real count is ~1e7/s: a representative few thousand per second,
         // as real-time spray is drawn), shared by the size classes
         if (s.kind == 3) rate = std::clamp(1500.0 * s.kgps, 300.0, 6000.0) * G.k.frac * capK;   // (a few seconds aloft on Titan: up to ~20k drawn at once)
-        if (s.kind == 4) rate = std::clamp(want, 40.0, 150.0) * capK;    // the condensate: a steady stream of sprites (a smooth trail)
+        if (s.kind == 4) rate = 300.0 * capK;   // the condensate: puffs closer than their width along the trail (continuous)
         if (G.hard) rate = std::max(rate, kc / 0.3);
         const double m = kc / rate;
         s.acc[c] += rate * dt;
+        while (s.acc[c] >= 1 && s.kind == 4) {
+            // the condensate (Exhaust.cpp): born all along the jet where its mix passes the frost point - a share growing
+            // as (z / z*)^2 (pdf 2 z / z*^2, s.cone = z*), across the jet's Gaussian (half-velocity radius 0.094 z) - at the
+            // jet's own speed there (the free round jet: 7 sqrt(J / rho) / z, the jet's momentum s.jetJ), the jet's width
+            // its size; the gas field (the same free jet) carries and slows it on
+            s.acc[c] -= 1;
+            // each sprite is a Gaussian puff of the ice (a Lagrangian puff, as dispersion models carry a plume): sigma
+            // the jet's concentration width there (~0.1 z), growing as the turbulence diffuses it (CSSim); the puffs
+            // overlap many times over, and their optical depths add (the blend multiplies the transmittances) - one
+            // continuous field of concentration, not separate balls. Its extinction cross-section m k_ext rides in ug0.x
+            const double zS = std::max(s.cone, 0.1), zz = zS * sqrt(U(0.0025, 1.0));
+            const double sg = 0.1 * zz + 0.02, ph = U(0, 2 * 3.14159265), rr = 0.3 * sg * sqrt(Rnd());
+            VECTOR3 p = p0 + ax * zz + b1 * (rr * cos(ph)) + b2 * (rr * sin(ph));
+            const double kj = s.jetJ > 0 && sc.rhoG > 0 ? sqrt(s.jetJ / sc.rhoG) : 0.0;
+            const double uj = std::min(kj > 0 ? 7.0 * kj / std::max(zz, 0.05) : speed, std::max(speed, 5.0));
+            VECTOR3 vel = gsL + ax * uj;
+            const double X = m * 2.0 * 1.5 / (917.0 * 2e-6);          // m2: crystals of ~1 um, Q_ext ~ 2 (1700 m2/kg)
+            UINT fl = Flags(G.look, G.alb, (inLiq ? F_LIQUID : 0) | F_COND);
+            Push(sc, p, vel, G.k.d, G.rho, sg, 1.0, std::max(0.2, s.life) * U(0.8, 1.2), gy, fl, _V(X, 0, 0), 0);
+        }
         while (s.acc[c] >= 1) {
             s.acc[c] -= 1;
             const double ct = 1 - Rnd() * (1 - cos(s.cone)), st = sqrt(std::max(0.0, 1 - ct * ct)), ph = U(0, 2 * 3.14159265);

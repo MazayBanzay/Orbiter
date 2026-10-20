@@ -19,7 +19,7 @@
 //                            over the film into the height map (max)
 //   PSLens, PSBlurH/V        the height map's slopes, coverage, thickness; blurred by the pupil's footprint on the
 //                            glass (Gaussian, then read bicubic: no texel blocks at ~15 pixels a texel)
-//   PSDown/PSDownMS          the scene so far at half resolution (its mips: the blur seen through a drop)
+//   PSDown/PSDownMS          the scene so far at a quarter resolution (its mips: the blur seen through a drop)
 //   PSInside                 the view through the glass: each pixel's ray meets the sphere, the drop there refracts
 //                            the scene (thin prism, (n-1) x slope), out of focus by the pupil's size on the glass
 //                            (3-5 cm from the eye), the rim dark (total reflection), the Sun and the lamps' light
@@ -354,15 +354,16 @@ Texture2D<float4> tScene : register(t14);
 Texture2DMS<float4> tSceneMS : register(t15);
 float4 PSDown(FOut i) : SV_Target
 {
-    int2 q = (int2)i.pos.xy * 2;
-    float4 s = tScene[q] + tScene[q + int2(1, 0)] + tScene[q + int2(0, 1)] + tScene[q + int2(1, 1)];
+    int2 q = (int2)i.pos.xy * 4;
+    float4 s = tScene[q + int2(1, 1)] + tScene[q + int2(3, 1)] + tScene[q + int2(1, 3)] + tScene[q + int2(3, 3)];
     s *= 0.25; s.rgb = NotFinite(s.rgb) ? 0 : min(s.rgb, 6e4);
     return float4(s.rgb, 1);
 }
 float4 PSDownMS(FOut i) : SV_Target
 {
-    int2 q = (int2)i.pos.xy * 2;
-    float4 s = tSceneMS.Load(q, 0);      // one sample: the mips blur it anyway
+    int2 q = (int2)i.pos.xy * 4;
+    float4 s = tSceneMS.Load(q + int2(1, 1), 0) + tSceneMS.Load(q + int2(3, 3), 0);   // two samples: the mips blur it anyway
+    s *= 0.5;      // one sample: the mips blur it anyway
     s.rgb = NotFinite(s.rgb) ? 0 : min(s.rgb, 6e4);
     return float4(s.rgb, 1);
 }
@@ -453,7 +454,7 @@ float4 PSInside(FOut i) : SV_Target
         float2 nd = float2(dcr.x / dcr.z / vProj.x, dcr.y / dcr.z / vProj.y);
         float2 uv = float2(nd.x * 0.5 + 0.5, 0.5 - nd.y * 0.5);
         // what lies beyond, through a lens of a few cm focal length: out of focus, the more the steeper
-        sc = SceneAt(saturate(uv), 1.0 + 3.0 * saturate(sl * 1.5));
+        sc = SceneAt(saturate(uv), 3.0 * saturate(sl * 1.5));
         float edge = saturate(min(min(uv.x, 1 - uv.x), min(uv.y, 1 - uv.y)) * 20);   // off the copy's edge: the sky
         sc = lerp(skyN * 0.6, sc, edge);
     } else sc = skyN * 0.6;

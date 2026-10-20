@@ -574,6 +574,7 @@ public:
 
 protected:
     HWND clbkCreateRenderWindow() override;
+    LRESULT RenderWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) override;
     void clbkPostCreation() override;
     void clbkCloseSession(bool fastclose) override;
     void clbkDestroyRenderWindow(bool fastclose) override;

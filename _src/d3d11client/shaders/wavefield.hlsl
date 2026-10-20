@@ -74,13 +74,17 @@ void CSSim(uint3 id : SV_DispatchThreadID)
     int nj = (int)gK.y;
     float2 pc = float2(p) + 0.5;
     for (int k = 0; k < nj; k++) nearJet = nearJet || length(pc - gJet[k].xy) < 3 * gJet[k].w + 9;
+    float Hc = 0;
     if (nearJet) {
         [loop] for (int j = -6; j <= 6; j++) {
             [loop] for (int i = -6; i <= 6; i++) conv += Ker((j + 6) * 13 + (i + 6)) * Head(pc + float2(i, j));
         }
+        Hc = Head(pc);
     }
     float a = gP.w;
-    float hn = (hv.x * (2 - a) - hv.y - gK.x * conv) / (1 + a);
+    // (the damping pulls the height to the level, h (2 - a): under a jet it pulls to its cavity, -H - else a steady jet
+    // held only ~1/6 of it)
+    float hn = (hv.x * (2 - a) - hv.y - gK.x * conv - 2 * a * Hc) / (1 + a);
     float hp = hv.x;
     // the sponge: waves die out before the window's edge (no reflection back in)
     float e = min(min(p.x, p.y), min(n - 1 - p.x, n - 1 - p.y));

@@ -173,6 +173,7 @@ private:
     std::map<std::pair<OBJHANDLE, int>, MixCache> mixCache;
     double kc[3] = {}, kcLum = 0;    // the blue continuum per [OH]^2 path (H2Chem::ContinuumRGB)
     void H2Jet(ExJet& j, VESSEL* v, const VECTOR3& eL, const VECTOR3& dL, const ExScene& sc);
+    std::vector<SmokeSrc> smoke;       // the 3D flow's sources this frame (Smoke.cpp)
     bool Scene(ExScene& sc, const VECTOR3& cp, double simDt);
     void Collect(const ExScene& sc);
     void Targets(D3D11Client* gc);
@@ -284,7 +285,7 @@ bool ExhaustFx::Scene(ExScene& sc, const VECTOR3& cp, double simDt)
 
 void ExhaustFx::Collect(const ExScene& sc)
 {
-    jets.clear(); heat.clear();
+    jets.clear(); heat.clear(); smoke.clear();
     steamPrev.swap(steamOn); steamOn.clear();
     {
         std::lock_guard<std::mutex> lk(g_ext.mx);
@@ -374,7 +375,13 @@ void ExhaustFx::H2Jet(ExJet& j, VESSEL* v, const VECTOR3& eL, const VECTOR3& dL,
         H2Chem::Mix(mc.t, j.yH2, Te, j.ve, std::max(pa, 1.0), std::max(Ta, 20.0), yO2);
     }
     j.fsU = mc.t.fs > 0 ? mc.t.fs : 0.03;
-    for (int i = 0; i < 32; i++) j.ohMix[i] = pa > 1e-3 ? mc.t.oh[i] : 0.0f;
+    for (int i = 0; i < 32; i++) { j.ohMix[i] = pa > 1e-3 ? mc.t.oh[i] : 0.0f; j.tMix[i] = mc.t.T[i]; }
+    {   // the glow's reach on the axis (c_axis ~ Lc / z): the leanest mix whose OH^2 is still 1 % of the peak
+        float mx = 0; for (float o : j.ohMix) mx = std::max(mx, o);
+        double cMin = 1;
+        for (int i = 0; i < 32; i++) if (mx > 0 && j.ohMix[i] >= 0.1f * mx) { double u = (i + 0.5) / 32; cMin = j.fsU * u / (1 - u); break; }
+        j.glowZ = mx > 0 ? std::min(j.Lc / std::max(cMin, 1e-4), 200 * j.Lc) : 0;
+    }
     j.ohE = H2Chem::ExhaustOH(j.yH2, Te, j.pE) * j.pE / (1.380649e-23 * Te) * 1e-20;
     // the flame's reach: the axis' share falls as Lc / z; the light lasts down to ~0.3 of the stoichiometric share
     j.flameZ = mc.t.fs > 0 && pa > 1e-3 ? j.Lc / (0.3 * mc.t.fs) : 0;
@@ -389,7 +396,9 @@ void ExhaustFx::H2Jet(ExJet& j, VESSEL* v, const VECTOR3& eL, const VECTOR3& dL,
     double cStar = 0;
     const double fc = H2Chem::Condense(W, Q, pa, Ta, cp, Ma, ea, cStar);
     j.cond = fc;
-    if (fc < cfg.condMin || cStar <= 0) return;
+    // (the 3D flow takes the jet's heat and momentum whether or not water condenses: the heat haze needs them)
+    const bool vis = fc >= cfg.condMin && cStar > 0;
+    if (!vis && !SmokeEnabled()) return;
     // where the jet's mean mix reaches c*: the entrained mass ~ 0.32 x/d_eff of the jet's own (Ricou & Spalding 1961),
     // d_eff = D (rho_jet / rho_air)^0.5. The condensate does not wait for it: the jet's outer mixing layer is diluted
     // past c* from the first centimetres, and the share of the jet's water there grows as (z / z*)^2 (the Gaussian
@@ -397,7 +406,7 @@ void ExhaustFx::H2Jet(ExJet& j, VESSEL* v, const VECTOR3& eL, const VECTOR3& dL,
     // to the whole plume at z*. Four sources along the jet carry those shares; a jet meeting the ground first leaves
     // the rest there, spreading along it (the wall jet)
     const double rhoJ = pa / (j.Rs * Te), dEff = 2 * j.rj * sqrt(std::clamp(rhoJ / ra, 1e-6, 1.0));
-    const double zStar = std::clamp((1 / cStar - 1) * dEff / 0.32, 4 * j.rExit, 60.0);
+    const double zStar = vis ? std::clamp((1 / cStar - 1) * dEff / 0.32, 4 * j.rExit, 60.0) : 1.0;
     const double mdot = j.thrust / std::max(j.ve, 100.0);
     VECTOR3 up;
     {
@@ -412,22 +421,29 @@ void ExhaustFx::H2Jet(ExJet& j, VESSEL* v, const VECTOR3& eL, const VECTOR3& dL,
     const double down = -dotp(dL, up);
     const double zHit = down > 0.2 && alt > 0 ? (alt - 0.15) / down : 1e9;   // a little over the surface (fog dies on it)
     const double life = Ta < 160 ? 40.0 : (ea >= H2Chem::EsIce(Ta) ? 20.0 : 3.0);
-    double F0 = 0;
-    for (int k = 0; k < 4; k++) {
-        double zk = zStar * (k + 1) / 4.0, F1 = (k == 3) ? 1.0 : ((k + 1) / 4.0) * ((k + 1) / 4.0);
-        const bool ground = zk >= zHit;
-        if (ground) { zk = std::max(zHit, 2 * j.rExit); F1 = 1.0; }
-        const double share = F1 - F0; F0 = F1;
-        const double cMean = 1 / (1 + 0.32 * zk / dEff);
-        const double u = std::max(j.ve * cMean, 0.5);
-        const VECTOR3 p = eL + dL * zk;
-        const VECTOR3 vv = ground ? up * (0.3 * u) : dL * u;    // at the ground: up and out (the cone spreads it round)
-        const double pv[3] = { p.x, p.y, p.z }, vel[3] = { vv.x, vv.y, vv.z };
-        // the crystals last where the air holds no water to sublimate them into: Titan's 94 K (ice's vapour 1e-16 Pa),
-        // else they evaporate as the trail dilutes in subsaturated air (a short contrail)
-        parts.Emit(j.h, 9500 + 8 * j.id + k, pv, vel, ground ? 1.35 : 0.3, 0.6, share * fc * W * mdot, 4, 0, 0.0, life, 0.0);
-        steamOn.insert({ j.h, 9500 + 8 * j.id + k });
-        if (ground) break;
+    // one stream along the jet from the exit (GpuParticles: kind 4 - born over 0..z* by the (z / z*)^2 share, carried by
+    // the jet's own flow field: its momentum flux is the thrust); a jet meeting the ground: the stream ends there and
+    // the fog flows out along it with the wall jet
+    if (SmokeEnabled()) {
+        // the 3D flow (Smoke.cpp): the jet's own flow imposed down to where it has slowed to ~30 m/s (or the ground),
+        // its heat there from the mix table, the condensate formed over 0..z*
+        SmokeSrc q;
+        q.eg = j.eg; q.dg = j.dg; q.rExit = j.rExit;
+        q.kJ = sqrt(j.thrust / std::max(ra, 1e-4));
+        q.mVis = vis ? fc * W * mdot : 0.0; q.zFull = zStar;
+        q.inject = std::clamp(7 * q.kJ / 30.0, 0.3, std::min(3.0, zHit > 0 ? zHit : 3.0));
+        {
+            const double cAx = std::min(1.0, j.Lc / q.inject), u = cAx / (cAx + j.fsU);
+            const int i = std::clamp((int)(u * 32 - 0.5), 0, 31);
+            q.Tex = std::max(0.0, (double)j.tMix[i] - Ta);
+        }
+        q.decay = life > 30 ? 0.0 : 1.0 / life;
+        smoke.push_back(q);
+    } else {
+        const double zS = std::min(zStar, zHit > 0 ? zHit : zStar);
+        const double pv[3] = { eL.x, eL.y, eL.z }, vel[3] = { dL.x * 300, dL.y * 300, dL.z * 300 };
+        parts.Emit(j.h, 9500 + 8 * j.id, pv, vel, zS, 0.0, fc * W * mdot, 4, 0, 0.0, life, j.thrust);
+        steamOn.insert({ j.h, 9500 + 8 * j.id });
     }
     j.condZ = std::min(zStar, zHit);
 }
@@ -507,13 +523,25 @@ bool ExhaustFx::DrawShimmer(D3D11Client* gc, const ExScene& sc, const XMMATRIX& 
         add(h.g - up * (0.5 * h.r), 1.3 * h.r, h.g + up * (4 * h.r), 1.6 * h.r, h.dT, sp, fmod(h.r * 977.0 + h.dT * 0.37, 1.0), 1);
     }
     for (const ExJet& j : jets) {       // a jet's hot gas: down to where its excess temperature is ~0.3 of the air's
+        if (j.h2 && SmokeLive()) continue;   // (its haze: the 3D flow's own temperature field, SmokeShimmer)
         double dT = j.T - Ta;
         if (dT < 20 || j.vacW > 0.9) continue;
         // the mixed gas: excess temperature (Te - Ta) Lc / x - refracting down to ~10 % of the air's temperature
         double L = std::clamp(j.Lc * dT / (0.1 * Ta), 20 * j.rExit, 15.0);
-        add(j.eg, j.rExit * 1.2, j.eg + j.dg * L, j.rExit + 0.11 * L, dT, std::min(0.5 * j.ve, 300.0), fmod(j.id * 0.618, 1.0), 0);
+        double sp = std::min(0.5 * j.ve, 300.0);
+        if (j.h2) {
+            // a hydrogen jet: its mix stays hot far down (the jet's kinetic energy dissipates into it, H2Chem's table):
+            // the haze reaches where the axis' mix is within 10 % of the air's temperature; the eddies there move at the
+            // axis' speed ~ ve Lc / z, shown no faster than the frames can follow (a camera would blur the rest)
+            double cHot = 1;
+            for (int i = 0; i < 32; i++) if (j.tMix[i] - Ta > 0.1 * Ta) { double u = (i + 0.5) / 32; cHot = j.fsU * u / (1 - u); break; }
+            L = std::clamp(j.Lc / std::max(cHot, 1e-4), 20 * j.rExit, 15.0);
+            const double w = j.rExit + 0.11 * L, fps = std::max(oapiGetFrameRate(), 10.0);
+            sp = std::min(0.6 * j.ve * j.Lc / (0.5 * L), 0.35 * fps * 0.3 * 0.5 * w);
+        }
+        add(j.eg, j.rExit * 1.2, j.eg + j.dg * L, j.rExit + 0.11 * L, dT, sp, fmod(j.id * 0.618, 1.0), 0);
     }
-    if (!n) return false;
+    if (!n && !SmokeLive()) return false;
     ID3D11DeviceContext* ctx = gc->Ctx();
     XMFLOAT4X4 P; XMStoreFloat4x4(&P, proj);
     k.misc = { (float)(P._22 * 0.5 * gc->SceneH()), (float)fmod(sc.simt, 1000.0), 1.0f / gc->SceneW(), 1.0f / gc->SceneH() };
@@ -534,7 +562,9 @@ bool ExhaustFx::DrawShimmer(D3D11Client* gc, const ExScene& sc, const XMMATRIX& 
     ctx->OMSetBlendState(bsAdd.Get(), nullptr, ~0u);
     ctx->VSSetShader(vsProxy.Get(), nullptr, 0); ctx->PSSetShader(psProxy.Get(), nullptr, 0);
     ctx->VSSetConstantBuffers(5, 1, cbShim.GetAddressOf()); ctx->PSSetConstantBuffers(5, 1, cbShim.GetAddressOf());
-    ctx->DrawInstanced(6, n, 0, 0);
+    if (n) ctx->DrawInstanced(6, n, 0, 0);
+    SmokeShimmer(gc);                  // the 3D flow's hot gas: its refraction into the same offsets (additive)
+    ctx->VSSetConstantBuffers(5, 1, cbShim.GetAddressOf()); ctx->PSSetConstantBuffers(5, 1, cbShim.GetAddressOf());
     // the scene re-read through the offsets
     ctx->OMSetRenderTargets(1, &rtv, nullptr);
     ctx->OMSetBlendState(bsOpaque.Get(), nullptr, ~0u);
@@ -570,7 +600,7 @@ void ExhaustFx::DrawPlumes(D3D11Client* gc, const ExScene& sc)
         double Hv = Lv * (thMax > PI / 2 ? 1.0 : sin(thMax)), z0v = thMax > PI / 2 ? -Lv * std::min(1.0, -cos(thMax)) : 0;
         double L = 0, H = 0, z0 = 0;
         if (j.vacW < 0.999) { L = La; H = Ha; }
-        if (j.h2 && j.flameZ > 0) { L = std::max(L, 1.2 * j.flameZ); H = std::max(H, j.rj + 0.09 * 1.2 * j.flameZ); }   // the afterburning
+        if (j.h2) { const double zg = std::max(j.flameZ, j.glowZ) * 1.3; L = std::max(L, zg); H = std::max(H, 2.2 * (j.rj + 0.09 * zg)); }   // the glow's whole reach
         if (j.vacW > 0.001) { L = std::max(L, Lv); H = std::max(H, Hv); z0 = z0v; }
         VECTOR3 ez = j.dg, ex = Unit(crossp(ez, fabs(ez.y) < 0.9 ? _V(0, 1, 0) : _V(1, 0, 0))), ey = crossp(ez, ex);
         const double rhoJ = sc.dense ? sc.pa / (j.Rs * j.T) : j.rhoE;
@@ -584,7 +614,7 @@ void ExhaustFx::DrawPlumes(D3D11Client* gc, const ExScene& sc)
         k.air = { (float)rhoJ, 0.09f, (float)fmod(j.id * 0.618, 1.0), (float)(0.5 * j.ve) };
         // a hydrogen jet: its light the blue continuum ~ [OH]^2 - OH over the exhaust's share in the mix (the flame sheet
         // where that share is stoichiometric), at the exit (the vacuum's frozen flow); per [OH]^2 path the radiance per channel
-        k.h2 = { j.h2 ? 1.0f : 0.0f, (float)j.ohE, (float)std::clamp(1.0 / std::max(oapiGetFrameRate(), 1.0), 1.0 / 240, 0.1), 0 };
+        k.h2 = { j.h2 ? 1.0f : 0.0f, (float)j.ohE, (float)std::clamp(1.0 / std::max(oapiGetFrameRate(), 1.0), 1.0 / 240, 0.1), (float)std::max(std::max(j.flameZ, j.glowZ), 4 * j.rj) };
         k.kc = { (float)kc[0], (float)kc[1], (float)kc[2], (float)j.fsU };
         for (int q = 0; q < 8; q++) k.oh[q] = { j.ohMix[4 * q], j.ohMix[4 * q + 1], j.ohMix[4 * q + 2], j.ohMix[4 * q + 3] };
         XMStoreFloat4x4(&k.vp, XMMatrixTranspose(g_exViewProj));
@@ -635,6 +665,7 @@ void ExhaustFx::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, co
     {
         PipeState saved(ctx);      // everything as it was on return
         if (partsOk) parts.Update(gc, sc, jets);
+        SmokeUpdate(gc, sc, smoke);
         ComPtr<ID3D11RenderTargetView> rtv; ComPtr<ID3D11DepthStencilView> dsv;
         ctx->OMGetRenderTargets(1, &rtv, &dsv);
         bool any = (cfg.glow && !heat.empty()) || (cfg.plumes && !jets.empty()) || partsOk;
@@ -658,6 +689,7 @@ void ExhaustFx::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, co
             }
             DrawPlumes(gc, sc);
             if (partsOk) parts.Render(gc, sc, gc->depthSRV.Get());
+            SmokeRender(gc);
             SprayRender(gc, sc, gc->depthSRV.Get());
             RenderVesselExhausts(gc, sc.cp);
             ID3D11ShaderResourceView* nul[2] = {};
@@ -683,7 +715,7 @@ ExhaustFx fx;
 // ------------------------------------------------------------------------------------------ the client's hooks
 void ExhaustInit(D3D11Client* gc) { if (!fx.Init(gc)) { LOGC("exhaust effects FAILED (shaders or resources; see above)"); fx.Release(); } }
 void ExhaustRender(D3D11Client* gc, const VECTOR3& camPos, const MATRIX3& camRot, const XMMATRIX& proj, double simDt) { fx.Render(gc, camPos, camRot, proj, simDt); }
-void ExhaustRelease() { fx.Release(); SprayRelease(); VesselExhaustRelease(); }
+void ExhaustRelease() { fx.Release(); SprayRelease(); VesselExhaustRelease(); SmokeRelease(); }
 void ExhaustEmit(OBJHANDLE h, int id, const double* pos, const double* vel, double cone, double spread, double kgps, int kind, int ground, double wet, double life, double jetJ)
 {
     fx.parts.Emit(h, id, pos, vel, cone, spread, kgps, kind, ground, wet, life, jetJ);

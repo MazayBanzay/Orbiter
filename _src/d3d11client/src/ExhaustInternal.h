@@ -52,6 +52,8 @@ struct ExJet
     bool h2 = false;
     double fsU = 0.03;                 // the table's scale: the stoichiometric share (with oxygen), else 0.03
     float ohMix[32] = {};              // [OH] [1e20 m^-3] over u (H2Chem::MixTable)
+    float tMix[32] = {};               // the mix's temperature [K] over u
+    double glowZ = 0;                  // down to where the axis' mix still glows (OH^2 > 1 % of its peak) [m]
     double ohE = 0;                    // [OH] at the exit [1e20 m^-3] (the vacuum source flow carries it, frozen)
     double flameZ = 0;                 // where the axis reaches the stoichiometric mix [m] (the box's reach; 0: no flame)
     double cond = 0, condZ = 0;        // the share of its water that condenses (Schmidt-Appleman) and where it is emitted [m]
@@ -68,6 +70,24 @@ void SprayRender(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResourceView* d
 // the vessels' own exhausts (AddExhaust), volumetric (VesselExhaust.cpp): in the exhaust pass, t5/s3 bound
 void RenderVesselExhausts(D3D11Client* gc, const VECTOR3& cp);
 void SprayRelease();             // with the device (Spray.cpp)
+// the engines' smoke and condensate as a 3D flow (Smoke.cpp): one source per engine this frame
+struct SmokeSrc
+{
+    VECTOR3 eg, dg;                    // exit and the gas's direction (global)
+    double rExit = 0.04;
+    double kJ = 0;                     // sqrt(momentum flux / the air's density) [m2/s]: the free jet's 7 kJ / z
+    double mVis = 0;                   // visible mass formed [kg/s] (condensate; later soot)
+    double zFull = 1;                  // it forms over 0..zFull with the share (z / zFull)^2 [m]
+    double inject = 1;                 // the length the jet's own flow is imposed over [m] (then the solver carries it)
+    double Tex = 0;                    // the mix's excess temperature there [K] (buoyancy)
+    double decay = 0;                  // the visible mass's loss [1/s] (evaporation; 0 on Titan)
+};
+bool SmokeEnabled();             // Exhaust.cfg Smoke (default on)
+void SmokeUpdate(D3D11Client* gc, const ExScene& sc, const std::vector<SmokeSrc>& src);   // after the particles' update
+void SmokeRender(D3D11Client* gc);                     // in the exhaust pass (t5 depth, s3 bound)
+bool SmokeLive();                // the flow ran this frame
+void SmokeShimmer(D3D11Client* gc);                    // its hot gas's refraction into the bound offset target (additive)
+void SmokeRelease();             // with the device
 void VesselExhaustRelease();     // with the device (VesselExhaust.cpp)
 
 class GpuParticles

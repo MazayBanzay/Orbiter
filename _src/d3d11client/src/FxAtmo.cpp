@@ -394,6 +394,7 @@ void Atmosphere::UpdateExposure(const VECTOR3& cp)
         VECTOR3 E = current->LightAt(cp, sunPos, false), En = current->LightAt(cp, sunPos, true);
         for (int i = 0; i < 3; i++) g_fxAtmo.light[i] = (float)E.data[i];
         double Y = lum(E), Ynoon = lum(En);
+        { float StormCameraLight(); const double sl = StormCameraLight(); Y *= sl; Ynoon *= sl; }   // under Earth's storm clouds (Storm.cpp): the eye adapts to the overcast
         // under a storm's deck (Storm.cpp sets the share of the light that reaches the camera; 1 without one) the eye
         // adapts to the dim light there, not to the clear sky's
         const double sl = std::clamp((double)g_stormLight, 1e-3, 1.0);

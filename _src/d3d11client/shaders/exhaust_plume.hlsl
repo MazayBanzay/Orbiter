@@ -30,7 +30,7 @@ cbuffer Plume : register(b5)
     float4 pJet;    // rj, Lc, cell length, shock amplitude (T2/T1 - 1, weakened)
     float4 pVac;    // vacuum weight 0..1, theta_max, rho_e, level (flicker)
     float4 pAir;    // rho of the jet at the ambient pressure, spreading slope, seed, the eddies' convection speed [m/s]
-    float4 pH2;     // hydrogen: x on, y [OH] at the exit [1e20 m^-3], z the frame's exposure [s] (the shutter)
+    float4 pH2;     // hydrogen: x on, y [OH] at the exit [1e20 m^-3], z the frame's exposure [s], w the glow's reach [m]
     float4 pKc;     // the continuum's radiance per [OH]^2 [(1e20 m^-3)^2] per metre, per channel (x kE); w: the table's fs
     float4 pOH[8];  // [OH] [1e20 m^-3] over u = c / (c + fs), 32 entries at (i + 0.5) / 32
     float4x4 pVP;
@@ -113,8 +113,12 @@ void Field(float3 q, out float kappa, out float T, out float oh2)
             float caxH = min(1, Lc / zc);
             float uc = 2 * pAir.w * caxH;                          // the axis' speed ~ ve c_axis
             float fe = 0.6 * uc / max(b, 1e-3);                     // the energetic eddies' passage frequency [Hz]
-            float vis = 1 / (1 + fe * pH2.z);                       // the share the exposure still resolves
-            float phE = frac(gShT * fe / 64) * 64;                  // (wrapped: past f dt ~ 1 the phase is random anyway)
+            // the share the exposure still resolves: near the exit the eddies pass in microseconds (smeared, steady); down
+            // the jet and at its edge the flow is slower and intermittent - the tip and the fringe flicker and tear, as a
+            // camera sees a real jet. The phase advances no faster than the frames can show (no strobing)
+            float far = saturate(max(zc / max(pH2.w, 1e-3), length(q.xy) / max(b, 1e-4) - 0.4));
+            float vis = max(1 / (1 + fe * pH2.z), lerp(0.3, 1.0, far));
+            float phE = gShT * min(fe, 0.45 / max(pH2.z, 1e-3));
             float3 nq = float3(q.xy / max(b, 1e-3) * 1.2, log(zc / max(rj, 1e-3)) / pAir.y * 0.45 - phE) + pAir.z * 13;
             float3 wv = float3(ExNoise(nq), ExNoise(nq + float3(5.2, 1.3, 7.7)), ExNoise(nq + float3(9.1, 3.7, 2.9)));
             wv += 0.5 * float3(ExNoise(nq * 2.1 + 3.3), ExNoise(nq * 2.1 + 8.1), ExNoise(nq * 2.1 + 1.7));
@@ -184,7 +188,7 @@ PSOut PS(VSOut i)
     float3 L = 0; float tr = 1;
     float kE = pX.w;
     // the moment within the frame's exposure (another low-discrepancy share per pixel; TAA averages the shutter)
-    gShT = fmod(pY.w, 64) + frac(jit * 1.6180339 + 0.37) * pH2.z;
+    gShT = pY.w + frac(jit * 1.6180339 + 0.37) * pH2.z;
     [loop] for (int k = 0; k < n; k++) {
         float t = ta + (k + jit) * ds;
         float kap, T, oh2;

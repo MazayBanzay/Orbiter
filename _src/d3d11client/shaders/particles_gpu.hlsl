@@ -35,6 +35,7 @@ struct Part
 #define F_LIQUID 0x200u
 #define F_HARD 0x400u
 #define F_GROUNDCOL 0x800u
+#define F_COND 0x1000u      // a Gaussian puff of condensate (ice/droplets out of an exhaust): ug0.x its extinction cross-section [m2]
 
 cbuffer Sim : register(b5)
 {
@@ -201,13 +202,19 @@ void CSSim(uint3 id : SV_DispatchThreadID)
                     if (q.gustT <= 0) {     // a new eddy: cubed uniform per axis, 0.3 of the local flow
                         uint sd = ExHash(id.x * 977u + (uint)(sTime.w * 60.0) * 131u + s);
                         float3 r3 = float3(ExRand(sd), ExRand(sd + 1), ExRand(sd + 2)) * 2 - 1;
-                        q.gust = r3 * r3 * r3 * 0.3 * (length(ug) + 0.05);
+                        q.gust = r3 * r3 * r3 * ((q.flags & F_COND) ? 0.3 : 0.3 * (length(ug) + 0.05));   // (condensate: its spread is the diffusion below)
                         q.gustT = 0.2 + 0.4 * ExRand(sd + 3);
                     }
                     float3 uf = ug + q.gust;
-                    if (airborne && s == 0) uf += Curl(q.p * 0.8 + float3(0, 0, sTime.w * 0.1)) * (0.15 + 0.3 * length(ug));
+                    if (airborne && s == 0) uf += Curl(q.p * 0.8 + float3(0, 0, sTime.w * 0.1)) * ((q.flags & F_COND) ? 0.2 : 0.15 + 0.3 * length(ug));
                     float3 rel = q.v - uf;
                     float rv = length(rel);
+                    // a condensate puff spreads: within a jet as the jet does (its width ~0.1 of the way it has run, so
+                    // d sigma / dt ~ 0.1 |u_gas|), beyond it by the air's own turbulence (~0.15 m/s near the ground)
+                    // (within the free jet - its first ~0.3 s - it widens with the jet, d sigma / dt ~ 0.1 |u|; then
+                    // the air's turbulent diffusion, d sigma^2 / dt = 2 K, K ~ 0.05 m2/s near the ground on a calm day)
+                    if (q.flags & F_COND)
+                        q.s0 = min(q.s0 + h * (0.1 * length(ug) * saturate(1 - q.age / 0.3) + (dense ? 0.05 : 0.005) / max(q.s0, 0.02)), 3);
                     // a drop breaks up in the gas to the Weber limit (bag break-up, We ~12): more, smaller drops, the cloud
                     // denser for the same mass (opacity ~ m / (rho d))
                     if (look == LOOK_DROP && sLiq.x > 0) {
@@ -242,6 +249,9 @@ void CSSim(uint3 id : SV_DispatchThreadID)
                         q.v = 0;
                         break;
                     }
+                    // fog (crystals of a few um, carried by the gas) does not land: it flows along the surface with the
+                    // wall jet and the wind - only the velocity into the ground goes
+                    if (look == LOOK_FOG) { float vn = dot(q.v, n); if (vn < 0) q.v -= vn * n; continue; }
                     bool bounce = look != LOOK_FOG && !(q.flags & F_HARD) && q.d > 1e-3 && sp > 1;
                     if (bounce) { q.v = (q.v - 2 * dot(q.v, n) * n) * 0.3; }
                     else {
@@ -306,6 +316,13 @@ VSOut VS(uint vid : SV_VertexID, uint inst : SV_InstanceID)
     if (look == LOOK_SPOT) { s = q.s0; a = q.a0 * saturate((life - t) / 2.0) * min(1, 4 * t); }
     else if (q.flags & F_HARD) { a = q.a0 * min(1, 30 * t) * ((q.flags & F_SETTLED) ? saturate((life - t) / 2) : 1); }
     else if (look == LOOK_DROP) { a = q.a0 * min(1, 20 * t) * saturate((life - t) / 0.5); }
+    else if (q.flags & F_COND) {
+        // a Gaussian puff (sigma = s0): the quad 2.5 sigma; the column's optical depth at the centre X / (2 pi sigma^2),
+        // the puff's extinction cross-section X spread over its growing area (mass conserved); it forms in ~0.1 s and
+        // sublimates / evaporates over the end of its life
+        s = 2.5 * q.s0;
+        a = q.ug0.x / (6.2831853 * q.s0 * q.s0) * min(1, 10 * t) * saturate((life - t) / min(3, 0.5 * life));
+    }
     else if (look == LOOK_FOG && life < 6) {
         s = min(q.s0 + (dense ? 0.3 : 0.6) * t, 3);
         float x = t / life; a = q.a0 * min(1, 20 * t) * max(0, 1 - x * x);
@@ -324,7 +341,7 @@ VSOut VS(uint vid : SV_VertexID, uint inst : SV_InstanceID)
     const bool vacGrain = !dense && look == LOOK_GRAIN && !(q.flags & F_SETTLED);
     if (!flat && !(q.flags & F_SETTLED) && look != LOOK_DROP && !vacGrain) {   // a sprite does not poke into the ground
         float h = dot(q.p.xz, q.p.xz) / (2 * dGeo.x) + q.p.y - q.gy;
-        float lift = (q.flags & F_HARD ? 0.8 : 0.6) * s - h;
+        float lift = (q.flags & F_COND) ? 0 : (q.flags & F_HARD ? 0.8 : 0.6) * s - h;   // (a puff of fog: soft against the depth instead)
         if (lift > 0) wp += upW * lift;
     }
     float dist = length(wp);
@@ -384,7 +401,7 @@ VSOut VS(uint vid : SV_VertexID, uint inst : SV_InstanceID)
     o.col = float4(alb, a);
     float g = (look == LOOK_DROP || look == LOOK_MIST || look == LOOK_FOG) ? 0.8 : look == LOOK_ICE ? 0.6 : fines ? 0.5 : 0.3;
     if (!dense && (look == LOOK_GRAIN || look == LOOK_CLOD)) g = -0.3;   // airless regolith: its grains scatter back (Hapke)
-    o.misc = float4(vacGrain ? 8 : look, q.seed, s, g);                    // 8: a grain's streak (PS)
+    o.misc = float4(vacGrain ? 8 : (q.flags & F_COND) ? 9 : look, q.seed, s, g);   // 8: a grain's streak, 9: a condensate puff (PS)
     // the shadow map looked up a little above the sprite (along the local up, as the surfaces offset along their normal):
     // a grain at the ground's height otherwise fell in the ground's own shadow - black dust
     o.sun = SunLight(wp) * ShadowAtN(wp, upW * 2.0) * tr;
@@ -442,7 +459,17 @@ float4 PS(VSOut i) : SV_Target
         float3 N = normalize(Rw * d.x + Uw * d.y - V * sqrt(saturate(1 - r2)));
         float3 upW = normalize(float3(dM0.y, dM1.y, dM2.y));
         float ph = HG(i.misc.w, dot(V, Lsun));          // scattering angle: the light along -Lsun, out along -V
-        if (look == 8) {
+        if (look == 9) {
+            // a condensate puff: the Gaussian's column optical depth tau_c exp(-r^2 / 2 sigma^2) (r in sigmas: 2.5 d), its
+            // opacity 1 - e^-tau - overlapping puffs multiply their transmittances: the plume's own Beer-Lambert. Lit
+            // as a cloud of tiny ice: forward-peaked single scattering when thin, a lit body with its own shade when thick
+            float tau = a * exp(-3.125 * r2);
+            a = 1 - exp(-tau);
+            // a medium has no surface: no normal, no lit side - the Sun's light by the phase function (towards the
+            // plain average of directions as it thickens and scatters many times), the sky's and the ground's ambient
+            float thick = saturate(i.col.a * 0.5);
+            c = alb * (i.sun * lerp(ph, 1.0, 0.6 * thick) + lerp(i.gnd, i.sky, 0.6));
+        } else if (look == 8) {
             // a grain's streak in a vacuum: optically thin, singly scattered - the body's colour under the Sun by the
             // phase, no self-shadow; the faint ambient of space and the ground's bounce below
             a *= pow(saturate(1 - r2), 1.5);                          // a soft ellipse along the velocity (never a square)
