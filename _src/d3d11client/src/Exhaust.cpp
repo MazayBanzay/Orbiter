@@ -533,6 +533,8 @@ void ExhaustFx::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, co
             }
             DrawPlumes(gc, sc);
             if (partsOk) parts.Render(gc, sc, gc->depthSRV.Get());
+            SprayRender(gc, sc, gc->depthSRV.Get());
+            RenderVesselExhausts(gc, sc.cp);
             ID3D11ShaderResourceView* nul[2] = {};
             ctx->PSSetShaderResources(5, 2, nul);
         }

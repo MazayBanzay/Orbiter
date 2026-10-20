@@ -40,8 +40,10 @@ try {
     $logs = Join-Path $PSScriptRoot "logs"; New-Item -ItemType Directory -Force -Path $logs | Out-Null
     $stamp = (Get-Date -Format "HHmmss") + "_" + ($Scenario -replace '[^A-Za-z0-9]', '_')
     Copy-Item -LiteralPath (Join-Path $orb "Orbiter.log") -Destination (Join-Path $logs "$stamp.log") -Force
+    $own = Join-Path $orb ("Modules\D3D11Client\shots\start_" + $p.Id + ".png")    # this run's own shot (Client.cpp)
     $shot = Join-Path $orb "Modules\D3D11Client\shots\start.png"
-    if (Test-Path $shot) { Copy-Item -LiteralPath $shot -Destination (Join-Path $logs "$stamp.png") -Force }
+    if (Test-Path $own) { Move-Item -LiteralPath $own -Destination (Join-Path $logs "$stamp.png") -Force }
+    elseif (Test-Path $shot) { Copy-Item -LiteralPath $shot -Destination (Join-Path $logs "$stamp.png") -Force; "shot: no own shot, start.png copied (may be another run's)" }
     "log: " + (Join-Path $logs "$stamp.log")
 } finally {
     Remove-Item Env:D3D11CLIENT_TEST -ErrorAction SilentlyContinue

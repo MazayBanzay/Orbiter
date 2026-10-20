@@ -364,6 +364,7 @@ void GpuParticles::SpawnSource(ExScene& sc, OBJHANDLE h, Source& s, std::vector<
     const double hLiq = sc.Rliq > 0 ? length(pg - sc.pp) - sc.Rliq : 1e9;
     if (s.kind != 3 && hLiq < 0.05) return;
     if (s.kind == 3 && hLiq < 0.02) p0.y += 0.02 - hLiq;
+    // (Spray.cpp's baked sheet cards are off: the spray is the drops alone, each independent - the user, 2026-10-20)
     const int ground = s.kind == 0 && sc.Rliq > 0 && Rground - sc.Rliq < 0.3 ? (int)EXG_WET : s.ground;
     if (s.jetJ > 0 && sc.dense && fj.size() < 16) {
         fj.push_back(F4(p0, sqrt(s.jetJ / sc.rhoG)));
@@ -410,6 +411,9 @@ void GpuParticles::SpawnSource(ExScene& sc, OBJHANDLE h, Source& s, std::vector<
         const bool longLived = !G.hard && G.k.d < 5e-5 && s.kind != 2;
         const double cap = (longLived ? 5.0 : std::max(30.0, 160.0 * G.k.frac)) * capK * 4.0;
         double rate = std::max(std::min(want, cap), std::min((longLived ? 5.0 : 20.0) * capK, 50.0 * want));
+        // drops: each sprite one drop seen (the stream's real count is ~1e7/s: a representative few thousand per second,
+        // as real-time spray is drawn), shared by the size classes
+        if (s.kind == 3) rate = std::clamp(1500.0 * s.kgps, 300.0, 6000.0) * G.k.frac * capK;   // (a few seconds aloft on Titan: up to ~20k drawn at once)
         if (G.hard) rate = std::max(rate, kc / 0.3);
         const double m = kc / rate;
         s.acc[c] += rate * dt;
@@ -521,9 +525,9 @@ void GpuParticles::Update(D3D11Client* gc, ExScene& sc, const std::vector<ExJet>
         k.m1 = { (float)c0.y, (float)c1.y, (float)c2.y, (float)o.y };
         k.m2 = { (float)c0.z, (float)c1.z, (float)c2.z, (float)o.z };
         XMStoreFloat4x4(&k.vp, XMMatrixTranspose(g_exViewProj));
-        bool groundCol = false;
-        for (const GPart& q : spawn) if (q.flags & F_GROUNDCOL) { groundCol = true; break; }
-        if (groundCol && gc->hdrCopy && gc->hdrCopySRV) { gc->CopySceneColour(gc->hdrCopy.Get()); sceneCopy = true; } else sceneCopy = false;
+        // the grains' colour is the body's (Render: the albedo table by body and class), not read back from the frame:
+        // the lit, shadowed, tone-mapped frame under a wheel gave black or wrong grains (the user, 2026-10-20)
+        sceneCopy = false;
         k.liq = { (float)sc.sigma, (float)sc.rhoL, sc.Rliq > 0 ? (float)(sc.Rliq - length(sc.aP)) : -1e9f, sceneCopy ? 1.0f : 0.0f };
     }
     for (size_t i = 0; i < imp.size() && i < 16; i++) k.imp[i] = imp[i];

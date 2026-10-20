@@ -16,6 +16,9 @@ cbuffer Tile : register(b1)
     float4 gEl;         // x: tile centre radius - R, y: its radius, z: liquid level over R, w: 1 = liquid
     float4 gGround[3];  // ground classes: [0] the tile centre in the site grid [m], 1/extent; [1] east, w 1 = on; [2] north
     float4 gMaskUV;     // the liquid mask (own or an ancestor's): scale u, v, offset u, v; on when gMisc.z > 0
+    float4 gShore;      // the coast (with the mask's distance field): x its texel [m] (0: none), y the beach's slope,
+                        // z the skirts' drop [m]
+    float4 gShore2;     // y: without a field, the mask round the tile all land (+1e3) or all liquid (-1e3), 0 none; x, z, w: 0
 };
 Texture2D tSurf : register(t0);
 Texture2D tMic0 : register(t1);     // finest
@@ -25,6 +28,7 @@ Texture2D tGc : register(t4);       // ground material, cobble field: r height [
 Texture2D tGs : register(t5);       // ground material, sand
 Texture2D tMask : register(t15);     // liquid mask: alpha 0 = liquid
 Texture2D tGround : register(t6);   // ground class weights: r sand, g cobbles, b ice bedrock, a wet margin
+Texture2D<float> tSdf : register(t16);   // the coast's signed distance in mask texels (+ land), Planet::CoastField
 SamplerState sAniso : register(s0);
 SamplerState sClamp : register(s1);
 
@@ -40,16 +44,57 @@ float ElevAt(float3 p)
     return gEl.x + a / (sqrt(rc * rc + a) + rc);
 }
 
-VSOut VS(VSIn v)
+// ---- the coast. The elevation steps 0.1 m on a grid of metres, the liquid's level lies between two steps: the terrain
+// would cross it along its own cells, and the shallows (seen through the liquid) would trace those cells too; the masks
+// themselves draw the coast in steps of a few metres. So near the coast the ground is laid as a beach of the masks'
+// distance field, smoothed over ~4 m (Planet::CoastField): rising from the coast on land (or the mesh where it stands
+// higher), sinking from it under the liquid, the mesh again some metres off. The drawn coast is the field's zero along
+// the triangles - a smooth curve - and no depth is written per pixel (that would cost the early depth test and the
+// depth buffer's compression for the tile and the passes after it).
+float CoastDist(float2 tuv)         // [m] from the coast at a tile uv, + on land (bilinear by hand: the VS has no sampler)
+{
+    float w, h; tSdf.GetDimensions(w, h);
+    float2 p = (tuv * gMaskUV.xy + gMaskUV.zw) * w - 0.5, i0 = floor(p), f = p - i0;
+    int2 a = clamp(int2(i0), 0, int(w) - 1), b = clamp(int2(i0) + 1, 0, int(w) - 1);
+    float s = lerp(lerp(tSdf.Load(int3(a.x, a.y, 0)), tSdf.Load(int3(b.x, a.y, 0)), f.x),
+                   lerp(tSdf.Load(int3(a.x, b.y, 0)), tSdf.Load(int3(b.x, b.y, 0)), f.x), f.y);
+    return s * gShore.x;
+}
+// the bed under the liquid s (< 0) from the coast: 12 cm a metre down to 12 m out (the masks' fields reach ~16 m;
+// past them, and in tiles all liquid, it stays there - the same at every tile's edge)
+float CoastBed(float s) { return -0.02 - 0.12 * min(-s, 12); }
+float CoastElev(float d, float s)   // the drawn height over the level for the mesh's d, s from the coast
+{
+    // within 1 m of the coast the beach alone (4 cm a metre), through zero at the field's zero: the drawn coast is that
+    // smooth curve (linear in s across each triangle); the mesh again by 4 m - land: as it is, never under the level
+    // (no pools where the mask has dry ground); liquid: the bed or the mesh where deeper, never over the level (no islets
+    // of the mesh's steps where the mask has liquid). The mesh moves 1.5 m at most (a deeper hollow or a higher rock is
+    // the data's own)
+    float p = gShore.y * s;
+    if (s >= 0) return lerp(p, min(max(d, 0.02), d + 1.5), smoothstep(1, 4, s));    // land: the mesh itself from 4 m in
+    return lerp(p, max(min(d, CoastBed(s)), d - 1.5), smoothstep(1, 4, -s));
+}
+
+VSOut VS(VSIn v, uint vid : SV_VertexID)
 {
     VSOut o;
-    o.pos = mul(float4(v.p, 1), gWVP);
+    float3 p = v.p;
+    float3 up = normalize(gMicC.xyz + v.p);
+    float e = ElevAt(v.p);
+    if (gShore.x > 0 || gShore2.y != 0) {               // a field, or a mask all land (+) or all liquid (-) round the tile
+        float d = e - gEl.z;
+        const bool skirt = vid >= 65 * 65;              // the skirts hang the same way under their edge
+        if (skirt) d += gShore.z;
+        float dd = CoastElev(d, gShore.x > 0 ? CoastDist(v.uv) : gShore2.y) - d;
+        p += up * dd; e += dd;
+    }
+    o.pos = mul(float4(p, 1), gWVP);
     o.n = mul(v.n, (float3x3)gRot);
-    o.wp = mul(float4(v.p, 1), gW).xyz;
+    o.wp = mul(float4(p, 1), gW).xyz;
     o.uv = v.uv * gUV.xy + gUV.zw;
-    o.lp = v.p;
-    o.up = normalize(gMicC.xyz + v.p);
-    o.elev = ElevAt(v.p);
+    o.lp = p;
+    o.up = up;
+    o.elev = e;
     return o;
 }
 
@@ -117,6 +162,12 @@ float GHeight(float2 uv, float2 dx, float2 dy, float wc)
 }
 
 // alb, n (global), sun visibility and sky occlusion from the ground material
+// what GroundDetail found near the camera, kept for the local lights' cobble shadows (CobbleVis, Lights.cpp's lamps)
+static bool gdNear = false;
+static float2 gdUV, gdDx, gdDy;
+static float gdH, gdWc, gdK;
+static float3 gdT, gdB, gdUp;
+static float gdF = 1, gdFL = 1;      // GroundDetail's albedo factor, and the local lights' one in its place
 void GroundDetail(VSOut i, inout float3 alb, inout float3 n, out float sunVis, out float skyOcc)
 {
     sunVis = 1; skyOcc = 1;
@@ -157,6 +208,7 @@ void GroundDetail(VSOut i, inout float3 alb, inout float3 n, out float sunVis, o
         float hq = GHeight(pp, dx, dy, wc);               // refine between the last two steps
         float t = saturate((zp - hq) / max((zp - hq) - (z - hp), 1e-5));
         uvF = lerp(pp, p, t); hF = lerp(zp, z, t);
+        gdNear = true; gdUV = uvF; gdH = hF; gdDx = dx; gdDy = dy; gdWc = wc; gdT = T; gdB = B; gdUp = up; gdK = smoothstep(12, 6, dist);
         // the cobbles' shadows: a short ray towards the Sun
         float3 L = gSunL.xyz;
         float lz = dot(L, up);
@@ -181,58 +233,104 @@ void GroundDetail(VSOut i, inout float3 alb, inout float3 n, out float sunVis, o
     n = normalize(lerp(n, mul(nd, (float3x3)gRot), fade));
     skyOcc = lerp(1, m.a, fade);
     alb *= lerp(1, lerp(1, 1.6, saturate((hF - 0.004) / 0.012)) * lerp(0.75, 1, m.a), fade);   // ice cobbles brighter
+    // (for the local lights: the factor taken back out - the ridges' x1.6 and the occlusion are the diffuse sky's; a lamp's
+    // N.L and the cobbles' shadow make them, the ice a little lighter by its material, x1.1 - titan-surface, 20.10.2026)
+    gdF = lerp(1, lerp(1, 1.6, saturate((hF - 0.004) / 0.012)) * lerp(0.75, 1, m.a), fade);
+    gdFL = lerp(1, lerp(1, 1.1, saturate((hF - 0.004) / 0.012)), fade);
 }
 
-// the coastline as the D3D9 client draws it: from the liquid mask, per pixel. The elevation data steps 0.1 m and the
-// liquid level sits between two steps, so the terrain crosses it along the sample grid (a staircase). Within 15 cm of
-// the level the depth written here says land or liquid as the mask does (the liquid pass decides by depth); the
-// geometry itself is not moved, so whatever stands there stands at the physics height.
-// the mask's alpha through a cubic B-spline (4 bilinear taps): its texels (metres wide, DXT5-blocked) would draw the
-// coast as rounded steps; the spline makes it a smooth curve
-float MaskCubic(float2 uv)
+// the surface textures paint the masks' stepped coast (the liquid black, a pale rim): near the field's smooth coast the
+// colour is taken 6 m further inland, up the field's gradient - the dry ground's own; under the liquid that beach darkens
+// to a tenth over 4 m (the bed the textures paint dark); the texture's own again 8..10 m inland and 10..12 m out
+float3 CoastAlbedo(VSOut i, float3 alb)
 {
-    float mw, mh; tMask.GetDimensions(mw, mh);
-    float2 sz = float2(mw, mh);
-    float2 st = uv * sz - 0.5, i0 = floor(st), f = st - i0;
-    float2 f2 = f * f, f3 = f2 * f;
-    float2 w0 = (-f3 + 3 * f2 - 3 * f + 1) / 6, w1 = (3 * f3 - 6 * f2 + 4) / 6;
-    float2 w2 = (-3 * f3 + 3 * f2 + 3 * f + 1) / 6, w3 = f3 / 6;
-    float2 g0 = w0 + w1, g1 = w2 + w3;
-    float2 h0 = (i0 - 0.5 + w1 / g0) / sz, h1 = (i0 + 1.5 + w3 / g1) / sz;
-    return g0.y * (g0.x * tMask.SampleLevel(sClamp, float2(h0.x, h0.y), 0).a + g1.x * tMask.SampleLevel(sClamp, float2(h1.x, h0.y), 0).a)
-         + g1.y * (g0.x * tMask.SampleLevel(sClamp, float2(h0.x, h1.y), 0).a + g1.x * tMask.SampleLevel(sClamp, float2(h1.x, h1.y), 0).a);
-}
-
-float ShoreDepth(VSOut i)
-{
-    float depth = i.pos.z;
-    if (gMisc.z <= 0 || gEl.w <= 0) return depth;
-    float d = i.elev - gEl.z;
-    // the band where the mask decides grows with the distance: the farther tiles' meshes stand off the full-resolution
-    // ground by more (a coarser grid over 0.1 m steps), and there the terrain would cross the level along its grid
-    float tol = min(0.15 + 0.004 * length(i.wp), 1.5);   // at most 1.5 m: farther the coarse masks would move the coast
-    float w = 1 - smoothstep(tol * 0.67, tol, abs(d));
-    if (w <= 0) return depth;
     float2 tuv = (i.uv - gUV.zw) / gUV.xy;
-    float m = MaskCubic(tuv * gMaskUV.xy + gMaskUV.zw);
-    float target = (smoothstep(0.35, 0.65, m) - 0.5) * 0.1;      // 5 cm above the level on land, below on liquid
-    float4 cp = mul(float4(i.lp + normalize(i.up) * (target - d) * w, 1), gWVP);
-    return cp.z / cp.w;
+    float s = CoastDist(tuv);
+    if (s > 10 || s < -12) return alb;
+    float w, h; tSdf.GetDimensions(w, h);
+    float2 e = 1 / (w * gMaskUV.xy);                    // a field texel in tile uv
+    float2 g = float2(CoastDist(tuv + float2(e.x, 0)) - s, CoastDist(tuv + float2(0, e.y)) - s) / e;   // [m per uv]
+    float2 dir = g / max(dot(g, g), 1e-6);              // uv per metre of s
+    float2 dx = ddx(i.uv), dy = ddy(i.uv);
+    float3 land = tSurf.SampleGrad(sClamp, (tuv + dir * (6 - min(s, 0))) * gUV.xy + gUV.zw, dx, dy).rgb;   // 6 m inland
+    if (s >= 0) return lerp(alb, land, 1 - smoothstep(8, 10, s));
+    return lerp(alb, land * lerp(1, 0.1, smoothstep(0, 4, -s)), 1 - smoothstep(10, 12, -s));   // the beach going under, darkening
+}
+
+// the cobbles' shadow towards a local light (global direction Lg): the same short ray over the height map as the Sun's
+// in GroundDetail (its 0.018 m steps and 0.008 m softness are the cobbles' geometry), near the camera only
+float CobbleVis(float3 Lg)
+{
+    if (!gdNear) return 1;
+    float3 L = mul((float3x3)gRot, Lg);                  // to the planet frame (as V in GroundDetail)
+    float lz = dot(L, gdUp);
+    if (lz <= 0.03) return 1 - gdK;
+    float2 kl = float2(dot(L, gdT), dot(L, gdB)) / lz * gGm.w;
+    float occ = 0;
+    [unroll] for (int s2 = 1; s2 <= 4; s2++) {
+        float zz = gdH + s2 * 0.018;
+        occ = max(occ, GHeight(gdUV + kl * (zz - gdH), gdDx, gdDy, gdWc) - zz);
+    }
+    return lerp(1, saturate(1 - occ / 0.008), gdK);
+}
+// the local lights on the ground (lights.hlsli's list and photometry), each shadowed by the cobbles
+float3 LocalLightsGround(float3 wp, float3 n, float3 ng, float3 alb)
+{
+    if (!LocalLightsOn()) return 0;
+    float3 s = 0, Ld;
+    uint2 cl = LocalCluster(wp);
+    uint cnt = cl.y == 0xFFFFFFFF ? min((uint)gLGrid.w, 64) : cl.y;
+    [loop] for (uint k = 0; k < cnt; k++) {
+        LocalLightG L = tLights[cl.y == 0xFFFFFFFF ? k : tLIndex[cl.x + k]];
+        float3 E = LocalLightE(L, wp, ng, Ld);
+        if (!any(E > 0)) continue;
+        s += E * saturate(dot(n, Ld)) * CobbleVis(Ld);
+    }
+    return alb * s;
 }
 
 float4 Shade(VSOut i)
 {
     float3 alb = gMisc.x > 0 ? tSurf.Sample(sClamp, i.uv).rgb : float3(0.5, 0.5, 0.5);
+    if (gShore.x > 0 && gMisc.x > 0) alb = CoastAlbedo(i, alb);
+    if (abs(gShadow.z - 6) < 0.5) return float4(alb * 0.5 / max(gHazeRGB.w * gAdapt.rgb, 1e-4), 1);   // test view: the albedo alone
     float3 n = normalize(i.n);
-    if (gMicF.w > 0) Micro(i, alb, n);
+    if (gMicF.w > 0 && gShadow.z < 11.5) Micro(i, alb, n);     // (test runs: SHADOWDBG 12, 13 profile without it)
     float sunVis = 1, skyOcc = 1;
-    if (gGm.w > 0) GroundDetail(i, alb, n, sunVis, skyOcc);
-    float nl = saturate(dot(n, gSunDir.xyz)) * ShadowAtN(i.wp, normalize(i.n)) * sunVis;
-    float3 col = alb * (nl * SunLight(i.wp) + SkyLight(n, i.wp) * skyOcc);
+    if (gGm.w > 0 && gShadow.z < 10.5) GroundDetail(i, alb, n, sunVis, skyOcc);   // (test runs: SHADOWDBG 11 profiles without it)
+    float nl = saturate(dot(n, gSunDir.xyz)) * (gShadow.z > 12.5 ? 1 : ShadowAtN(i.wp, normalize(i.n))) * sunVis;   // (13: without the shadow)
+    float3 sky = SkyLightShaded(n, i.wp, normalize(i.n)) * skyOcc * SkyVisibility(i.wp, normalize(i.n));   // under a vehicle less sky (lights.hlsli)
+    float3 col = alb * (nl * SunLight(i.wp) + sky);
+    {   // headlights, lamps on the ground: the material's albedo (no sky occlusion in it), the detail normal softened (a near,
+        // low light: the full one turns the cobbles to 0/1 patches), the cobbles' shadows towards each lamp
+        float3 nL = normalize(lerp(normalize(i.n), n, 0.6));
+        col += LocalLightsGround(i.wp, nL, normalize(i.n), alb / max(gdF, 0.05) * gdFL);
+    }
+    if (gShadow.z > 1.5 && gShadow.z < 9.5) {
+        float sl = dot(saturate(dot(n, gSunDir.xyz)) * sunVis * SunLight(i.wp), 1.0 / 3), kl = dot(SkyLight(n, i.wp) * skyOcc, 1.0 / 3);
+        float4 au = Aureole();
+        float3 c = gShadow.z < 2.5 ? float3(sl, kl, 0) / max(sl + kl, 1e-9)     // =2: red the Sun's share of the light, green the sky's
+                 : gShadow.z < 3.5 ? (dot(nl * SunLight(i.wp), 1.0 / 3) + dot(sky, 1.0 / 3)) / max(sl + kl, 1e-9)   // =3: the light left by all the shadows
+                 : float3(nl, AureoleVis(i.wp, normalize(i.n), au.x), au.y * 4);    // =4: the Sun's factor, the aureole's visibility, its red share x 4
+        return float4(c * 0.5 / max(gHazeRGB.w * gAdapt.rgb, 1e-4), 1);
+    }
     if (gSky0.w < 0.5 && !FxActive()) col += alb * 0.05 * smoothstep(-0.05, 0.1, dot(n, gSunDir.xyz));   // seen from space: a soft terminator
     return float4(ApplyHaze(col, i.wp), 1);
 }
 
-// all tiles; the ones that reach the liquid level use PSD (writing depth disables the early depth test, so only there)
-float4 PS(VSOut i) : SV_Target { return Shade(i); }
-float4 PSD(VSOut i, out float depthOut : SV_Depth) : SV_Target { depthOut = ShoreDepth(i); return Shade(i); }
+// test runs (Client.cfg TileDbg = 1): each tile in its level's colour, unlit (gMisc.w)
+float4 TileDbg(VSOut i)
+{
+    uint k = (uint)gMisc.y % 6;
+    float3 c = k == 0 ? float3(1, 0, 0) : k == 1 ? float3(0, 1, 0) : k == 2 ? float3(0, 0, 1) : k == 3 ? float3(1, 1, 0) : k == 4 ? float3(0, 1, 1) : float3(1, 0, 1);
+    return float4(c * 0.05, 1);
+}
+// test view (D3D11CLIENT_SHADOWDBG): the Sun's visibility alone, white lit, black in shadow
+float4 ShadowDbg(VSOut i)
+{
+    float s = ShadowAtN(i.wp, normalize(i.n));
+    float d = length(i.wp);      // the cascade by colour: focus map grey, 1 red, 2 green, 3 blue
+    float3 c = d < gCascFar.y ? float3(1, 0.4, 0.4) : d < gCascFar.z ? float3(0.4, 1, 0.4) : d < gCascFar.w ? float3(0.4, 0.4, 1) : float3(1, 1, 1);
+    return float4(s * c * 0.5 / max(gHazeRGB.w * gAdapt.rgb, 1e-4), 1);
+}
+float4 PS(VSOut i) : SV_Target { if (gShadow.z > 0.5 && gShadow.z < 1.5) return ShadowDbg(i); return abs(gMisc.w - 1) < 0.5 ? TileDbg(i) : Shade(i); }

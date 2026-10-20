@@ -34,9 +34,9 @@ bool Init(D3D11Client* c)
     ID3D11Device* dev = c->Dev();
     std::string path = c->ShaderDir() + "ar.hlsl"; std::wstring wp(path.begin(), path.end());
     ComPtr<ID3DBlob> vc, pc, err;
-    if (FAILED(D3DCompileFromFile(wp.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "VS", "vs_5_0", D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &vc, &err))) { LOGC("ar.hlsl VS: %s", err ? (const char*)err->GetBufferPointer() : "not found"); return false; }
+    if (FAILED(CachedCompileFromFile(wp.c_str(), nullptr, "VS", "vs_5_0", D3DCOMPILE_OPTIMIZATION_LEVEL3, &vc, &err))) { LOGC("ar.hlsl VS: %s", err ? (const char*)err->GetBufferPointer() : "not found"); return false; }
     err.Reset();
-    if (FAILED(D3DCompileFromFile(wp.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "PS", "ps_5_0", D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &pc, &err))) { LOGC("ar.hlsl PS: %s", err ? (const char*)err->GetBufferPointer() : "not found"); return false; }
+    if (FAILED(CachedCompileFromFile(wp.c_str(), nullptr, "PS", "ps_5_0", D3DCOMPILE_OPTIMIZATION_LEVEL3, &pc, &err))) { LOGC("ar.hlsl PS: %s", err ? (const char*)err->GetBufferPointer() : "not found"); return false; }
     dev->CreateVertexShader(vc->GetBufferPointer(), vc->GetBufferSize(), nullptr, &R.vs);
     dev->CreatePixelShader(pc->GetBufferPointer(), pc->GetBufferSize(), nullptr, &R.ps);
     D3D11_INPUT_ELEMENT_DESC el[] = {

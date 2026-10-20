@@ -16,6 +16,7 @@
 bool g_traceAlloc = false;     // test runs: log big allocations (TestScript turns it on)
 int g_traceFrames = 0;
 void LogMemory(const char* when);
+void HangWatchStart(); void HangWatchStop();     // HangWatch.cpp
 // what the client itself holds (LogMemory): the surfaces made for drawing (on the GPU) and their CPU copies (DIBs, private
 // memory of the process)
 long g_surfLive = 0, g_dibLive = 0; double g_surfMB = 0, g_dibMB = 0;
@@ -119,7 +120,13 @@ HWND D3D11Client::clbkCreateRenderWindow()
     CreateParticleTexture();
     if (shadersOk) { FxInit(this); ExhaustInit(this); }
     loaderRun = true;
-    loader = std::thread(&D3D11Client::LoaderMain, this);
+    {   // the tile loaders: a few threads (the device makes its resources from any of them); each holds a tile's working
+        // buffers (~10 MB at most), so not more than 6 in the 32-bit address space
+        const int nl = std::clamp((int)std::thread::hardware_concurrency() - 2, 2, 6);
+        for (int k = 0; k < nl; k++) loaders.emplace_back(&D3D11Client::LoaderMain, this);
+        LOGC("tile loader: %d threads", nl);
+    }
+    HangWatchStart();       // a freeze of 4 s leaves every thread's stack in the log (HangWatch.cpp)
     QueryPerformanceFrequency(&qpf); QueryPerformanceCounter(&tStart); tLog = tStart;
     LOGC("render window %ux%u, D3D11 device ready", W, H);
     return hWnd;
@@ -296,6 +303,19 @@ bool D3D11Client::CreateDevice()
         ix.insert(ix.end(), { id(k, G), e0, e0 + 1, id(k, G), e0 + 1, id(k + 1, G) });
     }
     tileIdxCount = (UINT)ix.size();
+    // the same grid at half the density (every other node, 32 x 32 quads) after it: for tiles whose fine triangles
+    // would be a pixel or two on the screen (Planet::Draw) - a quad of pixels shaded for a sliver of a triangle, 8 MSAA
+    // samples rasterised for each; the skirts hide the T-junctions against finer neighbours as they do between levels
+    for (int i = 0; i < G; i += 2) for (int j = 0; j < G; j += 2)
+        ix.insert(ix.end(), { id(i, j), id(i + 2, j), id(i + 2, j + 2), id(i, j), id(i + 2, j + 2), id(i, j + 2) });
+    for (int k = 0; k < G; k += 2) {
+        uint32_t s0 = sk + k, n0 = sk + (G + 1) + k, w0 = sk + 2 * (G + 1) + k, e0 = sk + 3 * (G + 1) + k;
+        ix.insert(ix.end(), { id(0, k), s0, s0 + 2, id(0, k), s0 + 2, id(0, k + 2) });
+        ix.insert(ix.end(), { id(G, k), id(G, k + 2), n0 + 2, id(G, k), n0 + 2, n0 });
+        ix.insert(ix.end(), { id(k, 0), id(k + 2, 0), w0 + 2, id(k, 0), w0 + 2, w0 });
+        ix.insert(ix.end(), { id(k, G), e0, e0 + 2, id(k, G), e0 + 2, id(k + 2, G) });
+    }
+    tileIdxCount2 = (UINT)ix.size() - tileIdxCount;
     D3D11_BUFFER_DESC ib = { (UINT)(ix.size() * 4), D3D11_USAGE_IMMUTABLE, D3D11_BIND_INDEX_BUFFER, 0, 0, 0 };
     D3D11_SUBRESOURCE_DATA isd = { ix.data(), 0, 0 };
     dev->CreateBuffer(&ib, &isd, &tileIB);
@@ -317,7 +337,7 @@ static ComPtr<ID3DBlob> CompileFile(const std::string& path, const char* entry, 
 {
     ComPtr<ID3DBlob> code, err;
     std::wstring wp(path.begin(), path.end());
-    HRESULT hr = D3DCompileFromFile(wp.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, entry, target, D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &code, &err);
+    HRESULT hr = CachedCompileFromFile(wp.c_str(), nullptr, entry, target, D3DCOMPILE_OPTIMIZATION_LEVEL3, &code, &err);
     if (err) LOGC("shader %s %s: %s", path.c_str(), entry, (const char*)err->GetBufferPointer());
     if (FAILED(hr)) return nullptr;
     return code;
@@ -396,7 +416,9 @@ void D3D11Client::clbkDestroyRenderWindow(bool fastclose)
     if (loaderRun) {
         { std::lock_guard<std::mutex> lk(loadMx); loaderRun = false; loadQ.clear(); }
         loadCv.notify_all();
-        if (loader.joinable()) loader.join();
+        for (std::thread& th : loaders) if (th.joinable()) th.join();
+        loaders.clear();
+        HangWatchStop();
     }
     for (Planet* p : planets) delete p;
     planets.clear();
@@ -429,9 +451,18 @@ void D3D11Client::LoaderMain()
             std::unique_lock<std::mutex> lk(loadMx);
             loadCv.wait(lk, [&] { return !loaderRun || !loadQ.empty(); });
             if (!loaderRun) return;
-            // the coarsest first: a tile needs its parent's elevation
+            // the tile that matters most first: nearest the camera for its size (Planet::LoadPrio, kept fresh by the
+            // drawing each frame) - the ground under the camera before the far ones. A tile asked for by nobody for
+            // half a second goes back unloaded (the view moved on); a child is only ever asked for once its parent is in
+            const DWORD now = frameNo;
+            // the stale ones out first, the best looked for after (a deque's erase invalidates every iterator)
+            loadQ.erase(std::remove_if(loadQ.begin(), loadQ.end(), [&](const std::pair<Planet*, Tile*>& j) {
+                if (now - j.second->lastUsed <= 30) return false;
+                j.second->state = 0; return true;
+            }), loadQ.end());
+            if (loadQ.empty()) continue;
             auto best = loadQ.begin();
-            for (auto it = loadQ.begin(); it != loadQ.end(); ++it) if (it->second->lvl < best->second->lvl) best = it;
+            for (auto it = loadQ.begin(); it != loadQ.end(); ++it) if (it->second->prio < best->second->prio) best = it;
             job = *best; loadQ.erase(best);
         }
         job.first->Load(job.second);
@@ -741,6 +772,10 @@ void D3D11Client::clbkRenderScene()
     if (!dev || !sc || !shadersOk) return;     // a shader that failed to compile is in Orbiter.log; nothing is drawn
     frameNo++;
     if (testMode) diagFrames = (frameNo >= 300 && frameNo < 302) ? 1 : 0;
+    if (testMode && frameNo == 600) {      // D3D11CLIENT_TEST_HANG: one frame held 6 s (the hang watchdog's own check)
+        static const bool hang = getenv("D3D11CLIENT_TEST_HANG") != nullptr;
+        if (hang) { LOGC("test: holding frame %u for 6 s", frameNo); Sleep(6000); }
+    }
     if (testMode) { TestScript(); void FxTestFrame(); FxTestFrame(); }   // FxTest.cpp: effects without a player
     if (g_traceFrames > 0) {     // the memory frame by frame after a scripted action, when it moved by 2 MB or more
         static size_t last = 0;
@@ -758,6 +793,21 @@ void D3D11Client::clbkRenderScene()
 
     VECTOR3 cp; oapiCameraGlobalPos(&cp);
     MATRIX3 cr; oapiCameraRotationMatrix(&cr);
+    {   // test runs (Client.cfg TestLookSun = 1): the view turned onto the Sun, the local vertical up (Sun.cpp checks in air)
+        double FxTestNum(const char* key);
+        static const bool look = FxTestNum("TestLookSun") > 0.5;
+        if (look) {
+            VECTOR3 sp = _V(0, 0, 0);
+            for (DWORD i = 0; i < oapiGetGbodyCount(); i++) { OBJHANDLE h = oapiGetGbodyByIndex(i); if (oapiGetObjectType(h) == OBJTP_STAR) { oapiGetGlobalPos(h, &sp); break; } }
+            VECTOR3 f = sp - cp; f = f / length(f); VECTOR3 up = _V(0, 1, 0);
+            if (OBJHANDLE hp = oapiCameraProxyGbody()) { VECTOR3 pp; oapiGetGlobalPos(hp, &pp); up = cp - pp; up = up / length(up); }
+            VECTOR3 r = crossp(up, f);
+            if (length(r) > 1e-6) {
+                r = r / length(r); up = crossp(f, r);
+                cr = _M(r.x, up.x, f.x, r.y, up.y, f.y, r.z, up.z, f.z);
+            }
+        }
+    }
     double ap = oapiCameraAperture();             // half the vertical field of view
     float tanY = (float)tan(ap);
     float n = 0.1f;
@@ -772,6 +822,7 @@ void D3D11Client::clbkRenderScene()
     FxFrame(this, cp, cr, proj, oapiGetSimStep());   // effects' compute work (waves, spray) before the scene
     GpuMark(fi, 1);
     RenderShadows(cp);
+    LightsFrame(cp);      // the vessels' local lights: gathered, clustered, the spots' shadows (Lights.cpp)
     GpuMark(fi, 2);
     D3D11_VIEWPORT vp = { 0, 0, (float)RW, (float)RH, 0, 1 };    // the scene's size (TAA render scale)
     ctx->RSSetViewports(1, &vp);
@@ -784,6 +835,7 @@ void D3D11Client::clbkRenderScene()
     ctx->PSSetShaderResources(7, 1, shadowSRV.GetAddressOf());
     XMMATRIX V(cr.m11, cr.m12, cr.m13, 0, cr.m21, cr.m22, cr.m23, 0, cr.m31, cr.m32, cr.m33, 0, 0, 0, 0, 1);
     UpdateFrameCB(cp, XMMatrixInverse(nullptr, V * proj));
+    LightsBind();         // b9, t17..t20 for the scene's shaders
     if (skyOn) {
         ctx->OMSetBlendState(bsOpaque.Get(), nullptr, ~0u);
         ctx->OMSetDepthStencilState(dsRead.Get(), 0);
@@ -827,9 +879,14 @@ void D3D11Client::clbkRenderScene()
     // the bent ray, dimmed by the column, under the waves' Fresnel and mirror); what stands out of it hides it by depth
     RenderLiquid(cp, cr, proj, tanY);
     GpuMark(fi, 6);
+    RenderSun(cp, cr, proj);                      // the Sun on the sky's depth, before the air dims it (Sun.cpp)
     for (auto& kv : visuals) if (kv.first != own) RenderVessel(kv.second, cp, cr, proj, true);
+    RenderStormShadow(cp, cr, proj);              // Earth's cyclone: its shadow on what is drawn, before the air (Storm.cpp)
     FxRenderTransparent(this, cp, cr, proj);      // the air (sky, aerial perspective) from the depth
+    RenderStorm(cp, cr, proj);                    // Earth's cyclone: the volumetric clouds, the air in front of them (Storm.cpp)
+    { void StormFrameFallback(); StormFrameFallback(); }   // its turbulence, if Orbiter does not call the client's clbkPreStep
     RenderClouds(cp, cr, proj);                   // cloud layers over it, the air in front of them included (Clouds.cpp)
+    LightsRenderAir(cp, cr, proj);                // the headlights' beams in the air, the lenses, the beacons (Lights.cpp)
     GpuMark(fi, 7);
     ExhaustRender(this, cp, cr, proj, oapiGetSimStep());   // glow, shimmer, plumes, GPU particles
     ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
@@ -846,11 +903,14 @@ void D3D11Client::clbkRenderScene()
         ctx->PSSetSamplers(0, 3, oss);
         ctx->PSSetShaderResources(7, 1, shadowSRV.GetAddressOf());
         ctx->VSSetConstantBuffers(0, 1, cbFrame.GetAddressOf()); ctx->PSSetConstantBuffers(0, 1, cbFrame.GetAddressOf());
+        LightsBind();
         ownPass = true;
         RenderVessel(visuals[own], cp, cr, proj, false);
         RenderVessel(visuals[own], cp, cr, proj, true);
         ownPass = false;
     }
+    LightsProbe();        // what the local lights light in the view, for the eye's adaptation (Lights.cpp)
+    RenderSunGlare();        // the Sun's glare in the eye over everything, the own cockpit too - hidden by it, none (Sun.cpp)
     ctx->End(qTs[fi][2].Get());
     GpuMark(fi, 9);
 
@@ -889,6 +949,8 @@ void D3D11Client::clbkRenderScene()
         LOGC("GPU ms by pass: fx compute %.2f, shadows %.2f, sky %.2f, planets %.2f, vessels opaque %.2f, liquid %.2f, "
              "transparent + air %.2f, exhaust/AR/particles %.2f, own vessel %.2f, resolve + post %.2f, 2D %.2f",
              markMs[1], markMs[2], markMs[3], markMs[4], markMs[5], markMs[6], markMs[7], markMs[8], markMs[9], markMs[10], markMs[11]);
+        std::string ls = Planet::LoadStats();
+        if (!ls.empty()) LOGC("%s", ls.c_str());
         LogMemory("now");     // a leak shows as a steady climb from one of these lines to the next
     }
 }
@@ -909,6 +971,18 @@ bool D3D11Client::clbkDisplayFrame()
         shotDone = true;
         CreateDirectoryA("Modules\\D3D11Client\\shots", nullptr);
         SaveShot("Modules\\D3D11Client\\shots\\start.png");
+        if (testMode) {     // this run's own copy (tests of several sessions overlap; tools\run_test.ps1 takes this one)
+            char own[96]; sprintf_s(own, "Modules\\D3D11Client\\shots\\start_%lu.png", GetCurrentProcessId());
+            SaveShot(own);
+        }
+    }
+    // test runs: D3D11CLIENT_TEST_BURST = n frames shot one after another from the shot's time on (burst_<pid>_<k>.png):
+    // what changes from frame to frame (shimmer, flicker) measured on still pictures
+    static int burst = -1, burstK = 0;
+    if (burst < 0) { char v[8] = {}; burst = testMode && GetEnvironmentVariableA("D3D11CLIENT_TEST_BURST", v, sizeof v) ? std::clamp(atoi(v), 0, 32) : 0; }
+    if (shotDone && burstK < burst) {
+        char fn[128]; sprintf_s(fn, "Modules\\D3D11Client\\shots\\burst_%lu_%02d.png", GetCurrentProcessId(), burstK++);
+        SaveShot(fn);
     }
     sc->Present(testMode || GetVideoData()->novsync ? 0 : 1, 0);   // uncapped when vsync is off (and in test runs)
     return true;
@@ -973,7 +1047,7 @@ bool D3D11Client::clbkSplashLoadMsg(const char* msg, int line)
 }
 
 // ------------------------------------------------------------------------------------------ per-frame constants: the atmosphere
-struct FrameCB { XMFLOAT4X4 invVP; XMFLOAT4 sunDir, sky0, sky1, amb, sun, up, planet, hazeRGB; XMFLOAT4X4 lightVP; XMFLOAT4 shadow, adapt, liq0, liq1, liq2; XMFLOAT4X4 lightVP2; XMFLOAT4X4 casc[4]; XMFLOAT4 cascFar, cascTex; };
+struct FrameCB { XMFLOAT4X4 invVP; XMFLOAT4 sunDir, sky0, sky1, amb, sun, up, planet, hazeRGB; XMFLOAT4X4 lightVP; XMFLOAT4 shadow, adapt, liq0, liq1, liq2; XMFLOAT4X4 lightVP2; XMFLOAT4X4 casc[4]; XMFLOAT4 cascFar, cascTex, cascRange; };
 
 void D3D11Client::UpdateFrameCB(const VECTOR3& cp, const XMMATRIX& invVP)
 {
@@ -1019,10 +1093,14 @@ void D3D11Client::UpdateFrameCB(const VECTOR3& cp, const XMMATRIX& invVP)
     f.lightVP = lightVP; f.lightVP2 = lightVP2;
     for (int i = 0; i < 4; i++) f.casc[i] = casc[i];
     f.cascFar = { cascFar[0], cascFar[1], cascFar[2], cascFar[3] }; f.cascTex = { cascTex[0], cascTex[1], cascTex[2], cascTex[3] };
-    f.shadow = { shadowOn ? 1.0f : 0.0f, 1.0f / SHADOW_N, 0, 0 };
+    f.cascRange = { cascRange[0], cascRange[1], cascRange[2], cascRange[3] };
+    static float shDbg = -1;      // test runs: D3D11CLIENT_SHADOWDBG=1 draws the Sun's visibility alone (planet.hlsl, mesh.hlsl)
+    if (shDbg < 0) { char v[8] = {}; shDbg = GetEnvironmentVariableA("D3D11CLIENT_SHADOWDBG", v, sizeof v) ? (float)atof(v) : 0.0f; }
+    f.shadow = { shadowOn ? 1.0f : 0.0f, 1.0f / SHADOW_N, shDbg, sunDiam };     // w: the Sun's angular diameter (the penumbra)
     // the eye's adaptation: the colour balance per channel and the brightness factor (1 without the FX atmosphere)
     if (g_fxAtmo.active) f.adapt = { g_fxAtmo.white[0], g_fxAtmo.white[1], g_fxAtmo.white[2], g_fxAtmo.exposure };
     else f.adapt = { 1, 1, 1, 1 };
+    LightsAdaptEye(f.adapt, f.hazeRGB.w);     // ... and to the headlights, the cabin's lamps where they light the view (Lights.cpp)
     // the liquid the camera is over (as RenderLiquid picks it): the vessels' parts below its level are seen through it
     for (Planet* p : planets) {
         if (!p->liq.has || !g_cfg.liquids) continue;
@@ -1056,23 +1134,89 @@ void D3D11Client::RenderShadows(const VECTOR3& cp)
     if (!g_cfg.shadows || visuals.empty()) return;
     VECTOR3 sp = _V(0, 0, 0);
     for (DWORD i = 0; i < oapiGetGbodyCount(); i++) { OBJHANDLE h = oapiGetGbodyByIndex(i); if (oapiGetObjectType(h) == OBJTP_STAR) { oapiGetGlobalPos(h, &sp); break; } }
-    VECTOR3 L = sp - cp; L = L / length(L);
-    // the light's frame, fixed to the world (not to the camera): u, v across the light, L along it
-    VECTOR3 a = fabs(L.y) < 0.9 ? _V(0, 1, 0) : _V(1, 0, 0);
-    VECTOR3 u = crossp(a, L); u = u / length(u);
-    VECTOR3 v = crossp(L, u);
+    VECTOR3 L = sp - cp;
+    {   // the Sun's angular diameter here (the penumbra's width, common.hlsli)
+        OBJHANDLE hs = nullptr; for (DWORD i = 0; i < oapiGetGbodyCount(); i++) { OBJHANDLE h = oapiGetGbodyByIndex(i); if (oapiGetObjectType(h) == OBJTP_STAR) { hs = h; break; } }
+        sunDiam = hs ? (float)(2 * oapiGetSize(hs) / std::max(length(L), 1.0)) : 0.0093f;
+    }
+    L = L / length(L);
+    // the light's frame, fixed to the nearest planet's ground - its rotation carries the terrain and what stands or
+    // flies over it (a grid fixed in space would crawl over them every frame: the shadows' edges shimmer whatever the
+    // snapping). u, v across the light, L along it, in the planet's axes; the light's axis held while the Sun moves
+    // less than half a degree over that ground (then taken anew: one step, not a crawl)
+    MATRIX3 Rp = _M(1, 0, 0, 0, 1, 0, 0, 0, 1); VECTOR3 pp = _V(0, 0, 0);
+    {
+        OBJHANDLE hp = nullptr; double best = 1e300;
+        for (DWORD i = 0; i < oapiGetGbodyCount(); i++) {
+            OBJHANDLE h = oapiGetGbodyByIndex(i); if (oapiGetObjectType(h) != OBJTP_PLANET) continue;
+            VECTOR3 q; oapiGetGlobalPos(h, &q); const double alt = length(cp - q) - oapiGetSize(h);
+            if (alt < best) { best = alt; hp = h; pp = q; }
+        }
+        if (hp && best < 20e3) oapiGetRotationMatrix(hp, &Rp);
+        else {      // in flight or in orbit: the grid goes with the focus vessel (its own shadows stay put on it)
+            hp = nullptr;
+            OBJHANDLE hf = oapiGetFocusObject();
+            if (hf) oapiGetGlobalPos(hf, &pp); else pp = cp;
+        }
+        static OBJHANDLE axP = nullptr; static VECTOR3 axL = _V(0, 0, 0);
+        const VECTOR3 Lp = tmul(Rp, L);
+        if (axP != hp || dotp(Lp, axL) < cos(0.5 * RAD)) { axP = hp; axL = Lp; }
+        L = mul(Rp, axL);
+    }
+    const VECTOR3 Lp = tmul(Rp, L);
+    const VECTOR3 ap = fabs(Lp.y) < 0.9 ? _V(0, 1, 0) : _V(1, 0, 0);
+    VECTOR3 up_ = crossp(ap, Lp); up_ = up_ / length(up_);
+    const VECTOR3 vp_ = crossp(Lp, up_);
+    const VECTOR3 u = mul(Rp, up_), v = mul(Rp, vp_);
+    // a map's centre (camera-relative) moved to whole texels of that frame (double: the positions are ~1e11 m)
+    auto snap = [&](const VECTOR3& c, double texel) {
+        const VECTOR3 q = tmul(Rp, (cp - pp) + c);
+        const double cu = dotp(q, up_), cv = dotp(q, vp_);
+        return c + mul(Rp, up_ * (floor(cu / texel) * texel - cu) + vp_ * (floor(cv / texel) * texel - cv));
+    };
     MATRIX3 cr; oapiCameraRotationMatrix(&cr);
     const double tanY = tan(oapiCameraAperture()), tanX = tanY * W / (double)H;
     const double nearD = 0.3, farD = 300.0, lambda = 0.85;
-    double split[5]; split[0] = nearD;
-    for (int i = 1; i <= 4; i++) {
-        const double f = i / 4.0;
+    double split[5]; split[0] = 0; split[1] = nearD;      // [0]: the focus map (below); 1..3: the view's slices
+    for (int i = 2; i <= 4; i++) {
+        const double f = (i - 1) / 3.0;
         split[i] = lambda * nearD * pow(farD / nearD, f) + (1 - lambda) * (nearD + (farD - nearD) * f);
     }
     const double back = 300.0;          // casters up to this far towards the Sun from a cascade's centre
     ctx->ClearDepthStencilView(shadowDSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
     ctx->OMSetRenderTargets(0, nullptr, shadowDSV.Get());
-    for (int ci = 0; ci < 4; ci++) {
+    // tile 0, as D3D9Client draws its shadows: one map fitted to the focus vessel's bounding sphere (a person: ~2 mm a
+    // texel), its depth range just round the casters - the finest self-shadowing where the eye looks
+    {
+        OBJHANDLE hf = oapiGetFocusObject();
+        if (hf && visuals.count(hf)) {
+            VECTOR3 fp; oapiGetGlobalPos(hf, &fp);
+            const double r = std::max(oapiGetSize(hf) * 1.02, 0.5);
+            const double texel = 2 * r / SHADOW_N;
+            VECTOR3 c = snap(fp - cp, texel);       // (the grid fixed to the ground: no shimmer as the focus moves)
+            XMVECTOR Lv = XMVectorSet((float)L.x, (float)L.y, (float)L.z, 0);
+            XMVECTOR uvv = XMVectorSet((float)v.x, (float)v.y, (float)v.z, 0);
+            const double back0 = r + 30.0;     // the casters: the focus and what stands within 30 m towards the Sun
+            XMVECTOR eye = XMVectorSet((float)c.x, (float)c.y, (float)c.z, 1) + Lv * (float)back0;
+            // the depth range reaches 60 m past the focus: the ground its shadow falls on (a low Sun: metres behind it) is in
+            const double far0 = back0 + r + 60.0;
+            XMMATRIX LVP = XMMatrixLookToLH(eye, -Lv, uvv) * XMMatrixOrthographicLH((float)(2 * r), (float)(2 * r), 0.0f, (float)far0);
+            XMStoreFloat4x4(&casc[0], XMMatrixTranspose(LVP));
+            cascFar[0] = -1; cascTex[0] = (float)texel; cascRange[0] = (float)(back0 + r + 60.0);   // tile 0 by the box, not by the distance
+            D3D11_VIEWPORT vp = { 0, 0, (float)SHADOW_N, (float)SHADOW_N, 0, 1 };
+            ctx->RSSetViewports(1, &vp);
+            for (auto& kv : visuals) {
+                VECTOR3 q; oapiGetGlobalPos(kv.first, &q);
+                VECTOR3 d = (q - cp) - c;
+                const double along = dotp(d, L);
+                VECTOR3 across = d - L * along;
+                const double sz = oapiGetSize(kv.first);
+                if (length(across) > r + sz || along > back0 + sz || along < -(r + sz)) continue;
+                RenderVessel(kv.second, cp, _M(1, 0, 0, 0, 1, 0, 0, 0, 1), XMMatrixIdentity(), false, &LVP);
+            }
+        } else { cascFar[0] = -2; cascTex[0] = 0; }
+    }
+    for (int ci = 1; ci < 4; ci++) {
         // the slice's bounding sphere (camera-centred): centre on the view axis, radius to the far corners
         const double z0 = split[ci], z1 = split[ci + 1];
         const double k2 = tanX * tanX + tanY * tanY;
@@ -1082,13 +1226,8 @@ void D3D11Client::RenderShadows(const VECTOR3& cp)
         double r = std::max(sqrt((z1 - zc) * (z1 - zc) + z1 * z1 * k2), sqrt((zc - z0) * (zc - z0) + z0 * z0 * k2));
         r = ceil(r * 16.0) / 16.0;      // quantised: the tile's scale stays the same frame to frame
         VECTOR3 fwd = _V(cr.m13, cr.m23, cr.m33);
-        VECTOR3 c = fwd * zc;
-        // its centre moved in whole texels of the world-fixed light frame (double: the global position is ~1e11 m)
         const double texel = 2 * r / SHADOW_N;
-        VECTOR3 cg = cp + c;
-        const double cu = dotp(cg, u), cv = dotp(cg, v);
-        const double su = floor(cu / texel) * texel, sv = floor(cv / texel) * texel;
-        c = c + u * (su - cu) + v * (sv - cv);
+        VECTOR3 c = snap(fwd * zc, texel);
         XMVECTOR Lv = XMVectorSet((float)L.x, (float)L.y, (float)L.z, 0);
         XMVECTOR uv = XMVectorSet((float)v.x, (float)v.y, (float)v.z, 0);
         XMVECTOR eye = XMVectorSet((float)c.x, (float)c.y, (float)c.z, 1) + Lv * (float)back;
@@ -1096,7 +1235,7 @@ void D3D11Client::RenderShadows(const VECTOR3& cp)
         XMMATRIX LP = XMMatrixOrthographicLH((float)(2 * r), (float)(2 * r), 0.0f, (float)(back + r));
         XMMATRIX LVP = LV * LP;
         XMStoreFloat4x4(&casc[ci], XMMatrixTranspose(LVP));
-        cascFar[ci] = (float)z1; cascTex[ci] = (float)texel;
+        cascFar[ci] = (float)z1; cascTex[ci] = (float)texel; cascRange[ci] = (float)(back + r);
         D3D11_VIEWPORT vp = { (float)((ci & 1) * SHADOW_N), (float)((ci >> 1) * SHADOW_N), (float)SHADOW_N, (float)SHADOW_N, 0, 1 };
         ctx->RSSetViewports(1, &vp);
         for (auto& kv : visuals) {
@@ -1162,7 +1301,8 @@ void LogMemory(const char* when)
 // ------------------------------------------------------------------------------------------ test runs: a script of actions
 // D3D11CLIENT_TEST_SCRIPT (set by tools/run_test.ps1 -Script, test runs only): "t action args; ...", t in seconds of
 // system time from the first frame. Actions: lift <vessel> <metres> (into the air over where it stands), cam <vessel>
-// in|out (the camera on it, inside or outside), focus <vessel>. Each is logged as it runs.
+// in|out (the camera on it, inside or outside), focus <vessel>, dist <vessel> <m>, polar|azim <vessel> <deg> (the external
+// camera's distance and turns round its target). Each is logged as it runs.
 void D3D11Client::TestScript()
 {
     static bool parsed = false; static double t0 = 0;
@@ -1189,6 +1329,25 @@ void D3D11Client::TestScript()
         if (orbitRate != 0 && lastT >= 0) oapiCameraRotAzimuth(orbitRate * PI / 180 * (t - lastT));
         lastT = t;
     }
+    {   // "sun <vessel> <fov deg>": the cockpit (a helmet) camera turns onto the Sun and zooms (Sun.cpp checks): a search on
+        // the cockpit's direction, one step a frame, as its angles' signs are the camera's own
+        static double az = 0, pol = 0, step = 0.3, best = 1e9; static int axis = 0, sgn = 1, phase = 0;
+        for (Act& a : acts) if (a.done && a.what == "sun" && a.arg > 0) { oapiCameraSetAperture(a.arg * 0.5 * RAD); a.arg = -1; phase = 1; }
+        if (phase == 1 && oapiCameraInternal()) {
+            VECTOR3 sp = _V(0, 0, 0), cpos, cd;
+            for (DWORD i = 0; i < oapiGetGbodyCount(); i++) { OBJHANDLE h = oapiGetGbodyByIndex(i); if (oapiGetObjectType(h) == OBJTP_STAR) { oapiGetGlobalPos(h, &sp); break; } }
+            oapiCameraGlobalPos(&cpos); oapiCameraGlobalDir(&cd);
+            const VECTOR3 s = (sp - cpos) / length(sp - cpos);
+            const double err = acos(std::clamp(dotp(s, cd), -1.0, 1.0));
+            if (err < best) best = err;                       // the last step helped: keep going that way
+            else {                                            // it did not: undo it, try the other sign, then the other axis
+                (axis ? pol : az) -= sgn * step;
+                if (sgn > 0) sgn = -1; else { sgn = 1; axis ^= 1; if (!axis) step *= 0.5; }
+            }
+            if (step < 2e-4) { phase = 2; LOGC("test script: camera on the Sun, %.3f deg off", err * DEG); }
+            else { (axis ? pol : az) += sgn * step; oapiCameraSetCockpitDir(az, pol, false); }
+        }
+    }
     for (Act& a : acts) {
         if (a.done || t < a.t) continue;
         a.done = true;
@@ -1204,6 +1363,9 @@ void D3D11Client::TestScript()
             v->DefSetStateEx(&vs);
         }
         else if (a.what == "cam") oapiCameraAttach(h, a.arg > 0.5 ? 0 : 1);
+        else if (a.what == "dist") oapiCameraScaleDist(a.arg / std::max(oapiCameraTargetDist(), 0.1));   // the external camera <arg> m off
+        else if (a.what == "polar") oapiCameraRotPolar(a.arg * RAD);         // ... turned up (+) round its target by <arg> degrees
+        else if (a.what == "azim") oapiCameraRotAzimuth(a.arg * RAD);        // ... and round it by <arg> degrees
         else if (a.what == "focus") oapiSetFocusObject(h);
         LOGC("test script: t %.1f %s %s %g", t, a.what.c_str(), a.name.c_str(), a.arg);
         LogMemory("after the action");

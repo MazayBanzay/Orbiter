@@ -1033,6 +1033,9 @@ static const DWORD KEY = 0x00010001;   // the screen layer's "nothing drawn" col
 
 void D3D11Client::BeginScreenLayer()
 {
+    if (screen && (screen->w != W || screen->h != H)) {     // the window's size changed: the layer and its texture anew
+        delete screen; screen = nullptr; screenTex.Reset(); screenSRV.Reset();
+    }
     if (!screen) {
         screen = new Surf; screen->w = W; screen->h = H;
         if (!EnsureDIB(screen)) return;
@@ -1066,9 +1069,15 @@ void D3D11Client::CompositeScreenLayer()
         D3D11_TEXTURE2D_DESC td = { W, H, 1, 1, DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, {1, 0}, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0 };
         std::vector<DWORD> zero((size_t)W * H, 0);
         D3D11_SUBRESOURCE_DATA sd = { zero.data(), W * 4, 0 };
-        dev->CreateTexture2D(&td, &sd, &screenTex);
+        HRESULT hr = dev->CreateTexture2D(&td, &sd, &screenTex);
+        if (FAILED(hr) || !screenTex) {     // (a relaunched session's first frame: null here crashed in UpdateSubresource)
+            static int logged = 0;
+            if (logged++ < 3) LOGC("screen layer: texture %ux%u failed (0x%08lx) - 2D skipped this frame", W, H, (unsigned long)hr);
+            screenTex.Reset(); return;
+        }
         dev->CreateShaderResourceView(screenTex.Get(), nullptr, &screenSRV);
     }
+    if (screen->w != W || screen->h != H) return;     // the window was resized: the layer is remade next frame
     if (u.right > u.left && u.bottom > u.top) {
         UINT uw = u.right - u.left, uh = u.bottom - u.top;
         screenTmp.resize((size_t)uw * uh);

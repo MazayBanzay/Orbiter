@@ -32,11 +32,11 @@ bool InitRes(D3D11Client* c)
     std::string path = c->ShaderDir() + "sketch.hlsl";
     std::wstring wp(path.begin(), path.end());
     ComPtr<ID3DBlob> vcode, pcode, err;
-    if (FAILED(D3DCompileFromFile(wp.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "VS", "vs_5_0", D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &vcode, &err))) {
+    if (FAILED(CachedCompileFromFile(wp.c_str(), nullptr, "VS", "vs_5_0", D3DCOMPILE_OPTIMIZATION_LEVEL3, &vcode, &err))) {
         LOGC("sketch.hlsl VS: %s", err ? (const char*)err->GetBufferPointer() : "not found"); return false;
     }
     err.Reset();
-    if (FAILED(D3DCompileFromFile(wp.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "PS", "ps_5_0", D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &pcode, &err))) {
+    if (FAILED(CachedCompileFromFile(wp.c_str(), nullptr, "PS", "ps_5_0", D3DCOMPILE_OPTIMIZATION_LEVEL3, &pcode, &err))) {
         LOGC("sketch.hlsl PS: %s", err ? (const char*)err->GetBufferPointer() : "not found"); return false;
     }
     dev->CreateVertexShader(vcode->GetBufferPointer(), vcode->GetBufferSize(), nullptr, &R.vs);

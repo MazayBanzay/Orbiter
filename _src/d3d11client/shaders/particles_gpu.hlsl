@@ -317,7 +317,10 @@ VSOut VS(uint vid : SV_VertexID, uint inst : SV_InstanceID)
     float3 wp = ToWorld(q.p);
     float3 upW = normalize(DirToWorld(float3(0, 1, 0)));
     bool flat = look == LOOK_SPOT;
-    if (!flat && !(q.flags & F_SETTLED) && look != LOOK_DROP) {   // a sprite does not poke into the ground
+    // in a vacuum the grains fly alone (no gas to hold a puff): each sprite is its grains' streak along the velocity,
+    // as thin as a pixel, never a soft ball (the puffs' self-shadowing drew black clouds where no sky lights them)
+    const bool vacGrain = !dense && look == LOOK_GRAIN && !(q.flags & F_SETTLED);
+    if (!flat && !(q.flags & F_SETTLED) && look != LOOK_DROP && !vacGrain) {   // a sprite does not poke into the ground
         float h = dot(q.p.xz, q.p.xz) / (2 * dGeo.x) + q.p.y - q.gy;
         float lift = (q.flags & F_HARD ? 0.8 : 0.6) * s - h;
         if (lift > 0) wp += upW * lift;
@@ -335,7 +338,7 @@ VSOut VS(uint vid : SV_VertexID, uint inst : SV_InstanceID)
     if (flat) {
         R = normalize(DirToWorld(float3(1, 0, 0))); U = normalize(DirToWorld(float3(0, 0, 1)));
         wp += upW * 0.03;
-    } else if (look == LOOK_DROP) {
+    } else if (look == LOOK_DROP || vacGrain) {
         // one drop, drawn as its streak over the frame's exposure along its velocity (as real-time spray and rain are
         // drawn): never under ~a pixel wide - a drop smaller than that keeps its share of the light (opacity d / width)
         float3 vw = DirToWorld(q.v);
@@ -343,10 +346,25 @@ VSOut VS(uint vid : SV_VertexID, uint inst : SV_InstanceID)
         float L = length(vp) * dCamU.w;
         R = L > 1e-5 ? vp / length(vp) : dCamR.xyz;
         U = normalize(cross(V, R));
-        s = max(0.5 * q.d, 0.7 * dist / max(dGeo.w, 1));
-        sx = s + 0.5 * L; sy = s;
         wp -= vw * (0.5 * dCamU.w);
-        a *= sqrt(saturate(q.d / (2 * s))) * sqrt(s / sx);
+        if (vacGrain) {
+            // the sprite's grains (its puff s across) gathered in a streak a fifth as wide: the same cross-section over
+            // the smaller area - opacity grows as the area shrinks (a gram of 100 um grains hides ~7 cm x 7 cm)
+            float sp = s;
+            s = max(0.2 * sp, 0.7 * dist / max(dGeo.w, 1));
+            sx = s + 0.5 * L; sy = s;
+            a = min(0.9, a * sp * sp / (sx * sy));
+        } else {
+            // one drop, alone (a spray is independent drops, not clumps): its real size; under ~1.5 px wide it is drawn
+            // that wide with its opacity cut to its own cross-section, (d_px / 1.5)^2; the streak over the exposure
+            // each drawn drop stands for some thousand of the stream's (~1e7 a second): drawn 4x its diameter, still one drop
+            float px = dist / max(dGeo.w, 1);                       // a pixel at this distance [m]
+            float dd = 4 * q.d;
+            s = max(0.5 * dd, 0.75 * px);
+            sx = s + 0.5 * L; sy = s;
+            float dpx = dd / px;
+            a = 0.85 * min(1, (dpx / 1.5) * (dpx / 1.5)) * min(1, 20 * t) * saturate((life - t) / 0.3) * (s / sx);
+        }
     } else {
         float ang = q.seed * 6.2832 + ((q.flags & F_HARD) ? q.age * (2 + 6 * frac(q.seed * 13.7)) : 0);   // clods tumble
         float cs = cos(ang), sn = sin(ang);
@@ -363,8 +381,11 @@ VSOut VS(uint vid : SV_VertexID, uint inst : SV_InstanceID)
     float tr = ExAirTrans(dist).g;
     o.col = float4(alb, a);
     float g = (look == LOOK_DROP || look == LOOK_MIST || look == LOOK_FOG) ? 0.8 : look == LOOK_ICE ? 0.6 : fines ? 0.5 : 0.3;
-    o.misc = float4(look, q.seed, s, g);
-    o.sun = SunLight(wp) * ShadowAt(wp) * tr;
+    if (!dense && (look == LOOK_GRAIN || look == LOOK_CLOD)) g = -0.3;   // airless regolith: its grains scatter back (Hapke)
+    o.misc = float4(vacGrain ? 8 : look, q.seed, s, g);                    // 8: a grain's streak (PS)
+    // the shadow map looked up a little above the sprite (along the local up, as the surfaces offset along their normal):
+    // a grain at the ground's height otherwise fell in the ground's own shadow - black dust
+    o.sun = SunLight(wp) * ShadowAtN(wp, upW * 2.0) * tr;
     o.sky = SkyLight(upW, wp) * tr;
     o.gnd = SkyLight(-upW, wp) * tr;
     return o;
@@ -409,14 +430,26 @@ float4 PS(VSOut i) : SV_Target
         float3 N = normalize(Rw * d.x + Uw * d.y - V * sqrt(saturate(1 - r2)));
         float3 upW = normalize(float3(dM0.y, dM1.y, dM2.y));
         float ph = HG(i.misc.w, dot(V, Lsun));          // scattering angle: the light along -Lsun, out along -V
-        if (look == LOOK_DROP) {
-            // a clear drop's streak: a capsule (rounded ends), a bright core where it refracts the sky behind it and
-            // mirrors the Sun (a glint that comes and goes as it tumbles), the sky and the ground round its rim
+        if (look == 8) {
+            // a grain's streak in a vacuum: optically thin, singly scattered - the body's colour under the Sun by the
+            // phase, no self-shadow; the faint ambient of space and the ground's bounce below
+            a *= pow(saturate(1 - r2), 1.5);                          // a soft ellipse along the velocity (never a square)
+            c = alb * (i.sun * ph + 0.5 * i.gnd + i.sky);
+        } else if (look == LOOK_DROP) {
+            // a clear drop (a ball lens): what it shows is the world round it, turned over - the sky in its lower half,
+            // the darker ground or liquid in its upper - and, by Fresnel at its rim, the sky mirrored; the Sun's glint
+            // where its surface faces half-way between the Sun and the eye. No albedo: a drop does not scatter, it bends.
             float across = abs(d.y), along = abs(d.x);
-            a *= pow(saturate(1 - across * across), 1.5) * saturate((1 - along) * 5);
-            float core = pow(saturate(1 - across), 4);
-            float glint = step(0.7, frac(seed * 91.7 + t * 1.7)) * pow(saturate(dot(reflect(V, N), Lsun) * 0.5 + 0.5), 8);
-            c = alb * (0.9 * i.sky + 0.35 * i.gnd + i.sun * ph * 0.3) * (0.75 + 0.5 * core) + i.sun * glint * core * 3;
+            a *= saturate((1 - across) * 2.5) * saturate((1 - along) * 4);
+            float3 upW = normalize(float3(dM0.y, dM1.y, dM2.y));
+            float cosv = saturate(dot(N, -V));
+            float F = 0.016 + 0.984 * pow(1 - cosv, 5);              // methane n 1.29 (water 1.33: F0 0.02)
+            float up = dot(N, upW);                                  // the drop's upper half sees, refracted, what lies below
+            float3 thru = lerp(i.sky, i.gnd, saturate(0.5 + 0.7 * up)) * float3(0.98, 0.95, 0.88);
+            float3 refl = i.sky;
+            float3 H = normalize(Lsun - V);
+            float glint = pow(saturate(dot(N, H)), 400) * 40;
+            c = lerp(thru, refl, F) + i.sun * glint;
         } else {
             // the outline torn by a finer octave (no round sprite edges); mist and fog thinner per sprite, more of them
             float n2 = ExNoise(float3(i.uv * 7.0 + seed * 13.1, seed * 5.7 + t * 0.05));

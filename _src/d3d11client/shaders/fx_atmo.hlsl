@@ -19,6 +19,7 @@ cbuffer AtmoPass : register(b3)
     float4 aGrid;     // the volume's columns, rows, slices
 };
 Texture2D<float> tDepth : register(t0);
+Texture2DMS<float> tDepthMS : register(t5);   // MSAA: the scene's depth per sample (aGrid.w samples; edges, see PS)
 Texture3D tApL : register(t1);      // the volume: in-scattered light up to each slice (on screen)
 Texture3D tApT : register(t2);      // ... the transmittance (the aerosol's forward peak passed)
 Texture2D tEndL : register(t3);     // each column's whole ray (to the top, the ground fill or the opaque layer)
@@ -117,7 +118,7 @@ void CSVol(uint3 id : SV_DispatchThreadID)
     AtmoRay r;
     if (!MakeRay(float2(uv.x * 2 - 1, 1 - uv.y * 2), r)) {
         for (int k = 0; k < S; k++) { uApL[uint3(id.xy, k)] = 0; uApT[uint3(id.xy, k)] = 1; }
-        uEndL[id.xy] = 0; uEndT[id.xy] = 1;
+        uEndL[id.xy] = 0; uEndT[id.xy] = float4(1, 1, 1, 0);
         return;
     }
     const bool opaque = r.tO < min(r.t1, r.tG);
@@ -141,10 +142,36 @@ void CSVol(uint3 id : SV_DispatchThreadID)
     float3 Le = L;
     if (ground) Le += T * GroundFill(r, tEnd);
     uEndL[id.xy] = float4(Le * FX_PI, 0);
-    uEndT[id.xy] = float4((ground || opaque) ? 0 : T * exp(min(fwd, 40)), 0);
+    uEndT[id.xy] = float4((ground || opaque) ? 0 : T * exp(min(fwd, 40)), tEnd * 1e-3);  // w: the column's ray length [km] (16-bit float)
 }
 
 struct PSOut { float4 add : SV_Target0; float4 mul : SV_Target1; };
+
+// the air along the ray to the distance ts, from the volume (as the PS's own path below): in-scattered light, transmittance
+void AirAt(AtmoRay r, float2 uv, float ts, out float3 L, out float3 T)
+{
+    bool opaque = r.tO < min(r.t1, min(ts, r.tG));
+    bool scene = !opaque && ts < min(r.t1, r.tG);
+    bool ground = !opaque && !scene && r.tG < r.t1;
+    L = 0; T = 0;
+    if (scene) {
+        const float2 grid = aGrid.xy;
+        float2 g = uv * grid - 0.5, c0 = floor(g), f = g - c0;
+        [unroll] for (int k = 0; k < 4; k++) {
+            int2 c = (int2)clamp(c0 + float2(k & 1, k >> 1), 0, grid - 1);
+            float te = tEndT.Load(int3(c, 0)).w * 1e3;
+            float u = pow(saturate((ts - r.t0) / max(te - r.t0, 1e-3)), 1.0 / 3.0);
+            float3 w = float3((c + 0.5) / grid, u * (aVol.w - 1) / aVol.w + 0.5 / aVol.w);
+            float wk = ((k & 1) ? f.x : 1 - f.x) * ((k >> 1) ? f.y : 1 - f.y);
+            L += wk * tApL.SampleLevel(sClamp, w, 0).rgb;
+            T += wk * tApT.SampleLevel(sClamp, w, 0).rgb;
+        }
+    } else {
+        L = tEndL.SampleLevel(sClamp, uv, 0).rgb;
+        T = tEndT.SampleLevel(sClamp, uv, 0).rgb;
+        if (!ground && !opaque && aSun.x > 0.5) { float rc = length(r.org); L += SunDisc(r.d, FxTrans(rc, dot(r.org, r.d) / rc)); }
+    }
+}
 
 PSOut PS(VSOut i)
 {
@@ -175,13 +202,46 @@ PSOut PS(VSOut i)
     if (aCam.z > 3.5 && scene) {   // AtmoDbg 4: the scene without the air; 5: the air's transmittance over the scene (grey)
         if (aCam.z < 4.5) discard;
     }
+    if (aVol.x > 0.5 && abs(aCam.z - 3) > 0.5 && aGrid.w > 1.5 && aCam.z < 0.5) {
+        // MSAA: where the pixel's samples lie at different depths (an edge: a ridge against the sky) the air is taken for
+        // each sample and averaged - one value for all of them (the first sample's) put the stepped edge back over the
+        // smoothed one: the horizon looked unsmoothed whatever the samples
+        uint ns = (uint)aGrid.w;
+        float dmin = 1e30, dmax = -1e30;
+        for (uint s = 0; s < ns; s++) { float ds = tDepthMS.Load(int2(i.pos.xy), s); dmin = min(dmin, ds); dmax = max(dmax, ds); }
+        if (dmax - dmin > 1e-7 * max(dmax, 1e-9) + 1e-12) {
+            float3 La = 0, Ta = 0;
+            for (uint s2 = 0; s2 < ns; s2++) {
+                float ds = tDepthMS.Load(int2(i.pos.xy), s2);
+                float ts = ds > 0 ? r.rl * aTan.z / ds : 1e30;
+                float3 Ls, Ts; AirAt(r, i.pos.xy * aVol.yz, ts, Ls, Ts);
+                La += Ls; Ta += Ts;
+            }
+            o.add = float4(La / ns, 0); o.mul = float4(min(Ta / ns, 1), 1);
+            return o;
+        }
+    }
     if (aVol.x > 0.5 && abs(aCam.z - 3) > 0.5) {         // inside the air (AtmoDbg 3: every pixel marches): the column's march at this distance
         float2 uv = i.pos.xy * aVol.yz;
         if (scene) {
-            float u = pow(saturate((tS - r.t0) / max(tEnd - r.t0, 1e-3)), 1.0 / 3.0);
-            float3 w = float3(uv, u * (aVol.w - 1) / aVol.w + 0.5 / aVol.w);
-            o.add = float4(tApL.SampleLevel(sClamp, w, 0).rgb, 0);
-            o.mul = float4(min(tApT.SampleLevel(sClamp, w, 0).rgb, 1), 1);
+            // each column's 64 slices span its own ray (to the top of the air, the ground fill or the opaque layer): the
+            // slice at this distance is found in each of the 4 nearest columns by that column's own length, then the
+            // columns are blended (one filtered lookup across columns of different lengths took the wrong distance where
+            // the ray's end jumps - a slit along the horizon, a row of columns wide)
+            const float2 grid = aGrid.xy;
+            float2 g = uv * grid - 0.5, c0 = floor(g), f = g - c0;
+            float3 L = 0, T = 0;
+            [unroll] for (int k = 0; k < 4; k++) {
+                int2 c = (int2)clamp(c0 + float2(k & 1, k >> 1), 0, grid - 1);
+                float te = tEndT.Load(int3(c, 0)).w * 1e3;
+                float u = pow(saturate((tS - r.t0) / max(te - r.t0, 1e-3)), 1.0 / 3.0);
+                float3 w = float3((c + 0.5) / grid, u * (aVol.w - 1) / aVol.w + 0.5 / aVol.w);
+                float wk = ((k & 1) ? f.x : 1 - f.x) * ((k >> 1) ? f.y : 1 - f.y);
+                L += wk * tApL.SampleLevel(sClamp, w, 0).rgb;
+                T += wk * tApT.SampleLevel(sClamp, w, 0).rgb;
+            }
+            o.add = float4(L, 0);
+            o.mul = float4(min(T, 1), 1);
             if (aCam.z > 4.5) { o.add = float4(dot(o.mul.rgb, 1.0 / 3) * 0.05 * float3(1, 1, 1), 0); o.mul = float4(0, 0, 0, 1); }
         } else {
             o.add = float4(tEndL.SampleLevel(sClamp, uv, 0).rgb, 0);

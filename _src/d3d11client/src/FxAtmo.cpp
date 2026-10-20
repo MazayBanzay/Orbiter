@@ -533,11 +533,12 @@ void Atmosphere::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, c
         k.tan = { tanX, tanY, P._43, 0 };
         static const float dbg = (float)FxTestNum("AtmoDbg");     // test runs: 1 = what each pixel's ray ends on
         k.cam = { (float)rc, (float)alt, dbg, 0 };
-        k.sun = { 1.0f, 64.0f, P._31, P._32 };           // the Sun's disc, its radiance capped; TAA's sub-pixel offset
+        extern bool g_sunPassOn;
+        k.sun = { g_sunPassOn ? 0.0f : 1.0f, 3.0e4f, P._31, P._32 };     // x: the air draws the disc (0: Sun.cpp draws it, before this pass); y: its cap, below the FP16 scene target's 65504 (with room for the glare added on top): +INF there turns black in post; through a visor filter it stays a bright disc; TAA's offset
         // inside this planet's air (its light is the frame's): the rays marched per column once, in the volume
         const bool useVol = a == current && alt < a->media.top && EnsureVolume(gc->Dev(), dw, dh);
         k.vol = { useVol ? 1.0f : 0.0f, 1.0f / dw, 1.0f / dh, (float)AP_SLICES };
-        k.grid = { (float)volW, (float)volH, (float)AP_SLICES, 0 };
+        k.grid = { (float)volW, (float)volH, (float)AP_SLICES, (float)gc->samples };     // w: MSAA samples (the edges, fx_atmo PS)
         D3D11_MAPPED_SUBRESOURCE m;
         ctx->Map(cbPass.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &m); memcpy(m.pData, &k, sizeof k); ctx->Unmap(cbPass.Get(), 0);
         ID3D11ShaderResourceView* srv[2] = { a->lutSRV.Get(), a->msSRV.Get() };
@@ -557,12 +558,14 @@ void Atmosphere::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, c
             ctx->CSSetShader(nullptr, nullptr, 0);
             ID3D11ShaderResourceView* v[4] = { apLS.Get(), apTS.Get(), endLS.Get(), endTS.Get() };
             ctx->PSSetShaderResources(1, 4, v);
+            ID3D11ShaderResourceView* dms = gc->samples > 1 ? gc->depthMSSRV.Get() : nullptr;   // the depth per sample (t5)
+            ctx->PSSetShaderResources(5, 1, &dms);
             ctx->PSSetSamplers(1, 1, gc->sampClamp.GetAddressOf());
         }
         ctx->PSSetShaderResources(8, 2, srv);
         ctx->PSSetConstantBuffers(4, 1, a->cb.GetAddressOf());
         ctx->Draw(3, 0);
-        if (useVol) { ID3D11ShaderResourceView* none4[4] = {}; ctx->PSSetShaderResources(1, 4, none4); }
+        if (useVol) { ID3D11ShaderResourceView* none5[5] = {}; ctx->PSSetShaderResources(1, 5, none5); }
     }
 
     // back to the current planet's light for what follows

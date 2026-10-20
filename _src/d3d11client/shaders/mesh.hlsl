@@ -148,11 +148,19 @@ PSOut PS(VSOut i, bool front : SV_IsFrontFace)
     o.mv = (i.cc.xy / i.cc.w - i.pc.xy / i.pc.w) * float2(0.5, -0.5);   // uv now - uv then
     float4 tex = gFlags.x > 0 ? tDiff.Sample(sAniso, i.uv) : float4(1, 1, 1, 1);
     float4 base = gDiff * tex;
+    if (gMaps2.z > 0.5) {      // a filter (group flag 0x100, the visor's sun spot): what lies behind times its transmittance -
+        // the texture's alpha as density, 0.7 (the spot's core) = optical density 4.5 (welding glass); blended Dest x Src
+        float a = saturate(tex.a * gDiff.a / 0.7);
+        float T = exp2(-14.95 * a);
+        o.c = float4(T, T, T, 1);
+        return o;
+    }
     if (gFlags.z > 0.5) {      // not lit: its own colour (a display, a lamp); the cockpit's ones keep their brightness to the eye
         float3 c = (base.rgb + gEmis.rgb * tex.rgb) / max(gAdapt.w * gAdapt.rgb, 1e-4);   // its own light: as it is on screen
         o.c = float4(c, base.a);
         return o;
     }
+    gLLOwn = gFlags.w;      // the camera's own cockpit: the local lights that light it (lights.hlsli)
     float3 n = normalize(i.n);
     // the dirt: matte, its own albedo over the material (lighter on dark composite, darker on white)
     float dirtK = DirtCover(i.wp, n);
@@ -164,6 +172,7 @@ PSOut PS(VSOut i, bool front : SV_IsFrontFace)
         n = PerturbNormal(n, i.wp, i.uv, t * (1 - dirtK * 0.7));
     }
     float sunSh = ShadowAtN(i.wp, normalize(i.n));     // the geometric normal: the offset against acne
+    float skyV = SkyVisibility(i.wp, normalize(i.n)); // the sky past the vessels round the camera: a cabin sees it through its windows (lights.hlsli)
     if (gMaps.z > 0.5 || gMaps.w > 0.5) {
         // the material maps (as D3D9Client's): smoothness and metalness -> GGX for the Sun, the sky's harmonics for the
         // light around (diffuse by the normal, specular by the mirrored direction, rough ones blurred by the SH anyway)
@@ -186,9 +195,10 @@ PSOut PS(VSOut i, bool front : SV_IsFrontFace)
         // warms (red wraps furthest round the terminator, blue least), as the light comes back out reddened
         float3 dif = nl0.xxx;
         if (gMaps2.y > 0.5) { float d0 = dot(n, L); dif = saturate((d0 + float3(0.45, 0.22, 0.15)) / float3(1.45, 1.22, 1.15)); }
-        float3 col = albedo * (dif * sun + SkyLight(n, i.wp) + fill) + spec * nl0 * sun * 3.14159265
-                   + Fa * EnvReflect(reflect(-V, n), i.wp, rough)
+        float3 col = albedo * (dif * sun + SkyLightShaded(n, i.wp, normalize(i.n)) * skyV + fill) + spec * nl0 * sun * 3.14159265
+                   + Fa * EnvReflect(reflect(-V, n), i.wp, rough) * skyV
                    + gEmis.rgb * tex.rgb / max(gAdapt.w * gAdapt.rgb, 1e-4);
+        col += LocalLights(i.wp, n, normalize(i.n), V, albedo, F0, a);     // headlights, lamps (lights.hlsli)
         // the emission map as D3D9 shows it: max(lit, map x emission2) - emission2 the module's glow colour (the jet pack's
         // chambers: 0 when cold), 1 when no module sets it
         if (gMaps2.x > 0.5) col = max(col, tEmisM.Sample(sAniso, i.uv).rgb * (gEmis2.w > 0.5 ? gEmis2.rgb : 1.0) / max(gAdapt.w * gAdapt.rgb, 1e-4));
@@ -197,7 +207,7 @@ PSOut PS(VSOut i, bool front : SV_IsFrontFace)
         return o;
     }
     float nl = saturate(dot(n, L)) * sunSh;
-    float3 col = base.rgb * (nl * SunLight(i.wp) + SkyLight(n, i.wp) + (FxActive() ? 0.02 / max(gHazeRGB.w * gAdapt.rgb, 1e-3) : 0.02) * gMAmb.rgb) + gEmis.rgb * tex.rgb / max(gAdapt.w * gAdapt.rgb, 1e-4);   // the faint fill: neutral and constant on screen under the eye's adaptation; the emission through the texture, as D3D9 lights it
+    float3 col = base.rgb * (nl * SunLight(i.wp) + SkyLightShaded(n, i.wp, normalize(i.n)) * skyV + (FxActive() ? 0.02 / max(gHazeRGB.w * gAdapt.rgb, 1e-3) : 0.02) * gMAmb.rgb) + gEmis.rgb * tex.rgb / max(gAdapt.w * gAdapt.rgb, 1e-4);   // the faint fill: neutral and constant on screen under the eye's adaptation; the emission through the texture, as D3D9 lights it
     float4 specM = gMaps.y > 0.5 ? tSpecM.Sample(sAniso, i.uv) : float4(1, 1, 1, 1);    // the specular map scales the material's
     if (gSpec.w > 0 || gMaps.y > 0.5) {
         float3 H = normalize(V + L);
@@ -213,8 +223,15 @@ PSOut PS(VSOut i, bool front : SV_IsFrontFace)
             float3 F0 = saturate(sc) * 0.5;
             float3 F = F0 + (1 - F0) * pow(1 - saturate(dot(n, V)), 5);
             float gloss = saturate(log2(max(pw, 1)) / 7);
-            col = lerp(col, SkyLight(R, i.wp), F * gloss * (1 - dirtK) * 0.6);
+            col = lerp(col, SkyLight(R, i.wp) * skyV, F * gloss * (1 - dirtK) * 0.6);
         }
+    }
+    {   // the local lights (lights.hlsli): the Phong material as GGX - the lobe's width from its power (a^2 = 2 / (n + 2)),
+        // F0 from its specular colour
+        float pwL = gSpec.w > 0 ? gSpec.w : 20;
+        float aL = sqrt(saturate(2 / (pwL + 2) + SpecAAKernel(n)));
+        float3 F0L = (gSpec.w > 0 || gMaps.y > 0.5) ? saturate((gSpec.w > 0 ? gSpec.rgb : 1) * specM.rgb) * 0.25 * (1 - dirtK) : 0.02;
+        col += LocalLights(i.wp, n, normalize(i.n), V, base.rgb, F0L, aL);
     }
     // under the liquid (seen from above it): the light goes down to the point and back up the refracted view ray
     // (as the D3D9 fork: exp(-ext (d + d / cos t)) per channel), the dark liquid body over what is lost

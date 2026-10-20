@@ -60,7 +60,7 @@ void ClientCfg::Save() const
     fprintf(f, "StatsLog = %d       ; fps and GPU times in Orbiter.log every 10 s\n", statsLog ? 1 : 0);
     fprintf(f, "Sharpen = %.2f     ; adaptive sharpening of the fine detail, 0 off .. 1\n", sharpen);
     fprintf(f, "Bloom = %d          ; the bright parts glow softly (the Sun in the haze, glints, lamps)\n", bloom ? 1 : 0);
-    fprintf(f, "AmbientOcclusion = %d ; darker folds of the ground and under the vessels (from the depth)\n", ao ? 1 : 0);
+    fprintf(f, "AmbientOcclusion = %d ; GTAO: the folds, gaps and contacts darken (the sky's light only)\n", ao ? 1 : 0);
     fprintf(f, "DriverCacheMB = %d ; the video driver's shader cache for Orbiter: set aside at start above this (0: never)\n", driverCacheMB);
     fprintf(f, "AntiAliasing = %d   ; 0 off, 1 MSAA 2x, 2 MSAA 4x, 3 MSAA 8x, 4 FXAA, 5 TAA (applies at the next start)\n", aa);
     fprintf(f, "RenderScale = %.2f  ; TAA: scene resolution 0.5..1 of the window, upsampled by TAAU (next start)\n", renderScale);
@@ -208,6 +208,7 @@ static INT_PTR CALLBACK AdvProc(HWND h, UINT m, WPARAM w, LPARAM l)
         CheckDlgButton(h, IDC_ADV_LIQUIDS, g_cfg.liquids ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(h, IDC_ADV_SHADOWS, g_cfg.shadows ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(h, IDC_ADV_MICRO, g_cfg.microTex ? BST_CHECKED : BST_UNCHECKED);
+        CheckDlgButton(h, IDC_ADV_AO, g_cfg.ao ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(h, IDC_ADV_STATS, g_cfg.statsLog ? BST_CHECKED : BST_UNCHECKED);
         for (const char* t : { "Off", "MSAA 2x", "MSAA 4x", "MSAA 8x", "FXAA (post)", "TAA (temporal)" }) SendDlgItemMessageA(h, IDC_ADV_AA, CB_ADDSTRING, 0, (LPARAM)t);
         SendDlgItemMessageA(h, IDC_ADV_AA, CB_SETCURSEL, g_cfg.aa, 0);
@@ -222,6 +223,7 @@ static INT_PTR CALLBACK AdvProc(HWND h, UINT m, WPARAM w, LPARAM l)
             g_cfg.liquids = IsDlgButtonChecked(h, IDC_ADV_LIQUIDS) == BST_CHECKED;
             g_cfg.shadows = IsDlgButtonChecked(h, IDC_ADV_SHADOWS) == BST_CHECKED;
             g_cfg.microTex = IsDlgButtonChecked(h, IDC_ADV_MICRO) == BST_CHECKED;
+            g_cfg.ao = IsDlgButtonChecked(h, IDC_ADV_AO) == BST_CHECKED;
             g_cfg.statsLog = IsDlgButtonChecked(h, IDC_ADV_STATS) == BST_CHECKED;
             g_cfg.aa = std::clamp((int)SendDlgItemMessageA(h, IDC_ADV_AA, CB_GETCURSEL, 0, 0), 0, 5);
             GetDlgItemTextA(h, IDC_ADV_SCALE, s, 32); g_cfg.renderScale = std::clamp((float)atof(s) / 100.0f, 0.5f, 1.0f);

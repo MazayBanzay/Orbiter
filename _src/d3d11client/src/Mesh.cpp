@@ -264,7 +264,7 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
     double dist = length(rel);
     double size = vv->v->GetSize();
     if (!shadowPass && size / std::max(dist, 1e-3) * H < 0.5) return;     // smaller than a pixel
-    static OBJHANDLE hSun = FindSun();
+    const OBJHANDLE hSun = FindSun();     // per call: a static kept the first session's Sun - freed when the next scenario loads (a crash in Orbiter.exe)
     VECTOR3 sp = _V(0, 0, 0); if (hSun) oapiGetGlobalPos(hSun, &sp);
     VECTOR3 sd = sp - gp; sd = sd / length(sd);
     XMMATRIX V(cr.m11, cr.m12, cr.m13, 0, cr.m21, cr.m22, cr.m23, 0, cr.m31, cr.m32, cr.m33, 0, 0, 0, 0, 1);
@@ -356,7 +356,14 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
             // skin: the texture's name (a head, a face, a hand) - its light scatters under the surface (mesh.hlsl)
             bool skin = false;
             if (s && !s->name.empty()) { std::string ln = s->name; for (char& ch : ln) ch = (char)tolower((unsigned char)ch); skin = ln.find("skin") != std::string::npos; }
-            c.maps2 = { msrv[4] ? 1.0f : 0.0f, skin ? 1.0f : 0.0f, 0, 0 };
+            const bool filter = (g.usrFlag & 0x100) != 0;      // a filter group (the visor's sun spot): Dest x transmittance
+            if (filter && !shadowPass) {   // ... over the Sun: the glare in the eye goes through it too (its transmittance, mesh.hlsl)
+                extern bool g_sunFilterSeen; extern float g_sunFilterT;
+                g_sunFilterSeen = true;
+                g_sunFilterT = std::min(g_sunFilterT, exp2f(-14.95f * std::clamp(mt.diffuse.a / 0.7f, 0.0f, 1.0f)));
+            }
+            if (filter && (g.usrFlag & 0x200) && !shadowPass) { extern bool g_sunHAlphaSeen; g_sunHAlphaSeen = true; }   // ... an H-alpha one: Sun.cpp draws the H-alpha Sun
+            c.maps2 = { msrv[4] ? 1.0f : 0.0f, skin ? 1.0f : 0.0f, filter ? 1.0f : 0.0f, 0 };
             if (!shadowPass) ctx->PSSetShaderResources(1, 5, msrv);
             D3D11_MAPPED_SUBRESOURCE ms;
             ctx->Map(cbObj.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms); memcpy(ms.pData, &c, sizeof c); ctx->Unmap(cbObj.Get(), 0);
@@ -370,7 +377,11 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
                 ctx->PSSetConstantBuffers(8, 1, emCB.GetAddressOf());
             }
             ctx->PSSetShaderResources(0, 1, &srv);
-            if (!shadowPass) ctx->OMSetBlendState((g.usrFlag & 8) ? bsAdd.Get() : bsAlpha.Get(), nullptr, ~0u);   // FLAG 8: added
+            if (!shadowPass) {
+                static ComPtr<ID3D11BlendState> bsFilt; static ID3D11Device* bfDev = nullptr;
+                if (bfDev != dev.Get()) { bfDev = dev.Get(); bsFilt.Reset(); D3D11_BLEND_DESC b = {}; b.RenderTarget[0] = { TRUE, D3D11_BLEND_ZERO, D3D11_BLEND_SRC_COLOR, D3D11_BLEND_OP_ADD, D3D11_BLEND_ZERO, D3D11_BLEND_ONE, D3D11_BLEND_OP_ADD, D3D11_COLOR_WRITE_ENABLE_RED | D3D11_COLOR_WRITE_ENABLE_GREEN | D3D11_COLOR_WRITE_ENABLE_BLUE }; dev->CreateBlendState(&b, &bsFilt); }
+                ctx->OMSetBlendState((g.usrFlag & 0x100) ? bsFilt.Get() : (g.usrFlag & 8) ? bsAdd.Get() : bsAlpha.Get(), nullptr, ~0u);   // FLAG 8: added; 0x100: a filter
+            }
             // diagnostics (test runs): in the cockpit view, the groups whose box covers much of the screen near the camera
             if (internal && !shadowPass && diagFrames > 0 && !g.vtx.empty()) {
                 XMMATRIX WVPd = W * VP;

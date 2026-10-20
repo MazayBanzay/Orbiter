@@ -8,7 +8,7 @@ BEGIN
     1001 "Graphics engines"
 END
 
-IDD_ADVANCED DIALOGEX 0, 0, 236, 220
+IDD_ADVANCED DIALOGEX 0, 0, 236, 234
 STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "D3D11Client - Advanced"
 FONT 9, "Segoe UI"
@@ -25,10 +25,11 @@ BEGIN
     AUTOCHECKBOX    "Shadows", IDC_ADV_SHADOWS, 10, 100, 200, 10
     AUTOCHECKBOX    "FPS and GPU times in Orbiter.log", IDC_ADV_STATS, 10, 114, 200, 10
     AUTOCHECKBOX    "Surface micro textures (close-up detail)", IDC_ADV_MICRO, 10, 128, 200, 10
-    LTEXT           "Anti-aliasing (next start)", -1, 10, 148, 150, 10
-    COMBOBOX        IDC_ADV_AA, 120, 146, 106, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "TAA render scale, % (50..100: upsampled)", -1, 10, 166, 160, 10
-    EDITTEXT        IDC_ADV_SCALE, 170, 164, 56, 12, ES_AUTOHSCROLL
-    DEFPUSHBUTTON   "OK", IDOK, 118, 196, 52, 14
-    PUSHBUTTON      "Cancel", IDCANCEL, 176, 196, 52, 14
+    AUTOCHECKBOX    "Ambient occlusion (folds, gaps, contacts; sky light only)", IDC_ADV_AO, 10, 142, 216, 10
+    LTEXT           "Anti-aliasing (next start)", -1, 10, 162, 150, 10
+    COMBOBOX        IDC_ADV_AA, 120, 160, 106, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "TAA render scale, % (50..100: upsampled)", -1, 10, 180, 160, 10
+    EDITTEXT        IDC_ADV_SCALE, 170, 178, 56, 12, ES_AUTOHSCROLL
+    DEFPUSHBUTTON   "OK", IDOK, 118, 210, 52, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 176, 210, 52, 14
 END

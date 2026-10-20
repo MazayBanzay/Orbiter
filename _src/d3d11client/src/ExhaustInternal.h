@@ -53,6 +53,12 @@ struct ExJet
 struct ExHeat { VECTOR3 g; double r = 0, dT = 0, Tair = 0; OBJHANDLE h = nullptr; };
 
 // the GPU particle system (GpuParticles.cpp)
+// spray sheets off wheels in a liquid (Spray.cpp): fed by the DROP sources, drawn after the particles
+void SprayFeed(const ExScene& sc, uintptr_t key, const VECTOR3& pLocal, const VECTOR3& vLocal, double kgps);
+void SprayRender(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResourceView* depth);
+// the vessels' own exhausts (AddExhaust), volumetric (VesselExhaust.cpp): in the exhaust pass, t5/s3 bound
+void RenderVesselExhausts(D3D11Client* gc, const VECTOR3& cp);
+
 class GpuParticles
 {
 public:

@@ -4,6 +4,7 @@
 // (a sub-rectangle) and elevation (interpolated). Tiles load on the loader thread (D3D11 devices are free-threaded).
 #include "Client.h"
 #include <functional>
+#include <DirectXPackedVector.h>
 
 static const double PI_ = 3.14159265358979323846;
 
@@ -39,16 +40,20 @@ DWORD TreeArchive::Index(int lvl, int ilat, int ilng)
 
 bool TreeArchive::Read(int lvl, int ilat, int ilng, std::vector<BYTE>& out)
 {
-    std::lock_guard<std::mutex> lk(m);
-    DWORD i = Index(lvl, ilat, ilng);
-    if (i == (DWORD)-1 || i >= toc.size() || !toc[i].size) return false;
-    __int64 end = i + 1 < toc.size() ? toc[i + 1].pos : dataLen;
-    DWORD zs = (DWORD)(end - toc[i].pos);
-    std::vector<BYTE> z(zs);
-    _fseeki64(f, toc[i].pos + dataOfs, SEEK_SET);
-    if (fread(z.data(), 1, zs, f) != zs) return false;
-    out.resize(toc[i].size);
-    return oapiInflate(z.data(), zs, out.data(), (DWORD)out.size()) > 0;
+    std::vector<BYTE> z; DWORD size = 0;
+    {   // the file is shared: only the read is locked, the loader threads inflate side by side
+        std::lock_guard<std::mutex> lk(m);
+        DWORD i = Index(lvl, ilat, ilng);
+        if (i == (DWORD)-1 || i >= toc.size() || !toc[i].size) return false;
+        __int64 end = i + 1 < toc.size() ? toc[i + 1].pos : dataLen;
+        DWORD zs = (DWORD)(end - toc[i].pos);
+        z.resize(zs);
+        _fseeki64(f, toc[i].pos + dataOfs, SEEK_SET);
+        if (fread(z.data(), 1, zs, f) != zs) return false;
+        size = toc[i].size;
+    }
+    out.resize(size);
+    return oapiInflate(z.data(), (DWORD)z.size(), out.data(), size) > 0;
 }
 
 // ------------------------------------------------------------------------------------------ planet
@@ -288,23 +293,6 @@ void Planet::LoadGround()
     LOGC("planet %s: ground classes %dx%d cells of %.0f m around %.4f %.4f", name.c_str(), gW, gH, gStep, gLat * 180 / PI_, gLon * 180 / PI_);
 }
 
-// the pixel shader for tiles at the liquid's edge (writes the coastline into the depth: planet.hlsl PSD)
-static struct { ID3D11Device* dev = nullptr; ComPtr<ID3D11PixelShader> ps; } g_psd;
-static ID3D11PixelShader* ShorePS()
-{
-    ID3D11Device* dev = g_client->Dev();
-    if (g_psd.dev != dev) {
-        g_psd.dev = dev; g_psd.ps.Reset();
-        std::string f = g_client->ShaderDir() + "planet.hlsl";
-        std::wstring wf(f.begin(), f.end());
-        ComPtr<ID3DBlob> code, err;
-        if (SUCCEEDED(D3DCompileFromFile(wf.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "PSD", "ps_5_0", D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &code, &err)))
-            dev->CreatePixelShader(code->GetBufferPointer(), code->GetBufferSize(), nullptr, &g_psd.ps);
-        else LOGC("planet PSD: compile failed: %s", err ? (const char*)err->GetBufferPointer() : "?");
-    }
-    return g_psd.ps.Get();
-}
-
 // the micro loader thread's work: the three levels (sRGB colour, or linear when they carry normals in .ag)
 void Planet::MicroLoad()
 {
@@ -391,19 +379,188 @@ static bool ParseElev(const std::vector<BYTE>& b, std::vector<float>& out)
     return true;
 }
 
+// ---- the coast as a signed distance field (the liquid's shore, planet.hlsl): from the masks' alpha, this tile's and its
+// eight neighbours' (the field runs on across the tile edges, no seams), + on land, - in the liquid, in mask texels
+
+// the alpha of a DXT5 DDS's first mip
+static bool DecodeBC3Alpha(const std::vector<BYTE>& b, int& w, int& h, std::vector<uint8_t>& a)
+{
+    if (b.size() < 128 || memcmp(b.data(), "DDS ", 4) || memcmp(b.data() + 84, "DXT5", 4)) return false;
+    memcpy(&h, b.data() + 12, 4); memcpy(&w, b.data() + 16, 4);
+    if (w <= 0 || h <= 0 || (w & 3) || (h & 3) || b.size() < 128 + (size_t)(w / 4) * (h / 4) * 16) return false;
+    a.assign((size_t)w * h, 0);
+    const BYTE* p = b.data() + 128;
+    for (int by = 0; by < h / 4; by++) for (int bx = 0; bx < w / 4; bx++, p += 16) {
+        int a0 = p[0], a1 = p[1]; uint8_t pal[8] = { (uint8_t)a0, (uint8_t)a1 };
+        if (a0 > a1) for (int k = 1; k < 7; k++) pal[k + 1] = (uint8_t)(((7 - k) * a0 + k * a1) / 7);
+        else { for (int k = 1; k < 5; k++) pal[k + 1] = (uint8_t)(((5 - k) * a0 + k * a1) / 5); pal[6] = 0; pal[7] = 255; }
+        uint64_t bits = 0;
+        for (int k = 0; k < 6; k++) bits |= (uint64_t)p[2 + k] << (8 * k);
+        for (int k = 0; k < 16; k++) a[(size_t)(by * 4 + k / 4) * w + bx * 4 + (k & 3)] = pal[(bits >> (3 * k)) & 7];
+    }
+    return true;
+}
+
+// squared Euclidean distance transform, one line (Felzenszwalb & Huttenlocher): f in, d out, n samples
+static void Edt1(const float* f, float* d, int n, int* v, float* z)
+{
+    auto S = [&](int q, int p) { return ((f[q] + (float)q * q) - (f[p] + (float)p * p)) / (2.0f * q - 2.0f * p); };
+    int k = 0; v[0] = 0; z[0] = -1e30f; z[1] = 1e30f;      // (|s| stays under ~1e20: the first boundary never goes)
+    for (int q = 1; q < n; q++) {
+        float s = S(q, v[k]);
+        while (s <= z[k]) { k--; s = S(q, v[k]); }
+        k++; v[k] = q; z[k] = s; z[k + 1] = 1e30f;
+    }
+    k = 0;
+    for (int q = 0; q < n; q++) { while (z[k + 1] < q) k++; float dq = (float)(q - v[k]); d[q] = dq * dq + f[v[k]]; }
+}
+// the squared distance from each cell of an n x n grid to the nearest cell where feat is set
+static void Edt2(const std::vector<uint8_t>& feat, int n, std::vector<float>& out)
+{
+    std::vector<float> f(n), d(n), z(n + 1); std::vector<int> v(n);
+    out.resize((size_t)n * n);
+    for (size_t i = 0; i < out.size(); i++) out[i] = feat[i] ? 0.0f : 1e20f;
+    for (int x = 0; x < n; x++) {       // columns
+        for (int y = 0; y < n; y++) f[y] = out[(size_t)y * n + x];
+        Edt1(f.data(), d.data(), n, v.data(), z.data());
+        for (int y = 0; y < n; y++) out[(size_t)y * n + x] = d[y];
+    }
+    for (int y = 0; y < n; y++) {       // rows
+        float* row = &out[(size_t)y * n];
+        for (int x = 0; x < n; x++) f[x] = row[x];
+        Edt1(f.data(), d.data(), n, v.data(), z.data());
+        memcpy(row, d.data(), n * sizeof(float));
+    }
+}
+
+// a mask tile's alpha, decoded once (the neighbours are asked for again by each of theirs)
+std::shared_ptr<std::vector<uint8_t>> Planet::MaskAlpha(int lvl, int ilat, int ilng, int& w)
+{
+    const uint64_t key = ((uint64_t)lvl << 48) | ((uint64_t)(uint32_t)ilat << 24) | (uint32_t)ilng;
+    {
+        std::lock_guard<std::mutex> lk(sdfMx);
+        auto it = maskCache.find(key);
+        if (it != maskCache.end()) { w = it->second.second; return it->second.first; }
+    }
+    std::shared_ptr<std::vector<uint8_t>> a;
+    std::vector<BYTE> b; int h = 0; w = 0;
+    std::string pm = LoosePath("Mask", lvl, ilat, ilng, ".dds");
+    if (FileExists(pm) && ReadFileBytes(pm.c_str(), b)) {
+        auto v = std::make_shared<std::vector<uint8_t>>();
+        if (DecodeBC3Alpha(b, w, h, *v) && w == h) a = v; else w = 0;
+    }
+    std::lock_guard<std::mutex> lk(sdfMx);
+    if (maskCache.size() > 96) maskCache.clear();      // ~25 MB at 512 x 512: dropped wholesale, the loader refills it
+    maskCache[key] = { a, w };
+    return a;
+}
+
+// the tile's field (null: its mask and the neighbours' are all land or all liquid within reach)
+ComPtr<ID3D11ShaderResourceView> Planet::CoastField(Tile* t, int& cls)
+{
+    int W = 0; cls = 0;
+    auto c = MaskAlpha(t->lvl, t->ilat, t->ilng, W);
+    if (!c || W < 16) return nullptr;
+    const int B = 32, N = W + 2 * B;                    // reach: 32 texels round the tile (16 m at level 18)
+    const int nlat = 1 << std::max(t->lvl - 4, 0), nlng = 2 * nlat;
+    std::shared_ptr<std::vector<uint8_t>> nb[3][3];
+    for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+        int la = t->ilat + dy, ln = ((t->ilng + dx) % nlng + nlng) % nlng, w2 = 0;
+        if (la < 0 || la >= nlat) continue;
+        auto a = (dx || dy) ? MaskAlpha(t->lvl, la, ln, w2) : c;
+        if (a && (dx || dy) && w2 != W) a = nullptr;
+        nb[dy + 1][dx + 1] = a;
+    }
+    std::vector<uint8_t> land((size_t)N * N), liq((size_t)N * N);
+    bool anyL = false, anyQ = false;
+    for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
+        int gx = x - B, gy = y - B;
+        int tx = gx < 0 ? 0 : gx >= W ? 2 : 1, ty = gy < 0 ? 0 : gy >= W ? 2 : 1;
+        uint8_t a;
+        if (nb[ty][tx]) a = (*nb[ty][tx])[(size_t)(gy - (ty - 1) * W) * W + (gx - (tx - 1) * W)];
+        else a = (*c)[(size_t)std::clamp(gy, 0, W - 1) * W + std::clamp(gx, 0, W - 1)];   // no neighbour: the edge goes on
+        bool l = a >= 128;
+        land[(size_t)y * N + x] = l; liq[(size_t)y * N + x] = !l;
+        anyL |= l; anyQ |= !l;
+    }
+    if (!anyL || !anyQ) { cls = anyL ? 1 : -1; return nullptr; }
+    std::vector<float> dLand, dLiq;
+    Edt2(land, N, dLand); Edt2(liq, N, dLiq);
+    std::vector<float> f((size_t)N * N), g((size_t)N * N);
+    for (size_t i = 0; i < f.size(); i++) f[i] = std::clamp(0.5f * (sqrtf(dLiq[i]) - sqrtf(dLand[i])), -(float)B, (float)B);   // midway between the last land and the first liquid texel
+    // the masks' coast comes in steps of a few metres (drawn from a coarse grid): the field smoothed over ~4 m (three box
+    // passes each way, a near-Gaussian) - its zero is a smooth curve through the steps, at every level alike
+    const double texM = (t->maxlat - t->minlat) * R / W;
+    const int r = std::clamp((int)lround(4.0 / texM), 1, B / 4);
+    for (int pass = 0; pass < 6; pass++) {
+        const bool rows = pass & 1;
+        for (int a = 0; a < N; a++) {
+            auto at = [&](int k) -> float& { return rows ? f[(size_t)a * N + k] : f[(size_t)k * N + a]; };
+            auto to = [&](int k) -> float& { return rows ? g[(size_t)a * N + k] : g[(size_t)k * N + a]; };
+            double sum = 0;
+            for (int k = -r; k <= r; k++) sum += at(std::clamp(k, 0, N - 1));
+            for (int k = 0; k < N; k++) {
+                to(k) = (float)(sum / (2 * r + 1));
+                sum += at(std::min(k + r + 1, N - 1)) - at(std::max(k - r, 0));
+            }
+        }
+        f.swap(g);
+    }
+    std::vector<uint16_t> out((size_t)W * W);
+    for (int y = 0; y < W; y++) for (int x = 0; x < W; x++)
+        out[(size_t)y * W + x] = PackedVector::XMConvertFloatToHalf(f[(size_t)(y + B) * N + (x + B)]);
+    D3D11_TEXTURE2D_DESC td = {}; td.Width = td.Height = W; td.MipLevels = td.ArraySize = 1; td.Format = DXGI_FORMAT_R16_FLOAT;
+    td.SampleDesc.Count = 1; td.Usage = D3D11_USAGE_IMMUTABLE; td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    D3D11_SUBRESOURCE_DATA sd = { out.data(), (UINT)(W * 2), 0 };
+    ComPtr<ID3D11Texture2D> tx; ComPtr<ID3D11ShaderResourceView> srv;
+    if (FAILED(g_client->Dev()->CreateTexture2D(&td, &sd, &tx)) || FAILED(g_client->Dev()->CreateShaderResourceView(tx.Get(), nullptr, &srv))) return nullptr;
+    return srv;
+}
+
+// where the tile loads spend their time: each stage's microseconds summed (the loader threads add, the 10 s log line
+// takes and clears them) - the surface's read and decode (its mips made here), the mask and the coast's field, the
+// elevation, the mesh
+static std::atomic<long long> g_ldUs[5];
+static std::atomic<int> g_ldN{ 0 };
+static double g_ldT0 = 0;
+static double NowUs() { LARGE_INTEGER c, f; QueryPerformanceCounter(&c); QueryPerformanceFrequency(&f); return (double)c.QuadPart * 1e6 / (double)f.QuadPart; }
+std::string Planet::LoadStats()
+{
+    const int n = g_ldN.exchange(0);
+    long long us[5]; for (int k = 0; k < 5; k++) us[k] = g_ldUs[k].exchange(0);
+    const double now = NowUs(), span = g_ldT0 > 0 ? (now - g_ldT0) * 1e-6 : 0; g_ldT0 = now;
+    if (!n) return "";
+    char b[256];
+    sprintf_s(b, "tile loads: %d in %.0f s (%.1f/s) | ms each: surface read %.1f, decode + mips %.1f, mask + coast %.1f, elevation %.1f, mesh %.1f",
+              n, span, span > 0 ? n / span : 0.0, us[0] / 1e3 / n, us[1] / 1e3 / n, us[2] / 1e3 / n, us[3] / 1e3 / n, us[4] / 1e3 / n);
+    return b;
+}
+
 void Planet::Load(Tile* t)
 {
     ID3D11Device* dev = g_client->Dev();
     std::vector<BYTE> b;
+    double tk = NowUs();
+    auto stage = [&](int k) { double n = NowUs(); g_ldUs[k] += (long long)(n - tk); tk = n; };
     // surface texture
     std::string ps = LoosePath("Surf", t->lvl, t->ilat, t->ilng, ".dds");
-    if (FileExists(ps) && ReadFileBytes(ps.c_str(), b)) t->tex = LoadDDSMemory(dev, b.data(), b.size(), true);
-    else if (surfTree && surfTree->Read(t->lvl, t->ilat, t->ilng, b)) t->tex = LoadDDSMemory(dev, b.data(), b.size(), true);
+    bool got = (FileExists(ps) && ReadFileBytes(ps.c_str(), b)) || (surfTree && surfTree->Read(t->lvl, t->ilat, t->ilng, b));
+    stage(0);
+    if (got) t->tex = LoadDDSMemory(dev, b.data(), b.size(), true);
+    stage(1);
     // the liquid mask (bodies with a liquid): the coastline per pixel, as the D3D9 client draws it
     if (liq.has) {
         std::string pm = LoosePath("Mask", t->lvl, t->ilat, t->ilng, ".dds");
         if (FileExists(pm) && ReadFileBytes(pm.c_str(), b)) t->mask = LoadDDSMemory(dev, b.data(), b.size(), false);
+        if (t->mask && t->lvl >= 14) {      // (coarser tiles are never drawn within the coast's 300 m: no field for them)
+            int w = 0;
+            MaskAlpha(t->lvl, t->ilat, t->ilng, w);
+            int cls = 0;
+            if (w > 0 && (t->sdf = CoastField(t, cls))) t->sdfTexel = (float)((t->maxlat - t->minlat) * R / w);
+            t->maskClass = cls;
+        }
     }
+    stage(2);
     // elevation: own, else the parent's quadrant interpolated
     auto e = std::make_shared<std::vector<float>>();
     bool own = false;
@@ -462,6 +619,7 @@ void Planet::Load(Tile* t)
     }
     t->elev = e; t->ownElev = own;
     t->elevLvl = own ? t->lvl : (t->parent ? t->parent->elevLvl : 0);
+    stage(3);
 
     // the mesh: 65x65 nodes from the elevation (every 4th sample), positions relative to the tile centre
     const int G = 64;
@@ -501,12 +659,6 @@ void Planet::Load(Tile* t)
     }
     // skirts hang below the edges (they hide the cracks against coarser neighbours)
     double drop = (t->maxlat - t->minlat) * R * 0.02 + 20.0;
-    // a tile without elevation data (none of its own, none above it) lies at the mean radius; where the data's coverage
-    // ends (Titan: loose tiles round the site only, the ground there 617 m down) it stands over its neighbours by hundreds
-    // of metres, and through the gap under its edge the sky showed: a slit round the horizon. Its skirts reach down to
-    // the lowest loaded ground (and the liquid's level): the coverage's edge is a wall of ground, not a hole
-    if (own && t->elev) { float lo = elevLow.load(); while (emin < lo && !elevLow.compare_exchange_weak(lo, (float)emin)) {} }
-    if (!t->elev) drop = std::max(drop, 30.0 - std::min({ (double)elevLow.load(), liq.has ? liq.level : 0.0, 0.0 }));
     int base = (G + 1) * (G + 1);
     auto skirt = [&](int dst, int i, int j) {
         TileVertex s = v[i * (G + 1) + j];
@@ -526,12 +678,13 @@ void Planet::Load(Tile* t)
     if (FAILED(dev->CreateBuffer(&bd, &sd, &vb))) { t->state = 3; return; }
     t->vb = vb;
     tilesLoaded++;
+    stage(4); g_ldN++;
     t->state = 2;
 }
 
 // ------------------------------------------------------------------------------------------ rendering
 struct PlanetCB { XMFLOAT4X4 wvp; XMFLOAT4 sunL, uv, misc; XMFLOAT4X4 w, rot; XMFLOAT4 mic[3], micM[3], micF, micC;
-                  XMFLOAT4 gm, el, ground[3], maskUV; };
+                  XMFLOAT4 gm, el, ground[3], maskUV, shore, shore2; };
 static_assert(sizeof(PlanetCB) <= 1024, "cbObj");
 
 void Planet::Render(ID3D11DeviceContext* ctx, const VECTOR3& camPos, const MATRIX3& camRot, const XMMATRIX& proj, float tanHalfY, int screenH)
@@ -599,10 +752,20 @@ void Planet::Render(ID3D11DeviceContext* ctx, const VECTOR3& camPos, const MATRI
     if (frame % 300 == 150 && getenv("D3D11CLIENT_TEST")) ElevCheck(camPos);
 }
 
+// how much a tile not loaded yet matters to the loaders: its distance from the camera over its size (the one under the
+// camera ~0, the small far ones large) - its centre taken on the reference sphere (the elevation comes with the load)
+float Planet::LoadPrio(const Tile* t, const VECTOR3& cpl) const
+{
+    double mlat = 0.5 * (t->minlat + t->maxlat), mlng = 0.5 * (t->minlng + t->maxlng);
+    double edge = (t->maxlat - t->minlat) * R;
+    VECTOR3 c = _V(cos(mlat) * cos(mlng), sin(mlat), cos(mlat) * sin(mlng)) * R;
+    return (float)(std::max(length(c - cpl) - edge * 0.75, edge * 0.02) / edge);
+}
+
 void Planet::Traverse(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, const MATRIX3& camRot, const XMMATRIX& proj, float tanHalfY, int screenH, const VECTOR3& sunL)
 {
     t->lastUsed = frame;
-    if (t->state != 2) { if (t->state == 0) g_client->QueueTile(this, t); return; }
+    if (t->state != 2) { t->prio = LoadPrio(t, cpl); if (t->state == 0) g_client->QueueTile(this, t); return; }
     VECTOR3 toTile = t->centre - cpl;
     double dist = length(toTile);
     // horizon: a tile wholly beyond the planet's limb is hidden
@@ -640,7 +803,10 @@ void Planet::Traverse(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, con
     }
     if (split) {
         bool ready = true;
-        for (int k = 0; k < 4; k++) { Tile* c = Child(t, k); if (c->state != 2) { ready = false; if (c->state == 0) g_client->QueueTile(this, c); } }
+        for (int k = 0; k < 4; k++) {
+            Tile* c = Child(t, k);
+            if (c->state != 2) { ready = false; c->prio = LoadPrio(c, cpl); if (c->state == 0) g_client->QueueTile(this, c); }
+        }
         if (ready) {
             for (int k = 0; k < 4; k++) Traverse(t->child[k], ctx, cpl, camRot, proj, tanHalfY, screenH, sunL);
             return;
@@ -649,6 +815,8 @@ void Planet::Traverse(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, con
     }
     Draw(t, ctx, cpl, sunL);
 }
+
+double FxTestNum(const char* key);
 
 void Planet::Draw(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, const VECTOR3& sunL)
 {
@@ -672,7 +840,8 @@ void Planet::Draw(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, const V
     XMStoreFloat4x4(&c.wvp, XMMatrixTranspose(Wm * V * P));
     c.sunL = { (float)sunL.x, (float)sunL.y, (float)sunL.z, 0 };
     c.uv = uv;
-    c.misc = { src ? 1.0f : 0.0f, (float)t->lvl, 0, 0 };
+    static const float tileDbg = (float)FxTestNum("TileDbg");     // test runs: the tiles in their levels' colours
+    c.misc = { src ? 1.0f : 0.0f, (float)t->lvl, 0, tileDbg };
     XMStoreFloat4x4(&c.w, XMMatrixTranspose(Wm));
     XMMATRIX Rx = RotToXM(Rp);
     XMStoreFloat4x4(&c.rot, XMMatrixTranspose(Rx));
@@ -705,10 +874,15 @@ void Planet::Draw(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, const V
                      (float)((t->minlng - msrc->minlng) / (msrc->maxlng - msrc->minlng)), (float)((msrc->maxlat - t->maxlat) / (msrc->maxlat - msrc->minlat)) };
     c.misc.z = mskv && liq.has ? 1.0f : 0.0f;
     ctx->PSSetShaderResources(15, 1, &mskv);
-    bool shore = mskv && liq.has && near_ < 300 && t->emin <= liq.level + 1.5 && t->emax >= liq.level - 1.5;   // far tiles: coarse masks would turn flat land into liquid   // ShoreDepth's tolerance reaches 1.5 m
-    static const bool noPsd = getenv("D3D11CLIENT_NOPSD") != nullptr;      // measuring: the coastline depth off
-    ID3D11PixelShader* sps = shore && !noPsd ? ShorePS() : nullptr;
-    ctx->PSSetShader(sps ? sps : g_client->psPlanet.Get(), nullptr, 0);
+    // the coast, from the masks' smoothed distance field (within 300 m: farther the coarse masks would move it): the
+    // beach laid by the vertex shader, the shore's colours by the pixel shader (planet.hlsl CoastElev, CoastAlbedo)
+    ID3D11ShaderResourceView* sdfv = msrc && liq.has && near_ < 300 ? msrc->sdf.Get() : nullptr;
+    const double drop = (t->maxlat - t->minlat) * R * 0.02 + 20.0;        // as the mesh's skirts hang (Planet::Load)
+    c.shore = { sdfv ? msrc->sdfTexel : 0.0f, 0.04f, (float)drop, 0 };
+    c.shore2 = { 0, !sdfv && msrc && liq.has && near_ < 300 ? msrc->maskClass * 1e3f : 0.0f, 0, 0 };   // no field: all land / all liquid
+    ctx->VSSetShaderResources(16, 1, &sdfv);
+    ctx->PSSetShaderResources(16, 1, &sdfv);
+    const bool shore = sdfv != nullptr;
     c.ground[0] = c.ground[1] = c.ground[2] = { 0, 0, 0, 0 };
     if (gOn && groundTex) {
         double lat = asin(t->centre.y / rc), lon = atan2(t->centre.z, t->centre.x);
@@ -726,7 +900,15 @@ void Planet::Draw(Tile* t, ID3D11DeviceContext* ctx, const VECTOR3& cpl, const V
     UINT stride = sizeof(TileVertex), off = 0;
     ctx->IASetVertexBuffers(0, 1, t->vb.GetAddressOf(), &stride, &off);
     ctx->PSSetShaderResources(0, 1, &srv);
-    ctx->DrawIndexed(g_client->tileIdxCount, 0, 0);
+    // the half-density grid where a fine cell would span under 2.5 pixels at the tile's nearest point (never for the
+    // ground under the camera: the ground material, the coastline)
+    static const bool fineOnly = getenv("D3D11CLIENT_FINETILES") != nullptr;    // measuring: always the fine grid
+    static DWORD vw = 0, vh = 0;
+    if (!vh) oapiGetViewportSize(&vw, &vh);
+    double cell = (t->maxlat - t->minlat) * R / 64, pxRad = 2 * tan(oapiCameraAperture()) / (double)std::max<DWORD>(vh, 1);
+    bool coarse = !fineOnly && !gOn && !shore && cell < 2.5 * pxRad * std::max(near_, 1.0);
+    if (coarse) ctx->DrawIndexed(g_client->tileIdxCount2, g_client->tileIdxCount, 0);
+    else ctx->DrawIndexed(g_client->tileIdxCount, 0, 0);
     tilesDrawn++;
 }
 

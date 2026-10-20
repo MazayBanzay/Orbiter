@@ -30,46 +30,83 @@ double PStream::LevelAlpha(double L) const
 
 void PStream::Update(double dt)
 {
-    // the particles move on (and slow down in the air towards the air's motion: the reference body's)
-    for (auto& p : ps) {
-        p.age += dt;
-        if (p.rho > 0 && spec.atmslowdown > 0) {
-            double k = exp(-spec.atmslowdown * dt);
-            p.vel = p.air + (p.vel - p.air) * k;
+    // as the stock D3D9 client's ExhaustStream::Update does it (Orbiter's own semantics of PARTICLESTREAMSPEC):
+    //  - born against the stream's direction (dir is the thrust's: the exhaust leaves the other way) at v0, spread by
+    //    srcspread, on top of the vessel's velocity;
+    //  - in the air they slow towards the air's motion there (the wind and the turning planet: oapiGetWindVector) at
+    //    exp(-atmslowdown * sqrt(rho) / 1.1371 * dt); gravity pulls them, less in the air (buoyancy, never below the
+    //    ~0.3 m/s settling the stock drag gives); at the ground they spread along it;
+    //  - born at intervals that shorten with the airspeed (size0 / (srcrate (0.1 v + size0))): a closed trail.
+    OBJHANDLE hP = nullptr;
+    VESSEL* v = hRef && oapiIsVessel(hRef) ? oapiGetVesselInterface(hRef) : nullptr;
+    if (v) hP = v->GetSurfaceRef();
+    if (!ps.empty() && hP) {
+        VECTOR3 pp; oapiGetGlobalPos(hP, &pp);
+        const double R0 = oapiGetSize(hP) + (v ? v->GetSurfaceElevation() : 0.0);
+        const double M = oapiGetMass(hP);
+        for (auto& p : ps) {
+            VECTOR3 s = p.pos - pp; const double d = length(s);
+            ATMPARAM prm; oapiGetPlanetAtmParams(hP, d, &prm);
+            double lng, lat, r; oapiGlobalToEqu(hP, p.pos, &lng, &lat, &r);
+            VECTOR3 av = _V(0, 0, 0);
+            const bool air = prm.rho > 0;
+            if (air) av = oapiGetWindVector(hP, lng, lat, r - oapiGetSize(hP), 3);   // global frame
+            const double g = 6.67430e-11 * M / (d * d);
+            VECTOR3 dv = -s / d * (g * dt);
+            if (air) {
+                const double pref = sqrt(prm.rho) / 1.1371, slow = exp(-spec.atmslowdown * pref * dt);
+                double fb = exp(-prm.rho * 2.0), fmin = 0.3 * spec.atmslowdown * pref / g;
+                if (fb < fmin) fb = std::min(fmin, 1.0);
+                p.vel += dv * fb;
+                p.vel = (p.vel - av) * slow + av;
+            } else p.vel += dv;
+            p.pos += p.vel * dt;
+            p.age += dt;
+            p.size += spec.growthrate * dt;
+            // at the ground: spread along it
+            VECTOR3 s2 = p.pos - pp; const double l2 = length(s2);
+            if (l2 < R0) {
+                p.pos += s2 * (R0 / l2 - 1.0);
+                const VECTOR3 n = s2 / l2, vv = p.vel - av;
+                VECTOR3 vt = vv - n * dotp(n, vv);
+                const double sp = length(vv);
+                if (length(vt) > 1e-9) vt = vt * (0.5 * sp / length(vt));
+                p.vel = vt + n * (0.2 * sp * Rnd()) + av;
+            }
         }
-        p.pos += p.vel * dt;
-        p.size += spec.growthrate * dt;
+    } else {
+        for (auto& p : ps) { p.pos += p.vel * dt; p.age += dt; p.size += spec.growthrate * dt; }
     }
     while (!ps.empty() && ps.front().age > ps.front().life) ps.pop_front();
-    if (!level || !hRef || !oapiIsVessel(hRef)) return;
+    if (!level || !v) { acc = 0; return; }
     double L = *level;
-    if (L <= 0) return;
+    if (L <= 0) { acc = 0; return; }
     double alpha = LevelAlpha(L);
-    VESSEL* v = oapiGetVesselInterface(hRef);
-    double rho = v->GetAtmDensity();
+    const double rho = v->GetAtmDensity();
     switch (spec.atmsmap) {
     case PARTICLESTREAMSPEC::ATM_PLIN: alpha *= std::clamp((rho - spec.amin) / std::max(spec.amax - spec.amin, 1e-12), 0.0, 1.0); break;
     case PARTICLESTREAMSPEC::ATM_PLOG: alpha *= rho > spec.amin ? std::clamp(log(rho / spec.amin) / std::max(log(spec.amax / spec.amin), 1e-9), 0.0, 1.0) : 0.0; break;
     default: break;
     }
-    if (alpha < 0.01) return;
-    MATRIX3 R; v->GetRotationMatrix(R);
+    if (alpha < 0.01) { acc = 0; return; }
+    MATRIX3 Rm; v->GetRotationMatrix(Rm);
     VECTOR3 vp, vv; v->GetGlobalPos(vp); v->GetGlobalVel(vv);
-    VECTOR3 air = vv;
-    if (OBJHANDLE hb = v->GetSurfaceRef()) oapiGetGlobalVel(hb, &air);
-    VECTOR3 src = vp + mul(R, pos ? *pos : lpos);
-    VECTOR3 d = mul(R, dir ? *dir : ldir);
-    acc += spec.srcrate * dt;
-    while (acc >= 1.0 && ps.size() < 4000) {
-        acc -= 1.0;
+    const VECTOR3 src = vp + mul(Rm, pos ? *pos : lpos);
+    const VECTOR3 vr = mul(Rm, dir ? *dir : ldir) * (-spec.v0);        // against the thrust's direction
+    const double size0 = std::max(spec.srcsize, 1e-3), rate = std::max(spec.srcrate, 1e-3);
+    double interval = spec.v0 > 10 ? std::max(0.015, size0 / (rate * (0.1 * v->GetAirspeed() + size0))) : 1.0 / rate;
+    acc += dt;
+    while (acc >= interval && ps.size() < 4000) {
+        acc -= interval * (0.5 + Rnd());                             // (the stock's random spacing)
+        const double back = std::max(acc, 0.0);                      // born that long ago within this step
+        const double dvs = spec.v0 * spec.srcspread;
+        const VECTOR3 dv = _V(Rnd() - 0.5, Rnd() - 0.5, Rnd() - 0.5) * dvs;
         P p;
-        double sp = spec.v0 * (1 + spec.srcspread * (Rnd() * 2 - 1));
-        VECTOR3 jitter = _V(Rnd() - 0.5, Rnd() - 0.5, Rnd() - 0.5) * (spec.srcspread * spec.v0);
-        p.vel = vv + d * sp + jitter;
-        double frac = Rnd();                       // spread the births over the step
-        p.pos = src + (p.vel - vv) * (frac * dt);
-        p.air = air; p.rho = rho;
-        p.size = spec.srcsize; p.age = 0; p.life = spec.lifetime * (0.7 + 0.6 * Rnd());
+        p.vel = vv + vr + dv;
+        p.pos = src + (vr + dv) * back;
+        p.air = vv; p.rho = rho;
+        p.size = spec.srcsize + spec.growthrate * back; p.age = back;
+        p.life = spec.lifetime * (0.7 + 0.6 * Rnd());
         p.alpha = alpha;
         ps.push_back(p);
     }

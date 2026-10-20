@@ -2,6 +2,7 @@
 // textures without mips get them generated (uncompressed: box filtered; DXT1/3/5: decoded, filtered, encoded again).
 #include "Client.h"
 #include <climits>
+#include <array>
 
 namespace {
 #pragma pack(push, 1)
@@ -55,14 +56,44 @@ void DecodeColour(const BYTE* b, BYTE px[16][4], bool bc1)
 
 void EncodeColour(const BYTE px[16][4], BYTE* out, bool bc1Alpha)
 {
-    int mn[3] = { 255, 255, 255 }, mx[3] = { 0, 0, 0 }; bool any = false, holes = false;
+    // the endpoints on the colours' principal axis (not the bounding box's diagonal): a block's colours lie along a
+    // line in RGB, and the axis of their spread follows it - gradients and two-tone details keep their hues
+    bool holes = false; int n = 0; float mean[3] = {};
     for (int i = 0; i < 16; i++) {
         if (bc1Alpha && px[i][3] < 128) { holes = true; continue; }
-        any = true;
-        for (int k = 0; k < 3; k++) { mn[k] = std::min(mn[k], (int)px[i][k]); mx[k] = std::max(mx[k], (int)px[i][k]); }
+        n++; for (int k = 0; k < 3; k++) mean[k] += px[i][k];
     }
-    if (!any) { memset(out, 0, 4); out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 0; memset(out + 4, 0xFF, 4); return; }
-    for (int k = 0; k < 3; k++) { int in = (mx[k] - mn[k]) / 16; mx[k] -= in; mn[k] += in; }
+    if (!n) { memset(out, 0, 4); memset(out + 4, 0xFF, 4); return; }
+    for (float& m : mean) m /= n;
+    float cov[6] = {};      // rr rg rb gg gb bb
+    for (int i = 0; i < 16; i++) {
+        if (bc1Alpha && px[i][3] < 128) continue;
+        const float d[3] = { px[i][0] - mean[0], px[i][1] - mean[1], px[i][2] - mean[2] };
+        cov[0] += d[0] * d[0]; cov[1] += d[0] * d[1]; cov[2] += d[0] * d[2]; cov[3] += d[1] * d[1]; cov[4] += d[1] * d[2]; cov[5] += d[2] * d[2];
+    }
+    float ax[3] = { 1, 1, 1 };
+    for (int it = 0; it < 8; it++) {         // power iteration: the dominant eigenvector
+        const float x = cov[0] * ax[0] + cov[1] * ax[1] + cov[2] * ax[2];
+        const float y = cov[1] * ax[0] + cov[3] * ax[1] + cov[4] * ax[2];
+        const float z = cov[2] * ax[0] + cov[4] * ax[1] + cov[5] * ax[2];
+        const float l = sqrtf(x * x + y * y + z * z);
+        if (l < 1e-6f) break;
+        ax[0] = x / l; ax[1] = y / l; ax[2] = z / l;
+    }
+    { const float l = sqrtf(ax[0] * ax[0] + ax[1] * ax[1] + ax[2] * ax[2]); for (float& a : ax) a /= std::max(l, 1e-6f); }
+    float tmin = 1e9f, tmax = -1e9f;
+    for (int i = 0; i < 16; i++) {
+        if (bc1Alpha && px[i][3] < 128) continue;
+        const float t = (px[i][0] - mean[0]) * ax[0] + (px[i][1] - mean[1]) * ax[1] + (px[i][2] - mean[2]) * ax[2];
+        tmin = std::min(tmin, t); tmax = std::max(tmax, t);
+    }
+    const float inset = (tmax - tmin) / 16;      // the extremes pulled in a little: the four-step palette fits better
+    tmin += inset; tmax -= inset;
+    int mn[3], mx[3];
+    for (int k = 0; k < 3; k++) {
+        mn[k] = std::clamp((int)lrintf(mean[k] + ax[k] * tmin), 0, 255);
+        mx[k] = std::clamp((int)lrintf(mean[k] + ax[k] * tmax), 0, 255);
+    }
     uint16_t c0 = To565(mx), c1 = To565(mn);
     const bool three = bc1Alpha && holes;
     if (three ? c0 > c1 : c0 < c1) std::swap(c0, c1);
@@ -116,11 +147,21 @@ void EncodeAlphaBC3(const BYTE px[16][4], BYTE* out)
 BYTE Avg4(BYTE a, BYTE b, BYTE c, BYTE d, bool srgb)
 {
     if (!srgb) return (BYTE)((a + b + c + d + 2) / 4);
-    static float lin[256]; static bool init = false;
-    if (!init) { for (int i = 0; i < 256; i++) { float v = i / 255.0f; lin[i] = v <= 0.04045f ? v / 12.92f : powf((v + 0.055f) / 1.055f, 2.4f); } init = true; }
+    static const std::array<float, 256> lin = [] {      // (a function's static: made once, safe for the loader threads)
+        std::array<float, 256> t;
+        for (int i = 0; i < 256; i++) { float v = i / 255.0f; t[i] = v <= 0.04045f ? v / 12.92f : powf((v + 0.055f) / 1.055f, 2.4f); }
+        return t;
+    }();
+    static const std::array<BYTE, 4097> enc = [] {      // linear -> sRGB byte in 4096 steps (within one count of powf)
+        std::array<BYTE, 4097> t;
+        for (int i = 0; i <= 4096; i++) {
+            float l = i / 4096.0f, v = l <= 0.0031308f ? l * 12.92f : 1.055f * powf(l, 1 / 2.4f) - 0.055f;
+            t[i] = (BYTE)std::clamp((int)(v * 255 + 0.5f), 0, 255);
+        }
+        return t;
+    }();
     float l = 0.25f * (lin[a] + lin[b] + lin[c] + lin[d]);
-    float v = l <= 0.0031308f ? l * 12.92f : 1.055f * powf(l, 1 / 2.4f) - 0.055f;
-    return (BYTE)std::clamp((int)(v * 255 + 0.5f), 0, 255);
+    return enc[std::min((int)(l * 4096 + 0.5f), 4096)];
 }
 
 // the full chain for a BC1/2/3 top level stored alone; false: not such a format (the caller keeps the one level)
@@ -131,7 +172,7 @@ bool BuildBlockMips(DXGI_FORMAT fmt, const BYTE* top, UINT W, UINT H, std::vecto
     const bool bc3 = fmt == DXGI_FORMAT_BC3_UNORM || fmt == DXGI_FORMAT_BC3_UNORM_SRGB;
     if (!bc1 && !bc2 && !bc3) return false;
     const bool srgbF = fmt == DXGI_FORMAT_BC1_UNORM_SRGB || fmt == DXGI_FORMAT_BC2_UNORM_SRGB || fmt == DXGI_FORMAT_BC3_UNORM_SRGB;
-    static int off = -1; if (off < 0) { char v[4] = {}; off = GetEnvironmentVariableA("D3D11CLIENT_NOMIPGEN", v, 4) && v[0] == '1'; }   // test runs: A/B
+    static const bool off = [] { char v[4] = {}; return GetEnvironmentVariableA("D3D11CLIENT_NOMIPGEN", v, 4) && v[0] == '1'; }();   // test runs: A/B
     if (off) return false;
     const size_t bb = bc1 ? 8 : 16;
     const UINT bw = (W + 3) / 4, bh = (H + 3) / 4;
@@ -180,11 +221,36 @@ bool BuildBlockMips(DXGI_FORMAT fmt, const BYTE* top, UINT W, UINT H, std::vecto
 
 static ComPtr<ID3D11ShaderResourceView> CreateTexture2D(ID3D11Device* dev, UINT W, UINT H, DXGI_FORMAT fmt, const void* data, UINT pitch);
 
+// the mips made for a DXT texture saved without them, written once to Modules\D3D11Client\mipcache (the file's path,
+// size and time in the name): the next start reads them ready instead of making them again (4096 textures take ~0.1 s)
+static thread_local std::vector<BYTE>* t_mipOut = nullptr;
+static std::string MipCachePath(const char* path)
+{
+    WIN32_FILE_ATTRIBUTE_DATA fa;
+    if (!GetFileAttributesExA(path, GetFileExInfoStandard, &fa)) return {};
+    std::string n = path;
+    for (char& ch : n) if (ch == '\\' || ch == '/' || ch == ':' || ch == ' ') ch = '_';
+    char tail[64]; sprintf_s(tail, "_%lu_%08lx%08lx.dds", fa.nFileSizeLow, fa.ftLastWriteTime.dwHighDateTime, fa.ftLastWriteTime.dwLowDateTime);
+    return "Modules\\D3D11Client\\mipcache\\" + n + tail;
+}
+
 ComPtr<ID3D11ShaderResourceView> LoadDDSFile(ID3D11Device* dev, ID3D11DeviceContext*, const char* path, bool srgb, UINT* ow, UINT* oh)
 {
     std::vector<BYTE> f;
+    const std::string cache = MipCachePath(path);
+    if (!cache.empty() && ReadFileBytes(cache.c_str(), f)) {
+        if (auto srv = LoadDDSMemory(dev, f.data(), f.size(), srgb, ow, oh, false)) return srv;
+    }
     if (!ReadFileBytes(path, f)) return nullptr;
-    return LoadDDSMemory(dev, f.data(), f.size(), srgb, ow, oh, false);   // meshes' textures: as stored (D3D9 shows a texture saved without mips at its full level: the full detail up close)
+    std::vector<BYTE> made;
+    t_mipOut = cache.empty() ? nullptr : &made;
+    auto srv = LoadDDSMemory(dev, f.data(), f.size(), srgb, ow, oh, true);   // a texture saved without mips gets them (as D3DX gives D3D9: no shimmer)
+    t_mipOut = nullptr;
+    if (srv && !made.empty()) {
+        CreateDirectoryA("Modules\\D3D11Client\\mipcache", nullptr);
+        if (FILE* o = fopen(cache.c_str(), "wb")) { fwrite(made.data(), 1, made.size(), o); fclose(o); }
+    }
+    return srv;
 }
 
 ComPtr<ID3D11ShaderResourceView> LoadDDSMemory(ID3D11Device* dev, const BYTE* fdata, size_t fsize, bool srgb, UINT* ow, UINT* oh, bool genMips)
@@ -248,6 +314,12 @@ ComPtr<ID3D11ShaderResourceView> LoadDDSMemory(ID3D11Device* dev, const BYTE* fd
             UINT w2 = W;
             for (auto& l : gen) { sd.push_back({ l.data(), (UINT)(std::max<UINT>(1, (w2 + 3) / 4) * bb), 0 }); w2 = std::max(1u, w2 / 2); }
             used = (UINT)gen.size();
+            if (t_mipOut) {         // the file with its mips, for the cache (LoadDDSFile): the header told of them
+                t_mipOut->assign(f.data(), f.data() + off);
+                Header& ch = *(Header*)(t_mipOut->data() + 4);
+                ch.flags |= 0x20000; ch.mips = used; ch.caps[0] |= 0x400008;
+                for (auto& l : gen) t_mipOut->insert(t_mipOut->end(), l.begin(), l.end());
+            }
         }
         D3D11_TEXTURE2D_DESC td = { W, H, used, 1, fmt, {1, 0}, D3D11_USAGE_IMMUTABLE, D3D11_BIND_SHADER_RESOURCE, 0, 0 };
         ComPtr<ID3D11Texture2D> tex;

@@ -8,7 +8,7 @@ ComPtr<ID3DBlob> FxCompile(const char* file, const char* entry, const char* targ
     std::string path = std::string("Modules\\D3D11Client\\") + file;
     std::wstring wp(path.begin(), path.end());
     ComPtr<ID3DBlob> code, err;
-    HRESULT hr = D3DCompileFromFile(wp.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, entry, target, D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &code, &err);
+    HRESULT hr = CachedCompileFromFile(wp.c_str(), nullptr, entry, target, D3DCOMPILE_OPTIMIZATION_LEVEL3, &code, &err);
     if (err) LOGC("shader %s %s: %s", path.c_str(), entry, (const char*)err->GetBufferPointer());
     if (FAILED(hr)) return nullptr;
     return code;

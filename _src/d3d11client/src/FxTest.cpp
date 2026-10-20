@@ -5,6 +5,7 @@
 //   jet     - a 800 N hydrogen jet straight down from 1 m (ground ejecta, or the cavity, spray and mist over a liquid)
 //   dirt    - the tholin film on the vessel up to 0.5 m
 //   orbit   - the external camera pulled out to ~2000 km
+//   far     - the external camera pulled back ~4x
 //   sky     - the external camera turned up to the sky (clouds)
 //   heat    - two hot nozzles (800 K over the air) on the back unit: their glow and the shimmer of the air
 // Also "TestShot = <s>" (the screenshot's time; D3D11CLIENT_TEST_SHOT wins) in Config\D3D11Client\Client.cfg.
@@ -51,22 +52,46 @@ double FxTestShotTime()
 
 void FxTestFrame()
 {
-    static bool parsed = false, dust = false, splash = false, jet = false, dirt = false, heat = false, sky = false, orbit = false;
+    static bool parsed = false, dust = false, splash = false, jet = false, dirt = false, heat = false, sky = false, orbit = false, farCam = false, nearCam = false, behind = false;
     if (!parsed) {
         parsed = true;
         std::string v = FxTestKey("FxTest");
         for (auto& ch : v) ch = (char)tolower(ch);
         dust = v.find("dust") != std::string::npos; splash = v.find("splash") != std::string::npos;
-        jet = v.find("jet") != std::string::npos; dirt = v.find("dirt") != std::string::npos; heat = v.find("heat") != std::string::npos; sky = v.find("sky") != std::string::npos; orbit = v.find("orbit") != std::string::npos;
+        jet = v.find("jet") != std::string::npos; dirt = v.find("dirt") != std::string::npos; heat = v.find("heat") != std::string::npos; sky = v.find("sky") != std::string::npos; orbit = v.find("orbit") != std::string::npos; farCam = v.find("far") != std::string::npos; nearCam = v.find("near") != std::string::npos; behind = v.find("behind") != std::string::npos;
         if (!v.empty()) LOGC("fx test: %s", v.c_str());
     }
     if (orbit) {      // the external camera pulled out to ~2000 km (from the scenario's few metres), once, after 3 s
         static bool done = false;
         if (!done && oapiGetSimTime() > 3) { done = true; oapiCameraScaleDist(5.0e5); LOGC("fx test: camera out to orbit"); }
     }
+    if (behind) {     // the external camera turned round its target by ~150 deg (to look along the exhausts), once, after 3 s
+        static bool done = false;
+        if (!done && oapiGetSimTime() > 3) { done = true; oapiCameraRotAzimuth(2.6); LOGC("fx test: camera round"); }
+    }
+    if (nearCam) {    // the external camera pulled in ~20x (a distant scenario view to tens of metres), once, after 3 s
+        static bool done = false;
+        if (!done && oapiGetSimTime() > 3) { done = true; oapiCameraScaleDist(0.05); LOGC("fx test: camera in"); }
+    }
+    if (farCam) {        // the external camera pulled back ~4x (a few metres to ~12 m), once, after 3 s
+        static bool done = false;
+        if (!done && oapiGetSimTime() > 3) { done = true; oapiCameraScaleDist(4.0); LOGC("fx test: camera back"); }
+    }
     if (sky) {        // the camera turned up to the sky (the external camera's polar angle), once, after 3 s
         static bool done = false;
         if (!done && oapiGetSimTime() > 3) { done = true; oapiCameraRotPolar(1.2); LOGC("fx test: camera up to the sky"); }
+    }
+    {   // "TestCamDist = <m>": the external camera at that distance from its target; "TestCamPolar = <rad>": turned by that
+        // (both once, after 3 s; for views of the clouds from a chosen height)
+        static bool done = false;
+        if (!done && oapiGetSimTime() > 3) {
+            done = true;
+            const double dist = FxTestNum("TestCamDist"), pol = FxTestNum("TestCamPolar");
+            if (dist > 0 && oapiCameraTargetDist() > 0) { oapiCameraScaleDist(dist / oapiCameraTargetDist()); LOGC("fx test: camera at %.0f m", dist); }
+            if (pol != 0) { oapiCameraRotPolar(pol); LOGC("fx test: camera turned %.2f rad", pol); }
+            const double pit = FxTestNum("TestCockpitPitch");     // the cockpit camera looking up by that [rad]
+            if (pit != 0 && oapiCameraInternal()) { oapiCameraSetCockpitDir(0, pit); LOGC("fx test: cockpit view up %.2f rad", pit); }
+        }
     }
     if (!dust && !splash && !jet && !dirt && !heat) return;
     OBJHANDLE h = oapiGetFocusObject();
@@ -82,8 +107,9 @@ void FxTestFrame()
         AtmoFX_Emit(h, 9001, p, vel, 0.6, 0.6, on ? 0.08 : 0.0, 0, 0, 0.25, 0.0, 0.0);
     }
     if (splash) {
-        const double p[3] = { 1.0, -alt + 0.3, -0.6 }, vel[3] = { 0, 2.2, -1.6 };
-        AtmoFX_Emit(h, 9002, p, vel, 0.35, 0.5, 3.0, 3, 0, 0.0, 0.0, 0.0);
+        // thrown sideways (across the external camera's view, which looks along the vessel's z): the throw's profile
+        const double p[3] = { 1.2, -alt + 0.3, 1.5 }, vel[3] = { 1.4, 1.8, 0 };
+        AtmoFX_Emit(h, 9002, p, vel, 0.35, 0.5, 8.0, 3, 0, 0.0, 0.0, 0.0);     // ~ a wading wheel (TVChassis: 0.1 rho A r)
         const double pc[3] = { -1.0, -alt + 0.3, -0.6 }, vc[3] = { 0, 1.8, -1.4 };
         AtmoFX_Emit(h, 9003, pc, vc, 0.25, 0.4, 0.6, 0, 1, 0.9, 0.0, 0.0);
     }

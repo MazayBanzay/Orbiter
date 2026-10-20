@@ -51,10 +51,10 @@ struct ClientCfg
     bool tess = false;       // the ground relief's tessellation (the detail is baked into the tiles now)
     bool terrainNormals = true;   // per-pixel normals from the full elevation data (off: the mesh's vertex normals)
     bool geomorph = true;         // terrain LOD levels blend smoothly (CDLOD-style morphing; off: they pop)
-    int driverCacheMB = 128;
-    bool ao = true;               // ambient occlusion from the depth (Ssao.cpp)
+    int driverCacheMB = 600;     // above this the cache is set aside (1 GB ran Orbiter out of memory; a cold cache makes the start slow)
+    bool ao = false;              // ambient occlusion from the depth (Ssao.cpp): off - its noise drew "fur" on the suits
     bool bloom = true;            // the bright parts glow (Bloom.cpp)
-    float sharpen = 0.4f;         // adaptive sharpening after the tone curve (post.hlsl), 0 off .. 1      // the video driver's shader cache file for Orbiter: set aside at start when bigger (0: never)
+    float sharpen = 0.0f;         // adaptive sharpening after the tone curve (post.hlsl), 0 off .. 1 (MSAA needs none: it lifted the fabric grain)      // the video driver's shader cache file for Orbiter: set aside at start when bigger (0: never)
     void Load();
     void Save() const;
 };
@@ -103,6 +103,7 @@ struct Surf
     ~Surf() { FreeDIB(); }
 };
 
+HRESULT CachedCompileFromFile(const wchar_t* path, const D3D_SHADER_MACRO* defs, const char* entry, const char* target, UINT flags, ID3DBlob** code, ID3DBlob** err);   // ShaderCache.cpp
 ComPtr<ID3D11ShaderResourceView> LoadDDSFile(ID3D11Device* dev, ID3D11DeviceContext* ctx, const char* path, bool srgb, UINT* w = nullptr, UINT* h = nullptr);
 ComPtr<ID3D11ShaderResourceView> LoadDDSMemory(ID3D11Device* dev, const BYTE* data, size_t size, bool srgb, UINT* w = nullptr, UINT* h = nullptr, bool genMips = true);
 bool ReadFileBytes(const char* path, std::vector<BYTE>& out);
@@ -136,6 +137,7 @@ public:
     PARTICLESTREAMSPEC spec;
     std::deque<P> ps;
     double acc = 0;
+    VECTOR3 lastSrc = { 0, 0, 0 }; bool hasLast = false;   // the source's place at the last frame's emission (a trail without gaps)
     void Update(double dt);
     double LevelAlpha(double L) const;
     bool Expired() const { return !level && ps.empty(); }
@@ -212,8 +214,13 @@ struct Tile
     Tile* parent = nullptr;
     Tile* child[4] = {};
     std::atomic<int> state{ 0 };        // 0 new, 1 queued, 2 ready, 3 failed
+    std::atomic<float> prio{ 1e9f };    // while queued: how much it matters, smaller first (Planet::LoadPrio, each frame)
     ComPtr<ID3D11ShaderResourceView> tex;   // own surface texture (null: use an ancestor's)
     ComPtr<ID3D11ShaderResourceView> mask;  // own liquid mask (alpha 0 = liquid; null: an ancestor's)
+    ComPtr<ID3D11ShaderResourceView> sdf;   // with it: the coast's signed distance (+land, -liquid) in mask texels, R16F;
+                                            // null where no coast lies within reach (Planet::Load)
+    float sdfTexel = 0;                     // its texel [m]
+    int maskClass = 0;                      // without a field: the mask round the tile all land (1), all liquid (-1)
     ComPtr<ID3D11ShaderResourceView> nmap;  // normals from its own elevation (257x257, planet frame; null: an ancestor's)
     ComPtr<ID3D11ShaderResourceView> hor[2];  // horizon sines in 8 directions (E, NE, N, NW / W, SW, S, SE), 65x65, with nmap
     std::shared_ptr<std::vector<float>> elev;   // 259x259 [m], own or interpolated from the parent
@@ -272,15 +279,22 @@ public:
     std::string name;
     double R;
     int maxLevel = 18;
-    int tilesDrawn = 0, tilesLoaded = 0;
-    std::atomic<float> elevLow{ 0.0f };   // the lowest ground of the loaded elevation tiles (skirts of the tiles without data reach it)
+    int tilesDrawn = 0;
+    std::atomic<int> tilesLoaded{ 0 };  // (the loader threads count)
+    float LoadPrio(const Tile* t, const VECTOR3& cpl) const;
     bool deepOk = true;     // this frame may split past the data (the last frame's tiles and the load queue within budget)
     // the loader (worker thread)
     void Load(Tile* t);
+    static std::string LoadStats();     // the tile loads since the last call: how many, the time of each stage (the log)
     bool HasSurf(int lvl, int ilat, int ilng);
     bool HasElev(int lvl, int ilat, int ilng);
     void Purge(DWORD frame);
 private:
+    // the coast's distance field (Planet::CoastField): the masks' alpha decoded, kept for the neighbours' fields
+    std::mutex sdfMx;
+    std::unordered_map<uint64_t, std::pair<std::shared_ptr<std::vector<uint8_t>>, int>> maskCache;
+    std::shared_ptr<std::vector<uint8_t>> MaskAlpha(int lvl, int ilat, int ilng, int& w);
+    ComPtr<ID3D11ShaderResourceView> CoastField(Tile* t, int& cls);
     std::unique_ptr<TreeArchive> surfTree, elevTree;
     std::string texDir;                 // Textures\<name>
     std::unordered_map<std::string, bool> fileCache;
@@ -311,6 +325,7 @@ private:
 class D3D11Client : public oapi::GraphicsClient
 {
 public:
+    const std::map<OBJHANDLE, VesselVis*>& Visuals() const { return visuals; }   // the vessels drawn (VesselExhaust.cpp)
     D3D11Client(HINSTANCE h);
     ~D3D11Client();
 
@@ -407,6 +422,13 @@ public:
     void RenderUnderwater(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);
     ComPtr<ID3DBlob> CompileShaderFile(const char* file, const char* entry, const char* target);
     void RenderAO(const XMMATRIX& proj);     // Ssao.cpp: ambient occlusion over the opaque scene
+    // Lights.cpp: the vessels' local lights - gathered, clustered, spot shadows (after the Sun's shadows); b9 + t17..t20
+    // bound for the scene's shaders; the beams in the air, the lenses and the beacons (after the air)
+    void LightsFrame(const VECTOR3& cp);
+    void LightsBind();
+    void LightsRenderAir(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);
+    void LightsProbe();     // ... measured on the finished scene's depth (after the own vessel)
+    void LightsAdaptEye(XMFLOAT4& adapt, float& exposure);   // the eye adapts to the local lights where they light what it sees
     ID3D11ShaderResourceView* RenderBloom(ID3D11ShaderResourceView* src);   // Bloom.cpp: the glow for the post pass
     ComPtr<ID3D11RasterizerState> rsMirror;
     ComPtr<ID3D11Texture2D> reflTex, reflDepth; ComPtr<ID3D11RenderTargetView> reflRTV; ComPtr<ID3D11ShaderResourceView> reflSRV;
@@ -428,7 +450,7 @@ public:
     ComPtr<ID3D11VertexShader> vsBlit, vsPanel;
     ComPtr<ID3D11PixelShader> psBlit, psPanel;
     ComPtr<ID3D11Buffer> tileIB;
-    UINT tileIdxCount = 0;
+    UINT tileIdxCount = 0, tileIdxCount2 = 0;     // the fine grid, then the half-density one after it in tileIB
     ComPtr<ID3D11ShaderResourceView> whiteTex;
     // the tile loader
     void QueueTile(Planet* p, Tile* t);
@@ -437,7 +459,7 @@ public:
     std::condition_variable loadCv;
     std::deque<std::pair<Planet*, Tile*>> loadQ;
     std::atomic<bool> loaderRun{ false };
-    std::thread loader;
+    std::vector<std::thread> loaders;
     DWORD frameNo = 0;
     ComPtr<ID3D11Buffer> cbFrame;
     ComPtr<ID3D11VertexShader> vsSky;
@@ -496,6 +518,13 @@ public:
     void RenderLiquid(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj, float tanY);
     void SaveLiquidBed();
     void RenderClouds(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);   // volumetric cloud layers (Clouds.cpp)
+    void RenderCloudShadow(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);   // Earth: the cloud layer's shadows, the cyclone's map (CloudLayer.cpp)
+    void RenderCloudLayer(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);    // Earth: the 2D cloud layer from afar (CloudLayer.cpp)
+    void RenderEarthClouds(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);   // Earth: the volumetric clouds near (EarthClouds.cpp)
+    void RenderStormShadow(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);   // Earth's cyclone: its shadow on what is drawn (Storm.cpp)
+    void RenderStorm(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);         // Earth's cyclone: the volumetric clouds (Storm.cpp)
+    void RenderSun(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);    // the Sun: disc, chromosphere, corona (Sun.cpp)
+    void RenderSunGlare();     // ... its glare in the eye over the finished scene (Sun.cpp)
     void RenderRain(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);   // Titan's methane rain (Rain.cpp)     // the terrain's depth alone (after the planets, before the vessels): the liquid's bed (Liquid.cpp)
     ComPtr<ID3D11Buffer> liqVB, liqIB;
     UINT liqIdx = 0;
@@ -515,6 +544,7 @@ protected:
     bool clbkSplashLoadMsg(const char* msg, int line) override;
     void clbkRenderScene() override;
     bool clbkDisplayFrame() override;
+    void clbkPreStep(double simt, double simdt, double mjd) override { void StormPreStep(double, double, double); StormPreStep(simt, simdt, mjd); }   // the storm's turbulence (Storm.cpp)
 
 private:
     HWND hWnd = nullptr;
@@ -585,7 +615,7 @@ private:
     ComPtr<ID3D11DepthStencilState> dsShadow;
     ComPtr<ID3D11RasterizerState> rsShadow;
     XMFLOAT4X4 lightVP, lightVP2;     // (the first two cascades; the shaders read casc)
-    XMFLOAT4X4 casc[4] = {}; float cascFar[4] = {}, cascTex[4] = {};   // the shadow cascades: light VP, far end [m], texel [m]
+    XMFLOAT4X4 casc[4] = {}; float cascFar[4] = {}, cascTex[4] = {}, cascRange[4] = {}; float sunDiam = 0.0093f;   // the shadow cascades: light VP, far end [m], texel [m]
     bool shadowOn = false;
     static const UINT SHADOW_N = 2048;
     void SaveShot(const char* path);

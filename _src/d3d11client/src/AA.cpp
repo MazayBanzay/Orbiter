@@ -116,29 +116,8 @@ ID3D11ShaderResourceView* D3D11Client::FinishScene(const VECTOR3& cp, const XMMA
 {
     ID3D11ShaderResourceView* nul[3] = {};
     if (g_cfg.aa != AA_TAA) {
-        if (samples > 1) {
-            // the samples averaged as they look after the tone curve (resolve.hlsl): smooth bright edges
-            static ComPtr<ID3D11PixelShader> psRes; static ID3D11Device* resDev = nullptr;
-            if (resDev != dev.Get()) {
-                resDev = dev.Get(); psRes.Reset();
-                if (auto b = CompileShaderFile("resolve.hlsl", "PS", "ps_5_0")) dev->CreatePixelShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &psRes);
-                LOGC("MSAA resolve: %s", psRes ? "weighted by the brightness on screen" : "plain average (resolve.hlsl failed)");
-            }
-            if (!psRes) { ctx->ResolveSubresource(outTex[0].Get(), 0, hdrTex.Get(), 0, DXGI_FORMAT_R16G16B16A16_FLOAT); return outSRV[0].Get(); }
-            ctx->OMSetRenderTargets(1, outRTV[0].GetAddressOf(), nullptr);
-            D3D11_VIEWPORT ovp = { 0, 0, (float)RW, (float)RH, 0, 1 };
-            ctx->RSSetViewports(1, &ovp);
-            ctx->OMSetBlendState(bsOpaque.Get(), nullptr, ~0u);
-            ctx->OMSetDepthStencilState(dsRead.Get(), 0);
-            ctx->RSSetState(rsNone.Get());
-            ctx->VSSetShader(vsAA.Get(), nullptr, 0);
-            ctx->PSSetShader(psRes.Get(), nullptr, 0);
-            ctx->PSSetConstantBuffers(0, 1, cbFrame.GetAddressOf());
-            ctx->PSSetShaderResources(0, 1, hdrSRV.GetAddressOf());
-            FullScreen(ctx.Get());
-            ctx->PSSetShaderResources(0, 1, nul);
-            return outSRV[0].Get();
-        }
+        // the plain hardware resolve (the brightness-weighted one pulled bright edges towards the dark sample: stepped)
+        if (samples > 1) { ctx->ResolveSubresource(outTex[0].Get(), 0, hdrTex.Get(), 0, DXGI_FORMAT_R16G16B16A16_FLOAT); return outSRV[0].Get(); }
         return hdrSRV.Get();
     }
     // TAA: out[cur] = blend(this frame, history out[prev] reprojected)
@@ -218,7 +197,7 @@ void D3D11Client::ToneMapAndAA(ID3D11ShaderResourceView* src)
         D3D11_MAPPED_SUBRESOURCE pm;
         if (cbPost && SUCCEEDED(ctx->Map(cbPost.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &pm))) {
             // TAA averages the frames: its output takes a stronger sharpening (as FSR follows its reconstruction with RCAS)
-            float v[4] = { g_cfg.aa == AA_TAA ? std::min(1.0f, g_cfg.sharpen + 0.5f) : g_cfg.sharpen, 0, 0, 0 };
+            float v[4] = { g_cfg.aa == AA_TAA ? std::min(1.0f, g_cfg.sharpen + 0.6f) : g_cfg.sharpen, 0, 0, 0 };
             memcpy(pm.pData, v, 16); ctx->Unmap(cbPost.Get(), 0);
             ctx->PSSetConstantBuffers(2, 1, cbPost.GetAddressOf());
         }
