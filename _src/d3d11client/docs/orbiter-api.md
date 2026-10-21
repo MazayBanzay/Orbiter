@@ -3,14 +3,14 @@
 [← оглавление](DEVELOPER.md)
 
 Источник требований — `Orbitersdk\include\GraphicsAPI.h` (класс `oapi::GraphicsClient`), `OrbiterAPI.h`,
-`VesselAPI.h`, `DrawAPI.h` (`oapi::Sketchpad`), `CelSphereAPI.h`. Объявления наших переопределений — `Client.h:245-414`.
+`VesselAPI.h`, `DrawAPI.h` (`oapi::Sketchpad`), `CelSphereAPI.h`. Объявления переопределений клиента — `Client.h:245-414`.
 
 Обозначения: ✅ реализовано; ◐ частично / упрощённо; ⛔ не переопределено (работает поведение SDK по умолчанию);
 ◻ переопределено заглушкой.
 
 ## 1. Модуль, окно, Launchpad
 
-| clbk / точка входа | Orbiter ждёт (SDK) | Мы делаем | |
+| clbk / точка входа | Orbiter ждёт (SDK) | Поведение клиента | |
 |---|---|---|---|
 | `InitModule` / `ExitModule` | создать клиент, `oapiRegisterGraphicsClient` | создаём, регистрируем, грузим прокладку `D3D9Client.dll` (`Client.cpp:19-29`) | ✅ |
 | `clbkInitialise` | подготовка до Launchpad; базовая версия обязательна | базовая + `g_cfg.Load()`, `InitVideoTab()`, размер окна из `VIDEODATA` (`Client.cpp:34-44`) | ✅ |
@@ -33,7 +33,7 @@
 
 ## 2. Текстуры и поверхности
 
-| clbk | Orbiter ждёт | Мы делаем | |
+| clbk | Orbiter ждёт | Поведение клиента | |
 |---|---|---|---|
 | `clbkLoadTexture(fname, flags)` | загрузить текстуру | DDS из `Textures2\`, затем `Textures\`, затем путь как есть; sRGB; кеш по имени (`Client.cpp:342-357`). `flags` игнорируются | ◐ |
 | `clbkLoadSurface(fname, attrib, bPath)` | загрузить поверхность с атрибутами | то же, что `clbkLoadTexture(fname, 0)`; `attrib`/`bPath` игнорируются (`Client.cpp:359-362`) | ◐ |
@@ -45,13 +45,13 @@
 | `clbkIncrSurfaceRef` / `clbkReleaseSurface` | счётчик ссылок | ✅ (`Client.cpp:366-377`) | ✅ |
 | `clbkGetSurfaceSize` | размер | ✅ (`Client.cpp:379-384`) | ✅ |
 | `clbkSetSurfaceColourKey` | ключевой цвет | запоминается, используется в `Blt` с `BLT_SRCCOLORKEY` (`Draw.cpp:269-275, 283-284`) | ✅ |
-| `clbkGetDeviceColour` | упаковка RGB | по умолчанию SDK (`0x00RRGGBB`) — совпадает с нашим `DevToRef` (`Draw.cpp:247`) | ⛔ |
-| `clbkSaveSurfaceToImage` | сохранить поверхность в файл | — (у нас есть только `SaveShot` back buffer'а) | ⛔ |
-| `clbkCopyBitmap` | битмап → поверхность (с растяжением) | не переопределён; базовая реализация сидит в `Orbiter.lib` — пишет ли она через наш `clbkGetSurfaceDC` и помечается ли поверхность грязной, **не проверялось** | ⛔ |
+| `clbkGetDeviceColour` | упаковка RGB | по умолчанию SDK (`0x00RRGGBB`) — совпадает с `DevToRef` клиента (`Draw.cpp:247`) | ⛔ |
+| `clbkSaveSurfaceToImage` | сохранить поверхность в файл | — (в клиенте есть только `SaveShot` back buffer'а) | ⛔ |
+| `clbkCopyBitmap` | битмап → поверхность (с растяжением) | не переопределён; базовая реализация сидит в `Orbiter.lib` — пишет ли она через `clbkGetSurfaceDC` клиента и помечается ли поверхность грязной, **не проверялось** | ⛔ |
 
 ## 3. 2D: Blt, Sketchpad, GDI, панели
 
-| clbk | Мы делаем | |
+| clbk | Поведение клиента | |
 |---|---|---|
 | `clbkBlt` (2 варианта), `clbkScaleBlt` | `BltImpl`: на DIB через GDI — `TransparentBlt` (ключ источника), `BitBlt`, `StretchBlt(HALFTONE)`; цель помечается грязной (`Draw.cpp:277-310`). `BLT_TGTCOLORKEY` не поддержан | ◐ |
 | `clbkBeginBltGroup` / `clbkEndBltGroup` | заглушки `return 0` (`Draw.cpp:312-313`) | ◻ |
@@ -71,13 +71,13 @@
 
 ## 4. Меши и визуалы
 
-| clbk | Orbiter ждёт | Мы делаем | |
+| clbk | Orbiter ждёт | Поведение клиента | |
 |---|---|---|---|
 | `clbkVisEvent` | события визуала, 1 если обработано | `INSMESH` → удалить и пересоздать недостающие меши; `DELMESH` (−1 = все); `RESETANIM/CLEARANIM/NEWANIM/DELANIM` → `ResetAnimations`; `MODMESHGROUP`, `MESHVISMODE`, `MESHOFS` — ничего (режим видимости и смещение читаются каждый кадр); всегда возвращает 1 (`Client.cpp:496-509`). Контекст `CLEARANIM` (сбрасывать или нет) игнорируется | ◐ |
-| `clbkGetMesh(vis, idx)` | DEVMESHHANDLE меша визуала (для `VESSEL::GetDevMesh`) | указатель на наш `DevMesh` (`Client.cpp:511-516`) | ✅ |
-| `clbkGetMeshGroup` | прочитать вершины/индексы группы | из CPU-копии группы, с `VtxPerm/IdxPerm`; `MtrlIdx` — индекс Orbiter, **`TexIdx` — наш слот (индекс+1, 0 = нет)**, а не индекс Orbiter (`Client.cpp:444-466`) | ◐ |
+| `clbkGetMesh(vis, idx)` | DEVMESHHANDLE меша визуала (для `VESSEL::GetDevMesh`) | указатель на `DevMesh` клиента (`Client.cpp:511-516`) | ✅ |
+| `clbkGetMeshGroup` | прочитать вершины/индексы группы | из CPU-копии группы, с `VtxPerm/IdxPerm`; `MtrlIdx` — индекс Orbiter, **`TexIdx` — слот клиента (индекс+1, 0 = нет)**, а не индекс Orbiter (`Client.cpp:444-466`) | ◐ |
 | `clbkEditMeshGroup` | изменить группу | все флаги `GRPEDIT_*` SDK (пользовательский флаг — замена/добавление/снятие, только один за вызов; вершины — замена/прибавление по осям), затем перезаливка вершин группы в GPU (`Client.cpp:468-493`, `Mesh.cpp:61-67`) | ✅ |
-| `clbkSetMeshTexture(hMesh, texidx, tex)` | заменить текстуру | `tex[texidx]` с учётом ссылок (`Client.cpp:416-424`). ⚠ SDK противоречив: `GraphicsAPI.h:548` пишет «texidx ≥ 0», `oapiSetTexture` (`OrbiterAPI.h:4714-4719`) — «1..n». Код считает, что приходит 1-based индекс (совпадает с нашим слотом). Не проверялось вживую | ◐ |
+| `clbkSetMeshTexture(hMesh, texidx, tex)` | заменить текстуру | `tex[texidx]` с учётом ссылок (`Client.cpp:416-424`). ⚠ SDK противоречив: `GraphicsAPI.h:548` пишет «texidx ≥ 0», `oapiSetTexture` (`OrbiterAPI.h:4714-4719`) — «1..n». Код считает, что приходит 1-based индекс (совпадает со слотом клиента). Не проверялось вживую | ◐ |
 | `clbkSetMeshMaterial` / `clbkMeshMaterial` | 0 успех, 3 плохой меш, 4 индекс вне диапазона | 0 / **2** (нет меша) / 4 (`Client.cpp:426-442`). Код 2 по SDK значит «клиент не поддерживает» | ◐ |
 | `clbkSetMeshMaterialEx` / `clbkMeshMaterialEx` | PBR-свойства материала | — (возвращают 2) | ⛔ |
 | `clbkSetMeshProperty` | `MESHPROPERTY_MODULATEMATALPHA` | заглушка `false` (`Client.h:261`) | ◻ |
@@ -98,7 +98,7 @@
 
 ## 5. Потоки частиц
 
-| clbk | Orbiter ждёт | Мы делаем | |
+| clbk | Orbiter ждёт | Поведение клиента | |
 |---|---|---|---|
 | `clbkCreateParticleStream` | новый поток (по умолчанию SDK — NULL) | `PStream`, в список `streams` (`Client.cpp:391`) | ✅ |
 | `clbkCreateExhaustStream` (указатели / ссылки) | поток, прикреплённый к кораблю | `PStream` + `Attach(hVessel, ref, dir, lvl)` (`Client.cpp:393-405`) | ✅ |
@@ -115,7 +115,7 @@
 
 | clbk | |
 |---|---|
-| `clbkCreateAnnotation` — экранные подписи | ⛔ по умолчанию SDK создаёт базовый `ScreenAnnotation`; рисуется ли он у нас — **не проверялось** |
+| `clbkCreateAnnotation` — экранные подписи | ⛔ по умолчанию SDK создаёт базовый `ScreenAnnotation`; рисуется ли он в клиенте — **не проверялось** |
 | `clbkFilterElevation` — фильтр высот для физики | ⛔ (`false`) |
 | `GetVCHUDSurface`, `GetMFDSurface`, `GetVCMFDSurface` (не clbk, методы базового класса) | не используются: MFD и HUD виртуальной кабины не рисуются (см. [roadmap.md](roadmap.md)) |
 
@@ -129,7 +129,7 @@
 `pss == NULL` — конструктор подставляет разумные значения (`Particles.cpp:9-17`).
 
 **2. NDEBUG и assert'ы Sketchpad.** В `DrawAPI.h` почти все виртуальные методы `oapi::Sketchpad` в базовом классе —
-`{ assert(false); … }` (`DrawAPI.h:1032-1697`), и они компилируются **в нашу DLL** (тела в заголовке). Модули, вызывающие
+`{ assert(false); … }` (`DrawAPI.h:1032-1697`), и они компилируются **в DLL клиента** (тела в заголовке). Модули, вызывающие
 метод, который `GPad` не переопределил, без `NDEBUG` уронили бы Orbiter. `build.bat` собирает с `/DNDEBUG` — не убирать.
 gcCore `SketchpadVersion` возвращает 1, чтобы аккуратные модули не звали методы Sketchpad v2 (`Ext.cpp:54`).
 
@@ -148,7 +148,7 @@ luminance; в D3D11 этих форматов либо нет, либо они �
 иначе: он заливается ключевым цветом `0x00010001` (почти чёрный, чтобы сглаженные края GDI-текста оставались тёмными), при
 композиции ключ → прозрачно, остальное → непрозрачно (`Draw.cpp:316, 362`).
 
-**6. Время жизни текстур меша.** Шаблон меша (или временная копия из `CopyMeshFromTemplate`, которую мы сразу удаляем) отпускает
+**6. Время жизни текстур меша.** Шаблон меша (или временная копия из `CopyMeshFromTemplate`, которая сразу удаляется) отпускает
 свои текстуры раньше, чем живёт меш корабля; без собственной ссылки `DevMesh` держал бы указатели на освобождённые `Surf`. Решение —
 `clbkIncrSurfaceRef` в `Build` и release в деструкторе (`Mesh.cpp:11-12, 51-54`).
 
@@ -157,7 +157,7 @@ x64-DLL Orbiter не загрузит. Отсюда же ограничение 
 
 **8. Прочее из кода.**
 - `oapiCameraAperture()` — **половина** вертикального угла обзора (`Client.cpp:556`).
-- Цвета неба AtmoFX в `Config\GC\*.atm.cfg` подобраны в гамма-пространстве D3D9-клиента; у нас линейный конвейер —
+- Цвета неба AtmoFX в `Config\GC\*.atm.cfg` подобраны в гамма-пространстве D3D9-клиента; в клиенте линейный конвейер —
   их надо линеаризовать (отсюда отдельный `Config\D3D11Client\Titan.cfg`, а цвет дымки из параметров планеты
   возводится в степень 2.2, `Planet.cpp:82`).
 - В тестовом режиме окно прячется не только при создании, но и в каждом `clbkDisplayFrame`, если оно оказалось видимым

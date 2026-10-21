@@ -4,7 +4,7 @@
 
 ## 1. Зачем прокладка `D3D9Client.dll`
 
-Наши модули через заголовки `Orbitersdk\samples\AtmoFX\AtmoFX*.h`, а также
+Модули проекта через заголовки `Orbitersdk\samples\AtmoFX\AtmoFX*.h`, а также
 `gcCoreAPI.h::gcGetCoreInterface()` (`gcCoreAPI.h:1159-1169`) ищут расширения клиента **по имени модуля**:
 `GetModuleHandle("D3D9Client.dll")` + `GetProcAddress(...)`. Чтобы ни один модуль не пришлось менять, клиент сам грузит
 DLL с этим именем, которая только переадресует экспорты в `D3D11Client.dll`.
@@ -19,14 +19,14 @@ DLL с этим именем, которая только переадресуе
   считал её модулем и чтобы не конфликтовать с настоящим D3D9Client в `Modules\Plugin`.
 - Загрузка: `D3D11Client::LoadShim` из `InitModule` после регистрации клиента (`Client.cpp:23`, `Ext.cpp:135-140`).
   Если в процессе уже есть настоящий `D3D9Client.dll`, прокладка не грузится. В лог: `extension shim loaded (gcCore, AtmoFX)`.
-- Порядок важен: модуль, который ищет `D3D9Client.dll` в своём `InitModule` раньше, чем загрузился наш клиент, его не
+- Порядок важен: модуль, который ищет `D3D9Client.dll` в своём `InitModule` раньше, чем загрузился D3D11Client, его не
   найдёт. Заголовки AtmoFX повторяют поиск, пока модуль не найден (`looked = (h != nullptr)`), так что для них это не
   проблема; `gcGetCoreInterface` не кеширует неудачу, но пишет `FAILED` в лог.
 
 ## 2. gcCore
 
 Таблица `gcBindCoreMethod` (`Ext.cpp:62-76`). `gcCore2` при создании запрашивает **все** методы по имени
-(`gcCoreAPI.h:1000-1054`); на неизвестное имя мы отдаём `gc::Null` — функцию `__cdecl`, возвращающую 0/NULL
+(`gcCoreAPI.h:1000-1054`); на неизвестное имя отдаётся `gc::Null` — функцию `__cdecl`, возвращающую 0/NULL
 (`Ext.cpp:58`). Это безопасно для методов, возвращающих `void`, `bool`, `int`, указатели и хэндлы; методы, возвращающие
 структуру по значению (`PickGround`), требуют своей заглушки (скрытый указатель на результат) — для обоих такие есть.
 `gcGetCoreAPI` (старый интерфейс) возвращает `nullptr` (`Ext.cpp:78`).
@@ -54,25 +54,33 @@ DLL с этим именем, которая только переадресуе
 Доступ к мешу: `D3D11Client::VesselMesh(hVessel, idx)` (`Ext.cpp:127-132`) — `DevMesh` из визуала, `nullptr`, если
 визуала или меша нет.
 
-## 3. Экспорты AtmoFX и `ExtState`
+## 3. Экспорты AtmoFX, `D3D11Hud_GetApi` и `ExtState`
 
-Сигнатуры — `Ext.cpp:83-115` (все `extern "C"`, `__cdecl`); смысл параметров — комментарии в
-`Orbitersdk\samples\AtmoFX\AtmoFX*.h` (их пишут для D3D9-форка AtmoFX; наш клиент принимает те же вызовы).
+Сигнатуры — `Ext.cpp` (все `extern "C"`, `__cdecl`); смысл параметров — комментарии в
+`Orbitersdk\samples\AtmoFX\AtmoFX*.h` (заголовки написаны для D3D9-форка AtmoFX; D3D11Client принимает те же вызовы).
+Состояние на 21.10.2026.
 
-| Экспорт | Заголовок / назначение | У нас |
+| Экспорт | Заголовок / назначение | В клиенте |
 |---|---|---|
-| `AtmoFX_SetJet(h, id, exitPos[3], jetDir[3], thrust, ve, exitT, ground, wet, rExit)` | `AtmoFXJet.h`: выброс грунта под струёй; позиции в системе корабля, вызывать каждый кадр, `thrust = 0` убирает, не обновлённое 0.5 с сим. времени отбрасывается | сохраняется в `g_ext.jets[{h,id}]` с отметкой `t = oapiGetSimTime()`; `thrust=0` **не удаляет** запись, устаревание по `t` должен делать потребитель |
-| `AtmoFX_SetWake(h, id, pos[3], r, strength)` | `AtmoFXWake.h`: кильватер/кольца на жидкости | `g_ext.wakes` (`depth` = strength); `r=0, strength=0` («удалить») **не удаляет** запись |
-| `AtmoFX_SetHeatSource(h, id, x, y, z, r, dT)` | `AtmoFXHeat.h`: горячие узлы для марева | `g_ext.heat`; `dT ≤ 0` удаляет |
-| `AtmoFX_SetFoam`, `AtmoFX_SetDirt`, `AtmoFX_Emit`, `AtmoFX_Box`, `AtmoFX_Mark`, `AtmoFX_MarkPut`, `AtmoFX_HudFrame`, `AtmoFX_HudMarker` | пузыри/пена, грязь на корпусе, свободные частицы, колеи, шлемный HUD | ◻ пустые |
+| `AtmoFX_SetJet(h, id, exitPos[3], jetDir[3], thrust, ve, exitT, ground, wet, rExit)` | `AtmoFXJet.h`: струя у грунта или жидкости; позиции в системе корабля, вызывать каждый кадр, `thrust = 0` убирает, не обновлённое 0.5 с сим. времени отбрасывается | запись `g_ext.jets[{h,id}]` с отметкой `t = oapiGetSimTime()`. Читают: `Exhaust.cpp` (факел, марево, выброс грунта), `Wake.cpp` (полости в жидкости), `FxWaves.cpp`. См. [exhaust.md](exhaust.md), [water.md](water.md) |
+| `AtmoFX_SetWake(h, id, pos[3], r, strength)` | `AtmoFXWake.h`: кильватер и кольца на жидкости | `WakeSet` (`Wake.cpp`): узлы источников волн жидкости. `g_ext.wakes` больше не заполняется. См. [water.md](water.md) |
+| `AtmoFX_SetHeatSource(h, id, x, y, z, r, dT)` | `AtmoFXHeat.h`: горячие узлы для марева | `g_ext.heat`; `dT ≤ 0` удаляет. Читает `Exhaust.cpp` (марево) |
+| `AtmoFX_SetDirt(h, amount, r, g, b, topY)` | `AtmoFXDirt.h`: грязь на корпусе | `DirtSet` (`Mesh.cpp`) |
+| `AtmoFX_Emit(...)`, `AtmoFX_Box(...)` | `AtmoFXPart.h`: свободные частицы и область, где они гаснут | `ExhaustEmit`, `ExhaustBox` (GPU-частицы, [exhaust.md](exhaust.md)) |
+| `AtmoFX_HudFrame`, `AtmoFX_HudMarker` | `AtmoFXHud.h`: шлемный HUD в сцене (изолинии рельефа, метки) | `Ar.cpp` |
+| `AtmoFX_SetFoam` | `AtmoFXFoam.h`: пузыри и пена | ◻ пусто |
+| `AtmoFX_Mark`, `AtmoFX_MarkPut` | `AtmoFXMark.h`: колеи и следы | ◻ пусто (проект — [ruts.md](ruts.md)) |
 | `AtmoFX_MarkCount`, `AtmoFX_MarkGet` | чтение колей для сохранения в сценарий | ◻ возвращают 0 |
+| `D3D11Hud_GetApi(version)` | `D3D11Hud.h`: таблица функций собственного HUD шлема | `HudApi.cpp` |
 
-`ExtState` (`Client.h:55-67`): `jets`, `wakes`, `heat` — `std::map` по ключу `{OBJHANDLE, id}`, под `g_ext.mx`;
-`renderProcs` — вектор HUD-процедур gcCore. Записи не удаляются при удалении корабля (заголовки AtmoFX обещают обратное —
-это задача потребителя). В срезе **никто в клиенте не читает** `jets/wakes/heat` — это данные для эффектов
-(`Fx*.cpp`, работа другой сессии).
+Все экспорты переадресованы прокладкой (`shim\shim.c`).
 
-Заметка: экспорт `AtmoFX_Box` заголовок `AtmoFXPart.h:54` ищет только по `GetModuleHandleA("D3D9Client.dll")` — с
+`ExtState` (`Client.h`): `jets`, `wakes`, `heat` — `std::map` по ключу `{OBJHANDLE, id}`, под `g_ext.mx`;
+`renderProcs` — вектор HUD-процедур gcCore. При удалении корабля его записи `jets/wakes/heat` удаляются
+(`Client.cpp`, удаление визуала). Запись струи с `thrust = 0` не удаляется: потребители проверяют тягу и отметку
+времени сами.
+
+Экспорт `AtmoFX_Box` заголовок `AtmoFXPart.h:54` ищет только по `GetModuleHandleA("D3D9Client.dll")` — с
 прокладкой это работает так же, как остальные.
 
 ## 4. Как добавить экспорт или метод gcCore

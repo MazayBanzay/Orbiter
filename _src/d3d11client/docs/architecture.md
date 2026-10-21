@@ -8,14 +8,14 @@
 |---|---|
 | `src\Client.h` | Все общие типы: `ClientCfg`, `ExtState`, `Surf`, `PStream`, `DGroup`/`DevMesh`, `VesselVis`, `TreeArchive`, `Tile`, `AtmCfg`, `LiquidCfg`, `Planet`, класс `D3D11Client`, `RotToXM` |
 | `src\Client.cpp` | `InitModule`/`ExitModule`, `clbkInitialise`, окно и устройство (`CreateDevice`), компиляция шейдеров (`CreateShaders`), сессия, поток-загрузчик, текстуры/поверхности, создание потоков частиц, меши (материалы, текстуры, группы), визуалы, **кадр** (`clbkRenderScene`, `clbkDisplayFrame`), снимок экрана, экран загрузки (Direct2D), `UpdateFrameCB`, тени (`RenderShadows`) |
-| `src\AA.cpp` | Сглаживание: цели сцены под выбранный режим (`CreateSceneTargets`), MSAA-резолв, `CopySceneColour`/`ResolveDepth`, джиттер и TAA (`FinishScene`), тон-маппинг + FXAA (`ToneMapAndAA`) — ⚠ в работе у сессии сглаживания |
+| `src\AA.cpp` | Сглаживание: цели сцены под выбранный режим (`CreateSceneTargets`), MSAA-резолв, `CopySceneColour`/`ResolveDepth`, джиттер и TAA (`FinishScene`), тон-маппинг + FXAA (`ToneMapAndAA`) |
 | `src\Mesh.cpp` | `DevMesh::Build` из шаблона Orbiter, `VesselVis` (создание мешей, иерархические анимации), `RenderVessel` (+ матрицы прошлого кадра для векторов движения) |
 | `src\Planet.cpp` | `.tree`-архивы, `Planet` (атмосфера и жидкость из cfg), загрузка тайла (`Planet::Load`), обход дерева с отсечением и LOD, рисование тайла, чистка |
 | `src\Draw.cpp` | Всё 2D: GDI-шрифты/перья/кисти, `GPad` (Sketchpad на HDC), DIB-сторона поверхностей, Blt/Fill, слой экрана, 2D-панели |
 | `src\Ext.cpp` | gcCore (`gcBindCoreMethod`), экспорты `AtmoFX_*`, вызов HUD-процедур модулей, загрузка прокладки |
-| `src\Liquid.cpp` | Жидкие поверхности (моря Титана); задаёт `g_fxPlanets` для эффектов — ⚠ в работе у сессии эффектов |
-| `src\Fx.h`, `src\Fx.cpp` | Четыре крючка эффектов, которые вызывает клиент (`FxInit`, `FxFrame`, `FxRenderTransparent`, `FxRelease`), и `FxCompile`. В срезе `FxRenderTransparent` рисует атмосферу снаружи, `FxFrame` пуст — ⚠ у сессии эффектов |
-| `src\FxInternal.h`, `src\FxAtmo.cpp` | Общее для эффектов (`g_fxPlanets`, `FxCompile`); атмосфера, видимая из космоса и с высоты (`fx_atmo.hlsl`) — ⚠ у сессии эффектов |
+| `src\Liquid.cpp` | Жидкие поверхности (моря Титана); задаёт `g_fxPlanets` для эффектов |
+| `src\Fx.h`, `src\Fx.cpp` | Четыре крючка эффектов, которые вызывает клиент (`FxInit`, `FxFrame`, `FxRenderTransparent`, `FxRelease`), и `FxCompile`. В срезе `FxRenderTransparent` рисует атмосферу снаружи, `FxFrame` пуст |
+| `src\FxInternal.h`, `src\FxAtmo.cpp` | Общее для эффектов (`g_fxPlanets`, `FxCompile`); атмосфера, видимая из космоса и с высоты (`fx_atmo.hlsl`) |
 | `src\Particles.cpp` | `PStream` (эмиссия на CPU), рисование частиц, текстура частицы по умолчанию |
 | `src\Stars.cpp` | Звёзды из каталога Orbiter через `oapi::CelestialSphere::LoadStars` |
 | `src\Dds.cpp` | Загрузчик DDS (BC1–5, DX10, 32/24/16/8 бит), `ReadFileBytes` |
