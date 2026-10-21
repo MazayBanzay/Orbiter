@@ -9,6 +9,7 @@
 #include <exception>
 #include <psapi.h>
 #pragma comment(lib, "psapi.lib")
+#pragma comment(lib, "advapi32.lib")
 #include <typeinfo>
 
 // an exception nobody caught ends the process without a crash dump (std::terminate -> abort -> fast fail 0xC0000409):
@@ -116,6 +117,14 @@ HWND D3D11Client::clbkCreateRenderWindow()
     }
     RECT rc; GetClientRect(hWnd, &rc);
     if (rc.right > 0 && rc.bottom > 0) { W = rc.right; H = rc.bottom; }
+    {   // test runs: the frame at a size of its own, whatever the window (D3D11CLIENT_TEST_RES = 2560x1440: a tester's 2K
+        // screen on a smaller one - the swap chain is that size and is scaled into the window when shown)
+        char rs[32] = ""; unsigned tw = 0, th = 0;
+        if (GetEnvironmentVariableA("D3D11CLIENT_TEST_RES", rs, sizeof rs) && sscanf(rs, "%ux%u", &tw, &th) == 2 && tw >= 320 && th >= 200) {
+            W = tw; H = th;
+            LOGC("test: frame forced to %ux%u (window %ldx%ld)", W, H, rc.right, rc.bottom);
+        }
+    }
     // test runs (tools/run_test.ps1 sets D3D11CLIENT_TEST): the window never shows and never takes the focus
     std::set_terminate(LogTerminate);     // (this thread: the render and simulation loop)
     char tv[8] = "";
@@ -245,14 +254,38 @@ static bool PatchImport(HMODULE h, const char* dllName, const char* fn, void* to
     }
     return done;
 }
+// the cache library without a previous start (a fresh install - its first start compiles every shader, the cache grows
+// the most then): the NVIDIA driver's folder in the DriverStore, from its 32-bit user-mode driver's path in the display
+// adapters' class key (UserModeDriverNameWow); NvMemMapStorage.dll sits in that same folder
+static bool FindNvMemMapLib(wchar_t* out, DWORD cap)
+{
+    const wchar_t* cls = L"SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}";
+    for (int i = 0; i < 16; i++) {
+        wchar_t key[160]; swprintf(key, 160, L"%s\\%04d", cls, i);
+        wchar_t prov[64] = {}; DWORD sz = sizeof prov;
+        if (RegGetValueW(HKEY_LOCAL_MACHINE, key, L"ProviderName", RRF_RT_REG_SZ, nullptr, prov, &sz) != ERROR_SUCCESS) continue;
+        if (!wcsstr(prov, L"NVIDIA")) continue;
+        wchar_t umd[1024] = {}; sz = sizeof umd;
+        if (RegGetValueW(HKEY_LOCAL_MACHINE, key, L"UserModeDriverNameWow", RRF_RT_REG_MULTI_SZ, nullptr, umd, &sz) != ERROR_SUCCESS || !umd[0]) continue;
+        wchar_t* slash = wcsrchr(umd, L'\\');
+        if (!slash) continue;
+        *slash = 0;
+        swprintf(out, cap, L"%s\\NvMemMapStorage.dll", umd);
+        if (GetFileAttributesW(out) != INVALID_FILE_ATTRIBUTES) return true;
+    }
+    return false;
+}
 static void DriverCacheGuardBefore()
 {
     if (!g_cfg.driverCacheOff) return;
-    FILE* f = _wfopen(kMemMapList, L"r, ccs=UTF-8");
-    if (!f) { LOGC("driver shader cache: off asked, but the driver's cache library is not known yet (noted at this start, off from the next)"); return; }
     wchar_t path[MAX_PATH] = {};
-    fgetws(path, MAX_PATH, f); fclose(f);
+    if (FILE* f = _wfopen(kMemMapList, L"r, ccs=UTF-8")) { fgetws(path, MAX_PATH, f); fclose(f); }
     size_t n = wcslen(path); while (n && (path[n - 1] == L'\n' || path[n - 1] == L'\r')) path[--n] = 0;
+    if (!n || GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES) {   // first start, or the driver updated since
+        if (!FindNvMemMapLib(path, MAX_PATH)) { LOGC("driver shader cache: off asked, no NVIDIA cache library found (another vendor's card, or noted at this start)"); return; }
+        n = wcslen(path);
+        LOGC("driver shader cache: the cache library found by the driver's registry entry");
+    }
     HMODULE h = n ? LoadLibraryW(path) : nullptr;      // kept loaded: the driver gets this same module
     if (!h) { LOGC("driver shader cache: off asked, the cache library could not be loaded (driver updated?) - the cache stays on"); return; }
     const bool ok = PatchImport(h, "KERNEL32.dll", "CreateFileW", (void*)NoNvphCreateFileW, (void**)&g_realCreateFileW) && g_realCreateFileW;
@@ -278,7 +311,9 @@ bool D3D11Client::CreateDevice()
     TrimDriverCache();
     DriverCacheGuardBefore();
     D3D_FEATURE_LEVEL fl = D3D_FEATURE_LEVEL_11_0, got;
-    HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, &fl, 1, D3D11_SDK_VERSION, &dev, &got, &ctx);
+    UINT devFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+    if (!g_cfg.driverThreads) devFlags |= D3D11_CREATE_DEVICE_PREVENT_INTERNAL_THREADING_OPTIMIZATIONS;   // DriverThreads = 0
+    HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, devFlags, &fl, 1, D3D11_SDK_VERSION, &dev, &got, &ctx);
     if (FAILED(hr)) { LOGC("D3D11CreateDevice failed 0x%08x", (unsigned)hr); return false; }
     NoteDriverCache();
     DriverCacheGuardAfter();
@@ -286,7 +321,18 @@ bool D3D11Client::CreateDevice()
     ComPtr<IDXGIAdapter> ad; dxd->GetAdapter(&ad);
     DXGI_ADAPTER_DESC add; ad->GetDesc(&add);
     char an[128]; WideCharToMultiByte(CP_UTF8, 0, add.Description, -1, an, 128, nullptr, nullptr);
-    LOGC("adapter %s, %u MB", an, (unsigned)(add.DedicatedVideoMemory >> 20));
+    // the driver's version with it (a crash inside a driver depends on it: testers' reports, 2026-10-21)
+    LARGE_INTEGER umd = {}; char dv[48] = "unknown";
+    if (SUCCEEDED(ad->CheckInterfaceSupport(__uuidof(IDXGIDevice), &umd)))
+        sprintf_s(dv, "%u.%u.%u.%u", (unsigned)HIWORD(umd.HighPart), (unsigned)LOWORD(umd.HighPart), (unsigned)HIWORD(umd.LowPart), (unsigned)LOWORD(umd.LowPart));
+    LOGC("adapter %s, %u MB, driver %s, driver threads %s", an, (unsigned)(add.DedicatedVideoMemory >> 20), dv, g_cfg.driverThreads ? "on" : "off (DriverThreads = 0)");
+    {   // ... and the processor (a race in a driver's worker threads shows on some core counts and not others)
+        char cpu[96] = "unknown"; DWORD sz = sizeof cpu;
+        RegGetValueA(HKEY_LOCAL_MACHINE, "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", "ProcessorNameString", RRF_RT_REG_SZ, nullptr, cpu, &sz);
+        SYSTEM_INFO si = {}; GetNativeSystemInfo(&si);
+        const char* c = cpu; while (*c == ' ') c++;
+        LOGC("processor %s, %u logical cores", c, (unsigned)si.dwNumberOfProcessors);
+    }
     ComPtr<IDXGIFactory2> fac; ad->GetParent(IID_PPV_ARGS(&fac));
     DXGI_SWAP_CHAIN_DESC1 sd = {};
     sd.Width = W; sd.Height = H; sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM; sd.SampleDesc.Count = 1;
@@ -359,6 +405,23 @@ bool D3D11Client::CreateDevice()
         D3D11_RASTERIZER_DESC rs2 = {}; rs2.FillMode = D3D11_FILL_SOLID; rs2.CullMode = D3D11_CULL_NONE; rs2.DepthClipEnable = TRUE;
         rs2.DepthBias = 0; rs2.SlopeScaledDepthBias = 1.5f; rs2.DepthBiasClamp = 0.002f;   // + the normal offset in the shader
         dev->CreateRasterizerState(&rs2, &rsShadow);
+        // the static casters' atlas (the same layout) and the tile copy/clear (shadow_cache.hlsl); without them every tile
+        // is drawn whole each frame, as before
+        shadowStatTex.Reset(); shadowStatDSV.Reset(); shadowStatSRV.Reset(); vsShTile.Reset(); psShCopy.Reset(); psShClear.Reset(); dsShAlways.Reset();
+        for (auto& k : shKey) k.valid = false;
+        if (SUCCEEDED(dev->CreateTexture2D(&st, nullptr, &shadowStatTex))) {
+            dev->CreateDepthStencilView(shadowStatTex.Get(), &sdv, &shadowStatDSV);
+            dev->CreateShaderResourceView(shadowStatTex.Get(), &ssv, &shadowStatSRV);
+        }
+        auto bv = CompileShaderFile("shadow_cache.hlsl", "VS", "vs_5_0"), bc = CompileShaderFile("shadow_cache.hlsl", "PSCopy", "ps_5_0"),
+             bk = CompileShaderFile("shadow_cache.hlsl", "PSClear", "ps_5_0");
+        if (bv && bc && bk) {
+            dev->CreateVertexShader(bv->GetBufferPointer(), bv->GetBufferSize(), nullptr, &vsShTile);
+            dev->CreatePixelShader(bc->GetBufferPointer(), bc->GetBufferSize(), nullptr, &psShCopy);
+            dev->CreatePixelShader(bk->GetBufferPointer(), bk->GetBufferSize(), nullptr, &psShClear);
+        }
+        D3D11_DEPTH_STENCIL_DESC sa = {}; sa.DepthEnable = TRUE; sa.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL; sa.DepthFunc = D3D11_COMPARISON_ALWAYS;
+        dev->CreateDepthStencilState(&sa, &dsShAlways);
     }
     UINT white = 0xFFFFFFFF;
     D3D11_TEXTURE2D_DESC wt = { 1, 1, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, {1, 0}, D3D11_USAGE_IMMUTABLE, D3D11_BIND_SHADER_RESOURCE, 0, 0 };
@@ -414,10 +477,25 @@ bool D3D11Client::CreateDevice()
 static ComPtr<ID3DBlob> CompileFile(const std::string& path, const char* entry, const char* target);
 ComPtr<ID3DBlob> D3D11Client::CompileShaderFile(const char* file, const char* entry, const char* target) { return CompileFile(shaderDir + file, entry, target); }
 
+// The shaders go to the video driver one at a time: each new one is compiled to the GPU's code by the driver on worker
+// threads of its own, and a burst of ~120 at the start loaded every core at once - on one tester's machine the driver's
+// compiler crashed in that burst every start (nvgpucomp32.dll, 2026-10-21; the same pattern NVIDIA and game studios
+// traced to unstable 13th/14th-gen Intel CPUs under all-core load). Here at least kShaderGapMs pass between two, and the
+// tile loaders wait while shaders are being made (g_shaderTick)
+std::atomic<ULONGLONG> g_shaderTick{ 0 };
+static const ULONGLONG kShaderGapMs = 12;
 static ComPtr<ID3DBlob> CompileFile(const std::string& path, const char* entry, const char* target)
 {
+    static std::mutex gapMx;
+    std::lock_guard<std::mutex> gap(gapMx);
+    {
+        const ULONGLONG now = GetTickCount64(), last = g_shaderTick.load();
+        if (last && now - last < kShaderGapMs) Sleep((DWORD)(kShaderGapMs - (now - last)));
+    }
+    struct Stamp { ~Stamp() { g_shaderTick = GetTickCount64(); } } stamp;
     ComPtr<ID3DBlob> code, err;
     std::wstring wp(path.begin(), path.end());
+    { void NoteShader(const char*, const char*); NoteShader(path.c_str(), entry); }   // HangWatch.cpp: the last ones go into crash.log
     HRESULT hr = CachedCompileFromFile(wp.c_str(), nullptr, entry, target, D3DCOMPILE_OPTIMIZATION_LEVEL3, &code, &err);
     if (err) LOGC("shader %s %s: %s", path.c_str(), entry, (const char*)err->GetBufferPointer());
     if (FAILED(hr)) return nullptr;
@@ -542,6 +620,15 @@ void D3D11Client::LoaderMain()
                 j.second->state = 0; return true;
             }), loadQ.end());
             if (loadQ.empty()) continue;
+            // shaders being made just now (CompileFile): no tiles meanwhile - their textures and buffers would go to the
+            // driver alongside its compiles, all cores at once (the start's burst); the queue waits half a second
+            {
+                extern std::atomic<ULONGLONG> g_shaderTick;
+                const ULONGLONG st = g_shaderTick.load();
+                if (st && GetTickCount64() - st < 500) {
+                    lk.unlock(); Sleep(50); continue;
+                }
+            }
             auto best = loadQ.begin();
             for (auto it = loadQ.begin(); it != loadQ.end(); ++it) if (it->second->prio < best->second->prio) best = it;
             job = *best; loadQ.erase(best);
@@ -824,6 +911,7 @@ void D3D11Client::clbkDeleteVessel(OBJHANDLE hVessel)
         for (auto it = g_ext.heat.begin(); it != g_ext.heat.end();) it = it->first.h == hVessel ? g_ext.heat.erase(it) : std::next(it);
     }
     WakeForget(hVessel);
+    { void LightsApiForget(OBJHANDLE); LightsApiForget(hVessel); }   // its interior volumes and area lamps (LightsApi.cpp)
 }
 
 void D3D11Client::ScanVessels()
@@ -856,6 +944,8 @@ void D3D11Client::clbkRenderScene()
     if (testMode && frameNo == 600) {      // D3D11CLIENT_TEST_HANG: one frame held 6 s (the hang watchdog's own check)
         static const bool hang = getenv("D3D11CLIENT_TEST_HANG") != nullptr;
         if (hang) { LOGC("test: holding frame %u for 6 s", frameNo); Sleep(6000); }
+        static const bool crash = getenv("D3D11CLIENT_TEST_CRASH") != nullptr;   // ... and a crash (the crash report's own check)
+        if (crash) { LOGC("test: crashing at frame %u", frameNo); *(volatile int*)(UINT_PTR)0x10 = 1; }
     }
     if (testMode) { TestScript(); void FxTestFrame(); FxTestFrame(); }   // FxTest.cpp: effects without a player
     if (g_traceFrames > 0) {     // the memory frame by frame after a scripted action, when it moved by 2 MB or more
@@ -1002,7 +1092,6 @@ void D3D11Client::clbkRenderScene()
         RenderVessel(visuals[own], cp, cr, proj, true);
         ownPass = false;
     }
-    LightsProbe();        // what the local lights light in the view, for the eye's adaptation (Lights.cpp)
     RenderSunGlare();        // the Sun's glare in the eye over everything, the own cockpit too - hidden by it, none (Sun.cpp)
     ctx->End(qTs[fi][2].Get());
     GpuMark(fi, 9);
@@ -1011,6 +1100,7 @@ void D3D11Client::clbkRenderScene()
     {
         XMMATRIX Vt(cr.m11, cr.m12, cr.m13, 0, cr.m21, cr.m22, cr.m23, 0, cr.m31, cr.m32, cr.m33, 0, 0, 0, 0, 1);
         ID3D11ShaderResourceView* img = FinishScene(cp, Vt * proj, Vt * projNoJit);
+        LightsProbe(img);     // what the view shows and what the local lights light there: the eye's adaptation (Lights.cpp)
         ToneMapAndAA(img);
     }
     GpuMark(fi, 10);
@@ -1056,7 +1146,7 @@ void D3D11Client::clbkRenderScene()
         LogMemory("now");     // a leak shows as a steady climb from one of these lines to the next
         { void HeapTrackReport(); HeapTrackReport(); }
         static int nNow = 0;
-        if (++nNow == 2) { double FxTestNum(const char*); if (FxTestNum("MemCensus") > 0) { void LogMemoryCensus(); LogMemoryCensus(); } }   // MemCensus.cpp: who holds the address space (a ~1.5 s hitch: test runs only, -Set "MemCensus = 1")
+        ++nNow; { double FxTestNum(const char*); const int mc = (int)FxTestNum("MemCensus"); if (mc > 0 && (nNow == 2 || nNow == mc)) { void LogMemoryCensus(); LogMemoryCensus(); } }   // MemCensus = N: also at the N-th tick (after a test script's actions)   // MemCensus.cpp: who holds the address space (a ~1.5 s hitch: test runs only, -Set "MemCensus = 1")
     }
 }
 
@@ -1250,6 +1340,7 @@ void D3D11Client::RenderShadows(const VECTOR3& cp)
     // snapping). u, v across the light, L along it, in the planet's axes; the light's axis held while the Sun moves
     // less than half a degree over that ground (then taken anew: one step, not a crawl)
     MATRIX3 Rp = _M(1, 0, 0, 0, 1, 0, 0, 0, 1); VECTOR3 pp = _V(0, 0, 0);
+    OBJHANDLE axisPlanet = nullptr;     // the ground the grid is fixed to (null: the focus vessel's frame)
     {
         OBJHANDLE hp = nullptr; double best = 1e300;
         for (DWORD i = 0; i < oapiGetGbodyCount(); i++) {
@@ -1267,6 +1358,7 @@ void D3D11Client::RenderShadows(const VECTOR3& cp)
         const VECTOR3 Lp = tmul(Rp, L);
         if (axP != hp || dotp(Lp, axL) < cos(0.5 * RAD)) { axP = hp; axL = Lp; }
         L = mul(Rp, axL);
+        axisPlanet = hp;
     }
     const VECTOR3 Lp = tmul(Rp, L);
     const VECTOR3 ap = fabs(Lp.y) < 0.9 ? _V(0, 1, 0) : _V(1, 0, 0);
@@ -1274,10 +1366,73 @@ void D3D11Client::RenderShadows(const VECTOR3& cp)
     const VECTOR3 vp_ = crossp(Lp, up_);
     const VECTOR3 u = mul(Rp, up_), v = mul(Rp, vp_);
     // a map's centre (camera-relative) moved to whole texels of that frame (double: the positions are ~1e11 m)
+    // ... and along the light by whole metres (a constant offset of the depths, nothing else: the tile's key below stays
+    // the same while the camera moves within a texel, so the static casters' cache holds)
+    long long sIu = 0, sIv = 0, sIl = 0;
     auto snap = [&](const VECTOR3& c, double texel) {
         const VECTOR3 q = tmul(Rp, (cp - pp) + c);
-        const double cu = dotp(q, up_), cv = dotp(q, vp_);
-        return c + mul(Rp, up_ * (floor(cu / texel) * texel - cu) + vp_ * (floor(cv / texel) * texel - cv));
+        const double cu = dotp(q, up_), cv = dotp(q, vp_), cl = dotp(q, Lp);
+        sIu = (long long)floor(cu / texel); sIv = (long long)floor(cv / texel); sIl = (long long)floor(cl);
+        return c + mul(Rp, up_ * (sIu * texel - cu) + vp_ * (sIv * texel - cv) + Lp * ((double)sIl - cl));
+    };
+    // the casters of a tile: what stands still into the static atlas (when the tile's key changed), copied into the atlas,
+    // the people and what moves over it. A person (an OrbiterCrew vessel: skinned, animated every frame) is always drawn;
+    // anything else is "still" by its signature - its place and attitude in the planet's frame, its animations' states -
+    // a vehicle driving off changes it every frame and is then simply drawn every frame, as before
+    const bool cacheOk = shadowStatDSV && shadowStatSRV && vsShTile && psShCopy && psShClear && dsShAlways;
+    auto fnv = [](uint64_t& h, long long v) { for (int i = 0; i < 8; i++) { h ^= (uint64_t)((v >> (8 * i)) & 0xFF); h *= 1099511628211ull; } };
+    auto tilePass = [&](ID3D11PixelShader* ps, ID3D11ShaderResourceView* srv) {
+        ctx->IASetInputLayout(nullptr); ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        ctx->VSSetShader(vsShTile.Get(), nullptr, 0); ctx->PSSetShader(ps, nullptr, 0);
+        ctx->HSSetShader(nullptr, nullptr, 0); ctx->DSSetShader(nullptr, nullptr, 0); ctx->GSSetShader(nullptr, nullptr, 0);
+        ctx->PSSetShaderResources(0, 1, &srv);
+        ctx->OMSetDepthStencilState(dsShAlways.Get(), 0); ctx->RSSetState(rsShadow.Get());
+        ctx->Draw(3, 0);
+        ID3D11ShaderResourceView* none = nullptr; ctx->PSSetShaderResources(0, 1, &none);
+    };
+    auto drawTile = [&](int ti, const VECTOR3& c, double r, double backD, const XMMATRIX& LVP, const D3D11_VIEWPORT& vp) {
+        std::vector<VesselVis*> stat, dyn;
+        uint64_t sig = 1469598103934665603ull;
+        fnv(sig, (long long)(intptr_t)axisPlanet); fnv(sig, llround(Lp.x * 1e6)); fnv(sig, llround(Lp.y * 1e6)); fnv(sig, llround(Lp.z * 1e6));
+        for (auto& kv : visuals) {
+            VECTOR3 q; oapiGetGlobalPos(kv.first, &q);
+            VECTOR3 d = (q - cp) - c;
+            const double along = dotp(d, L);
+            VECTOR3 across = d - L * along;
+            const double sz = oapiGetSize(kv.first);
+            if (length(across) > r + sz || along > backD + sz || along < -(r + sz)) continue;
+            VESSEL* v = kv.second->v;
+            const char* cn = v ? v->GetClassNameA() : nullptr;
+            if (!cacheOk || !v || (cn && strstr(cn, "OrbiterCrew"))) { dyn.push_back(kv.second); continue; }
+            stat.push_back(kv.second);
+            const VECTOR3 qL = tmul(Rp, q - pp); MATRIX3 Rv; v->GetRotationMatrix(Rv);
+            const VECTOR3 fx = tmul(Rp, _V(Rv.m11, Rv.m21, Rv.m31)), fz = tmul(Rp, _V(Rv.m13, Rv.m23, Rv.m33));
+            fnv(sig, (long long)(intptr_t)kv.first);
+            fnv(sig, llround(qL.x * 1000)); fnv(sig, llround(qL.y * 1000)); fnv(sig, llround(qL.z * 1000));
+            fnv(sig, llround(fx.x * 1e5)); fnv(sig, llround(fx.y * 1e5)); fnv(sig, llround(fx.z * 1e5));
+            fnv(sig, llround(fz.x * 1e5)); fnv(sig, llround(fz.y * 1e5)); fnv(sig, llround(fz.z * 1e5));
+            ANIMATION* an = nullptr; const UINT na = v->GetAnimPtr(&an);
+            for (UINT k = 0; k < na && an; k++) fnv(sig, llround(an[k].state * 1e5));
+        }
+        if (cacheOk) {
+            ShadowTileKey& k = shKey[ti];
+            const bool same = k.valid && k.iu == sIu && k.iv == sIv && k.iL == sIl && k.r == r && k.sig == sig;
+            if (!same) {        // the static casters drawn anew into their atlas
+                ctx->OMSetRenderTargets(0, nullptr, shadowStatDSV.Get());
+                ctx->RSSetViewports(1, &vp);
+                tilePass(psShClear.Get(), nullptr);
+                for (VesselVis* vv : stat) RenderVessel(vv, cp, _M(1, 0, 0, 0, 1, 0, 0, 0, 1), XMMatrixIdentity(), false, &LVP);
+                k.valid = true; k.iu = sIu; k.iv = sIv; k.iL = sIl; k.r = r; k.sig = sig;
+                shStatDrawn++;
+            } else shStatKept++;
+            ctx->OMSetRenderTargets(0, nullptr, shadowDSV.Get());
+            ctx->RSSetViewports(1, &vp);
+            tilePass(psShCopy.Get(), shadowStatSRV.Get());
+        } else {
+            ctx->OMSetRenderTargets(0, nullptr, shadowDSV.Get());
+            ctx->RSSetViewports(1, &vp);
+        }
+        for (VesselVis* vv : dyn) RenderVessel(vv, cp, _M(1, 0, 0, 0, 1, 0, 0, 0, 1), XMMatrixIdentity(), false, &LVP);
     };
     MATRIX3 cr; oapiCameraRotationMatrix(&cr);
     const double tanY = tan(oapiCameraAperture()), tanX = tanY * W / (double)H;
@@ -1309,16 +1464,7 @@ void D3D11Client::RenderShadows(const VECTOR3& cp)
             XMStoreFloat4x4(&casc[0], XMMatrixTranspose(LVP));
             cascFar[0] = -1; cascTex[0] = (float)texel; cascRange[0] = (float)(back0 + r + 60.0);   // tile 0 by the box, not by the distance
             D3D11_VIEWPORT vp = { 0, 0, (float)SHADOW_N, (float)SHADOW_N, 0, 1 };
-            ctx->RSSetViewports(1, &vp);
-            for (auto& kv : visuals) {
-                VECTOR3 q; oapiGetGlobalPos(kv.first, &q);
-                VECTOR3 d = (q - cp) - c;
-                const double along = dotp(d, L);
-                VECTOR3 across = d - L * along;
-                const double sz = oapiGetSize(kv.first);
-                if (length(across) > r + sz || along > back0 + sz || along < -(r + sz)) continue;
-                RenderVessel(kv.second, cp, _M(1, 0, 0, 0, 1, 0, 0, 0, 1), XMMatrixIdentity(), false, &LVP);
-            }
+            drawTile(0, c, r, back0, LVP, vp);
         } else { cascFar[0] = -2; cascTex[0] = 0; }
     }
     for (int ci = 1; ci < 4; ci++) {
@@ -1342,19 +1488,16 @@ void D3D11Client::RenderShadows(const VECTOR3& cp)
         XMStoreFloat4x4(&casc[ci], XMMatrixTranspose(LVP));
         cascFar[ci] = (float)z1; cascTex[ci] = (float)texel; cascRange[ci] = (float)(back + r);
         D3D11_VIEWPORT vp = { (float)((ci & 1) * SHADOW_N), (float)((ci >> 1) * SHADOW_N), (float)SHADOW_N, (float)SHADOW_N, 0, 1 };
-        ctx->RSSetViewports(1, &vp);
-        for (auto& kv : visuals) {
-            VECTOR3 q; oapiGetGlobalPos(kv.first, &q);
-            VECTOR3 d = (q - cp) - c;
-            const double along = dotp(d, L);
-            VECTOR3 across = d - L * along;
-            const double sz = oapiGetSize(kv.first);
-            if (length(across) > r + sz || along > back + sz || along < -(r + sz)) continue;
-            RenderVessel(kv.second, cp, _M(1, 0, 0, 0, 1, 0, 0, 0, 1), XMMatrixIdentity(), false, &LVP);
-        }
+        drawTile(ci, c, r, back, LVP, vp);
     }
     lightVP = casc[0]; lightVP2 = casc[1];
     shadowOn = true;
+    static ULONGLONG shLog = 0;
+    if (GetTickCount64() - shLog > 10000) {
+        shLog = GetTickCount64();
+        LOGC("sun shadows: static casters' tiles drawn %d, kept %d (last 10 s; %s)", shStatDrawn, shStatKept, cacheOk ? "cache on" : "no cache");
+        shStatDrawn = shStatKept = 0;
+    }
 }
 
 // the process's memory (a 32-bit process: the address space runs out before the RAM): committed private bytes and the
@@ -1472,6 +1615,15 @@ void D3D11Client::TestScript()
         else if (a.what == "polar") oapiCameraRotPolar(a.arg * RAD);         // ... turned up (+) round its target by <arg> degrees
         else if (a.what == "azim") oapiCameraRotAzimuth(a.arg * RAD);        // ... and round it by <arg> degrees
         else if (a.what == "focus") oapiSetFocusObject(h);
+        else if (a.what == "fov") oapiCameraSetAperture(a.arg * 0.5 * RAD);         // the field of view, <arg> degrees (the zoom)
+        else if (a.what == "look") oapiCameraSetCockpitDir(a.arg * RAD, 0, false);   // the cockpit view turned <arg> degrees round
+        else if (a.what == "mfdl" || a.what == "mfdr") oapiOpenMFD((int)a.arg, a.what == "mfdl" ? MFD_LEFT : MFD_RIGHT);   // an MFD's mode (MFD_ORBIT ...)
+        else if (a.what == "btnl" || a.what == "btnr") {     // an MFD's button <arg> pressed and let go
+            const int mfd = a.what == "btnl" ? MFD_LEFT : MFD_RIGHT;
+            oapiProcessMFDButton(mfd, (int)a.arg, PANEL_MOUSE_LBDOWN); oapiProcessMFDButton(mfd, (int)a.arg, PANEL_MOUSE_LBUP);
+        }
+        else if (a.what == "key") oapiSimulateBufferedKey((DWORD)a.arg);       // a key by its OAPI_KEY code (F8: 66, the cockpit modes)
+        else if (a.what == "panel") oapiSetPanel((int)a.arg);                  // a 2D panel by its id
         LOGC("test script: t %.1f %s %s %g", t, a.what.c_str(), a.name.c_str(), a.arg);
         LogMemory("after the action");
         g_traceAlloc = true; g_traceFrames = 60;

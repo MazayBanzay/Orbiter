@@ -92,35 +92,76 @@ namespace {
 
     // where in the client the bytes are asked for (blocks of 4 KB and more): the call stack's first frames, summed over
     // the run (allocated, not live - for data kept, as caches, the two are close); reported as module offsets for the PDB
-    struct Site { uint32_t key; uint32_t fr[6]; LONGLONG bytes; LONG n; };
+    // ... and what each site still holds (live): its blocks remembered by address in a table of their own, so a free
+    // takes the bytes back off the site that asked for them (the peaks a zoom leaves behind, 2026-10-21)
+    struct Site { uint32_t key; uint32_t fr[6]; LONGLONG bytes; LONG n; LONGLONG live; LONG liveN; };
     const int NSITE = 4096;
     Site sites[NSITE]; int clientMod = -1;
-    void Note(size_t n)
+    struct BSlot { uint32_t p; int32_t site; uint32_t sz; };
+    const uint32_t BBITS = 18, BSIZE = 1u << BBITS, BMASK = BSIZE - 1;
+    BSlot* btab = nullptr; uint32_t bUsed = 0;
+    inline uint32_t HB(uint32_t p) { return (p >> 4) * 2654435761u >> (32 - BBITS); }
+    int Note(size_t n)
     {
         void* fr[8] = {};
         const USHORT c = CaptureStackBackTrace(2, 8, fr, nullptr);     // past hMalloc and the module's operator new
         uint32_t k = 2166136261u;
         for (USHORT i = 0; i < c && i < 6; i++) k = (k ^ (uint32_t)(uintptr_t)fr[i]) * 16777619u;
+        int r = -1;
         EnterCriticalSection(&tLock);
         for (uint32_t i = k & (NSITE - 1), probes = 0; probes < 64; i = (i + 1) & (NSITE - 1), probes++) {
             Site& st = sites[i];
             if (st.n && st.key != k) continue;
             if (!st.n) { st.key = k; for (int j = 0; j < 6; j++) st.fr[j] = j < c ? (uint32_t)(uintptr_t)fr[j] : 0; }
-            st.bytes += n; st.n++;
+            st.bytes += n; st.n++; r = (int)i;
             break;
+        }
+        LeaveCriticalSection(&tLock);
+        return r;
+    }
+    void AddBig(void* p, int site, size_t n)
+    {
+        if (!p || site < 0 || !btab) return;
+        EnterCriticalSection(&tLock);
+        if (bUsed < BSIZE / 10 * 7) {
+            uint32_t i = HB((uint32_t)(uintptr_t)p);
+            while (btab[i].p && btab[i].p != (uint32_t)(uintptr_t)p) i = (i + 1) & BMASK;
+            if (!btab[i].p) bUsed++;
+            else { sites[btab[i].site].live -= btab[i].sz; sites[btab[i].site].liveN--; }
+            btab[i] = { (uint32_t)(uintptr_t)p, site, (uint32_t)n };
+            sites[site].live += n; sites[site].liveN++;
+        }
+        LeaveCriticalSection(&tLock);
+    }
+    void RemoveBig(void* p)
+    {
+        if (!p || !btab) return;
+        EnterCriticalSection(&tLock);
+        uint32_t i = HB((uint32_t)(uintptr_t)p);
+        while (btab[i].p && btab[i].p != (uint32_t)(uintptr_t)p) i = (i + 1) & BMASK;
+        if (btab[i].p) {
+            sites[btab[i].site].live -= btab[i].sz; sites[btab[i].site].liveN--;
+            uint32_t j = i;
+            for (;;) {
+                j = (j + 1) & BMASK;
+                if (!btab[j].p) break;
+                const uint32_t k = HB(btab[j].p);
+                if ((j > i && (k <= i || k > j)) || (j < i && (k <= i && k > j))) { btab[i] = btab[j]; i = j; }
+            }
+            btab[i] = { 0, 0, 0 }; bUsed--;
         }
         LeaveCriticalSection(&tLock);
     }
 
-    void* __cdecl hMalloc(size_t n) { void* p = rMalloc(n); if (on && !inside) { const int m = ModOf((uintptr_t)_ReturnAddress()); Add(p, n, m); if (m == clientMod && n >= 4096) Note(n); } return p; }
+    void* __cdecl hMalloc(size_t n) { void* p = rMalloc(n); if (on && !inside) { const int m = ModOf((uintptr_t)_ReturnAddress()); Add(p, n, m); if (m == clientMod && n >= 4096) AddBig(p, Note(n), n); } return p; }
     void* __cdecl hCalloc(size_t c, size_t n) { void* p = rCalloc(c, n); if (on && !inside) Add(p, c * n, ModOf((uintptr_t)_ReturnAddress())); return p; }
     void* __cdecl hRealloc(void* q, size_t n)
     {
         void* p = rRealloc(q, n);
-        if (on && !inside) { if (q && (p || !n)) Remove(q); if (p) { const int m = ModOf((uintptr_t)_ReturnAddress()); Add(p, n, m); if (m == clientMod && n >= 4096) Note(n); } }
+        if (on && !inside) { if (q && (p || !n)) { Remove(q); RemoveBig(q); } if (p) { const int m = ModOf((uintptr_t)_ReturnAddress()); Add(p, n, m); if (m == clientMod && n >= 4096) AddBig(p, Note(n), n); } }
         return p;
     }
-    void __cdecl hFree(void* p) { if (on && !inside && p) Remove(p); rFree(p); }
+    void __cdecl hFree(void* p) { if (on && !inside && p) { Remove(p); RemoveBig(p); } rFree(p); }
 
     void PatchAll();
     HMODULE WINAPI hLLA(LPCSTR a) { HMODULE m = rLLA(a); if (m) PatchAll(); return m; }
@@ -218,6 +259,7 @@ void HeapTrackStart()
     if (!rMalloc || !rCalloc || !rRealloc || !rFree || !rLLA || !rLLW || !rLLExA || !rLLExW) return;
     tab = (Slot*)VirtualAlloc(nullptr, TSIZE * sizeof(Slot), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     if (!tab) return;
+    btab = (BSlot*)VirtualAlloc(nullptr, BSIZE * sizeof(BSlot), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     InitializeCriticalSection(&tLock);
     strcpy_s(mods[0].name, "(other callers)");
     on = true;
@@ -241,8 +283,38 @@ void HeapTrackReport()
         line += b;
     }
     if (!line.empty()) LOGC("heap by module: %s", line.c_str());
-    // once, at the third report: the client's biggest call sites
+    // the client's call sites by what they still hold (blocks of 4 KB and more): every report
     static int nRep = 0;
+    if (clientMod > 0) {
+        std::vector<int> idx;
+        for (int i = 0; i < NSITE; i++) if (sites[i].liveN > 0) idx.push_back(i);
+        std::sort(idx.begin(), idx.end(), [](int x, int y) { return sites[x].live > sites[y].live; });
+        const uintptr_t lo = mods[clientMod].lo, hi = mods[clientMod].hi;
+        for (size_t i = 0; i < idx.size() && i < 10; i++) {
+            const Site& st = sites[idx[i]];
+            char fr[160] = ""; size_t o = 0;
+            for (int j = 0; j < 6 && st.fr[j]; j++) {
+                const uintptr_t a = st.fr[j];
+                if (a >= lo && a < hi) o += sprintf_s(fr + o, sizeof fr - o, " +%x", (unsigned)(a - lo));
+                else { const int m = ModOf(a); o += sprintf_s(fr + o, sizeof fr - o, " [%s]", m ? mods[m].name : "sys"); }
+                if (o > sizeof fr - 24) break;
+            }
+            LOGC("heap live: %7.1f MB in %5ld blocks:%s", st.live / 1048576.0, st.liveN, fr);
+            if (i == 0 && btab) {   // the biggest holder: its live blocks by size (a size names the buffer when the stack can't)
+                std::map<uint32_t, std::pair<LONG, LONGLONG>> bySize;
+                EnterCriticalSection(&tLock);
+                for (uint32_t k = 0; k < BSIZE; k++) if (btab[k].p && btab[k].site == idx[0]) { auto& e = bySize[btab[k].sz]; e.first++; e.second += btab[k].sz; }
+                LeaveCriticalSection(&tLock);
+                std::vector<std::pair<LONGLONG, uint32_t>> bs;
+                for (auto& e : bySize) bs.push_back({ e.second.second, e.first });
+                std::sort(bs.begin(), bs.end(), [](auto& x, auto& y) { return x.first > y.first; });
+                std::string ln;
+                for (size_t q = 0; q < bs.size() && q < 12; q++) { char b[64]; sprintf_s(b, "%s%u B x%ld = %.1f MB", q ? ", " : "", bs[q].second, bySize[bs[q].second].first, bs[q].first / 1048576.0); ln += b; }
+                LOGC("heap live by size: %s", ln.c_str());
+            }
+        }
+    }
+    // once, at the third report: the client's biggest call sites
     if (++nRep == 3 && clientMod > 0) {
         std::vector<int> idx;
         for (int i = 0; i < NSITE; i++) if (sites[i].n) idx.push_back(i);

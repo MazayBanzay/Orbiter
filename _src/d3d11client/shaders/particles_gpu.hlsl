@@ -36,6 +36,7 @@ struct Part
 #define F_HARD 0x400u
 #define F_GROUNDCOL 0x800u
 #define F_COND 0x1000u      // a Gaussian puff of condensate (ice/droplets out of an exhaust): ug0.x its extinction cross-section [m2]
+#define F_VAC 0x2000u       // a grain thrown in a vacuum: ug0.y the cross-section of the grains it stands for [m2]
 
 cbuffer Sim : register(b5)
 {
@@ -252,6 +253,9 @@ void CSSim(uint3 id : SV_DispatchThreadID)
                     // fog (crystals of a few um, carried by the gas) does not land: it flows along the surface with the
                     // wall jet and the wind - only the velocity into the ground goes
                     if (look == LOOK_FOG) { float vn = dot(q.v, n); if (vn < 0) q.v -= vn * n; continue; }
+                    // a vacuum grain lands as it flew: part of the ground at once (no gas to lift it again, the
+                    // regolith's restitution low) - a tenth of a second's fade, nothing left lying
+                    if (q.flags & F_VAC) { q.flags |= F_SETTLED; q.v = 0; q.life = min(q.life, q.age + 0.12); break; }
                     bool bounce = look != LOOK_FOG && !(q.flags & F_HARD) && q.d > 1e-3 && sp > 1;
                     if (bounce) { q.v = (q.v - 2 * dot(q.v, n) * n) * 0.3; }
                     else {
@@ -282,6 +286,7 @@ cbuffer Draw : register(b5)
     float4 dGeo;            // x anchor radius, y dense, z the liquid's level (local; -1e9 none), w focal length [px]
     float4x4 dVP;           // camera-centred global -> clip
     float4 dAlb[16];        // albedo per class
+    float4 dVac;            // x the vacuum parcels' exposure [s] (the frame's simulated time)
 };
 StructuredBuffer<Part> tPool : register(t4);
 StructuredBuffer<uint> tAlive : register(t3);
@@ -316,6 +321,11 @@ VSOut VS(uint vid : SV_VertexID, uint inst : SV_InstanceID)
     if (look == LOOK_SPOT) { s = q.s0; a = q.a0 * saturate((life - t) / 2.0) * min(1, 4 * t); }
     else if (q.flags & F_HARD) { a = q.a0 * min(1, 30 * t) * ((q.flags & F_SETTLED) ? saturate((life - t) / 2) : 1); }
     else if (look == LOOK_DROP) { a = q.a0 * min(1, 20 * t) * saturate((life - t) / 0.5); }
+    else if (q.flags & F_VAC) {
+        // a vacuum grain: its size and opacity below (a pixel-wide streak); gone a moment after it lands
+        s = 0.005;
+        a = min(1, 30 * t) * ((q.flags & F_SETTLED) ? saturate((life - t) / 0.12) : 1);
+    }
     else if (q.flags & F_COND) {
         // a Gaussian puff (sigma = s0): the quad 2.5 sigma; the column's optical depth at the centre X / (2 pi sigma^2),
         // the puff's extinction cross-section X spread over its growing area (mass conserved); it forms in ~0.1 s and
@@ -338,8 +348,9 @@ VSOut VS(uint vid : SV_VertexID, uint inst : SV_InstanceID)
     bool flat = look == LOOK_SPOT;
     // in a vacuum the grains fly alone (no gas to hold a puff): each sprite is its grains' streak along the velocity,
     // as thin as a pixel, never a soft ball (the puffs' self-shadowing drew black clouds where no sky lights them)
-    const bool vacGrain = !dense && look == LOOK_GRAIN && !(q.flags & F_SETTLED);
-    if (!flat && !(q.flags & F_SETTLED) && look != LOOK_DROP && !vacGrain) {   // a sprite does not poke into the ground
+    const bool vacParcel = (q.flags & F_VAC) != 0;
+    const bool vacGrain = !dense && look == LOOK_GRAIN && !(q.flags & F_SETTLED) && !vacParcel;
+    if (!flat && !(q.flags & F_SETTLED) && look != LOOK_DROP && !vacGrain && !vacParcel) {   // a sprite does not poke into the ground
         float h = dot(q.p.xz, q.p.xz) / (2 * dGeo.x) + q.p.y - q.gy;
         float lift = (q.flags & F_COND) ? 0 : (q.flags & F_HARD ? 0.8 : 0.6) * s - h;   // (a puff of fog: soft against the depth instead)
         if (lift > 0) wp += upW * lift;
@@ -357,16 +368,24 @@ VSOut VS(uint vid : SV_VertexID, uint inst : SV_InstanceID)
     if (flat) {
         R = normalize(DirToWorld(float3(1, 0, 0))); U = normalize(DirToWorld(float3(0, 0, 1)));
         wp += upW * 0.03;
-    } else if (look == LOOK_DROP || vacGrain) {
+    } else if (look == LOOK_DROP || vacGrain || vacParcel) {
         // one drop, drawn as its streak over the frame's exposure along its velocity (as real-time spray and rain are
         // drawn): never under ~a pixel wide - a drop smaller than that keeps its share of the light (opacity d / width)
+        const float ex = vacParcel ? dVac.x : dCamU.w;
         float3 vw = DirToWorld(q.v);
         float3 vp = vw - dot(vw, V) * V;
-        float L = length(vp) * dCamU.w;
+        float L = length(vp) * ex;
         R = L > 1e-5 ? vp / length(vp) : dCamR.xyz;
         U = normalize(cross(V, R));
-        wp -= vw * (0.5 * dCamU.w);
-        if (vacGrain) {
+        wp -= vw * (0.5 * ex);
+        if (vacParcel) {
+            // a grain (10-200 um) is always under a pixel: drawn a pixel wide, streaked over the exposure, its opacity
+            // the cross-section it stands for over that streak (as the drops: what is smaller keeps only its share)
+            float px = dist / max(dGeo.w, 1);
+            s = 0.75 * px;
+            sx = s + 0.5 * L; sy = s;
+            a *= min(0.9, q.ug0.y / (3.14159265 * sx * sy));
+        } else if (vacGrain) {
             // the sprite's grains (its puff s across) gathered in a streak a fifth as wide: the same cross-section over
             // the smaller area - opacity grows as the area shrinks (a gram of 100 um grains hides ~7 cm x 7 cm)
             float sp = s;
@@ -396,12 +415,15 @@ VSOut VS(uint vid : SV_VertexID, uint inst : SV_InstanceID)
     uint ai = (q.flags >> 4) & 15;
     float3 alb = dAlb[ai].rgb;
     if (q.col) alb = UnpackCol(q.col);                       // the ground's own colour
-    else if (FxActive() && ai <= 1) alb = mGround.rgb * (ai == 1 ? 0.6 : 1.0);
+    else if (FxActive() && ai <= 1 && any(mGround.rgb > 0)) alb = mGround.rgb * (ai == 1 ? 0.6 : 1.0);   // (open space: no ground albedo - zero; the table's then)
     float tr = ExAirTrans(dist).g;
     o.col = float4(alb, a);
     float g = (look == LOOK_DROP || look == LOOK_MIST || look == LOOK_FOG) ? 0.8 : look == LOOK_ICE ? 0.6 : fines ? 0.5 : 0.3;
     if (!dense && (look == LOOK_GRAIN || look == LOOK_CLOD)) g = -0.3;   // airless regolith: its grains scatter back (Hapke)
-    o.misc = float4(vacGrain ? 8 : (q.flags & F_COND) ? 9 : look, q.seed, s, g);   // 8: a grain's streak, 9: a condensate puff (PS)
+    // a grain scatters singly: its single-scattering albedo, 2-3 x the loose ground's own (Hapke: the surface darkens
+    // itself by shadowing among its grains) - lighter than the soil it left
+    if (vacParcel) o.col.rgb = saturate(alb * 2.2);
+    o.misc = float4(vacParcel ? 10 : vacGrain ? 8 : (q.flags & F_COND) ? 9 : look, q.seed, s, g);   // 8: a grain's streak, 9: a condensate puff, 10: a vacuum grain (PS)
     // the shadow map looked up a little above the sprite (along the local up, as the surfaces offset along their normal):
     // a grain at the ground's height otherwise fell in the ground's own shadow - black dust
     o.sun = SunLight(wp) * ShadowAtN(wp, upW * 2.0) * tr;
@@ -469,6 +491,11 @@ float4 PS(VSOut i) : SV_Target
             // plain average of directions as it thickens and scatters many times), the sky's and the ground's ambient
             float thick = saturate(i.col.a * 0.5);
             c = alb * (i.sun * lerp(ph, 1.0, 0.6 * thick) + lerp(i.gnd, i.sky, 0.6));
+        } else if (look == 10) {
+            // a grain in a vacuum: its streak (soft across, its ends tapered as the drops'), lit by the Sun alone - sharp:
+            // in the hull's shadow it is dark - singly scattered by the regolith's back-scattering phase
+            a *= saturate((1 - abs(d.y)) * 2.5) * saturate((1 - abs(d.x)) * 4);
+            c = alb * (i.sun * ph + 0.5 * i.gnd + i.sky);
         } else if (look == 8) {
             // a grain's streak in a vacuum: optically thin, singly scattered - the body's colour under the Sun by the
             // phase, no self-shadow; the faint ambient of space and the ground's bounce below

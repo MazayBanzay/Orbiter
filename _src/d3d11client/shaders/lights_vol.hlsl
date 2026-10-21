@@ -68,7 +68,7 @@ float4 PSBeams(VSOut i) : SV_Target
     }
     float3 sum = 0;
     const int N = 10;
-    float jit = Ign(i.pos.xy, gSpotK[0].w);
+    float jit = Ign(i.pos.xy, gLZ.w);
     {
         LocalLightG L = tLights[(uint)gBeam.x];
         float3 p = L.p.xyz;
@@ -100,16 +100,7 @@ float4 PSBeams(VSOut i) : SV_Target
             float cone = 1;
             if (LightIsSpot(L)) { float cd = dot(wi, L.d.xyz); cone = smoothstep(L.d.w, L.a.x, cd); cone *= cone; }
             float sh = 1;
-            if (L.a.z >= 0) {
-                int st = (int)L.a.z;
-                float4 q = mul(float4(x, 1), gSpotVP[st]);
-                if (q.w > 1e-4) {
-                    float3 cq = q.xyz / q.w;
-                    float2 uv = cq.xy * float2(0.5, -0.5) + 0.5;
-                    if (all(uv > 0.002) && all(uv < 0.998) && cq.z <= 1)
-                        sh = tSpotShadow.SampleCmpLevelZero(sShadow, (float2(st & 1, st >> 1) + uv) * 0.5, cq.z);
-                }
-            }
+            if (L.a.z >= 0) sh = ShadowTap(ShadowRecFor(L, x), x, 1);
             float mu = dot(wi, -rd);
             float3 ph = sR * (0.0596831 * (1 + mu * mu)) + sM * HG(mu, g);
             acc += ph * (w * cone * sh * smoothstep(0.05, 0.25, r)) * exp(-ext * (t + r)) * (r2 / max(r2, L.a.y * L.a.y));   // (inside the lamp: no air)
@@ -148,6 +139,20 @@ SOut VSSprite(uint vid : SV_VertexID, uint inst : SV_InstanceID)
     SOut o = (SOut)0;
     Sprite s = tSprites[inst];
     o.pos = float4(0, 0, -1, 1);     // culled unless set below
+    if (s.c.w > 3.5) {
+        // a rectangle lamp's face (D3D11Lights AreaLight): its own radiance, pre-exposed like the rest of the scene (no
+        // division by the eye: it glows hotter than a lit wall and blooms) - a quad 2 mm in front of its plane, depth-tested
+        float3 nL = normalize(cross(s.d.xyz, s.e.xyz));
+        float side = dot(-s.p.xyz, nL);
+        if (side <= 0 && s.e.w < 0.5) return o;
+        float2 corner = float2((vid == 1 || vid == 2 || vid == 4) ? 1 : -1, (vid == 2 || vid == 4 || vid == 5) ? 1 : -1);
+        float3 wpos = s.p.xyz + nL * (side > 0 ? 0.002 : -0.002) + s.d.xyz * corner.x + s.e.xyz * corner.y;
+        o.pos = mul(float4(wpos, 1), gSVP);
+        o.q = corner;
+        o.col = float4(s.c.rgb, 0);
+        o.shape = float2(4, 0);
+        return o;
+    }
     float z = dot(s.p.xyz, gSFwd.xyz);
     if (z < 0.05) return o;
     // occlusion: the scene's depth round the centre against a point moved towards the eye by the sprite's size
@@ -203,6 +208,7 @@ SOut VSSprite(uint vid : SV_VertexID, uint inst : SV_InstanceID)
 
 float4 PSSprite(SOut i) : SV_Target
 {
+    if (i.shape.x > 3.5) return float4(i.col.rgb, 1);     // a lamp's face: flat, its radiance
     float d2 = dot(i.q, i.q);                          // in core radii
     float shape = i.shape.x;
     float k;
@@ -218,6 +224,7 @@ float4 PSSprite(SOut i) : SV_Target
 // ---- the probe for the eye's adaptation (Lights.cpp): 16 x 9 points of the view, each the visible surface's position
 // (camera-centred; w 1) or the sky (w 0). The CPU adds up the local lights' illuminance there, two frames later
 RWStructuredBuffer<float4> uProbe : register(u0);
+Texture2D tImg : register(t1);     // the scene, single-sampled (FinishScene)
 [numthreads(16, 9, 1)]
 void CSProbe(uint3 id : SV_DispatchThreadID)
 {
@@ -225,7 +232,14 @@ void CSProbe(uint3 id : SV_DispatchThreadID)
     float2 uv = (id.xy + 0.5) / float2(16, 9);
     float z = tDepth.Load(int3(uv * float2(w, h), 0));
     float4 o = 0;
-    if (z > 0) { float4 c = mul(float4(uv * float2(2, -2) + float2(-1, 1), z, 1), gInvVP); o = float4(c.xyz / c.w, 1); }
+    if (z > 0) {
+        float4 c = mul(float4(uv * float2(2, -2) + float2(-1, 1), z, 1), gInvVP);
+        // w: 1 + the finished image's luminance there (before the exposure): the eye's adaptation on airless bodies
+        float iw, ih; tImg.GetDimensions(iw, ih);
+        float3 L = tImg.Load(int3(uv * float2(iw, ih), 0)).rgb;
+        float lum = NotFinite(L) ? 0 : max(dot(L, float3(0.2126, 0.7152, 0.0722)), 0);
+        o = float4(c.xyz / c.w, 1 + lum);
+    }
     uProbe[id.y * 16 + id.x] = o;
 }
 
@@ -236,3 +250,7 @@ float4 PSUpsample(VSOut i) : SV_Target { return float4(tHalf.SampleLevel(sClampB
 
 // a full-viewport triangle at depth 1 (clears one tile of the sky maps' atlas, Lights.cpp)
 float4 VSClearZ(uint id : SV_VertexID) : SV_Position { float2 p = float2((id << 1) & 2, id & 2); return float4(p * float2(2, -2) + float2(-1, 1), 1, 1); }
+
+// the static shadow atlas' tile copied into the working one (Lights.cpp: the people are drawn over it)
+Texture2D<float> tStatZ : register(t0);
+float PSCopyZ(float4 pos : SV_Position) : SV_Depth { return tStatZ.Load(int3(pos.xy, 0)); }

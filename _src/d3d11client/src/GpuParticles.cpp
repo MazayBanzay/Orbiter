@@ -11,11 +11,12 @@
 namespace {
 
 struct SimCB { XMFLOAT4 time, gas, geo, misc; XMFLOAT4 imp[16], fr[16], box[64]; XMFLOAT4 m0, m1, m2; XMFLOAT4X4 vp; XMFLOAT4 liq; };   // as particles_gpu.hlsl's Sim
-struct DrawCB { XMFLOAT4 m0, m1, m2, camR, camU, geo; XMFLOAT4X4 vp; XMFLOAT4 alb[16]; };
+struct DrawCB { XMFLOAT4 m0, m1, m2, camR, camU, geo; XMFLOAT4X4 vp; XMFLOAT4 alb[16]; XMFLOAT4 vac; };
 
 enum Look { LOOK_GRAIN = 0, LOOK_CLOD = 1, LOOK_DROP = 2, LOOK_FOG = 3, LOOK_ICE = 4, LOOK_SPOT = 5, LOOK_SPLASH = 6, LOOK_MIST = 7 };
 enum Alb { ALB_DRY = 0, ALB_WET = 1, ALB_ICEG = 2, ALB_DROP = 3, ALB_FOG = 4, ALB_CRYSTAL = 5, ALB_MIST = 6 };
 const UINT F_SETTLED = 0x100, F_LIQUID = 0x200, F_HARD = 0x400, F_GROUNDCOL = 0x800, F_COND = 0x1000;   // GROUNDCOL: the ground's own colour at birth
+const UINT F_VAC = 0x2000;      // a parcel of grains thrown in a vacuum: ug0.x its spread rate [m/s], ug0.y its grains' cross-section [m2]
 UINT Flags(int look, int alb, UINT extra = 0) { return (UINT)look | ((UINT)alb << 4) | extra; }
 
 struct Cls { double d, frac, s0, a0; };
@@ -31,6 +32,8 @@ const Cls DROP_C[] = { { 3e-3, .30, .07, 0 }, { 1e-3, .40, .07, 0 }, { 3e-4, .25
 template<size_t N> std::pair<const Cls*, int> L(const Cls (&a)[N]) { return { a, (int)N }; }
 
 const double JET_RATE_GPU = 2.0;
+uintptr_t srcKey = 0;          // the source being spawned (its vessel and id: Regolith.cpp keeps its rows by it - a wheel's
+                               // source is dropped and made again on every bounce, its record's address with it)
 
 // drops falling back into a liquid ring it (the wave field, Wake.cpp): their landing is foreseen at birth (ballistic,
 // the gas's drag shortening the flight across) and the ring put in when they get there
@@ -312,6 +315,17 @@ void GpuParticles::SpawnJet(ExScene& sc, const ExJet& j, JetAcc& acc, std::vecto
     const double tauW = 0.06 * q;
     const double uE = sc.dense ? std::max(uw, 1.0) : 50.0;
     const double mErode = std::min(0.02 * (tauW - tauC) * 3.14159265 * r * r / uE, 2.0);
+    if (!sc.dense && ground != EXG_LIQUID) {
+        // in a vacuum the gas turns along the ground and drags the eroded soil out in a thin sheet, 1-6 deg up, at up to a
+        // few hundred m/s, the fines fastest (the Apollo landings' ejecta: Metzger et al. 2011, Lane & Metzger 2012) -
+        // flown ballistic with the rest of the vacuum soil (Regolith.cpp: a ring round the vertical, its inner edge 6 deg
+        // up); a lander's hover erodes tens of kg/s
+        const double mV = std::min(0.02 * (tauW - tauC) * 3.14159265 * r * r / uE, 30.0);
+        const double sp = std::clamp(8 * sqrt(q), 20.0, 600.0);
+        RegolithFeed(sc, (uintptr_t)j.h * 40503u + (uintptr_t)j.id + 0x40000000u, hit + _V(0, 0.05, 0), _V(0, 1, 0), _V(0, 0, 0),
+                     sp, 1.553, mV, gy, std::vector<XMFLOAT4>(), 0.944);
+        return;
+    }
     std::pair<const Cls*, int> mix = ground == EXG_WET ? L(WET_C) : ground == EXG_REGOLITH ? L(REG_C) :
                                      ground == EXG_ICE ? L(ICE_C) : ground == EXG_LIQUID ? L(LIQ_C) : L(DRY_C);
     const int alb = ground == EXG_WET ? ALB_WET : ground == EXG_ICE ? ALB_ICEG : ground == EXG_LIQUID ? ALB_MIST : ALB_DRY;
@@ -393,7 +407,13 @@ void GpuParticles::SpawnSource(ExScene& sc, OBJHANDLE h, Source& s, std::vector<
     default:
         if (ground == EXG_WET) addWet(1);
         else if (ground == EXG_LIQUID) add(L(LIQ_C), 1, LOOK_MIST, ALB_MIST, 450, 1.5e-3);
-        else if (ground == EXG_REGOLITH) add(L(REG_C), 1, LOOK_GRAIN, ALB_DRY, rhoP, 1.5e-3);
+        else if (ground == EXG_REGOLITH) {
+            // regolith off a tyre it stuck to (TVChassis: the wet share = the aggregates' share): the fines held by van der
+            // Waals and electrostatic cohesion come off as mm aggregates - lumps of the ground's own colour, not wet clods
+            const double ag = puff ? 0 : std::clamp(s.wet, 0.0, 0.9);
+            if (ag > 0) mix.push_back({ { 0, ag, 0, .97 }, LOOK_CLOD, ALB_DRY, true, rhoP, 2e-4 });
+            add(L(REG_C), 1 - ag, LOOK_GRAIN, ALB_DRY, rhoP, 1.5e-3);
+        }
         else if (ground == EXG_ICE) add(L(ICE_C), 1, LOOK_GRAIN, ALB_ICEG, rhoP, 1.5e-3);
         else {
             double cl = puff ? 0 : std::clamp(2 * s.wet, 0.0, 0.9);
@@ -405,10 +425,26 @@ void GpuParticles::SpawnSource(ExScene& sc, OBJHANDLE h, Source& s, std::vector<
     const double capK = std::clamp((0.85 - load) / 0.35, 0.15, 1.0);
     // the basis about the axis
     VECTOR3 b1 = Unit(crossp(ax, fabs(ax.y) < 0.9 ? _V(0, 1, 0) : _V(1, 0, 0))), b2 = crossp(ax, b1);
+    // soil in a vacuum: no drag sorts the grains by size - every one flies the throw's parabola, so the flight time is the
+    // throw's own (2 v_up / g); the grains drawn are held to ~3000 aloft per source over it (8 wheels: ~24k at once)
+    const bool vac = !sc.dense && s.kind == 0;
+    const double gL = sc.GM / (sc.R * sc.R);
+    const double Tf = 2 * std::max(gsL.y + ax.y * speed, 0.3) / std::max(gL, 0.1) + 0.2;
+    if (vac) {   // the grains themselves fly as one ballistic sheet (Regolith.cpp); only the aggregates stay particles here
+        double fine = 0; for (const C& G : mix) if (!G.hard) fine += G.k.frac;
+        std::vector<XMFLOAT4> vb;      // the vessel's own boxes (its wheels too - ids 100+: the regolith's alone), local
+        for (auto& kb : boxes) {
+            if (kb.first.h != h) continue;
+            VECTOR3 cg; v->Local2Global(_V(kb.second.c[0], kb.second.c[1], kb.second.c[2]), cg);
+            vb.push_back(F4(sc.ToLocal(cg), 0));
+            for (int i = 0; i < 3; i++) { VECTOR3 e = _V(i == 0, i == 1, i == 2), eg; v->GlobalRot(e, eg); vb.push_back(F4(Unit(sc.DirToLocal(eg)), kb.second.h[i])); }
+        }
+        RegolithFeed(sc, srcKey, p0, ax, gsL, speed, s.cone, s.kgps * fine, gy, vb);
+    }
     for (size_t c = 0; c < mix.size() && c < 8; c++) {
         const C& G = mix[c];
         const double kc = s.kgps * G.k.frac;
-        if (kc <= 0) continue;
+        if (kc <= 0 || (vac && !G.hard)) continue;
         const double want = kc / G.M;
         const bool longLived = !G.hard && G.k.d < 5e-5 && s.kind != 2 && s.kind != 4;
         const double cap = (longLived ? 5.0 : std::max(30.0, 160.0 * G.k.frac)) * capK * 4.0;
@@ -417,7 +453,8 @@ void GpuParticles::SpawnSource(ExScene& sc, OBJHANDLE h, Source& s, std::vector<
         // as real-time spray is drawn), shared by the size classes
         if (s.kind == 3) rate = std::clamp(1500.0 * s.kgps, 300.0, 6000.0) * G.k.frac * capK;   // (a few seconds aloft on Titan: up to ~20k drawn at once)
         if (s.kind == 4) rate = 300.0 * capK;   // the condensate: puffs closer than their width along the trail (continuous)
-        if (G.hard) rate = std::max(rate, kc / 0.3);
+        if (vac && !G.hard) rate = std::min(kc / 2e-5, 3000.0 * G.k.frac * capK / Tf);   // each drawn grain >= 20 mg's share
+        if (G.hard) rate = vac && ground == EXG_REGOLITH ? std::min(kc / G.M, 150.0 * capK) : std::max(rate, kc / 0.3);
         const double m = kc / rate;
         s.acc[c] += rate * dt;
         while (s.acc[c] >= 1 && s.kind == 4) {
@@ -445,16 +482,24 @@ void GpuParticles::SpawnSource(ExScene& sc, OBJHANDLE h, Source& s, std::vector<
             const double ct = 1 - Rnd() * (1 - cos(s.cone)), st = sqrt(std::max(0.0, 1 - ct * ct)), ph = U(0, 2 * 3.14159265);
             VECTOR3 dir = ax * ct + b1 * (st * cos(ph)) + b2 * (st * sin(ph));
             double sp = speed * (1 - s.spread * Rnd());
-            if (s.kind == 0 && !G.hard && G.k.d > 0) sp *= std::min(1.3, pow(2e-4 / G.k.d, 0.15));
+            if (s.kind == 0 && !G.hard && G.k.d > 0 && sc.dense) sp *= std::min(1.3, pow(2e-4 / G.k.d, 0.15));
             VECTOR3 p = p0 + _V(U(-1, 1), U(-1, 1), U(-1, 1)) * 0.03;
             if (s.jetJ > 0) p += ax * U(0.03, 0.15);        // the condensate forms a little down the jet
             VECTOR3 vel = gsL + dir * sp;
             double d = G.k.d, s0, a0, life, rho = G.rho;
+            VECTOR3 vacUg = _V(0, 0, 0);
             UINT fl = Flags(G.look, G.alb, (inLiq ? F_LIQUID : 0) | (s.kind == 0 ? F_GROUNDCOL : 0));
             if (G.hard) {
                 const double rc = 0.65 * rhoP + (sc.titan ? 160 : 350);
                 d = std::min(0.08, cbrt(6 * m / (3.14159265 * rc))) * U(0.75, 1.25);
                 s0 = 0.62 * d; a0 = 0.97; life = 60; rho = rc; fl |= F_HARD;
+            } else if (vac) {
+                // one grain in a vacuum, alone (as a spray's drops: independent, never a puff or a clump), standing for
+                // its share m of the throw: drawn as its streak a pixel wide, its opacity that share's cross-section
+                // 1.5 m / (rho d) over the streak (the VS); no gas: no puff, no hanging, gone where it lands
+                s0 = 0; a0 = 1; life = std::min(40.0, 1.5 * Tf + 1.0);
+                vacUg = _V(0, 1.5 * m / (rho * d), 0);
+                fl |= F_VAC;
             } else {
                 if (s.kind == 3 && sc.dense) d = std::max(5e-5, std::min(d, 12 * sc.sigma / (sc.rhoG * std::max(dotp(vel, vel), 1e-6)))) * U(0.7, 1.3);
                 s0 = G.k.s0 * sqrt(m / G.M) * U(0.7, 1.3);
@@ -471,7 +516,7 @@ void GpuParticles::SpawnSource(ExScene& sc, OBJHANDLE h, Source& s, std::vector<
                 life = s.kind == 2 || s.kind == 4 ? std::max(0.2, s.life) * U(0.6, 1.3) : s.kind == 1 ? (s.life > 0 ? s.life * U(0.7, 1.3) : U(20, 40)) :
                        s.kind == 3 ? 30.0 : d < 2e-5 ? U(30, 70) : 40.0;
             }
-            Push(sc, p, vel, d, rho, s0, a0, life, gy, fl, puff ? dir * sp : _V(0, 0, 0), puff ? s.life : 0);
+            Push(sc, p, vel, d, rho, s0, a0, life, gy, fl, (fl & F_VAC) ? vacUg : puff ? dir * sp : _V(0, 0, 0), puff && !(fl & F_VAC) ? s.life : 0);
             if (s.kind == 3 && sc.Rliq > 0) ForeseeLanding(sc, p, vel, m, s0);
         }
     }
@@ -483,7 +528,7 @@ void GpuParticles::UpdateBoxes(const ExScene& sc)
     std::vector<std::pair<double, std::array<XMFLOAT4, 4>>> list;
     for (auto& kv : boxes) {
         OBJHANDLE h = kv.first.h;
-        if (!oapiIsVessel(h)) continue;
+        if (!oapiIsVessel(h) || kv.first.id >= 100) continue;      // (ids 100+: for the vacuum regolith only, Regolith.cpp)
         VESSEL* v = oapiGetVesselInterface(h);
         VECTOR3 cg; v->Local2Global(_V(kv.second.c[0], kv.second.c[1], kv.second.c[2]), cg);
         VECTOR3 c = sc.ToLocal(cg);
@@ -529,7 +574,7 @@ void GpuParticles::Update(D3D11Client* gc, ExScene& sc, const std::vector<ExJet>
             SpawnJet(sc, j, a, imp);
         }
         for (auto it = jetAcc.begin(); it != jetAcc.end();) { if (sc.simt - it->second.t > 1.0) it = jetAcc.erase(it); else ++it; }
-        for (auto& kv : sources) SpawnSource(sc, kv.first.h, kv.second, fj);
+        for (auto& kv : sources) { srcKey = (uintptr_t)kv.first.h * 40503u + (uintptr_t)kv.first.id; SpawnSource(sc, kv.first.h, kv.second, fj); }
         SpawnCrowns(sc);
         UpdateBoxes(sc);
     }
@@ -626,6 +671,9 @@ void GpuParticles::Render(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResour
     MATRIX3 cr; oapiCameraRotationMatrix(&cr);
     k.camR = { (float)cr.m11, (float)cr.m21, (float)cr.m31, (float)fmod(simTime, 10000.0) };
     k.camU = { (float)cr.m12, (float)cr.m22, (float)cr.m32, 0 };
+    // the vacuum parcels' exposure: the frame's simulated time (they streak over it as a camera's shutter sees them;
+    // the drops keep camU.w = 0 - the liquids' look is not this work's)
+    k.vac = { (float)std::clamp(sc.dt, 0.0, 1.0 / 30), 0, 0, 0 };
     const float focal = (float)(0.5 * gc->SceneH() / std::max(oapiCameraAperture() > 0 ? tan(oapiCameraAperture()) : 1.0, 1e-3));
     k.geo = { (float)length(sc.aP), sc.dense ? 1.0f : 0.0f, sc.Rliq > 0 ? (float)(sc.Rliq - length(sc.aP)) : -1e9f, focal };   // z: the liquid's level (local)
     XMStoreFloat4x4(&k.vp, XMMatrixTranspose(g_exViewProj));
@@ -664,6 +712,12 @@ void GpuParticles::Render(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResour
     ctx->VSGetShaderResources(7, 3, vlt); ctx->VSGetSamplers(2, 1, &vss); ctx->VSGetConstantBuffers(4, 1, &vb4);
     ctx->PSGetShaderResources(7, 3, lt); ctx->PSGetSamplers(2, 1, &ss); ctx->PSGetConstantBuffers(4, 1, &b4);
     ctx->VSSetShaderResources(7, 3, lt); ctx->VSSetSamplers(2, 1, &ss); ctx->VSSetConstantBuffers(4, 1, &b4);
+    if (!sc.dense) {
+        // in a vacuum the Sun is the only light: the shadow map itself, as the rain binds it - whatever a pass before left
+        // in the PS's t7 (or nothing: every grain "in shadow", black) is not it. (The dense air's look is left as it is.)
+        ID3D11ShaderResourceView* sh = gc->ShadowSRV(); ID3D11SamplerState* shs = gc->ShadowSampler();
+        ctx->VSSetShaderResources(7, 1, &sh); ctx->VSSetSamplers(2, 1, &shs);
+    }
     ctx->PSSetShaderResources(5, 1, &depth);
     ctx->DrawInstancedIndirect(args.Get(), 0);
     ID3D11ShaderResourceView* nul[2] = {};

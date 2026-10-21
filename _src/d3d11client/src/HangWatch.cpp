@@ -90,8 +90,82 @@ static void Dump(DWORD frame)
     fclose(f);
 }
 
+// A crash report (Modules\D3D11Client\crash.log): an unhandled exception, from any thread, writes where it happened -
+// the code, the faulting module+offset, the address read or written, the registers and the return addresses on the
+// stack (as the hang dump does), then the exception goes on to Windows as before. Orbiter.log loses its last lines in
+// a crash (it is written buffered); this file is written and closed before the process goes (testers' crashes,
+// 2026-10-21)
+// the shaders made last (file, entry, frame): the video driver compiles a new shader on threads of its own right after
+// it is made, and a crash in its compiler has none of our code on the stack - this list names the shader it was on
+// (a tester's crash in nvgpucomp32.dll, 2026-10-21)
+struct ShNote { char what[80]; DWORD frame; };
+static ShNote g_shRing[24];
+static volatile LONG g_shN = 0;
+void NoteShader(const char* file, const char* entry)
+{
+    const LONG i = InterlockedIncrement(&g_shN) - 1;
+    ShNote& n = g_shRing[i % 24];
+    const char* f = strrchr(file, '\\'); f = f ? f + 1 : file;
+    _snprintf_s(n.what, _TRUNCATE, "%s %s", f, entry ? entry : "");
+    n.frame = g_client ? g_client->frameNo : 0;
+}
+
+static LPTOP_LEVEL_EXCEPTION_FILTER g_prevFilter = nullptr;
+static volatile LONG g_crashOnce = 0;
+static LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep)
+{
+    if (InterlockedExchange(&g_crashOnce, 1) == 0 && ep && ep->ExceptionRecord && ep->ContextRecord) {
+        if (FILE* f = fopen("Modules\\D3D11Client\\crash.log", "a")) {
+            std::vector<HwMod> ms;
+            HMODULE hm[512]; DWORD need = 0;
+            if (EnumProcessModules(GetCurrentProcess(), hm, sizeof hm, &need))
+                for (DWORD i = 0; i < std::min<DWORD>(need / sizeof(HMODULE), 512); i++) {
+                    MODULEINFO mi = {}; HwMod m = {};
+                    if (!GetModuleInformation(GetCurrentProcess(), hm[i], &mi, sizeof mi)) continue;
+                    m.lo = (UINT_PTR)mi.lpBaseOfDll; m.hi = m.lo + mi.SizeOfImage;
+                    GetModuleBaseNameA(GetCurrentProcess(), hm[i], m.name, sizeof m.name);
+                    ms.push_back(m);
+                }
+            const EXCEPTION_RECORD& er = *ep->ExceptionRecord; const CONTEXT& c = *ep->ContextRecord;
+            SYSTEMTIME st; GetLocalTime(&st);
+            const HwMod* m = ModOf(ms, (UINT_PTR)er.ExceptionAddress);
+            fprintf(f, "=== %04d-%02d-%02d %02d:%02d:%02d crash: code %08X at %s+%X, thread %u, frame %u ===\n",
+                    st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, (unsigned)er.ExceptionCode,
+                    m ? m->name : "?", m ? (unsigned)((UINT_PTR)er.ExceptionAddress - m->lo) : (unsigned)(UINT_PTR)er.ExceptionAddress,
+                    GetCurrentThreadId(), g_client ? (unsigned)g_client->frameNo : 0u);
+            if (er.ExceptionCode == EXCEPTION_ACCESS_VIOLATION && er.NumberParameters >= 2)
+                fprintf(f, "access violation: %s address %08X\n", er.ExceptionInformation[0] == 1 ? "writing" : er.ExceptionInformation[0] == 8 ? "executing" : "reading", (unsigned)er.ExceptionInformation[1]);
+            fprintf(f, "eax %08X ebx %08X ecx %08X edx %08X esi %08X edi %08X ebp %08X esp %08X\n",
+                    (unsigned)c.Eax, (unsigned)c.Ebx, (unsigned)c.Ecx, (unsigned)c.Edx, (unsigned)c.Esi, (unsigned)c.Edi, (unsigned)c.Ebp, (unsigned)c.Esp);
+            for (const HwMod& mm : ms) if (strstr(mm.name, "D3D11Client") || strstr(mm.name, "nv") == mm.name) fprintf(f, "module %s at %08X\n", mm.name, (unsigned)mm.lo);
+            // the stack: return addresses (after a CALL) from esp up, read in place (this thread is the crashed one)
+            MEMORY_BASIC_INFORMATION mi = {};
+            if (VirtualQuery((LPCVOID)(UINT_PTR)c.Esp, &mi, sizeof mi)) {
+                const UINT_PTR top = (UINT_PTR)mi.BaseAddress + mi.RegionSize;
+                fprintf(f, "stack:");
+                int n = 0;
+                for (UINT_PTR a = c.Esp; a + 4 <= top && n < 40; a += 4) {
+                    const UINT_PTR v = *(const DWORD*)a;
+                    const HwMod* mv = ModOf(ms, v);
+                    if (mv && AfterCall(v)) { fprintf(f, " %s+%X", mv->name, (unsigned)(v - mv->lo)); n++; }
+                }
+                fprintf(f, "\n");
+            }
+            const LONG n = g_shN;
+            fprintf(f, "shaders made last (oldest first, of %ld):", n);
+            for (LONG k = std::max<LONG>(0, n - 24); k < n; k++) fprintf(f, " [%u] %s;", (unsigned)g_shRing[k % 24].frame, g_shRing[k % 24].what);
+            fprintf(f, "\n");
+            fclose(f);
+        }
+    }
+    if (getenv("D3D11CLIENT_TEST")) return EXCEPTION_EXECUTE_HANDLER;   // test runs: end quietly (no error dialog left open)
+    return g_prevFilter ? g_prevFilter(ep) : EXCEPTION_CONTINUE_SEARCH;
+}
+
 void HangWatchStart()
 {
+    static bool filterOn = false;
+    if (!filterOn) { filterOn = true; g_prevFilter = SetUnhandledExceptionFilter(CrashFilter); }
     if (g_hwRun.exchange(true)) return;
     g_hw = std::thread([] {
         DWORD last = 0; ULONGLONG since = GetTickCount64(); bool told = false;

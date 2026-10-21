@@ -35,6 +35,7 @@ void ClientCfg::Load()
         else if (k == "RenderScale") renderScale = std::clamp((float)v, 0.5f, 1.0f);
         else if (k == "DriverCacheMB") driverCacheMB = std::max((int)v, 0);
         else if (k == "DriverCacheOff") driverCacheOff = v != 0;
+        else if (k == "DriverThreads") driverThreads = v != 0;
         else if (k == "AmbientOcclusion") ao = v != 0;
         else if (k == "Bloom") bloom = v != 0;
         else if (k == "Sharpen") sharpen = std::clamp((float)v, 0.0f, 1.0f);
@@ -45,6 +46,26 @@ void ClientCfg::Load()
 void ClientCfg::Save() const
 {
     CreateDirectoryA("Config\\D3D11Client", nullptr);
+    // the keys this dialog does not own (the lights', the visor drops', ... read by their own modules) are kept as they
+    // were: the file was written whole with these keys only, and OK in Advanced wiped the rest (2026-10-21)
+    static const char* own[] = { "LodBias", "Anisotropy", "Haze", "Exposure", "Liquids", "Shadows", "MicroTextures", "VisorDrops",
+        "GroundDetail", "Tessellation", "TerrainNormals", "Geomorph", "StatsLog", "Sharpen", "Bloom", "AmbientOcclusion",
+        "DriverCacheMB", "DriverCacheOff", "DriverThreads", "AntiAliasing", "RenderScale" };
+    std::vector<std::string> keep;
+    if (FILE* r = fopen("Config\\D3D11Client\\Client.cfg", "r")) {
+        char ln[512];
+        while (fgets(ln, sizeof ln, r)) {
+            std::string s = ln; while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
+            size_t a = s.find_first_not_of(" \t");
+            if (a == std::string::npos || s[a] == ';') continue;                 // blank lines, comments: written anew
+            size_t b = s.find_first_of(" \t=", a);
+            const std::string k = s.substr(a, b == std::string::npos ? std::string::npos : b - a);
+            bool mine = false;
+            for (const char* o : own) if (k == o) { mine = true; break; }
+            if (!mine) keep.push_back(s);
+        }
+        fclose(r);
+    }
     FILE* f = fopen("Config\\D3D11Client\\Client.cfg", "w");
     if (!f) return;
     fprintf(f, "; D3D11Client settings (Launchpad > Video > Advanced)\n");
@@ -66,8 +87,11 @@ void ClientCfg::Save() const
     fprintf(f, "AmbientOcclusion = %d ; GTAO: the folds, gaps and contacts darken (the sky's light only)\n", ao ? 1 : 0);
     fprintf(f, "DriverCacheMB = %d ; the video driver's shader cache for Orbiter: set aside at start above this (0: never)\n", driverCacheMB);
     fprintf(f, "DriverCacheOff = %d ; 1: the video driver's disk shader cache is not used by Orbiter (saves 256-1024 MB of the 32-bit address space)\n", driverCacheOff ? 1 : 0);
+    fprintf(f, "DriverThreads = %d ; 0: the video driver compiles shaders on Orbiter's thread, not its own worker threads (next start)\n", driverThreads ? 1 : 0);
     fprintf(f, "AntiAliasing = %d   ; 0 off, 1 MSAA 2x, 2 MSAA 4x, 3 MSAA 8x, 4 FXAA, 5 TAA (applies at the next start)\n", aa);
     fprintf(f, "RenderScale = %.2f  ; TAA: scene resolution 0.5..1 of the window, upsampled by TAAU (next start)\n", renderScale);
+    if (!keep.empty()) fprintf(f, "; read by the other parts of the client (kept as they were)\n");
+    for (const std::string& s : keep) fprintf(f, "%s\n", s.c_str());
     fclose(f);
 }
 

@@ -695,8 +695,9 @@ void ExhaustFx::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, co
     ctx->Begin(qDis[qi].Get()); ctx->End(qT0[qi].Get());
     {
         PipeState saved(ctx);      // everything as it was on return
-        if (partsOk) {   // (the universal jets: no ejecta of their own - the flow carries what they move)
-            std::vector<ExJet> pj; for (const ExJet& j : jets) if (!j.universal) pj.push_back(j);
+        if (partsOk) {   // (the universal jets: no ejecta of their own in a gas - the flow carries what they move; in a
+                         //  vacuum there is no flow: their eroded soil flies ballistic, Regolith.cpp)
+            std::vector<ExJet> pj; for (const ExJet& j : jets) if (!j.universal || !sc.dense) pj.push_back(j);
             parts.Update(gc, sc, pj);
         }
         SmokeUpdate(gc, sc, smoke);
@@ -725,6 +726,7 @@ void ExhaustFx::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, co
             if (partsOk) parts.Render(gc, sc, gc->depthSRV.Get());
             SmokeRender(gc);
             SprayRender(gc, sc, gc->depthSRV.Get());
+            RegolithRender(gc, sc, gc->depthSRV.Get());
             RenderVesselExhausts(gc, sc.cp);
             ID3D11ShaderResourceView* nul[2] = {};
             ctx->PSSetShaderResources(5, 2, nul);
@@ -749,7 +751,7 @@ ExhaustFx fx;
 // ------------------------------------------------------------------------------------------ the client's hooks
 void ExhaustInit(D3D11Client* gc) { if (!fx.Init(gc)) { LOGC("exhaust effects FAILED (shaders or resources; see above)"); fx.Release(); } }
 void ExhaustRender(D3D11Client* gc, const VECTOR3& camPos, const MATRIX3& camRot, const XMMATRIX& proj, double simDt) { fx.Render(gc, camPos, camRot, proj, simDt); }
-void ExhaustRelease() { fx.Release(); SprayRelease(); VesselExhaustRelease(); SmokeRelease(); }
+void ExhaustRelease() { fx.Release(); SprayRelease(); RegolithRelease(); VesselExhaustRelease(); SmokeRelease(); }
 void ExhaustEmit(OBJHANDLE h, int id, const double* pos, const double* vel, double cone, double spread, double kgps, int kind, int ground, double wet, double life, double jetJ)
 {
     fx.parts.Emit(h, id, pos, vel, cone, spread, kgps, kind, ground, wet, life, jetJ);

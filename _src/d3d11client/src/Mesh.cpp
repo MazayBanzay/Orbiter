@@ -276,6 +276,20 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
         VECTOR3 lc = tmul(R, cpos - gp);
         LOGC("diag cockpit: vessel %s camera at %.3f %.3f %.3f (vessel frame), cockpit mode %d, meshes %zu", vv->v->GetName(), lc.x, lc.y, lc.z, oapiCockpitMode(), vv->mesh.size());
     }
+    // the virtual cockpit's screens: an MFD's group (oapiVCRegisterMFD) shows the MFD's surface, the HUD's group
+    // (oapiVCRegisterHUD, FLAG 2 - not drawn with the mesh) the HUD's surface, added over the glass in the alpha pass
+    struct VcScreen { DWORD mesh, grp; Surf* s; bool hud; };
+    VcScreen vcs[MAXMFD + 1]; int nvcs = 0;
+    if (internal && vc && !shadowPass && !mirrorPass) {
+        for (int i = 0; i < MAXMFD; i++) {
+            const VCMFDSPEC* ms = nullptr;
+            Surf* s = (Surf*)GetVCMFDSurface(i, &ms);
+            if (s && ms) { SurfToGpu(s); if (s->srv) vcs[nvcs++] = { ms->nmesh, ms->ngroup, s, false }; }
+        }
+        const VCHUDSPEC* hs = nullptr;
+        Surf* s = (Surf*)GetVCHUDSurface(&hs);
+        if (s && hs) { SurfToGpu(s); if (s->srv) vcs[nvcs++] = { hs->nmesh, hs->ngroup, s, true }; }
+    }
 
     ctx->IASetInputLayout(ilMesh.Get());
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -322,10 +336,13 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
         ctx->IASetVertexBuffers(0, 1, m->vb.GetAddressOf(), &stride, &off);
         ctx->IASetIndexBuffer(m->ib.Get(), DXGI_FORMAT_R16_UINT, 0);
         for (DGroup& g : m->grp) {
-            if (!g.ni || (g.usrFlag & 2)) continue;
+            const VcScreen* scr = nullptr;
+            for (int k = 0; k < nvcs; k++) if (vcs[k].mesh == mi && vcs[k].grp == (DWORD)(&g - &m->grp[0])) scr = &vcs[k];
+            if (!g.ni || ((g.usrFlag & 2) && !(scr && scr->hud))) continue;
             MATERIAL mt = { { 1, 1, 1, 1 }, { 1, 1, 1, 1 }, { 0, 0, 0, 1 }, { 0, 0, 0, 0 }, 0 };
             if (g.mtrl != SPEC_DEF && g.mtrl < m->mtrl.size()) mt = m->mtrl[g.mtrl];
-            bool transparent = mt.diffuse.a < 0.99f;
+            if (scr) mt = { { 1, 1, 1, 1 }, { 0, 0, 0, 1 }, { 0, 0, 0, 1 }, { 0, 0, 0, 0 }, 0 };   // a screen: its picture as it is
+            bool transparent = scr && scr->hud ? true : mt.diffuse.a < 0.99f;
             if (transparent != alphaPass) continue;
             XMMATRIX W = XMLoadFloat4x4(&g.xf) * W0;
             MeshCB c;
@@ -342,11 +359,11 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
             c.amb = { mt.ambient.r, mt.ambient.g, mt.ambient.b, mt.ambient.a };
             c.spec = { mt.specular.r, mt.specular.g, mt.specular.b, mt.power };
             c.emis = { mt.emissive.r, mt.emissive.g, mt.emissive.b, mt.emissive.a };
-            Surf* s = g.tex && g.tex < m->tex.size() ? (Surf*)m->tex[g.tex] : nullptr;
+            Surf* s = scr ? scr->s : g.tex && g.tex < m->tex.size() ? (Surf*)m->tex[g.tex] : nullptr;
             ID3D11ShaderResourceView* srv = s && s->srv ? s->srv.Get() : whiteTex.Get();
             // the mesh file's FLAG (UsrFlag) 4: not lit. In the cockpit such a group (a display, the helmet's light layer) is
             // seen by the eye as it is: the eye's adaptation to a dim scene (the FX exposure) must not brighten it
-            const bool unlit = (g.usrFlag & 4) != 0;
+            const bool unlit = (g.usrFlag & 4) != 0 || scr;
             c.flags = { s && s->srv ? 1.0f : 0.0f, (float)internal, unlit ? 1.0f : 0.0f, internal ? 1.0f : 0.0f };
             // the texture's material maps (t1..t5)
             const MatMaps* mm = (!shadowPass && s && s->srv) ? MapsFor(dev.Get(), ctx.Get(), s) : nullptr;
@@ -384,7 +401,7 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
             if (!shadowPass) {
                 static ComPtr<ID3D11BlendState> bsFilt; static ID3D11Device* bfDev = nullptr;
                 if (bfDev != dev.Get()) { bfDev = dev.Get(); bsFilt.Reset(); D3D11_BLEND_DESC b = {}; b.RenderTarget[0] = { TRUE, D3D11_BLEND_ZERO, D3D11_BLEND_SRC_COLOR, D3D11_BLEND_OP_ADD, D3D11_BLEND_ZERO, D3D11_BLEND_ONE, D3D11_BLEND_OP_ADD, D3D11_COLOR_WRITE_ENABLE_RED | D3D11_COLOR_WRITE_ENABLE_GREEN | D3D11_COLOR_WRITE_ENABLE_BLUE }; dev->CreateBlendState(&b, &bsFilt); }
-                ctx->OMSetBlendState((g.usrFlag & 0x100) ? bsFilt.Get() : (g.usrFlag & 8) ? bsAdd.Get() : bsAlpha.Get(), nullptr, ~0u);   // FLAG 8: added; 0x100: a filter
+                ctx->OMSetBlendState((g.usrFlag & 0x100) ? bsFilt.Get() : ((g.usrFlag & 8) || (scr && scr->hud)) ? bsAdd.Get() : bsAlpha.Get(), nullptr, ~0u);   // FLAG 8 and the HUD: added; 0x100: a filter
             }
             // diagnostics (test runs): in the cockpit view, the groups whose box covers much of the screen near the camera
             if (internal && !shadowPass && diagFrames > 0 && !g.vtx.empty()) {

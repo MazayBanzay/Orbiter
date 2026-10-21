@@ -178,8 +178,9 @@ PSOut PS(VSOut i, bool front : SV_IsFrontFace)
         float2 t = tNorm.Sample(sAniso, i.uv).rg * 2 - 1;
         n = PerturbNormal(n, i.wp, i.uv, t * (1 - dirtK * 0.7));
     }
-    float sunSh = ShadowAtN(i.wp, normalize(i.n));     // the geometric normal: the offset against acne
+    float sunSh = ShadowAtN(i.wp, normalize(i.n)) * InteriorSun(i.wp);     // the geometric normal: the offset against acne; no Sun inside a declared interior (D3D11Lights)
     float skyV = SkyVisibility(i.wp, normalize(i.n)); // the sky past the vessels round the camera: a cabin sees it through its windows (lights.hlsli)
+    skyV *= 1 - VolumeWeight(i.wp);                    // none inside a declared interior volume (D3D11Lights.h)
     if (gMaps.z > 0.5 || gMaps.w > 0.5) {
         // the material maps (as D3D9Client's): smoothness and metalness -> GGX for the Sun, the sky's harmonics for the
         // light around (diffuse by the normal, specular by the mirrored direction, rough ones blurred by the SH anyway)
@@ -205,7 +206,7 @@ PSOut PS(VSOut i, bool front : SV_IsFrontFace)
         float3 col = albedo * (dif * sun + SkyLightShaded(n, i.wp, normalize(i.n)) * skyV + fill) + spec * nl0 * sun * 3.14159265
                    + Fa * EnvReflect(reflect(-V, n), i.wp, rough) * skyV
                    + gEmis.rgb * tex.rgb / max(gAdapt.w * gAdapt.rgb, 1e-4);
-        col += LocalLights(i.wp, n, normalize(i.n), V, albedo, F0, a);     // headlights, lamps (lights.hlsli)
+        col += LocalLights(i.wp, n, normalize(i.n), V, albedo, F0, a, 1 - skyV);   // headlights, lamps (lights.hlsli), their bounce in an enclosed room
         // the emission map as D3D9 shows it: max(lit, map x emission2) - emission2 the module's glow colour (the jet pack's
         // chambers: 0 when cold), 1 when no module sets it
         if (gMaps2.x > 0.5) col = max(col, tEmisM.Sample(sAniso, i.uv).rgb * (gEmis2.w > 0.5 ? gEmis2.rgb : 1.0) / max(gAdapt.w * gAdapt.rgb, 1e-4));
@@ -238,7 +239,7 @@ PSOut PS(VSOut i, bool front : SV_IsFrontFace)
         float pwL = gSpec.w > 0 ? gSpec.w : 20;
         float aL = sqrt(saturate(2 / (pwL + 2) + SpecAAKernel(n)));
         float3 F0L = (gSpec.w > 0 || gMaps.y > 0.5) ? saturate((gSpec.w > 0 ? gSpec.rgb : 1) * specM.rgb) * 0.25 * (1 - dirtK) : 0.02;
-        col += LocalLights(i.wp, n, normalize(i.n), V, base.rgb, F0L, aL);
+        col += LocalLights(i.wp, n, normalize(i.n), V, base.rgb, F0L, aL, 1 - skyV);   // and their bounce in an enclosed room
     }
     // under the liquid (seen from above it): the light goes down to the point and back up the refracted view ray
     // (as the D3D9 fork: exp(-ext (d + d / cos t)) per channel), the dark liquid body over what is lost

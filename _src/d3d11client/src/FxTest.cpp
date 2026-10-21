@@ -3,6 +3,8 @@
 //   dust    - footsteps' sand: short puffs from either foot in turn
 //   splash  - drops and wet clods thrown up and back, as a wheel through the shallows
 //   jet     - a 800 N hydrogen jet straight down from 1 m (ground ejecta, or the cavity, spray and mist over a liquid)
+//   wheels  - soil off four wheels as the EMPU's rear ones throw it (6 m/s rims, the arc 20-60 deg up, 2.5 kg/s each)
+//   drive   - the same wheels rolling forward at 6 m/s (no slip: the source moves, the vessel stays), over 80 m and back
 //   dirt    - the tholin film on the vessel up to 0.5 m
 //   orbit   - the external camera pulled out to ~2000 km
 //   far     - the external camera pulled back ~4x
@@ -52,11 +54,12 @@ double FxTestShotTime()
 
 void FxTestFrame()
 {
-    static bool parsed = false, dust = false, splash = false, jet = false, dirt = false, heat = false, sky = false, orbit = false, farCam = false, nearCam = false, behind = false;
+    static bool parsed = false, dust = false, splash = false, jet = false, dirt = false, heat = false, sky = false, orbit = false, farCam = false, nearCam = false, behind = false, wheels = false, drive = false;
     if (!parsed) {
         parsed = true;
         std::string v = FxTestKey("FxTest");
         for (auto& ch : v) ch = (char)tolower(ch);
+        wheels = v.find("wheels") != std::string::npos; drive = v.find("drive") != std::string::npos;
         dust = v.find("dust") != std::string::npos; splash = v.find("splash") != std::string::npos;
         jet = v.find("jet") != std::string::npos; dirt = v.find("dirt") != std::string::npos; heat = v.find("heat") != std::string::npos; sky = v.find("sky") != std::string::npos; orbit = v.find("orbit") != std::string::npos; farCam = v.find("far") != std::string::npos; nearCam = v.find("near") != std::string::npos; behind = v.find("behind") != std::string::npos;
         if (!v.empty()) LOGC("fx test: %s", v.c_str());
@@ -93,7 +96,7 @@ void FxTestFrame()
             if (pit != 0 && oapiCameraInternal()) { oapiCameraSetCockpitDir(0, pit); LOGC("fx test: cockpit view up %.2f rad", pit); }
         }
     }
-    if (!dust && !splash && !jet && !dirt && !heat) return;
+    if (!dust && !splash && !jet && !dirt && !heat && !wheels && !drive) return;
     OBJHANDLE h = oapiGetFocusObject();
     if (!h || !oapiIsVessel(h)) return;
     VESSEL* v = oapiGetVesselInterface(h);
@@ -105,6 +108,16 @@ void FxTestFrame()
         const double x = (k & 1) ? 0.12 : -0.12;
         const double p[3] = { x, -alt + 0.03, 0.1 }, vel[3] = { 0, 0.6, -0.9 };
         AtmoFX_Emit(h, 9001, p, vel, 0.6, 0.6, on ? 0.08 : 0.0, 0, 0, 0.25, 0.0, 0.0);
+    }
+    if (wheels || drive) {   // the rim's tangent 40 deg up and back, the arc +-20 deg (TVChassis DustClient on regolith)
+        const double xs[4] = { 1.85, -1.85, 1.85, -1.85 }, zs[4] = { -1.65, -1.65, -3.3, -3.3 };
+        const double ph = 40 * PI / 180, R = 0.8;
+        // driving: the hubs carried forward at the rim's speed (the throw then has the vessel's 6 m/s added)
+        const double z0 = drive ? -40 + fmod(6 * t, 80.0) : 0, vz = drive ? 6 : 0;
+        for (int i = 0; i < 4; i++) {
+            const double p[3] = { xs[i], -alt + R - R * cos(ph), z0 + zs[i] - R * sin(ph) }, vel[3] = { 0, 6 * sin(ph), vz - 6 * cos(ph) };
+            AtmoFX_Emit(h, 9030 + i, p, vel, 20 * PI / 180, 0.35, 2.5, 0, 3, 0.0, 0.0, 0.0);
+        }
     }
     if (splash) {
         // thrown sideways (across the external camera's view, which looks along the vessel's z): the throw's profile

@@ -52,6 +52,9 @@ struct ClientCfg
     bool terrainNormals = true;   // per-pixel normals from the full elevation data (off: the mesh's vertex normals)
     bool geomorph = true;         // terrain LOD levels blend smoothly (CDLOD-style morphing; off: they pop)
     bool driverCacheOff = false; // the driver's disk shader cache kept out of the process (Client.cpp DriverCacheGuardBefore)
+    bool driverThreads = true;   // false: the device is made with PREVENT_INTERNAL_THREADING_OPTIMIZATIONS - the driver compiles
+                                 // shaders on our thread, one at a time (its own worker threads raced in its compiler on one
+                                 // tester's machine, 2026-10-21)
     int driverCacheMB = 600;     // above this the cache is set aside (1 GB ran Orbiter out of memory; a cold cache makes the start slow)
     bool ao = false;              // ambient occlusion (Ssao.cpp, GTAO: the sky's light only)
     bool visorDrops = true;       // drops on the suits' visors (VisorDrops.cpp)
@@ -254,7 +257,12 @@ struct Tile
     int maskClass = 0;                      // without a field: the mask round the tile all land (1), all liquid (-1)
     ComPtr<ID3D11ShaderResourceView> nmap;  // normals from its own elevation (257x257, planet frame; null: an ancestor's)
     ComPtr<ID3D11ShaderResourceView> hor[2];  // horizon sines in 8 directions (E, NE, N, NW / W, SW, S, SE), 65x65, with nmap
-    std::shared_ptr<const ElevQ> elev;  // 259x259 [m], own or interpolated from the parent; null once no child needs it
+    std::shared_ptr<const ElevQ> elev;  // 259x259 [m], its own data's; null once no child needs it (and on tiles without
+                                        // data of their own: those keep only a reference to the owner's, elevSrc)
+    std::shared_ptr<const ElevQ> elevSrc;   // where its heights come from: its own (= elev) or the nearest ancestor's with
+                                            // data (shared, not copied: interpolated copies of 134 KB a tile filled the
+                                            // 32-bit address space on a zoom, 2026-10-21); null once no child needs it
+    float esR = 1, esC = 1, esS = 1;        // sample (i, j) of this tile is the owner's (esR + esS*(i-1), esC + esS*(j-1))
     bool ownElev = false;
     bool hasElev = false;               // it had heights at its load (kept or not)
     std::shared_ptr<const ElevQ> nodes; // the mesh's own 65x65 node heights (every 4th sample), always kept (8 KB): what
@@ -462,7 +470,7 @@ public:
     void LightsFrame(const VECTOR3& cp);
     void LightsBind();
     void LightsRenderAir(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);
-    void LightsProbe();     // ... measured on the finished scene's depth (after the own vessel)
+    void LightsProbe(ID3D11ShaderResourceView* img);     // ... measured on the finished scene (its depth, its image)
     void LightsAdaptEye(XMFLOAT4& adapt, float& exposure);   // the eye adapts to the local lights where they light what it sees
     ID3D11ShaderResourceView* RenderBloom(ID3D11ShaderResourceView* src);   // Bloom.cpp: the glow for the post pass
     ComPtr<ID3D11RasterizerState> rsMirror;
@@ -649,6 +657,9 @@ public:
     // their visuals and everything kept for them go with them, never a pointer left to a deleted VESSEL
     void clbkNewVessel(OBJHANDLE hVessel) override;
     void clbkDeleteVessel(OBJHANDLE hVessel) override;
+    // the Sun's shadow map and its comparison sampler (t7, s2), for passes late in the frame whose slots others reused
+    ID3D11ShaderResourceView* ShadowSRV() const { return shadowSRV.Get(); }
+    ID3D11SamplerState* ShadowSampler() const { return sampShadow.Get(); }
 private:
     void RenderVessel(VesselVis* vv, const VECTOR3& camPos, const MATRIX3& camRot, const XMMATRIX& proj, bool alphaPass, const XMMATRIX* lightVP = nullptr);
     // shadows: one map from the Sun around the focus object
@@ -663,6 +674,16 @@ private:
     XMFLOAT4X4 casc[4] = {}; float cascFar[4] = {}, cascTex[4] = {}, cascRange[4] = {}; float sunDiam = 0.0093f;   // the shadow cascades: light VP, far end [m], texel [m]
     bool shadowOn = false;
     static const UINT SHADOW_N = 2048;
+    // the static casters' Sun shadows kept (RenderShadows): what stands still (a building, a parked vehicle) is drawn into
+    // its own atlas only when a tile's key changes, and copied into the atlas each frame under the people and what moves
+    struct ShadowTileKey { bool valid = false; long long iu = 0, iv = 0, iL = 0; double r = 0; uint64_t sig = 0; };
+    ShadowTileKey shKey[4];
+    ComPtr<ID3D11Texture2D> shadowStatTex;
+    ComPtr<ID3D11DepthStencilView> shadowStatDSV;
+    ComPtr<ID3D11ShaderResourceView> shadowStatSRV;
+    ComPtr<ID3D11VertexShader> vsShTile; ComPtr<ID3D11PixelShader> psShCopy, psShClear;
+    ComPtr<ID3D11DepthStencilState> dsShAlways;
+    int shStatDrawn = 0, shStatKept = 0;     // tiles of static casters drawn / taken from the cache (the stats line)
     void SaveShot(const char* path);
     void LoaderMain();
 };

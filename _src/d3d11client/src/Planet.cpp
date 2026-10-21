@@ -402,6 +402,26 @@ static bool DecodeBC3Alpha(const std::vector<BYTE>& b, int& w, int& h, std::vect
     return true;
 }
 
+// a work buffer's memory straight from the system (VirtualAlloc): released whole when it goes, so the addresses come back
+// at once - a buffer from the heap leaves its segment reserved, and hundreds of tiles a second of them shredded the 32-bit
+// address space (2026-10-21)
+template<class T> struct VAlloc
+{
+    using value_type = T;
+    VAlloc() = default;
+    template<class U> VAlloc(const VAlloc<U>&) {}
+    T* allocate(size_t n)
+    {
+        void* p = VirtualAlloc(nullptr, n * sizeof(T), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+        if (!p) throw std::bad_alloc();
+        return (T*)p;
+    }
+    void deallocate(T* p, size_t) { VirtualFree(p, 0, MEM_RELEASE); }
+    template<class U> bool operator==(const VAlloc<U>&) const { return true; }
+    template<class U> bool operator!=(const VAlloc<U>&) const { return false; }
+};
+template<class T> using VVec = std::vector<T, VAlloc<T>>;
+
 // squared Euclidean distance transform, one line (Felzenszwalb & Huttenlocher): f in, d out, n samples
 static void Edt1(const float* f, float* d, int n, int* v, float* z)
 {
@@ -416,7 +436,7 @@ static void Edt1(const float* f, float* d, int n, int* v, float* z)
     for (int q = 0; q < n; q++) { while (z[k + 1] < q) k++; float dq = (float)(q - v[k]); d[q] = dq * dq + f[v[k]]; }
 }
 // the squared distance from each cell of an n x n grid to the nearest cell where feat is set
-static void Edt2(const std::vector<uint8_t>& feat, int n, std::vector<float>& out)
+static void Edt2(const VVec<uint8_t>& feat, int n, VVec<float>& out)
 {
     std::vector<float> f(n), d(n), z(n + 1); std::vector<int> v(n);
     out.resize((size_t)n * n);
@@ -443,11 +463,19 @@ std::shared_ptr<std::vector<uint8_t>> Planet::MaskAlpha(int lvl, int ilat, int i
         auto it = maskCache.find(key);
         if (it != maskCache.end()) { w = it->second.second; return it->second.first; }
     }
+    // the alphas (256 KB at 512 x 512) come from a pool and go back to it when the last holder lets go: the cache is
+    // dropped wholesale every ~100 masks, and freeing them churned the heap like the coast's work buffers did
+    static std::mutex poolMx;
+    static std::vector<std::vector<uint8_t>*> pool;
+    auto give = [](std::vector<uint8_t>* p) { std::lock_guard<std::mutex> lk(poolMx); if (pool.size() < 32) pool.push_back(p); else delete p; };
     std::shared_ptr<std::vector<uint8_t>> a;
-    std::vector<BYTE> b; int h = 0; w = 0;
+    static thread_local std::vector<BYTE> b;   // the file's bytes: the loader thread's own
+    int h = 0; w = 0;
     std::string pm = LoosePath("Mask", lvl, ilat, ilng, ".dds");
     if (FileExists(pm) && ReadFileBytes(pm.c_str(), b)) {
-        auto v = std::make_shared<std::vector<uint8_t>>();
+        std::vector<uint8_t>* raw = nullptr;
+        { std::lock_guard<std::mutex> lk(poolMx); if (!pool.empty()) { raw = pool.back(); pool.pop_back(); } }
+        std::shared_ptr<std::vector<uint8_t>> v(raw ? raw : new std::vector<uint8_t>(), give);
         if (DecodeBC3Alpha(b, w, h, *v) && w == h) a = v; else w = 0;
     }
     std::lock_guard<std::mutex> lk(sdfMx);
@@ -472,7 +500,12 @@ ComPtr<ID3D11ShaderResourceView> Planet::CoastField(Tile* t, int& cls)
         if (a && (dx || dy) && w2 != W) a = nullptr;
         nb[dy + 1][dx + 1] = a;
     }
-    std::vector<uint8_t> land((size_t)N * N), liq((size_t)N * N);
+    // the work buffers (0.3-1.3 MB each at 512 x 512 masks) straight from the system (VVec): from the heap, at hundreds of
+    // tiles a second (a zoom, a look round), they left its segments reserved and the 32-bit address space ran out in
+    // minutes (testers' logs, 2026-10-21); kept per loader thread they held ~40 MB for good
+    VVec<uint8_t> land((size_t)N * N), liq((size_t)N * N);
+    VVec<float> dLand, dLiq, f, g;
+    VVec<uint16_t> out;
     bool anyL = false, anyQ = false;
     for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
         int gx = x - B, gy = y - B;
@@ -485,9 +518,8 @@ ComPtr<ID3D11ShaderResourceView> Planet::CoastField(Tile* t, int& cls)
         anyL |= l; anyQ |= !l;
     }
     if (!anyL || !anyQ) { cls = anyL ? 1 : -1; return nullptr; }
-    std::vector<float> dLand, dLiq;
     Edt2(land, N, dLand); Edt2(liq, N, dLiq);
-    std::vector<float> f((size_t)N * N), g((size_t)N * N);
+    f.resize((size_t)N * N); g.resize((size_t)N * N);
     for (size_t i = 0; i < f.size(); i++) f[i] = std::clamp(0.5f * (sqrtf(dLiq[i]) - sqrtf(dLand[i])), -(float)B, (float)B);   // midway between the last land and the first liquid texel
     // the masks' coast comes in steps of a few metres (drawn from a coarse grid): the field smoothed over ~4 m (three box
     // passes each way, a near-Gaussian) - its zero is a smooth curve through the steps, at every level alike
@@ -507,7 +539,7 @@ ComPtr<ID3D11ShaderResourceView> Planet::CoastField(Tile* t, int& cls)
         }
         f.swap(g);
     }
-    std::vector<uint16_t> out((size_t)W * W);
+    out.resize((size_t)W * W);
     for (int y = 0; y < W; y++) for (int x = 0; x < W; x++)
         out[(size_t)y * W + x] = PackedVector::XMConvertFloatToHalf(f[(size_t)(y + B) * N + (x + B)]);
     D3D11_TEXTURE2D_DESC td = {}; td.Width = td.Height = W; td.MipLevels = td.ArraySize = 1; td.Format = DXGI_FORMAT_R16_FLOAT;
@@ -573,15 +605,21 @@ void Planet::Load(Tile* t)
     if (FileExists(pe) && ReadFileBytes(pe.c_str(), b)) own = ParseElev(b, ef);
     else if (elevTree && elevTree->Read(t->lvl, t->ilat, t->ilng, b)) own = ParseElev(b, ef);
     have = own;
+    std::shared_ptr<const ElevQ> src;   // without data of its own: the owner's heights (the nearest ancestor with data)
+    float sR = 1, sC = 1, sS = 1;       // and where this tile's samples lie in them
     if (!own) {
         Tile* p = t->parent;
-        if (p && p->elev) {
-            const ElevQ& pe2 = *p->elev;
+        if (p && p->elevSrc) {
+            src = p->elevSrc;
+            const ElevQ& pe2 = *src;
             int a = (t->ilat & 1), c = (t->ilng & 1);     // a 0: northern half (upper rows), c 0: western half
-            double r0 = a ? 0.0 : 0.5, c0 = c ? 0.5 : 0.0;
+            // in the parent's samples this tile's (i, j) is (1 + 256 r0 + (i-1)/2, ...); through the parent's own mapping
+            // that is a point of the owner's grid - one bilinear from the owner, at every level below it
+            const float pr0 = 1 + 256.0f * (a ? 0.0f : 0.5f), pc0 = 1 + 256.0f * (c ? 0.5f : 0.0f);
+            sR = p->esR + p->esS * (pr0 - 1); sC = p->esC + p->esS * (pc0 - 1); sS = p->esS * 0.5f;
             ef.resize(259 * 259); have = true;
             for (int i = 0; i < 259; i++) for (int j = 0; j < 259; j++) {
-                double pr = 1 + 256.0 * (r0 + 0.5 * (i - 1) / 256.0), pc = 1 + 256.0 * (c0 + 0.5 * (j - 1) / 256.0);
+                double pr = sR + (double)sS * (i - 1), pc = sC + (double)sS * (j - 1);
                 pr = std::clamp(pr, 0.0, 257.999); pc = std::clamp(pc, 0.0, 257.999);
                 int i0 = (int)pr, j0 = (int)pc; double fr = pr - i0, fc = pc - j0;
                 double v = (pe2.at(i0 * 259 + j0) * (1 - fc) + pe2.at(i0 * 259 + j0 + 1) * fc) * (1 - fr) +
@@ -627,13 +665,15 @@ void Planet::Load(Tile* t)
     // the heights stay with the tile (in 16 bits) only while a child may still need them: a child without elevation data
     // of its own is interpolated from them. Where all four children have their own, they are dropped once the mesh is made
     // (~170 MB of floats were kept for every loaded tile on Titan)
+    // A tile without data of its own keeps no copy: only a reference to the owner's heights and its place in them
     bool keep = have;
     if (have) {
         bool all = true;
         for (int k = 0; k < 4 && all; k++) all = HasElev(t->lvl + 1, t->ilat * 2 + (k >> 1), t->ilng * 2 + (k & 1));
         keep = !all;
     }
-    t->elev = keep ? ElevQ::From(ef) : nullptr;
+    if (own) { t->elev = keep ? ElevQ::From(ef) : nullptr; t->elevSrc = t->elev; t->esR = t->esC = t->esS = 1; }
+    else { t->elev = nullptr; t->elevSrc = keep ? src : nullptr; t->esR = sR; t->esC = sC; t->esS = sS; }
     if (have) {
         static thread_local std::vector<float> tN;
         tN.resize(65 * 65);
@@ -661,7 +701,9 @@ void Planet::Load(Tile* t)
         double r = R + H(i, j);
         return _V(r * cos(lat) * cos(lng), r * sin(lat), r * cos(lat) * sin(lng));
     };
-    std::vector<TileVertex> v((G + 1) * (G + 1) + 4 * (G + 1));
+    static thread_local std::vector<TileVertex> tV;   // ~140 KB a tile: kept per loader thread (every element is written below)
+    std::vector<TileVertex>& v = tV;
+    v.resize((G + 1) * (G + 1) + 4 * (G + 1));
     double rad = 0, emin = 1e9, emax = -1e9;
     for (int i = 0; i <= G; i++) for (int j = 0; j <= G; j++) {
         VECTOR3 p = P(i, j);

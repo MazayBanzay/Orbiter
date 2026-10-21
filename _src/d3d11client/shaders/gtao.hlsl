@@ -147,8 +147,13 @@ float4 PSApply(VSOutA i) : SV_Target
         n = normalize(Nv.x * ex + Nv.y * ey + Nv.z * ez);
     }
     float3 sun = SunLight(wp) * ShadowAtN(wp, n) * saturate(dot(n, gSunDir.xyz));
-    float3 sky = SkyLight(n, wp);
-    float ls = dot(sun, 1.0 / 3), lk = dot(sky, 1.0 / 3);
+    float3 sky = SkyLight(n, wp) * (1 - VolumeWeight(wp));
+    // the local lamps (lights.hlsli): their direct light is not occluded (it has its own shadows), their bounce is - so the
+    // AO darkens only the indirect share (Frostbite: AO on indirect lighting only); indoors that share was ~1 (no Sun, a
+    // faint sky) and the AO darkened the lamps' own light (21.10.2026)
+    float3 lampD = LocalLightsDiffuse(wp, n, n, float3(1, 1, 1));
+    float3 lampI = gSkyK.z > 0.5 ? LocalFill(wp) * max(VolumeWeight(wp), 1 - SkyVisibility(wp, n)) : 0;
+    float ls = dot(sun + lampD, 1.0 / 3), lk = dot(sky + lampI, 1.0 / 3);
     float share = lk / max(ls + lk, 1e-9);
     float m = 1 - share * (1 - ao);
     if (m > 0.995) discard;

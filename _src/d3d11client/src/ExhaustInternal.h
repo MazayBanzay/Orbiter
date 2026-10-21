@@ -73,6 +73,12 @@ void SprayRender(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResourceView* d
 // the vessels' own exhausts (AddExhaust), volumetric (VesselExhaust.cpp): in the exhaust pass, t5/s3 bound
 void RenderVesselExhausts(D3D11Client* gc, const VECTOR3& cp);
 void SprayRelease();             // with the device (Spray.cpp)
+// soil thrown in a vacuum as ballistic sheets (Regolith.cpp): fed by the SOIL sources when the air is not dense
+void RegolithFeed(const ExScene& sc, uintptr_t key, const VECTOR3& p0, const VECTOR3& ax, const VECTOR3& gs, double speed,
+                  double cone, double kgps, double gy, const std::vector<XMFLOAT4>& boxes,   // boxes: the vessel's (local; c, 3 x axis+half)
+                  double ringIn = 0.5);   // a ring's inner edge (a share of its cone)
+void RegolithRender(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResourceView* depth);
+void RegolithRelease();          // with the device
 // the engines' smoke and condensate as a 3D flow (Smoke.cpp): one source per engine this frame
 struct SmokeSrc
 {

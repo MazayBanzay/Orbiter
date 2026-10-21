@@ -274,19 +274,22 @@ float CobbleVis(float3 Lg)
     return lerp(1, saturate(1 - occ / 0.008), gdK);
 }
 // the local lights on the ground (lights.hlsli's list and photometry), each shadowed by the cobbles
-float3 LocalLightsGround(float3 wp, float3 n, float3 ng, float3 alb)
+float3 LocalLightsGround(float3 wp, float3 n, float3 ng, float3 alb, float encl)
 {
     if (!LocalLightsOn()) return 0;
-    float3 s = 0, Ld;
+    float3 s = 0, Ld, fl = 0;
+    if (gSkyK.z < 0.5) encl = 0;
     uint2 cl = LocalCluster(wp);
     uint cnt = cl.y == 0xFFFFFFFF ? min((uint)gLGrid.w, 64) : cl.y;
     [loop] for (uint k = 0; k < cnt; k++) {
         LocalLightG L = tLights[cl.y == 0xFFFFFFFF ? k : tLIndex[cl.x + k]];
+        if (encl > 0.01) fl += LightFillOne(L, wp);
+        if (LightIsRect(L)) { s += RectIrradiance(L, wp, n); continue; }
         float3 E = LocalLightE(L, wp, ng, Ld);
         if (!any(E > 0)) continue;
         s += E * saturate(dot(n, Ld)) * CobbleVis(Ld);
     }
-    return alb * s;
+    return alb * (s + fl * encl);
 }
 
 float4 Shade(VSOut i)
@@ -298,13 +301,14 @@ float4 Shade(VSOut i)
     if (gMicF.w > 0 && gShadow.z < 11.5) Micro(i, alb, n);     // (test runs: SHADOWDBG 12, 13 profile without it)
     float sunVis = 1, skyOcc = 1;
     if (gGm.w > 0 && gShadow.z < 10.5) GroundDetail(i, alb, n, sunVis, skyOcc);   // (test runs: SHADOWDBG 11 profiles without it)
-    float nl = saturate(dot(n, gSunDir.xyz)) * (gShadow.z > 12.5 ? 1 : ShadowAtN(i.wp, normalize(i.n))) * sunVis;   // (13: without the shadow)
-    float3 sky = SkyLightShaded(n, i.wp, normalize(i.n)) * skyOcc * SkyVisibility(i.wp, normalize(i.n));   // under a vehicle less sky (lights.hlsli)
+    float nl = saturate(dot(n, gSunDir.xyz)) * (gShadow.z > 12.5 ? 1 : ShadowAtN(i.wp, normalize(i.n))) * sunVis * InteriorSun(i.wp);   // (13: without the shadow; inside a declared interior: through its openings only)
+    float3 sky = SkyLightShaded(n, i.wp, normalize(i.n)) * skyOcc * SkyVisibility(i.wp, normalize(i.n)) * (1 - VolumeWeight(i.wp));   // (none inside a declared interior)   // under a vehicle less sky (lights.hlsli)
     float3 col = alb * (nl * SunLight(i.wp) + sky);
     {   // headlights, lamps on the ground: the material's albedo (no sky occlusion in it), the detail normal softened (a near,
         // low light: the full one turns the cobbles to 0/1 patches), the cobbles' shadows towards each lamp
         float3 nL = normalize(lerp(normalize(i.n), n, 0.6));
-        col += LocalLightsGround(i.wp, nL, normalize(i.n), alb / max(gdF, 0.05) * gdFL);
+        const float enclG = gSkyK.z > 0.5 ? max(1 - SkyVisibility(i.wp, normalize(i.n)), VolumeWeight(i.wp)) : 0;   // airless: the bounce in an enclosed room (a hangar's floor)
+        col += LocalLightsGround(i.wp, nL, normalize(i.n), alb / max(gdF, 0.05) * gdFL, enclG);
     }
     if (gShadow.z > 1.5 && gShadow.z < 9.5) {
         float sl = dot(saturate(dot(n, gSunDir.xyz)) * sunVis * SunLight(i.wp), 1.0 / 3), kl = dot(SkyLight(n, i.wp) * skyOcc, 1.0 / 3);

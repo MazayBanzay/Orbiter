@@ -725,7 +725,10 @@ static bool StormAt(const VECTOR3& cp, double& mmh, VECTOR3& wind, double& alt)
     const double eyeR = C.eye * 1.05;
     const double eyeCut = std::clamp((rxy - eyeR * 0.9) / (eyeR * 0.2), 0.0, 1.0);
     const double depth = std::clamp((top - 2500.0) / 5000.0, 0.0, 1.0);   // showers from cumulus over ~2.5 km, downpours from the deep cells
-    mmh = cov * cov * (conv * 55.0 + (1 - conv) * 6.0) * depth * eyeCut;
+    // liquid rain only below the melting level (~4.5-5 km in a hurricane, the bands' two layers split there): above it
+    // the cloud holds snow and graupel - no rain streaks up there
+    const double melt = std::clamp((5500.0 - h) / 1000.0, 0.0, 1.0);
+    mmh = cov * cov * (conv * 55.0 + (1 - conv) * 6.0) * depth * eyeCut * melt;
     static double tl = -1e9; if (oapiGetSysTime() - tl > 20) { tl = oapiGetSysTime(); LOGC("storm rain map: r %.1f km, cover %.2f, top %.0f m, conv %.2f, eye %.2f -> %.1f mm/h", rxy / 1e3, cov, top, conv, eyeCut, mmh); }
     // the wind: the modified Rankine vortex of the map's flow, 80 % of it near the sea, the inflow turning it inwards
     const double rm = C.eye + 0.5 * C.wall, vmax = 62;

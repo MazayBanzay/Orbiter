@@ -177,15 +177,19 @@ struct TextScratch
     bool Ensure(int ww, int hh)
     {
         Get();
-        if (bmp && ww <= w && hh <= h) return true;
-        w = std::max(ww, w); h = std::max(hh, h);
-        BITMAPINFO bi = {}; bi.bmiHeader.biSize = sizeof(bi.bmiHeader); bi.bmiHeader.biWidth = w; bi.bmiHeader.biHeight = -h;
+        // selected again each time: the Sketchpad's end (RestoreDC) puts the DC's first bitmap back, and GDI's text then
+        // went into that 1x1 bitmap - the GPU Sketchpads' text (the MFDs') was empty
+        if (bmp && ww <= w && hh <= h) { SelectObject(dc, bmp); return true; }
+        const int nw = std::max(ww, w), nh = std::max(hh, h);
+        BITMAPINFO bi = {}; bi.bmiHeader.biSize = sizeof(bi.bmiHeader); bi.bmiHeader.biWidth = nw; bi.bmiHeader.biHeight = -nh;
         bi.bmiHeader.biPlanes = 1; bi.bmiHeader.biBitCount = 32; bi.bmiHeader.biCompression = BI_RGB;
-        HBITMAP nb = CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, (void**)&bits, nullptr, 0);
+        DWORD* nbits = nullptr;
+        HBITMAP nb = CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, (void**)&nbits, nullptr, 0);
         if (!nb) return false;
         HGDIOBJ prev = SelectObject(dc, nb);
-        if (!old) old = prev; else DeleteObject(prev);
-        bmp = nb; return true;
+        if (!old) old = prev;
+        if (bmp) DeleteObject(bmp);     // (not selected now)
+        bmp = nb; bits = nbits; w = nw; h = nh; return true;
     }
 };
 static TextScratch g_txt;
@@ -501,7 +505,8 @@ public:
         TEXTMETRICA tm; GetTextMetricsA(hdc, &tm);
         const int m = 2 + tm.tmHeight / 4, w = sz.cx + 2 * m, h = sz.cy + 2 * m;
         int tx = x, ty = y;
-        if (talign & TA_CENTER) tx -= sz.cx / 2; else if (talign & TA_RIGHT) tx -= sz.cx;
+        // (TA_CENTER is 6 and holds TA_RIGHT's bit 2: compared whole, or right-aligned text went half its width over the edge)
+        if ((talign & TA_CENTER) == TA_CENTER) tx -= sz.cx / 2; else if (talign & TA_RIGHT) tx -= sz.cx;
         if ((talign & TA_BASELINE) == TA_BASELINE) ty -= tm.tmAscent; else if (talign & TA_BOTTOM) ty -= sz.cy;
         float X, Y; Tr((float)tx, (float)ty, X, Y);
         if (bkOpaque) { gb->Prim(); gb->Tri(X, Y, X + sz.cx, Y, X + sz.cx, Y + sz.cy, bkcol); gb->Tri(X, Y, X + sz.cx, Y + sz.cy, X, Y + sz.cy, bkcol); }
@@ -1145,8 +1150,9 @@ void D3D11Client::clbkRender2DPanel(SURFHANDLE* hSurf, MESHHANDLE hMesh, MATRIX3
         if (!grp || !grp->nIdx || (grp->UsrFlag & 2)) continue;
         // the group's texture: TEXIDX_MFD0 and above name an MFD's surface, the rest index hSurf (or the mesh's own
         // textures when there is no hSurf)
+        // (SPEC_DEFAULT, 0xFFFFFFFF, lies above them too: no texture, not an MFD past the last one)
         Surf* s = nullptr;
-        if (grp->TexIdx >= TEXIDX_MFD0) s = (Surf*)GetMFDSurface((int)(grp->TexIdx - TEXIDX_MFD0));
+        if (grp->TexIdx >= TEXIDX_MFD0) { const UINT k = grp->TexIdx - TEXIDX_MFD0; if (k < MAXMFD) { s = (Surf*)GetMFDSurface((int)k); if (s) SurfToGpu(s); } }
         else if (hSurf) s = (Surf*)hSurf[grp->TexIdx];
         else s = (Surf*)oapiGetTextureHandle(hMesh, grp->TexIdx + 1);
         ID3D11ShaderResourceView* srv = s && s->srv ? s->srv.Get() : whiteTex.Get();

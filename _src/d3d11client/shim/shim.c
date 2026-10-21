@@ -17,4 +17,5 @@
 #pragma comment(linker, "/export:AtmoFX_HudFrame=D3D11Client.AtmoFX_HudFrame")
 #pragma comment(linker, "/export:AtmoFX_HudMarker=D3D11Client.AtmoFX_HudMarker")
 #pragma comment(linker, "/export:D3D11Hud_GetApi=D3D11Client.D3D11Hud_GetApi")   // D3D11Hud.h (HudApi.cpp)
+#pragma comment(linker, "/export:D3D11Lights_GetApi=D3D11Client.D3D11Lights_GetApi")   // D3D11Lights.h (LightsApi.cpp)
 BOOL WINAPI DllMain(HINSTANCE h, DWORD r, LPVOID p) { return TRUE; }
