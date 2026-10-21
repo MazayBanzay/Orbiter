@@ -31,7 +31,7 @@ try:
     for n, a in (("LeftUpLeg", -G), ("RightUpLeg", G), ("LeftFoot", G), ("RightFoot", -G)): turn(n, a)
     for s in ("Left", "Right"): turn(s + "UpLeg", -K, 'X'); turn(s + "Leg", 2 * K, 'X'); turn(s + "Foot", -K, 'X')
     cam = render_util.setup_stage(); sc = bpy.context.scene
-    sc.render.engine = 'BLENDER_EEVEE_NEXT'
+    sc.render.engine = os.environ.get('ENGINE', 'BLENDER_EEVEE_NEXT')
     w = sc.world.node_tree; bg = next(n for n in w.nodes if n.type == 'BACKGROUND'); bg.inputs[0].default_value = (0.3, 0.31, 0.33, 1); bg.inputs[1].default_value = 0.9
     sun = bpy.data.lights.new("SunK", 'SUN'); sun.energy = 3; so = bpy.data.objects.new("SunK", sun); sc.collection.objects.link(so); so.rotation_euler = (math.radians(50), 0, math.radians(35))
     def shot(name, loc, tgt, lens=60, res=(700, 900)):
@@ -43,6 +43,17 @@ try:
     shot("front", h + V((0, -4.2, 0.1)), h + V((0, 0, -0.05)))
     shot("shoulder", h + V((-1.2, 1.4, 0.85)), h + V((-0.25, 0, 0.45)), lens=70, res=(700, 700))
     shot("side", h + V((-4.0, -0.3, 0.1)), h + V((0, 0, -0.05)))
+    if os.environ.get("HIP") == "1":
+        hp = W @ arm.pose.bones["Hips"].head
+        shot("hip_back", hp + V((0.25, 1.6, -0.25)), hp + V((0, 0, -0.12)), lens=60, res=(700, 700))
+        shot("hip_side", hp + V((-1.7, -0.2, -0.2)), hp + V((0, 0, -0.12)), lens=60, res=(700, 700))
+    if os.environ.get("CLOSE") == "1":
+        hd = W @ arm.pose.bones["Head"].head
+        shot("helm_F", hd + V((0.25, -0.95, 0.12)), hd + V((0, -0.05, 0.08)), lens=70, res=(700, 700))
+        shot("helm_L", hd + V((0.75, 0.55, 0.15)), hd + V((0, 0, 0.05)), lens=70, res=(700, 700))
+        shot("helm_R", hd + V((-0.75, 0.55, 0.15)), hd + V((0, 0, 0.05)), lens=70, res=(700, 700))
+        el = W @ arm.pose.bones["LeftForeArm"].head
+        shot("elbow_L", el + V((0.9, 0.9, 0.2)), el, lens=70, res=(700, 700))
 except Exception:
     L.append(traceback.format_exc())
 open(LOG, "w", encoding="utf-8").write("\n".join(L) + "\n")

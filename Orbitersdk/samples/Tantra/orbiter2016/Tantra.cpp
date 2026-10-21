@@ -1689,6 +1689,26 @@ void Tantra::UpdateDamage(double dt) {
     ATMPARAM atm;
     oapiGetAtm(GetHandle(), &atm);
     f.ambientT = atm.T > 0.0 ? atm.T : 250.0;
+    {   // the Sun on the hull: 1/d^2 from its luminosity, none in a planet's shadow, dimmed through the air's column
+        const OBJHANDLE hSun = oapiGetGbodyByIndex(0);
+        VECTOR3 sp, gp; oapiGetGlobalPos(hSun, &sp); GetGlobalPos(gp);
+        const VECTOR3 d = sp - gp; const double dist = length(d), rs = oapiGetSize(hSun);
+        if (dist > rs) {
+            const VECTOR3 u = d / dist;
+            bool lit = true;
+            if (const OBJHANDLE ref = GetSurfaceRef(); ref && ref != hSun) {   // (near the Sun the reference is the Sun itself)
+                VECTOR3 c; oapiGetGlobalPos(ref, &c);
+                const double along = dotp(c - gp, u);
+                if (along > 0 && length((c - gp) - u * along) < oapiGetSize(ref)) lit = false;
+            }
+            if (lit) {
+                f.sunFlux = 3.828e26 / (4.0 * PI * dist * dist) * std::exp(-(std::max)(0.0, atm.p) / 3.2e5);
+                MATRIX3 R; GetRotationMatrix(R);
+                const VECTOR3 l = tmul(R, u);
+                f.sunX = l.x; f.sunY = l.y; f.sunZ = l.z;
+            }
+        }
+    }
     const tantra::CarriagePose& p = carriage_.Pose();
     dm::Exposure x;
     x.crests = x.fin = 1.0 - (std::max)(tuck_, p.tuck);

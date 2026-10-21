@@ -350,8 +350,47 @@ try:
                 R1 = R if n in KEEP else Rp1 @ (D.get(n, Matrix.Identity(3)) @ Rl)
                 out[n] = (R1, tp1 + Rp1 @ tl)
             return out
-        idle_frame = retarget(idle_frame)
+        # the turns D are taken against the clip-like idle (arms hanging, as in the walk and the run), so their swing stays
+        # about the sleeves; the idle itself is the suit's own stance exactly - the fit pose, square (2026-10-20: D against
+        # the rig's rest, arms out to the sides, drove the walking arms into the torso)
+        idle_frame = {n: (fitR[n], cp(Vector((M.translation.x, M.translation.y - 0.07, M.translation.z)) / 1.046)) for n, M in fitW.items() if n in bones}
         log.append("  pantsir: clips retargeted onto the suit's stance (%d bones)" % len(D))
+        # the legs swing fore and aft only: a hard suit's thighs and shins keep the stance's sideways angle (the mocap's
+        # walk sets the feet on one line, its legs swing in under the body - in the suit's thick legs they met and crossed,
+        # 2026-10-20). Per frame, each thigh and then each shin is turned about the model's forward axis (z) at its joint
+        # back to the idle's sideways angle; the feet keep the clip's own world orientation (flat soles)
+        kids = {}
+        for n_ in bones:
+            p_ = par1[n_]
+            while p_ is not None: kids.setdefault(p_, []).append(n_); p_ = par1[p_]
+        def side_angle(v): return math.atan2(v.x, -v.y)
+        LEGS = {sd + k: (sd + a_, sd + b_, sd + c_) for sd in ("Left", "Right") for k, (a_, b_, c_) in (("leg", ("UpLeg", "Leg", "Foot")), ("arm", ("Arm", "ForeArm", "Hand")))}
+        SQUARE_SEGS = {"LeftUpLeg", "LeftLeg", "RightUpLeg", "RightLeg", "LeftArm", "RightArm"}   # forearms swing free (2026-10-20: squared, they jerked)   # (the arms too: the run's forearm no longer crosses the chest)
+        A0 = {}
+        for sd, (u_, l_, f_) in LEGS.items():
+            A0[u_] = side_angle(idle_frame[l_][1] - idle_frame[u_][1]); A0[l_] = side_angle(idle_frame[f_][1] - idle_frame[l_][1])
+        def square_seq(frames_):
+            # per segment, over the whole cycle: the sideways correction of each frame, then smoothed round the loop (a
+            # 5-frame window) so it never jumps between frames - the arms jerked where the per-frame correction switched
+            frames_ = [dict(f_) for f_ in frames_]; n_f = len(frames_)
+            for sd, (u_, l_, f_) in LEGS.items():
+                for seg, nxt in ((u_, l_), (l_, f_)):
+                    if seg not in SQUARE_SEGS: continue
+                    ds = []
+                    for fr in frames_:
+                        v_ = fr[nxt][1] - fr[seg][1]
+                        fw = math.hypot(v_.x, v_.y) / max(v_.length, 1e-9); wgt = min(max((fw - 0.35) / 0.35, 0.0), 1.0); wgt = wgt * wgt * (3 - 2 * wgt)
+                        ds.append(((A0[seg] - side_angle(v_) + math.pi) % (2 * math.pi) - math.pi) * wgt)
+                    if n_f > 4: ds = [(ds[k - 2] + 2 * ds[k - 1] + 3 * ds[k] + 2 * ds[(k + 1) % n_f] + ds[(k + 2) % n_f]) / 9 for k in range(n_f)]
+                    for fr, d in zip(frames_, ds):
+                        piv = fr[seg][1]; Rm = Matrix.Rotation(d, 3, 'Z')
+                        for n_ in [seg] + kids.get(seg, []):
+                            R_, t_ = fr[n_]
+                            fr[n_] = (R_ if n_ in KEEP else Rm @ R_, piv + Rm @ (t_ - piv))
+            return frames_
+        _rt = retarget
+        retarget = lambda fr: square_seq([_rt(fr)])[0]
+        retarget_seq = lambda frs: square_seq([_rt(f_) for f_ in frs])
     write_clip("idle", [idle_frame], 30, 0.0, 0.0, 0, bones)
 
     for name, clip in CLIPS:
@@ -375,7 +414,7 @@ try:
         for i in range(a, b):
             line = hips[a] + span * ((i - a) / (b - a)); off = Matrix.Translation(Vector((rest_hips.x - line.x, rest_hips.y - line.y, 0)))
             frames.append({n: cm(heading @ off @ mats[i][n]) for n in bones})
-        if (VARIANT == "coverall" or os.environ.get("TANTRA_SUIT_SEAM") == "1") and b < len(mats):   # loop seam: coverall clips; suit only on request (its clips are pinned, the seam fix is applied to them as a delta)
+        if (VARIANT in ("coverall", "pantsir") or os.environ.get("TANTRA_SUIT_SEAM") == "1") and b < len(mats):   # (pantsir 2026-10-20: its own clips, the capture's seam jumped 37 deg in the arms)   # loop seam: coverall clips; suit only on request (its clips are pinned, the seam fix is applied to them as a delta)
             # close the loop: the next cycle's first frame never matches this one exactly (the head jumped 18 mm and
             # 2 deg at the seam, "a missing frame"). Spread that difference evenly over the cycle.
             off_b = Matrix.Translation(Vector((rest_hips.x - (hips[a] + span).x, rest_hips.y - (hips[a] + span).y, 0)))
@@ -623,7 +662,7 @@ try:
                     out[bn] = (Quaternion(acc).normalized().to_matrix(), (ta + 2 * tb + tc) / 4)
                 smooth.append(out)
             frames = smooth
-        if retarget is not None: frames = [retarget(f) for f in frames]
+        if retarget is not None: frames = retarget_seq(frames)
         write_clip(name, frames, fps, stride, stride / T, 1, bones)
         log.append("  %s cycle frames %d..%d (peaks %s)" % (clip, a, b, peaks))
 except Exception:

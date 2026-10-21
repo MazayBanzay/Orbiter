@@ -1,0 +1,15 @@
+az   0 el  0: Astronavigator.Astronavigator.female1605@0.031, HelmCapGr@0.047, HelmCapGr@0.050, HelmCapGr@0.050, HelmCapGr@0.054, HelmCapGd@0.068
+az   0 el  5: Astronavigator.Astronavigator.female1605@0.031, HelmCapGr@0.047, HelmCapGr@0.049, HelmCapGr@0.050, HelmCapGr@0.051, HelmCapGr@0.054
+az   0 el -5: Astronavigator.Astronavigator.female1605@0.031, HelmCapGr@0.047, HelmCapGr@0.050, HelmCapGr@0.054, HelmCapGd@0.069, HelmCapGr@0.078
+az  10 el  0: Astronavigator.Astronavigator.female1605@0.029, HelmCapGr@0.047, HelmCapGr@0.048, HelmCapGr@0.050, HelmCapGr@0.051, HelmCapGr@0.052
+az  10 el  5: Astronavigator.Astronavigator.female1605@0.030, HelmCapGr@0.048, HelmCapGr@0.049, HelmCapGr@0.050, HelmCapGr@0.051, HelmCapGr@0.053
+az  10 el -5: Astronavigator.Astronavigator.female1605@0.029, HelmCapGr@0.048, HelmCapGr@0.049, HelmCapGr@0.050, HelmCapGr@0.051, HelmCapGr@0.052
+az -10 el  0: Astronavigator.Astronavigator.female1605@0.029, HelmCapGr@0.047, HelmCapGr@0.048, HelmCapGr@0.050, HelmCapGr@0.051, HelmCapGr@0.051
+az -10 el  5: Astronavigator.Astronavigator.female1605@0.030, HelmCapGr@0.048, HelmCapGr@0.049, HelmCapGr@0.049, HelmCapGr@0.051, HelmCapGr@0.053
+az -10 el -5: Astronavigator.Astronavigator.female1605@0.029, HelmCapGr@0.048, HelmCapGr@0.049, HelmCapGr@0.050, HelmCapGr@0.051, HelmCapGr@0.052
+az  20 el  0: Astronavigator.Astronavigator.female1605@0.031, HelmCapGr@0.049, HelmCapGr@0.051, HelmCapGr@0.052, HelmCapGr@0.052, HelmCapGr@0.053
+az  20 el  5: Astronavigator.Astronavigator.female1605@0.031, HelmCapGr@0.049, HelmCapGr@0.051, HelmCapGr@0.053, HelmCapGr@0.054, HelmCapGr@0.056
+az  20 el -5: Astronavigator.eyebrow001@0.030, HelmCapGr@0.049, HelmCapGr@0.051, HelmCapGr@0.052, HelmCapGr@0.054, HelmCapGr@0.055
+az -20 el  0: Astronavigator.Astronavigator.female1605@0.031, HelmCapGr@0.049, HelmCapGr@0.051, HelmCapGr@0.052, HelmCapGr@0.053, HelmCapGr@0.054
+az -20 el  5: Astronavigator.Astronavigator.female1605@0.031, HelmCapGr@0.049, HelmCapGr@0.051, HelmCapGr@0.051, HelmCapGr@0.053, HelmCapGr@0.054
+az -20 el -5: Astronavigator.eyebrow001@0.030, HelmCapGr@0.049, HelmCapGr@0.051, HelmCapGr@0.052, HelmCapGr@0.054, HelmCapGr@0.055

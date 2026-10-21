@@ -27,6 +27,7 @@
 #include "LavaThermal.h"            // the lava field's rasters (Config\<body>\LavaField)
 #include "../AtmoFX/AtmoFXHeat.h"   // the AtmoFX client's heat shimmer over warm parts (nothing with another client)
 #include "../AtmoFX/AtmoFXPart.h"   // its free particles: the wheels' soil, the vents' ice (Orbiter's streams without it)
+#include "../AtmoFX/AtmoFXDirt.h"   // the AtmoFX client's dirt on the machine's lower body
 #include "../AtmoFX/AtmoFXMark.h"   // the AtmoFX client's marks on the ground: ruts, pits
 #include "../AtmoFX/AtmoFXWake.h"   // the AtmoFX client's wakes and rings on a liquid surface
 #include "../AtmoFX/AtmoFXFoam.h"   // the AtmoFX client's bubbles and foam from warm parts in a liquid
@@ -233,6 +234,13 @@ public:
         if (tv_.Load() && tv_.SocketRegister) tv_.SocketRegister(GetHandle(), &kSocket);
         stepsOut_ = park_ ? 1.0 : 0.0;
         snd_ = XRSound::CreateInstance(this);
+        // XRSound's own default sounds (tyres rolling, wheel chirp, touchdown, crunch, brakes, wind...) off: ours are physical
+        // (none through vacuum) - its were heard on the Moon (the user, 2026-10-21)
+        if (snd_ && snd_->IsPresent())
+        {
+            for (int id = XRSound::AirConditioning; id < XRSound::LastDefaultSound; ++id) snd_->SetDefaultSoundEnabled((XRSound::DefaultSoundID)id, false);
+            for (int id = XRSound::RadioATCGroup; id < XRSound::MusicFolder; ++id) snd_->SetDefaultSoundEnabled((XRSound::DefaultSoundID)id, false);
+        }
         if (snd_ && snd_->IsPresent()) {
             using PT = XRSound::PlaybackType;
             snd_->LoadWav(kSndDrive, "XRSound\\MPU\\drive.wav", PT::Global);          // played faster / slower with the speed
@@ -276,6 +284,12 @@ public:
                     if (mt > 0.0) { motTi_[i] = mt; motT_ = (std::max)(motT_, mt); }
                 }
             }
+            else if (!std::strncmp(line, "ATMOFX_MARK", 11)) AtmoFXMark::Load(GetHandle(), line + 11);   // its ruts and pits, to the client
+            else if (!std::strncmp(line, "PITN", 4)) {                            // the next pit's number of each wheel (so a new pit is new)
+                std::sscanf(line + 4, "%d %d %d %d %d %d %d %d", &pitN_[0], &pitN_[1], &pitN_[2], &pitN_[3], &pitN_[4], &pitN_[5], &pitN_[6], &pitN_[7]);
+                for (int& k : pitN_) k = (k + 1) % 50;                            // past the saved ones
+            }
+            else if (!std::strncmp(line, "DIRT", 4)) { std::sscanf(line + 4, "%lf %lf %lf %lf", &dirt_, &dirtC_[0], &dirtC_[1], &dirtC_[2]); dirt_ = Clamp(dirt_, 0.0, 1.0); }
             else if (!std::strncmp(line, "FLOOD", 5)) { std::sscanf(line + 5, "%lf", &floodV_); }   // m3 of the sea in the cabin
             else if (!std::strncmp(line, "CLOG", 4)) {                            // the sand stuck in each wheel's mesh, 0..1
                 std::sscanf(line + 4, "%lf %lf %lf %lf %lf %lf %lf %lf", &clog_[0], &clog_[1], &clog_[2], &clog_[3], &clog_[4], &clog_[5], &clog_[6], &clog_[7]);
@@ -307,6 +321,12 @@ public:
         { bool any = false; for (double c : clog_) any |= c > 0.005;
           if (any) { char cb2[128]; std::snprintf(cb2, sizeof cb2, "%.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f", clog_[0], clog_[1], clog_[2], clog_[3], clog_[4], clog_[5], clog_[6], clog_[7]);
                      oapiWriteScenario_string(scn, const_cast<char*>("CLOG"), cb2); } }
+        {   // the marks it left on the ground stay with the scenario (the client keeps them; ours: the newest 3000)
+            char pb[96]; std::snprintf(pb, sizeof pb, "%d %d %d %d %d %d %d %d", pitN_[0], pitN_[1], pitN_[2], pitN_[3], pitN_[4], pitN_[5], pitN_[6], pitN_[7]);
+            oapiWriteScenario_string(scn, const_cast<char*>("PITN"), pb);
+            AtmoFXMark::Save(GetHandle(), scn);
+        }
+        if (dirt_ > 0.002) { char db2[96]; std::snprintf(db2, sizeof db2, "%.3f %.3f %.3f %.3f", dirt_, dirtC_[0], dirtC_[1], dirtC_[2]); oapiWriteScenario_string(scn, const_cast<char*>("DIRT"), db2); }
         if (floodV_ > 0.001) { char fb[32]; std::snprintf(fb, sizeof fb, "%.3f", floodV_); oapiWriteScenario_string(scn, const_cast<char*>("FLOOD"), fb); }
         if (heatInit_) {                                                          // the heat nodes and their damage (TVHeat.h)
             for (int i = 0; i < mpu::kWheels; ++i) {
@@ -540,7 +560,7 @@ public:
             const bool cruise = cruise_;
             // stuck (the throttle open, hardly moving): the cruise drive's power, force and slip limits lift to the full drive over
             // ~3 s - a soft bank, a rut, a slope: it climbs out; moving off, the slip allowed is wider at low speed (a start)
-            if (cruise && drive_ > 0.5 && vAbs < 1.0) stuckT_ += simdt; else stuckT_ = (std::max)(0.0, stuckT_ - 2.0 * simdt);
+            if (cruise && std::fabs(drive_) > 0.5 && vAbs < 1.0) stuckT_ += simdt;   // backwards too (the user: «задний ход почти пропал») else stuckT_ = (std::max)(0.0, stuckT_ - 2.0 * simdt);
             const double boost = Clamp(stuckT_ / 2.0 - 0.5, 0.0, 1.0);
             if (boost > 0.0 && !boostWas_) {                                       // and why, for the log
                 double dg = 0.0, cl = 0.0, sk = 0.0; for (int i = 0; i < mpu::kWheels; ++i) { dg = (std::max)(dg, dig_[i]); cl = (std::max)(cl, clog_[i]); sk += sink_[i] / mpu::kWheels; }
@@ -645,7 +665,10 @@ public:
             double digMean = 0.0; for (double dg : dig_) digMean += dg / mpu::kWheels;   // settled into its holes: that much lower
             const double sag = GetAltitude(ALTMODE_GROUND) - (mpu::kCgH - kSag + ride_ - digMean);
             const bool settled = std::fabs(v.y) < 0.03 && std::fabs(sag) < 0.015;
-            if ((buoyFrac_ < 0.9 && ((still_ > 0.5 && settled) || still_ > 4.0)) || (contact && oapiGetTimeAcceleration() > 4.0)) {
+            // never on its side or roof: the re-seat stands it on its wheels - a rolled machine stays where it lies
+            VECTOR3 upH; HorizonRot(_V(0, 1, 0), upH);
+            const bool upright = upH.y > 0.75;
+            if (upright && ((buoyFrac_ < 0.9 && ((still_ > 0.5 && settled) || still_ > 4.0)) || (contact && oapiGetTimeAcceleration() > 4.0))) {
                 if (!restPending_) Probe("rest: still %.2f s, |v| %.3f m/s, vertical %.3f m/s, %+.3f m off its height, load %.2f of mg", still_, length(v), v.y, sag, nSum / (GetMass() * g));
                 restPending_ = true;                                              // at the next step's start (above)
             }
@@ -661,6 +684,7 @@ public:
         ImmersionStep(simdt, st.status != 1 && !restedNow);
         HeatStep(simdt);
         ProbeStep(simdt);
+        Dirt(simdt);
         MotorThermal(simdt);
         powerW_ = powerW;
         powerAvg_ += (powerW - powerAvg_) * Clamp(simdt / 30.0, 0.0, 1.0);    // the draw over the last half minute
@@ -701,6 +725,7 @@ public:
 
     bool clbkDrawHUD(int mode, const HUDPAINTSPEC* hps, oapi::Sketchpad* skp) override {
         VESSEL4::clbkDrawHUD(mode, hps, skp);
+        if (!cab_ && !selftest_) return true;                    // МПУ: no readouts over the outside view (the user, 2026-10-21)
         char buf[160];
         const int x = hps->W / 40, y = hps->H - hps->H / 6, dy = hps->H / 30;
         if (selftest_) { const char* t = "SELF-TEST: the MPU drives a fixed course, controls off"; skp->Text(x, y - 2 * dy, t, (int)std::strlen(t)); }
@@ -1235,10 +1260,11 @@ protected:
     // radius - a contact: the closing speed along the normal is taken out in one step (a dead, slightly springy stop) and
     // the overlap pushed back. The ship is the immovable side.
     void Obstacles(double dt) {
-        static tantraOuterSolids_t fn = nullptr;
-        static bool looked = false;
-        if (!looked) { looked = true; if (HMODULE h = GetModuleHandleA("Tantra.dll")) fn = (tantraOuterSolids_t)GetProcAddress(h, "tantraOuterSolids"); }
-        if (!fn) { if (HMODULE h = GetModuleHandleA("Tantra.dll")) fn = (tantraOuterSolids_t)GetProcAddress(h, "tantraOuterSolids"); if (!fn) return; }
+        // the same solids from the buildings (TVehicles.dll tvOuterSolids, TVBuilding.h: the technical point's walls and gate)
+        static tantraOuterSolids_t fns[2] = {};
+        if (!fns[0]) if (HMODULE h = GetModuleHandleA("Tantra.dll")) fns[0] = (tantraOuterSolids_t)GetProcAddress(h, "tantraOuterSolids");
+        if (!fns[1]) if (HMODULE h = GetModuleHandleA("TVehicles.dll")) fns[1] = (tantraOuterSolids_t)GetProcAddress(h, "tvOuterSolids");
+        if (!fns[0] && !fns[1]) return;
         VECTOR3 me;
         GetGlobalPos(me);
         const double m = GetMass();
@@ -1249,7 +1275,8 @@ protected:
             oapiGetGlobalPos(h, &sp);
             if (length(sp - me) > 400.0) continue;
             TantraSolid sol[32];
-            const int n = fn(h, sol, 32);
+            int n = 0;
+            for (tantraOuterSolids_t fn : fns) if (fn && n <= 0) n = fn(h, sol, 32);
             if (n <= 0) continue;
             VESSEL* ship = oapiGetVesselInterface(h);
             ThrownAgainst(ship, sol, n);
@@ -1514,7 +1541,9 @@ protected:
         case 4: gnd = AtmoFXPart::LIQUID; wet = 1.0; delta = 0.0; return;          // in the liquid: nothing thrown here
         default: break;
         }
-        if (!std::strcmp(body, "Moon") || !std::strcmp(body, "Io")) { gnd = AtmoFXPart::REGOLITH; wet = 0.0; delta = 4.0e-4; }   // loose fine regolith
+        // loose fine regolith: ~0.1 mm a pass - the Apollo 16 film's dust loops are translucent (optical depth ~0.4 across a
+        // ~1 m loop with ~15 m2/kg of the soil's fines: ~0.02 kg a burst, ~0.08 kg/s a wheel at 2.5 m/s, 0.23 m wide)
+        if (!std::strcmp(body, "Moon") || !std::strcmp(body, "Io")) { gnd = AtmoFXPart::REGOLITH; wet = 0.0; delta = 1.0e-4; }
         else if (!std::strcmp(body, "Mars")) { gnd = AtmoFXPart::DRY; wet = 0.0; delta = 3.0e-4; }
         else if (!std::strcmp(body, "Earth")) { gnd = AtmoFXPart::DRY; wet = 0.15; delta = 1.0e-4; }      // firm loam: a thin loose skin
         else if (!std::strcmp(body, "Titan")) { gnd = AtmoFXPart::DRY; wet = 0.25; delta = 3.0e-4; }
@@ -1543,23 +1572,35 @@ protected:
             double kg = 0.0;
             if (n_[i] > 0.0 && vr > 0.3 && gnd != AtmoFXPart::LIQUID) {
                 const double rho = soilW_[i] ? soilW_[i]->rho : 1500.0;
-                kg = rho * mpu::kWheelW * (delta * vr + 0.003 * std::fabs(rim - vf_[i]));
+                // (a slipping tyre digs: 3 mm of the ground a metre of slip - on the regolith the same in the share of its pass)
+                const double dig = gnd == AtmoFXPart::REGOLITH ? 0.003 * 1.0e-4 / 4.0e-4 : 0.003;
+                kg = rho * mpu::kWheelW * (delta * vr + dig * std::fabs(rim - vf_[i]));
             }
             const double late = gnd == AtmoFXPart::WET ? 1.0 : Clamp(wet * 2.0, 0.0, 1.0);   // damp soil clings longer
-            const double phi = (15.0 + (30.0 + 15.0 * late) * U01()) * RAD;
+            // regolith (the client flies it in a vacuum as one ballistic sheet): the whole arc it leaves over at once - its
+            // middle and its half-width as the cone; elsewhere a fresh angle each frame over the arc
+            const bool arc = gnd == AtmoFXPart::REGOLITH;
+            // (regolith: 20-60 deg up - the Apollo 16 film's dust tip left at 45-55 deg, the rest lower and higher)
+            const double arcW = arc ? 40.0 * RAD : (30.0 + 15.0 * late) * RAD;
+            const double phi = arc ? 20.0 * RAD + 0.5 * arcW : (15.0 + (30.0 + 15.0 * late) * U01()) * RAD;
             const VECTOR3 at = _V(W.hub[0], W.hub[1] - R * std::cos(phi) - ride_, W.hub[2] - s * R * std::sin(phi));
-            AtmoFXPart::Emit(GetHandle(), 8000 + i, at, _V(0.0, std::sin(phi), -s * std::cos(phi)) * vr, 0.12, 0.35, kg,
+            AtmoFXPart::Emit(GetHandle(), 8000 + i, at, _V(0.0, std::sin(phi), -s * std::cos(phi)) * vr, arc ? 0.5 * arcW : 0.12, 0.35, kg,
                              AtmoFXPart::SOIL, gnd, wet, 0.0, 0.0);
-            const double clods = n_[i] > 0.0 && vr > 1.0 && clog_[i] > 0.05 ? 0.4 * clog_[i] * mpu::kWheelW * vr : 0.0;
+            // (the airless regolith's film, GroundFeel: what the rim sheds of it - the film's ~5 kg on a full tyre (1 mm over
+            // its 3.3 m2) at the shedding rate; it leaves as dry aggregates of the ground's colour, not wet clods)
+            const bool film = regolith_ && gndKind_[i] < 0;
+            const double clods = n_[i] > 0.0 && vr > 1.0 && clog_[i] > 0.05
+                                 ? (film ? 5.0 * std::pow(vr / 10.0, 2.0) / 20.0 * clog_[i] : 0.4 * clog_[i] * mpu::kWheelW * vr) : 0.0;
             const double phi2 = (25.0 + 35.0 * U01()) * RAD;
             const VECTOR3 at2 = _V(W.hub[0], W.hub[1] - R * std::cos(phi2) - ride_, W.hub[2] - s * R * std::sin(phi2));
             AtmoFXPart::Emit(GetHandle(), 8100 + i, at2, _V(0.0, std::sin(phi2), -s * std::cos(phi2)) * vr, 0.10, 0.3, clods,
-                             AtmoFXPart::SOIL, AtmoFXPart::WET, 0.9, 0.0, 0.0);
+                             AtmoFXPart::SOIL, film ? AtmoFXPart::REGOLITH : AtmoFXPart::WET, film ? 1.0 : 0.9, 0.0, 0.0);
         }
     }
     void Dust() {
         const bool air = GetAtmPressure() > 50.0;
         char nm[64] = ""; if (OBJHANDLE ref = GetSurfaceRef()) oapiGetObjectName(ref, nm, sizeof nm);
+        regolith_ = !std::strcmp(nm, "Moon") || !std::strcmp(nm, "Io") || (nm[0] && !air && GetAtmDensity() < 1e-4 && std::strcmp(nm, "Titan"));
         if (AtmoFXPart::Available()) {                                         // the client flies it: Orbiter's streams off
             if (dustMade_) { for (PSTREAM_HANDLE& h : dust_) if (h) { DelExhaustStream(h); h = nullptr; } dustMade_ = false; }
             DustClient(nm);
@@ -1623,7 +1664,9 @@ protected:
         if (api_.Ok() && api_.PersonOfBody && api_.ShipOf) {
             const OBJHANDLE f = oapiGetFocusObject();
             const int pid = f ? api_.PersonOfBody(f) : 0;
-            if (pid && api_.ShipOf(pid) == GetHandle()) att = (std::max)(att, cab_ ? 0.8 : 0.4);
+            // in the cabin: the motors through the structure and the cabin's air - fully heard (the user, 2026-10-21: «пусть
+            // будет нормально слышно»); on the open deck only through an air outside, in vacuum nothing
+            if (pid && api_.ShipOf(pid) == GetHandle()) att = (std::max)(att, cab_ ? 1.0 : (air > 0.01 ? 0.4 : 0.0));
         }
         sfxAtt_ = (std::max)(att, 0.0);
         const bool aboard = att >= (cab_ ? 0.79 : 0.39);                  // a person of ours aboard (the structure carries it)
@@ -1729,7 +1772,7 @@ protected:
         if (probeAcc_ >= 1.0) { probeAcc_ = 0.0; probeN_ = 0; }
         double lng, lat, rad; GetEquPos(lng, lat, rad);
         const double e = oapiSurfaceElevation(ref, lng, lat), R = oapiGetSize(ref);
-        if (probeElev_ > -1e8 && std::fabs(e - probeElev_) > 0.005) Probe("the terrain under it changed %+.3f m (elevation %.3f) - a tile arrived?", e - probeElev_, e);
+        if (probeElev_ > -1e8 && (GetFlightStatus() & 1) && std::fabs(e - probeElev_) > 0.005) Probe("the terrain under it changed %+.3f m (elevation %.3f) - a tile arrived?", e - probeElev_, e);
         probeElev_ = e;
         const int status = (GetFlightStatus() & 1) ? 1 : 0;
         if (status != probeStatus_) { Probe("Orbiter status %s, altitude %.3f m, driving mode %d", status ? "LANDED" : "free", GetAltitude(ALTMODE_GROUND), drivingMode_ ? 1 : 0); probeStatus_ = status; }
@@ -1881,15 +1924,20 @@ protected:
         // slip three times its own sinkage more, no deeper (before: without a bound - 26 cm in seconds on the wet margin);
         // it gets there at ~1 cm per metre of slip (the chevrons carry the soil out behind), softer soils faster
         const double vs = std::fabs(r - vf);
-        const double s = Clamp(vs / (std::max)((std::max)(std::fabs(r), std::fabs(vf)), 0.05), 0.0, 1.0);
+        // the slip the soil is sheared at: the traction's own (sl) - at a standstill the kinematic ratio is always 1 and made
+        // every start dig the full hole (the user, 2026-10-19: stuck on the wet margin even without Shift); a true spin: 1
+        const double s = sl >= 0.999 ? 1.0 : Clamp(std::fabs(sl), 0.0, 0.999);
         const double digT = w.z * ((1.0 + s) / (1.0 - 0.5 * s) - 1.0);
         const double kDig = 0.01 * Clamp(4.0e5 / (std::max)(S.kphi, 1.0), 0.05, 2.0);
         if (dig_[i] < digT) dig_[i] = (std::min)(digT, dig_[i] + kDig * vs * dt);
+        // spinning in place (the machine not moving) it goes on throwing the soil out past that: a third as fast, until the
+        // belly lies on the ground (the user, 2026-10-19: «закопаться она может глубже») - out of that, only a tow
+        else if (sl >= 0.999 && std::fabs(vf) < 0.1 && vs > 0.5) dig_[i] += 0.3 * kDig * vs * dt;   // only a true spin
         // rolling on, it leaves the hole behind (over ~3 m) - always, not only without slip: on the cruise drive's 8 % the
         // hole had grown on the move to its 0.32 m cap within a minute on Titan's sand and the machine bogged in its own rut
         // (the user, 2026-10-19: «иногда застревают»); now with a steady slip s it holds kDig s/(1-s) 3 m - ~1 mm at 8 %
         dig_[i] -= dig_[i] * std::fabs(vf) * dt / 3.0;
-        dig_[i] = Clamp(dig_[i], 0.0, 0.4 * mpu::kWheelR);
+        dig_[i] = Clamp(dig_[i], 0.0, 0.5);                                       // ~ the belly's clearance
         return r;
     }
     // ---------------- in a liquid (the user, 2026-10-19: Titan's seas, «как есть в реалиях») ----------------
@@ -2159,7 +2207,9 @@ protected:
     double rutPath_[mpu::kWheels] = {}, pitDepth_[mpu::kWheels] = {};
     int pitN_[mpu::kWheels] = {};
     void Marks(int i, double vf, double delta, double dt) {
-        if (!AtmoFXMark::Available() || n_[i] <= 0.0 || height_[i] > 0.05) return;
+        // off until the client draws them right (2026-10-19: black blots under the machine - the user: «это что??? следы???»)
+        static constexpr bool kMarksOn = true;
+        if (!kMarksOn || !AtmoFXMark::Available() || n_[i] <= 0.0 || height_[i] > 0.05) return;
         const auto& W = mpu::kWheel[i];
         const VECTOR3 at = _V(W.hub[0], W.hub[1] - mpu::kWheelR - ride_ - height_[i], W.hub[2]);   // the ground under it
         const VECTOR3 dir = _V(std::sin(delta), 0.0, std::cos(delta));
@@ -2185,10 +2235,77 @@ protected:
             pitDepth_[i] = 0.0; pitN_[i] = (pitN_[i] + 1) % 50;                    // that one stays; the next is new
         }
     }
+    // ---------------- the dirt on the machine (the user, 2026-10-19, «1-4 можно делать»: dirt by the world and the mileage;
+    // drawn by the AtmoFX client - AtmoFXDirt: dense up to topY in the vessel frame, fading over ~0.6 m above, a light film on
+    // the top faces). The amount grows with the distance driven on loose ground, e-fold per L metres by what it is - Titan's
+    // wet margin (sticky, methane-damp tholin sand) 150 m, its sand 400, regolith 600, Mars 500, Io's crust and sulphur
+    // 500, Earth's loam 1500, pebbles and ice 2000 - faster still where the wheels spin and throw it; a liquid it wades in
+    // rinses the loose part off (~2 min). Its colour: what it picked up, mixed by the share each added
+    double dirt_ = 0.0, dirtC_[3] = {0.35, 0.30, 0.25}, dirtSent_ = -1.0, dirtT_ = 0.0;
+    // the body as boxes for the AtmoFX client's particles (AtmoFXPart::Box: they bounce off, stick or slide, the dust's
+    // sprites keep out - the user, 2026-10-19: «частицы и пыль могут не проходить сквозь ЭМПУ?»). Above the wheels only (the
+    // dust and the spray start at the wheels: a source inside a box is pushed out at once). Vessel frame, sent once
+    bool boxesSent_ = false;
+    void Boxes() {
+        if (boxesSent_) return;
+        boxesSent_ = true;
+        AtmoFXPart::Box(GetHandle(), 1, _V(0.0, 0.08, 0.0), _V(0.8, 0.45, 4.3));                        // the spine
+        AtmoFXPart::Box(GetHandle(), 2, _V(0.0, 0.67, 0.0), _V(kBodyX, 0.06, 0.5 * (kBodyZ1 - kBodyZ0)));   // the deck over the wheels
+        if (cab_) AtmoFXPart::Box(GetHandle(), 3, _V(0.0, 0.5 * (kDeckY + 2.85), -0.2), _V(1.5, 0.5 * (2.85 - kDeckY), 4.1));   // the cabin
+        else AtmoFXPart::Box(GetHandle(), 3, _V(0.0, kDeckY + 0.6, 3.6), _V(0.5, 0.6, 0.4));             // the post
+        // the wheels (ids 100+: the client's vacuum regolith alone - the grains the front wheels throw back meet the rear ones)
+        for (int i = 0; i < mpu::kWheels; ++i)
+            AtmoFXPart::Box(GetHandle(), 100 + i, _V(mpu::kWheel[i].hub[0], mpu::kWheel[i].hub[1], mpu::kWheel[i].hub[2]), _V(0.5 * mpu::kWheelW, mpu::kWheelR, mpu::kWheelR));
+    }
+    void Dirt(double dt) {
+        Boxes();
+        OBJHANDLE ref = GetSurfaceRef();
+        if (!ref || dt <= 0.0) return;
+        char nm[64] = ""; oapiGetObjectName(ref, nm, sizeof nm);
+        int cnt[5] = {}; for (int i = 0; i < mpu::kWheels; ++i) if (gndKind_[i] >= 0 && gndKind_[i] < 5) ++cnt[gndKind_[i]];
+        int k = -1, kn = 0; for (int q = 0; q < 5; ++q) if (cnt[q] > kn) { kn = cnt[q]; k = q; }
+        double L = 1500.0, c[3] = {0.38, 0.31, 0.23};
+        if (!std::strcmp(nm, "Titan")) {
+            if (k == tvground::WET) { L = 150.0; c[0] = 0.22; c[1] = 0.15; c[2] = 0.09; }
+            else if (k == tvground::PEBBLES || k == tvground::ICE) { L = 2000.0; c[0] = 0.40; c[1] = 0.32; c[2] = 0.22; }
+            else { L = 400.0; c[0] = 0.30; c[1] = 0.20; c[2] = 0.12; }
+        }
+        else if (!std::strcmp(nm, "Moon")) { L = 600.0; c[0] = 0.42; c[1] = 0.41; c[2] = 0.39; }
+        else if (!std::strcmp(nm, "Mars")) { L = 500.0; c[0] = 0.55; c[1] = 0.32; c[2] = 0.20; }
+        else if (!std::strcmp(nm, "Io")) { L = 500.0; c[0] = 0.70; c[1] = 0.62; c[2] = 0.28; }
+        const bool moving = (GetFlightStatus() & 1) == 0;
+        double add = 0.0;
+        if (moving) {
+            double path = 0.0, spin = 0.0, on = 0.0;
+            for (int i = 0; i < mpu::kWheels; ++i) if (n_[i] > 0.0) { path += std::fabs(vf_[i]) * dt; spin += std::fabs(wRim_[i] - vf_[i]) * dt; on += 1.0; }
+            if (on > 0.0) add = (path / on + 2.0 * spin / on) / L;            // thrown by the spinning too
+        }
+        if (add > 0.0) {
+            const double d0 = dirt_, d1 = d0 + add * (1.0 - d0);
+            for (int q = 0; q < 3; ++q) dirtC_[q] = d1 > 0.0 ? (dirtC_[q] * d0 + c[q] * (d1 - d0)) / d1 : c[q];
+            dirt_ = d1;
+        }
+        if (wadeDepth_ > 0.1) dirt_ -= dirt_ * (1.0 - std::exp(-dt / 120.0)) * 0.5;   // rinsed (the half that is loose)
+        dirt_ = Clamp(dirt_, 0.0, 1.0);
+        if ((dirtT_ += dt) > 0.5 && (std::fabs(dirt_ - dirtSent_) > 0.01 || dirtSent_ < 0.0)) {
+            dirtT_ = 0.0; dirtSent_ = dirt_;
+            AtmoFXDirt::Set(GetHandle(), dirt_, dirtC_[0], dirtC_[1], dirtC_[2], -0.2);   // dense to the hubs and the belly
+        }
+    }
     void GroundFeel(int i, double vf, double dt) {
         const double v = std::fabs(vf);
         const int k = gndKind_[i];
-        if (k < 0 || dt <= 0.0) return;
+        if (dt <= 0.0) return;
+        if (k < 0) {
+            // off a site raster, an airless body's regolith: its fines cling to the tyre (van der Waals, and the charge the
+            // grains take in the Sun's UV - the Apollo rovers came back grey to the hubs), a dust film to about half the
+            // sticky sand's clog, built over ~250 m; flung off as the rim speeds up (DustClient throws what is shed)
+            if (!regolith_) return;
+            if (n_[i] > 0.0) clog_[i] += v * dt / 250.0 * (1.0 - clog_[i] / 0.5);   // picked up only in contact
+            clog_[i] -= std::pow(v / 10.0, 2.0) * dt / 20.0 * clog_[i];
+            clog_[i] = Clamp(clog_[i], 0.0, 0.5);
+            return;
+        }
         if (k == tvground::SAND || k == tvground::WET || k == tvground::LIQUID) clog_[i] += v * dt / (k == tvground::SAND ? 300.0 : 80.0) * (1.0 - clog_[i]);
         else clog_[i] -= v * dt / 40.0 * clog_[i];
         clog_[i] -= std::pow(v / 10.0, 2.0) * dt / 20.0 * clog_[i];
@@ -2203,6 +2320,7 @@ protected:
     const Soil* soilW_[mpu::kWheels] = {&kMoonSoil, &kMoonSoil, &kMoonSoil, &kMoonSoil, &kMoonSoil, &kMoonSoil, &kMoonSoil, &kMoonSoil};
     int gndKind_[mpu::kWheels] = {-1, -1, -1, -1, -1, -1, -1, -1};
     double clog_[mpu::kWheels] = {}, bumpT_[mpu::kWheels] = {}, bumpF_[mpu::kWheels] = {};
+    bool regolith_ = false;                                          // on an airless body's regolith (Dust(): the tyres' film)
 
     double LocalG() const {
         OBJHANDLE ref = GetSurfaceRef();
@@ -2220,7 +2338,7 @@ protected:
         k_ = m * g / (mpu::kWheels * kSag);
         const double c = 2.0 * 0.7 * std::sqrt(k_ * m / mpu::kWheels);
         const int order[8] = {1, 7, 6, 0, 2, 3, 4, 5};   // front left, rear left, rear right, then the rest
-        TOUCHDOWNVTX t[16];
+        TOUCHDOWNVTX t[32];
         int n = 0;
         for (int k : order) {
             const auto& W = mpu::kWheel[k];
@@ -2231,6 +2349,12 @@ protected:
         const VECTOR3 hull[8] = {{-0.5, -0.37, 4.0}, {0.5, -0.37, 4.0}, {-0.5, -0.37, -4.0}, {0.5, -0.37, -4.0},
                                  {-1.25, -0.06, 4.35}, {1.25, -0.06, 4.35}, {-1.25, -0.06, -4.35}, {1.25, -0.06, -4.35}};
         for (const VECTOR3& p : hull) t[n++] = {p, 10.0 * k_, 2.0 * c, 0.8, 0.8};
+        // the roof and the upper sides (the user, 2026-10-19: rolled over on Io, the body sank into the ground - «крыша должна
+        // быть физической»): on its roof or its side it lies on these, as stiff as the belly's
+        const double zf = bz1_ - 0.3, zr = bz0_ + 0.3, ym = 0.5 * (btop_ - 0.37), xr = cab_ ? 1.5 : kDeckX;
+        const VECTOR3 top[8] = {{-xr, btop_, zf}, {xr, btop_, zf}, {-xr, btop_, zr}, {xr, btop_, zr},
+                                {-kBodyX, ym, zf}, {kBodyX, ym, zf}, {-kBodyX, ym, zr}, {kBodyX, ym, zr}};
+        for (const VECTOR3& p : top) t[n++] = {p, 10.0 * k_, 2.0 * c, 0.8, 0.8};
         SetTouchdownPoints(t, n);
     }
 

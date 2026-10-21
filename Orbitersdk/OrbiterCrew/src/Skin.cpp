@@ -623,6 +623,26 @@ namespace ocrew
 		return oapiSetMaterialEx(dev, static_cast<DWORD>(mtrl), Emission, &v);
 	}
 
+	int Skin::SetDiffuse(int mtrl, float r, float g, float b, float a)
+	{
+		if (!dev || mtrl < 0) return -1;
+		const oapi::FVECTOR4 v(r, g, b, a);
+		return oapiSetMaterialEx(dev, static_cast<DWORD>(mtrl), Diffuse, &v);
+	}
+
+	int Skin::SetSpecular(int mtrl, float r, float g, float b, float power)
+	{
+		if (!dev || mtrl < 0) return -1;
+		const oapi::FVECTOR4 v(r, g, b, power);
+		return oapiSetMaterialEx(dev, static_cast<DWORD>(mtrl), Specular, &v);
+	}
+
+	bool Skin::HasPart(const char* prefix) const
+	{
+		for (const auto& g : groups) if (HasPrefix(g.label, prefix)) return true;
+		return false;
+	}
+
 	bool Skin::SetPartHidden(const char* prefix, bool hide)
 	{
 		bool found = false;

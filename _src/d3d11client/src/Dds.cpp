@@ -260,8 +260,41 @@ ComPtr<ID3D11ShaderResourceView> LoadDDSFile(ID3D11Device* dev, ID3D11DeviceCont
     return srv;
 }
 
+// whether the last texture this thread loaded has see-through texels at its top level (alpha under 250): 1 yes, 0 no,
+// -1 not known (BC7, BC6H). A vessel's group with an opaque texture goes into the depth prepass (Mesh.cpp): one with
+// holes or a soft edge must not hide what lies behind it before it is blended
+thread_local int g_ddsAlpha = -1;
+static int TopAlpha(DXGI_FORMAT fmt, const BYTE* top, UINT W, UINT H)
+{
+    const size_t nb = (size_t)std::max<UINT>(1, (W + 3) / 4) * std::max<UINT>(1, (H + 3) / 4);
+    switch (fmt) {
+    case DXGI_FORMAT_BC1_UNORM: case DXGI_FORMAT_BC1_UNORM_SRGB:
+        for (size_t i = 0; i < nb; i++) {     // the 1-bit alpha: colour0 <= colour1 and an index 3 in the block
+            const BYTE* b = top + i * 8;
+            if ((b[0] | b[1] << 8) > (b[2] | b[3] << 8)) continue;
+            const uint32_t ix = b[4] | b[5] << 8 | b[6] << 16 | (uint32_t)b[7] << 24;
+            for (int k = 0; k < 16; k++) if (((ix >> (2 * k)) & 3) == 3) return 1;
+        }
+        return 0;
+    case DXGI_FORMAT_BC2_UNORM: case DXGI_FORMAT_BC2_UNORM_SRGB:
+        for (size_t i = 0; i < nb; i++) { const BYTE* b = top + i * 16; for (int k = 0; k < 8; k++) if (b[k] < 0xF0 || (b[k] & 0x0F) < 0x0F) return 1; }
+        return 0;
+    case DXGI_FORMAT_BC3_UNORM: case DXGI_FORMAT_BC3_UNORM_SRGB:
+        for (size_t i = 0; i < nb; i++) {
+            const BYTE* b = top + i * 16;
+            if (b[0] >= 250 && b[1] >= 250) continue;
+            BYTE px[16][4]; DecodeAlphaBC3(b, px);
+            for (int k = 0; k < 16; k++) if (px[k][3] < 250) return 1;
+        }
+        return 0;
+    case DXGI_FORMAT_BC4_UNORM: case DXGI_FORMAT_BC4_SNORM: case DXGI_FORMAT_BC5_UNORM: case DXGI_FORMAT_BC5_SNORM: return 0;
+    default: return -1;
+    }
+}
+
 ComPtr<ID3D11ShaderResourceView> LoadDDSMemory(ID3D11Device* dev, const BYTE* fdata, size_t fsize, bool srgb, UINT* ow, UINT* oh, bool genMips)
 {
+    g_ddsAlpha = -1;
     struct View { const BYTE* p; size_t n; const BYTE* data() const { return p; } size_t size() const { return n; } } f{ fdata, fsize };
     if (f.size() < 128 || memcmp(f.data(), "DDS ", 4) != 0) return nullptr;
     const Header& h = *(const Header*)(f.data() + 4);
@@ -315,6 +348,7 @@ ComPtr<ID3D11ShaderResourceView> LoadDDSMemory(ID3D11Device* dev, const BYTE* fd
         if (!used) return nullptr;
         // block formats need sizes in whole blocks at the top level
         if ((W & 3) || (H & 3)) { if (W >= 4 && H >= 4) return nullptr; }
+        g_ddsAlpha = TopAlpha(fmt, f.data() + off, W, H);
         static thread_local std::vector<std::vector<BYTE>> gen;   // a DXT texture saved without mips: they are made here (the buffers kept per thread)
         if (genMips && used == 1 && W >= 8 && H >= 8 && BuildBlockMips(fmt, f.data() + off, W, H, gen)) {
             sd.clear();
@@ -362,6 +396,8 @@ ComPtr<ID3D11ShaderResourceView> LoadDDSMemory(ID3D11Device* dev, const BYTE* fd
         memcpy(px.data(), s, px.size());
         if (noAlpha32) for (size_t i = 0; i < (size_t)W * H; i++) px[i * 4 + 3] = 255;
     }
+    g_ddsAlpha = 0;
+    for (size_t i = 0; i < (size_t)W * H; i++) if (px[i * 4 + 3] < 250) { g_ddsAlpha = 1; break; }
     return CreateTexture2D(dev, W, H, fmt, px.data(), W * 4);
 }
 

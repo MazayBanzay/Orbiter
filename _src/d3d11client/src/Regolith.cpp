@@ -4,10 +4,9 @@
 // Horanyi 2012, Am. J. Phys. 80, 452) is a fan of parabolas, a "rooster tail" that falls back within seconds; no cloud,
 // no hanging. Each source sends a row every Dt of simulated time - the soil it threw then; the GPU draws grains of every
 // row aloft each frame (a fresh draw each frame), puts each where its parabola has it now (p0 + v t - g t^2 / 2, analytic:
-// no simulation, no drift), drops those that landed or met the vessel (its hull, its wheels), and renders the soil's
-// optical depth as a participating medium the way Frostbite renders its fog and particles (Hillaire 2015, after
-// Wronski 2014): froxels (8 x 8 pixels x 64 slices over where the dust is), a time filter with reprojection, the Sun
-// through a volumetric shadow of the dust and the hulls' shadow map, energy-conserving integration, one lookup a pixel.
+// no simulation, no drift), drops those that landed or met the vessel (its hull, its wheels), and draws each grain sharp
+// into the pixel it is in (its optical depth there; no grid, no blur, no time filter), lit by the Sun through a
+// volumetric shadow of the dust and the hulls' shadow map.
 // Fed from GpuParticles::SpawnSource (SOIL sources) and SpawnJet (the jets' eroded soil) when the air is not dense; the
 // aggregates (sticky regolith shed off a tyre) stay particles.
 #include "Client.h"
@@ -18,16 +17,17 @@
 extern XMMATRIX g_exViewProj;
 
 namespace {
-    const int NG = 192;                    // grains drawn a row each frame (at most: a light source draws fewer)
+    const UINT BUDGET = 500000;            // samples drawn a frame over all the rows aloft, shared by their mass
+    const UINT MAXSAMP = 600000;           // (the samples' buffer: the budget and every row's least 8)
     const UINT RING = 512, MAXS = 24;      // rows kept per source; sources
     const UINT MAXB = 12, BOXN = 1 + 4 * MAXB;   // boxes a vessel; float4 a slot's boxes
-    const int FZ = 64, TILE = 8;           // the froxels: slices, pixels across
     const int SX = 96, SY = 48, SZ = 96;   // the dust's shadow box (cells)
     const double FIX = 1e5;                // the extinction sums' fixed point [m]
     struct Row { XMFLOAT3 p0; float t0; XMFLOAT3 v0; float m; XMFLOAT3 n; float cone; XMFLOAT3 gs; float gy; float serial, lat, slot, burst; };   // 80 B
     struct CB { XMFLOAT4 m0, m1, m2; XMFLOAT4X4 vp; XMFLOAT4 t; XMFLOAT4 opt; XMFLOAT4 src; };
-    struct VolCB { XMFLOAT4 box, dim, fz, fz2, camD; XMFLOAT4X4 prevVP; XMFLOAT4 prevFz; };
-    struct Src { int slot = -1; UINT tail = 0, count = 0; double tNext = 0, last = 0; double land[RING] = {}; double serial = 0; double kgps = 0, dt = 1.0 / 60; };
+    struct VolCB { XMFLOAT4 box, dim, fz2; };
+    struct Src { int slot = -1; UINT tail = 0, count = 0; double tNext = 0, last = 0; double land[RING] = {}; double serial = 0; double kgps = 0, dt = 1.0 / 60;
+                 double bNext = -1, bEnd = -1, bF = 0.4, bM = 1; uint32_t bN = 0; };   // (a wheel's bursts: the next, this one's end, share, mass)
     std::map<uintptr_t, Src> srcs;
     bool slotUsed[MAXS] = {};
     std::vector<Row> pending;                       // rows born this frame
@@ -36,14 +36,16 @@ namespace {
     std::vector<XMFLOAT4> slotBoxes[MAXS];          // each source's vessel's boxes this frame (local)
     std::vector<Row> mirror(MAXS * RING);           // the rows as the GPU has them (the dust's extent)
     struct Vol { ComPtr<ID3D11Texture3D> t; ComPtr<ID3D11ShaderResourceView> srv; ComPtr<ID3D11UnorderedAccessView> uav; };
-    ComPtr<ID3D11ComputeShader> csVoxel, csShade, csColumn;
-    ComPtr<ID3D11VertexShader> vsFull; ComPtr<ID3D11PixelShader> psApply;
-    ComPtr<ID3D11BlendState> bsApply;
+    ComPtr<ID3D11ComputeShader> csVoxel, csShade;
+    ComPtr<ID3D11VertexShader> vsFull, vsGrain; ComPtr<ID3D11PixelShader> psApply, psGrain;
+    ComPtr<ID3D11BlendState> bsApply, bsAdd;
     ComPtr<ID3D11Buffer> rowBuf, boxBuf, listBuf, rgCB, volCB;
     ComPtr<ID3D11ShaderResourceView> rowSRV, boxSRV, listSRV;
-    Vol frox, hist[2], integ, shadeSum, shade;       // the froxels (sums, filtered extinction x 2, integrated); the shadow box
-    int fxW = 0, fxH = 0, histCur = 0; bool histValid = false;
-    XMFLOAT4X4 prevVP = {}; VECTOR3 prevCam = { 0, 0, 0 }; double prevZn = 1, prevL = 1;
+    ComPtr<ID3D11Buffer> sampBuf; ComPtr<ID3D11ShaderResourceView> sampSRV; ComPtr<ID3D11UnorderedAccessView> sampUAV;   // each sample for the draw
+    Vol shadeSum, shade;                             // the shadow box (sums, transmittance)
+    struct Scr { ComPtr<ID3D11Texture2D> t; ComPtr<ID3D11ShaderResourceView> srv; ComPtr<ID3D11RenderTargetView> rtv; };
+    Scr tauS, litS;                                  // the screen: optical depth, its sunlit share (fixed point)
+    int scW = 0, scH = 0;
     UINT frameNo = 0;
     bool rgTried = false, rgOk = false;
 
@@ -76,9 +78,12 @@ namespace {
             return b && SUCCEEDED(dev->CreateComputeShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &c));
         };
         auto bf = FxCompile("regolith.hlsl", "VSFull", "vs_5_0"), bq = FxCompile("regolith.hlsl", "PSApply", "ps_5_0");
-        if (!csh("CSVoxel", csVoxel) || !csh("CSShade", csShade) || !csh("CSColumn", csColumn) || !bf || !bq ||
+        auto bg = FxCompile("regolith.hlsl", "VSGrain", "vs_5_0"), bp = FxCompile("regolith.hlsl", "PSGrain", "ps_5_0");
+        if (!csh("CSVoxel", csVoxel) || !csh("CSShade", csShade) || !bf || !bq || !bg || !bp ||
             FAILED(dev->CreateVertexShader(bf->GetBufferPointer(), bf->GetBufferSize(), nullptr, &vsFull)) ||
-            FAILED(dev->CreatePixelShader(bq->GetBufferPointer(), bq->GetBufferSize(), nullptr, &psApply))) { LOGC("regolith: shaders failed"); return false; }
+            FAILED(dev->CreatePixelShader(bq->GetBufferPointer(), bq->GetBufferSize(), nullptr, &psApply)) ||
+            FAILED(dev->CreateVertexShader(bg->GetBufferPointer(), bg->GetBufferSize(), nullptr, &vsGrain)) ||
+            FAILED(dev->CreatePixelShader(bp->GetBufferPointer(), bp->GetBufferSize(), nullptr, &psGrain))) { LOGC("regolith: shaders failed"); return false; }
         auto sbuf = [&](UINT n, UINT stride, D3D11_USAGE use, UINT cpu, ComPtr<ID3D11Buffer>& b, ComPtr<ID3D11ShaderResourceView>& s) {
             D3D11_BUFFER_DESC d = { n * stride, use, D3D11_BIND_SHADER_RESOURCE, cpu, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, stride };
             if (FAILED(dev->CreateBuffer(&d, nullptr, &b))) return false;
@@ -88,6 +93,11 @@ namespace {
         if (!sbuf(MAXS * RING, sizeof(Row), D3D11_USAGE_DEFAULT, 0, rowBuf, rowSRV) ||
             !sbuf(MAXS * BOXN, 16, D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE, boxBuf, boxSRV) ||
             !sbuf(MAXS * RING, 8, D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE, listBuf, listSRV)) return false;
+        {
+            D3D11_BUFFER_DESC d = { MAXSAMP * 16, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, 0, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, 16 };
+            if (FAILED(dev->CreateBuffer(&d, nullptr, &sampBuf)) || FAILED(dev->CreateShaderResourceView(sampBuf.Get(), nullptr, &sampSRV)) ||
+                FAILED(dev->CreateUnorderedAccessView(sampBuf.Get(), nullptr, &sampUAV))) return false;
+        }
         D3D11_BUFFER_DESC c = { (UINT)((sizeof(CB) + 15) & ~15u), D3D11_USAGE_DYNAMIC, D3D11_BIND_CONSTANT_BUFFER, D3D11_CPU_ACCESS_WRITE, 0, 0 };
         if (FAILED(dev->CreateBuffer(&c, nullptr, &rgCB))) return false;
         c.ByteWidth = (UINT)((sizeof(VolCB) + 15) & ~15u);
@@ -97,27 +107,31 @@ namespace {
         D3D11_BLEND_DESC bd = {};
         bd.RenderTarget[0] = { TRUE, D3D11_BLEND_ONE, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_OP_ADD, D3D11_BLEND_ZERO, D3D11_BLEND_ONE, D3D11_BLEND_OP_ADD, D3D11_COLOR_WRITE_ENABLE_ALL };
         if (FAILED(dev->CreateBlendState(&bd, &bsApply))) return false;
-        LOGC("regolith: vacuum soil grain by grain on its parabola, rendered in froxels (%d px x %d slices; %d grains a row a frame, %u rows a source, kappa %.1f m2/kg)",
-             TILE, FZ, NG, RING, KAPPA);
+        // the samples summed: optical depth, its sunlit share
+        bd.RenderTarget[0] = { TRUE, D3D11_BLEND_ONE, D3D11_BLEND_ONE, D3D11_BLEND_OP_ADD, D3D11_BLEND_ONE, D3D11_BLEND_ONE, D3D11_BLEND_OP_ADD, D3D11_COLOR_WRITE_ENABLE_RED };
+        if (FAILED(dev->CreateBlendState(&bd, &bsAdd))) return false;
+        LOGC("regolith: vacuum soil grain by grain on its parabola, drawn as samples by mass (%u a frame, %u rows a source, kappa %.1f m2/kg)",
+             BUDGET, RING, KAPPA);
         rgOk = true;
         return true;
     }
 
-    // the froxel volumes for this screen (made again when it changes)
-    bool Froxels(D3D11Client* gc)
+    // the screen's sums (made again when it changes)
+    bool Screen(D3D11Client* gc)
     {
-        const int w = (gc->SceneW() + TILE - 1) / TILE, h = (gc->SceneH() + TILE - 1) / TILE;
-        if (w == fxW && h == fxH && frox.t) return true;
+        const int w = gc->SceneW(), h = gc->SceneH();
+        if (w == scW && h == scH && tauS.t) return true;
         ID3D11Device* dev = gc->Dev();
-        fxW = w; fxH = h; histValid = false;
-        if (!MakeVol(dev, frox, w, h, FZ, DXGI_FORMAT_R32_UINT) || !MakeVol(dev, hist[0], w, h, FZ, DXGI_FORMAT_R16_FLOAT) ||
-            !MakeVol(dev, hist[1], w, h, FZ, DXGI_FORMAT_R16_FLOAT) || !MakeVol(dev, integ, w, h, FZ, DXGI_FORMAT_R16G16B16A16_FLOAT)) {
-            fxW = fxH = 0; LOGC("regolith: froxel volumes failed"); return false;
-        }
-        const double n = (double)w * h * FZ, nb = (double)SX * SY * SZ;
-        LOGC("regolith: froxels %d x %d x %d, GPU memory %.1f MB (sums %.1f, filtered x 2 %.1f, integrated %.1f; shadow box %.1f; rows %.1f; none CPU-mapped)",
-             w, h, FZ, (n * (4 + 2 + 2 + 8) + nb * 6 + MAXS * RING * sizeof(Row)) / 1048576, n * 4 / 1048576, n * 4 / 1048576, n * 8 / 1048576,
-             nb * 6 / 1048576, MAXS * RING * sizeof(Row) / 1048576.0);
+        scW = w; scH = h;
+        auto mk = [&](Scr& v) {
+            v = Scr();
+            D3D11_TEXTURE2D_DESC d = { (UINT)w, (UINT)h, 1, 1, DXGI_FORMAT_R16_FLOAT, { 1, 0 }, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET, 0, 0 };
+            return SUCCEEDED(dev->CreateTexture2D(&d, nullptr, &v.t)) && SUCCEEDED(dev->CreateShaderResourceView(v.t.Get(), nullptr, &v.srv)) &&
+                   SUCCEEDED(dev->CreateRenderTargetView(v.t.Get(), nullptr, &v.rtv));
+        };
+        if (!mk(tauS) || !mk(litS)) { scW = scH = 0; LOGC("regolith: screen sums failed"); return false; }
+        LOGC("regolith: screen sums %d x %d, GPU memory %.1f MB (shadow box %.1f, rows %.1f; none CPU-mapped)", w, h,
+             (w * h * 4.0 + SX * SY * SZ * 6.0 + MAXS * RING * sizeof(Row) + MAXSAMP * 16.0) / 1048576, SX * SY * SZ * 6.0 / 1048576, MAXS * RING * sizeof(Row) / 1048576.0);
         return true;
     }
 
@@ -125,7 +139,7 @@ namespace {
     {
         srcs.clear(); pending.clear(); pendIdx.clear();
         for (bool& u : slotUsed) u = false;
-        haveBase = false; histValid = false;
+        haveBase = false;
     }
 
     XMFLOAT3 F3(const VECTOR3& v) { return { (float)v.x, (float)v.y, (float)v.z }; }
@@ -167,9 +181,10 @@ void RegolithFeed(const ExScene& sc, uintptr_t key, const VECTOR3& p0, const VEC
     VECTOR3 n = ring ? a : crossp(a, _V(0, 1, 0));
     n = length(n) < 1e-3 ? _V(1, 0, 0) : Unit(n);
     // a row every Dt: ~480 rows over the longest flight (the 512 kept), never coarser than 1/15 s
-    const VECTOR3 vHi = gs + (ring ? a : Rot(a, n, cone)) * (speed * 1.9);   // (the fastest grains: 1.6 x the rim in a 1.2 x burst)
+    // (the fastest grains: 1.6 x in a 1.2 x burst - of the rim's speed off a ring, of the lug's over the ground off a wheel)
+    const VECTOR3 vHi = ring ? gs + a * (speed * 1.9) : (gs + Rot(a, n, cone) * speed) * 1.9;
     const double Tf = LandT(p0, vHi, gy, g);
-    const double Dt = std::clamp(Tf / 480.0, 1.0 / 120, 1.0 / 15);
+    const double Dt = std::clamp(Tf / 480.0, 1.0 / 120, ring ? 1.0 / 15 : 1.0 / 60);   // (a wheel's 40 ms bursts get rows)
     s.dt = Dt;
     {   // what the sources throw (every 5 s of real time, the fastest of them): the check of the heights and densities
         static double logT = -1e9, vMax = 0, kMax = 0, gMax = 0, tMax = 0;
@@ -189,20 +204,40 @@ void RegolithFeed(const ExScene& sc, uintptr_t key, const VECTOR3& p0, const VEC
         const double age = sc.simt - s.tNext;                 // born a little before this frame: where the source was then
         const VECTOR3 pb = p0 - gs * age;
         r.p0 = F3(pb); r.t0 = (float)(s.tNext - tBase);
-        // a burst: the soil comes off in pulses (the lugs, the bumps; the film shows the dust "produced intermittently with
-        // different maximum heights and densities") - the mass 0.3-1.7 x, the speed 0.75-1.2 x, ~4 per second
-        const double bm = BurstNoise(s.tNext * 4.0, 17u + s.slot), bv = BurstNoise(s.tNext * 3.0 + 50.0, 91u + s.slot);
-        r.v0 = F3(gs + a * speed); r.m = (float)(kgps * Dt * (0.3 + 1.4 * bm));
+        r.v0 = F3(gs + a * speed);
         r.n = F3(n); r.cone = (float)(ring ? -cone : cone);
         r.gs = F3(gs); r.gy = (float)gy;
-        r.serial = (float)fmod(s.serial, 65536.0); r.lat = ring ? (float)ringIn : 0.3f; r.slot = (float)s.slot; r.burst = (float)(0.75 + 0.45 * bv);
+        r.serial = (float)fmod(s.serial, 65536.0); r.lat = ring ? (float)ringIn : 0.3f; r.slot = (float)s.slot;
+        if (ring) {
+            // a sole's, a jet's soil in pulses (the film shows the dust "produced intermittently with different maximum
+            // heights and densities") - most of the mass in short pulses (4 n^3: a mean of 1, peaks of 4) ~4 a second
+            const double bm = BurstNoise(s.tNext * 4.0, 17u + s.slot), bv = BurstNoise(s.tNext * 3.0 + 50.0, 91u + s.slot);
+            r.m = (float)(kgps * Dt * 4.0 * bm * bm * bm); r.burst = (float)(0.7 + 0.35 * bm + 0.15 * bv);
+        } else {
+            // a wheel's soil in bursts: a patch of the tread full of soil, a bump - 40 ms every 0.18-0.43 s, 85 % of the mass,
+            // the whole burst at one share 0.25-0.55 of its rim points' ground velocity (each burst a ring; the shader); the
+            // rest between them at any share (burst = 0)
+            auto rnd = [&](uint32_t k) { uint32_t v = (s.bN * 2654435761u) ^ (k * 40503u + s.slot * 97u); v ^= v >> 16; v *= 0x7feb352du; v ^= v >> 15; return (v & 0xffffff) / 16777216.0; };
+            if (s.bNext < 0 || s.bNext < s.tNext - 1.0) s.bNext = s.tNext;
+            if (s.tNext >= s.bNext) {
+                s.bN++;
+                s.bEnd = s.bNext + 0.04; s.bF = 0.25 + 0.3 * rnd(1); s.bM = 0.4 + 1.2 * rnd(2);
+                s.bNext += 0.18 + 0.25 * rnd(3);
+            }
+            const bool in = s.tNext < s.bEnd;
+            r.m = (float)(kgps * Dt * (in ? 0.85 * (0.305 / 0.04) * s.bM : 0.15));
+            r.burst = in ? (float)s.bF : 0.0f;
+        }
         // its last grain down: the row's extreme throws (the arc's ends and past them, sideways, at the tip's speed)
         double tl = 0;
         for (int k = 0; k < 6; k++) {
-            const double sa = (k % 3 - 1) * 1.25, la = (k < 3 ? -1 : 1) * 0.25;
+            // (off a wheel: the rim from 15 to 160 deg past the contact, the arc's middle at 20 deg + cone; the share's top)
+            const double la = (k < 3 ? -1 : 1) * 0.25, mid = 20 * RAD + cone;
+            const double th = k % 3 == 0 ? 15 * RAD - mid : k % 3 == 1 ? 0 : 160 * RAD - mid;
             const VECTOR3 d = ring ? Rot(a, Unit(crossp(a, _V(0.3, 0.1, 0.9))), cone * (k % 2 ? ringIn : 1.0))
-                                   : Unit(Rot(a, n, cone * sa) + n * tan(la));
-            tl = std::max(tl, LandT(pb, gs + d * (speed * 1.6 * r.burst), gy, g));
+                                   : Unit(Rot(a, n, th) + n * tan(la));
+            const VECTOR3 vf = ring ? gs + d * (speed * 1.6 * r.burst) : (gs + d * speed) * (r.burst > 0 ? 1.4 * r.burst : 1.2);
+            tl = std::max(tl, LandT(pb, vf, gy, g));   // the fastest grain of the row
         }
         s.land[idx] = s.tNext + tl + 0.1;
         pending.push_back(r); pendIdx.push_back(s.slot * RING + idx); mirror[s.slot * RING + idx] = r;
@@ -221,7 +256,7 @@ void RegolithRender(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResourceView
         else ++it;
     }
     // nothing aloft: no pass at all (no clears, no dispatches)
-    if (srcs.empty() || !sc.anchored || !Init(gc) || !Froxels(gc)) { pending.clear(); pendIdx.clear(); histValid = false; return; }
+    if (srcs.empty() || !sc.anchored || !Init(gc) || !Screen(gc)) { pending.clear(); pendIdx.clear(); return; }
     ID3D11DeviceContext* ctx = gc->Ctx();
     for (size_t i = 0; i < pending.size(); i++) {
         D3D11_BOX b = { pendIdx[i] * (UINT)sizeof(Row), 0, 0, (pendIdx[i] + 1) * (UINT)sizeof(Row), 1, 1 };
@@ -239,15 +274,15 @@ void RegolithRender(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResourceView
     for (auto& kv : srcs) {
         const Src& s = kv.second;
         if (s.count < 1) continue;
-        const UINT ng = (UINT)std::clamp(NG * sqrt(std::max(s.kgps, 0.0) / 1.0), 24.0, (double)NG);
         for (UINT i = 0; i < s.count; i++) {
             const UINT ri = s.slot * RING + (s.tail + i) % RING;
-            list.push_back({ ri, ng });
+            list.push_back({ ri, 0 });
             if (i % 4 && i + 1 != s.count) continue;
             const Row& r = mirror[ri];
             const double t = std::max(tNow - r.t0, 0.0);
             const VECTOR3 gs = _V(r.gs.x, r.gs.y, r.gs.z), rel = _V(r.v0.x, r.v0.y, r.v0.z) - gs;
-            const double vm = length(rel) * 1.2 * r.burst;
+            const double vm = r.cone >= 0 ? (length(rel) + length(gs)) * (r.burst > 0 ? 1.4 * r.burst : 1.2)   // (off a wheel: a share of the rim's ground velocity)
+                                          : length(rel) * 1.6 * r.burst;
             const double radH = t * sqrt(std::max(vm * vm - 0.25 * g * g * t * t, 0.0)) + 0.6;
             const VECTOR3 c = _V(r.p0.x, r.p0.y, r.p0.z) + gs * t;
             const double top = c.y + vm * t - 0.5 * g * t * t + 0.6;
@@ -256,26 +291,28 @@ void RegolithRender(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResourceView
             hi = _V(std::max(hi.x, c.x + radH), std::max(hi.y, top), std::max(hi.z, c.z + radH));
         }
     }
-    if (list.empty() || hi.x <= lo.x) { histValid = false; return; }
+    if (list.empty() || hi.x <= lo.x) return;
+    if (list.size() > MAXS * RING) list.resize(MAXS * RING);
+    // each row's samples by its mass (a wheel's bursts carry most of it: they get most), each its first sample's index
+    UINT total = 0;
+    {
+        double sm = 0; for (const XMUINT2& e : list) sm += std::max((double)mirror[e.x].m, 0.0);
+        for (XMUINT2& e : list) {
+            const UINT ng = (UINT)std::clamp(BUDGET * std::max((double)mirror[e.x].m, 0.0) / std::max(sm, 1e-12), 8.0, 65536.0);
+            e.y = total; total += ng;
+        }
+        total = std::min(total, MAXSAMP);
+    }
     {   // round the focus (the frame's origin lies on the mean sphere, the ground may be kilometres off it)
         VECTOR3 fg = sc.cp; if (OBJHANDLE hf = oapiGetFocusObject()) oapiGetGlobalPos(hf, &fg);
         const VECTOR3 f = sc.ToLocal(fg);
         lo = _V(std::max(lo.x, f.x - 300), std::max(lo.y, f.y - 300), std::max(lo.z, f.z - 300));
         hi = _V(std::min(hi.x, f.x + 300), std::min(hi.y, f.y + 300), std::min(hi.z, f.z + 300));
-        if (hi.x <= lo.x || hi.y <= lo.y || hi.z <= lo.z) { histValid = false; return; }
+        if (hi.x <= lo.x || hi.y <= lo.y || hi.z <= lo.z) return;
     }
     // the shadow box's cell (steps of 2^(1/4) from 15 cm, its corner on its grid: no crawl as the cloud grows)
     const double hRaw = std::max({ (hi.x - lo.x) / SX, (hi.y - lo.y) / SY, (hi.z - lo.z) / SZ, 0.15 });
     const double hb = 0.15 * pow(2.0, ceil(4 * log2(hRaw / 0.15)) / 4);
-    // the froxels' depth range: over the dust as the camera sees it (its box's nearest and farthest points)
-    const VECTOR3 cam = sc.ToLocal(sc.cp);
-    double dn = 0, df = 0;
-    {
-        const VECTOR3 q = _V(std::clamp(cam.x, lo.x, hi.x), std::clamp(cam.y, lo.y, hi.y), std::clamp(cam.z, lo.z, hi.z));
-        dn = length(q - cam);
-        for (int k = 0; k < 8; k++) df = std::max(df, length(_V(k & 1 ? hi.x : lo.x, k & 2 ? hi.y : lo.y, k & 4 ? hi.z : lo.z) - cam));
-    }
-    const double zn = std::max(0.3, 0.9 * dn), zf = std::clamp(df * 1.05, zn * 2, 3000.0);
     const double focal = 0.5 * gc->SceneH() / std::max(oapiCameraAperture() > 0 ? tan(oapiCameraAperture()) : 1.0, 1e-3);
 
     CB k = {};
@@ -287,25 +324,22 @@ void RegolithRender(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResourceView
     XMFLOAT4X4 vpNow; XMStoreFloat4x4(&vpNow, XMMatrixTranspose(g_exViewProj));
     k.vp = vpNow;
     k.t = { (float)tNow, (float)g, 0, 0 };
-    // the ground's albedo the grains have (the body's), their single-scattering albedo (Hapke: a loose surface darkens
-    // itself by shadowing and multiple scattering among its grains - the grains alone are 2-3 x lighter), kappa
+    // the ground's albedo (as the client's tiles show it) and the grains' single-scattering albedo: Hapke's fits to lunar
+    // soils give w ~0.2-0.35 in the visible - a cloud of the grains is darker than the sunlit ground it rose from, whose
+    // brightness the opposition surge (shadow hiding among its packed grains) lifts; so the Apollo 16 film shows the
+    // wheels' dust dark against the bright ground and grey against the black sky (Hsu & Horanyi 2012, Fig. 1)
     char nm[64] = ""; if (sc.hBody) oapiGetObjectName(sc.hBody, nm, 63);
-    double alb = !strcmp(nm, "Moon") ? 0.30 : !strcmp(nm, "Io") ? 0.45 : !strcmp(nm, "Mercury") ? 0.25 : 0.25;   // (as the client's tiles show it)
-    k.opt = { (float)alb, (float)std::min(0.95, 2.2 * alb), (float)KAPPA, (float)focal };
-    const UINT nl = (UINT)std::min<size_t>(list.size(), MAXS * RING);
-    k.src = { (float)nl, (float)BOXN, (float)(++frameNo % 65536), 0 };
+    double alb = !strcmp(nm, "Moon") ? 0.30 : !strcmp(nm, "Io") ? 0.45 : !strcmp(nm, "Mercury") ? 0.25 : 0.25;
+    double w = !strcmp(nm, "Moon") ? 0.28 : !strcmp(nm, "Io") ? 0.45 : 0.28;
+    k.opt = { (float)alb, (float)w, (float)KAPPA, (float)focal };
+    const UINT nl = (UINT)list.size();
+    k.src = { (float)nl, (float)BOXN, (float)(++frameNo % 65536), (float)total };
     VolCB v = {};
     v.box = { (float)(floor(lo.x / hb) * hb), (float)(floor(lo.y / hb) * hb), (float)(floor(lo.z / hb) * hb), (float)hb };
     v.dim = { (float)SX, (float)SY, (float)SZ, (float)FIX };
-    v.fz = { (float)zn, (float)log(zf / zn), (float)fxW, (float)fxH };
-    // the time filter: a tenth of the new frame (Frostbite 1/20; the dust moves fast: a longer memory trails it); none after a gap
     double FxTestNum(const char* key);
     static const float dbg = (float)FxTestNum("RegolithDbg");     // (test runs only: the debug view)
-    v.fz2 = { (float)FZ, (float)TILE, histValid ? 0.1f : 1.0f, dbg };
-    const VECTOR3 dc = sc.cp - prevCam;
-    v.camD = { (float)dc.x, (float)dc.y, (float)dc.z, 0 };
-    v.prevVP = histValid ? prevVP : vpNow;
-    v.prevFz = { (float)(histValid ? prevZn : zn), (float)(histValid ? prevL : log(zf / zn)), 0, 0 };
+    v.fz2 = { 0, 0, 0, dbg };
     D3D11_MAPPED_SUBRESOURCE m;
     if (FAILED(ctx->Map(rgCB.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) return;
     memcpy(m.pData, &k, sizeof k); ctx->Unmap(rgCB.Get(), 0);
@@ -338,18 +372,16 @@ void RegolithRender(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResourceView
     ctx->CSSetSamplers(2, 1, &shs); ctx->CSSetSamplers(3, 1, &s3);
     ID3D11UnorderedAccessView* nu[6] = {}; ID3D11ShaderResourceView* ns[4] = {};
     const UINT zero4[4] = {};
-    ctx->ClearUnorderedAccessViewUint(frox.uav.Get(), zero4);
     ctx->ClearUnorderedAccessViewUint(shadeSum.uav.Get(), zero4);
-    {   // 1: the grains into the froxels and the shadow box
-        ctx->CSSetShaderResources(4, 1, rowSRV.GetAddressOf());
-        ctx->CSSetShaderResources(12, 1, boxSRV.GetAddressOf());
-        ctx->CSSetShaderResources(15, 1, listSRV.GetAddressOf());
-        ID3D11UnorderedAccessView* u[2] = { frox.uav.Get(), shadeSum.uav.Get() };
-        ctx->CSSetUnorderedAccessViews(1, 2, u, nullptr);
+    ctx->CSSetShaderResources(4, 1, rowSRV.GetAddressOf());
+    ctx->CSSetShaderResources(12, 1, boxSRV.GetAddressOf());
+    ctx->CSSetShaderResources(15, 1, listSRV.GetAddressOf());
+    {   // 1: the samples into the shadow box
+        ctx->CSSetUnorderedAccessViews(2, 1, shadeSum.uav.GetAddressOf(), nullptr);
+        ctx->CSSetUnorderedAccessViews(5, 1, sampUAV.GetAddressOf(), nullptr);
         ctx->CSSetShader(csVoxel.Get(), nullptr, 0);
-        ctx->Dispatch((nl * NG + 63) / 64, 1, 1);
-        ctx->CSSetUnorderedAccessViews(1, 2, nu, nullptr);
-        ctx->CSSetShaderResources(4, 1, ns); ctx->CSSetShaderResources(12, 1, ns); ctx->CSSetShaderResources(15, 1, ns);
+        ctx->Dispatch((total + 63) / 64, 1, 1);
+        ctx->CSSetUnorderedAccessViews(2, 1, nu, nullptr); ctx->CSSetUnorderedAccessViews(5, 1, nu, nullptr);
     }
     {   // 2: the dust's own shade towards the Sun
         ctx->CSSetShaderResources(22, 1, shadeSum.srv.GetAddressOf());
@@ -359,44 +391,57 @@ void RegolithRender(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResourceView
         ctx->CSSetUnorderedAccessViews(3, 1, nu, nullptr);
         ctx->CSSetShaderResources(22, 1, ns);
     }
-    const int cur = histCur, prev = histCur ^ 1;
-    {   // 3: the columns - the time filter, the light, the integration
-        ID3D11ShaderResourceView* sr[3] = { frox.srv.Get(), hist[prev].srv.Get(), shade.srv.Get() };
-        ctx->CSSetShaderResources(23, 3, sr);
-        ID3D11UnorderedAccessView* u[2] = { hist[cur].uav.Get(), integ.uav.Get() };
-        ctx->CSSetUnorderedAccessViews(4, 2, u, nullptr);
-        ctx->CSSetShader(csColumn.Get(), nullptr, 0);
-        ctx->Dispatch((fxW + 7) / 8, (fxH + 7) / 8, 1);
-        ctx->CSSetUnorderedAccessViews(4, 2, nu, nullptr);
-        ctx->CSSetShaderResources(23, 3, ns);
-    }
+    ctx->CSSetShaderResources(4, 1, ns); ctx->CSSetShaderResources(12, 1, ns); ctx->CSSetShaderResources(15, 1, ns);
     ctx->CSSetShader(nullptr, nullptr, 0);
     ctx->CSSetShaderResources(7, 1, ns); ctx->CSSetShaderResources(8, 1, ns);
     ID3D11Buffer* nb1[1] = {}; ctx->CSSetConstantBuffers(0, 1, nb1); ctx->CSSetConstantBuffers(4, 1, nb1);
-    if (b0) b0->Release();
     if (b4) b4->Release();
     if (t8) t8->Release();
     if (s3) s3->Release();
-    histCur ^= 1; histValid = true;
-    prevVP = vpNow; prevCam = sc.cp; prevZn = zn; prevL = log(zf / zn);
+
+    // ---- 3: the samples as soft discs, summed into the optical depth and its sunlit share (the scene's target kept)
+    ID3D11RenderTargetView* oldRT[2] = {}; ID3D11DepthStencilView* oldDS = nullptr;
+    ctx->OMGetRenderTargets(2, oldRT, &oldDS);
+    const float z4[4] = {};
+    ctx->ClearRenderTargetView(tauS.rtv.Get(), z4); ctx->ClearRenderTargetView(litS.rtv.Get(), z4);
+    ID3D11RenderTargetView* rt2[2] = { tauS.rtv.Get(), litS.rtv.Get() };
+    ctx->OMSetRenderTargets(2, rt2, nullptr);
+    ctx->OMSetBlendState(bsAdd.Get(), nullptr, ~0u);
+    ctx->RSSetState(gc->rsNone.Get());
+    ctx->IASetInputLayout(nullptr); ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    ctx->VSSetShader(vsGrain.Get(), nullptr, 0); ctx->PSSetShader(psGrain.Get(), nullptr, 0);
+    ID3D11Buffer* oldVB0 = nullptr; ctx->VSGetConstantBuffers(0, 1, &oldVB0);
+    ID3D11SamplerState* oldVS[2] = {}; ctx->VSGetSamplers(2, 2, oldVS);
+    ctx->VSSetConstantBuffers(0, 1, &b0); ctx->VSSetConstantBuffers(5, 2, cb56); ctx->PSSetConstantBuffers(5, 2, cb56);
+    ctx->VSSetShaderResources(5, 1, &depth); ctx->VSSetShaderResources(7, 1, &sh);
+    ctx->VSSetShaderResources(16, 1, sampSRV.GetAddressOf()); ctx->VSSetShaderResources(25, 1, shade.srv.GetAddressOf());
+    ctx->VSSetSamplers(2, 1, &shs); ctx->VSSetSamplers(3, 1, &s3);
+    ctx->PSSetShaderResources(5, 1, &depth);
+    ctx->DrawInstanced(4, total, 0, 0);
+    ctx->VSSetShaderResources(5, 1, ns); ctx->VSSetShaderResources(7, 1, ns); ctx->VSSetShaderResources(16, 1, ns); ctx->VSSetShaderResources(25, 1, ns);
+    ctx->VSSetConstantBuffers(0, 1, &oldVB0); ctx->VSSetSamplers(2, 2, oldVS);
+    if (oldVB0) oldVB0->Release();
+    for (auto* q : oldVS) if (q) q->Release();
+    ctx->OMSetRenderTargets(2, oldRT, oldDS);
+    for (auto* r : oldRT) if (r) r->Release();
+    if (oldDS) oldDS->Release();
+    if (b0) b0->Release();
 
     // ---- 4: over the scene (the exhaust pass binds no depth target: the depth is read, t5)
     ctx->OMSetBlendState(bsApply.Get(), nullptr, ~0u);
-    ctx->RSSetState(gc->rsNone.Get());
-    ctx->IASetInputLayout(nullptr); ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     ctx->VSSetShader(vsFull.Get(), nullptr, 0); ctx->PSSetShader(psApply.Get(), nullptr, 0);
-    ctx->PSSetConstantBuffers(5, 2, cb56);
     ctx->PSSetShaderResources(5, 1, &depth);
-    ctx->PSSetShaderResources(25, 1, shade.srv.GetAddressOf());
-    ctx->PSSetShaderResources(26, 1, integ.srv.GetAddressOf());
+    ID3D11ShaderResourceView* ps3[3] = { shade.srv.Get(), tauS.srv.Get(), litS.srv.Get() };
+    ctx->PSSetShaderResources(25, 3, ps3);
     ctx->Draw(3, 0);
-    ctx->PSSetShaderResources(25, 2, ns);
-    {   // the check (every 5 s): the depth range, the samples
+    ctx->PSSetShaderResources(25, 3, ns);
+    {   // the check (every 5 s): the samples
         static double logT = -1e9;
         if (oapiGetSysTime() - logT > 5.0) {
             logT = oapiGetSysTime();
-            LOGC("regolith: froxels over %.1f-%.0f m (%.2f m deep at 10 m), shadow box %.0f x %.0f x %.0f m (%.2f m cells); %u rows, ~%u grains a frame",
-                 zn, zf, 10 * log(zf / zn) / FZ, SX * hb, SY * hb, SZ * hb, hb, nl, nl * NG);
+            LOGC("regolith: shadow box %.0f x %.0f x %.0f m (%.2f m cells); %u rows, %u samples a frame (by mass)",
+                 SX * hb, SY * hb, SZ * hb, hb, nl, total);
         }
     }
 }
@@ -404,10 +449,11 @@ void RegolithRender(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResourceView
 void RegolithRelease()
 {
     Clear();
-    csVoxel.Reset(); csShade.Reset(); csColumn.Reset(); vsFull.Reset(); psApply.Reset(); bsApply.Reset();
+    csVoxel.Reset(); csShade.Reset(); vsFull.Reset(); vsGrain.Reset(); psApply.Reset(); psGrain.Reset(); bsApply.Reset(); bsAdd.Reset();
+    sampBuf.Reset(); sampSRV.Reset(); sampUAV.Reset();
     rowBuf.Reset(); boxBuf.Reset(); listBuf.Reset(); rgCB.Reset(); volCB.Reset(); rowSRV.Reset(); boxSRV.Reset(); listSRV.Reset();
-    frox = Vol(); hist[0] = Vol(); hist[1] = Vol(); integ = Vol(); shadeSum = Vol(); shade = Vol();
+    shadeSum = Vol(); shade = Vol(); tauS = Scr(); litS = Scr();
     for (auto& b : slotBoxes) b.clear();
-    fxW = fxH = 0;
+    scW = scH = 0;
     rgTried = rgOk = false;
 }

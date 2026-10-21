@@ -14,6 +14,7 @@
 #if __has_include("../../samples/AtmoFX/AtmoFXPart.h")
 #include "../../samples/AtmoFX/AtmoFXPart.h"   // the AtmoFX client's free particles: the thrusters' condensate, the vent's ice
 #include "../../samples/AtmoFX/AtmoFXHeat.h"   // and its heat shimmer (a warm jet in a cold air)
+#include "../../samples/AtmoFX/AtmoFXWake.h"   // and its wakes on a liquid (wading)
 #define OC_ATMOFXPART 1
 #endif
 #include <algorithm>
@@ -80,15 +81,26 @@ namespace ocrew
 		// 2026-10-18, CrewMember.dll+0x24689 = the old CtxWndProc, the dumps in %LOCALAPPDATA%\CrashDumps). The hook's
 		// procedure has returned before the message is dispatched
 		HHOOK g_msgHook{}; HWND g_view{}; std::atomic<int> g_wheel{ 0 }; std::atomic<bool> g_wheelEat{ false }; int g_ctxUsers{};
+		// whose menu has the wheel: the person in focus only. Every person steps, and one not in focus used to clear the
+		// flag after the one in focus had set it - with two of them in a scenario the wheel zoomed under her menu now and
+		// then (the user, 2026-10-21: «при наведении и появлении этого меню зум на колесо строго настрого НЕ МЕНЯТЬ»)
+		OBJHANDLE g_wheelOwner{};
+		void WheelEat(OBJHANDLE me, bool on)
+		{
+			if (on) { g_wheelOwner = me; g_wheelEat = true; }
+			else if (g_wheelOwner == me || !g_wheelOwner) { g_wheelEat = false; g_wheelOwner = nullptr; }
+		}
 		LRESULT CALLBACK CtxMsgHook(int code, WPARAM wp, LPARAM lp)
 		{
 			if (code == HC_ACTION && wp == PM_REMOVE && lp)
 			{
 				MSG& m = *reinterpret_cast<MSG*>(lp);
-				if (g_view && (m.hwnd == g_view || IsChild(g_view, m.hwnd)))
+				// the view, its children, or its frame (after a dialog the focus may sit on the frame: the wheel goes there)
+				if (g_view && (m.hwnd == g_view || IsChild(g_view, m.hwnd) || m.hwnd == GetAncestor(g_view, GA_ROOT)))
 				{
 					stallprobe::KeyMsg(m.hwnd, m.message, static_cast<unsigned>(m.wParam));   // (the probe, when on: the Alt-keys Windows beeps at)
-					if (m.message == WM_MOUSEWHEEL && g_wheelEat.load() && !(GET_KEYSTATE_WPARAM(m.wParam) & MK_SHIFT))
+					if (m.message == WM_MOUSEWHEEL && g_wheelEat.load() && g_wheelOwner && g_wheelOwner == oapiGetFocusObject()
+						&& !(GET_KEYSTATE_WPARAM(m.wParam) & MK_SHIFT))
 					{
 						g_wheel += GET_WHEEL_DELTA_WPARAM(m.wParam);
 						m.message = WM_NULL;   // eaten: the view does not zoom
@@ -99,11 +111,12 @@ namespace ocrew
 		}
 		void HookWheel()
 		{
-			if (g_msgHook) return;
+			// every step: the render window is made anew with each scenario, a handle kept from the first one matched nothing
 			gcCore2* core = gcGetCoreInterface();
 			HWND v = core ? core->GetRenderWindow() : nullptr;
 			if (!v) return;
 			g_view = v;
+			if (g_msgHook) return;
 			g_msgHook = SetWindowsHookEx(WH_GETMESSAGE, CtxMsgHook, nullptr, GetCurrentThreadId());   // (the main thread: the crew's step)
 			if (!g_msgHook) g_view = nullptr;
 		}
@@ -122,7 +135,7 @@ namespace ocrew
 		void UnhookWheel()
 		{
 			if (g_msgHook) UnhookWindowsHookEx(g_msgHook);
-			g_msgHook = nullptr; g_view = nullptr; g_wheelEat = false;
+			g_msgHook = nullptr; g_view = nullptr; g_wheelEat = false; g_wheelOwner = nullptr;
 		}
 		std::string ToCp1251(const std::string& u8)   // our UTF-8 into the ships' code page (an OcAction's label)
 		{
@@ -256,13 +269,21 @@ namespace ocrew
 		oapiReadItem_float(cfg, const_cast<char*>("StandHeight"), height);
 		oapiReadItem_float(cfg, const_cast<char*>("WalkSpeed"), walkSpeed);
 		oapiReadItem_float(cfg, const_cast<char*>("RunSpeed"), runSpeed);
-		oapiReadItem_vec(cfg, const_cast<char*>("EyePos"), eye);
-		oapiReadItem_vec(cfg, const_cast<char*>("HelmCapHinge"), capHinge);
-		if (oapiReadItem_vec(cfg, const_cast<char*>("HelmCapAxis"), capAxis)) { const double l = length(capAxis); if (l > 1e-9) capAxis /= l; }
+		// (oapiReadItem_vec writes its vector even when the key is missing - zero: a cfg without LampPos put both lamps at
+		//  her centre of mass, «фонарь в паху», 2026-10-20; the defaults stay unless the key is there)
+		auto readVec = [cfg](const char* key, VECTOR3& v) { VECTOR3 t; if (!oapiReadItem_vec(cfg, const_cast<char*>(key), t)) return false; v = t; return true; };
+		readVec("EyePos", eye);
+		readVec("HelmCapHinge", capHinge);
+		readVec("LampPos", lampRest);
+		oapiReadItem_bool(cfg, const_cast<char*>("HideHair"), hideHair);
+		if (readVec("HelmCapAxis", capAxis)) { const double l = length(capAxis); if (l > 1e-9) capAxis /= l; }
 		if (oapiReadItem_float(cfg, const_cast<char*>("HelmCapOpen"), capOpen)) capOpen *= RAD;
 		oapiReadItem_int(cfg, const_cast<char*>("HeatCeram"), heatMtrl[0]);
 		oapiReadItem_int(cfg, const_cast<char*>("HeatSole"), heatMtrl[1]);
 		oapiReadItem_int(cfg, const_cast<char*>("HeatRad"), heatMtrl[2]);
+		oapiReadItem_int(cfg, const_cast<char*>("VisorMtrl"), visorMtrl);
+		oapiReadItem_bool(cfg, const_cast<char*>("HelmetView"), helmetView);
+		readVec("HelmetEye", helmEye);   // (readVec: a missing key must not zero it - the eye went to her centre of mass, 2026-10-20)
 		{ int dl = 0; if (oapiReadItem_int(cfg, const_cast<char*>("DebugLog"), dl)) debugLog = dl != 0; }
 		{ int sp = 0; if (oapiReadItem_int(cfg, const_cast<char*>("StallProbe"), sp) && sp > 0) stallprobe::Arm(sp > 1 ? sp : 40.0); }   // the main-thread probe (opt-in; 1: the start, 40 s; N: N s of play): where the frames go
 		{ int ct = 0; if (oapiReadItem_int(cfg, const_cast<char*>("CtxTest"), ct)) ctxTest = ct != 0; }   // test lines in Orbiter.log (clicks, the head camera)
@@ -288,6 +309,7 @@ namespace ocrew
 		load(bodyFig, "BodySkin", "BodyClips");
 		bodyFig.clips.walk.cubic = bodyFig.clips.run.cubic = true;   // coverall: smooth interpolation between mocap frames
 		load(suitFig, "SuitSkin", "SuitClips");
+		if (helmetView && suitFig.ok) hud.GlassSource(this, helmEye);   // the MFDs on the visor's glass (Meshes\Tantra\VisorGlassHud.msh)
 		// the suit has no seated motion of its own yet: it takes the coverall's (its bones are the coverall's first ones -
 		// the same skeleton without the fingers), cut to its own bones. Used only in the couches that give their pose
 		if (suitFig.ok && bodyFig.ok && !suitFig.clips.seats && bodyFig.clips.seats)
@@ -345,7 +367,7 @@ namespace ocrew
 		// helmet lamps in the side pods (rest pose, model frame); they follow the torso at run time
 		for (int i = 0; i < 2; ++i)
 		{
-			const VECTOR3 pos = _V(i ? -0.162 : 0.162, 0.707, 0.11), dir = unit(_V(0, -0.10, 1));
+			const VECTOR3 pos = _V(i ? -lampRest.x : lampRest.x, lampRest.y, lampRest.z), dir = unit(_V(0, -0.10, 1));
 			lamps[i] = static_cast<SpotLight*>(AddSpotLight(pos, dir, 60, 0.5, 0, 2e-3, 18 * RAD, 40 * RAD,
 				{ 1.0f, 0.97f, 0.90f, 0 }, { 1, 1, 1, 0 }, { 0, 0, 0, 0 }));
 			lamps[i]->Activate(false);
@@ -477,6 +499,7 @@ namespace ocrew
 		// the caption drawn by the display itself, last, into the same surface as its own signs (its light layer, or the VC
 		// HUD when paused): the same layer and sharpness as the HUD («Архитектор - скафандр», 2026-10-07)
 		hud.overlay = [this](oapi::Sketchpad* s, double W, double H, double kx, double ky) { CtxPaintPlate(s, W, H, kx, ky); };
+		hud.overlayNative = [this](const D3D11Hud::Api* gx, D3D11Hud::Canvas cv, double W, double H, double kx, double ky) { CtxPaintPlateNative(gx, cv, W, H, kx, ky); };
 		return true;
 	}
 
@@ -567,7 +590,11 @@ namespace ocrew
 		}
 		if (KEYMOD_CONTROL(kstate) || KEYMOD_ALT(kstate)) return 0;
 		if (key == OAPI_KEY_F) {
-			if (down && inShip && useKind == OC_EXIT && useId >= 0 && useShip == inShip && !useFallback) {
+			if (down && useKind == OC_DOORWAY && useId >= 0 && useShip) {      // a door aimed at: in or out, over the action wheel
+				if (cx.busy && cx.interruptible) CtxBreak(false);
+				DoUse();
+			}
+			else if (down && inShip && useKind == OC_EXIT && useId >= 0 && useShip == inShip && !useFallback) {
 				if (cx.busy && cx.interruptible) CtxBreak(false);  // the ladder exit wins over a nearby action wheel
 				DoUse();
 			}
@@ -583,7 +610,11 @@ namespace ocrew
 		if (key == OAPI_KEY_H && suitOn && oapiCameraInternal() && oapiCameraTarget() == GetHandle()) { if (down) hudOn = !hudOn; return 1; }
 		if (key == OAPI_KEY_CAPITAL && jet.Worn()) { if (down) ApRequest(SuitHud::AP_FINE); return 1; }   // the limiter
 		if (key == OAPI_KEY_V && !KEYMOD_SHIFT(kstate)) { if (down) ShipView(); return 1; }   // the ship from outside; again: her view
-		if (key == OAPI_KEY_V && suitOn) { if (down) { shadeTarget = shadeTarget > 0.5 ? 0 : 1; Say(shadeTarget > 0.5 ? Tr("СВЕТОФИЛЬТР: опущен", "VISOR SHADE: down") : Tr("СВЕТОФИЛЬТР: поднят", "VISOR SHADE: up")); } return 1; }
+		if (key == OAPI_KEY_V && suitOn && suit.Heavy()) {   // the heavy suit: its armoured louvres - the cameras (closed) or the window
+			if (down) { pzWindow = !pzWindow; pzAutoShut = false; pzShutReason.clear(); Say(pzWindow ? Tr("ШТОРКА ОТКРЫТА: обзор через окно", "LOUVRES OPEN: window view") : Tr("ШТОРКА ЗАКРЫТА: обзор камерами", "LOUVRES CLOSED: camera view")); }
+			return 1;
+		}
+		if (key == OAPI_KEY_V && suitOn) { if (down) { shadeTarget = shadeTarget > 0.5 ? 0 : 1; Say(visorMtrl >= 0 ? (shadeTarget > 0.5 ? Tr("СВЕТОФИЛЬТР: включён", "VISOR FILTER: on") : Tr("СВЕТОФИЛЬТР: выключен", "VISOR FILTER: off")) : shadeTarget > 0.5 ? Tr("СВЕТОФИЛЬТР: опущен", "VISOR SHADE: down") : Tr("СВЕТОФИЛЬТР: поднят", "VISOR SHADE: up")); } return 1; }
 		if (key == OAPI_KEY_L && suitOn && KEYMOD_SHIFT(kstate)) { if (down) LampModeNext(); return 1; }   // the beam: flood / work / spot
 		if (key == OAPI_KEY_L && suitOn) { if (down) { lampOn = !lampOn; Say(lampOn ? Tr("ФОНАРИ: вкл", "LAMPS: on") : Tr("ФОНАРИ: выкл", "LAMPS: off")); } return 1; }
 		if (key == OAPI_KEY_B && suitOn) { if (down && bio.CanAct()) { if (jet.Worn()) DropPack(); else TakePack(); } return 1; }
@@ -621,6 +652,20 @@ namespace ocrew
 		else if (suitOn) { walkV = 1.0; runV = (std::min)(2.2, bio.RunLimit()); }
 		if (suitOn) { walkV *= suit.walkFactor; runV *= suit.walkFactor; }   // the suit's class: a heavy one is slower
 		if (sink > 0.05) { walkV *= 0.35; runV = walkV; }                    // wading in a viscous melt
+		if (liqDepth > 0.02)
+		{
+			// wading in a sea (Titan's methane, 520 kg/m3): the liquid holds up what of her it covers (legs, then the trunk), so
+			// her soles push with less weight; and it drags on what moves through it, 1/2 rho Cd A v^2 (Cd ~1, A her frontal
+			// area under the level) - she walks as fast as her soles' push (~1/4 of her weight there) beats that drag
+			const double rhoL = 520.0, d = liqDepth;
+			const double aLeg = suitOn ? 0.030 : 0.013, aTrunk = suitOn ? 0.16 : 0.08;          // cross-sections [m2]
+			const double V = 2.0 * aLeg * (std::min)(d, 0.9) + aTrunk * std::clamp(d - 0.9, 0.0, 0.7);
+			g *= (std::max)(0.15, 1.0 - rhoL * V / (std::max)(Mass(), 30.0));
+			const double wLeg = suitOn ? 0.20 : 0.13, wTrunk = suitOn ? 0.50 : 0.36;            // frontal widths [m]
+			const double A = 2.0 * wLeg * (std::min)(d, 0.9) + wTrunk * std::clamp(d - 0.9, 0.0, 0.7);
+			const double vCap = std::sqrt(2.0 * 0.25 * Mass() * g / (rhoL * 1.0 * (std::max)(A, 0.01)));
+			walkV = (std::min)(walkV, vCap); runV = (std::min)(runV, 1.15 * vCap);
+		}
 		if (holding) { const double f = HeldSlow(); walkV *= f; runV = HeldWeight() > 0.6 * CarryLimit() ? walkV : runV * f; }   // her hands full
 		boost = drives && k.run && k.fwd;
 
@@ -1071,6 +1116,7 @@ namespace ocrew
 		const double SIGMA = 5.670e-8, ALPHA = suitOn ? suit.solarAlpha : 0.20, EPS = 0.85;
 		Thermal t;
 		OBJHANDLE sun = oapiGetGbodyByIndex(0), ref = GetSurfaceRef();
+		if (ref == sun) ref = nullptr;     // near the Sun it is the reference body itself: free space, not a planet in the way
 		VECTOR3 p, s, c{};
 		GetGlobalPos(p); oapiGetGlobalPos(sun, &s);
 		const VECTOR3 d = s - p; const double dist = length(d); const VECTOR3 u = d / dist;
@@ -1224,7 +1270,23 @@ namespace ocrew
 	{
 		// sun shade: about 0.8 s to travel; turned about the helmet centre's lateral axis (rest pose, model frame)
 		shade = Approach(shade, suitOn ? shadeTarget : 0.0, 1.25, dt);
-		if (&fig == &suitFig)
+		if (visorMtrl >= 0)
+		{
+			// the visor's own light filter (2026-10-20, in place of the shade): the suit's button (V, the HUD's ЩИТОК) darkens the
+			// glass itself - no automatics (the user: «ЕСТЬ КНОПКА В СКАФАНДРЕ, ЗАЧЕМ АВТО»). ~0.6 s to dark, ~1 s to clear;
+			// outside the glass goes from clear to a dark bronze, inside the HUD dims the view by it (d.shade)
+			const double dark = suitOn && shadeTarget > 0.5 ? 0.94 : 0.0;
+			photo += (dark - photo) * (1 - std::exp(-dt / (dark > photo ? 0.6 : 1.0)));
+			// as the D3D11 client draws glass (and the DX9 fork reads the same, «Форк DX9» 2026-10-20): a dark tint, alpha =
+			// 1 - transmission (0.97 clear .. 0.05 dark); the glints by Phong, specular white at power 200
+			if (&fig == &suitFig && fig.skin.Attached() && std::abs(photo - photoSent) > 0.01)
+			{
+				if (photoSent < 0.0) fig.skin.SetSpecular(visorMtrl, 1.0f, 1.0f, 1.0f, 200.0f);
+				fig.skin.SetDiffuse(visorMtrl, 0.02f, 0.02f, 0.025f, static_cast<float>(0.03 + 0.92 * photo / 0.94));
+				photoSent = photo;
+			}
+		}
+		else if (&fig == &suitFig)
 			for (const char* part : { "SunShade", "ShadeArms" })   // the hinge axis runs through the helmet centre and the side pods
 				fig.skin.MovePart(part, _V(0, 0.695, 0.045), _V(1, 0, 0), static_cast<float>(-(1 - shade) * 1.12));
 		if (&fig == &suitFig && capOpen != 0)   // the V1 cap: lifted by the same helmet drive (suit.helmetPos 0..1)
@@ -1263,14 +1325,24 @@ namespace ocrew
 			if (lampModeSet != lampMode)
 			{
 				lamps[i]->SetAperture(bm.umbra, bm.penumbra); lamps[i]->SetRange(bm.range); lamps[i]->SetAttenuation(0.5, 0, bm.att2);
-				lampHalo[i].size = bm.halo;
+				lampHalo[i].size = bm.halo * (suit.Heavy() ? 0.3 : 1.0);
+				lampGlow[i].size = suit.Heavy() ? 0.007 : 0.018;
 			}
 			lamps[i]->Activate(live);
 			lampGlow[i].active = live; lampHalo[i].active = live;
 			if (!live || spine < 0) continue;
-			const VECTOR3 rest = _V(i ? -0.162 : 0.162, 0.707, 0.11), p = fig.skin.Point(spine, rest);
+			const VECTOR3 rest = _V(i ? -lampRest.x : lampRest.x, lampRest.y, lampRest.z), p = fig.skin.Point(spine, rest);
 			lamps[i]->SetPosition(p);
 			lampGlowPos[i] = fig.skin.Point(spine, rest + _V(0, -0.0012, 0.012));
+			if (debugLog && i == 0)   // (2026-10-20: the lamp seen at her belt - where it really is, by figure)
+			{
+				static double lampLogT = 0; if ((lampLogT -= oapiGetSysStep()) <= 0)
+				{
+					lampLogT = 5.0;
+					oapiWriteLogV("OrbiterCrew: %s lamp: %s figure, bone Spine1 %d, rest (%.3f %.3f %.3f) -> light (%.3f %.3f %.3f), glow (%.3f %.3f %.3f)",
+						name.c_str(), &fig == &suitFig ? "suit" : "body", spine, rest.x, rest.y, rest.z, p.x, p.y, p.z, lampGlowPos[i].x, lampGlowPos[i].y, lampGlowPos[i].z);
+				}
+			}
 			static_cast<SpotLight*>(lamps[i])->SetDirection(unit(fig.skin.Point(spine, rest + _V(0, -0.10, 1)) - p));
 		}
 		lampModeSet = lampMode;
@@ -1334,7 +1406,7 @@ namespace ocrew
 			stepDustLvl = 0;
 			int gnd = 0; double wet = 0.0; jet.GroundUnder(gnd, wet);
 			double kg = 0.0;
-			if (stepPuff > 0 && !inShip && gnd != AtmoFXPart::LIQUID) kg = 1000.0 * 0.03 * 5e-4 * (0.5 + stepKick) / 0.15;
+			if (stepPuff > 0 && !inShip && gnd != AtmoFXPart::LIQUID && liqDepth <= 0.02) kg = 1000.0 * 0.03 * 5e-4 * (0.5 + stepKick) / 0.15;
 			const double vOut = 1.75 * stepKick;   // the squeezed gas leaves the sole's edge at ~5x its down speed, ~1/3 of it on average round the boot
 			AtmoFXPart::Emit(GetHandle(), 7300, _V(0, -height + 0.03, 0.08), _V(0, vOut, 0), 1.45, 0.7, kg, AtmoFXPart::SOIL, gnd, wet, 0.15, 0.0);   // (0.15 s: the squeeze's puff carries the fines)
 			if (kg > 0.0 && debugLog)
@@ -1369,6 +1441,64 @@ namespace ocrew
 #endif
 		stepDustLvl = stepPuff > 0 ? 0.6 : 0.0;
 		if (iceT > 0) { iceT -= dt; if (iceT <= 0) iceLvl = 0; }
+	}
+
+	// wading: the liquid's depth over the ground under her (its level from the body's Config\GC\<body>.atm.cfg,
+	// AtmoFX_LiquidLevel - the one the client draws), and what the AtmoFX client shows of it: a wake round each leg at the level
+	// while it crosses it (round the trunk once deeper than the legs), rings where a foot comes down into it, and the drops a
+	// brisk step throws. Without the client the calls do nothing
+	void CrewMember::UpdateWading(double dt)
+	{
+		liqDepth = 0.0;
+		OBJHANDLE ref = GetSurfaceRef();
+		if (ref && titanEnv && (GetFlightStatus() & 1) && !inShip)
+		{
+			char nm[64] = ""; oapiGetObjectName(ref, nm, sizeof nm);
+			if (liqBody != nm)
+			{
+				liqBody = nm; liqHas = false; liqLevel = 0.0;
+				char path[128]; std::snprintf(path, sizeof path, "GC/%s.atm.cfg", nm);
+				if (FILEHANDLE f = oapiOpenFile(path, FILE_IN_ZEROONFAIL, CONFIG))
+				{
+					liqHas = oapiReadItem_float(f, const_cast<char*>("AtmoFX_LiquidLevel"), liqLevel);
+					oapiCloseFile(f, FILE_IN_ZEROONFAIL);
+				}
+				if (liqHas) oapiWriteLogV("OrbiterCrew: %s: the liquid's level on %s %.2f m (wading)", name.c_str(), nm, liqLevel);
+			}
+			if (liqHas) liqDepth = (std::max)(0.0, liqLevel - GetSurfaceElevation());
+		}
+		const double d = liqDepth, y = -height + d;   // the level in her frame (her soles at -height)
+		const bool legs = d > 0.02 && d < 0.95, trunk = d >= 0.95 && d < 1.7;
+		const double st = 0.30 + 0.30 * (std::min)(1.0, d / 0.8);
+		auto node = [&](int k, int id, const VECTOR3& p, double r, double s) {
+			if (s == 0.0 && wakeSent[k] == 0.0) return;   // (gone: removed once)
+			AtmoFXWake::Set(GetHandle(), id, p, s > 0.0 ? r : 0.0, s); wakeSent[k] = s;   // (radius and strength 0: the node removed)
+		};
+		node(0, 7310, _V(-0.12, y, 0.0), suitOn ? 0.10 : 0.08, legs ? st : 0.0);
+		node(1, 7311, _V(0.12, y, 0.0), suitOn ? 0.10 : 0.08, legs ? st : 0.0);
+		node(2, 7314, _V(0.0, y, 0.0), suitOn ? 0.28 : 0.20, trunk ? 0.6 : 0.0);
+#ifdef OC_ATMOFXPART
+		// a foot coming down into it: rings, and on a brisk step the drops it throws (~1/10 of the liquid the sole's area sweeps
+		// at its speed, over the 0.15 s it breaks the surface) - not once the level is over the knee
+		const double v = std::hypot(fwd, lat);
+		double kg = 0.0;
+		// the entry rings' nodes: the client rings them on its next frame, then they go (a node would keep bobbing)
+		if (wadeImpT > 0.0 && (wadeImpT -= dt) <= 0.0)
+			for (int id : { 7312, 7313 }) AtmoFXWake::Set(GetHandle(), id, _V(0, 0, 0), 0.0, 0.0);
+		if (d > 0.02 && d < 0.95 && stepPuff > 0.0)
+		{
+			if (stepPuff > wadePrevPuff + 1e-6)   // a new footfall (its puff just restarted)
+			{
+				const double x = (wadeFoot ^= 1) ? 0.12 : -0.12;
+				AtmoFXWake::Set(GetHandle(), 7312 + wadeFoot, _V(x, y, 0.15), suitOn ? 0.10 : 0.08, 2.0);
+				wadeImpT = 0.2;
+			}
+			if (v > 0.6 && d < 0.7) kg = 0.1 * 520.0 * 0.035 * v;
+		}
+		wadePrevPuff = stepPuff;
+		AtmoFXPart::Emit(GetHandle(), 7320, _V(wadeFoot ? 0.12 : -0.12, y + 0.05, 0.2), _V(0, 0.8 * v + 0.4, 0.6 * v), 0.5, 0.5, kg,
+		                 AtmoFXPart::DROP, 0, 0.0, 0.0, 0.0);
+#endif
 	}
 
 	void CrewMember::UpdateRcsFx()
@@ -1497,6 +1627,10 @@ namespace ocrew
 		static double perfStepUs = 0, perfT = 0; static int perfFrames = 0;
 		struct StepScope { std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
 			~StepScope() { perfStepUs += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count(); } } stepScope;
+		// ... and by part of the step (all crew): what costs besides the skinning
+		static double perfSecUs[10] = {};
+		auto perfLast = std::chrono::steady_clock::now();
+		auto lap = [&](int k) { const auto now = std::chrono::steady_clock::now(); perfSecUs[k] += std::chrono::duration<double, std::micro>(now - perfLast).count(); perfLast = now; };
 		if (debugLog && oapiGetFocusInterface() == this)
 		{
 			++perfFrames;
@@ -1505,6 +1639,12 @@ namespace ocrew
 				oapiWriteLogV("OrbiterCrew: perf: %.1f fps; crew steps %.2f ms/frame (all crew), skinning %.2f ms/frame (of it the uploads %.2f; %d meshes/frame); camera %s",
 					perfFrames / perfT, perfStepUs / 1000.0 / perfFrames, Skin::perfUs / 1000.0 / perfFrames, Skin::perfEditUs / 1000.0 / perfFrames,
 					perfFrames ? static_cast<int>(Skin::perfN / perfFrames) : 0, oapiCameraInternal() ? "internal" : "external");
+				const double kf = 1.0 / (1000.0 * perfFrames);
+				oapiWriteLogV("OrbiterCrew: perf by part (ms/frame, all crew): air + use + view %.2f, ground fx %.2f, power %.2f, lava %.2f, suit + body + radiation %.2f, "
+					"jet pack %.2f, posture + walking %.2f, HUD %.2f, animation %.2f (skinning in it %.2f), in a ship / riding %.2f",
+					perfSecUs[0] * kf, perfSecUs[1] * kf, perfSecUs[2] * kf, perfSecUs[3] * kf, perfSecUs[4] * kf, perfSecUs[5] * kf, perfSecUs[6] * kf,
+					perfSecUs[7] * kf, perfSecUs[8] * kf, Skin::perfUs * kf, perfSecUs[9] * kf);
+				for (double& u : perfSecUs) u = 0;
 				perfT = 0; perfFrames = 0; perfStepUs = 0; Skin::perfUs = 0; Skin::perfEditUs = 0; Skin::perfN = 0;
 			}
 		}
@@ -1517,7 +1657,7 @@ namespace ocrew
 			// Ride mode stops the contextual-action clock; end its transaction before switching
 			// update paths, otherwise the ship-side animation can remain reserved forever.
 			if (cx.busy) CtxBreak(false);
-			RideStep(dt); return;
+			lap(0); RideStep(dt); lap(9); return;
 		}
 		FindUse(dt);
 		CtxStep(dt);
@@ -1549,16 +1689,19 @@ namespace ocrew
 				DefSetStateEx(&s);
 			}
 		}
-		if (inShip) { settling = false; InteriorStep(dt); if (takeView && inParent) ApplyView(); return; }
+		lap(0);
+		if (inShip) { settling = false; InteriorStep(dt); if (takeView && inParent) ApplyView(); lap(9); return; }
 		if (settling) Settle(simt, dt);
 		jet.SetOxygen(air.ppO2 > 1.0);   // steam behind the jets only where hydrogen can burn
 		titanEnv = air.p > 50 && air.ppO2 < 1.0 && air.T < 150;   // cold dense air without oxygen (Titan: 147 kPa, 94 K)
 		jet.SetTitan(titanEnv);
 		UpdateTitanFx(dt);
 		UpdateRcsFx();
+		UpdateWading(dt);
 		const double g = Gravity();
 		const bool landed = (GetFlightStatus() & 1) != 0;
 		UpdateRcs(!landed && !airborne);
+		lap(1);
 
 		// ---- life support ----
 		// her legs pay for what the drives do not carry; the drives pay in watts (motors ~85 %, muscle ~25 % efficient)
@@ -1583,6 +1726,7 @@ namespace ocrew
 		else humanW = LocomotionPower(Mass(), v, g) * 1.35;   // dead drives: extra mass and stiff joints
 		if (frame.Worn() && !frame.Live()) humanW = LocomotionPower(Mass(), v, g) * 1.35;   // a flat frame: dead weight on her
 		thermal = Surroundings();
+		lap(2);
 		// a lava field: does the crust under her hold? A step (or standing) on the melt (kind 6) or a crust under 2 cm breaks
 		// through; 2..5 cm breaks with a chance growing towards 2 cm (decided per raster cell by a fixed hash, the same rule
 		// the lava field draws its traces by); 5 cm and more holds. Through it, her feet settle into the melt in ~2-5 s
@@ -1618,6 +1762,7 @@ namespace ocrew
 			if (std::abs(sink - before) > 0.002) Place(lying);
 		}
 		else if (sink > 0 && !landed) { sink = sinkTarget = 0; }
+		lap(3);
 		if (sink > 0.02) thermal.contactT = suit.meltK;   // the soles in the melt itself
 		suit.immersion = suitOn ? sink : 0;
 		double heat;
@@ -1673,6 +1818,7 @@ namespace ocrew
 			}
 		}
 
+		lap(4);
 		// ---- jet pack ----
 		const double altFeet = GetAltitude(ALTMODE_GROUND) - height;
 		const int req = hud.TakeRequest();
@@ -1703,6 +1849,7 @@ if (landed && !airborne && bio.CanAct() && jet.Lift() > GetMass() * g * jet.Lift
 		// fallen and pushed loose by the ground contact (lying on the pack): she gets up when the fall is over all the same
 		if (lying && !landed && !airborne && fallenT <= 0 && bio.CanAct()) StandUp();
 
+		lap(5);
 		// ---- posture and movement ----
 		if (airborne)
 		{
@@ -1730,8 +1877,11 @@ if (landed && !airborne && bio.CanAct() && jet.Lift() > GetMass() * g * jet.Lift
 		}
 		else fwd = lat = turn = accel = 0;
 		keysFresh = false;
+		lap(6);
 		HudBySuit();
+		lap(7);
 		Animate(dt, g, landed);
+		lap(8);
 	}
 
 	// The eyes aboard a ship: the specific force at the eyes (the ship's thrust, lift and drag over its mass, plus the
@@ -1903,7 +2053,7 @@ if (landed && !airborne && bio.CanAct() && jet.Lift() > GetMass() * g * jet.Lift
 			in.landing = landingSpeed;
 			in.effort = (std::min)(1.0, bio.Effort()); in.fatigue = bio.Fatigue(); in.breathRate = bio.breath;
 			in.walkTop = walkSpeed * (suitOn ? 0.9 * suit.walkFactor : 1.0);
-			in.suited = suitOn; in.heavy = suitOn ? 1.0 - suit.walkFactor : 0.0; in.armOutDeg = suitOn ? suit.armOutDeg : -1; in.legOutDeg = suitOn ? suit.legOutDeg : -1; in.foreArmInDeg = suitOn ? suit.foreArmInDeg : 0; in.bound = boost ? std::clamp((std::hypot(fwd, lat) - 3.5) / 2.5, 0.0, 1.0) : 0.0;
+			in.suited = suitOn; in.heavy = suitOn ? 1.0 - suit.walkFactor : 0.0; in.armOutDeg = suitOn ? suit.armOutDeg : -1; in.legOutDeg = suitOn ? suit.legOutDeg : -1; in.foreArmInDeg = suitOn ? suit.foreArmInDeg : 0; in.suitModel = suitOn ? (suit.Heavy() ? 2 : 1) : 0; in.bound = boost ? std::clamp((std::hypot(fwd, lat) - 3.5) / 2.5, 0.0, 1.0) : 0.0;
 			in.floating = !landed && !airborne;
 			if (in.floating) GetAngularVel(in.angVel);
 			if (in.floating) { VECTOR3 f; GetThrustVector(f); in.thrustAcc = f / GetMass(); GetAngularAcc(in.angAcc); }
@@ -1912,9 +2062,30 @@ if (landed && !airborne && bio.CanAct() && jet.Lift() > GetMass() * g * jet.Lift
 			fig.skin.SetHideHead(firstPerson);
 			// from inside the helmet its own parts sit at the camera: seen from within they show cut edges and their dark
 			// inner faces. The body below the neck stays in view; the helmet, the visor, the shade and its arms do not
-			for (const char* part : { "Helm", "Visor", "SunShade", "ShadeArms", "NeckSeal" }) fig.skin.SetPartHidden(part, firstPerson);
+			// (HelmetView: from inside the helmet - its liner, rim, chin bar and neck ring stay and frame the view, as the helmet
+			// sits on the torso and the head turns in it; the glass at 2-3 cm from the eye and the shade go. Under D3D11 only)
+			const bool inHelm = firstPerson && (helmetView || (suit.Heavy() && pzWindow)) && suitOn && suit.helmetPos < 0.5 && GetModuleHandleA("D3D11Client.dll") != nullptr;   // (the heavy suit's window view: its helmet frames the view)
+			inHelmView = inHelm;
+			// (inside: the helmet's inner shell alone - InHelm, one smooth dark shell with the glass's opening, built for this
+			//  view (Tantra_Design/blender/add_helmet_inner.py) - the outer parts' seams and gaps hidden with them; outside: it
+			//  goes, the helmet as it was)
+			const bool hasInner = fig.skin.HasPart("InHelm");
+			for (const char* part : { "Helm", "NeckSeal" }) fig.skin.SetPartHidden(part, firstPerson && !(inHelm && !hasInner));   // (no InHelm: its own parts frame the view)
+			if (hasInner) fig.skin.SetPartHidden("InHelm", !inHelm);
+			for (const char* part : { "Visor", "SunShade", "ShadeArms" }) fig.skin.SetPartHidden(part, firstPerson);
 			if (suitOn && suit.helmetPos > 0.5) for (const char* part : { "Visor", "SunShade", "ShadeArms" }) fig.skin.SetPartHidden(part, true);   // the front open: her face seen
+			if (visorMtrl >= 0) for (const char* part : { "SunShade", "ShadeArms" }) fig.skin.SetPartHidden(part, true);   // a photochromic visor: no shade
 			if (&fig == &suitFig) fig.skin.SetPartHidden("Set", !who.worn.suit.setOn);   // the class's set: its plates (Wearable SetPlates)
+			if (&fig == &suitFig && hideHair) fig.skin.SetPartHidden("Hair", suit.helmetPos < 0.5);   // tucked under a compact hard helmet
+			if (inHelm && suit.Heavy()) fig.skin.SetPartHidden("HelmCapGd", true);
+			if (&fig == &suitFig && suit.Heavy())   // the louvres: the five slats come down one by one from the brow bar (and go up in turn)
+			{
+				const double target = pzWindow ? 0.0 : 1.0, before = louvreT;
+				louvreT = Approach(louvreT, target, 1.0 / 1.2, dt); louvreMoving = std::abs(louvreT - before) > 1e-6;
+				const bool hideAll = firstPerson && !inHelm;   // (the camera view: no helmet parts at the camera)
+				for (int k = 0; k < 5; ++k) { char nm[16]; snprintf(nm, sizeof nm, "HelmCapLv%d", k); fig.skin.SetPartHidden(nm, hideAll || louvreT < (k + 0.5) / 5.0); }
+				fig.skin.SetPartHidden("HelmCapLu", hideAll || louvreT > 0.9);
+			}   // its glass, opaque from outside (a mirror), at 2 cm from her eye: the view through it
 			UpdateHelmet(dt, fig);
 			if (&fig == &suitFig) { jet.Pose(fig.skin); jet.PoseFan(fig.skin, vis); }
 			in.jet = jet.Worn();
@@ -1997,10 +2168,52 @@ if (landed && !airborne && bio.CanAct() && jet.Lift() > GetMass() * g * jet.Lift
 #endif
 			}
 			lastFootfalls = footfalls;
-			if (firstPerson) {   // the camera rides the head; aboard a ship the head rides the ship's accelerations
-				const VECTOR3 e = fig.skin.Point(fig.skin.Bone("Head"), eye);
-				camEye = e + HeadSwayStep(dt, e);
+			// the heavy suit's synthetic vision (helmet C, the user 2026-10-20): its louvres closed, she sees the frame's
+			// cameras on the helmet display - fixed on the helmet (on the torso), not on her head: the stereo pair in the
+			// top bar while she looks within ~35 deg of ahead, the wide camera of that side's module beyond (hysteresis
+			// 32/38 deg); the display's crop follows her gaze. No head sway: the cameras do not move with her head
+			// the louvres close by themselves where the window must not stay open: lava under or by her, strong radiation,
+			// heat over the glass's rating (~+250 C outside)
+			if (pzWindow && suitOn && suit.Heavy() && (suit.immersion > 0.005 || suit.radRate > 0.05 || thermal.tEnv > 523.0 || thermal.contactT > 600.0))
+			{ pzWindow = false; pzAutoShut = true;
+			  pzShutReason = suit.immersion > 0.005 || thermal.contactT > 600.0 ? Tr("лава", "lava") : suit.radRate > 0.05 ? Tr("радиация", "radiation") : Tr("жара", "heat"); Say(Tr("ШТОРКА ЗАКРЫТА АВТОМАТИЧЕСКИ: опасная среда", "LOUVRES CLOSED AUTOMATICALLY: hazard"), 1); }
+			const bool synth = firstPerson && suitOn && suit.Heavy() && suit.helmetPos <= 0 && !inShip && !pzWindow;
+			if (synth) {
+				const double rel = std::remainder(headYaw, PI2) * DEG;
+				if (synthCam == 0 && std::abs(rel) > 38) synthCam = rel > 0 ? 1 : -1;
+				else if (synthCam != 0 && std::abs(rel) < 32) synthCam = 0;
+				const VECTOR3 rest = synthCam == 0 ? _V(0, 0.736, 0.205) : _V(synthCam > 0 ? 0.128 : -0.128, 0.710, 0.150);
+				camEye = fig.skin.Point(fig.skin.Bone("Spine1"), rest);
+				headSway.Reset(); SetCameraOffset(camEye);
+			} else if (firstPerson) {   // the camera rides the head; aboard a ship the head rides the ship's accelerations
+				// (the helmet view: the eye on the helmet - it sits on the torso, Spine1 - between its lamps)
+				const VECTOR3 e = inHelmView ? fig.skin.Point(fig.skin.Bone("Spine1"), helmEye) : fig.skin.Point(fig.skin.Bone("Head"), eye);
+				// (in the helmet no sway: the eye is fixed in it - the sway carried the camera 3-5 cm off, out through the inner
+				//  shell, 2026-10-20)
+				if (inHelmView) {
+					// Orbiter turns its cockpit camera about a neck point ~10 cm under and ~8 cm behind the eye (measured
+					// 2026-10-20 from the log: looking 42 deg down the camera stood 8 cm low and 5 cm forward of the eye set,
+					// 30 up 2.6 cm high and 6 cm back): the offset is set against that swing, so the camera lands on the eye
+					const double hy = 0.099, hz = 0.079, yw = headYaw, pt = headPitch;
+					const double y1 = hy * std::cos(pt) + hz * std::sin(pt), z1 = -hy * std::sin(pt) + hz * std::cos(pt);
+					const VECTOR3 swing = _V(z1 * std::sin(yw), y1, z1 * std::cos(yw)) - _V(0, hy, hz);
+					headSway.Reset(); camEye = e - swing;
+				}
+				else camEye = e + HeadSwayStep(dt, e);
 				SetCameraOffset(camEye);
+				if (debugLog)   // (2026-10-20: the helmet view seen from her middle - where the camera really is)
+				{
+					static double camLogT = 0; if ((camLogT -= oapiGetSysStep()) <= 0)
+					{
+						camLogT = 5.0;
+						VECTOR3 cg, cl; oapiCameraGlobalPos(&cg); Global2Local(cg, cl);
+						const int hb = fig.skin.Bone("Head");
+						const VECTOR3 hj = fig.skin.Point(hb, _V(0, 0.666, 0.041));
+						const VECTOR3 want = inHelmView ? fig.skin.Point(fig.skin.Bone("Spine1"), helmEye) : camEye;
+						oapiWriteLogV("OrbiterCrew: %s eye: helmet view %d, head bone %d (joint at %.3f %.3f %.3f), eye wanted (%.3f %.3f %.3f), offset set (%.3f %.3f %.3f), camera at (%.3f %.3f %.3f) - off by %.3f m, yaw %.0f pitch %.0f",
+							name.c_str(), inHelmView ? 1 : 0, hb, hj.x, hj.y, hj.z, want.x, want.y, want.z, camEye.x, camEye.y, camEye.z, cl.x, cl.y, cl.z, length(cl - want), headYaw * DEG, headPitch * DEG);
+					}
+				}
 			} else { headSway.Reset(); if (thirdIn) camEye = fig.skin.Point(fig.skin.Bone("Head"), eye); }   // (from behind: AimHead)
 		}
 		// ---- sound ----
@@ -2017,8 +2230,9 @@ if (landed && !airborne && bio.CanAct() && jet.Lift() > GetMass() * g * jet.Lift
 			si.compStrain = suit.compStrain; si.evap = suit.evapMaxW > 0 ? suit.evapW / suit.evapMaxW : 0.0;
 			si.coils = suit.FieldUp() && suit.fieldW > 0 ? suit.FieldW() / suit.fieldW * (suit.fieldW / 2000.0 + 0.3) : 0.0;
 			// the drives: their load against ~300 W, their rate by her pace (walking ~0.4, running 1)
-			si.drives = suit.Drives() ? std::clamp(suit.driveW / 300.0, 0.0, 1.0) : 0.0;
-			si.driveRate = suit.Drives() ? std::clamp(std::hypot(fwd, lat) / 3.0, 0.0, 1.0) : 0.0;
+			si.drives = suit.Drives() && suit.driveSound ? std::clamp(suit.driveW / 300.0, 0.0, 1.0) : 0.0;
+			si.driveRate = suit.Drives() && suit.driveSound ? std::clamp(std::hypot(fwd, lat) / 3.0, 0.0, 1.0) : 0.0;
+			if (louvreMoving && suit.Heavy()) { si.driveRate = (std::max)(si.driveRate, 0.9); si.drives = (std::max)(si.drives, 0.4); }   // the louvres' drives
 		}
 		else si.drives = si.driveRate = 0;
 		// the shell's layers against each other: from -120 C down and from +150 C up, full at -200 / +450 C
@@ -2095,6 +2309,48 @@ if (landed && !airborne && bio.CanAct() && jet.Lift() > GetMass() * g * jet.Lift
 	}
 
 
+	// the caption on the D3D11 client's canvas: the same boxes, marks and text runs; the text in the display's
+	// signed-distance font, at the glyph atlas's sizes and colours
+	void CrewMember::CtxPaintPlateNative(const D3D11Hud::Api* gx, D3D11Hud::Canvas cv, double vw, double vh, double kx, double ky)
+	{
+		if (!gx || !cv || !plateOn || vw < 1 || vh < 1 || !suitOn || !hudOn || !oapiCameraInternal() || oapiCameraTarget() != GetHandle()) return;
+		auto rect = [&](double x0, double y0, double x1, double y1, DWORD col)
+		{
+			gx->Rect(cv, static_cast<float>(std::lround(x0 * kx)), static_cast<float>(std::lround(y0 * ky)), static_cast<float>(std::lround(x1 * kx)), static_cast<float>(std::lround(y1 * ky)), col | 0xFF000000u, 0, 0);
+		};
+		for (const CtxBox& b : plateBoxes) rect(b.x0, b.y0, b.x1, b.y1, b.col);
+		if (plateMarks)
+		{
+			VECTOR3 cg; oapiCameraGlobalPos(&cg); MATRIX3 Rc; oapiCameraRotationMatrix(&Rc);
+			const double f = vh / (2 * std::tan((std::max)(0.1, oapiCameraAperture())));
+			for (const auto& m : cx.marks)
+			{
+				if (!oapiIsVessel(m.ship)) continue;
+				VECTOR3 g; oapiGetVesselInterface(m.ship)->Local2Global(m.pos, g);
+				const VECTOR3 c = tmul(Rc, g - cg);
+				if (c.z < 0.1) continue;
+				const double sx = std::round(vw / 2.0 + c.x / c.z * f), sy = std::round(vh / 2.0 - c.y / c.z * f);
+				const double h = m.reach ? 5 : 3;
+				rect(sx - h, sy - h, sx + h, sy + h, 0xFF2699FF);   // orange
+			}
+		}
+		if (!hud.sdf[0]) return;
+		static const DWORD ATLAS_COL[7] = { 0xFFFFE246, 0xFF2894FF, 0xFFFFF8F2, 0xFF4646FF, 0xFFA58E5E, 0xFF527BA3, 0xFF9C8D7D };   // HudFont's colours, 0xAABBGGRR
+		static const double SIZE_EM[4] = { 9.5, 11, 13, 15 };
+		for (const CtxRun& r : plateRuns)
+		{
+			const int si = std::clamp(r.size, 0, 3);
+			const float em = static_cast<float>(SIZE_EM[si] * 2.0 * 0.5 * (kx + ky));
+			const DWORD col = r.black ? 0xFF000000u : ATLAS_COL[std::clamp(r.col, 0, 6)];
+			// a thin, faint halo: the display's own (0.16 em at 0.55) spread round each letter and made the menu's words
+			// look bold and soft (the user, 2026-10-21: «жирноват шрифт. или плохо сглажен»)
+			gx->SetGlow(cv, r.black ? 0.0f : em * 0.05f, 0.22f);
+			gx->Text(cv, hud.sdf[si == 3 && hud.sdf[1] ? 1 : 0], static_cast<float>(r.x * kx), static_cast<float>(r.base * ky), em, r.u.c_str(), col,
+				(r.align == 1 ? D3D11Hud::CENTER : r.align == 2 ? D3D11Hud::RIGHT : D3D11Hud::LEFT) | D3D11Hud::BASELINE);
+		}
+		gx->SetGlow(cv, 0, 0);
+	}
+
 	// every frame for every body: only the one whose eyes we look through, in the suit, with the HUD on, draws it
 	void CrewMember::DrawSuitHud(oapi::Sketchpad* skp, DWORD W, DWORD H)
 	{
@@ -2149,8 +2405,10 @@ if (landed && !airborne && bio.CanAct() && jet.Lift() > GetMass() * g * jet.Lift
 		d.life = &suit;   // the suit itself: its loads, equipment heat, SERVO and ECONOMY switches (the display's)
 		d.frame = frame.Worn() ? &frame : nullptr;   // «СОЕДИНЕНИЯ»: the frame's cassette and its link to the suit
 		d.liftKg = LiftLimit(); d.heldKg = holding && held.kind != OC_HELD_PLUG ? HeldWeight() : 0;
-		d.shadeDown = shadeTarget > 0.5; d.lampsOn = lampOn && suit.LampsUp(); d.lampMode = lampMode; d.shade = shade;
+		d.shadeDown = shadeTarget > 0.5; d.lampsOn = lampOn && suit.LampsUp(); d.lampMode = lampMode; d.shade = visorMtrl >= 0 ? photo : shade;
 		d.firstPerson = oapiCameraInternal() && oapiCameraTarget() == GetHandle() && !thirdIn;
+		// the heavy suit's vision: the camera on the display (0 stereo, +1 right, -1 left), the window view, the louvres' automatic close
+		d.pzCam = synthCam; d.pzWindow = suitOn && suit.Heavy() && pzWindow; d.pzAutoShut = pzAutoShut; d.pzShutReason = pzShutReason;
 		d.speed = std::hypot(fwd, lat); d.simt = oapiGetSimTime();
 		jet.Fill(d);
 		std::string w = bio.warning;
@@ -2677,8 +2935,8 @@ namespace ocrew
 				}
 		}
 		else if ((seat != 2 && !atPost) || !inShip || !mine) seatGauges.clear();
-		if (!mine || !bio.CanAct() || seat || airborne || lying) { cx.ship = nullptr; cx.node = -1; cx.acts.clear(); cx.marks.clear(); g_wheelEat = false; farNode = false; return; }
-		if (!g_msgHook) HookWheel();
+		if (!mine || !bio.CanAct() || seat || airborne || lying) { cx.ship = nullptr; cx.node = -1; cx.acts.clear(); cx.marks.clear(); WheelEat(GetHandle(), false); farNode = false; return; }
+		HookWheel();
 		// which node: every 0.1 s, the one nearest the ray within reach
 		if ((cx.scanT -= dt) <= 0 && !cx.busy)
 		{
@@ -2823,9 +3081,8 @@ namespace ocrew
 			if (keep < 0) for (int k = 0; k < static_cast<int>(cx.acts.size()); ++k) if (cx.acts[k].available) { cx.sel = k; break; }
 		}
 		if ((!si && !cx.local) || cx.node < 0) cx.acts.clear();
-		// the wheel: hers only while two or more are listed
+		// the wheel: hers all the time her menu is up (CtxDraw), it picks among two or more
 		const int n = static_cast<int>(cx.acts.size());
-		g_wheelEat = n >= 2 && !cx.busy;
 		const int w = g_wheel.exchange(0);
 		if (n >= 2 && w != 0) cx.sel = ((cx.sel + (w < 0 ? 1 : -1) * (std::max)(1, std::abs(w) / WHEEL_DELTA)) % n + n) % n;
 		// M-1: a click on a row of the panel picks it and does it; on the node: does the picked one
@@ -3128,6 +3385,10 @@ namespace ocrew
 		// is not shown all the time she drives (the user, 2026-10-07: «постоянное ВСТАТЬ в машине - убрать»)
 		const bool fHint = !nodeMenu && !seat && ((!useHint.empty() && (!(suitOn && hudOn) || ctxTest)) || farNode) && bio.CanAct();
 		const bool menu = nodeMenu || fHint;
+		// the wheel is the menu's while it is up - the node's menu (one action or more, or a long one going on) or F's
+		// hint, here or on the suit's display; never Orbiter's zoom then
+		const bool hudHint = !seat && !useHint.empty() && bio.CanAct();
+		WheelEat(GetHandle(), oapiGetFocusObject() == GetHandle() && (menu || hudHint || cx.busy));
 		const bool cross = simCursor;
 		const bool gauges = !seatGauges.empty();
 		const bool marks = cx.cursor && !cx.marks.empty();
@@ -3140,7 +3401,10 @@ namespace ocrew
 		const bool bare = eyesHere && !(suitOn && hudOn);
 		const bool sayNow = bare && messageTime > 0 && !message.empty();
 		const std::string warn = bare ? WarnLabel(bio.warning) : std::string();
-		const bool show = menu || cross || gauges || marks || sayNow || !warn.empty();
+		// only the person in focus shows anything: the layer is laid before the camera, and one left by the car kept her
+		// «F кресло водителя» before the eyes of the one the user switched to (the user, 2026-10-21: «за мной увязалась
+		// кнопка f... после переключения на другого персонажа»)
+		const bool show = oapiGetFocusObject() == GetHandle() && (menu || cross || gauges || marks || sayNow || !warn.empty());
 		// in the suit with its display on: onto the display's plate (CtxPaintPlate); else our own layer before her eyes
 		const bool plate = oapiCameraInternal() && oapiCameraTarget() == GetHandle() && suitOn && hudOn && !thirdIn;
 		plateOn = false; plateRuns.clear(); plateBoxes.clear(); plateMarks = plate && marks && marksLit;
@@ -3171,14 +3435,20 @@ namespace ocrew
 		VECTOR3 C;
 		if (oapiCameraInternal() && oapiCameraTarget() == GetHandle() && !thirdIn)
 		{
-			C = camEye;
+			const double y = headAsked ? headWantYaw : headYaw, p = headAsked ? headWantPitch : headPitch;
 			if (headAsked)   // her eyes: the look set this frame (yaw from her vessel's nose, + right; pitch + up)
 			{
-				const double y = headWantYaw, p = headWantPitch;
 				F = _V(std::sin(y) * std::cos(p), std::sin(p), std::cos(y) * std::cos(p));
 				R = _V(std::cos(y), 0, -std::sin(y));
 				U = crossp(F, R);
 			}
+			// where the camera really is: Orbiter turns it about the neck point under and behind the offset set (camEye),
+			// the same swing the helmet view sets against (Pose). The layer was laid from camEye: looking down the camera
+			// stood ~8 cm nearer the layer than that and the menu came out half the screen (the user, 2026-10-21: «как в
+			// скафандре так и без должно быть меню а не на полэкрана»)
+			const double hy = 0.099, hz = 0.079;
+			const double y1 = hy * std::cos(p) + hz * std::sin(p), z1 = -hy * std::sin(p) + hz * std::cos(p);
+			C = camEye + _V(z1 * std::sin(y), y1, z1 * std::cos(y)) - _V(0, hy, hz);
 		}
 		else { VECTOR3 cg; oapiCameraGlobalPos(&cg); Global2Local(cg, C); }
 		// 0.25 m: well beyond the cockpit's near plane (0.1 m, D3D9Client VCNearPlane). The helmet display's plate is never
@@ -3471,7 +3741,7 @@ namespace ocrew
 		seat = 0; seatT = 0; seatId = -1; carried = 0;
 		fwd = lat = turn = accel = 0; airborne = false; lying = false;
 		cx.ship = nullptr; cx.node = -1; cx.local = 0; cx.acts.clear(); cx.marks.clear();
-		g_wheelEat = false; farNode = false;
+		WheelEat(GetHandle(), false); farNode = false;
 		who.where = Person::IN_WORLD; who.ship = nullptr;
 	}
 
@@ -3484,7 +3754,7 @@ namespace ocrew
 		ride = ship; rideName = oapiGetVesselInterface(ship)->GetName(); rideKeyWas = true;
 		for (UINT i = 0, n = GetMeshCount(); i < n; ++i) SetMeshVisibilityMode(i, MESHVIS_NEVER);
 		cx.ship = nullptr; cx.node = -1; cx.local = 0; cx.acts.clear(); cx.marks.clear();
-		g_wheelEat = false;   // the wheel is Orbiter's again (its zoom): her menu is gone
+		WheelEat(GetHandle(), false);   // the wheel is Orbiter's again (its zoom): her menu is gone
 		if (cursorHidden) { ShowCursor(TRUE); cursorHidden = false; }   // the mouse is the ship's: its cockpit is clicked
 		// only the focus: Orbiter moves the camera to it and builds its cockpit itself (attached at once, before the focus
 		// had changed, the ship's VC came up with its MFDs dead until its 2D panel was opened - the user, 2026-10-08)
@@ -3536,7 +3806,7 @@ namespace ocrew
 
 	void CrewMember::RideStep(double dt)
 	{
-		g_wheelEat = false;   // aboard: no menu of hers, the wheel zooms the ship's view (the user, 2026-10-08)
+		WheelEat(GetHandle(), false);   // aboard: no menu of hers, the wheel zooms the ship's view (the user, 2026-10-08)
 		if (rideNote && rideNoteT > 0 && (rideNoteT -= oapiGetSysStep()) <= 0) oapiAnnotationSetText(rideNote, const_cast<char*>(""));
 		if (!ride)   // a scenario with her aboard: find the ship (it may come a little later)
 		{
@@ -3834,7 +4104,13 @@ namespace ocrew
 		// the neck turned while the mouse did not walk her) goes over into her heading - the view stays where it is, she
 		// no longer walks sideways to it (the user, 2026-10-16: «камера запоминает угол и требует альт для коррекции»)
 		if (mouseMode) { const double back = headYaw - Approach(headYaw, 0.0, 2.5, dt); headYaw -= back; turnBy += back; }
-		headPitch = std::clamp(headPitch + dPitch, -75 * RAD, 75 * RAD);
+		// inside a helmet on its neck ring: the neck bends ~20 deg in it and the eyes do the rest - down to ~40 deg (the chin
+		// bar fills the view's foot), up ~30 (the brow rim); bare-headed or the helmet open, 75 both ways
+		// (and looking down aside less: the neck ring and the shoulders - an ellipse, 45 deg straight down, ~26 at 70 aside)
+		const double yawRel = std::remainder(headYaw, PI2);
+		const double downLim = inHelmView ? (std::max)(20.0, 45.0 * std::sqrt((std::max)(0.0, 1.0 - (yawRel * DEG / 75.0) * (yawRel * DEG / 75.0)))) : 75.0;
+		if (inHelmView) headYaw = std::clamp(headYaw, -60 * RAD, 60 * RAD);
+		headPitch = std::clamp(headPitch + dPitch, -downLim * RAD, (inHelmView ? 25 : 75) * RAD);
 		return turnBy;
 	}
 
@@ -3845,7 +4121,16 @@ namespace ocrew
 		if (!headStepped) { g_headFromAim = true; HeadStep(dt, false); g_headFromAim = false; }   // a step without walking (flying, lying): her head still turns
 		headStepped = false;
 		const bool eyes = oapiCameraInternal() && oapiCameraTarget() == GetHandle();
-		if (!eyes) { headAsked = false; SuitHud::HelmetView hv; hv.eye = camEye; hv.show = false; hud.HelmetFrame(this, vis, hv); return; }
+		auto helmPose = [&](SuitHud::HelmetView& hv)   // the helmet sits on the torso (Spine1): its axes and eye point
+		{
+			Figure& fig = Active(); const int sp = fig.skin.Bone("Spine1");
+			const VECTOR3 o = fig.skin.Point(sp, helmEye);
+			auto ax = [&](const VECTOR3& d) { VECTOR3 a = fig.skin.Point(sp, helmEye + d) - o; const double l = length(a); return l > 1e-9 ? a / l : d * 10.0; };
+			hv.hX = ax(_V(0.1, 0, 0)); hv.hY = ax(_V(0, 0.1, 0)); hv.hZ = ax(_V(0, 0, 0.1)); hv.hO = o;
+		};
+		// the glass layer seen from outside: the light suit worn, its helmet closed, the display powered
+		const bool glassExt = helmetView && suitOn && suitFig.ok && !suit.Heavy() && !suit.helmetOpen && suit.helmetPos <= 0 && suit.Powered();
+		if (!eyes) { headAsked = false; SuitHud::HelmetView hv; hv.eye = camEye; hv.show = false; hv.ext = glassExt; if (glassExt) { helmPose(hv); HudData d; FillHudData(d); hud.HelmetFrame(this, vis, hv, &d); } else hud.HelmetFrame(this, vis, hv); return; }
 		if (debugLog && headAsked && (headCheckT += dt) > 2.0)
 		{
 			headCheckT = 0;
@@ -3853,11 +4138,22 @@ namespace ocrew
 			oapiWriteLogV("OrbiterCrew: head camera asked yaw %.1f pitch %.1f, shows yaw %.1f pitch %.1f (deg)",
 				headWantYaw * DEG, headWantPitch * DEG, y * DEG, p * DEG);
 		}
+		// the heavy suit's window view: its hard helmet is built tight round her head - it turns ~25 deg in it, nods ~20
+		// (beyond, she turns the suit; the cameras' view has no such limit: they are not on her head)
+		const bool pzWin = inHelmView && suitOn && suit.Heavy() && pzWindow;
+		if (pzWin) { headYaw = std::clamp(std::remainder(headYaw, PI2), -25 * RAD, 25 * RAD); headPitch = std::clamp(headPitch, -20 * RAD, 20 * RAD); }
+		else if (inHelmView) {   // the helmet's look limits, at the camera too (whatever moved the head since HeadStep)
+			headYaw = std::clamp(std::remainder(headYaw, PI2), -60 * RAD, 60 * RAD);
+			const double yr = headYaw * DEG;
+			const double dl = (std::max)(20.0, 45.0 * std::sqrt((std::max)(0.0, 1.0 - (yr / 75.0) * (yr / 75.0))));
+			headPitch = std::clamp(headPitch, -dl * RAD, 25 * RAD);
+		}
 		const double yaw = inShip ? std::remainder(inHdg + headYaw, PI2) : headYaw;
 		// Orbiter's own limit is the person's: walking inside she turns all round (wider than a full turn: its limit never
 		// bites); seated and outside the neck (70 deg aside, 75 up and down, about her vessel's nose - her body, her seat)
-		if (mouseMode) SetCameraRotationRange(PI2, PI2, 75 * RAD, 75 * RAD);
-		else SetCameraRotationRange(70 * RAD, 70 * RAD, 75 * RAD, 75 * RAD);
+		const double upR = (pzWin ? 20 : inHelmView ? 25 : 75) * RAD, dnR = (pzWin ? 20 : inHelmView ? 45 : 75) * RAD, sideR = (pzWin ? 25 : inHelmView ? 60 : 70) * RAD;
+		if (mouseMode) SetCameraRotationRange(PI2, PI2, upR, dnR);
+		else SetCameraRotationRange(sideR, sideR, upR, dnR);
 		// Orbiter's cockpit angles (Camera::SetCockpitDir, measured 2026-10-03): the first turns the view to the LEFT
 		// (yaw = -first), the second up (pitch = second); set at once, not limited by the rotation range
 		oapiCameraSetCockpitDir(-yaw, headPitch + seatViewPitch);
@@ -3892,7 +4188,16 @@ namespace ocrew
 		// the helmet display: before her eyes, along her look, in the suit with the HUD on
 		SuitHud::HelmetView hv;
 		hv.eye = camEye; hv.yaw = yaw; hv.pitch = headPitch;
-		hv.show = suitOn && hudOn && !thirdIn;
+		hv.show = suitOn && hudOn && !thirdIn && !(suit.Heavy() && pzWindow);   // the heavy suit's window view: the display is off, she looks herself
+		hv.glass = suitOn && !thirdIn && !suit.helmetOpen && suit.helmetPos <= 0;
+		hv.ext = glassExt; if (glassExt && !inHelmView) helmPose(hv);
+		if (inHelmView)   // the helmet sits on the torso (Spine1): its axes, for the displays fixed on its glass
+		{
+			hv.helm = true; helmPose(hv);
+		}
+		// (the MFDs' own glow on the helmet's lining - two cockpit point lights - is off: the user, 2026-10-20, «эту подсветку
+		//  убрать, шлем внутри пусть освещается средой». Lights made earlier are switched off and stay so)
+		for (int i = 0; i < 2; ++i) if (mfdLight[i]) mfdLight[i]->Activate(false);
 		if (hv.show) { HudData d; FillHudData(d); hud.HelmetFrame(this, vis, hv, &d); }   // the whole HUD into its light layer
 		else hud.HelmetFrame(this, vis, hv);
 	}
@@ -4176,7 +4481,15 @@ namespace ocrew
 				// the item she has come up to: within reach, and the one she faces (a neighbouring seat may be as near)
 				const VECTOR3 dv = it.pos - inFeet;
 				const double d = std::hypot(dv.x, dv.z);
-				if (d >= it.radius || std::abs(dv.y) >= 2.0) continue;
+				if (d >= it.radius || std::abs(dv.y) >= 3.0) continue;
+				if (it.kind == OC_DOORWAY)                                            // a door: where she aims at it, before all else
+				{
+					if (!AimsAtDoor(inShip, it.pos + si->Origin(), it.dir)) continue;
+					best = -1.0; useShip = inShip; useId = it.id; useKind = it.kind; useHint = Utf8(it.label);
+					continue;
+				}
+				if (best < 0.0) continue;                                         // (a door aimed at is taken)
+				if (std::abs(dv.y) >= 2.0) continue;
 				const double facing = d > 0.05 ? (dv.x * std::sin(inHdg) + dv.z * std::cos(inHdg)) / d : 1.0;   // cos of the angle off her nose
 				if (it.kind != OC_EXIT && facing < 0.2) continue;                  // at a ladder the exit hint must not depend on facing
 				const double score = it.kind == OC_EXIT ? d / it.radius : (1.0 - facing) * 2.0 + d / it.radius;
@@ -4212,12 +4525,35 @@ namespace ocrew
 			{
 				OcItem it{};
 				if (!si.fns.Item(si.ctx, i, &it)) continue;
-				if (it.kind != OC_LIFT && it.kind != OC_AIRLOCK && it.kind != OC_EXIT) continue;   // from outside: the entrances
+				if (it.kind != OC_LIFT && it.kind != OC_AIRLOCK && it.kind != OC_EXIT && it.kind != OC_DOORWAY) continue;   // from outside: the entrances
 				VECTOR3 g; sv->Local2Global(it.pos, g);
 				const double d = length(g - feet);
-				if (d < it.radius && d < best) { best = d; useShip = si.ship; useId = it.id; useHint = Utf8(it.label); }
+				if (d >= it.radius) continue;
+				if (it.kind == OC_DOORWAY) {                                           // a door: only where she aims at it, and first
+					if (!AimsAtDoor(si.ship, it.pos, it.dir)) continue;
+					best = -1.0; useShip = si.ship; useId = it.id; useKind = it.kind; useHint = Utf8(it.label);
+				}
+				else if (d < best) { best = d; useShip = si.ship; useId = it.id; useKind = it.kind; useHint = Utf8(it.label); }
 			}
 		}
+	}
+
+	// OC_DOORWAY: does her look (CtxRay - the view's middle, the cursor with Alt, her eyes from outside) meet the door's opening:
+	// the plane through its centre across its normal, hit within 6 m, within 0.65 m aside and 1.05 m up or down of the centre
+	bool CrewMember::AimsAtDoor(OBJHANDLE ship, const VECTOR3& shipPos, const VECTOR3& shipNormal) const
+	{
+		VECTOR3 o, d;
+		if (!CtxRay(o, d) || !oapiIsVessel(ship)) return false;
+		VESSEL* sv = oapiGetVesselInterface(ship);
+		VECTOR3 c, n, up;
+		sv->Local2Global(shipPos, c); sv->GlobalRot(shipNormal, n); sv->GlobalRot(_V(0, 1, 0), up);
+		n = unit(n);
+		const double dn = dotp(d, n);
+		if (std::abs(dn) < 0.08) return false;                                  // along the door's face
+		const double t = dotp(c - o, n) / dn;
+		if (t <= 0.0 || t > 6.0) return false;
+		const VECTOR3 h = o + d * t - c, side = unit(crossp(up, n));
+		return std::abs(dotp(h, side)) < 0.65 && std::abs(dotp(h, up)) < 1.05;
 	}
 
 	bool CrewMember::DoUse()
@@ -4316,6 +4652,11 @@ namespace ocrew
 			if (suit.fieldOn) std::snprintf(b, sizeof b, Tr("МАГНИТНОЕ ПОЛЕ: %.0f %% · %.0f Вт", "MAGNETIC FIELD: %.0f %% · %.0f W"), suit.fieldLevel * 100, suit.FieldW());
 			else std::snprintf(b, sizeof b, "%s", Tr("МАГНИТНОЕ ПОЛЕ: выкл", "MAGNETIC FIELD: off"));
 			Say(b);
+			return;
+		}
+		if (req == SuitHud::AP_SHADE && suitOn && suit.Heavy()) {   // the heavy suit: its louvres (the cameras / the window), as Shift+V
+			pzWindow = !pzWindow; pzAutoShut = false; pzShutReason.clear();
+			Say(pzWindow ? Tr("ШТОРКА ОТКРЫТА: обзор через окно", "LOUVRES OPEN: window view") : Tr("ШТОРКА ЗАКРЫТА: обзор камерами", "LOUVRES CLOSED: camera view"));
 			return;
 		}
 		if (req == SuitHud::AP_SHADE) { if (suitOn) { shadeTarget = shadeTarget > 0.5 ? 0 : 1; Say(shadeTarget > 0.5 ? Tr("СВЕТОФИЛЬТР: опущен", "VISOR SHADE: down") : Tr("СВЕТОФИЛЬТР: поднят", "VISOR SHADE: up")); } return; }

@@ -45,6 +45,7 @@ namespace ocrew
 		rd("EquipC", s.cEq); rd("EquipG", s.gEq);
 		rd("WalkFactor", s.walkFactor); rd("StepPitch", s.stepPitch);
 		s.armOutDeg = s.legOutDeg = -1; rd("ArmOutDeg", s.armOutDeg); rd("LegOutDeg", s.legOutDeg); s.foreArmInDeg = 0; rd("ForeArmInDeg", s.foreArmInDeg);
+		{ int ds = 0; s.driveSound = oapiReadItem_int(f, const_cast<char*>("DriveSound"), ds) && ds != 0; }
 		if (oapiReadItem_int(f, const_cast<char*>("LocksUpright"), iv)) s.locksUpright = iv != 0;
 		if (oapiReadItem_float(f, const_cast<char*>("DamageC"), v)) s.damageK = v + 273.15;
 		if (oapiReadItem_float(f, const_cast<char*>("ColdC"), v)) s.coldK = v + 273.15;

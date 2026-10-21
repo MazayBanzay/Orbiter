@@ -22,6 +22,7 @@ cbuffer Gtao : register(b11)
 };
 Texture2D<float> tDepth : register(t0);       // the scene's depth, single-sampled
 Texture2D<float2> tAO : register(t1);         // occlusion (1 open), view z
+Texture2D<float> tShare : register(t2);       // the sky's share of the light, written by the scene's own pass (mesh.hlsl, planet.hlsl)
 RWTexture2D<float2> uAO : register(u0);
 
 static const float PI = 3.14159265;
@@ -133,28 +134,10 @@ float4 PSApply(VSOutA i) : SV_Target
     float ao = ws > 0 ? sum / ws : 1;
     if (aK.z > 0.5) return float4(ao.xxx * 0.5 / max(gHazeRGB.w * gAdapt.rgb, 1e-4), 1);   // test view
     if (ao > 0.995) discard;
-    // the sky's share of the light here: the point and its normal in the frame's (camera-centred) space
-    float3 P = ViewPos(p);
-    float3 Nv = ViewNormal(p, P);
-    float2 ndc = (p + 0.5) / aS.xy * float2(2, -2) + float2(-1, 1);
-    float4 w4 = mul(float4(ndc, d0, 1), gInvVP); float3 wp = w4.xyz / w4.w;
-    float3 n;                       // the view-space normal in the frame's axes: the camera's right, up (a step on the
-    {                               // screen at that depth) and forward
-        float4 bx = mul(float4(ndc + float2(1e-3, 0), d0, 1), gInvVP), by = mul(float4(ndc + float2(0, 1e-3), d0, 1), gInvVP);
-        float3 ex = normalize(bx.xyz / bx.w - wp), ey = normalize(by.xyz / by.w - wp);
-        float3 ez = normalize(cross(ex, ey));
-        if (dot(ez, wp) < 0) ez = -ez;
-        n = normalize(Nv.x * ex + Nv.y * ey + Nv.z * ez);
-    }
-    float3 sun = SunLight(wp) * ShadowAtN(wp, n) * saturate(dot(n, gSunDir.xyz));
-    float3 sky = SkyLight(n, wp) * (1 - VolumeWeight(wp));
-    // the local lamps (lights.hlsli): their direct light is not occluded (it has its own shadows), their bounce is - so the
-    // AO darkens only the indirect share (Frostbite: AO on indirect lighting only); indoors that share was ~1 (no Sun, a
-    // faint sky) and the AO darkened the lamps' own light (21.10.2026)
-    float3 lampD = LocalLightsDiffuse(wp, n, n, float3(1, 1, 1));
-    float3 lampI = gSkyK.z > 0.5 ? LocalFill(wp) * max(VolumeWeight(wp), 1 - SkyVisibility(wp, n)) : 0;
-    float ls = dot(sun + lampD, 1.0 / 3), lk = dot(sky + lampI, 1.0 / 3);
-    float share = lk / max(ls + lk, 1e-9);
+    // the sky's share of the light here: the scene's pass worked it out with its own light (the Sun and its shadow, the sky,
+    // a room's walls, the lamps directly and their bounce - Frostbite: AO on the indirect light only) and wrote it beside
+    // the colour; this pass lit every pixel a second time for it before (21.10.2026: 2 ms indoors)
+    float share = tShare.Load(int3(p, 0));
     float m = 1 - share * (1 - ao);
     if (m > 0.995) discard;
     return float4(m, m, m, 1);

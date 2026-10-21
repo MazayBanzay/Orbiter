@@ -53,6 +53,7 @@ def game_materials():
         it = nt.nodes.new("ShaderNodeTexImage"); it.image = img; nt.links.new(it.outputs["Color"], p.inputs["Base Color"])
         p.inputs["Metallic"].default_value = 1.0 if code in ("Mi", "Gd", "Be") else 0.0
         p.inputs["Roughness"].default_value = 0.3 if code in ("Mi", "Gd") else 0.55
+
         m["orb_name"] = name; m["orb_spec"] = spec; out[code] = m
     return out
 
@@ -67,11 +68,16 @@ def planar_uv(n, p, code):
 def classify(base, x, cap):
     """label, bone rule, side"""
     s = 1 if x > 0 else -1; S = "L" if s > 0 else "R"
+    if base.startswith("helm_liner"): return "HelmCapLn", "Spine1", s
+    m_ = re.match(r"helmet_louvre(\d)$", base)
+    if m_: return "HelmCapLv" + m_.group(1), "Spine1", s                         # a closed slat, its own group
+    if base.startswith("helmet_louvre_up"): return "HelmCapLu", "Spine1", s     # the open stack
     if cap: return "HelmCap", "Spine1", s
     if base.startswith(("helmet_", "hinge_")) and "_fore" not in base: return "Helm", "Spine1", s
     if base == "collar": return "NeckSeal", "Spine1", s
     if base.startswith(("waist_P0", "waist_rib", "waist_zero")): return "Wst", "waist", s
-    if base.startswith(("pelvis",)): return "Pel", "Hips", s
+    if base.startswith(("pelvis_ring",)): return "Pel", "Hips", s
+    if base.startswith(("pelvis",)): return "Pel", "pelvis", s
     if base.startswith("hip_bellows"): return "Pel", "hipfold", s
     if base.startswith(("hut", "chest_", "flank", "torso_member", "shoulder_yoke", "motor_shoulder_P2", "backunit", "pump_hatch", "battery_bay",
                         "cassette", "port_cap", "emergency", "handle_", "grab_slot", "rad_", "wing_", "evap_", "waist_skirt")):
@@ -83,6 +89,7 @@ def classify(base, x, cap):
     if base.startswith(("thigh", "ring_p9", "motor_hip")): return "Th" + S, "UpLeg", s
     if base.startswith(("shin", "calf_pl", "achilles")): return "Sh" + S, "Leg", s
     if base.startswith("leg_member"): return None                                   # side decided per vertex below
+    if base.startswith(("elbow_bellows", "elbow_fold")): return "Ua" + S, "elbowfold", s      # the folds bend with the joint
     if base.startswith(("deltoid", "armhole_P1", "shoulder_collar", "ring_P3", "upperarm", "upper_pl", "elbow", "motor_elbow", "arm_member", "arm_link")):
         return "Ua" + S, "Arm", s
     if base.startswith(("forearm", "fore_", "ring_P5", "olecranon")): return "Fa" + S, "ForeArm", s
@@ -97,6 +104,13 @@ def weights_of(rule, s, p):
     if rule == "waist": t = smooth(1.026, 1.060, p.z); return {"Spine1": t, "Hips": 1 - t}
     if rule == "knee": w = smooth(0.578, 0.502, p.z); return {S + "Leg": w, S + "UpLeg": 1 - w}
     if rule == "hipfold": w = smooth(0.975, 0.905, p.z); return {S + "UpLeg": w, "Hips": 1 - w}
+    if rule == "pelvis":   # the seat and side plates follow the thigh under them (up to half), so it never comes through them
+        lo = smooth(0.875, 0.800, p.z)
+        wl = 0.5 * lo * smooth(0.02, 0.09, p.x); wr = 0.5 * lo * smooth(-0.02, -0.09, p.x)
+        return {"Hips": 1 - wl - wr, "LeftUpLeg": wl, "RightUpLeg": wr}
+    if rule == "elbowfold":   # across the elbow: upper arm before the joint's mid plane, forearm after it, blended over 6 cm
+        E = HPOS[S + "ForeArm"]; u = ((E - HPOS[S + "Arm"]).normalized() + (HPOS[S + "Hand"] - E).normalized()).normalized()
+        w = smooth(-0.03, 0.03, (p - E).dot(u)); return {S + "ForeArm": w, S + "Arm": 1 - w}
     if rule in ("Spine1", "Hips"): return {rule: 1.0}
     return {S + {"UpLeg": "UpLeg", "Leg": "Leg", "Foot": "Foot", "Toe": "ToeBase", "Arm": "Arm", "ForeArm": "ForeArm", "Hand": "Hand"}[rule]: 1.0}
 
@@ -114,8 +128,13 @@ def main():
     # the game's idle first (pelvis, spine, collarbones as the game shows them), then the arms and legs onto the suit's
     # sleeves: the torso, the shoulders and the hips then meet in the game's stance, not in the rig's rest (2026-10-19)
     from pose_util import idle_pose
-    ns["figure_head"](); idle_pose(arm); ns["pose_fit"]()
-    Wm = arm.matrix_world.copy(); Tb = {}; Hp = {}
+    # the suit stands square (no contrapposto: a 130 kg hard suit stands on both legs): the rig's own upright rest for the
+    # pelvis, spine and collarbones, the arms and legs onto the sleeves (2026-10-20: the clip's weight-on-the-right idle,
+    # baked in here, made it lean right on the walk)
+    ns["figure_head"]()
+    for pb in arm.pose.bones: pb.rotation_mode = 'QUATERNION'; pb.rotation_quaternion = (1, 0, 0, 0); pb.location = (0, 0, 0)
+    bpy.context.view_layer.update(); ns["pose_fit"]()
+    Wm = arm.matrix_world.copy(); Tb = {}; Hp = {}; global HPOS; HPOS = Hp
     for pb in arm.pose.bones:
         Tb[pb.name] = (Wm @ pb.bone.matrix_local) @ (Wm @ pb.matrix).inverted(); Hp[pb.name] = (Wm @ pb.matrix).translation.copy()
     # the pose the suit is built in, kept on the armature: export_skin.py retargets the Pantsir's clips onto it (their
@@ -128,6 +147,19 @@ def main():
     arm.data.pose_position = 'REST'; arm.scale = (1, 1, 1); arm.location = (0, 0, 0); bpy.context.view_layer.update()
     for o in head: o.hide_render = False
     ns["set_open"](False); ns["set_louvres"](True); ns["set_rad"]("cryo"); ns["set_variant"](4)
+    for o in ns["LOUV_CLOSED"]: o.hide_render = False      # (2026-10-20) the closed slats too: animated in the game
+    # the helmet's liner (2026-10-20, «внутри всё дырявое»): a closed padded shell round her head inside the hard helmet,
+    # its faces inward (from outside it is culled), the window's opening and the neck ring cut out. Rig-frame size, made in
+    # the mockup's frame (rig x 1.046 + 0.07 y); the cap's hinge carries it (it is part of the cap)
+    import bmesh as _bm
+    bm_ = _bm.new(); _bm.ops.create_uvsphere(bm_, u_segments=40, v_segments=24, radius=1.0)
+    C_, R_ = V((0.0, -0.052, 1.655)), V((0.088, 0.118, 0.115))   # x: to the shell's inner wall (built tight round the head)   # top 1.770 under the raised crown (inner ~1.773), front at the glass
+    for v_ in bm_.verts: v_.co = V((C_.x + v_.co.x * R_.x, C_.y + v_.co.y * R_.y, C_.z + v_.co.z * R_.z))
+    kill = [f for f in bm_.faces if (lambda c: (abs(c.x) < 0.080 and 1.604 < c.z < 1.668 and c.y < -0.120) or c.z < 1.565)(f.calc_center_median())]
+    _bm.ops.delete(bm_, geom=kill, context='FACES')   # (outward winding here: the export's flip turns it to face her)
+    for v_ in bm_.verts: v_.co = V((v_.co.x, v_.co.y, v_.co.z)) * FIG_S + V((0, FIG_DY, 0))
+    lme = bpy.data.meshes.new("Pantsir_helm_liner"); bm_.to_mesh(lme); bm_.free(); lme.materials.append(ns["M"]["rubber"])
+    lo_ = bpy.data.objects.new("Pantsir_helm_liner", lme); ns["COLL"][0].objects.link(lo_)
     M_ = ns["M"]
     for o in ns["COLL"][0].objects:                                              # the hand: borazon on the back and pinky edge only
         b = o.name.split(".")[0][len("Pantsir_"):]
@@ -136,6 +168,9 @@ def main():
     cap_names = set(o.name for o in ns["OPENABLE"])
     SOLE_T = ns["SOLE_T"]; DZ = -0.059 * FIG_S                    # the suit's soles 59 mm under hers: StandHeight 0.989
     def dz_leg(z): return DZ * (1.0 - smooth(0.22, 0.50, z))
+    # the helmet's crown raised 5 cm over the brow (2026-10-19): it sat right on her scalp - a hard helmet leaves ~4-5 cm
+    # over the head (it moves inside, the comms cap) under its 30 mm wall; the window and the brow bar stay
+    def dz_head(z): return 0.05 * smooth(1.755, 1.785, z)
     def to_rig(p): return V((p.x, (p.y - FIG_DY), p.z)) / FIG_S
     src = []; ndrop = 0; uncl = []; fonts = []
     for o in list(ns["COLL"][0].objects):
@@ -153,6 +188,8 @@ def main():
     gm = game_materials(); groups = {}; KD_P = []; KD_I = []
     dg = bpy.context.evaluated_depsgraph_get()
     for o, base, cl in src:
+        oc = o.matrix_world @ (sum((V(b_) for b_ in o.bound_box), V((0, 0, 0))) / 8)
+        whole = base.startswith(("hip_bellows", "elbow_bellows", "knee_bellows", "ankle_bellows"))
         if cl is None:
             if base.startswith("leg_member"): cl = None
             else: cl = ("Tor", "Spine1", 1)
@@ -162,6 +199,7 @@ def main():
             mn = re.sub(r"\.\d+$", "", mn)
             if mn in DROP_MATS: continue
             code = GM.get(mn, "Gr")
+            if code == "Gd" and pg.normal.y > -0.3: continue   # the visor pane: its outer face only (tinted glass: no back or edges seen through it)
             if re.match(r"^(rad_tray|rad_rail|wing_fin)", base) and code != "Rd": code = "Ra"
             c_ = pg.center
             if cl is None:                                                       # leg exo member: thigh or shin by height
@@ -173,7 +211,9 @@ def main():
             vm = g["maps"].setdefault(id(me), {}); vs = []
             for vi in pg.vertices:
                 if vi not in vm:
-                    p = me.vertices[vi].co.copy(); ws = weights_of(rule, s, p)
+                    p = me.vertices[vi].co.copy()
+                    if lab.startswith("Helm") and lab != "HelmCapLn": p.z += dz_head(p.z)   # (the liner is sized to the raised helmet)
+                    ws = weights_of(rule, s, oc if whole else p)
                     q = V((0, 0, 0))
                     for bn, w in ws.items(): q += (Tb[bn] @ p) * w if bn in Tb else p * w
                     if lab[:2] in ("Sh", "Ft", "To", "Kn") : q.z += dz_leg(p.z)
@@ -200,7 +240,9 @@ def main():
         cen = sum((v.co for v in me.vertices), V((0, 0, 0))) / len(me.vertices)
         rule, s, lab = KD_I[kd.find(cen)[1]]
         for v in me.vertices:
-            p = v.co.copy(); ws = weights_of(rule, s, p); q = V((0, 0, 0))
+            p = v.co.copy()
+            if lab.startswith("Helm"): p.z += dz_head(p.z)
+            ws = weights_of(rule, s, p); q = V((0, 0, 0))
             for bn, w in ws.items(): q += (Tb[bn] @ p) * w if bn in Tb else p * w
             if lab[:2] in ("Sh", "Ft", "To", "Kn"): q.z += dz_leg(p.z)
             v.co = to_rig(q)
@@ -224,7 +266,7 @@ def main():
     say("game objects %d, %d verts, %d tris (suit only; the head groups come on top)" % (len(made), tv, tt))
     for o in made: say("  %-12s v=%-6d t=%-6d mat=%s" % (o.name, len(o.data.vertices), len(o.data.polygons), o.data.materials[0]["orb_name"]))
     # the cap hinge in the Orbiter model frame
-    hb = to_rig(ns["HINGE"]); C = Matrix(((-1, 0, 0), (0, 0, 1), (0, -1, 0))); ho = C @ hb - V((0, 0.93, 0))
+    hh = ns["HINGE"].copy(); hh.z += dz_head(hh.z); hb = to_rig(hh); C = Matrix(((-1, 0, 0), (0, 0, 1), (0, -1, 0))); ho = C @ hb - V((0, 0.93, 0))
     say("HelmCapHinge (Orbiter frame) of rev. S: %.4f %.4f %.4f  (cfg now: 0 0.8745 -0.0943); axis (-1,0,0), 65 deg" % (ho.x, ho.y, ho.z))
     zs = [v.co.z for o in made for v in o.data.vertices]
     say("suit z range (rig) %.4f .. %.4f -> StandHeight %.4f (origin 0.93)" % (min(zs), max(zs), 0.93 - min(zs)))

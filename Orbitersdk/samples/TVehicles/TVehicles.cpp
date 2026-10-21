@@ -1,4 +1,5 @@
-// TVehicles.dll - the transport module: the shared registry (TVApi.h) and the charging / cell-exchange station.
+// TVehicles.dll - the transport module: the shared registry (TVApi.h), the charging / cell-exchange station and the
+// buildings (TVBuilding.h: the spaceport's technical point ТП-1, class TVehicles\Building).
 // Station (class TVehicles\Station): a cabinet with a 15 m cable on a reel and a rack of six energy cells (80 kg, 250 kWh).
 // Its input (300 kW: the Tantra's plant, a base) recharges the rack's cells and feeds the cable. People work it with F
 // (through OrbiterCrew's entrance items until the context menu is there): take / return the cable, take / put a cell.
@@ -443,5 +444,16 @@ extern "C" __declspec(dllexport) int tvUnplug(OBJHANDLE v, int person) {
 extern "C" __declspec(dllexport) OBJHANDLE tvPluggedTo(OBJHANDLE v) { Station* s = PluggedStation(v); return s ? s->GetHandle() : nullptr; }
 extern "C" __declspec(dllexport) double tvDraw(OBJHANDLE v, double wantW, double dt) { Station* s = PluggedStation(v); return s ? s->Give(wantW, dt) : 0.0; }
 
-DLLCLBK VESSEL* ovcInit(OBJHANDLE h, int fm) { return new Station(h, fm); }
-DLLCLBK void ovcExit(VESSEL* v) { delete static_cast<Station*>(v); }
+#include "TVBuilding.h"
+
+// one module, two classes: the class name read through a plain VESSEL on the handle
+DLLCLBK VESSEL* ovcInit(OBJHANDLE h, int fm) {
+    VESSEL probe(h, fm);
+    const char* cn = probe.GetClassNameA();
+    if (cn && !_stricmp(cn, "TVehicles\\Building")) return new tvb::Building(h, fm);
+    return new Station(h, fm);
+}
+DLLCLBK void ovcExit(VESSEL* v) {
+    for (tvb::Building* b : tvb::All()) if (b == v) { delete b; return; }
+    delete static_cast<Station*>(v);
+}

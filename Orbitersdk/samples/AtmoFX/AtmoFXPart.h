@@ -43,6 +43,17 @@ namespace AtmoFXPart {
 		return fn;
 	}
 	inline bool Available() { return Fn() != nullptr; }
+	// the vessel's solids the particles do not pass: boxes in its own axes (centre, half sizes, vessel frame [m]); call when
+	// they change (kept until removed - half 0 - or the vessel is deleted). A particle in one is pushed out by the nearest
+	// face: a dry grain bounces a little and slides, a clod or a drop sticks and slides off; a sprite there is drawn no bigger
+	// than its distance to the box (it does not poke into the hull)
+	inline void Box(OBJHANDLE hVessel, int id, const VECTOR3& center, const VECTOR3& half)
+	{
+		typedef void (*BoxFn)(OBJHANDLE, int, const double*, const double*);
+		static BoxFn fn = nullptr; static bool looked = false;
+		if (!looked) { HMODULE h = GetModuleHandleA("D3D9Client.dll"); if (h) fn = (BoxFn)GetProcAddress(h, "AtmoFX_Box"); looked = (h != nullptr); }
+		if (fn) { const double c[3] = { center.x, center.y, center.z }, hh[3] = { half.x, half.y, half.z }; fn(hVessel, id, c, hh); }
+	}
 	inline void Emit(OBJHANDLE hVessel, int id, const VECTOR3& pos, const VECTOR3& vel, double cone, double spread, double kgps,
 		int kind, int ground, double wet, double life, double jetJ)
 	{

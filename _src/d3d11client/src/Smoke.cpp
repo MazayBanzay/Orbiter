@@ -212,10 +212,12 @@ struct SmokeFx
             Pass(ctx, csCurl.Get(), { vel[0].srv.Get() }, { { 2, curl.uav.Get() } }, gx, gy, gz);
             Pass(ctx, csForce.Get(), { vel[0].srv.Get(), den[1].srv.Get(), curl.srv.Get() }, { { 0, vel[1].uav.Get() }, { 1, den[0].uav.Get() } }, gx, gy, gz);
             Pass(ctx, csDiv.Get(), { vel[1].srv.Get() }, { { 3, div.uav.Get() } }, gx, gy, gz);
+            ExGpuMark(2);
             for (int it = 0; it < iters; it++) {
                 const int a = it & 1, b = a ^ 1;
                 Pass(ctx, csJac.Get(), { nullptr, nullptr, nullptr, pr[a].srv.Get(), div.srv.Get() }, { { 3, pr[b].uav.Get() } }, gx, gy, gz);
             }
+            ExGpuMark(3);
             Pass(ctx, csProj.Get(), { vel[1].srv.Get(), nullptr, nullptr, pr[0].srv.Get() }, { { 0, vel[0].uav.Get() } }, gx, gy, gz);
             ctx->CopyResource(vel[1].t.Get(), vel[0].t.Get());
         }

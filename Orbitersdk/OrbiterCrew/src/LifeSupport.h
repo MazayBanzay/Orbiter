@@ -136,7 +136,8 @@ namespace ocrew
 		double gBody{ 15 };                           // W/K: her skin to the garment and the air inside
 		// (the class) how it walks: its pace against the light suit's (a heavy suit is slower), its footfall's pitch
 		double walkFactor{ 1.0 }, stepPitch{ 1.0 };
-		double armOutDeg{ -1 }, legOutDeg{ -1 }, foreArmInDeg{};   // the stance its mesh is built for (class ArmOutDeg / LegOutDeg; -1: by WalkFactor)
+		double armOutDeg{ -1 }, legOutDeg{ -1 }, foreArmInDeg{};
+		bool driveSound{};   // its joint drives are heard inside (class DriveSound; the Pantsir's ring motors)   // the stance its mesh is built for (class ArmOutDeg / LegOutDeg; -1: by WalkFactor)
 		// a rigid suit whose joint drives brake when its wearer stops acting (or the power fails): it stays standing with her
 		// inside instead of falling (class key LocksUpright)
 		bool locksUpright{};

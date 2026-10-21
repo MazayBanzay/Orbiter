@@ -31,6 +31,11 @@ struct Flight {
     double beta = 0.0;       // sideslip [rad]
     double gLoad = 0.0;      // felt (proper) acceleration of the structure, ground contact included [g]
     double ambientT = 250.0; // [K]
+    // sunlight on the hull: the flux at the ship [W/m^2] (0 in a planet's shadow; dimmed by the air's column) and the
+    // direction to the Sun in the ship's frame (unit: +x right, +y up, +z forward). Near the Sun it heats each zone by
+    // its absorptance and its facing; at 0.1 AU it is 100 Suns
+    double sunFlux = 0.0;
+    double sunX = 0.0, sunY = 0.0, sunZ = 0.0;
 };
 
 struct Exposure {            // 0 closed / stowed .. 1 open / out

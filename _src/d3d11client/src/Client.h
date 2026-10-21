@@ -94,6 +94,8 @@ struct Surf
     ComPtr<ID3D11ShaderResourceView> srv;
     int refs = 1;
     std::string name;          // file name for cached textures
+    signed char isSkin = -1;   // Mesh.cpp: the name says skin (a face, a hand); -1 not looked yet (was lower-cased every draw: 12 % of a frame)
+    signed char alpha = -1;    // a file's texture: 1 see-through texels (Dds.cpp g_ddsAlpha), 0 none - its groups go into the depth prepass; -1 not known
     DWORD attrib = 0;
     bool immutable = false;    // loaded from a file (an immutable GPU texture)
     DWORD ckey = 0; bool hasKey = false;   // colour key for blits
@@ -460,11 +462,16 @@ public:
     // the liquid's mirror (Liquid.cpp): the vessels drawn reflected in its plane into their own target
     bool mirrorPass = false; XMMATRIX mirrorM = XMMatrixIdentity();
     bool ownPass = false;      // the camera's own vessel from inside, drawn last; its overlay layers write no depth
+    // the depth prepass (Client.cpp, before the planets where no liquid needs their bed): RenderVessel writes only the
+    // depth of the opaque groups with opaque textures - the colour pass then lights each visible pixel once (early depth
+    // rejection; psMeshMain has no discard, which would turn it off)
+    bool prepass = false;
     // the view from inside a liquid (Liquid.cpp)
     ComPtr<ID3D11VertexShader> uwVS; ComPtr<ID3D11PixelShader> uwPS; ComPtr<ID3D11BlendState> uwBlend; ComPtr<ID3D11Buffer> uwCB;
     void RenderUnderwater(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);
     ComPtr<ID3DBlob> CompileShaderFile(const char* file, const char* entry, const char* target);
     void RenderAO(const XMMATRIX& proj);     // Ssao.cpp: ambient occlusion over the opaque scene
+    ID3D11RenderTargetView* AOShareTarget();     // Ssao.cpp: the sky's share of the light, written by the opaque pass (target 2); null without AO
     // Lights.cpp: the vessels' local lights - gathered, clustered, spot shadows (after the Sun's shadows); b9 + t17..t20
     // bound for the scene's shaders; the beams in the air, the lenses and the beacons (after the air)
     void LightsFrame(const VECTOR3& cp);
@@ -483,7 +490,7 @@ public:
     bool DiagFrame() const { return diagFrames != 0; }
     // shared render state for the scene parts
     ComPtr<ID3D11VertexShader> vsMesh, vsPlanet;
-    ComPtr<ID3D11PixelShader> psMesh, psPlanet;
+    ComPtr<ID3D11PixelShader> psMesh, psPlanet, psMeshMain;
     ComPtr<ID3D11InputLayout> ilMesh, ilPlanet;
     ComPtr<ID3D11Buffer> cbObj, cbGrp;
     ComPtr<ID3D11SamplerState> sampAniso, sampClamp;
@@ -618,7 +625,22 @@ private:
     static const int kMarks = 12;
     ComPtr<ID3D11Query> qMk[4][kMarks];
     double markMs[kMarks] = {};
-    void GpuMark(UINT fi, int k) { if (qMk[fi][k]) ctx->End(qMk[fi][k].Get()); }
+    void GpuMark(UINT fi, int k) { if (qMk[fi][k]) ctx->End(qMk[fi][k].Get()); QueryPerformanceCounter(&cpuMk[k]); }
+    // the CPU's time by the same marks (where each GpuMark is set) and round the frame: Orbiter and the modules between
+    // two frames, the HUD drawn through the Sketchpad after clbkRenderScene, Present (a long Present: the CPU waits for
+    // the GPU - the frame is the GPU's; a short one with a long frame: the CPU's). The stats line "CPU ms ..."
+    LARGE_INTEGER cpuMk[kMarks] = {};
+    double cpuMs[kMarks] = {};
+    LARGE_INTEGER tSceneBeg = {}, tSceneEnd = {}, tDispBeg = {}, tPresentEnd = {};
+    double cpuOutMs = 0, cpuPreMs = 0, cpuHudMs = 0, cpuDispMs = 0, cpuPresentMs = 0, cpuFrameMs = 0;
+    // marks of their own, GPU and CPU: 0 after the Sun's shadows (the rest to mark 2: the local lights), 1 and 2 round the
+    // vessels' depth prepass
+    static const int kEx = 3;
+    ComPtr<ID3D11Query> qEx[4][kEx];
+    LARGE_INTEGER cpuEx[kEx] = {};
+    double exMs[2] = {}, cpuExMs[2] = {};     // the Sun's shadows / the local lights split of mark 2; the prepass
+    double exLightsMs = 0, cpuExLightsMs = 0;
+    void GpuEx(UINT fi, int k) { if (qEx[fi][k]) ctx->End(qEx[fi][k].Get()); QueryPerformanceCounter(&cpuEx[k]); }
     // finer marks within two of them (the log's second line): before the AO, then after each pass of the transparent
     // part - the Sun, the transparent vessels, the storm's shadow, the air, the storm, the clouds (the lights' last)
     static const int kSub = 7;

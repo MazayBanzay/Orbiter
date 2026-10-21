@@ -7,18 +7,15 @@
 //    superposition of all those parabolas is the rooster tail; thrown in bursts of different heights and densities.
 //    The soil by mass (Sargeant et al. 2022, LPSC 2040, after Zeng et al. 2010): 469 um 38 %, 55 um 32 %, 12 um 30 % -
 //    the fines hold most of the cross-section (kappa = 1.5 / (rho d)).
-//  - A grain (10-500 um) is far under a pixel: no grain is seen, only the soil's optical depth. It is rendered as a
-//    participating medium the way Frostbite renders its fog and particles (Hillaire 2015, after Wronski 2014):
-//      CSVoxel   - each frame a fresh draw of grains from every row (new samples of the same distribution, so the time
-//                  average below converges on it) adds its extinction into a frustum-aligned grid (froxels: 8 x 8
-//                  pixels x 64 slices, exponential in depth over where the dust is), trilinear, atomic, normalized by
-//                  the froxel's volume; and into a coarse box in the world (the dust's own shadow);
+//  - Drawn grain by grain, sharp: each sample (a share of its row's soil - as many a row as its mass asks; the same
+//    samples every frame, each flying on) adds its optical depth where it is - no grid, no time filter:
+//      CSVoxel   - the grains' extinction into a coarse box in the world (the dust's own shadow);
 //      CSShade   - the box's transmittance towards the Sun (a volumetric shadow map);
-//      CSColumn  - per froxel column, front to back: the extinction blended with its reprojected history (the time
-//                  filter that takes the sampling noise out), lit by the Sun through the dust's shade and the hulls'
-//                  shadow map, integrated energy-conserving across each froxel (Hillaire's fix of the light leak);
-//      PSApply   - one lookup per pixel at the scene's depth: the light in front and the transmittance, and the dust's
-//                  shadow on the ground.
+//      VSGrain/PSGrain - each sample a soft disc as wide as its row's samples' spacing (a whole sheet, sharp
+//                  edges), its optical depth and its share of the Sun (the dust's shade, the hulls' shadow map) summed
+//                  by the blend; hidden behind the scene, nothing;
+//      PSApply   - per pixel: the transmittance exp(-tau), the light scattered (Hapke's w, a back-scattering phase),
+//                  and the dust's shadow on the ground.
 #include "exhaust_common.hlsli"
 
 cbuffer Rg : register(b5)
@@ -27,19 +24,14 @@ cbuffer Rg : register(b5)
     float4x4 rVP;           // camera-centred global -> clip
     float4 rT;              // x now (from the base) [s], y gravity [m/s2], z -, w -
     float4 rOpt;            // x the ground's albedo, y the grains' single-scattering albedo, z kappa [m2/kg], w focal [px]
-    float4 rSrc;            // x the samples' list length, y the boxes kept a slot (each 1 + 4 x MAXB float4), z the frame
+    float4 rSrc;            // x the rows drawn, y the boxes kept a slot (each 1 + 4 x MAXB float4), z the frame, w the samples
 };
 cbuffer Vol : register(b6)
 {
     float4 vBox;     // xyz the shade box's corner (local) [m], w its cell [m]
     float4 vDim;     // xyz its cells, w the fixed-point scale of the extinction sums
-    float4 vFz;      // x near [m], y ln(far / near), z froxels across, w froxels down
-    float4 vFz2;     // x slices, y the froxel's size [px], z the history's weight of the new frame (1: none), w debug view
-    float4 vCamD;    // xyz the camera's move since the last frame (global) [m]
-    float4x4 vPrevVP;   // last frame's camera-centred global -> clip
-    float4 vPrevFz;  // last frame's x near, y ln(far / near)
+    float4 vFz2;     // w the debug view
 };
-#define NG 192
 #define MAXB 12
 struct Row { float3 p0; float t0; float3 v0; float m; float3 n; float cone; float3 gs; float gy; float serial, lat, slot, burst; };   // burst: this moment's speed
 StructuredBuffer<Row> tRows : register(t4);
@@ -51,32 +43,44 @@ float3 Rot(float3 v, float3 k, float a) { float c = cos(a), s = sin(a); return v
 // Henyey-Greenstein relative to isotropic (4 pi p), capped
 float HG(float g, float c) { float t = 1 + g * g - 2 * g * c; return min((1 - g * g) / (t * sqrt(t)), 25); }
 
-// grain j of row r in draw 'salt': its start, its velocity (with the vessel's), its share of the shade. The soil leaves
-// the lugs over the arc and a little past its ends (triangular), across the tyre, up to ~15 deg sideways (the
-// chevrons), at 0.2-1.6 x the rim's speed - most of it slow (it slides off the tread), the lugs' flung tip fast - times
-// this moment's burst; coarse (469 um), medium (55 um) or fine (12 um) by the soil's mass shares
-void Grain(Row r, uint j, uint salt, out float3 p, out float3 v, out float kap)
+// grain j of row r in draw 'salt': its start, its velocity (with the vessel's), its share of the shade (false: no grain
+// leaves there now). Off a wheel the soil comes off the whole rear and top of the rim at once, in short bursts (a patch
+// of the tread full of soil, a bump; src\Regolith.cpp): each point of a rolling rim moves over the ground at
+// V (1 - cos phi, sin phi) (phi from the contact, up the rear) - a circle - so the soil of one burst, each grain at the
+// burst's share f of its point's velocity, lies at a moment t later on a ring of radius f V t round a centre that went
+// f V t the vessel's way and fell g t^2 / 2: the rings the Apollo 16 film shows growing, falling and left behind the
+// rover (f < 1/2 puts their centres behind it). Between the bursts a little soil at any share 0.2-1.2. Across the tyre,
+// up to ~15 deg sideways (the chevrons); coarse (469 um), medium (55 um) or fine (12 um) by the soil's mass shares
+#define RIM_R 0.8          // the wheel's radius [m] (the MPU's; the client's API carries none)
+bool Grain(Row r, uint j, uint salt, out float3 p, out float3 v, out float kap)
 {
     uint h = ExHash((uint)r.serial * 9781u + j * 6271u + (uint)r.slot * 104729u + salt * 7919u);
     float s = (ExRand(h) + ExRand(h + 1) - 1) * 1.25, q = ExRand(h + 2) * 2 - 1;
     float lat = (ExRand(h + 3) + ExRand(h + 4) - 1) * 0.25;
-    float sf = (0.2 + 1.4 * pow(ExRand(h + 5), 1.8)) * r.burst;
     float uc = ExRand(h + 6);
     kap = uc < 0.38 ? 0.067 : uc < 0.70 ? 0.58 : 2.63;     // kappa_class / the mix's (1.0, 8.8, 40 m2/kg over 15.3)
     float3 rel = r.v0 - r.gs;
     float speed = length(rel);
     float3 a = rel / max(speed, 1e-4);
-    float3 d, off = 0;
-    if (r.cone >= 0) {                       // along the rim's arc: turned about the axle; the chevrons throw it out
-        d = normalize(Rot(a, r.n, r.cone * s) + r.n * tan(lat));
-        off = r.n * (q * r.lat);
-    } else {                                 // a ring round the axis: a sole's squeeze, a jet's sheet over the ground
-        float cone = -r.cone * (r.lat + (1 - r.lat) * abs(q));            // (lat: the ring's inner edge, a share of its cone)
-        float3 b1 = normalize(cross(a, abs(a.y) < 0.9 ? float3(0, 1, 0) : float3(1, 0, 0)));
-        d = a * cos(cone) + Rot(b1, a, s * 3.14159265) * sin(cone);
+    if (r.cone >= 0) {                       // off a wheel: anywhere on the rim from 15 to 160 deg past the contact
+        float phi = radians(15 + 145 * ExRand(h + 8));
+        float th = phi - (radians(20) + r.cone);                        // from the arc's middle (where a points), up the rim
+        float3 d = normalize(Rot(a, r.n, th) + r.n * tan(lat));
+        float3 rh = cross(a, r.n);                                       // the hub -> the release point at the arc's middle
+        float g1 = (ExRand(h + 9) + ExRand(h + 10) + ExRand(h + 11) - 1.5) * 0.24;   // (~ +-12 % round the burst's share)
+        float sf = r.burst > 0 ? r.burst * (1 + g1) : 0.2 + 1.0 * ExRand(h + 5);
+        v = (r.gs + d * speed) * sf;                                     // its point's velocity over the ground, the share
+        p = r.p0 + r.n * (q * 0.3) + (Rot(rh, r.n, th) - rh) * RIM_R;    // across the tyre; round the rim
+        return true;
     }
+    // a ring round the axis: a sole's squeeze, a jet's sheet over the ground
+    float sf = (0.2 + 1.4 * pow(ExRand(h + 5), 1.8)) * r.burst;
+    float cone = -r.cone * (r.lat + (1 - r.lat) * abs(q));               // (lat: the ring's inner edge, a share of its cone)
+    float3 b1 = normalize(cross(a, abs(a.y) < 0.9 ? float3(0, 1, 0) : float3(1, 0, 0)));
+    float3 d = a * cos(cone) + Rot(b1, a, s * 3.14159265) * sin(cone);
     v = r.gs + d * speed * sf;
-    p = r.p0 + off;
+    p = r.p0;
+    return true;
 }
 float LandT(float3 p, float3 v, float gy) { const float g = rT.y; return (v.y + sqrt(v.y * v.y + 2 * g * max(p.y - gy, 0))) / g; }
 
@@ -137,64 +141,62 @@ float RgShadow(float3 wp)
     return 1;
 }
 
-// the froxel grid: depth slices exponential from near to far
-float SliceOf(float d) { return log(max(d, 1e-3) / vFz.x) / vFz.y * vFz2.x; }          // continuous [slices]
-float DepthOf(float s) { return vFz.x * exp(s / vFz2.x * vFz.y); }
+StructuredBuffer<uint2> tSplat : register(t15);     // (row, its first sample): each row's samples, as many as its mass asks
 
-// ------------------------------------------------------------------------------------------ 1: the grains into the grids
-StructuredBuffer<uint2> tSplat : register(t15);     // (row, grains drawn of it)
-RWTexture3D<uint> uFrox : register(u1);
-RWTexture3D<uint> uShadeSum : register(u2);
-[numthreads(64, 1, 1)]
-void CSVoxel(uint3 id : SV_DispatchThreadID)
+// sample 'id' of all: its row (a search over the rows' first samples), its index in it, the row's count
+bool SampleOf(uint id, out Row r, out uint j, out uint ng)
 {
-    uint k = id.x / NG, j = id.x % NG;
-    if (k >= (uint)rSrc.x) return;
-    uint2 e = tSplat[k];
-    if (j >= e.y) return;
-    Row r = tRows[e.x];
-    float3 p, v; float kap; Grain(r, j, (uint)rSrc.z, p, v, kap);
+    uint n = (uint)rSrc.x, total = (uint)rSrc.w;
+    r = (Row)0; j = 0; ng = 0;
+    if (id >= total || n == 0) return false;
+    uint lo = 0, hi = n - 1;
+    [loop] while (lo < hi) { uint mid = (lo + hi + 1) >> 1; if (tSplat[mid].y <= id) lo = mid; else hi = mid - 1; }
+    uint2 e = tSplat[lo];
+    uint next = lo + 1 < n ? tSplat[lo + 1].y : total;
+    r = tRows[e.x]; j = id - e.y; ng = next - e.y;
+    return true;
+}
+// a sample where it is now: its place (local), its cross-section [m2], its velocity and age (its spread); false: none
+bool GrainNow(uint id, out float3 pl, out float X, out float spread)
+{
+    pl = 0; X = 0; spread = 0;
+    Row r; uint j, ng;
+    if (!SampleOf(id, r, j, ng)) return false;
+    float3 p, v; float kap;
+    if (!Grain(r, j, 0u, p, v, kap)) return false;          // the same grains every frame: each one flies on, seen moving
     const float g = rT.y;
     float t = rT.x - r.t0;
     float tl = LandT(p, v, r.gy);
-    if (t < 0 || t >= tl) return;
-    if (t >= DeathT(r, p, v, tl)) return;
-    float3 pl = p + v * t - float3(0, 0.5 * g * t * t, 0);
-    float X = rOpt.z * kap * r.m / e.y * saturate((tl - t) / 0.05);     // its cross-section [m2]
-    // the shade box (the dust's own shadow): its cell's share
+    if (t < 0 || t >= tl) return false;
+    if (t >= DeathT(r, p, v, tl)) return false;
+    pl = p + v * t - float3(0, 0.5 * g * t * t, 0);
+    X = rOpt.z * kap * r.m / ng * saturate((tl - t) / 0.05);
+    // the spacing of the row's samples there: its soil spread over a sheet ~(0.3 + 2.5 u t) long, (0.6 + 0.5 u t) across
+    float u = length(v - r.gs) + 0.3 * length(r.gs);
+    spread = sqrt((0.3 + 2.5 * u * t) * (0.6 + 0.5 * u * t) / ng);
+    return true;
+}
+
+// ------------------------------------------------------------------------------------------ 1: the grains into the shade box
+RWTexture3D<uint> uShadeSum : register(u2);
+RWStructuredBuffer<uint4> uSamp : register(u5);    // each sample for the draw: its place (local), its cross-section x 1e4 and spacing (halves)
+[numthreads(64, 1, 1)]
+void CSVoxel(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)rSrc.w) return;
+    float3 pl; float X, sp;
+    bool ok = GrainNow(id.x, pl, X, sp);
+    uSamp[id.x] = uint4(asuint(pl), ok ? f32tof16(X * 1e4) | (f32tof16(sp) << 16) : 0);
+    if (!ok) return;
     float3 gb = (pl - vBox.xyz) / vBox.w - 0.5;
-    {
-        int3 c0 = int3(floor(gb)); float3 f = gb - c0;
-        float val = X / (vBox.w * vBox.w * vBox.w) * vDim.w;
-        [unroll] for (int q = 0; q < 8; q++) {
-            int3 o = int3(q & 1, (q >> 1) & 1, q >> 2), c = c0 + o;
-            if (any(c < 0) || any(c >= int3(vDim.xyz))) continue;
-            float3 w3 = o ? f : 1 - f;
-            uint add = (uint)min(val * w3.x * w3.y * w3.z + 0.5, 4e8);
-            if (add) InterlockedAdd(uShadeSum[c], add);
-        }
-    }
-    // the froxels: where the camera sees it; its extinction is its cross-section over the froxel's volume there
-    float3 wp = ToWorld(pl);
-    float4 cl = mul(float4(wp, 1), rVP);
-    if (cl.w <= 0) return;
-    float2 ndc = cl.xy / cl.w;
-    if (any(abs(ndc) > 1.05)) return;
-    float d = length(wp);
-    float sl = SliceOf(d);
-    if (sl < -0.5 || sl > vFz2.x - 0.5) return;
-    float3 gf = float3((ndc.x * 0.5 + 0.5) * vFz.z, (0.5 - ndc.y * 0.5) * vFz.w, sl) - 0.5;
-    float side = vFz2.y * d / rOpt.w;                                   // the froxel's width there [m]
-    float thick = d * vFz.y / vFz2.x;                                   // its depth [m]
-    float val = X / (side * side * thick) * vDim.w;
-    int3 c0 = int3(floor(gf)); float3 f = gf - c0;
-    int3 dim = int3(vFz.z, vFz.w, vFz2.x);
+    int3 c0 = int3(floor(gb)); float3 f = gb - c0;
+    float val = X / (vBox.w * vBox.w * vBox.w) * vDim.w;
     [unroll] for (int q = 0; q < 8; q++) {
         int3 o = int3(q & 1, (q >> 1) & 1, q >> 2), c = c0 + o;
-        if (any(c < 0) || any(c >= dim)) continue;
+        if (any(c < 0) || any(c >= int3(vDim.xyz))) continue;
         float3 w3 = o ? f : 1 - f;
         uint add = (uint)min(val * w3.x * w3.y * w3.z + 0.5, 4e8);
-        if (add) InterlockedAdd(uFrox[c], add);
+        if (add) InterlockedAdd(uShadeSum[c], add);
     }
 }
 
@@ -219,59 +221,53 @@ void CSShade(uint3 id : SV_DispatchThreadID)
     uShade[c] = exp(-tau);
 }
 
-// ------------------------------------------------------------------------------------------ 3: the columns
-Texture3D<uint> tFrox : register(t23);
-Texture3D<float> tHist : register(t24);           // last frame's filtered extinction
+// ------------------------------------------------------------------------------------------ 3: the grains onto the screen
+// each sample a small soft disc as wide as the spacing of its row's samples there (so the sheet is whole, its edges and
+// rings sharp: no blur past that), its optical depth X / area summed by the blend into two targets: the optical depth
+// and its sunlit share (the dust's own shade, the hulls' shadow); hidden behind the scene, nothing
 Texture3D<float> tShade : register(t25);
-RWTexture3D<float> uExtOut : register(u4);        // this frame's filtered extinction (the next one's history)
-RWTexture3D<float4> uInteg : register(u5);        // the light in front of each slice's far side, the transmittance to it
-[numthreads(8, 8, 1)]
-void CSColumn(uint3 id : SV_DispatchThreadID)
+struct GOut { float4 pos : SV_Position; float2 q : TEXCOORD0; float2 ts : TEXCOORD1; float d : TEXCOORD2; };
+StructuredBuffer<uint4> tSamp : register(t16);
+GOut VSGrain(uint c : SV_VertexID, uint id : SV_InstanceID)
 {
-    if (id.x >= (uint)vFz.z || id.y >= (uint)vFz.w) return;
-    float2 ndc = float2((id.x + 0.5) / vFz.z * 2 - 1, 1 - (id.y + 0.5) / vFz.w * 2);
-    float4 q = mul(float4(ndc, 1e-3, 1), gInvVP);
-    float3 dir = normalize(q.xyz / q.w);
-    float3 Esun = SunLight(float3(0, 0, 0));
-    float ph = HG(-0.3, dot(dir, gSunDir.xyz));
-    // single scattering w E p in the scene's units (pi x physical): w ph / 4 per unit of optical depth; the ground's
-    // light from below
-    float3 Lsun = Esun * (rOpt.y * ph * 0.25), Lamb = rOpt.y * rOpt.x * 0.08 * Esun * 0.25;
-    float3 L = 0; float T = 1;
-    float3 boxSize = vDim.xyz * vBox.w;
-    const float a = vFz2.z;
-    [loop] for (uint s = 0; s < (uint)vFz2.x; s++) {
-        float d0 = DepthOf(s), d1 = DepthOf(s + 1.0), dm = DepthOf(s + 0.5);
-        float3 wp = dir * dm;
-        float ext = tFrox.Load(int4(id.x, id.y, s, 0)) / vDim.w;
-        // the time filter: last frame's value where this froxel was then (the camera moved; the dust's own motion
-        // smears a few frames - a camera's exposure)
-        if (a < 0.999) {
-            float3 wpp = wp + vCamD.xyz;
-            float4 cp = mul(float4(wpp, 1), vPrevVP);
-            if (cp.w > 0) {
-                float2 np = cp.xy / cp.w;
-                float sp = log(max(length(wpp), 1e-3) / vPrevFz.x) / vPrevFz.y * vFz2.x;
-                float3 uvw = float3(np.x * 0.5 + 0.5, 0.5 - np.y * 0.5, (sp + 0.5) / vFz2.x);
-                if (all(uvw > 0) && all(uvw < 1)) ext = lerp(tHist.SampleLevel(sExLin, uvw, 0), ext, a);
-            }
-        }
-        uExtOut[int3(id.x, id.y, s)] = ext;
-        if (ext > 1e-5) {
-            float3 ql = ToLocal(wp) - vBox.xyz;
-            float3 ub = ql / boxSize;
-            float sh = all(ub > 0) && all(ub < 1) ? tShade.SampleLevel(sExLin, ub, 0) : 1;
-            float3 S = Lsun * sh * RgShadow(wp) + Lamb;
-            float tr = exp(-ext * (d1 - d0));
-            L += T * S * (1 - tr);                    // across the froxel with its own transmittance (no light leak)
-            T *= tr;
-        }
-        uInteg[int3(id.x, id.y, s)] = float4(L, T);
-    }
+    GOut o = (GOut)0;
+    o.pos = float4(2, 2, 2, 1);
+    uint4 e = tSamp[id];
+    if (e.w == 0) return o;
+    float3 pl = asfloat(e.xyz);
+    float X = f16tof32(e.w & 0xffff) * 1e-4, sp = f16tof32(e.w >> 16);
+    float3 wp = ToWorld(pl);
+    float4 cl = mul(float4(wp, 1), rVP);
+    if (cl.w <= 0.05) return o;
+    float d = length(wp);
+    uint w, h; tExDepth.GetDimensions(w, h);
+    float rpx = clamp(1.2 * sp * rOpt.w / d, 1.0, 4.0);                 // its disc's radius [px]
+    float2 cq = float2(c & 1 ? 1 : -1, c & 2 ? 1 : -1);            // (a strip of 4)
+    o.pos = cl;
+    o.pos.xy += cq * rpx * float2(2.0 / w, 2.0 / h) * cl.w;
+    o.q = cq;
+    float px = rOpt.w / d;                                              // pixels a metre there
+    float tau = X * px * px * 3 / (3.14159265 * rpx * rpx);             // the disc's centre (the kernel 3/(pi R^2) (1 - r^2)^2)
+    float3 ub = (pl - vBox.xyz) / (vDim.xyz * vBox.w);
+    float sh = (all(ub > 0) && all(ub < 1) ? tShade.SampleLevel(sExLin, ub, 0) : 1) * RgShadow(wp);
+    o.ts = float2(tau, sh);
+    o.d = cl.z / cl.w;                                                  // its depth (reverse Z: nearer is larger)
+    return o;
+}
+struct GTarg { float tau : SV_Target0; float lit : SV_Target1; };
+GTarg PSGrain(GOut i)
+{
+    float r2 = dot(i.q, i.q);
+    if (r2 >= 1) discard;
+    if (i.d < tExDepth.Load(int3(i.pos.xy, 0))) discard;               // behind the scene
+    float k = (1 - r2) * (1 - r2);
+    GTarg o; o.tau = i.ts.x * k; o.lit = i.ts.x * i.ts.y * k;
+    return o;
 }
 
 // ------------------------------------------------------------------------------------------ 4: over the scene
-Texture3D<float4> tInteg : register(t26);
+Texture2D<float> tTau : register(t26);
+Texture2D<float> tLit : register(t27);
 float4 VSFull(uint vid : SV_VertexID) : SV_Position
 {
     float2 uv = float2((vid << 1) & 2, vid & 2);
@@ -279,28 +275,23 @@ float4 VSFull(uint vid : SV_VertexID) : SV_Position
 }
 float4 PSApply(float4 pos : SV_Position) : SV_Target
 {
+    int2 p = int2(pos.xy);
+    float tau = tTau.Load(int3(p, 0)), lit = tLit.Load(int3(p, 0));
     float3 sw; float sd = ExSceneDist(pos.xy, sw);
-    uint w, h; tExDepth.GetDimensions(w, h);
-    float2 uv = pos.xy / float2(w, h);
-    // the integrated value at the scene's depth (each slice holds it at its far side); in front of the first, a share of it
-    float sl = SliceOf(min(sd, 1e7)) - 1.0;
-    float4 iv;
-    if (sl < 0) {
-        float4 i0 = tInteg.SampleLevel(sExLin, float3(uv, 0.5 / vFz2.x), 0);
-        float f = saturate(sl + 1);
-        iv = lerp(float4(0, 0, 0, 1), i0, f);
-    } else iv = tInteg.SampleLevel(sExLin, float3(uv, (min(sl, vFz2.x - 1) + 0.5) / vFz2.x), 0);
-    // the ground (or hull) behind, in the dust's shadow - its share lit by the Sun (in a vacuum nearly all)
+    // the ground (or hull) behind, in the dust's shadow - its share lit by the Sun
     float gsh = 1;
     if (sd < 1e7) {
         float3 ub = (ToLocal(sw) - vBox.xyz) / (vDim.xyz * vBox.w);
         if (all(ub > 0) && all(ub < 1)) gsh = lerp(1, tShade.SampleLevel(sExLin, ub, 0), 0.95);
     }
-    float T = iv.a * gsh;
-    if (vFz2.w > 0.5) {                          // (test runs, RegolithDbg = 1: red where the dust takes light, green its light, blue its extinction raw)
-        float raw = tInteg.SampleLevel(sExLin, float3(uv, 1 - 0.5 / vFz2.x), 0).a;
-        return float4(saturate(1 - iv.a) * 4, saturate(dot(iv.rgb, 1) * 4), saturate(1 - raw) * 4, 0.3);
-    }
-    if (T > 0.998 && dot(iv.rgb, 1) < 1e-4) discard;
-    return float4(iv.rgb, T);                    // the blend: this + the scene x T
+    if (tau < 1e-5 && gsh > 0.998) discard;
+    float3 dir = normalize(sw);
+    float3 Esun = SunLight(float3(0, 0, 0));
+    float ph = HG(-0.3, dot(dir, gSunDir.xyz));
+    // single scattering w E p in the scene's units (pi x physical): w ph / 4 per unit of optical depth, the share of it
+    // the Sun reaches; the ground's light from below
+    float3 S = Esun * (rOpt.y * ph * 0.25) * (lit / max(tau, 1e-9)) + rOpt.y * rOpt.x * 0.08 * Esun * 0.25;
+    float T = exp(-tau);
+    if (vFz2.w > 0.5) return float4(saturate(tau * 4), saturate(lit * 4), 0, 0.3);   // (test runs, RegolithDbg = 1)
+    return float4(S * (1 - T), T * gsh);         // the blend: this + the scene x T
 }

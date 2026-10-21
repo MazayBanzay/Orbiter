@@ -74,6 +74,16 @@ namespace ocrew
 			{ "ОТНОСИТЕЛЬНОЕ ДВИЖЕНИЕ · ", "RELATIVE MOTION · " },
 			{ "ОХЛАЖДЕНИЕ НЕ СПРАВЛЯЕТСЯ", "COOLING CANNOT KEEP UP" },
 			{ "ИЗОЛЯЦИЯ ПРОГОРАЕТ ", "INSULATION BURNING THROUGH " },
+			{ "ТЕМА ЭКРАНА", "DISPLAY THEME" }, { "ЛАЗЕР", "LASER" }, { "ПРОЕКТОР", "PROJECTOR" }, { "ДОП. РЕАЛЬНОСТЬ", "AUGMENTED" }, { "ВЫСОКОКОНТРАСТ", "HIGH CONTRAST" },
+			{ "зелёный лазер, тонкая линия", "green laser, a fine line" }, { "голубой свет с мягким ореолом", "cyan light, a soft glow" }, { "белый и синий, плоско", "white and blue, flat" }, { "оранжевый, плотный", "orange, dense" },
+			{ "ЗАПАСЫ И РАСХОД", "RESERVES AND USE" }, { "ЗАПАСЫ", "RESERVES" }, { "Топливо ранца", "Jet pack fuel" }, { "Вода (питьё)", "Water (drink)" }, { "ЗАПАС", "LEFT" }, { "РАСХОД", "USE" }, { "предел: ", "limit: " }, { "готов", "ready" }, { "на грунте", "on the ground" }, { "«БУРАН»", "«BURAN»" }, { "ИНДУСТРИАЛЬНАЯ", "INDUSTRIAL" },
+			{ "«Буран» — зелёный лазер", "«Buran» — green laser" }, { "индустриальная — белый и оранжевый", "industrial — white and orange" },
+			{ "ЖУРНАЛ", "LOG" }, { " · активно ", " · active " }, { "СКАФАНДР", "SUIT" }, { " · ДЫХ ", " · BR " }, { "ЗАПАСЫ · РАСХОД", "RESERVES · USE" },
+			{ "воздух", "air" }, { " г/мин", " g/min" }, { "висение ", "hover " }, { "МЕХАНИЗАЦИЯ", "MECHANISMS" }, { "МОДУЛЬ ПОЛЁТА", "FLIGHT MODULE" },
+			{ "ЛУЧ ", "BEAM " }, { "шир", "wide" }, { "раб", "work" }, { "дал", "far" }, { "ЩИТОК", "SHADE" }, { "ШТОРКА", "LOUVRES" }, { "ШЛЕМ ОТКР", "HELMET OPEN" }, { "ШЛЕМ", "HELMET" },
+			{ "H-АЛЬФА", "H-ALPHA" }, { "ГОРИЗОНТ", "HORIZON" }, { "ГОРИЗОНТ ▸", "HORIZON ▸" }, { "ХАД", "HUD" }, { "ХАД ▸", "HUD ▸" }, { "МФД НА СТЕКЛЕ", "MFD ON THE GLASS" }, { "ПО СТОРОНАМ", "AT THE SIDES" }, { "ВПЕРЕДИ", "IN FRONT" }, { "МФД · ПО СТОРОНАМ", "MFD · AT THE SIDES" }, { "МФД · В ЦЕНТРЕ", "MFD · IN FRONT" }, { "КАМЕРА · ", "CAMERA · " }, { "БОК Л", "SIDE L" }, { "БОК П", "SIDE R" }, { "СТЕРЕО", "STEREO" }, { "широта 70°", "field 70°" }, { "широта 120°", "field 120°" },
+			{ "ШТОРКА ОТКРЫТА · вид через окно · Shift+V — камеры", "SHUTTER OPEN · through the window · Shift+V — cameras" }, { "ШТОРКА ЗАКРЫТА", "SHUTTER CLOSED" }, { " · АВТО: ", " · AUTO: " }, { " · Shift+V — окно", " · Shift+V — window" }, { "ЗАТЕНЕНИЕ СТЕКЛА", "VISOR SHADING" }, { "яркость линий — ниже, «ЯРКОСТЬ ЭКРАНА»", "line brightness — below, DISPLAY BRIGHTNESS" }, { "СЕРВО", "SERVO" }, { "ЭКОНОМ", "ECONOMY" }, { "ПОЛЕ", "FIELD" }, { "СВЕТ", "LAMPS" }, { "ПНВ", "NIGHT VIS" },
+			{ "щелчок — вкл / выкл", "click — on / off" }, { "ВЕРТ ", "VERT " }, { "ЗАПАС Δv ", "Δv LEFT " }, { "ПУЛЬС", "PULSE" }, { "ТОПЛ", "FUEL" }, { "БАТ", "BAT" },
 			{ "ПАНЦИРЬ", "PANTSIR" },
 			{ "управление", "control" },
 			{ "ДАННЫЕ", "DATA" },
@@ -659,6 +669,80 @@ namespace ocrew
 			{},
 			{ { 0.80f, 0.95f, 1.0f }, {}, { 0.95f, 1.0f, 1.0f }, { 0.75f, 0.95f, 1.1f }, {}, {} },
 			{ { 0.36f, 1.0f, 0.78f }, {}, { 0.80f, 1.0f, 0.94f }, { 0.35f, 0.90f, 0.75f }, {}, {} } };
+		// the light suit's «Буран» layout: its own two themes, laser light without the photonics' tint. 0 «Буран» - a green
+		// laser, amber for the autopilot and cautions; 1 industrial - white light, orange for what is on and for cautions
+		// the themes (the user, 2026-10-20): laser - a green coherent line; projector - cyan light with a soft glow;
+		// augmented reality - white and blue, flat; high contrast - orange (not white)
+		const Palette BURAN_PAL[4] = {
+			{ { 0xFF93FF6D, 0xFF2EB0FF, 0xFFF0FFE9, 0xFF77A85F, 0xFF3D4AFF, 0xFF000000 }, { 2, 1, 2, 6, 3, 6 } },
+			{ { 0xFFFFE357, 0xFF2EB0FF, 0xFFFFF8F2, 0xFFA58E5E, 0xFF4646FF, 0xFF000000 }, { 0, 1, 2, 4, 3, 4 } },
+			{ { 0xFFFFE6CF, 0xFF3AD2FF, 0xFFFFFFFF, 0xFFAD937F, 0xFF4A55FF, 0xFF000000 }, { 2, 1, 2, 6, 3, 6 } },
+			{ { 0xFF1A8AFF, 0xFF4AE6FF, 0xFFE0F2FF, 0xFF1A5FB8, 0xFF2A35FF, 0xFF000000 }, { 1, 1, 2, 5, 3, 5 } } };
+		const int BURAN_LOOK[4] = { 1, 0, 2, 1 };
+		// the glass canvas: an angular picture of the helmet from the eye - x the yaw (±GLASS_YW), y the pitch (GLASS_PT at
+		// the top .. GLASS_PB at the bottom). The same window as Tantra_Design\blender\make_visor_glass_hud.py
+		const double GLASS_YW = 105 * RAD, GLASS_PT = 50 * RAD, GLASS_PB = -72 * RAD, GLASS_FREF_HALF = 31 * RAD;   // the layout's reference view on the glass (smaller: more of the view open)
+		const int GLASS_CW = 2560, GLASS_CH = 1280;   // the whole glass: 12 px a degree
+		// the helmet's window seen from the eye (0, 0.700, 0.150): the opening of its inner shell (InHelm) measured from
+		// the mesh (2026-10-20), its top and bottom pitch every 10 deg of yaw, 0..100 (the same both sides)
+		const double WIN_TOP[12] = { 58.9, 58.9, 58.7, 58.3, 57.4, 55.9, 53.8, 49.2, 45.3, 36.2, 26.2, -5.0 };   // 110: the side, closed
+		const double WIN_BOT[12] = { -70.0, -69.8, -69.5, -68.4, -67.6, -65.5, -62.7, -59.3, -55.3, -46.2, -36.1, -5.0 };
+		// a smooth curve through a table's points (Catmull-Rom; mirror: the curve is symmetric about the table's start)
+		double Spline(const double* t, int n, double a, bool mirror)
+		{
+			const int i = std::clamp(static_cast<int>(a), 0, n - 2); const double f = a - i;
+			const double p0 = i > 0 ? t[i - 1] : mirror ? t[1] : t[0], p1 = t[i], p2 = t[i + 1], p3 = t[(std::min)(i + 2, n - 1)];
+			return 0.5 * (2 * p1 + (p2 - p0) * f + (2 * p0 - 5 * p1 + 4 * p2 - p3) * f * f + (3 * p1 - p0 - 3 * p2 + p3) * f * f * f);
+		}
+		double WinEdge(const double* t, double yawDeg) { return Spline(t, 12, (std::min)(std::abs(yawDeg), 109.999) / 10, true); }
+		// its side edge: the yaw every 10 deg of pitch, -60..50 (rays from the eye against InHelm and VisorB, 2026-10-20)
+		const double WIN_SIDE[12] = { 65, 81, 91, 98, 102, 104, 104, 102, 98, 91, 82, 66 };
+		double WinSide(double pitchDeg) { return Spline(WIN_SIDE, 12, (std::clamp(pitchDeg, -60.0, 49.999) + 60) / 10, false); }
+		// the MFDs at the sides (the user's frames, 2026-10-20, in the helmet's angles by the camera fitted to the panels on
+		// the screenshots; then: «не растягивай» - every button the same): one flat panel seen from the eye, its edges
+		// straight lines of the view - the inner edge at yaw 54 from pitch 20 to -18, the top and the bottom straight, the
+		// outer corners at 88 deg, inside the window's side edge less 9. Fitted (smfd_fit.py): the centre yaw 71.09, pitch
+		// 0.89, roll 0.27, the distance 470 layout units for the panel's 289 width. Its frame's outer side runs along the
+		// glass, 9 deg inside the window's side edge, from corner to corner
+		const double SMFD_YAW = 71.09, SMFD_PITCH = 0.89, SMFD_ROLL = 0.27, SMFD_F = 470.0 / 289, SMFD_OUT = 9, SMFD_BULGE = 0.55;   // (the frame's outer side: 0.55 of the glass's bulge over the straight corner-to-corner line - the user: less convex)
+		// the reserves' rings along the window's bottom edge, the outer first (the user's oval: yaw -64..-13), their centres
+		// 11 deg over the edge (the times and the rates under them clear of it); each ring's own scale so all four are seen
+		// the same size (radius 4.3 deg: the glass is nearer the eye low and in front)
+		// (the user, 2026-10-20: «не сплющивать, не деформировать» - the top, the counters and the mechanization are flat
+		// panels seen from the eye, as the side MFDs: no squeeze, no shear, straight lines straight). Fitted by plates_fit.py:
+		// the counters (260 x 150, the rings 64 apart): the first ring at yaw -54, 21 deg over the window's bottom edge, the
+		// last at -10, 19 over it (raised and drawn in: the user - the rings were cut at the bottom) - the centre yaw -34.32,
+		// pitch -50.99, roll 15.33, distance 353.9; the CO2 line at its top right clear of the low lines (-38) by 2 deg
+		const double CNT_YAW = -34.32, CNT_PITCH = -50.99, CNT_ROLL = 15.33, CNT_F = 353.9, CNT_W = 260, CNT_H = 150;
+		// the mechanization: one column of the twelve down the right of the chin (the user's squares: yaw 44..46, pitch
+		// -35..-52; the area yaw 37..66, pitch -23..-58), clear of the right MFD's bottom
+		// fitted to the user's frame on a screenshot (fit2.py: the camera from the panels on it, rms 9 px), then 3 deg lower:
+		// its top right corner 2.9 deg under the right MFD, its bottom 6 deg over the window's bottom
+		const double MECH_YAW = 54.4, MECH_PITCH = -41.4, MECH_ROLL = -19.54, MECH_F = 562.6, MECH_W = 200, MECH_H = 350;
+		// the top band: one flat panel, the layout's (640, 68) at pitch 40, 700 layout units away - the name at yaw -50,
+		// pitch 31, the modes at 43, 16 deg under the window's top
+		const double TOP_PC = 40, TOP_F = 700;
+		// the top band: its x laid along the arc of its own pitch (equal yaw up there is narrower: cos 44 = 0.72 - the
+		// middle looked squeezed), 0.88 of the old width so the name and the clock stay inside the window
+		const double TOP_ARC_Q = 0.88;
+		// its middle (the modes, the compass, the lamps, the dangers) 1.3 times the layout round (640, 8): the size of the
+		// brow's scales beside it (the user: the top not squeezed)
+		const double TOP_MID = 1.3;
+		// the layout on the glass, every number from that window and the view at FoV 90 looking level (±45 up and down,
+		// ±60 to the sides on 16:9): all of it within ±42 / ±58
+		const double LAY_DEG = 58.0 / 640;       // degrees per layout unit: the layout's half width (640) = 58 deg
+		const double TOP_P0 = 40.0;              // the top band's centre line (layout y 68): 40 deg up, 19 under the window's top
+		const double BOT_P0 = -38.0;             // the low lines (layout y 652): 38 deg down, 32 over the window's bottom
+		const double MFD_YAW = 41, MFD_PITCH = 3, MFD_SIDE_YAW = 74, MFD_SIDE_PITCH = 2, LOW_YAW = 38, LOW_PITCH = -30;   // (side: a folded MFD's tab, the middle of its frame)
+		// the visor's glass itself: the sphere fitted to VisorGlassHud.msh (2026-10-20), seen from the eye (x right, y up,
+		// z forward, metres) - its centre 10.5 cm behind the eye, radius 15.2 cm. The panels lie on it as decals: their
+		// edges are lines of the glass, as flat as the glass is (the eye is not at its centre: no fish-eye bulge)
+		const double GLASS_SPH_C[3] = { 0.0, -0.0046, -0.1051 }, GLASS_SPH_R = 0.1522;
+		// the panels' size on the glass: metres of glass a radian of the layout at the reference view. Measured sizes seen
+		// from the eye: an MFD at the sides 26 x 44 deg (yaw 58..84, pitch -22..22), in front 25 x 34 deg (yaw 28..53,
+		// pitch -14..20), the low plates 26 x 16 / 29 x 19 deg (yaw 22..52, pitch -39..-21) - nothing overlaps, all inside
+		// the window and, in front, inside FoV 90 looking level
+		const double MFD_SIDE_ARC = 0.095, MFD_ARC = 0.055, LOW_ARC = 0.05;
 		const char* LOOK_NAME[3] = { "ГОЛО", "ФОТОНИКА", "ЭЛ" };
 		const char* PAL_NAME[3] = { "ЦИАН + ОРАНЖ", "ОРАНЖ + ЦИАН", "БЕЛЫЙ + ОРАНЖ" };
 		const char* PAL_NOTE[3] = { "основной циан, автопилот оранжевый", "основной оранжевый, автопилот циан", "основной белый, автопилот оранжевый" };
@@ -872,14 +956,229 @@ namespace ocrew
 	{
 	public:
 		Gfx(oapi::Sketchpad* skp, SuitHud& o, const HudText& t, const Palette& p)   // a fixed palette (the GRI ring)
-			: skp(skp), s2(Ext(skp)), o(o), txt(t), P(p), look(0) {}
+			: skp(skp), s2(Ext(skp)), o(o), txt(t), P(p), look(0) { if (o.drawCv && o.gx) { gx = o.gx; cv = o.drawCv; } }
+		Gfx(oapi::Sketchpad* skp, SuitHud& o, const HudText& t, const Palette& p, int look, bool tinted)   // «Буран»: its palette, the photonics' lines
+			: skp(skp), s2(Ext(skp)), o(o), txt(t), P(p), look(look), tint(tinted)
+		{
+			if (o.drawCv && o.gx) { gx = o.gx; cv = o.drawCv; }
+			if (look && !o.gcTried) { o.gcTried = true; o.gcOk = Core() != nullptr; }
+			if (look && o.gcOk && s2) s3 = s2;
+		}
 		Gfx(oapi::Sketchpad* skp, SuitHud& o, const HudText& t, int pal, int look = 0)
 			: skp(skp), s2(Ext(skp)), o(o), txt(t), P(look ? LOOK_PAL[look] : PALS[pal]), look(look)
 		{
+			if (o.drawCv && o.gx) { gx = o.gx; cv = o.drawCv; }   // the native canvas: every shape below goes there
 			if (look && !o.gcTried) { o.gcTried = true; o.gcOk = Core() != nullptr; }
 			if (look && o.gcOk && s2) s3 = s2;
 		}
 		oapi::Sketchpad* skp; oapi::Sketchpad* s2; SuitHud& o; const HudText& txt; const Palette& P;
+		const D3D11Hud::Api* gx{}; D3D11Hud::Canvas cv{};   // the D3D11 client's canvas (null: the Sketchpad)
+		// ---- the native side: the same widths, colours and alphas as the Sketchpad's, in float surface pixels
+		float PW(double w) const { return static_cast<float>((std::max)(1.0, w * u * 0.8 * (1 + 0.6 * boost) * 0.5 * (kx + ky))); }
+		float FX(double x) const { return static_cast<float>(X(x) * kx); }
+		float FY(double y) const { return static_cast<float>(Y(y) * ky); }
+		bool tint{ true };   // the photonics' glyph tint (off for «Буран»'s own palettes)
+		// ---- a plate («Буран»): a flat panel set round the eye and turned to face it - its normal points at the eye, all
+		// plates share one perspective centred on the view (the focal length of the approved mockup, 0.85 of the view's
+		// width: the real eye's would turn them too far to read). Every point drawn while a plate is set goes through its
+		// projection; text gets the plate's local slant, so the glyphs stay straight and sharp
+		bool pj{}; double pjCx{}, pjCy{}, pjF{}, pjW2{}, pjH2{}, pjC[3]{}, pjEx[3]{}, pjEy[3]{}, pjPad{};   // (kept together: SetBase copies them as one block)
+		void Plate(double x0, double y0, double w, double h, double W, double H)   // view pixels
+		{
+			pjW2 = W / 2; pjH2 = H / 2; pjF = 0.85 * W; pjCx = x0 + w / 2; pjCy = y0 + h / 2;
+			const double C[3] = { pjCx - pjW2, pjCy - pjH2, pjF }, l = std::sqrt(C[0] * C[0] + C[1] * C[1] + C[2] * C[2]);
+			const double n[3] = { C[0] / l, C[1] / l, C[2] / l };
+			double ex[3] = { n[2], 0, -n[0] }; const double le = std::sqrt(ex[0] * ex[0] + ex[2] * ex[2]); ex[0] /= le; ex[2] /= le;   // (0,1,0) x n
+			const double ey[3] = { n[1] * ex[2] - n[2] * ex[1], n[2] * ex[0] - n[0] * ex[2], n[0] * ex[1] - n[1] * ex[0] };          // n x ex
+			for (int i = 0; i < 3; ++i) { pjC[i] = C[i]; pjEx[i] = ex[i]; pjEy[i] = ey[i]; }
+			pj = true;
+		}
+		// a plate fixed on the helmet's glass: q = HelmDir's centre, right, down (camera space, y down). Its flat layout is
+		// the rectangle (x0, y0, w, h) the plate has looking straight ahead; F the view's focal length in pixels. False: the
+		// panel is behind or across the eye - not drawn
+		bool PlateAt(double x0, double y0, double w, double h, double W, double H, double F, const double q[9], double dist = 0)
+		{
+			if (dist <= 0) dist = F;
+			pjW2 = W / 2; pjH2 = H / 2; pjF = F; pjCx = x0 + w / 2; pjCy = y0 + h / 2;
+			for (int i = 0; i < 3; ++i) { pjC[i] = q[i] * dist; pjEx[i] = q[3 + i]; pjEy[i] = q[6 + i]; }
+			for (int c = 0; c < 4; ++c)
+			{
+				const double u = (c & 1 ? 0.5 : -0.5) * w, vv = (c & 2 ? 0.5 : -0.5) * h;
+				if (pjC[2] + pjEx[2] * u + pjEy[2] * vv < 0.25 * dist) { pj = false; return false; }
+			}
+			pj = true; return true;
+		}
+		void NoPlate() { pj = false; gl = false; noHit = false; if (baseOn) { std::copy(bGl, bGl + 25, &glC[0]); gl = true; pj = bPj; std::copy(bPjv, bPjv + 15, &pjCx); noHit = bNoHit; } }
+		// the layout's own place on the glass (the glass pass): everything not on a panel goes through it
+		bool baseOn{}, bPj{}, bNoHit{}; double bGl[25]{}, bPjv[15]{};
+		void SetBase() { baseOn = true; std::copy(&glC[0], &glC[0] + 25, bGl); bPj = pj; std::copy(&pjCx, &pjCx + 15, bPjv); bNoHit = noHit; }
+		// ---- the helmet's glass: the panel drawn into the glass canvas (an angular picture of the helmet, seen from the eye:
+		// x = yaw, y = pitch), which the glass mesh - the visor's own shape - carries. glC/glR/glD: the panel's centre
+		// direction, right and down in the helmet (y up); glF its distance in view pixels (the reference focal length)
+		bool gl{}, noHit{}; double glC[3]{}, glR[3]{}, glD[3]{}, glF{}, glCx{}, glCy{}, glCW{}, glCH{}, glYW{}, glPT{}, glPB{}, glLin{}, glY0{}, glP0{}, glC0{}, glK{}, glS{}, glW{}, glH{};   // (kept together: SetBase copies them as one block)
+		VESSEL* hv{}; double hitW{}, hitH{}, hitF{};   // the clicks of an equal-angle part: through the helmet to the view
+		void Glass(double x0, double y0, double w, double h, double F, double yaw, double pitch, double CW, double CH, double YW, double PT, double PB)
+		{
+			const double cy = std::cos(yaw), sy = std::sin(yaw), cp = std::cos(pitch), sp = std::sin(pitch);
+			glC[0] = cp * sy; glC[1] = sp; glC[2] = cp * cy;
+			glR[0] = cy; glR[1] = 0; glR[2] = -sy;
+			glD[0] = sp * sy; glD[1] = -cp; glD[2] = sp * cy;
+			glF = F; glCx = x0 + w / 2; glCy = y0 + h / 2; glCW = CW; glCH = CH; glYW = YW; glPT = PT; glPB = PB;
+			glLin = 0; glY0 = yaw; glP0 = pitch;
+			gl = true;
+		}
+		void Gl(double sx, double sy, double& ox_, double& oy_) const   // view pixels of the flat panel -> glass canvas pixels
+		{
+			const double u = sx - glCx, v = sy - glCy;
+			if (glLin > 0) { double yaw, pitch; LinAng(sx, sy, yaw, pitch); ox_ = glCW * (0.5 + yaw / (2 * glYW)); oy_ = glCH * (glPT - pitch) / (glPT - glPB); return; }   // equal angles
+			const double P0 = glC[0] * glF + glR[0] * u + glD[0] * v, P1 = glC[1] * glF + glR[1] * u + glD[1] * v, P2 = glC[2] * glF + glR[2] * u + glD[2] * v;
+			const double yaw = std::atan2(P0, P2), pitch = std::atan2(P1, std::hypot(P0, P2));
+			ox_ = glCW * (0.5 + yaw / (2 * glYW)); oy_ = glCH * (glPT - pitch) / (glPT - glPB);
+		}
+		// a point of the layout (view pixels) -> the surface's pixels: through the glass, the plate, or as it is
+		void Map(double sx, double sy, double& ox_, double& oy_) const
+		{
+			if (gl) { Gl(sx, sy, ox_, oy_); return; }
+			if (pj) Pj(sx, sy, sx, sy);
+			ox_ = sx * kx; oy_ = sy * ky;
+		}
+		bool On() const { return pj || gl; }
+		// equal angles: x by LAY_DEG from the centre; y from the mode's line (glCy) - flat, or along the window's edge
+		void LinAng(double sx, double sy, double& yaw, double& pitch) const
+		{
+			if (glLin == 4)   // a decal on the glass: from the point the panel's centre is seen at, along the sphere
+			{
+				const double* Cs = GLASS_SPH_C; const double Rs = GLASS_SPH_R;
+				const double d0[3] = { std::cos(glP0) * std::sin(glY0), std::sin(glP0), std::cos(glP0) * std::cos(glY0) };
+				const double dc = d0[0] * Cs[0] + d0[1] * Cs[1] + d0[2] * Cs[2], cc = Cs[0] * Cs[0] + Cs[1] * Cs[1] + Cs[2] * Cs[2];
+				const double t = dc + std::sqrt(dc * dc - cc + Rs * Rs);
+				double n[3]; for (int i = 0; i < 3; ++i) n[i] = (t * d0[i] - Cs[i]) / Rs;
+				const double le = std::hypot(n[0], n[2]), ex[3] = { n[2] / le, 0, -n[0] / le };
+				const double ey[3] = { n[1] * ex[2] - n[2] * ex[1], n[2] * ex[0] - n[0] * ex[2], n[0] * ex[1] - n[1] * ex[0] };
+				const double u = (sx - glCx) / glF * glS, w = -(sy - glCy) / glF * glS, r = std::hypot(u, w), th = r / Rs;
+				const double cs = std::cos(th), sn = r > 1e-9 ? std::sin(th) / r : 1 / Rs;
+				double q[3]; for (int i = 0; i < 3; ++i) q[i] = Cs[i] + Rs * (n[i] * cs + (u * ex[i] + w * ey[i]) * sn);
+				yaw = std::atan2(q[0], q[2]); pitch = std::atan2(q[1], std::hypot(q[0], q[2]));
+				return;
+			}
+			if (glLin == 6)   // a flat panel seen from the eye (glC its centre, glR / glD its right and down, rolled; glF its distance)
+			{
+				const double u = sx - glCx, v = sy - glCy;
+				const double P0 = glC[0] * glF + glR[0] * u + glD[0] * v, P1 = glC[1] * glF + glR[1] * u + glD[1] * v, P2 = glC[2] * glF + glR[2] * u + glD[2] * v;
+				yaw = std::atan2(P0, P2); pitch = std::atan2(P1, std::hypot(P0, P2));
+				return;
+			}
+			if (glLin == 7) { yaw = sx / 100 * RAD; pitch = sy / 100 * RAD; return; }   // the points in hundredths of a degree
+			// x: degrees of arc along the band's line, so the yaw is the arc over the cosine of the pitch (no squeeze up high)
+			const double xd = (sx - glCx) / glK * LAY_DEG * TOP_ARC_Q;
+			double line = glP0 * DEG, dy = sy - glCy;
+			if (glLin == 2)   // the brow's scales: the layout's rim arc (centre 640, 1560, r 1492) laid on the window's top edge
+			{
+				const double lx = (sx - glC0) / glK - 640, yr = 1560 - std::sqrt((std::max)(0.0, 1492.0 * 1492.0 - lx * lx));
+				dy = sy - yr * glK;
+			}
+			double yd = xd, p = line;
+			for (int it = 0; it < 3; ++it)
+			{
+				const double ln = line + (glLin == 2 ? WinEdge(WIN_TOP, yd) - WIN_TOP[0] : glLin == 3 ? WinEdge(WIN_BOT, yd) - WIN_BOT[0] : 0.0);
+				p = ln - dy / glK * LAY_DEG;
+				yd = xd / std::cos(p * RAD);
+			}
+			yaw = yd * RAD; pitch = p * RAD;
+		}
+		void Pj(double sx, double sy, double& ox_, double& oy_) const   // view pixels -> view pixels
+		{
+			const double u = sx - pjCx, v = sy - pjCy;
+			const double P0 = pjC[0] + pjEx[0] * u + pjEy[0] * v, P1 = pjC[1] + pjEx[1] * u + pjEy[1] * v, P2 = pjC[2] + pjEx[2] * u + pjEy[2] * v;
+			ox_ = pjW2 + pjF * P0 / P2; oy_ = pjH2 + pjF * P1 / P2;
+		}
+		void FP(double x, double y, float& fx, float& fy) const   // a point in surface pixels, through the plate when set
+		{
+			double ox_, oy_; Map(X(x), Y(y), ox_, oy_);
+			fx = static_cast<float>(ox_); fy = static_cast<float>(oy_);
+		}
+		// the plate's local affine at a point (surface pixels): maps the flat surface point to its projected place
+		void PjAffine(double x, double y, float m[6]) const
+		{
+			const double sx = X(x), sy = Y(y), e = 2.0; double ax, ay, bx, by, cx_, cy_;
+			Map(sx, sy, ax, ay); Map(sx + e, sy, bx, by); Map(sx, sy + e, cx_, cy_);   // surface pixels
+			const double a = (bx - ax) / e / kx, b = (cx_ - ax) / e / ky, c = (by - ay) / e / kx, d = (cy_ - ay) / e / ky;
+			const double px = sx * kx, py = sy * ky, qx = ax, qy = ay;
+			m[0] = static_cast<float>(a); m[1] = static_cast<float>(b); m[2] = static_cast<float>(qx - a * px - b * py);
+			m[3] = static_cast<float>(c); m[4] = static_cast<float>(d); m[5] = static_cast<float>(qy - c * px - d * py);
+		}
+		static void Mul(const float A[6], const float B[6], float out[6])   // A after B
+		{
+			out[0] = A[0] * B[0] + A[1] * B[3]; out[1] = A[0] * B[1] + A[1] * B[4]; out[2] = A[0] * B[2] + A[1] * B[5] + A[2];
+			out[3] = A[3] * B[0] + A[4] * B[3]; out[4] = A[3] * B[1] + A[4] * B[4]; out[5] = A[3] * B[2] + A[4] * B[5] + A[5];
+		}
+		void Quad(double x0, double y0, double x1, double y1, float q[8]) const { FP(x0, y0, q[0], q[1]); FP(x1, y0, q[2], q[3]); FP(x1, y1, q[4], q[5]); FP(x0, y1, q[6], q[7]); }
+		// a mapping that bends straight lines (the glass's perspective middle, the bands along its edges): segments are cut
+		// into pieces of ~6 layout units, each mapped - smooth curves on the glass, no breaks
+		bool Bends() const { return gl && glLin != 1; }
+		void PathXY(const std::vector<V2>& pts, bool closed, std::vector<float>& xy) const
+		{
+			xy.clear();
+			const size_t n = pts.size(), m = closed ? n : n - 1;
+			for (size_t i = 0; i < m; ++i)
+			{
+				const V2 a = pts[i], b = pts[(i + 1) % n];
+				const int k = Bends() ? (std::max)(1, static_cast<int>(std::hypot(b.first - a.first, b.second - a.second) / 6)) : 1;
+				for (int j = 0; j < k; ++j) { float fx, fy; FP(a.first + (b.first - a.first) * j / k, a.second + (b.second - a.second) * j / k, fx, fy); xy.push_back(fx); xy.push_back(fy); }
+			}
+			if (!closed && n) { float fx, fy; FP(pts[n - 1].first, pts[n - 1].second, fx, fy); xy.push_back(fx); xy.push_back(fy); }
+		}
+		void QuadPath(double x0, double y0, double x1, double y1, std::vector<float>& xy) const { PathXY({ { x0, y0 }, { x1, y0 }, { x1, y1 }, { x0, y1 } }, true, xy); }
+		// a stroke with the look's halo: holo a soft glow, light-built a double halo (as its two wider passes), the
+		// electroluminescent none
+		void NStroke(const float* xy, int n, int c, double w, double a, bool dash, bool glow, bool closed)
+		{
+			double cw = w, gw = 0, gs = 0;
+			if (look == 1) { a *= shimmer; cw = w * 0.85; if (glow && !dash) { gw = (PW(w + 5) - PW(cw)) * 0.5; gs = 0.35; } }
+			else if (look == 0 && glow && !dash) { gw = (PW(w + 2.4) - PW(w)) * 0.5 + 1.0; gs = 0.3; }
+			gx->SetGlow(cv, static_cast<float>(gw), static_cast<float>(gs));
+			const float pw = PW(cw);
+			gx->Polyline(cv, xy, n, pw, C(c, a), (dash ? D3D11Hud::DASHED : 0u) | (closed ? D3D11Hud::CLOSED : 0u), dash ? 3 * pw + 2 : 0);
+			gx->SetGlow(cv, 0, 0);
+		}
+		DWORD TextCol(int c) const   // the text's colour: the palette's, with the look's tint, the shimmer and the dark optics
+		{
+			const float* tn = look && tint ? LOOK_TINT[look][c] : nullptr;
+			const bool hasTn = tn && (tn[0] > 0 || tn[1] > 0);
+			const double k = look == 1 ? shimmer : 1.0;
+			const DWORD col = P.col[c];
+			const double r = (col & 0xFF) * (hasTn ? tn[0] : 1.0) * k * dimR, gg = ((col >> 8) & 0xFF) * (hasTn ? tn[1] : 1.0) * k * dimG, b = ((col >> 16) & 0xFF) * (hasTn ? tn[2] : 1.0) * k * dimB;
+			auto q = [](double v) { return static_cast<DWORD>(std::clamp(v, 0.0, 255.0)); };
+			return q(r) | (q(gg) << 8) | (q(b) << 16) | 0xFF000000u;
+		}
+		// a 1 px line, not scaled up (the sparks)
+		void Raw(double x0, double y0, double x1, double y1, int c)
+		{
+			if (cv) { float xy[4]; FP(x0, y0, xy[0], xy[1]); FP(x1, y1, xy[2], xy[3]); gx->Polyline(cv, xy, 2, 1.0f, C(c, 1), 0, 0); return; }
+			NoBrush(); if (s2) s2->QuickPen(C(c, 1), 1.0f, 1); else Pen(c, 1, 1, false);
+			skp->Line(IX(x0), IY(y0), IX(x1), IY(y1));
+		}
+		// text turned about a point (radians, clockwise on the screen), as the rim's arcs read it
+		void TurnedText(double px, double py, const std::string& s, int c, double sz, int align, double ang, double cx, double cy)
+		{
+			if (cv)
+			{
+				const float X0 = FX(cx), Y0 = FY(cy), cs = static_cast<float>(std::cos(ang)), sn = static_cast<float>(std::sin(ang));
+				const float m[6] = { cs, -sn, X0 - cs * X0 + sn * Y0, sn, cs, Y0 - sn * X0 - cs * Y0 };
+				if (On()) { float a[6], mm[6]; PjAffine(cx, cy, a); Mul(a, m, mm); const bool was = pj, wasG = gl; pj = gl = false; gx->SetTransform(cv, mm); T(px, py, s, c, sz, align); pj = was; gl = wasG; }
+				else { gx->SetTransform(cv, m); T(px, py, s, c, sz, align); }
+				gx->SetTransform(cv, nullptr);
+				return;
+			}
+			if (s2)
+			{
+				oapi::IVECTOR2 ctr{ IX(cx), IY(cy) };
+				s2->SetWorldTransform2D(1.0f, static_cast<float>(ang), &ctr, nullptr);
+				T(px, py, s, c, sz, align);
+				s2->SetWorldTransform2D();
+			}
+			else T(px, py, s, c, sz, align);
+		}
 		int look{}; oapi::Sketchpad* s3{}; double shimmer{ 1 };   // light-built: a fine flicker of coherent light
 		double ox{}, oy{}, u{ 1 }, boost{};   // boost 0..1: brighter surroundings, bolder lines
 		// a shift of the whole display (pixels; 0 - it rides the view). world = true: signs projected through the camera
@@ -921,6 +1220,8 @@ namespace ocrew
 
 		void Line(double x1, double y1, double x2, double y2, int c = CP, double w = 1.2, double a = 1, bool dash = false, bool glow = true)
 		{
+			if (cv && Bends()) { std::vector<float> xy; PathXY({ { x1, y1 }, { x2, y2 } }, false, xy); NStroke(xy.data(), static_cast<int>(xy.size() / 2), c, w, a, dash, glow, false); return; }
+			if (cv) { float xy[4]; FP(x1, y1, xy[0], xy[1]); FP(x2, y2, xy[2], xy[3]); NStroke(xy, 2, c, w, a, dash, glow, false); return; }
 			NoBrush();
 			if (look == 1)
 			{
@@ -934,6 +1235,39 @@ namespace ocrew
 		}
 		void Rect(double x, double y, double w, double h, int sc, double sw = 1, double sa = 1, int fc = -1, double fa = 0)
 		{
+			if (cv && On())
+			{
+				float q[8];
+				if (look == 1 && fc >= 0 && fc != CK && fa >= 0.99)
+				{
+					std::vector<float> p; QuadPath(x, y, x + w, y + h, p); gx->Polyline(cv, p.data(), static_cast<int>(p.size() / 2), PW(1.8), C(fc, shimmer), D3D11Hud::CLOSED, 0);
+					const double in = 2.5 / u; QuadPath(x + in, y + in, x + w - in, y + h - in, p); gx->Polyline(cv, p.data(), static_cast<int>(p.size() / 2), PW(1.0), C(fc, 0.8 * shimmer), D3D11Hud::CLOSED, 0);
+					return;
+				}
+				if (look == 1 && fc >= 0 && fc != CK && fa > 0)
+				{
+					if (fa >= 0.15) { const double step = 3.2 / u; for (double xx = x + step / 2; xx < x + w; xx += step) Line(xx, y + 0.5, xx, y + h - 0.5, fc, 0.9, (std::min)(1.0, fa * 1.2), false, false); }
+				}
+				else if (fc >= 0 && fa > 0) { std::vector<float> p; QuadPath(x, y, x + w, y + h, p); gx->Polygon(cv, p.data(), static_cast<int>(p.size() / 2), C(fc, fa)); }
+				if (sc >= 0) { std::vector<float> p; QuadPath(x, y, x + w, y + h, p); gx->Polyline(cv, p.data(), static_cast<int>(p.size() / 2), PW(sw), C(sc, sa * (look == 1 ? shimmer : 1)), D3D11Hud::CLOSED, 0); }
+				return;
+			}
+			if (cv)
+			{
+				if (look == 1 && fc >= 0 && fc != CK && fa >= 0.99)
+				{
+					gx->Rect(cv, FX(x), FY(y), FX(x + w), FY(y + h), 0, C(fc, shimmer), PW(1.8));
+					const double in = 2.5 / u; gx->Rect(cv, FX(x + in), FY(y + in), FX(x + w - in), FY(y + h - in), 0, C(fc, 0.8 * shimmer), PW(1.0));
+					return;
+				}
+				if (look == 1 && fc >= 0 && fc != CK && fa > 0)
+				{
+					if (fa >= 0.15) { const double step = 3.2 / u; for (double xx = x + step / 2; xx < x + w; xx += step) Line(xx, y + 0.5, xx, y + h - 0.5, fc, 0.9, (std::min)(1.0, fa * 1.2), false, false); }
+				}
+				else if (fc >= 0 && fa > 0) gx->Rect(cv, FX(x), FY(y), FX(x + w), FY(y + h), C(fc, fa), 0, 0);
+				if (sc >= 0) gx->Rect(cv, FX(x), FY(y), FX(x + w), FY(y + h), 0, C(sc, sa * (look == 1 ? shimmer : 1)), PW(sw));
+				return;
+			}
 			if (look == 1 && fc >= 0 && fc != CK && fa >= 0.99)
 			{
 				// light-built, a solid fill (a button that is on): a double line of light round it, the inside left clear -
@@ -956,6 +1290,26 @@ namespace ocrew
 		}
 		void Circle(double cx, double cy, double r, int sc, double sw = 1.2, double sa = 1, int fc = -1, double fa = 0, bool dash = false)
 		{
+			if (cv && On())
+			{
+				std::vector<float> xy; const int n = 40; xy.resize(2 * n);
+				for (int i = 0; i < n; ++i) FP(cx + r * std::cos(PI2 * i / n), cy + r * std::sin(PI2 * i / n), xy[2 * i], xy[2 * i + 1]);
+				if (fc >= 0 && fa > 0 && look == 1) { if (sc < 0) { sc = fc; sa = fa; } }
+				else if (fc >= 0 && fa > 0) gx->Polygon(cv, xy.data(), n, C(fc, fa));
+				if (sc >= 0) gx->Polyline(cv, xy.data(), n, PW(sw), C(sc, sa * (look == 1 ? shimmer : 1)), D3D11Hud::CLOSED | (dash ? D3D11Hud::DASHED : 0u), dash ? 3 * PW(sw) + 2 : 0);
+				return;
+			}
+			if (cv)
+			{
+				if (fc >= 0 && fa > 0 && look == 1) { if (sc < 0) { sc = fc; sa = fa; } }
+				else if (fc >= 0 && fa > 0) gx->Ellipse(cv, FX(cx), FY(cy), static_cast<float>(r * u * kx), static_cast<float>(r * u * ky), C(fc, fa), 0, 0);
+				if (sc >= 0)
+				{
+					if (dash) gx->Arc(cv, FX(cx), FY(cy), static_cast<float>(r * u * 0.5 * (kx + ky)), 0.0f, 6.2831853f, PW(sw), C(sc, sa), D3D11Hud::DASHED, 3 * PW(sw) + 2);
+					else gx->Ellipse(cv, FX(cx), FY(cy), static_cast<float>(r * u * kx), static_cast<float>(r * u * ky), 0, C(sc, sa * (look == 1 ? shimmer : 1)), PW(sw));
+				}
+				return;
+			}
 			if (fc >= 0 && fa > 0 && look == 1) { if (sc < 0) { sc = fc; sa = fa; } }   // light-built: the outline, not a disc
 			else if (fc >= 0 && fa > 0 && Brush(fc, fa)) { NoPen(); skp->Ellipse(IX(cx - r), IY(cy - r), IX(cx + r), IY(cy + r)); }
 			if (sc >= 0) { NoBrush(); Pen(sc, sw, sa, dash); skp->Ellipse(IX(cx - r), IY(cy - r), IX(cx + r), IY(cy + r)); }
@@ -964,6 +1318,12 @@ namespace ocrew
 		void Poly(const std::vector<V2>& pts, int c, double w = 1.2, double a = 1, bool closed = false, bool dash = false)
 		{
 			if (pts.size() < 2) return;
+			if (cv)
+			{
+				std::vector<float> xy; PathXY(pts, closed, xy);
+				NStroke(xy.data(), static_cast<int>(xy.size() / 2), c, w, a, dash, false, closed);
+				return;
+			}
 			std::vector<oapi::IVECTOR2> v;
 			for (const V2& p : pts) { oapi::IVECTOR2 q; q.x = IX(p.first); q.y = IY(p.second); v.push_back(q); }
 			if (closed) v.push_back(v.front());
@@ -973,6 +1333,13 @@ namespace ocrew
 		void Fill(const std::vector<V2>& pts, int c, double a)
 		{
 			if (look == 1 && pts.size() >= 3) { Poly(pts, c, 1.2, a, true); return; }   // light-built: drawn, not filled
+			if (cv)
+			{
+				if (pts.size() < 3 || a <= 0) return;
+				std::vector<float> xy; PathXY(pts, true, xy);
+				gx->Polygon(cv, xy.data(), static_cast<int>(xy.size() / 2), C(c, a));
+				return;
+			}
 			if (pts.size() < 3 || !Brush(c, a)) return;
 			std::vector<oapi::IVECTOR2> v;
 			for (const V2& p : pts) { oapi::IVECTOR2 q; q.x = IX(p.first); q.y = IY(p.second); v.push_back(q); }
@@ -1001,7 +1368,19 @@ namespace ocrew
 			const int si = SizeIdx(sz * (std::max)(1.0, ky));   // at 2x the bigger glyphs
 			if (look == 1 && c == CK) c = CA;
 			if (boost > 1.05 && c == CD) c = CP;   // the maximum brightness: the dim labels are lit as the rest
-			const float* tn = look ? LOOK_TINT[look][c] : nullptr;
+			if (cv && o.sdf[0])
+			{
+				// signed-distance glyphs: the em is the size in display units, the glow (the atlas's baked one) from the distance
+				const float em = static_cast<float>(sz * u * 0.5 * (kx + ky));
+				const float gw = look == 0 ? em * 0.16f : look == 1 ? em * 0.12f : em * 0.07f, gs = look == 0 ? 0.55f : look == 1 ? 0.4f : 0.25f;
+				gx->SetGlow(cv, gw, gs);
+				if (On()) { float m[6]; PjAffine(x, y, m); gx->SetTransform(cv, m); }
+				gx->Text(cv, o.sdf[si == 3 && o.sdf[1] ? 1 : 0], FX(x), FY(y), em, s.c_str(), TextCol(c), (align == 1 ? D3D11Hud::CENTER : align == 2 ? D3D11Hud::RIGHT : D3D11Hud::LEFT) | D3D11Hud::BASELINE);
+				if (On()) gx->SetTransform(cv, nullptr);
+				gx->SetGlow(cv, 0, 0);
+				return;
+			}
+			const float* tn = look && tint ? LOOK_TINT[look][c] : nullptr;
 			const bool hasTn = tn && (tn[0] > 0 || tn[1] > 0), dimmed = dimR < 0.999 || dimG < 0.999 || dimB < 0.999;
 			const bool tint = s3 && (hasTn || dimmed);
 			if (tint)
@@ -1024,6 +1403,7 @@ namespace ocrew
 		double TW(const std::string& s, double sz) const
 		{
 			const int si = SizeIdx(sz);
+			if (cv && o.sdf[0]) return gx->TextWidth(o.sdf[si == 3 && o.sdf[1] ? 1 : 0], static_cast<float>(sz), s.c_str());
 			if (txt.Ok()) return txt.Width(s, si, sz / SIZE_BASE[si]);
 			return Decode(s).size() * sz * 0.55;
 		}
@@ -1038,7 +1418,25 @@ namespace ocrew
 			f = std::clamp(f, 0.0, 1.0);
 			if (f > 0.002) Rect(x + 1, y + 1, (w - 2) * f, h - 2, -1, 0, 0, c, 0.9);
 		}
-		void Hit(double x, double y, double w, double h, int kind, int arg = 0) { o.hits.push_back({ X(x), Y(y), X(x + w), Y(y + h), kind, arg }); }
+		void Hit(double x, double y, double w, double h, int kind, int arg = 0)
+		{
+			if (gl && glLin > 0 && hv)   // an equal-angle part: each corner through the helmet into the view
+			{
+				double xs[4], ys[4];
+				for (int i = 0; i < 4; ++i)
+				{
+					double yw, pt, d[9]; LinAng(X(i & 1 ? x + w : x), Y(i & 2 ? y + h : y), yw, pt);
+					if (!o.HelmDir(hv, yw, pt, d) || d[2] < 0.2) return;
+					xs[i] = hitW / 2 + hitF * d[0] / d[2]; ys[i] = hitH / 2 + hitF * d[1] / d[2];
+				}
+				o.hits.push_back({ (std::min)({ xs[0], xs[1], xs[2], xs[3] }), (std::min)({ ys[0], ys[1], ys[2], ys[3] }), (std::max)({ xs[0], xs[1], xs[2], xs[3] }), (std::max)({ ys[0], ys[1], ys[2], ys[3] }), kind, arg });
+				return;
+			}
+			if (noHit) return;
+			if (!pj) { o.hits.push_back({ X(x), Y(y), X(x + w), Y(y + h), kind, arg }); return; }
+			double xs[4], ys[4]; Pj(X(x), Y(y), xs[0], ys[0]); Pj(X(x + w), Y(y), xs[1], ys[1]); Pj(X(x + w), Y(y + h), xs[2], ys[2]); Pj(X(x), Y(y + h), xs[3], ys[3]);
+			o.hits.push_back({ (std::min)({ xs[0], xs[1], xs[2], xs[3] }), (std::min)({ ys[0], ys[1], ys[2], ys[3] }), (std::max)({ xs[0], xs[1], xs[2], xs[3] }), (std::max)({ ys[0], ys[1], ys[2], ys[3] }), kind, arg });
+		}
 		void Arrow(double x0, double y0, double x1, double y1, int c, double w = 1.6, double a = 1, bool dash = false)
 		{
 			const double dx = x1 - x0, dy = y1 - y0, l = std::hypot(dx, dy);
@@ -1058,6 +1456,74 @@ namespace ocrew
 	{
 		Gfx& g; const HudData& d; SuitHud& h; VESSEL* v; double W, H, k; bool blink;
 	};
+	// a «Буран» plate: on the helmet's glass when the head turns inside the helmet (fixed there, the look slides over
+	// it), else turned to the eye on the view. False: on the glass but out of sight now - skip it
+	// a panel on the helmet's glass (the glass pass): centred at yaw/pitch (degrees), arc metres of glass a radian of the
+	// layout (mode 4, a decal); mode 5 an MFD shaped by the window, arc its side (-1 left, 1 right)
+	bool SetDecal(Ctx& c, double x0, double y0, double w, double h, double yawDeg, double pitchDeg, double arc, int lin = 4, double fUnits = 0)
+	{
+		if (!c.g.cv) return true;
+		const double F = (c.H / 2) / std::tan((std::max)(0.1, oapiCameraAperture())), Fr = (c.H / 2) / std::tan(GLASS_FREF_HALF);
+		double q[9];
+		const double yaw = yawDeg * RAD, pitch = pitchDeg * RAD;
+		const bool seen = c.h.HelmDir(c.v, yaw, pitch, q) && c.g.PlateAt(x0, y0, w, h, c.W, c.H, F, q, Fr);
+		c.g.pjF = F;
+		c.g.Glass(x0, y0, w, h, Fr, yaw, pitch, GLASS_CW, GLASS_CH, GLASS_YW, GLASS_PT, GLASS_PB);
+		c.g.glLin = lin; c.g.glS = arc; c.g.glW = w; c.g.glH = h;
+		if (lin == 6)   // a flat panel: arc its roll (degrees), its distance from its width (SMFD_F)
+		{
+			const double r = arc * RAD, cr = std::cos(r), sr = std::sin(r);
+			for (int i = 0; i < 3; ++i) { const double R0 = c.g.glR[i], D0 = c.g.glD[i]; c.g.glR[i] = R0 * cr + D0 * sr; c.g.glD[i] = -R0 * sr + D0 * cr; }
+			c.g.glF = fUnits > 0 ? fUnits * c.k : SMFD_F * w;   // (the side MFDs: from their width)
+		}
+		c.g.hv = c.v; c.g.hitW = c.W; c.g.hitH = c.H; c.g.hitF = F;   // its clicks through the helmet into the view
+		c.g.noHit = !seen;
+		return true;
+	}
+	bool SetPlate(Ctx& c, double x0, double y0, double w, double h, int kind = 0)
+	{
+		if (!c.g.cv) return true;
+		const double F = (c.H / 2) / std::tan((std::max)(0.1, oapiCameraAperture()));
+		double q[9];
+		if (c.h.GlassOn() && !c.h.glassPass) return false;   // the glass layer carries the panels: none on the view
+		(void)q;
+		if (c.h.glassPass)
+		{
+			// on the glass, at the measured places: 1 an MFD, 2 a low plate, 3 a folded MFD's tab (where the MFD was)
+			const double Fr = (c.H / 2) / std::tan(GLASS_FREF_HALF);
+			const double side = x0 + w / 2 < c.W / 2 ? -1 : 1;
+			if (kind == 1 && c.h.mfdSide)
+			{
+				// the frame: the panel's inner edge, top and bottom (straight), its outer side along the glass from corner to corner
+				SetDecal(c, x0, y0, w, h, side * SMFD_YAW, SMFD_PITCH, side * SMFD_ROLL, 6);
+				double cy[4], cp[4];   // the corners: inner top, outer top, outer bottom, inner bottom
+				const double ix = side < 0 ? x0 + w : x0, ox_ = side < 0 ? x0 : x0 + w;
+				c.g.LinAng(ix, y0, cy[0], cp[0]); c.g.LinAng(ox_, y0, cy[1], cp[1]); c.g.LinAng(ox_, y0 + h, cy[2], cp[2]); c.g.LinAng(ix, y0 + h, cy[3], cp[3]);
+				for (int i = 0; i < 4; ++i) { cy[i] *= DEG; cp[i] *= DEG; }
+				const double rT = std::abs(cy[1]) - (WinSide(cp[1]) - SMFD_OUT), rB = std::abs(cy[2]) - (WinSide(cp[2]) - SMFD_OUT);
+				std::vector<V2> pts;   // the outer side: along the glass, through both outer corners (degrees x 100)
+				for (int i = 0; i <= 40; ++i)
+				{
+					const double t = i / 40.0, p = cp[1] + (cp[2] - cp[1]) * t, chord = std::abs(cy[1]) + (std::abs(cy[2]) - std::abs(cy[1])) * t;
+					const double ya = chord + SMFD_BULGE * (WinSide(p) - SMFD_OUT + rT + (rB - rT) * t - chord);
+					pts.push_back({ side * ya * 100, p * 100 });
+				}
+				c.g.glLin = 7; c.g.Frame(0, 0, 1);
+				c.g.Poly(pts, CP, 1.2 * c.k, 0.55);
+				SetDecal(c, x0, y0, w, h, side * SMFD_YAW, SMFD_PITCH, side * SMFD_ROLL, 6);   // the straight edges: on the panel
+				c.g.Frame(0, 0, 1);
+				c.g.Poly({ { ox_, y0 }, { ix, y0 }, { ix, y0 + h }, { ox_, y0 + h } }, CP, 1.2 * c.k, 0.55);
+				return true;
+			}
+			double yaw = std::atan((x0 + w / 2 - c.W / 2) / Fr) * DEG, pitch = std::atan(-(y0 + h / 2 - c.H / 2) / Fr) * DEG;
+			if (kind == 1 || kind == 3) { yaw = side * (c.h.mfdSide ? MFD_SIDE_YAW : MFD_YAW); pitch = c.h.mfdSide ? MFD_SIDE_PITCH : MFD_PITCH; }
+			else if (kind == 2) { yaw = side * LOW_YAW; pitch = LOW_PITCH; }
+			return SetDecal(c, x0, y0, w, h, yaw, pitch, kind == 2 ? LOW_ARC : c.h.mfdSide ? MFD_SIDE_ARC : MFD_ARC);
+		}
+		if (c.h.HelmDir(c.v, std::atan((x0 + w / 2 - c.W / 2) / F), std::atan(-(y0 + h / 2 - c.H / 2) / F), q)) return c.g.PlateAt(x0, y0, w, h, c.W, c.H, F, q);
+		c.g.Plate(x0, y0, w, h, c.W, c.H);
+		return true;
+	}
 
 	// ================= state =================
 	SuitHud::~SuitHud()
@@ -1071,6 +1537,7 @@ namespace ocrew
 		if (ipi && Core()) Core()->ReleaseIPInterface(static_cast<gcIPInterface*>(ipi));
 		if (lightSrc) oapiDestroySurface(lightSrc);
 		if (lightOut) oapiDestroySurface(lightOut);
+		if (gx) { for (auto* c : { lightCv, modCv, sunCv, glassCv }) if (c) gx->CanvasRelease(c); for (auto* f : sdf) if (f) gx->FontRelease(f); }
 	}
 
 	void SuitHud::Detach()
@@ -1082,11 +1549,14 @@ namespace ocrew
 		if (nvSrf) { oapiDestroySurface(nvSrf); nvSrf = nullptr; }
 		if (modSrf) { oapiDestroySurface(modSrf); modSrf = nullptr; }
 		if (sunSrf) { oapiDestroySurface(sunSrf); sunSrf = nullptr; }
-		sunDm = nullptr; sunAmp = -1; modKeyed = false;
+		sunDm = nullptr; sunAmp = -1; modKeyed = false; glassDm = nullptr; glassSet = -1;
 		if (ipi && Core()) Core()->ReleaseIPInterface(static_cast<gcIPInterface*>(ipi));
 		ipi = nullptr; ipiTried = false;
 		if (lightSrc) { oapiDestroySurface(lightSrc); lightSrc = nullptr; }
 		if (lightOut) { oapiDestroySurface(lightOut); lightOut = nullptr; }
+		if (gx) { for (auto* c : { lightCv, modCv, sunCv, glassCv }) if (c) gx->CanvasRelease(c); for (auto* f : sdf) if (f) gx->FontRelease(f); }
+		glassCv = nullptr; glassMeshDm = nullptr; glassLive = false; glassLogged = false;
+		lightCv = modCv = sunCv = drawCv = nullptr; sdf[0] = sdf[1] = nullptr; gx = nullptr; gxTried = false;   // the client may change next session
 		lightW = lightH = modW = modH = nvW = nvH = 0; lightLive = false; lightLogged = modLogged = false;
 		glyphs.Release(); glyphsTried = false;
 		for (auto& p : pens) if (p.second) oapiReleasePen(p.second);
@@ -1136,6 +1606,51 @@ namespace ocrew
 		RECT src = { 0, 0, nvW, nvH }, dst = { 0, 0, static_cast<LONG>(SW), static_cast<LONG>(SH) };
 		s3->StretchRect(nvSrf, &src, &dst);
 		s3->SetBrightness(nullptr); s3->SetRenderParam(oapi::Sketchpad::PRM_GAMMA, nullptr); s3->SetRenderParam(oapi::Sketchpad::PRM_NOISE, nullptr);
+	}
+
+	// the D3D11 client's table and the display's fonts, looked up once (null: another client - the Sketchpad path)
+	const D3D11Hud::Api* SuitHud::Native()
+	{
+		if (gxTried) return gx;
+		gxTried = true;
+		gx = D3D11Hud::Get();
+		if (!gx) return nullptr;
+		sdf[0] = gx->FontLoad("Tantra\\HudSDF600.dds", "Config\\Tantra\\HudSDF600.txt");
+		sdf[1] = gx->FontLoad("Tantra\\HudSDF700.dds", "Config\\Tantra\\HudSDF700.txt");
+		char b[160]; snprintf(b, sizeof b, "OrbiterCrew: helmet display - the D3D11 client's own drawing (API %d), fonts %s", gx->version, sdf[0] ? "loaded" : "MISSING (glyph text off)");
+		oapiWriteLog(b);
+		return gx;
+	}
+
+	// the night vision on the D3D11 canvas: the same camera (gcCore), its picture drawn with the gain, gamma and grain
+	void SuitHud::NightVisionNative(VESSEL* v, double W, double H, double SW, double SH)
+	{
+		if (!gcTried) { gcTried = true; gcOk = Core() != nullptr; }
+		if (!gcOk || !gx || !drawCv) { nvNote = TR("ПНВ недоступен: нет камер клиента"); return; }
+		const int w = (std::max)(64, static_cast<int>(W) / 2), h = (std::max)(64, static_cast<int>(H) / 2);
+		if (!nvSrf || w != nvW || h != nvH)
+		{
+			if (nvCam) { Core()->DeleteCustomCamera(nvCam); nvCam = nullptr; }
+			if (nvSrf) oapiDestroySurface(nvSrf);
+			nvSrf = oapiCreateSurfaceEx(w, h, OAPISURFACE_RENDER3D | OAPISURFACE_TEXTURE | OAPISURFACE_RENDERTARGET | OAPISURFACE_NOMIPMAPS);
+			nvW = w; nvH = h;
+		}
+		if (!nvSrf) { nvNote = TR("ПНВ недоступен: нет поверхности"); return; }
+		VECTOR3 cg, cd; oapiCameraGlobalPos(&cg); oapiCameraGlobalDir(&cd);
+		MATRIX3 cr; oapiCameraRotationMatrix(&cr);
+		MATRIX3 R; v->GetRotationMatrix(R);
+		VECTOR3 pos, dir = tmul(R, cd), up = tmul(R, _V(cr.m12, cr.m22, cr.m32));
+		v->Global2Local(cg, pos);
+		up = up - dir * dotp(up, dir); { const double l = length(up); if (l > 1e-6) up = up / l; }
+		nvCam = Core()->SetupCustomCamera(nvCam, v->GetHandle(), pos, dir, up, oapiCameraAperture(), nvSrf, 0xFF);
+		if (!nvCam) { nvNote = TR("ПНВ недоступен: нет камер клиента"); return; }
+		nvTick = (nvTick + 1) % 3;
+		Core()->CustomCameraOnOff(nvCam, nvTick == 0);
+		const double gain = sunElev > 0.05 && surface ? 1.2 : 4.0;
+		nvNote = gain > 2 ? TR("ИК") : TR("ИК · засветка");
+		const D3D11Hud::ImageFx fx = { { static_cast<float>(gain), static_cast<float>(gain), static_cast<float>(gain * 1.04) }, 0.55f, 0.10f };
+		const float dst[4] = { 0, 0, static_cast<float>(SW), static_cast<float>(SH) };
+		gx->Image(drawCv, nvSrf, nullptr, dst, 0xFFFFFFFF, &fx);
 	}
 
 	std::string SuitHud::Save() const
@@ -1217,6 +1732,14 @@ namespace ocrew
 			case H_PZTAB: pzTab = std::clamp(it->arg, 0, 4); break;
 			case H_SUIT: if (life) { if (it->arg == 0) life->drivesOn = !life->drivesOn; else life->econ = !life->econ; } break;
 			case H_NVG: nvg = !nvg; if (!nvg && nvCam) Core()->CustomCameraOnOff(nvCam, false); break;
+			case H_LOG: logOpen = !logOpen; if (!logOpen) logShowT = -1; break;
+			case H_LOGPG: logPage = (std::max)(0, logPage + it->arg); logOpen = true; break;
+			case H_SUNF: sunHAlpha = !sunHAlpha; SavePrefs(); break;
+			case H_THEME: hudTheme = std::clamp(it->arg, 0, 3); SavePrefs(); break;
+			case H_MFDSIDE: mfdSide = !mfdSide; SavePrefs(); break;
+			case H_LADDER: hideLadder = !hideLadder; SavePrefs(); break;
+			case H_HUDMIN: hudMin = !hudMin; SavePrefs(); break;
+			case H_SHADEK: shadeK = std::clamp(shadeK + 0.1 * it->arg, 0.0, 2.0); modKeyed = false; SavePrefs(); break;
 			case H_ACK:
 				if (it->arg < 0) { for (auto& a : alerts) if (a.active) a.ack = true; }
 				else if (it->arg < static_cast<int>(alerts.size())) alerts[it->arg].ack = true;
@@ -1964,6 +2487,38 @@ namespace ocrew
 			}
 		}
 
+		// ЗАПАСЫ: every reserve the suit carries, what is left, how long it lasts and how fast it goes (the user,
+		// 2026-10-20: one page of all the parameters - the pack's fuel and the RCS nitrogen too)
+		void Reserves(Ctx& c)
+		{
+			Gfx& g = c.g; const HudData& d = c.d; Grid(g);
+			if (!d.suit) { Msg(g, TR("КОМБИНЕЗОН"), TR("питания нет")); return; }
+			struct Row { std::string n, left, rate; double f; bool has; };
+			const bool fly = d.jet && d.jetFlying;
+			std::vector<Row> rows = {
+				{ TR("Батарея"), Num(100 * d.batt, 0) + " % · " + Hours(d.battHours), Num(d.powerW, 0) + TR(" Вт"), d.batt, true },
+				{ TR("Кислород"), d.o2Vent ? TR("из воздуха · баллон ") + Num(100 * d.o2, 0) + " %" : Num(100 * d.o2, 0) + " % · " + Hours(d.o2Hours), d.o2Vent ? std::string("—") : Num(d.o2Flow * 60000, 2) + TR(" г/мин"), d.o2, true },
+				{ TR("Поглотитель CO2"), Num(100 * d.sorbent, 0) + " % · " + Hours(d.sorbHours), "CO2 " + Num(d.ppCO2, 2) + TR(" кПа"), d.sorbent, true },
+				{ TR("Топливо ранца"), d.jet ? Num(100 * d.jetFuel, 0) + " % · " + Num(d.jetDv, 0) + TR(" м/с") : std::string(TR("ранец снят")), d.jet ? (fly ? Num(d.jetFlow * 1000, 0) + TR(" г/с") : d.jetHover > 0 ? TR("висение ") + Clock(d.jetHover) : std::string("—")) : std::string("—"), d.jet ? d.jetFuel : 0.0, d.jet },
+				{ TR("Азот РСУ"), Num(100 * d.n2, 0) + " % · " + Num(d.n2Dv, 1) + TR(" м/с"), d.rcs == 1 ? std::string(TR("готов")) : d.rcs == 2 ? std::string(TR("нет питания")) : std::string(TR("на грунте")), d.n2, true } };
+			if (d.life) rows.push_back({ TR("Вода (питьё)"), Num(d.life->water, 2) + TR(" кг"), "", d.life->waterCap > 0 ? d.life->water / d.life->waterCap : 0.0, true });
+			if (d.life && d.life->evapCap > 0) rows.push_back({ TR("Вода испарителя"), Num(d.life->evap, 1) + TR(" кг"), d.life->evapW > 1 ? Num(d.life->evapW, 0) + TR(" Вт") : std::string("—"), d.life->evap / d.life->evapCap, true });
+			g.T(14, 18, TR("ЗАПАС"), CD, 9.5); g.T(326, 18, TR("РАСХОД"), CD, 9.5, 2);
+			for (size_t i = 0; i < rows.size(); ++i)
+			{
+				const Row& r = rows[i]; const double y = 40 + i * 38, f = std::clamp(r.f, 0.0, 1.0);
+				const int col = !r.has ? CD : f < 0.1 ? CR : f < 0.25 ? CA : CP;
+				g.T(14, y, r.n, r.has ? CW : CD, 11);
+				g.T(326, y, r.rate, CD, 10.5, 2);
+				g.T(14, y + 15, r.left, r.has ? col == CP ? CW : col : CD, 10.5);
+				g.Bar(170, y + 7, 156, 7, f, col);
+			}
+			const double lim = (std::min)({ d.battHours, d.o2Hours > 0 && !d.o2Vent ? d.o2Hours : 1e9, d.sorbHours > 0 ? d.sorbHours : 1e9 });
+			const char* limName = lim == d.battHours ? TR("батарея") : lim == d.o2Hours ? TR("кислород") : TR("поглотитель");
+			const double yl = 40 + rows.size() * 38 + 6;
+			g.Line(14, yl - 14, 326, yl - 14, CD, 1, 0.5, false, false);
+			g.T(14, yl, TR("хватит на ") + Hours(lim), lim < 1 ? CR : CW, 12.5); g.T(326, yl, std::string(TR("предел: ")) + limName, CD, 10.5, 2);
+		}
 		void Power(Ctx& c)
 		{
 			Gfx& g = c.g; const HudData& d = c.d; Grid(g);
@@ -1995,6 +2550,35 @@ namespace ocrew
 		void Opts(Ctx& c)
 		{
 			Gfx& g = c.g; SuitHud& h = c.h; Grid(g);
+			if (c.d.suit && c.d.life && !c.d.life->Heavy())   // the light suit's «Буран»: its two themes instead of the looks and colours
+			{
+				g.T(14, 16, TR("ТЕМА ЭКРАНА"), CD, 9.5);
+				const char* TN[4] = { TR("ЛАЗЕР"), TR("ПРОЕКТОР"), TR("ДОП. РЕАЛЬНОСТЬ"), TR("ВЫСОКОКОНТРАСТ") };
+				for (int i = 0; i < 4; ++i)
+				{
+					const double x = 10 + (i % 2) * 162, y = 22 + (i / 2) * 26, w = 158; const bool on = i == h.hudTheme;
+					if (on) { g.Rect(x, y, w, 22, -1, 0, 0, CA, 1); g.T(x + w / 2, y + 15, TN[i], CK, 11, 1); }
+					else { g.Rect(x, y, w, 22, CP, 1, 0.7, CP, 0.08); g.T(x + w / 2, y + 15, TN[i], CP, 11, 1); }
+					g.Hit(x, y, w, 22, SuitHud::H_THEME, i);
+				}
+				static const char* const TNOTE[4] = { "зелёный лазер, тонкая линия", "голубой свет с мягким ореолом", "белый и синий, плоско", "оранжевый, плотный" };
+				g.T(14, 88, TR(TNOTE[std::clamp(h.hudTheme, 0, 3)]), CD, 9.5);
+				// the shading of the glass behind the display (the modulator): how dark under the plates and along the edges
+				g.T(14, 112, TR("ЗАТЕНЕНИЕ СТЕКЛА"), CD, 9.5); g.T(326, 112, Num(100 * h.shadeK, 0) + " %", CP, 9.5, 2);
+				const double y = 118;
+				g.Rect(14, y, 20, 20, CP, 1, 0.7, CP, 0.08); g.T(24, y + 15, "−", CP, 13, 1); g.Hit(14, y, 20, 20, SuitHud::H_SHADEK, -1);
+				g.Bar(40, y + 6, 250, 8, h.shadeK / 2, CP);
+				g.Rect(296, y, 20, 20, CP, 1, 0.7, CP, 0.08); g.T(306, y + 15, "+", CP, 13, 1); g.Hit(296, y, 20, 20, SuitHud::H_SHADEK, 1);
+				g.T(14, 160, TR("яркость линий — ниже, «ЯРКОСТЬ ЭКРАНА»"), CD, 9);
+				g.T(14, 182, TR("МФД НА СТЕКЛЕ"), CD, 9.5);
+				for (int i = 0; i < 2; ++i)
+				{
+					const double x = 120 + i * 104, w = 98; const bool on = (i == 1) == h.mfdSide;
+					if (on) { g.Rect(x, 170, w, 18, -1, 0, 0, CA, 1); g.T(x + w / 2, 183, i ? TR("ПО СТОРОНАМ") : TR("ВПЕРЕДИ"), CK, 9.5, 1); }
+					else { g.Rect(x, 170, w, 18, CP, 1, 0.7, CP, 0.08); g.T(x + w / 2, 183, i ? TR("ПО СТОРОНАМ") : TR("ВПЕРЕДИ"), CP, 9.5, 1); g.Hit(x, 170, w, 18, SuitHud::H_MFDSIDE); }
+				}
+			}
+			else {
 			g.T(14, 16, TR("ОБЛИК ЭКРАНА"), CD, 9.5);
 			for (int i = 0; i < 3; ++i)
 			{
@@ -2014,6 +2598,7 @@ namespace ocrew
 				sw.Rect(22, y + 7, 22, 22, -1, 0, 0, CP, 1); sw.Rect(48, y + 7, 22, 22, -1, 0, 0, CA, 1);
 				g.T(88, y + 16, std::string(on ? "▶ " : "") + TR(PAL_NAME[i]), on ? CA : CW, 12.5);
 				g.T(88, y + 30, TR(PAL_NOTE[i]), CD, 9.5);
+			}
 			}
 			g.Line(14, 192, 326, 192, CD, 1, 0.5, false, false);
 			g.T(14, 207, TR("ЯРКОСТЬ ЭКРАНА"), CD, 9.5);
@@ -2464,6 +3049,134 @@ namespace ocrew
 		mouseWasDown = down;
 	}
 
+	// ================= «Буран»: the light suit's lower plates =================
+	// the four plates in view pixels: 0 the autopilot's MFD (upper left), 1 the map's MFD (upper right), both at eye level
+	// below the brow's scales; 2 the reserves' counters (lower left), 3 the mechanization (lower right)
+	void SuitHud::BuranRects(double W, double H, double r[4][4]) const
+	{
+		const double k = H / 720.0, R0 = W - 1280 * k, mw = 340 * 0.85, mh = 400 * 0.85;
+		const double q[4][4] = { { 16, 176, mw, mh }, { 1264 - mw, 176, mw, mh }, { 30, 532, 300, 150 }, { 1256 - 344, 510, 344, 182 } };
+		for (int i = 0; i < 4; ++i)
+		{
+			const double ox = (i == 1 || i == 3) ? R0 : 0.0;
+			r[i][0] = ox + q[i][0] * k; r[i][1] = q[i][1] * k; r[i][2] = r[i][0] + q[i][2] * k; r[i][3] = r[i][1] + q[i][3] * k;
+		}
+	}
+
+	namespace
+	{
+		// the reserves (lower left): three rings - the battery, the oxygen, the pack's fuel (without the pack: the CO2
+		// sorbent) - each with its share, how long it lasts and how fast it goes; the rest in one line
+		void BuranCounters(Ctx& c, bool glass = false)   // glass: the flat panel on the glass (CNT_W wide, the rings 64 apart)
+		{
+			Gfx& g = c.g; const HudData& d = c.d;
+			g.T(8, 14, TR("ЗАПАСЫ · РАСХОД"), CD, 9.5);
+			g.T(glass ? CNT_W - 8 : 292, 14, d.jet ? "CO2 " + Num(100 * d.sorbent, 0) + " % · " + Hours(d.sorbHours) : std::string(), CD, 9, 2);
+			struct Ring { const char* name; double f; std::string time, rate; };
+			const double fly = d.jet && d.jetFlying;
+			const Ring rings[4] = {
+				{ TR("БАТ"), d.batt, Hours(d.battHours), "−" + Num(d.powerW, 0) + TR(" Вт") },
+				{ "O2", d.o2, d.o2Vent ? std::string(TR("воздух")) : Hours(d.o2Hours), d.o2Vent ? std::string("—") : "−" + Num(d.o2Flow * 60000, 2) + TR(" г/мин") },
+				d.jet ? Ring{ TR("ТОПЛ"), d.jetFuel, Num(d.jetDv, 0) + TR(" м/с"), fly ? "−" + Num(d.jetFlow * 1000, 0) + TR(" г/с") : (d.jetHover > 0 ? TR("висение ") + Clock(d.jetHover) : std::string("—")) }
+				      : Ring{ "CO2", d.sorbent, Hours(d.sorbHours), std::string(TR("поглотитель")) },
+				Ring{ "N2", d.n2, Num(d.n2Dv, 1) + TR(" м/с"), std::string(TR("РСУ")) } };
+			for (int i = 0; i < 4; ++i)
+			{
+				const Ring& r = rings[i];
+				const double cx = glass ? 34 + i * 64 : 38 + i * 75, cy = 64;
+				const double R = 26, f = std::clamp(r.f, 0.0, 1.0);
+				const int col = f < 0.1 ? CR : f < 0.25 ? CA : CP;
+				std::vector<V2> track, fill;
+				for (int j = 0; j <= 36; ++j) { const double a = PI * 0.75 + PI * 1.5 * j / 36; track.push_back({ cx + R * std::cos(a), cy + R * std::sin(a) }); }
+				const int nf = static_cast<int>(std::lround(36 * f));
+				for (int j = 0; j <= nf; ++j) { const double a = PI * 0.75 + PI * 1.5 * j / 36; fill.push_back({ cx + R * std::cos(a), cy + R * std::sin(a) }); }
+				// the empty part a hairline, the reserve a thick arc ending in a tick across the ring: where it ends is seen at
+				// a glance; low (a quarter, a tenth) - the whole counter turns amber or red, not just the arc
+				const bool low = col != CP;
+				g.Poly(track, low ? col : CD, 0.8, low ? 0.6 : 0.4);
+				if (fill.size() > 1) g.Poly(fill, col, 4.2, 1);
+				{
+					const double a = PI * 0.75 + PI * 1.5 * f, ca = std::cos(a), sa = std::sin(a);
+					g.Line(cx + (R - 6) * ca, cy + (R - 6) * sa, cx + (R + 6) * ca, cy + (R + 6) * sa, low ? col : CW, 2.0);
+				}
+				g.T(cx, cy + 5, Num(100 * f, 0), low ? col : CW, 15, 1);
+				g.T(cx, cy + 18, r.name, low ? col : CD, 8.5, 1);
+				g.T(cx, cy + 44, r.time, low ? col : CW, 10.5, 1);
+				g.T(cx, cy + 58, r.rate, low ? col : CD, 9, 1);
+			}
+		}
+
+		// the mechanization (lower right): all twelve of the suit's switches in two columns - lit = on - each a click to
+		// switch it; the key beside it where it has one; what this suit has not got (the pack's controls without the pack)
+		// stays dim with a dash
+		void BuranMech(Ctx& c, bool big = false)   // big: on the glass, one column (MECH_W x MECH_H)
+		{
+			Gfx& g = c.g; const HudData& d = c.d; SuitHud& h = c.h;
+			struct M { std::string name; bool on, has; int kind, arg; const char* key; int col; };
+			static const char* const BEAM[3] = { "шир", "раб", "дал" };
+			const bool helmOpen = d.life && d.life->helmetOpen;
+			const M m[12] = {
+				{ TR("МОДУЛЬ ПОЛЁТА"), d.jet, true, -1, 0, "B", -1 },
+				{ TR("СВЕТ"), d.lampsOn, true, SuitHud::H_AP, SuitHud::AP_LAMP, "L", -1 },
+				{ std::string(TR("ЛУЧ ")) + TR(BEAM[std::clamp(d.lampMode, 0, 2)]), d.lampsOn, true, SuitHud::H_AP, SuitHud::AP_LAMPMODE, "⇧L", -1 },
+				{ TR("ПОЛЕ"), d.fieldOn, true, SuitHud::H_AP, SuitHud::AP_FIELD, "", -1 },
+				{ d.life && d.life->Heavy() ? TR("ШТОРКА") : TR("ЩИТОК"), d.life && d.life->Heavy() ? !d.pzWindow : d.shadeDown, true, SuitHud::H_AP, SuitHud::AP_SHADE, "⇧V", -1 },   // the heavy suit: its louvres (on = closed, the cameras)
+				{ helmOpen ? TR("ШЛЕМ ОТКР") : TR("ШЛЕМ"), d.life && !helmOpen, d.life != nullptr, SuitHud::H_AP, SuitHud::AP_HELMET, "", helmOpen ? CA : -1 },
+				{ TR("ПНВ"), h.nvg, true, SuitHud::H_NVG, 0, "", -1 },
+				{ TR("H-АЛЬФА"), h.sunHAlpha, true, SuitHud::H_SUNF, 0, "", -1 },
+				{ TR("СЕРВО"), d.life && d.life->drivesOn, d.life != nullptr, SuitHud::H_SUIT, 0, "", -1 },
+				{ TR("ЭКОНОМ"), d.life && d.life->econ, d.life != nullptr, SuitHud::H_SUIT, 1, "", -1 },
+				{ TR("ПОМОЩНИК"), d.jet && d.jetAssist, d.jet, SuitHud::H_AP, SuitHud::AP_MANUAL, "", -1 },
+				{ TR("ОГРАНИЧ."), d.jet && d.jetFine, d.jet, SuitHud::H_AP, SuitHud::AP_FINE, "Caps", -1 } };
+			int on = 0; for (const M& x : m) if (x.on && x.has) ++on;
+			g.T(8, 14, TR("МЕХАНИЗАЦИЯ"), CD, big ? 11 : 9.5);
+			g.T(big ? MECH_W - 8 : 336, 14, std::to_string(on) + " / 12", CP, big ? 11 : 9.5, 2);
+			for (int i = 0; i < 12 && big; ++i)
+			{
+				const M& x = m[i];
+				const double cx = 8, cy = 46 + i * 26;
+				const int col = !x.has ? CD : x.col >= 0 ? x.col : x.on ? CP : CD;
+				if (*x.key) g.T(cx + 16, cy, x.key, CD, 11, 2);
+				if (x.on && x.has) g.Rect(cx + 21, cy - 12, 12, 12, -1, 0, 0, col, 1); else g.Rect(cx + 21, cy - 12, 12, 12, CD, 1.2, x.has ? 0.8 : 0.35);
+				g.T(cx + 40, cy, x.has ? x.name : x.name + " —", col, 15);
+				if (x.has && x.kind >= 0) g.Hit(cx - 2, cy - 19, MECH_W - 12, 25, x.kind, x.arg);
+			}
+			if (big) { g.T(8, MECH_H - 4, TR("щелчок — вкл / выкл"), CD, 9.5); return; }
+			for (int i = 0; i < 12; ++i)
+			{
+				const M& x = m[i];
+				const double cx = 8 + (i / 6) * 170, cy = 42 + (i % 6) * 23;
+				const int col = !x.has ? CD : x.col >= 0 ? x.col : x.on ? CP : CD;
+				if (*x.key) g.T(cx + 16, cy, x.key, CD, 10, 2);   // the key, then the lamp, then the name
+				if (x.on && x.has) g.Rect(cx + 21, cy - 10, 9, 9, -1, 0, 0, col, 1); else g.Rect(cx + 21, cy - 10, 9, 9, CD, 1, x.has ? 0.8 : 0.35);
+				g.T(cx + 36, cy, x.has ? x.name : x.name + " —", col, 12.5);
+				if (x.has && x.kind >= 0) g.Hit(cx - 2, cy - 15, 166, 21, x.kind, x.arg);
+			}
+			g.T(8, 178, TR("щелчок — вкл / выкл"), CD, 8.5);
+		}
+	}
+
+	// the two lower plates of «Буран», each a plate turned to the eye
+	void BuranLow(Ctx& c, double W, double H, double k, double L0, double R0)
+	{
+		(void)L0; (void)R0;
+		double r[4][4]; c.h.BuranRects(W, H, r);
+		for (int i = 2; i < 4; ++i)
+		{
+			if (c.h.glassPass)   // on the glass: the rings along the bottom edge, the mechanization a column down the right
+			{
+				if (i == 2) { SetDecal(c, r[i][0], r[i][1], CNT_W * k, CNT_H * k, CNT_YAW, CNT_PITCH, CNT_ROLL, 6, CNT_F); c.g.Frame(r[i][0], r[i][1], k); BuranCounters(c, true); }
+				else { SetDecal(c, r[i][0], r[i][1], MECH_W * k, MECH_H * k, MECH_YAW, MECH_PITCH, MECH_ROLL, 6, MECH_F); c.g.Frame(r[i][0], r[i][1], k); BuranMech(c, true); }
+				c.g.NoPlate();
+				continue;
+			}
+			if (!SetPlate(c, r[i][0], r[i][1], r[i][2] - r[i][0], r[i][3] - r[i][1], 2)) continue;
+			c.g.Frame(r[i][0], r[i][1], k);
+			if (i == 2) BuranCounters(c); else BuranMech(c);
+			c.g.NoPlate();
+		}
+	}
+
 	void SuitHud::Draw(oapi::Sketchpad* skp, double SW, double SH, const HudData& d, VESSEL* v)
 	{
 		if (!glyphsTried) { glyphsTried = true; glyphs.Load(); }
@@ -2472,7 +3185,7 @@ namespace ocrew
 		if (!d.powered) { if (nvCam && nvg) Core()->CustomCameraOnOff(nvCam, false); return; }
 		// the helmet's display is seen only from inside her helmet: with the camera on anything else (a machine's view from
 		// its post, an outside view) nothing of it is drawn
-		if (!v || !oapiCameraInternal() || oapiCameraTarget() != v->GetHandle()) { if (nvCam && nvg) Core()->CustomCameraOnOff(nvCam, false); return; }
+		if (!v || ((!oapiCameraInternal() || oapiCameraTarget() != v->GetHandle()) && !glassExtPass)) { if (nvCam && nvg) Core()->CustomCameraOnOff(nvCam, false); return; }
 		// the layout is the viewport's; the surface may be another size (the helmet display's square texture)
 		DWORD vw = 0, vh = 0; oapiGetViewportSize(&vw, &vh);
 		const double W = vw > 0 ? vw : SW, H = vh > 0 ? vh : SH;
@@ -2485,9 +3198,9 @@ namespace ocrew
 			// paused: no steps, the light layer cannot be redrawn - the HUD goes through the VC HUD until the run resumes
 			lightLive = false;
 			if (lightOut) oapiClearSurface(lightOut, 0);
+			if (lightCv && gx && gx->Begin(lightCv, true, 0)) gx->End(lightCv);   // the native light layer cleared too
 		}
-		hits.clear();
-		ConformalHud(v, d);   // the helmet HUD's parts drawn in the scene by the AtmoFX client (contours, pad, gates)
+		if (!glassPass) { hits.clear(); ConformalHud(v, d); glassLines.clear(); }   // the helmet HUD's parts drawn in the scene by the AtmoFX client (contours, pad, gates)
 		lastShade = d.shade; lastSunlit = d.sunlit; life = d.life; frame = d.frame;
 		{
 			const bool was = onMpu;
@@ -2496,19 +3209,61 @@ namespace ocrew
 			if (onMpu && !was) { rpageBeforeMpu = rpage; rpage = R_MACHINE; }
 			if (!onMpu && was && rpage == R_MACHINE) rpage = rpageBeforeMpu >= 0 ? rpageBeforeMpu : R_TARGETS;
 		}
-		Gfx g(skp, *this, glyphs, pal, look); g.kx = SW / W; g.ky = SH / H;
+		// the heavy suit «Панцирь» has its own computer on the same system (HEAVY_SUIT.md); the light suit (Каркас and its kinds)
+		// draws the «Буран» layout; the layout it had before is kept below as legacy, under !bu, and not drawn for it
+		const bool pz = d.suit && d.life && d.life->Heavy();
+		const bool bu = d.suit && !pz;
+		Gfx g = bu ? Gfx(skp, *this, glyphs, BURAN_PAL[std::clamp(hudTheme, 0, 3)], BURAN_LOOK[std::clamp(hudTheme, 0, 3)], false) : Gfx(skp, *this, glyphs, pal, look);
+		g.kx = SW / W; g.ky = SH / H;
+		if (glassPass)   // the glass canvas: its pixels per view pixel at the panels' reference distance
+		{ const double Fref = (H / 2) / std::tan(GLASS_FREF_HALF); g.kx = GLASS_CW / (2 * GLASS_YW) / Fref; g.ky = GLASS_CH / (GLASS_PT - GLASS_PB) / Fref; }
 		if (d.life && d.life->optDark > 0.002)
 		{
 			const double D = d.life->optDark;
 			g.dimR = 1 - 0.35 * D; g.dimG = 1 - 0.55 * D; g.dimB = 1 - 0.9 * D;
 			if (!g.s3) g.s3 = g.s2;   // the text is dimmed through the sketchpad's brightness
 		}
-		if (look == 1) { const double r = std::sin(oapiGetSimTime() * 1234.567 + oapiGetSysTime() * 789.1) * 43758.5453; g.shimmer = 0.94 + 0.06 * (r - std::floor(r)); }
+		if (g.look == 1) { const double r = std::sin(oapiGetSimTime() * 1234.567 + oapiGetSysTime() * 789.1) * 43758.5453; g.shimmer = 0.94 + 0.06 * (r - std::floor(r)); }
 		Ctx c{ g, d, *this, v, W, H, k, std::fmod(d.simt, 1.0) < 0.62 };
-		// the heavy suit «Панцирь» has its own computer on the same system (HEAVY_SUIT.md): analogue scales on the rim, its
-		// control panel and the consumption low beside two smaller MFDs, a fixed shading top and bottom. The light suit's
-		// computer is drawn exactly as before (every Pantsir branch below is under this flag)
-		const bool pz = d.suit && d.life && d.life->Heavy();
+		// (pz: the Pantsir's analogue scales on the rim, its control panel and the consumption low beside two smaller MFDs,
+		// a fixed shading top and bottom - every Pantsir branch below is under that flag)
+		const bool fly = d.jet && d.jetFlying;
+		// the light suit with the glass layer: everything but the scene's own signs (the horizon, the flight path, the
+		// target, the tapes) is drawn on the helmet's glass, in the glass pass
+		const bool glassItems = bu && GlassOn() ? glassPass : !glassPass;
+		// the layout's place on the glass (the glass pass): the top arc on equal angles, raised into the helmet's crown;
+		// the middle (the horizon, the tapes, the flight path) in perspective on the helmet's axis - conformal from the eye
+		auto glassBase = [&](int mode)   // 0 the middle (perspective, conformal), 1 the top band, 2 the brow's scales, 3 the low lines
+		{
+			const double Fv = (H / 2) / std::tan((std::max)(0.1, oapiCameraAperture())), Fr = (H / 2) / std::tan(GLASS_FREF_HALF);
+			g.hv = v; g.hitW = W; g.hitH = H; g.hitF = Fv;
+			g.baseOn = false; g.NoPlate();
+			double q[9];
+			const bool seen = mode == 0 && HelmDir(v, 0, 0, q) && g.PlateAt(0, 0, W, H, W, H, Fv, q, Fr);
+			g.Glass(0, 0, W, H, Fr, 0, 0, GLASS_CW, GLASS_CH, GLASS_YW, GLASS_PT, GLASS_PB);
+			if (mode == 1 || mode == 2)   // the top band, the brow's scales with it: one flat panel (TOP_PC, TOP_F)
+			{
+				g.Glass(0, 0, W, H, Fr, 0, TOP_PC * RAD, GLASS_CW, GLASS_CH, GLASS_YW, GLASS_PT, GLASS_PB);
+				g.glLin = 6; g.glF = TOP_F * k; g.glCx = W / 2; g.glCy = 68 * k;
+			}
+			else if (mode)
+			{
+				g.glLin = mode; g.glC0 = C0; g.glK = k; g.glCx = W / 2;
+				g.glCy = 652 * k; g.glP0 = BOT_P0 * RAD;
+			}
+			g.noHit = mode == 0 ? !seen : false; g.SetBase();
+		};
+		// the helmet's frame as the "camera" of the glass pass (the middle's conformal signs), else the camera's own
+		auto viewRot = [&](MATRIX3& M)
+		{
+			oapiCameraRotationMatrix(&M);
+			if (!glassPass || !helmOk) return;
+			MATRIX3 Rv; v->GetRotationMatrix(Rv);
+			const VECTOR3 r = mul(Rv, helmX), u = mul(Rv, helmY), f = mul(Rv, helmZ);
+			M = _M(r.x, u.x, f.x, r.y, u.y, f.y, r.z, u.z, f.z);
+		};
+		const double viewF = glassPass ? (H / 2) / std::tan(GLASS_FREF_HALF) : (H / 2) / std::tan((std::max)(0.1, oapiCameraAperture()));
+		if (!glassPass) {   // (the view's pass: the state, the shading)
 		Nav(v, d);
 		Alerts(d);
 
@@ -2521,7 +3276,6 @@ namespace ocrew
 			else if (space && s && s->dist < 5000) m = RDV;
 			if (m != mode) SetMode(m, false);
 		}
-		const bool fly = d.jet && d.jetFlying;
 
 		// how bright it is around her: in the sun, over a lit ground, looking towards the sun
 		{
@@ -2539,7 +3293,7 @@ namespace ocrew
 		}
 		if (d.suit && d.firstPerson)
 		{
-			if (nvg) NightVision(skp, v, W, H, SW, SH);
+			if (nvg) { if (g.cv) NightVisionNative(v, W, H, SW, SH); else NightVision(skp, v, W, H, SW, SH); }
 			if (nvg && surface && hBody)
 			{
 				// the ranger's relief: rings and spokes of the ground round her, drawn into the view through the camera;
@@ -2607,6 +3361,21 @@ namespace ocrew
 			}
 			g.world = false;
 		}
+		else if (bu && g.boost > 0.05 && !onVisor)   // «Буран» on the screen: the bands and soft backings under its four plates
+		{
+			const double a = 0.10 + 0.40 * (std::min)(1.0, g.boost);
+			g.Frame(0, 0, 1); g.world = true;
+			const int N = 48; const double topH = 140 * k, botH = 115 * k;
+			for (int i = 0; i < N; ++i)
+			{
+				const double x = (i + 0.5) / N, f = 0.5 + 0.5 * std::cos(PI * x);
+				g.Rect(0, std::floor(i * topH / N), W, std::ceil(topH / N) + 1, -1, 0, 0, CK, 0.85 * a * f);
+				g.Rect(0, H - std::floor((i + 1) * botH / N), W, std::ceil(botH / N) + 1, -1, 0, 0, CK, 0.7 * a * f);
+			}
+			double r[4][4]; BuranRects(W, H, r);
+			for (auto& q : r) for (int i = 7; i >= 0; --i) { const double e = i * 3 * k; g.Rect(q[0] - e, q[1] - e, q[2] - q[0] + 2 * e, q[3] - q[1] + 2 * e, -1, 0, 0, CK, a * 0.13); }
+			g.world = false;
+		}
 		else if (d.suit && g.boost > 0.05 && !onVisor)   // projected light cannot darken: no backing on the helmet display
 		{
 			const double a = 0.10 + 0.40 * (std::min)(1.0, g.boost);
@@ -2628,6 +3397,9 @@ namespace ocrew
 			g.Frame(L0, 0, k); soft(18, 166, 242, 170);
 			g.Frame(R0, 0, k); soft(1020, 166, 242, 192);
 		}
+		}   // (the view's pass)
+		if (glassItems) {
+		if (glassPass) glassBase(2);   // the brow's scales first: on the window's top edge
 		g.Frame(C0, 0, k);
 		// the person's state is data on the display (the body page, the ribbon), never a reason for it to go dark
 
@@ -2649,14 +3421,7 @@ namespace ocrew
 				{
 					const double w = g.TW(ch, 13), a = amid + (sArc + w / 2) / 1500;
 					const double px = 640 + 1500 * std::cos(a), py = 1560 + 1500 * std::sin(a);
-					if (g.s2)   // turned to the arc: the line reads as one slope, not a staircase
-					{
-						IVECTOR2 ctr{ g.IX(px), g.IY(py - 4.5) };
-						g.s2->SetWorldTransform2D(1.0f, static_cast<float>(a + PI05), &ctr, nullptr);
-						g.T(px, py, ch, col, 13, 1);
-						g.s2->SetWorldTransform2D();
-					}
-					else g.T(px, py, ch, col, 13, 1);
+					g.TurnedText(px, py, ch, col, 13, 1, a + PI05, px, py - 4.5);   // turned to the arc: the line reads as one slope, not a staircase
 					sArc += w;
 				}
 			};
@@ -2675,9 +3440,9 @@ namespace ocrew
 					if (i + 1 < slots.size()) { charsOn(sArc, " · ", CD, amid); sArc += sep; }
 				}
 			};
-			if (pz)
+			if (pz || bu)
 			{
-				// the Pantsir: four analogue scales on the rim - a scale line, ticks, the red zone from the limit, a pointer outside,
+				// the Pantsir (and «Буран»): four analogue scales on the rim - a scale line, ticks, the red zone from the limit, a pointer outside,
 				// the name and the value along the arc. Radiation on a log scale; body, surroundings and the shell linear
 				auto scale = [&](double a0, double a1, double f, double red0, const std::string& name, const std::string& val, int col)
 				{
@@ -2704,14 +3469,7 @@ namespace ocrew
 						{
 							const double cw = g.TW(ch, 13), a = amid + (sArc + cw / 2) / Rt;
 							const double px = 640 + Rt * std::cos(a), py = 1560 + Rt * std::sin(a);
-							if (g.s2)
-							{
-								IVECTOR2 ctr{ g.IX(px), g.IY(py) };
-								g.s2->SetWorldTransform2D(1.0f, static_cast<float>(a + PI05), &ctr, nullptr);
-								g.T(px, py + 4.5, ch, c, 13, 1);
-								g.s2->SetWorldTransform2D();
-							}
-							else g.T(px, py + 4.5, ch, c, 13, 1);
+							g.TurnedText(px, py + 4.5, ch, c, 13, 1, a + PI05, px, py);
 							sArc += cw;
 						}
 					};
@@ -2720,12 +3478,47 @@ namespace ocrew
 					tilted(-tw / 2 + g.TW(name + "  ", 13), val, f >= red0 ? CR : col, amid);
 				};
 				const double msv = doseRate / 1000;   // mSv/h
-				const double tShellC = d.life->tShell - 273.15, onsetC = (d.life->damageK > 0 ? d.life->damageK : d.life->tMax + 70) - 273.15;
+				const double tShellC = pz ? d.life->tShell - 273.15 : 0.0, onsetC = pz ? (d.life->damageK > 0 ? d.life->damageK : d.life->tMax + 70) - 273.15 : 0.0;
 				auto lin = [](double v, double lo, double hi) { return (v - lo) / (hi - lo); };
+				if (pz)
+				{
+				// the Pantsir sees through cameras (its visor is a screen, not a curved glass): the four scales in a straight row
+				// under the switches - two left, two right, the middle left to the lamps and the warnings
+				auto hscale = [&](double x0, double x1, double f, double red0, const std::string& name, const std::string& val, int col)
+				{
+					const double y = 128;
+					g.Line(x0, y, x1, y, CP, 1.2, 0.6, false, false);
+					g.Line(x0 + (x1 - x0) * red0, y - 1.5, x1, y - 1.5, CR, 3, 0.9, false, false);
+					for (int i = 0; i <= 12; ++i) { const double x = x0 + (x1 - x0) * i / 12, l = i % 4 == 0 ? 9 : 4; g.Line(x, y, x, y + l, CP, 1, 0.7, false, false); }
+					f = std::clamp(f, 0.0, 1.0);
+					const double px = x0 + (x1 - x0) * f;
+					g.Tri(px, y - 3, -5, -12, 5, -12, f >= red0 ? CR : col);
+					const double tw = g.TW(name + "  " + val, 13);
+					g.T((x0 + x1) / 2 - tw / 2, y + 26, name + "  ", CD, 13); g.T((x0 + x1) / 2 - tw / 2 + g.TW(name + "  ", 13), y + 26, val, f >= red0 ? CR : col, 13);
+				};
+				g.Frame(L0, 0, k);
+				hscale(40, 220, (std::log10((std::max)(msv, 0.01)) + 2) / 5, 0.6, TR("РАД"), Num(msv, msv < 10 ? 1 : 0) + TR(" мЗв/ч") + (d.fieldOn ? TR(" · поле ") + Num(d.life->fieldLevel * 100, 0) + " %" : ""), d.fieldOn ? CW : CA);
+				hscale(250, 410, lin(d.coreC, 35, 43), lin(39.5, 35, 43), TR("ТЕЛО"), Num(d.coreC, 1) + "° · " + Num(d.pulse, 0), CW);
+				g.Frame(R0, 0, k);
+				hscale(870, 1030, lin(d.envC, -200, 800), lin(d.ratedMaxC, -200, 800), TR("СРЕДА"), Num(d.envC, 0, true) + "°", CW);
+				hscale(1060, 1240, lin(tShellC, -200, 800), lin(onsetC, -200, 800), TR("КОРПУС"), Num(tShellC, 0, true) + "°", CW);
+				g.Frame(C0, 0, k);
+				}
+				else if (false)
+				{
 				scale(-1.925, -1.805, (std::log10((std::max)(msv, 0.01)) + 2) / 5, 0.6, TR("РАД"), Num(msv, msv < 10 ? 1 : 0) + TR(" мЗв/ч") + (d.fieldOn ? TR(" · поле ") + Num(d.life->fieldLevel * 100, 0) + " %" : ""), d.fieldOn ? CW : CA);
 				scale(-1.790, -1.672, lin(d.coreC, 35, 43), lin(39.5, 35, 43), TR("ТЕЛО"), Num(d.coreC, 1) + "° · " + Num(d.pulse, 0), CW);
 				scale(-1.470, -1.352, lin(d.envC, -200, 800), lin(d.ratedMaxC, -200, 800), TR("СРЕДА"), Num(d.envC, 0, true) + "°", CW);
 				scale(-1.337, -1.217, lin(tShellC, -200, 800), lin(onsetC, -200, 800), TR("КОРПУС"), Num(tShellC, 0, true) + "°", CW);
+				}
+				else
+				{
+					// «Буран»: only what is shown nowhere else - the body and the air in the suit (the reserves are on the counters)
+					scale(-1.950, -1.832, lin(d.pulse, 40, 200), lin(150, 40, 200), TR("ПУЛЬС"), Num(d.pulse, 0) + TR(" · ДЫХ ") + Num(d.breath, 0), d.pulse > 150 ? CR : CW);
+					scale(-1.817, -1.705, lin(d.coreC, 34, 40), lin(38.5, 34, 40), TR("ТЕЛО"), Num(d.coreC, 1) + "°", d.coreC < 35.8 ? CA : CW);
+					scale(-1.437, -1.325, lin(d.tInC, -10, 40), lin(30, -10, 40), TR("СКАФАНДР"), Num(d.tInC, 1) + "°" + (Trend(4, 0.3) > 0 ? " ↑" : Trend(4, 0.3) < 0 ? " ↓" : ""), d.tInC < 12 ? CA : CW);
+					scale(-1.310, -1.192, (std::log10((std::max)(msv, 0.01)) + 2) / 5, 0.6, TR("РАД"), Num(msv, msv < 10 ? 2 : 0) + TR(" мЗв/ч") + (d.fieldOn ? TR(" · поле") : ""), d.fieldOn ? CW : msv > 1 ? CA : CW);
+				}
 			}
 			else {
 			arcLine(-1.925, -1.672); arcLine(-1.470, -1.217);
@@ -2739,6 +3532,7 @@ namespace ocrew
 			}
 		}
 
+		if (glassPass) glassBase(1);   // the rest of the top band: flat, equal angles
 		// ---- corners ----
 		g.Frame(L0, 0, k);
 		g.T(24, 32, Upper(d.name), CW, 15); g.T(24, 49, d.role + TR(" · «Тантра»"), CD, 9.5);
@@ -2771,11 +3565,11 @@ namespace ocrew
 			std::string where = std::string(ru ? ru : bn) + (surface ? (sunElev > 0 ? TR(" · день") : TR(" · ночь")) : TR(" · орбита"));
 			where += d.vacuum ? TR(" · вакуум") + (d.life && d.life->Heavy() ? Trace(d.airKPa) : std::string()) : " · " + Num(d.airKPa, 0) + TR(" кПа");
 			g.T(1256, 49, where, CD, 9.5, 2);
-			if (d.suit)
+			if (d.suit && !bu)   // legacy: the light suit's layout before «Буран» (kept, not drawn for the light suit)
 			{
 				// the suit's switches on the right; the pack's control block (assistant, limiter) apart on their left, framed
 				struct Tg { const char* n; bool on; int kind, arg; };
-				const Tg suitTg[4] = { { TR("ПОЛЕ"), d.fieldOn, H_AP, AP_FIELD }, { TR("СВЕТ"), d.lampsOn, H_AP, AP_LAMP }, { TR("ЩИТОК"), d.shadeDown, H_AP, AP_SHADE }, { TR("ПНВ"), nvg, H_NVG, 0 } };
+				const Tg suitTg[4] = { { TR("ПОЛЕ"), d.fieldOn, H_AP, AP_FIELD }, { TR("СВЕТ"), d.lampsOn, H_AP, AP_LAMP }, { d.life && d.life->Heavy() ? TR("ШТОРКА") : TR("ЩИТОК"), d.life && d.life->Heavy() ? !d.pzWindow : d.shadeDown, H_AP, AP_SHADE }, { TR("ПНВ"), nvg, H_NVG, 0 } };
 				const Tg jetTg[2] = { { TR("ПОМОЩНИК"), d.jetAssist, H_AP, AP_MANUAL }, { TR("ОГРАНИЧ."), d.jetFine, H_AP, AP_FINE } };
 				double bx = 1256;
 				auto button = [&](const Tg& t)
@@ -2817,7 +3611,8 @@ namespace ocrew
 		}
 
 		// ---- modes and compass ----
-		g.Frame(C0, 0, k);
+		auto midFrame = [&]() { if (glassPass) g.Frame(C0 + 640 * k * (1 - TOP_MID), 8 * k * (1 - TOP_MID), k * TOP_MID); else g.Frame(C0, 0, k); };
+		midFrame();
 		{
 			const char* NAMES[4] = { TR("ВКД"), TR("ПОЛЁТ"), TR("СБЛИЖЕНИЕ"), TR("СИСТЕМЫ") };
 			const double xs[4] = { 490, 580, 690, 800 };
@@ -2826,7 +3621,7 @@ namespace ocrew
 				const bool on = i == mode; const double w = g.TW(NAMES[i], 12.5) + 16;
 				if (on) g.Rect(xs[i] - w / 2, 12, w, 22, CP, 1.2, 1, CP, 0.14);
 				g.T(xs[i], 28, NAMES[i], on ? CP : CD, 12.5, 1);
-				g.T(xs[i] - w / 2 + 3, 10, std::to_string(i + 1), CD, 8.5);
+				g.T(xs[i], 9, std::to_string(i + 1), CD, 8.5, 1);   // over its name
 				g.Hit(xs[i] - w / 2, 8, w, 28, H_MODE, i);
 			}
 			g.T(868, 28, autoMode ? TR("АВТО") : TR("РУЧН"), autoMode ? CD : CA, 9.5);
@@ -2862,14 +3657,14 @@ namespace ocrew
 			const bool lit = anyW || anyC, on = lit && (!unacked || c.blink);
 			const int mc = anyW ? CR : CA;
 			// the side vision catches a blink at the very edge; a click on either strip acknowledges everything
-			for (int sdx = 0; sdx < 2; ++sdx)
+			for (int sdx = 0; sdx < 2 && !bu; ++sdx)   // («Буран»: none - the user crossed them out, 2026-10-20)
 			{
 				g.Frame(sdx ? R0 : L0, 0, k);
 				const double x = sdx ? 1268 : 6;
 				if (on) g.Rect(x, 250, 6, 190, mc, 1, 1, mc, 1); else g.Rect(x, 250, 6, 190, lit ? mc : CD, 1, lit ? 0.6 : 0.3);
 				g.Hit(x - 6, 240, 18, 210, H_ACK, -1);
 			}
-			g.Frame(C0, 0, k);
+			midFrame();
 			size_t shown = 0;   // lines of the ribbon on show (the message goes under them)
 			const char* TILE[8] = { "O2", "CO2", TR("ДАВЛ"), TR("БАТ"), TR("ТЕПЛО"), TR("РАДИАЦ"), TR("СВЯЗЬ"), TR("РЕЗЕРВ") };
 			const char* SHORT[8] = { "O2", "CO2", TR("ДАВЛ"), TR("БАТ"), TR("ТЕПЛ"), TR("РАД"), TR("СВЯЗ"), TR("РЕЗ") };
@@ -2879,12 +3674,33 @@ namespace ocrew
 				{
 					int lvl = 0; bool un = false;
 					for (const auto& a : alerts) if (a.active && a.tile == TILE[i]) { lvl = (std::max)(lvl, a.level); un = un || !a.ack; }
-					const double x = 640 - 217 + i * 62;
+					const double x = bu ? 640 - 154 + i * 44 : 640 - 217 + i * 62;   // «Буран»: closer, clear of the brow's scales
 					const int col = lvl == 2 ? CR : CA;
 					if (lvl && (!un || c.blink)) g.Circle(x, 104, 4, col, 1.2, 1, col, 1); else g.Circle(x, 104, 4, lvl ? col : CD, 1, lvl ? 0.7 : 0.4);
 					g.T(x + 8, 108, SHORT[i], lvl ? col : CD, 8.5);
 				}
 				g.Hit(640 - 230, 96, 500, 16, H_ACK, -1);
+				if (bu)
+				{
+					// «Буран» (the user, 2026-10-20: the journal got in the way): over the view only the dangers that are on now -
+					// at most two lines with the time, blinking until acknowledged; cautions stay on the lamps, the rest on the MFD
+					std::vector<int> dz;
+					for (int i = 0; i < static_cast<int>(alerts.size()); ++i) if (alerts[i].active && alerts[i].level == 2) dz.push_back(i);
+					// the dangers as notices (the user: notices, not a journal) - the text alone, red, no time, no box; gone when
+					// the condition is
+					size_t nd = 0;
+					for (size_t n = 0; n < dz.size() && n < 2; ++n) { g.T(640, 160 + n * 20, alerts[dz[n]].text, CR, 14, 1); g.Hit(400, 146 + n * 20, 480, 18, H_ACK, dz[n]); ++nd; }
+					shown = nd;
+					// the heat and the cold (cautions of the tile ТЕПЛО): a plain message under them, no time, no journal - as
+					// long as it lasts
+					int nm = 0;
+					for (const auto& a : alerts)
+						if (a.active && a.level == 1 && a.tile == TR("ТЕПЛО") && nm < 2) { g.T(640, 160 + (shown + nm) * 20, a.text, CA, 14, 1); ++nm; }
+					shown += nm;
+					alertLines = static_cast<int>(shown);
+				}
+				else
+				{
 				// the three newest of what is on now; a message whose condition is gone leaves the ribbon at once
 				std::vector<int> order;
 				for (int i = 0; i < static_cast<int>(alerts.size()); ++i) if (alerts[i].active) order.push_back(i);
@@ -2900,6 +3716,7 @@ namespace ocrew
 					g.T(640, y, line, col, 13, 1);
 					g.Hit(380, y - 14, 520, 18, H_ACK, order[n]);
 				}
+				}
 			}
 			if (d.suit && lit)
 			{
@@ -2908,9 +3725,13 @@ namespace ocrew
 				if (!unacked || c.blink) { const double w = g.TW(word, 18) + 30; g.Rect(640 - w / 2, 112, w, 27, mc, 1.6, 1, mc, unacked ? 0.25 : 0.1); g.T(640, 132, word, mc, 18, 1); }
 				g.Hit(640 - 90, 110, 180, 31, H_ACK, -1);
 			}
-			if (!d.message.empty()) g.T(640, 158 + shown * 19, d.message, d.messageLevel >= 2 ? CR : d.messageLevel == 1 ? CA : CW, 12.5, 1);
+			// these three lines low in the view: on the display itself, not on the glass - there they came out small and
+			// off their place (the user, 2026-10-21: «МЕЛКО ТО ПОЧЕМУ ТАК», «ВЕРНИ РАЗМЕР КАК БЫЛ И ПОЛОЖЕНИЕ»)
+			if (!d.message.empty()) { const int mc = d.messageLevel >= 2 ? CR : d.messageLevel == 1 ? CA : CW; g.T(640, 158 + shown * 19, d.message, mc, 12.5, 1); }   // up under the lamps, as it always was (the user, 2026-10-21)
 		}
 
+		}   // (glassItems)
+		if (!glassPass) {
 		// ---- the Pantsir: its control panel (low left) and the consumption (low right), the MFDs between them ----
 		if (pz)
 		{
@@ -3010,7 +3831,7 @@ namespace ocrew
 			}
 		}
 		// ---- thermal control (left) and consumption (right) ----
-		else if (d.suit)
+		else if (d.suit && !bu)   // legacy: the light suit's layout before «Буран» (kept, not drawn for the light suit)
 		{
 			g.Frame(L0, 0, k);
 			const double x = 24, y = 180, w = 230;
@@ -3094,7 +3915,7 @@ namespace ocrew
 			g.T(x + 5, y0 + hh + 16, name, CD, 9.5, 1); g.T(x + 5, y0 - 8, val, CW, 11, 1);
 		};
 		auto lvl = [](double f) { return f < 0.1 ? CR : f < 0.25 ? CA : CP; };
-		if (d.suit && !pz)
+		if (d.suit && !pz && !bu)   // legacy: the light suit's layout before «Буран» (kept, not drawn for the light suit)
 		{
 			g.Frame(L0, 0, k);
 			vscale(30, d.o2, lvl(d.o2), "O2", Num(100 * d.o2, 0)); vscale(58, d.sorbent, lvl(d.sorbent), "CO2", Num(100 * d.sorbent, 0)); vscale(86, d.batt, lvl(d.batt), TR("БАТ"), Num(100 * d.batt, 0));
@@ -3103,26 +3924,29 @@ namespace ocrew
 			else vscale(1240, d.n2, lvl(d.n2), "N2", Num(100 * d.n2, 0));
 		}
 
+		}   // (the view's block)
+		if (glassItems && !(glassPass && hudMin)) {
+		if (glassPass) glassBase(0);
 		// ---- the middle: horizon, reticle, flight path, tapes ----
 		g.Frame(C0, 0, k);
 		{
-			const double f = (H / 2) / std::tan((std::max)(0.1, oapiCameraAperture())) / k;   // units per radian
+			const double f = viewF / k;   // units per radian
 			const double cx = 640, cy = 360;
 			// the pitch ladder against the local horizon of the body she is at: in auto on the jet in flight and in space
 			// (on foot she sees the horizon herself), or always, or never - the user's setting
 			const OBJHANDLE ref = hBody ? hBody : v ? v->GetGravityRef() : nullptr;
 			const bool flying = d.jet && d.jetFlying;
-			const bool ladder = d.suit && mode != SYS && ref && (horizonMode == 1 || (horizonMode == 0 && (flying || !surface)));
+			const bool ladder = d.suit && mode != SYS && ref && !hideLadder && (horizonMode == 1 || (horizonMode == 0 && (flying || !surface)));
 			if (ladder)
 			{
 				// the gaze's own pitch and roll (the camera, not the body: the head turns)
 				VECTOR3 cpos, bpos; oapiCameraGlobalPos(&cpos); oapiGetGlobalPos(ref, &bpos);
-				MATRIX3 Rc; oapiCameraRotationMatrix(&Rc);
+				MATRIX3 Rc; viewRot(Rc);
 				const VECTOR3 upL = Unit(cpos - bpos), cr = _V(Rc.m11, Rc.m21, Rc.m31), cu = _V(Rc.m12, Rc.m22, Rc.m32), cf = _V(Rc.m13, Rc.m23, Rc.m33);
 				const double camPitch = std::asin(std::clamp(dotp(cf, upL), -1.0, 1.0)), camBank = std::atan2(dotp(cr, upL), dotp(cu, upL));
 				const double ca = std::cos(camBank), sa = std::sin(camBank);
 				// the window between the side panels and above the MFDs: lines are cut to it, not pinned at its edge
-				const double WX0 = 300, WX1 = 980, WY0 = 105, WY1 = 565;
+				const double WX0 = 300, WX1 = 980, WY0 = bu && alertLines ? 158 + alertLines * 20 + 14 : 105, WY1 = 565;   // «Буран»: clear of the messages
 				auto clip = [&](double& x1, double& y1, double& x2, double& y2)
 				{
 					const double dx = x2 - x1, dy = y2 - y1; double t0 = 0, t1 = 1;
@@ -3183,7 +4007,7 @@ namespace ocrew
 				const double sp = length(vg);
 				if (sp > 0.3)
 				{
-					MATRIX3 R; oapiCameraRotationMatrix(&R);
+					MATRIX3 R; viewRot(R);
 					const VECTOR3 c = tmul(R, vg / sp);
 					auto put = [&](const VECTOR3& dir, double& x, double& y)   // false: outside the view
 					{
@@ -3213,17 +4037,33 @@ namespace ocrew
 			auto tape = [&](double x, double val, double step, int maj, double px, int sgn, int dec, const std::string& label, bool hasTgt, double tgt)
 			{
 				const double hh = 150, top = cy - hh / 2, bot = cy + hh / 2;
-				g.Line(x, top, x, bot, CD, 1, 0.7, false, false);
+				// «Буран»: the scale bows outward with the helmet's glass - the speed's to the left, the height's to the right
+				auto tx = [&](double y) { const double t = (y - cy) / (hh / 2); return bu ? x + sgn * 9 * (1 - t * t) : x; };
+				if (bu) { std::vector<V2> arc; for (int i = 0; i <= 24; ++i) { const double y = top + hh * i / 24; arc.push_back({ tx(y), y }); } g.Poly(arc, CD, 1, 0.7); }
+				else g.Line(x, top, x, bot, CD, 1, 0.7, false, false);
 				for (int kk = static_cast<int>(std::ceil((val - hh / 2 / px) / step)); kk <= static_cast<int>(std::floor((val + hh / 2 / px) / step)); ++kk)
 				{
-					const double vv = kk * step, y = cy - (vv - val) * px; const bool big = std::abs(kk) % maj == 0;
-					g.Line(x, y, x + sgn * (big ? 8 : 4), y, CP, 1, 0.8, false, false);
-					if (big) g.T(x + sgn * 12, y + 4, Num(vv, dec), CD, 9.5, sgn > 0 ? 0 : 2);
+					const double vv = kk * step, y = cy - (vv - val) * px, xx = tx(y); const bool big = std::abs(kk) % maj == 0;
+					g.Line(xx, y, xx + sgn * (big ? 8 : 4), y, CP, 1, 0.8, false, false);
+					if (big && !(bu && std::abs(y - cy) < 13)) g.T(xx + sgn * 12, y + 4, Num(vv, dec), CD, 9.5, sgn > 0 ? 0 : 2);   // «Буран»: the labels give way to the pointer
 				}
+				if (bu)
+				{
+					// «Буран»: the reading outside the scale's labels - a pointer on the scale, a hairline out to a framed counter
+					// (as on an instrument: nothing laid over the numbers of the scale)
+					const double xc = tx(cy), bx0 = xc + sgn * 58, bx1 = xc + sgn * 116;
+					g.Tri(xc + sgn * 1, cy, sgn * 9, -5, sgn * 9, 5, CW);
+					g.Line(xc + sgn * 10, cy, bx0, cy, CP, 1, 0.7, false, false);
+					g.Poly({ { bx0, cy }, { bx0 + sgn * 6, cy - 11 }, { bx1, cy - 11 }, { bx1, cy + 11 }, { bx0 + sgn * 6, cy + 11 } }, CP, 1.2, 1, true);
+					g.T((bx0 + bx1) / 2 + sgn * 3, cy + 5, Num(val, dec), CW, 14, 1);
+				}
+				else
+				{
 				g.Poly({ { x, cy }, { x + sgn * 8, cy - 10 }, { x + sgn * 54, cy - 10 }, { x + sgn * 54, cy + 10 }, { x + sgn * 8, cy + 10 } }, CP, 1.2, 1, true);
 				g.T(x + sgn * 31, cy + 5, Num(val, dec), CW, 13, 1);
-				if (hasTgt) { const double y = std::clamp(cy - (tgt - val) * px, top, bot); g.Tri(x - sgn, y, -sgn * 8, -6, -sgn * 8, 6, CA); }
-				g.T(x, top - 8, label, CD, 9.5, 1);
+				}
+				if (hasTgt) { const double y = std::clamp(cy - (tgt - val) * px, top, bot); g.Tri(tx(y) - sgn, y, -sgn * 8, -6, -sgn * 8, 6, CA); }
+				g.T(tx(top), top - 8, label, CD, 9.5, 1);
 			};
 			if (mode == FLIGHT && d.jet && surface)
 			{
@@ -3240,9 +4080,15 @@ namespace ocrew
 				double track = std::atan2(gsH.x, gsH.z) * DEG; if (track < 0) track += 360;
 				const double drift = Wrap(std::atan2(gsH.x, gsH.z) - hdg) * DEG;
 				char tb[48]; snprintf(tb, sizeof tb, TR("ПУТЬ %03.0f° · СНОС %+.0f°"), track, d.gs > 0.3 ? drift : 0.0);
-				box(424, TR("V ГОРИЗ"), Num(d.gs, 1) + TR(" м/с"), CW, d.gs > 0.3 ? std::string(tb) : std::string(TR("на месте")), CD);
 				const bool sinkHard = d.vs < -(1.0 + 0.8 * d.alt) && d.alt < 25;   // the same limit as the pack's ground guard
-				box(716, TR("V ВЕРТ"), Num(d.vs, 1, true) + TR(" м/с"), sinkHard ? CR : CW,
+				if (bu)
+				{
+					g.T(483, 455, d.gs > 0.3 ? std::string(tb) : std::string(TR("на месте")), CD, 9.5, 1);
+					g.T(797, 455, std::string(TR("ВЕРТ ")) + Num(d.vs, 1, true) + TR(" м/с"), sinkHard ? CR : CP, 10.5, 1);
+					if (d.jet) g.T(483, 470, TR("ЗАПАС Δv ") + Num(d.jetDv, 0) + TR(" м/с"), d.jetDv < 30 ? CA : CD, 9.5, 1);
+				}
+				else box(424, TR("V ГОРИЗ"), Num(d.gs, 1) + TR(" м/с"), CW, d.gs > 0.3 ? std::string(tb) : std::string(TR("на месте")), CD);
+				if (!bu) box(716, TR("V ВЕРТ"), Num(d.vs, 1, true) + TR(" м/с"), sinkHard ? CR : CW,
 					d.vs > 0.2 ? TR("НАБОР ↑") : d.vs < -0.2 ? (sinkHard ? TR("СНИЖЕНИЕ ↓ БЫСТРО") : TR("СНИЖЕНИЕ ↓")) : TR("ВИСЕНИЕ"), sinkHard ? CR : CD);
 			}
 			if (mode == RDV)
@@ -3251,6 +4097,75 @@ namespace ocrew
 					tape(510, -s->rate, 0.05, 2, 220, -1, 2, TR("СБЛИЖ м/с"), true, (std::min)(1.0, s->dist / 100));
 					tape(770, s->dist, s->dist > 200 ? 50 : 5, 2, s->dist > 200 ? 0.3 : 3, 1, 1, TR("ДАЛЬН м"), false, 0);
 				}
+		}
+
+		}   // (the middle)
+		if (glassItems)   // two keys over the horizon: the pitch ladder, the whole HUD (kept when the HUD is down to its arc)
+		{
+			if (glassPass) glassBase(0);
+			g.Frame(C0, 0, k);
+			if (bu)
+			{
+				const char* nm[2] = { hideLadder ? TR("ГОРИЗОНТ ▸") : TR("ГОРИЗОНТ"), hudMin ? TR("ХАД ▸") : TR("ХАД") };
+				for (int i = 0; i < 2; ++i)
+				{
+					const double x = 574 + i * 70, y = 300, w = 62, on = i == 0 ? !hideLadder : !hudMin;
+					g.Rect(x, y, w, 16, on ? CP : CD, 1, on ? 0.7 : 0.45);
+					g.T(x + w / 2, y + 12, nm[i], on ? CP : CD, 8.5, 1);
+					g.Hit(x, y, w, 16, i == 0 ? H_LADDER : H_HUDMIN);
+				}
+				// the MFDs' place (the user, 2026-10-20: by these two keys): centred over them - away from the horizon and the
+				// flight path, where the look rests; a rare switch, so the higher, quieter place
+				{
+					const double x = 592, y = 280, w = 96;
+					g.Rect(x, y, w, 16, CP, 1, 0.6);
+					g.T(x + w / 2, y + 12, mfdSide ? TR("МФД · ПО СТОРОНАМ") : TR("МФД · В ЦЕНТРЕ"), CP, 8.5, 1);
+					g.Hit(x, y, w, 16, H_MFDSIDE);
+				}
+			}
+			g.NoPlate(); g.baseOn = false; g.NoPlate();
+		}
+		if (!glassPass) {   // (the view's block)
+		// ---- the Pantsir's camera view («Обзорный прибор»): with the shutter closed she sees through the helmet's cameras -
+		// the frame of a sight round the window, the camera in use and where it sits on the helmet, mil ticks on the frame's
+		// sides, a short double flash when the picture moves to another camera; the shutter's line under it always
+		if (pz && d.suit && d.firstPerson)
+		{
+			g.Frame(C0, 0, k);
+			const double now = oapiGetSysTime();
+			if (d.pzCam != lastPzCam) { if (lastPzCam != -9) camSwitchT = now; lastPzCam = d.pzCam; }
+			const double fx0 = 300, fx1 = 980, fy0 = 178, fy1 = 470, arm = 46;
+			if (!d.pzWindow)
+			{
+				const double fl = camSwitchT >= 0 && now - camSwitchT < 0.35 && now >= camSwitchT ? 1 - (now - camSwitchT) / 0.35 : 0.0;
+				for (int i = 0; i < 4; ++i)
+				{
+					const double bx = i & 1 ? fx1 : fx0, by = i & 2 ? fy1 : fy0, dx = i & 1 ? -arm : arm, dy = i & 2 ? -arm : arm;
+					g.Line(bx, by, bx + dx, by, CP, 2.2); g.Line(bx, by, bx, by + dy, CP, 2.2);
+					if (fl > 0) { const double o = 6; g.Line(bx - (i & 1 ? -o : o), by - (i & 2 ? -o : o), bx + dx, by - (i & 2 ? -o : o), CW, 1.4, fl); g.Line(bx - (i & 1 ? -o : o), by - (i & 2 ? -o : o), bx - (i & 1 ? -o : o), by + dy, CW, 1.4, fl); }
+				}
+				// mil ticks on the sides: every 10 mrad of the camera's view, a long one each 50
+				const double f = (H / 2) / std::tan((std::max)(0.1, oapiCameraAperture())) / k;
+				for (int m = -150; m <= 150; m += 10)
+				{
+					const double y = 360 - std::tan(m * 0.001) * f; if (y < fy0 + arm + 8 || y > fy1 - arm - 8) continue;
+					const double l = m % 50 == 0 ? 9 : 4;
+					g.Line(fx0, y, fx0 + l, y, CP, 1, 0.7, false, false); g.Line(fx1, y, fx1 - l, y, CP, 1, 0.7, false, false);
+				}
+				// the camera in use and where it sits: the helmet seen from the front, three eyes, the active one lit
+				static const char* const CAMN[3] = { "БОК Л", "СТЕРЕО", "БОК П" };
+				const int ci = std::clamp(d.pzCam, -1, 1) + 1;
+				g.T(fx0 + 10, fy0 + 18, std::string(TR("КАМЕРА · ")) + TR(CAMN[ci]), CW, 11.5);
+				const double hx = fx0 + 30, hy = fy0 + 40;
+				g.Circle(hx, hy, 14, CD, 1, 0.8);
+				const double ex[3] = { hx - 12, hx, hx + 12 }, ey[3] = { hy + 2, hy - 7, hy + 2 };
+				for (int i = 0; i < 3; ++i) g.Circle(ex[i], ey[i], 2.6, i == ci ? CW : CD, 1.2, 1, i == ci ? CW : -1, 1);
+			}
+			// the shutter, always
+			std::string sh = d.pzWindow ? std::string(TR("ШТОРКА ОТКРЫТА · вид через окно · Shift+V — камеры"))
+				: std::string(TR("ШТОРКА ЗАКРЫТА")) + (d.pzAutoShut ? std::string(TR(" · АВТО: ")) + d.pzShutReason : std::string(TR(" · Shift+V — окно")));
+			const int shc = d.pzAutoShut ? CA : d.pzWindow ? CP : CD;
+			g.T(fx0 + 54, fy0 + 40, sh, shc, 10, 0);   // inside the frame's corner, by the camera's name (the MFDs' titles are under the frame)
 		}
 
 		// ---- the selected target in the view: a box, or an arrow at the edge ----
@@ -3303,8 +4218,7 @@ namespace ocrew
 			if (!sparks.empty())
 			{
 				g.Frame(0, 0, 1); g.world = true;
-				g.NoBrush(); if (g.s2) g.s2->QuickPen(g.C(CW, 1), 1.0f, 1); else g.Pen(CW, 1, 1, false);   // 1 px, not scaled up
-				for (auto& sp : sparks) { skp->Line(g.IX(sp.x), g.IY(sp.y), g.IX(sp.x + sp.dx), g.IY(sp.y + sp.dy)); sp.life -= dt; }
+				for (auto& sp : sparks) { g.Raw(sp.x, sp.y, sp.x + sp.dx, sp.y + sp.dy, CW); sp.life -= dt; }   // 1 px, not scaled up
 				sparks.erase(std::remove_if(sparks.begin(), sparks.end(), [](const Spark& s) { return s.life <= 0; }), sparks.end());
 				g.world = false;
 			}
@@ -3317,13 +4231,13 @@ namespace ocrew
 		{
 			std::vector<V2> pts;
 			for (int i = 0; i <= 24; ++i) { const double a = PI * (0.385 + 0.23 * i / 24); pts.push_back({ 640 + 1000 * std::cos(a), -260 + 1000 * std::sin(a) }); }
-			if (!pz) g.Poly(pts, CP, 1.2, 0.5);
+			if (!pz && !bu) g.Poly(pts, CP, 1.2, 0.5);
 			std::string ann;
 			if (d.jet && d.jetMode == 1) ann = TR("АП · УДЕРЖАНИЕ ВЫСОТЫ ") + Num(d.jetAltHold, 1) + TR(" м");
 			else if (d.jet && d.jetMode == 2) ann = TR("АП · АВТОПОСАДКА");
 			if (d.apMode) ann = TR("АП · ") + d.apStatus + (ann.empty() ? "" : "   ▸   " + ann.substr(ann.find("·") + 3));
 			if (d.jet && d.boost) ann += ann.empty() ? TR("ПОЛНЫЙ ВЕКТОР") : TR("   ▸   ПОЛНЫЙ ВЕКТОР");
-			if (!ann.empty()) { const double w = g.TW(ann, 12.5) + 24; g.Rect(640 - w / 2, 618 + by, w, 22, CA, 1.2, 1, CA, 0.12); g.T(640, 634 + by, ann, CA, 12.5, 1); }
+			if (!ann.empty()) { if (bu) g.T(640, 672, ann, CA, 12, 1); else { const double w = g.TW(ann, 12.5) + 24; g.Rect(640 - w / 2, 618 + by, w, 22, CA, 1.2, 1, CA, 0.12); g.T(640, 634 + by, ann, CA, 12.5, 1); } }
 			// the jet pack's working state, all the time it is worn (the user: its modes on the display permanently): which
 			// pack, what drives her now (the fans' speed, the boost, the turbine's power in hot air, no air), the control mode
 			if (d.jet)
@@ -3354,8 +4268,8 @@ namespace ocrew
 					}
 				}
 				js += d.jetMode == 1 ? TR(" · УДЕРЖ") : d.jetMode == 2 ? TR(" · ПОСАДКА") : d.jetMode == 3 ? TR(" · ВЕКТОР") : d.jetAssist ? TR(" · ПОМОЩН") : TR(" · РУЧН");
-				const double w = g.TW(js, 11.5) + 20;
-				g.Rect(640 - w / 2, 594 + by, w, 20, jc, 1.0, 1, jc, 0.08); g.T(640, 609 + by, js, jc, 11.5, 1);
+				if (bu) g.T(640, 652, js, jc, 12.5, 1);
+				else { const double w = g.TW(js, 11.5) + 20; g.Rect(640 - w / 2, 594 + by, w, 20, jc, 1.0, 1, jc, 0.08); g.T(640, 609 + by, js, jc, 11.5, 1); }
 			}
 			std::vector<std::tuple<std::string, std::string, int>> cells;
 			const Target* s = Selected();
@@ -3370,6 +4284,7 @@ namespace ocrew
 				          { TR("ТОРМОЗ"), ms.brake ? TR("стояночный") : TR("снят"), ms.brake ? CA : CW },
 				          { TR("ЗАРЯД"), ms.charge < 0 ? std::string("—") : Num(100 * ms.charge, 0) + " %", ms.charge >= 0 && ms.charge < 0.15 ? CA : CW } };
 			}
+			else if (bu) {}   // «Буран»: the numbers are on the tapes and the counters
 			else if (mode == FLIGHT && d.jet)
 				cells = { { TR("ВЫСОТА"), Num(d.alt, 1) + TR(" м"), CW }, { TR("ВЕРТ"), Num(d.vs, 1, true) + TR(" м/с"), d.vs < -3 ? CA : CW }, { TR("ГОРИЗ"), Num(d.gs, 1) + TR(" м/с"), CW },
 				          { TR("ТЯГА"), Num(100 * d.jetThrottle, 0) + " %", CW }, { TR("ЗАПАС Δv"), Num(d.jetDv, 0) + TR(" м/с"), d.jetDv < 30 ? CA : CW } };
@@ -3382,7 +4297,7 @@ namespace ocrew
 			else if (pz)   // the Pantsir's navigation line
 			{
 				char hb[16]; snprintf(hb, sizeof hb, "%03.0f°", std::fmod(hdg * DEG + 360, 360));
-				cells = { { TR("СКОРОСТЬ"), Num(surface ? d.speed : std::hypot(gsH.x, gsH.z), 1) + TR(" м/с"), CW }, { TR("КУРС"), hb, CW },
+				cells = { { TR("СКОРОСТЬ"), Num(surface ? d.speed : std::hypot(gsH.x, gsH.z), 1) + TR(" м/с"), CW },   // (the heading is on the tape above)
 				          { TR("ЦЕЛЬ"), s ? s->name + " · " + Dist(s->dist) : std::string(TR("нет")), s ? CA : CD },
 				          { d.hasGround ? TR("ГРУНТ") : TR("СРЕДА"), Num(d.hasGround ? d.groundC : d.envC, 0, true) + " °C", d.hasGround && d.groundC > d.ratedMaxC ? CR : CW } };
 			}
@@ -3405,7 +4320,7 @@ namespace ocrew
 			else
 				for (size_t i = 0; i < cells.size(); ++i) g.Cell(x0 + i * cw, 664 + by, std::get<0>(cells[i]), std::get<1>(cells[i]), std::get<2>(cells[i]), 1);
 			// the pods, seen from her left side
-			if (fly && surface)
+			if (fly && surface && !bu)
 				for (int i = 0; i < 2; ++i)
 				{
 					const double x = i == 0 ? 425 : 855, y = 664, t = d.jetTilt[i];
@@ -3423,12 +4338,13 @@ namespace ocrew
 			else if (mode == RDV) keys = TR("РСУ: цифровой блок   ·   цель и автопилот — мышью на правом МФД");
 			else if (mode == SYS) keys = TR("режим ещё раз — снова автоматически   ·   заголовок МФД — свернуть");
 			else keys = TR("WASD — шаг   Shift — серво   B — ранец   Shift+V — щиток   L — фонари   K — скафандр");
-			if (!pz) g.T(640, 712, keys, CD, 10.5, 1);
+			if (!pz && !bu) g.T(640, 712, keys, CD, 10.5, 1);
 		}
+		}   // (!glassPass)
 		if (!d.suit) return;
 
 		// ---- the two MFDs, low in the corners, each folds on its own key ----
-		const double ms = pz ? 0.62 : 0.78;   // both MFDs the same size, clear of the panels above (the Pantsir: smaller, between its panels)
+		const double ms = pz ? 0.62 : bu ? 0.85 : 0.78;   // both MFDs the same size, clear of the panels above (the Pantsir: smaller, between its panels)
 		auto mfd = [&](bool left)
 		{
 			const auto rp = RPages();
@@ -3438,16 +4354,17 @@ namespace ocrew
 			const double FW = pz ? 440 : 340, ph = pz ? 282 : 400, mf = pz ? 340.0 / 440 : ms, sub = pz ? 0.767 : 1.0;
 			const bool wideMap = pz && left && lpage == L_LOCAL;
 			g.clipL = 3; g.clipR = FW - 3;   // nothing written past the panel's edges
-			const double x0 = pz ? C0 + (left ? 640 - 6 - 340 : 640 + 6) * k : left ? L0 + 112 * k : R0 + (1168 - 340 * ms) * k, y0 = (686 - ph * mf) * k;
+			double x0 = pz ? C0 + (left ? 640 - 6 - 340 : 640 + 6) * k : left ? L0 + 112 * k : R0 + (1168 - 340 * ms) * k, y0 = (686 - ph * mf) * k;
+			if (bu) { double r[4][4]; BuranRects(W, H, r); x0 = r[left ? 1 : 0][0]; y0 = r[left ? 1 : 0][1]; if (!SetPlate(c, x0, y0, FW * k * mf, ph * k * mf, 1)) { g.clipL = -1e9; g.clipR = 1e9; return; } }
 			g.Frame(x0, y0, k * mf);
-			g.Rect(0, 0, FW, ph, -1, 0, 0, CK, 0.38 + 0.4 * (std::min)(1.0, g.boost)); g.Rect(0, 0, FW, ph, CP, 1, 0.32, CP, 0.06);
-			for (int i = 0; i < 4; ++i)
+			if (!bu) { g.Rect(0, 0, FW, ph, -1, 0, 0, CK, 0.38 + 0.4 * (std::min)(1.0, g.boost)); g.Rect(0, 0, FW, ph, CP, 1, 0.32, CP, 0.06); }
+			for (int i = 0; i < 4 && (!bu || hudTheme == 3); ++i)
 			{
 				const double bx = i & 1 ? FW : 0, by = i & 2 ? ph : 0, dx = i & 1 ? -12 : 12, dy = i & 2 ? -12 : 12;
 				g.Line(bx, by, bx + dx, by, CP, 2); g.Line(bx, by, bx, by + dy, CP, 2);
 			}
-			const char* LT[] = { TR("КАРТА"), TR("ОРБИТА"), TR("ПИТАНИЕ И ТЕПЛО"), TR("ОПЦИИ") };
-			const char* LTAB[] = { TR("МЕСТН"), TR("ОРБИТА"), TR("ПИТАНИЕ"), TR("ОПЦИИ") };
+			const char* LT[] = { TR("КАРТА"), TR("ОРБИТА"), TR("ПИТАНИЕ И ТЕПЛО"), TR("ЗАПАСЫ И РАСХОД"), TR("ОПЦИИ") };
+			const char* LTAB[] = { TR("МЕСТН"), TR("ОРБИТА"), TR("ПИТАНИЕ"), TR("ЗАПАСЫ"), TR("ОПЦИИ") };
 			const char* RT[] = { TR("ЦЕЛИ"), TR("ПЕРЕЛЁТ"), TR("ПОСАДКА"), TR("СБЛИЖЕНИЕ"), TR("СТЫКОВКА"), TR("ОРГАНИЗМ"), TR("ПОЛЁТ"), TR("МАШИНА"), TR("СОЕДИНЕНИЯ") };
 			const char* RTAB[] = { TR("ЦЕЛИ"), TR("ПЕРЕЛЁТ"), TR("ПОСАДКА"), TR("СБЛИЖ"), TR("СТЫК"), TR("ОРГАНИЗМ"), TR("ПОЛЁТ"), TR("МАШИНА"), TR("СОЕД") };
 			const Target* s = Selected();
@@ -3482,7 +4399,7 @@ namespace ocrew
 			gMapW = wideMap ? FW / sub : 340;
 			g.clipR = wideMap ? gMapW - 3 : 337;
 			g.Frame(x0 + pageOff * k * mf, y0 + 40 * k * mf, k * mf * sub);
-			if (left) { switch (lpage) { case L_LOCAL: pages::Local(c); break; case L_ORBIT: pages::Orbit(c); break; case L_POWER: pages::Power(c); break; default: pages::Opts(c); } }
+			if (left) { switch (lpage) { case L_LOCAL: pages::Local(c); break; case L_ORBIT: pages::Orbit(c); break; case L_POWER: pages::Power(c); break; case L_RES: pages::Reserves(c); break; default: pages::Opts(c); } }
 			else
 			{
 				switch (rpage)
@@ -3525,11 +4442,13 @@ namespace ocrew
 			}
 			g.T(9, fy, TR("заголовок — свернуть"), CD, 9, 0);
 			g.clipL = -1e9; g.clipR = 1e9;
+			g.NoPlate();
 		};
 		auto tab = [&](bool left)
 		{
-			const double x0 = pz ? C0 + (left ? 640 - 6 - 252 : 640 + 6) * k : left ? L0 + 112 * k : R0 + (1168 - 252) * k;
-			g.Frame(x0, 662 * k, k);
+			double x0 = pz ? C0 + (left ? 640 - 6 - 252 : 640 + 6) * k : left ? L0 + 112 * k : R0 + (1168 - 252) * k, ty = 662 * k;
+			if (bu) { double r[4][4]; BuranRects(W, H, r); x0 = r[left ? 1 : 0][0]; ty = r[left ? 1 : 0][1]; if (!SetPlate(c, x0, ty, 252 * k, 24 * k, 3)) return; }
+			g.Frame(x0, ty, k);
 			g.Rect(0, 0, 252, 24, CP, 1, 0.4, CP, 0.08);
 			g.Hit(0, 0, 252, 24, left ? H_LFOLD : H_RFOLD);
 			const Target* s = Selected();
@@ -3537,9 +4456,26 @@ namespace ocrew
 			g.T(10, 16, t, CP, 11);
 			if (!left && (d.apMode || (d.jet && d.jetMode))) g.T(244, 16, d.apMode ? std::string(TR("АП: ")) + (d.apStatus.substr(0, d.apStatus.find(" "))) : d.jetMode == 1 ? TR("АП: УДЕРЖ") : TR("АП: ПОСАДКА"), CA, 10, 2);
 		};
-		if (openL) mfd(true); else tab(true);
-		if (openR) mfd(false); else tab(false);
-		if (overlay) overlay(skp, W, H, g.kx, g.ky);   // the crew's signs, on top, in the same surface
+		g.baseOn = false; g.NoPlate();
+		if (!(bu && hudMin)) { if (openL) mfd(true); else tab(true); if (openR) mfd(false); else tab(false); }
+		if (bu && !hudMin) BuranLow(c, W, H, k, L0, R0);
+		if (glassPass && !hudMin && !glassLines.empty())
+		{
+			// the lines low on the glass: glyph by glyph, each on its own place of the glass - the line bends with it
+			glassBase(3);
+			{
+				g.Frame(C0, 0, k); g.noHit = true;
+				for (const GlassLine& l : glassLines)
+				{
+					double x = 640 - g.TW(l.text, l.size) / 2;
+					for (const std::string& ch : Chars(l.text)) { g.T(x, l.y, ch, l.col, l.size, 0); x += g.TW(ch, l.size); }
+				}
+				g.baseOn = false; g.NoPlate();
+			}
+		}
+		if (glassPass) return;
+		if (g.cv) { if (overlayNative) overlayNative(gx, g.cv, W, H, g.kx, g.ky); }   // the crew's signs, on top, in the same surface
+		else if (overlay) overlay(skp, W, H, g.kx, g.ky);
 	}
 
 	// ================= the helmet display =================
@@ -3620,14 +4556,148 @@ namespace ocrew
 		oapiVCRegisterHUD(&hs);
 	}
 
+	bool SuitHud::HelmDir(VESSEL* v, double yaw, double pitch, double out[9]) const
+	{
+		if (!helmOk || !v) return false;
+		MATRIX3 Rc, R; oapiCameraRotationMatrix(&Rc); v->GetRotationMatrix(R);
+		const VECTOR3 cr = _V(Rc.m11, Rc.m21, Rc.m31), cu = _V(Rc.m12, Rc.m22, Rc.m32), cf = _V(Rc.m13, Rc.m23, Rc.m33);
+		auto cam = [&](double a, double b, double c, double* o)   // helmet-frame components -> camera space, y down
+		{
+			const VECTOR3 g = mul(R, helmX * a + helmY * b + helmZ * c);
+			o[0] = dotp(g, cr); o[1] = -dotp(g, cu); o[2] = dotp(g, cf);
+		};
+		const double cy = std::cos(yaw), sy = std::sin(yaw), cp = std::cos(pitch), sp = std::sin(pitch);
+		cam(cp * sy, sp, cp * cy, out);                 // the centre's direction
+		cam(cy, 0, -sy, out + 3);                       // the panel's right, square to it
+		cam(sp * sy, -cp, sp * cy, out + 6);            // its down
+		return true;
+	}
+
+	bool SuitHud::MfdGlow(int i, double& yaw, double& pitch, double rgb[3], double& level) const
+	{
+		if (!lightLive || !life || life->Heavy() || !life->Powered()) return false;
+		if ((i == 0 && !openR) || (i == 1 && !openL)) return false;
+		DWORD vw = 0, vh = 0; oapiGetViewportSize(&vw, &vh);
+		if (!vw || !vh) return false;
+		double r[4][4]; BuranRects(vw, vh, r);
+		const double F = (vh / 2.0) / std::tan((std::max)(0.1, oapiCameraAperture()));
+		yaw = std::atan(((r[i][0] + r[i][2]) / 2 - vw / 2.0) / F); pitch = std::atan(-((r[i][1] + r[i][3]) / 2 - vh / 2.0) / F);
+		const DWORD c = BURAN_PAL[std::clamp(hudTheme, 0, 3)].col[CP];
+		rgb[0] = (c & 0xFF) / 255.0; rgb[1] = ((c >> 8) & 0xFF) / 255.0; rgb[2] = ((c >> 16) & 0xFF) / 255.0;
+		const double b = brightAuto ? ambient : brightManual;
+		level = 0.35 + 0.45 * (std::min)(1.0, b);   // a screen of thin lines: most of it dark
+		return true;
+	}
+
+	// the glass layer each step: the mesh carried with the helmet, the inner face shown from her eyes, the outer one (dim)
+	// from outside; the hidden face's vertices folded into one point
+	void SuitHud::GlassSource(VESSEL* v, const VECTOR3& eyeRest)
+	{
+		glassEye = eyeRest;
+		if (glassOwner == v && glassIdx != static_cast<UINT>(-1)) return;
+		if (!glassTpl) glassTpl = oapiLoadMeshGlobal("Tantra\\VisorGlassHud");
+		if (!glassTpl) { oapiWriteLog(const_cast<char*>("OrbiterCrew: glass layer - Meshes\\Tantra\\VisorGlassHud.msh missing: the MFDs stay on the view")); return; }
+		if (MESHGROUP* g0 = oapiMeshGroup(glassTpl, 0)) { glassRest.resize(g0->nVtx); for (DWORD i = 0; i < g0->nVtx; ++i) glassRest[i] = _V(g0->Vtx[i].x, g0->Vtx[i].y, g0->Vtx[i].z); }
+		glassOwner = v; glassIdx = v->AddMesh(glassTpl); glassMeshDm = nullptr; glassShown = -1; glassLogged = false; glassGlow = nullptr;
+		v->SetMeshVisibilityMode(glassIdx, MESHVIS_EXTERNAL | MESHVIS_VC);
+		glassWanted = true;
+	}
+
+	// the glass layer each step: the mesh carried with the helmet, the inner face shown from her eyes, the outer one (dim)
+	// from outside; the hidden face's vertices folded into one point
+	void SuitHud::GlassFrame(VESSEL* v, VISHANDLE vis, const HelmetView& hv)
+	{
+		glassLive = false;
+		if (!glassWanted || !v || glassOwner != v) return;
+		const D3D11Hud::Api* nx = Native();
+		if (!nx) return;
+		auto fail = [&](const char* why) { if (!glassLogged) { glassLogged = true; oapiWriteLogV("OrbiterCrew: glass layer - %s: the MFDs stay on the view", why); } };
+		if (!glassCv) { glassCv = nx->CanvasCreate(GLASS_CW, GLASS_CH, D3D11Hud::LIGHT); if (!glassCv) { fail("no canvas"); return; } }
+		DEVMESHHANDLE dm = vis ? v->GetDevMesh(vis, glassIdx) : nullptr;
+		if (!dm) { if (vis) fail("no device mesh"); return; }
+		if (dm != glassMeshDm)
+		{
+			if (!oapiSetTexture(dm, 1, nx->CanvasSurface(glassCv))) { fail("texture not bound"); return; }
+			glassMeshDm = dm; glassShown = -1;
+			oapiWriteLogV("OrbiterCrew: glass layer - the MFDs on the visor's glass (%d vertices, canvas %dx%d)", static_cast<int>(glassRest.size()), GLASS_CW, GLASS_CH);
+		}
+		const bool inside = hv.helm && hv.show && oapiCameraInternal() && oapiCameraTarget() == v->GetHandle();
+		const bool outside = hv.ext && !(oapiCameraInternal() && oapiCameraTarget() == v->GetHandle());
+		const int show = inside ? 0 : outside ? 1 : -1;
+		// from her eyes the glass is set on the camera itself (it is the eye): no shake between the two
+		const VECTOR3 org = hv.hO;
+		lastHv = hv;
+		// from outside the glass glows a little: a small light of its own on the helmet's front (outside views only)
+		if (outside)
+		{
+			const DWORD c = BURAN_PAL[std::clamp(hudTheme, 0, 3)].col[CP];
+			const COLOUR4 col = { (c & 0xFF) / 255.0f, ((c >> 8) & 0xFF) / 255.0f, ((c >> 16) & 0xFF) / 255.0f, 0 }, none = { 0, 0, 0, 0 };
+			const VECTOR3 at = hv.hO + hv.hZ * 0.09;
+			if (!glassGlow) { glassGlow = v->AddPointLight(at, 0.8, 0, 0, 10, col, col, none); if (glassGlow) glassGlow->SetVisibility(LightEmitter::VIS_EXTERNAL); }
+			if (glassGlow) { glassGlow->SetPosition(at); const_cast<COLOUR4&>(glassGlow->GetDiffuseColour()) = col; const_cast<COLOUR4&>(glassGlow->GetSpecularColour()) = col; glassGlow->SetIntensity(0.35); glassGlow->Activate(true); }
+		}
+		else if (glassGlow) glassGlow->Activate(false);
+		std::vector<NTVERTEX> vt(glassRest.size());
+		for (int gi = 0; gi < 2; ++gi)
+		{
+			if (gi == 0 && show == 0) continue;   // from her eyes: PlaceVisor sets it on the camera, when the view is drawn
+			for (size_t i = 0; i < glassRest.size(); ++i)
+			{
+				VECTOR3 p = org;
+				if (gi == show) { const VECTOR3 r = glassRest[i] - glassEye; p = org + hv.hX * r.x + hv.hY * r.y + hv.hZ * r.z; }
+				vt[i].x = static_cast<float>(p.x); vt[i].y = static_cast<float>(p.y); vt[i].z = static_cast<float>(p.z);
+			}
+			GROUPEDITSPEC e{}; e.flags = GRPEDIT_VTXCRD; e.Vtx = vt.data(); e.nVtx = static_cast<DWORD>(vt.size());
+			oapiEditMeshGroup(dm, gi, &e);
+		}
+		glassShown = show;
+		glassLive = show == 0 && life && !life->Heavy();   // the light suit's «Буран» (the Pantsir keeps its own layout)
+	}
+
 	void SuitHud::HelmetFrame(VESSEL* v, VISHANDLE vis, const HelmetView& hv, const HudData* d)
 	{
 		if (plateIdx == static_cast<UINT>(-1)) return;
 		const bool show = hv.show && oapiCameraInternal() && oapiCameraTarget() == v->GetHandle();   // only her own eyes
+		// the helmet's axes a little smoothed (the user, 2026-10-20: the torso's small motions of the clips shook the glass;
+		// 40 % of each step's change - a turn of the body still carried, with a little inertia, as a real helmet on a body)
+		if (hv.helm && helmOk)
+		{
+			const double a = 0.6;
+			auto mix = [&](const VECTOR3& o, const VECTOR3& n) { const VECTOR3 m = o * (1 - a) + n * a; const double l = length(m); return l > 1e-9 ? m / l : n; };
+			helmX = mix(helmX, hv.hX); helmY = mix(helmY, hv.hY); helmZ = mix(helmZ, hv.hZ);
+		}
+		else { helmX = hv.hX; helmY = hv.hY; helmZ = hv.hZ; }
+		helmOk = hv.helm;
+		GlassFrame(v, vis, hv);
 		onVisor = show; plateVis = vis;
 		v->SetMeshVisibilityMode(plateIdx, show ? MESHVIS_VC : MESHVIS_NEVER);
 		if (show) { PlaceVisor(v); Modulator(v); LightLayer(v, d); }
 		else lightLive = false;
+		if (!show && hv.ext && d && glassCv && glassShown == 1 && life && !life->Heavy())   // from outside: the glass's own picture, MFDs at the sides
+		{
+			const double now = oapiGetSysTime();
+			if (glassExtT < 0 || now < glassExtT || now - glassExtT >= 0.1)
+			{
+				glassExtT = now;
+				const D3D11Hud::Api* nx = Native();
+				if (nx && nx->Begin(glassCv, true, 0))
+				{
+					const bool side = mfdSide; mfdSide = true; helmOk = true;
+					drawCv = glassCv; drawingLight = glassPass = glassExtPass = true; glassLive = true;
+					Draw(nullptr, GLASS_CW, GLASS_CH, *d, v);
+					drawingLight = glassPass = glassExtPass = false; drawCv = nullptr; glassLive = false;
+					mfdSide = side;
+					nx->End(glassCv);
+				}
+			}
+		}
+		// the closed visor before her eyes: 0x400 on group 0 (the client draws the drops on the glass only then)
+		if (DEVMESHHANDLE dm = vis ? v->GetDevMesh(vis, plateIdx) : nullptr)
+		{
+			const int g = hv.glass && show ? 1 : 0;
+			if (dm != glassDm) { glassDm = dm; glassSet = -1; }
+			if (g != glassSet) { GROUPEDITSPEC e = {}; e.flags = g ? GRPEDIT_ADDUSERFLAG : GRPEDIT_DELUSERFLAG; e.UsrFlag = 0x400; oapiEditMeshGroup(dm, 0, &e); glassSet = g; }
+		}
 	}
 
 	// The plate is set from the camera itself, not from the head model: it is close to the eye, so a centimetre of
@@ -3679,6 +4749,19 @@ namespace ocrew
 		}
 		ges.Vtx = big; oapiEditMeshGroup(dm, 1, &ges);
 		SunSprite(v, dm, eye, r, up, f, dist);
+		// the glass layer, seen from her eyes: on the camera itself, now - the moment the view is drawn (set at the step
+		// it lagged the camera a frame: at 4-15 cm from the eye a millimetre is degrees - it shook)
+		if (glassShown == 0 && glassMeshDm && !glassRest.empty() && glassOwner == v)
+		{
+			std::vector<NTVERTEX> vt(glassRest.size());
+			for (size_t i = 0; i < glassRest.size(); ++i)
+			{
+				const VECTOR3 rr = glassRest[i] - glassEye, p = eye + helmX * rr.x + helmY * rr.y + helmZ * rr.z;
+				vt[i].x = static_cast<float>(p.x); vt[i].y = static_cast<float>(p.y); vt[i].z = static_cast<float>(p.z);
+			}
+			GROUPEDITSPEC e{}; e.flags = GRPEDIT_VTXCRD; e.Vtx = vt.data(); e.nVtx = static_cast<DWORD>(vt.size());
+			oapiEditMeshGroup(glassMeshDm, 0, &e);
+		}
 	}
 
 	// The sun's spot: dense over its disc (~1 deg core, a smooth fall-off over three times that), so the eye is not blinded
@@ -3686,19 +4769,46 @@ namespace ocrew
 	// modulator and the light come over it whatever the depth test)
 	void SuitHud::SunSprite(VESSEL* v, DEVMESHHANDLE dm, const VECTOR3& eye, const VECTOR3& r, const VECTOR3& up, const VECTOR3& f, double dist)
 	{
-		if (!sunSrf)
+		const D3D11Hud::Api* nx = Native();
+		if (nx && !sunCv) { sunCv = nx->CanvasCreate(256, 256, D3D11Hud::ALPHA); sunDm = nullptr; sunAmp = -1; if (!sunCv) return; }
+		if (!nx && !sunSrf)
 		{
 			sunSrf = oapiCreateSurfaceEx(256, 256, OAPISURFACE_TEXTURE | OAPISURFACE_RENDERTARGET | OAPISURFACE_SKETCHPAD | OAPISURFACE_ALPHA | OAPISURFACE_NOMIPMAPS);
 			sunDm = nullptr; sunAmp = -1;
 			if (!sunSrf) return;
 		}
-		if (dm != sunDm && oapiSetTexture(dm, 3, sunSrf)) sunDm = dm;
+		if (dm != sunDm && oapiSetTexture(dm, 3, nx ? nx->CanvasSurface(sunCv) : sunSrf))
+		{
+			sunDm = dm; sunHAlphaSet = -1;   // a new visual: the filter's flag is set again
+			// D3D11: the spot is a filter (group flag 0x100): what lies behind it is multiplied by its transmittance, down to
+			// welding glass over the core - the Sun's disc stays a disc seen through dark glass, not a black hole
+			if (nx) { GROUPEDITSPEC g = {}; g.flags = GRPEDIT_ADDUSERFLAG; g.UsrFlag = 0x100; oapiEditMeshGroup(dm, 0, &g); }
+		}
+		if (nx && sunDm && sunHAlphaSet != (sunHAlpha ? 1 : 0))   // grey <-> H-alpha: the flag 0x200 on the filter group
+		{
+			GROUPEDITSPEC g = {}; g.flags = sunHAlpha ? GRPEDIT_ADDUSERFLAG : GRPEDIT_DELUSERFLAG; g.UsrFlag = 0x200;
+			oapiEditMeshGroup(sunDm, 0, &g); sunHAlphaSet = sunHAlpha ? 1 : 0;
+		}
 		const double boost = brightAuto ? ambient : brightManual;
 		const double amp = 0.7 * (std::min)(1.0, 0.4 + boost);
 		if (std::abs(amp - sunAmp) > 1.0 / 255)
 		{
-			oapiClearSurface(sunSrf, 0);
-			if (oapi::Sketchpad* skp = oapiGetSketchpad(sunSrf))
+			if (nx)
+			{
+				if (nx->Begin(sunCv, true, 0))   // a soft disc: rings from the faint rim to the dense core, written straight
+				{
+					nx->SetBlend(sunCv, D3D11Hud::COPY);
+					for (int i = 63; i >= 0; --i)
+					{
+						const double t = i / 63.0, fall = 1 - t * t * (3 - 2 * t), rr = 128.0 / 3 * (1 + 2.0 * t), a = amp * fall;
+						if (a < 1.0 / 255) continue;
+						nx->Ellipse(sunCv, 128, 128, static_cast<float>(rr), static_cast<float>(rr), static_cast<DWORD>(std::lround(a * 255)) << 24, 0, 0);
+					}
+					nx->End(sunCv);
+				}
+			}
+			else oapiClearSurface(sunSrf, 0);
+			if (oapi::Sketchpad* skp = nx ? nullptr : oapiGetSketchpad(sunSrf))
 			{
 				if (Ext(skp))
 				{
@@ -3751,22 +4861,31 @@ namespace ocrew
 		DWORD vw = 0, vh = 0; oapiGetViewportSize(&vw, &vh);
 		if (!vw || !vh) return;
 		const int w = (std::max)(64, static_cast<int>(vw) / 2), h = (std::max)(64, static_cast<int>(vh) / 2);   // soft shapes: half resolution
-		if (!modSrf || w != modW || h != modH)
+		// the D3D11 client: a GPU canvas of its own (no Sketchpad); else the surface as before
+		const D3D11Hud::Api* nx = Native();
+		if (nx && (!modCv || w != modW || h != modH))
+		{
+			if (modCv) nx->CanvasRelease(modCv);
+			modCv = nx->CanvasCreate(w, h, D3D11Hud::ALPHA);
+			modW = w; modH = h; modDm = nullptr;
+		}
+		if (!nx && (!modSrf || w != modW || h != modH))
 		{
 			if (modSrf) oapiDestroySurface(modSrf);
 			modSrf = oapiCreateSurfaceEx(w, h, OAPISURFACE_TEXTURE | OAPISURFACE_RENDERTARGET | OAPISURFACE_SKETCHPAD | OAPISURFACE_ALPHA | OAPISURFACE_NOMIPMAPS);
 			modW = w; modH = h; modDm = nullptr;
 		}
-		if (!modSrf) { if (!modLogged) { modLogged = true; oapiWriteLog(const_cast<char*>("OrbiterCrew: visor modulator - no surface")); } return; }
+		const SURFHANDLE modTex = nx ? (modCv ? nx->CanvasSurface(modCv) : nullptr) : modSrf;
+		if (!modTex) { if (!modLogged) { modLogged = true; oapiWriteLog(const_cast<char*>("OrbiterCrew: visor modulator - no surface")); } return; }
 		if (dm != modDm)   // a new visual: bind again (retried until it takes)
 		{
-			const bool ok = oapiSetTexture(dm, 1, modSrf);
+			const bool ok = oapiSetTexture(dm, 1, modTex);
 			if (ok) { modDm = dm; modKeyed = false; }
-			if (!modLogged || ok) { char b[96]; snprintf(b, sizeof b, "OrbiterCrew: visor modulator %dx%d, texture bound: %s", w, h, ok ? "yes" : "NO"); oapiWriteLog(b); modLogged = true; }
+			if (!modLogged || ok) { char b[96]; snprintf(b, sizeof b, "OrbiterCrew: visor modulator %dx%d%s, texture bound: %s", w, h, nx ? " (D3D11 canvas)" : "", ok ? "yes" : "NO"); oapiWriteLog(b); modLogged = true; }
 		}
 		{
 			const double now = oapiGetSysTime();
-			if (modT >= 0 && now >= modT && now - modT < 1.0 / 15) return;   // soft and slow: 15 times a second is enough
+			if (!helmOk && modT >= 0 && now >= modT && now - modT < 1.0 / 15) return;   // soft and slow: 15 times a second is enough (in a helmet fixed to the body: every frame - its edge moves as the head turns)
 			modT = now;
 		}
 		// the view's layout lands in the inner part of the (larger) plate: x_tex = ((x / vw - 0.5) / M + 0.5) * w
@@ -3782,31 +4901,42 @@ namespace ocrew
 		if (life && !life->Powered())   // the display is dead: no shading of its own (the plate stays clear)
 		{
 			if (modKeyed && modKey[7] < 0) return;
-			oapiClearSurface(modSrf, 0); modKeyed = true; modKey[7] = -1; return;
+			if (nx) { if (nx->Begin(modCv, true, 0)) nx->End(modCv); } else oapiClearSurface(modSrf, 0);
+			modKeyed = true; modKey[7] = -1; return;
 		}
-			const double key[8] = { static_cast<double>(w), static_cast<double>(h), shade, glass, heavy ? 0.0 : a0, openL ? 1.0 : 0.0, openR ? 1.0 : 0.0, heavy };
+			// in a helmet fixed to the body its window's edge stays on the helmet: where the helmet's forward is in the view
+			helmPx[0] = helmPx[1] = 0;
+			{ double q[9]; if (HelmDir(v, 0, 0, q) && q[2] > 0.2) { const double F = (vh / 2.0) / std::tan((std::max)(0.1, oapiCameraAperture())); helmPx[0] = std::round(F * q[0] / q[2]); helmPx[1] = std::round(F * q[1] / q[2]); } }
+			const double key[11] = { static_cast<double>(w), static_cast<double>(h), shade, glass, heavy ? 0.0 : a0 * shadeK, openL ? 1.0 : 0.0, openR ? 1.0 : 0.0, heavy, static_cast<double>(alertLines), helmPx[0], helmPx[1] };
 			bool same = modKeyed;
-			for (int i = 0; i < 8 && same; ++i) same = std::abs(key[i] - modKey[i]) < 1.0 / 1024;
+			for (int i = 0; i < 11 && same; ++i) same = std::abs(key[i] - modKey[i]) < 1.0 / 1024;
 			if (same) return;
-			std::copy(key, key + 8, modKey); modKeyed = true;
+			std::copy(key, key + 11, modKey); modKeyed = true;
 		}
 		LARGE_INTEGER mq0, mqf; QueryPerformanceFrequency(&mqf); QueryPerformanceCounter(&mq0);
 		struct ModTime { LARGE_INTEGER& a; LARGE_INTEGER& f; SuitHud& h; ~ModTime() { LARGE_INTEGER e; QueryPerformanceCounter(&e); h.perfMod += 1000.0 * (e.QuadPart - a.QuadPart) / f.QuadPart; ++h.perfModN; } } modTime{ mq0, mqf, *this };
-		oapiClearSurface(modSrf, 0);   // transparent: last step's shapes must not stay (they smeared across the visor)
-		oapi::Sketchpad* skp = oapiGetSketchpad(modSrf);
-		if (!skp) { modKeyed = false; return; }
-		if (!Ext(skp)) { oapiReleaseSketchpad(skp); modKeyed = false; return; }
+		oapi::Sketchpad* skp = nullptr;
+		if (nx) { if (!nx->Begin(modCv, true, 0)) { modKeyed = false; return; } nx->SetBlend(modCv, D3D11Hud::COPY); }   // cleared: transparent
+		else
+		{
+			oapiClearSurface(modSrf, 0);   // transparent: last step's shapes must not stay (they smeared across the visor)
+			skp = oapiGetSketchpad(modSrf);
+			if (!skp) { modKeyed = false; return; }
+			if (!Ext(skp)) { oapiReleaseSketchpad(skp); modKeyed = false; return; }
+		}
+		auto finish = [&]() { if (nx) nx->End(modCv); else { skp->QuickPen(0); skp->QuickBrush(0); skp->SetBlendState(); oapiReleaseSketchpad(skp); } };
 		const double base = 1 - (1 - shade) * (1 - glass);   // the whole view: the shade and the glass
 		auto with = [&](double a) { return 1 - (1 - std::clamp(a, 0.0, 1.0)) * (1 - base); };
 		auto box = [&](double x0, double y0, double x1, double y1, double a)
 		{
 			if (with(a) < 1.0 / 255) return;   // nothing to dim (and a zero colour would mean "no brush")
 			const DWORD c = static_cast<DWORD>(std::lround(with(a) * 255)) << 24;
+			const int X0 = static_cast<int>(std::floor(ox + x0 * sx)), Y0 = static_cast<int>(std::floor(oy + y0 * sy)), X1 = static_cast<int>(std::ceil(ox + x1 * sx)), Y1 = static_cast<int>(std::ceil(oy + y1 * sy));
+			if (nx) { nx->Rect(modCv, static_cast<float>(X0), static_cast<float>(Y0), static_cast<float>(X1), static_cast<float>(Y1), c, 0, 0); return; }
 			skp->QuickPen(c); skp->QuickBrush(c);   // the outline as the fill: under COPY a pen of another alpha leaves a rim
-			skp->Rectangle(static_cast<int>(std::floor(ox + x0 * sx)), static_cast<int>(std::floor(oy + y0 * sy)), static_cast<int>(std::ceil(ox + x1 * sx)), static_cast<int>(std::ceil(oy + y1 * sy)));
+			skp->Rectangle(X0, Y0, X1, Y1);
 		};
-		skp->SetBlendState(oapi::Sketchpad::COPY);
-		skp->QuickPen(0);
+		if (skp) { skp->SetBlendState(oapi::Sketchpad::COPY); skp->QuickPen(0); }
 		const double mx = vw * (MOD_MARGIN - 1) / 2 + 2, my = vh * (MOD_MARGIN - 1) / 2 + 2;   // the margins, in view pixels
 		box(-mx, -my, vw + mx, vh + my, 0);   // the shade's tone over the whole plate (skipped when there is none)
 		const double k = vh / 720.0;
@@ -3824,12 +4954,63 @@ namespace ocrew
 				box(-mx, (47 + i * 60.0 / N) * k, vw + mx, (47 + (i + 1) * 60.0 / N) * k + 1, A * f);
 				box(-mx, (490 - (i + 1) * 60.0 / N) * k - 1, vw + mx, (490 - i * 60.0 / N) * k, A * f);
 			}
-			skp->QuickPen(0); skp->QuickBrush(0);
-			skp->SetBlendState();
-			oapiReleaseSketchpad(skp);
+			finish();
 			return;
 		}
-		// the shading along the visor's upper edge follows the rim's arc (the helmet's line: the circle the rim's readouts sit
+		if (nx)
+		{
+			// the light suit on the D3D11 client: the glass darkens by the helmet's own shape (the user, 2026-10-20: no
+			// rectangles) - clear in the middle, deepening towards the brow, the chin and the corners where the plates sit:
+			// nested ellipses, flattened so the top and the bottom take most, each a little darker, outermost first
+			// the helmet's window (the user's drawing, 2026-10-20): an oval nearly the whole view - its top just under the
+			// brow at the middle, its sides reaching the screen's edges a quarter down, its bottom at the chin. Outside it the
+			// shell and the seal right at the eyes: dense; inside, the dark fades out towards the open view over a wide band,
+			// as something too near the eye to be in focus. Drawn as nested ellipses, outermost first (COPY), many fine steps
+			const double A = (std::min)(0.94, (0.6 + 0.3 * (std::min)(1.0, boost)) * shadeK);
+			// (the user, 2026-10-20: the other way round - bent by the helmet's shape, fixed): the window's own outline seen
+			// from the eye (WIN_TOP / WIN_BOT), drawn through the helmet into the view - nested copies drawn in towards the
+			// window's middle (yaw 0, pitch -6), dense at the edge, fading out over a third of the way in. It stays on the
+			// helmet as the head turns inside it (the instruments' backing in the day)
+			const double Fv = (vh / 2.0) / std::tan((std::max)(0.1, oapiCameraAperture()));
+			std::vector<float> xy;
+			auto outline = [&](double sc)
+			{
+				xy.clear();
+				auto put = [&](double yd, double pd)
+				{
+					double q[9];
+					if (!HelmDir(v, yd * sc * RAD, (-6 + (pd + 6) * sc) * RAD, q)) return;
+					const double z = (std::max)(q[2], 0.05);   // behind the eye: far out to the side
+					xy.push_back(static_cast<float>(ox + (vw * 0.5 + Fv * q[0] / z) * sx)); xy.push_back(static_cast<float>(oy + (vh * 0.5 + Fv * q[1] / z) * sy));
+				};
+				for (int yd = -108; yd <= 108; yd += 4) put(yd, WinEdge(WIN_TOP, yd));
+				for (int yd = 108; yd >= -108; yd -= 4) put(yd, WinEdge(WIN_BOT, yd));
+			};
+			nx->Rect(modCv, 0, 0, static_cast<float>(w), static_cast<float>(h), static_cast<DWORD>(std::lround(with(A) * 255)) << 24, 0, 0);
+			const int NE = 48;
+			for (int i = 0; i <= NE; ++i)
+			{
+				const double t = static_cast<double>(i) / NE;                    // 0 the window's edge .. 1 a third in
+				const double f = 0.5 + 0.5 * std::cos(PI * std::pow(t, 0.8));     // dense at the edge, a smooth, long fall
+				const DWORD c = static_cast<DWORD>(std::lround(with(A * f) * 255)) << 24;
+				outline(1.0 - 0.36 * t);
+				if (xy.size() >= 6) nx->Polygon(modCv, xy.data(), static_cast<int>(xy.size() / 2), c ? c : 0x01000000u);
+			}
+			if (false && alertLines > 0)   // (removed, the user: no box) the dangers and messages under the lamps: the glass darkened behind them, so red reads on a bright sky
+			{
+				const double C0 = vw / 2.0 - 640 * k, X0 = ox + (C0 + 300 * k) * sx, X1 = ox + (C0 + 980 * k) * sx;
+				const double Y0 = oy + 132 * k * sy, Y1 = oy + (160 + alertLines * 20) * k * sy;
+				for (int i = 10; i >= 0; --i)
+				{
+					const double e = i * 4 * k * sx, aa = 0.45 + 0.4 * (1 - i / 10.0);   // never lighter than the oval round it
+					const DWORD c = static_cast<DWORD>(std::lround(with(aa) * 255)) << 24;
+					nx->Rect(modCv, static_cast<float>(X0 - e), static_cast<float>(Y0 - e), static_cast<float>(X1 + e), static_cast<float>(Y1 + e), c, 0, 0);
+				}
+			}
+			finish();
+			return;
+		}
+		// legacy (the Sketchpad path): the shading along the visor's upper edge follows the rim's arc (the helmet's line: the circle the rim's readouts sit
 		// on, centre (640, 1560), radius 1492 of the 720 layout): solid above it, a soft edge across it; a low band below
 		const double topH = 140 * k, botH = 115 * k;
 		const int N = 32;
@@ -3841,20 +5022,20 @@ namespace ocrew
 				const double x0 = -mx + (vw + 2 * mx) * j / MC, x1 = -mx + (vw + 2 * mx) * (j + 1) / MC + 1, u = ((x0 + x1) / 2 - C0) / k;
 				const double dx = u - 640, arcY = std::abs(dx) < 1492 ? 1560 - std::sqrt(1492.0 * 1492.0 - dx * dx) : 0.0;
 				const double solid = (std::max)(0.0, arcY - 34) * k, edge = 46 * k;   // dark to just above the readouts, soft 46 below
-				box(x0, -my, x1, solid, 0.85 * a0);
+				box(x0, -my, x1, solid, 0.85 * (std::min)(1.1, a0 * shadeK));
 				for (int i = 0; i < 12; ++i)
 				{
 					const double f = 0.5 + 0.5 * std::cos(PI * (i + 0.5) / 12);
-					box(x0, solid + i * edge / 12, x1, solid + (i + 1) * edge / 12 + 1, 0.85 * a0 * f);
+					box(x0, solid + i * edge / 12, x1, solid + (i + 1) * edge / 12 + 1, 0.85 * (std::min)(1.1, a0 * shadeK) * f);
 				}
 			}
 		}
 		for (int i = 0; i < N; ++i)
 		{
 			const double x = (i + 0.5) / N, f = 0.5 + 0.5 * std::cos(PI * x);
-			box(-mx, vh - (i + 1) * botH / N - 1, vw + mx, vh - i * botH / N, 0.7 * a0 * f);
+			box(-mx, vh - (i + 1) * botH / N - 1, vw + mx, vh - i * botH / N, 0.7 * (std::min)(1.1, a0 * shadeK) * f);
 		}
-		box(-mx, vh, vw + mx, vh + my, 0.7 * a0);   // below the view: as the band's edge
+		box(-mx, vh, vw + mx, vh + my, 0.7 * (std::min)(1.1, a0 * shadeK));   // below the view: as the band's edge
 		(void)topH;
 		// feathered backings under the two side panels, faint rim first, dense core last
 		auto soft = [&](double x, double y, double ww, double hh)
@@ -3862,12 +5043,19 @@ namespace ocrew
 			for (int i = 7; i >= 0; --i) { const double e = i * 2 * k; box(x - e, y - e, x + ww + e, y + hh + e, a0 * 0.75 * (1 - i / 8.0)); }
 		};
 		const double R0 = vw - 1280 * k;
-		if (openL) soft(18 * k, 166 * k, 242 * k, 170 * k);
-		if (openR) soft(R0 + 1020 * k, 166 * k, 242 * k, 192 * k);
+		// «Буран»: the glass darkens under its four plates, a wide feather (the plates are turned to the eye: a little room)
+		{
+			double r[4][4]; BuranRects(vw, vh, r);
+			for (int q = 0; q < 4; ++q)
+			{
+				if ((q == 0 && !openR) || (q == 1 && !openL)) continue;
+				const double pad = 10 * k;
+				for (int i = 11; i >= 0; --i) { const double e = pad + i * 3 * k; box(r[q][0] - e, r[q][1] - e, r[q][2] + e, r[q][3] + e, (std::min)(0.92, a0 * shadeK * 0.75) * (1 - i / 12.0) * 0.3); }
+			}
+		}
+		(void)soft; (void)R0;   // legacy: the light suit's side panels before «Буран»
 		// (the sun's spot is a sprite of its own: SunSprite)
-		skp->QuickPen(0); skp->QuickBrush(0);
-		skp->SetBlendState();
-		oapiReleaseSketchpad(skp);
+		finish();
 	}
 
 	// The light layer: the whole HUD drawn as light on black into our own texture of the screen's size (or half),
@@ -3878,6 +5066,64 @@ namespace ocrew
 		auto logOnce = [&](const char* what) { if (!lightLogged) { lightLogged = true; char b[160]; snprintf(b, sizeof b, "OrbiterCrew: helmet light layer %dx%d: %s", lightW, lightH, what); oapiWriteLog(b); } };
 		const bool wasLive = lightLive;
 		lightLive = false;
+		if (const D3D11Hud::Api* nx = Native())
+		{
+			// the D3D11 client: the whole HUD drawn on the GPU into a light canvas, turned into colour + alpha by the client
+			if (!d) return;
+			DEVMESHHANDLE dm = v->GetDevMesh(plateVis, plateIdx);
+			if (!dm) return;
+			DWORD vw = 0, vh = 0; oapiGetViewportSize(&vw, &vh);
+			if (!vw || !vh) return;
+			// 1:1 with the screen: the client's strokes and glyphs are anti-aliased from their exact distance, so the 2x
+			// smoothing of the Sketchpad path isn't needed - and a 2x canvas costs ~4x the memory of a 32-bit process
+			const int w = static_cast<int>(vw), h = static_cast<int>(vh);
+			if (!lightCv || w != lightW || h != lightH)
+			{
+				if (lightCv) nx->CanvasRelease(lightCv);
+				lightW = w; lightH = h; lightDm = nullptr;
+				lightCv = nx->CanvasCreate(w, h, D3D11Hud::LIGHT);
+				if (!lightCv) { logOnce("D3D11 canvas FAILED"); return; }
+			}
+			if (dm != lightDm)
+			{
+				const bool ok = oapiSetTexture(dm, 2, nx->CanvasSurface(lightCv));
+				if (ok) lightDm = dm;
+				logOnce(ok ? "D3D11 canvas, texture bound" : "texture NOT bound");
+				if (!ok) return;
+			}
+			Mouse(vw, vh);
+			const double now = oapiGetSysTime();
+			// every frame (the user, 2026-10-20: the tapes and the pitch ladder lagged at 30/s - they move with the view);
+			// on the GPU a redraw costs ~1-2 ms. (void)wasLive: the Sketchpad path below still keeps its 30/s
+			(void)wasLive;
+			lightT = now; drawnSeq = clickSeq;
+			LARGE_INTEGER q0, q1, qf; QueryPerformanceFrequency(&qf); QueryPerformanceCounter(&q0);
+			if (!nx->Begin(lightCv, true, 0)) return;
+			drawCv = lightCv; drawingLight = true;
+			Draw(nullptr, lightW, lightH, *d, v);
+			drawingLight = false; drawCv = nullptr;
+			nx->End(lightCv);
+			if (GlassOn() && d->life && !d->life->Heavy() && nx->Begin(glassCv, true, 0))   // the panels on the glass
+			{
+				drawCv = glassCv; drawingLight = glassPass = true;
+				Draw(nullptr, GLASS_CW, GLASS_CH, *d, v);
+				drawingLight = glassPass = false; drawCv = nullptr;
+				nx->End(glassCv);
+			}
+			QueryPerformanceCounter(&q1);
+			lightLive = true;
+			perfDraw += 1000.0 * (q1.QuadPart - q0.QuadPart) / qf.QuadPart; ++perfN;
+			if (perfT0 < 0 || now < perfT0) perfT0 = now;
+			if (now - perfT0 >= 5)
+			{
+				char b[200];
+				snprintf(b, sizeof b, "OrbiterCrew: helmet display %dx%d (D3D11 canvas): draw %.2f ms (%.0f/s); modulator %.2f ms (%.0f/s)",
+					lightW, lightH, perfN ? perfDraw / perfN : 0, perfN / (now - perfT0), perfModN ? perfMod / perfModN : 0, perfModN / (now - perfT0));
+				oapiWriteLog(b);
+				perfDraw = perfShader = perfMod = 0; perfN = perfModN = 0; perfT0 = now;
+			}
+			return;
+		}
 		gcCore2* core = Core();
 		if (!core || !d) return;
 		DEVMESHHANDLE dm = v->GetDevMesh(plateVis, plateIdx);
@@ -3966,6 +5212,12 @@ namespace ocrew
 			else if (key == "RESOLUTION") { int x; if (f >> x) hudScale = std::clamp(x, 1, 2); }
 			else if (key == "HORIZON") { int x; if (f >> x) horizonMode = std::clamp(x, 0, 2); }
 			else if (key == "SYNTH") { int x; if (f >> x) synth = x != 0; }
+			else if (key == "SUN_FILTER") { int x; if (f >> x) sunHAlpha = x != 0; }
+			else if (key == "MFD_SIDE") { int x; if (f >> x) mfdSide = x != 0; }
+			else if (key == "HIDE_LADDER") { int x; if (f >> x) hideLadder = x != 0; }
+			else if (key == "HUD_MIN") { int x; if (f >> x) hudMin = x != 0; }
+			else if (key == "HUD_THEME") { int x; if (f >> x) hudTheme = std::clamp(x, 0, 3); }
+			else if (key == "SHADE") { double x; if (f >> x) shadeK = std::clamp(x, 0.0, 2.0); }
 			else std::getline(f, key);
 		}
 	}
@@ -4001,5 +5253,11 @@ namespace ocrew
 		f << "RESOLUTION " << hudScale << "  ; 1 = 1:1 with the screen, 2 = 2x smoothed\n";
 		f << "HORIZON " << horizonMode << "     ; pitch ladder: 0 auto (flight, space), 1 always, 2 off\n";
 		f << "SYNTH " << (synth ? 1 : 0) << "       ; terrain contours on the ground (the AtmoFX D3D9 client)\n";
+		f << "SUN_FILTER " << (sunHAlpha ? 1 : 0) << "  ; the visor's sun filter (D3D11): 0 grey, 1 H-alpha\n";
+		f << "HUD_THEME " << hudTheme << "   ; the light suit's display: 0 laser, 1 projector, 2 augmented reality, 3 high contrast\n";
+		f << "HIDE_LADDER " << (hideLadder ? 1 : 0) << "   ; the pitch ladder hidden\n";
+		f << "HUD_MIN " << (hudMin ? 1 : 0) << "   ; the light suit's HUD down to its top arc\n";
+		f << "MFD_SIDE " << (mfdSide ? 1 : 0) << "   ; the MFDs on the helmet's glass: 0 in front, 1 at the sides\n";
+		f << "SHADE " << shadeK << "   ; the visor's shading behind the light suit's display, 0 .. 2\n";
 	}
 }

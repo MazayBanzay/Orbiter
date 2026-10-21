@@ -268,7 +268,7 @@ def e_pane(pn, P, depth=0.05, rim=0.09):
     c = sum(P, Vector()) / len(P); n = (P[1] - P[0]).cross(P[2] - P[0]).normalized()
     Q = [q + (c - q) * min(rim / max((c - q).length, 1e-6), 0.45) - n * depth for q in P]
     for a in range(len(P)):
-        b = (a + 1) % len(P); add_poly(pn, [P[a], P[b], Q[b], Q[a]], MI["Hull"])
+        b = (a + 1) % len(P); add_poly(pn, [P[a], P[b], Q[b], Q[a]], MI["Hull"]); add_poly(pn, [Q[a], Q[b], P[b], P[a]], MI["Hull"])
 
 def e_shell(pn, R, glass, inset=0.07):
     """the outer skin (outwards), panes where 'glass' says, and the lining inside (inwards; none at the panes, none at the
@@ -280,8 +280,11 @@ def e_shell(pn, R, glass, inset=0.07):
             j1 = (j + 1) % 8
             if s_ in glass and j in glass[s_]: e_pane(pn, [A[j], A[j1], B[j1], B[j]]); continue
             if j == 0 and max(A[0].z, B[0].z) < DE + 0.005: continue          # the bottom on the deck: the deck is it (no flicker)
-            add_poly(pn, [A[j], A[j1], B[j1], B[j]], MI["White"])
-            if j != 0: add_poly(pn, [inner[s_ + 1][j], inner[s_ + 1][j1], inner[s_][j1], inner[s_][j]], MI["Lining"])
+            # (2026-10-20: both were wound inside out - the skin faced in, the lining out: from outside the D3D11 client culled
+            # the skin and showed the lining's back 7 cm in, the lit inside through its edges - the user's «дыры»)
+            add_poly(pn, [A[j], B[j], B[j1], A[j1]], MI["White"])
+            if j == 0: add_poly(pn, [A[j1], B[j1], B[j], A[j]], MI["White"])  # an underside above the deck (the nose): seen from inside too
+            if j != 0: add_poly(pn, [inner[s_][j], inner[s_][j1], inner[s_ + 1][j1], inner[s_ + 1][j]], MI["Lining"])
     return rings, inner
 
 def e_joint(pn, p, r, mi):
@@ -406,7 +409,7 @@ def ring_xz(pn, O, I, y, f, t, mi):
     for k in range(len(O)):
         k1 = (k + 1) % len(O)
         Q = [Vector((O[k][0], yf, O[k][1])), Vector((O[k1][0], yf, O[k1][1])), Vector((I[k1][0], yf, I[k1][1])), Vector((I[k][0], yf, I[k][1]))]
-        add_poly(pn, Q if f < 0 else Q[::-1], mi)
+        add_poly(pn, Q, mi); add_poly(pn, Q[::-1], mi)                         # both faces (one was wound away from the eye)
         S = [Vector((O[k][0], y, O[k][1])), Vector((O[k1][0], y, O[k1][1])), Vector((O[k1][0], yf, O[k1][1])), Vector((O[k][0], yf, O[k][1]))]
         add_poly(pn, S, mi); add_poly(pn, S[::-1], mi)
 
@@ -464,12 +467,111 @@ def e_inner_door(B, dt):
         ring_xz(B, O, I, y, f, 0.025, MI["Hull"])
     box(B, (-0.52, 2.40, DE + 0.95), (-0.48, 2.43, DE + 1.10), MI["Metal"])                                   # the door's pull
 
+# ---- the industrial hull mock-ups (2026-10-20, the user: «доработаем корпус ... до промышленного вездехода»): MPU_IND=A|B|C,
+# rendered only (renders\mock_ind_<V>_*.png), never the game's mesh. A «рабочий»: ribbed chamfers, corner guards round the
+# stern, a roof rack on the rails, lamp guards, grab rails, an armoured belly with ramps, tow eyes, marking plates.
+# B «тяжёлый»: A + bolted armour plates, guard tubes along the bays, a bull bar. C «чистый»: deep panel joints, the belly
+# and the tow eyes only.
+IND = os.environ.get("MPU_IND", "").upper()
+IND_GAME = "B"                                     # the game's Э.МПУ: «тяжёлый» (the user's pick, 2026-10-20)
+if IND:
+    MESH_OUT = os.path.join(HERE, "renders", "mock_ind.msh"); GEO_OUT = os.path.join(HERE, "renders", "mock_ind_geo.h")
+
+def ind_bar(pn, a, b, r, mi, seg=8):
+    cyl(pn, Vector(a), Vector(b), r, mi, seg)
+
+def ind_bolts(pn, a, b, n, nrm, mi):
+    a, b, nrm = Vector(a), Vector(b), Vector(nrm).normalized()
+    for k in range(n):
+        p = a + (b - a) * (k / max(n - 1, 1)); cyl(pn, p, p + nrm * 0.015, 0.018, mi, 6)
+
+def industrial(V):
+    B = "Body"
+    if VAR != "EMPU": return
+    oct_ = lambda y: oct_ring(y, 1.47, DE, 3.55, 0.50)
+    if V in ("A", "B"):
+        # ribs along the upper chamfers (a ribbed panel: stiff, it reads in a low light), the cabin's whole length
+        for sx in (-1, 1):
+            for t in (0.3, 0.7):
+                x = sx * (1.47 - 0.50 * t) + sx * 0.025; z = 3.05 + 0.50 * t + 0.025
+                ind_bar(B, (x, -3.0, z), (x, 4.22, z), 0.022, MI["White"], 6)
+        # corner guards round the stern's octagon: steel angle along each edge
+        R = oct_(4.25); c = sum(R, Vector()) / 8
+        for k in range(8):
+            a, b = R[k], R[(k + 1) % 8]
+            ia, ib = a + (c - a).normalized() * 0.11, b + (c - b).normalized() * 0.11
+            # one plate 12 mm off the wall, both faces (its back 8 mm behind the lining flickered inside; its 12 mm edge
+            # strip shimmered on the roof's edge - 2026-10-20)
+            Q = [Vector((p.x, 4.262, p.z)) for p in (a, b, ib, ia)]
+            add_poly(B, Q, MI["Metal"]); add_poly(B, Q[::-1], MI["Metal"])
+            ind_bolts(B, (ia.x, 4.262, ia.z), (ib.x, 4.262, ib.z), 3, (0, 1, 0), MI["Hull"])
+        # the roof rack on the exoskeleton's rails: a tube frame, cross bars every 0.6 m, a mesh floor
+        zr = 3.95
+        for x in (-1.05, 1.05): ind_bar(B, (x, -2.3, zr), (x, 2.2, zr), 0.03, MI["Metal"])
+        for k in range(9):
+            y = -2.3 + k * 0.5625; ind_bar(B, (-1.05, y, zr), (1.05, y, zr), 0.022, MI["Metal"])
+        for y in (-2.3, -0.9, 0.5, 2.2):
+            for x in (-1.05, 1.05): ind_bar(B, (x, y, 3.72), (x, y, zr), 0.025, MI["Metal"])
+        for y0 in (-2.2, 0.0):                                              # cargo: two crates strapped down
+            box(B, (-0.85, y0, zr + 0.03), (-0.05, y0 + 1.1, zr + 0.45), MI["Seat"])
+            for yy in (y0 + 0.25, y0 + 0.85): box(B, (-0.86, yy - 0.02, zr + 0.03), (-0.04, yy + 0.02, zr + 0.46), MI["Warn"])
+        # lamp guards: a frame and three bars before each headlamp (front and rear)
+        for sy in (-1, 1):
+            y = sy * 4.60
+            for sx in (-1, 1):
+                x0, x1 = sx * 0.95 - 0.26, sx * 0.95 + 0.26
+                for x in (x0, x1): ind_bar(B, (x, sy * 4.45, 1.18), (x, y, 1.18), 0.015, MI["Metal"], 6)
+                ind_bar(B, (x0, y, 1.18), (x1, y, 1.18), 0.015, MI["Metal"], 6); ind_bar(B, (x0, y, 1.34), (x1, y, 1.34), 0.015, MI["Metal"], 6)
+                for k in range(4): xx = x0 + (x1 - x0) * k / 3; ind_bar(B, (xx, y, 1.18), (xx, y, 1.34), 0.012, MI["Metal"], 6)
+        # grab rails along the airlock's sides and by the hatch
+        for sx in (-1, 1):
+            x = sx * 1.56
+            ind_bar(B, (x, 2.75, 2.55), (x, 4.05, 2.55), 0.02, MI["Red"])
+            for y in (2.75, 3.40, 4.05): ind_bar(B, (sx * 1.47, y, 2.55), (x, y, 2.55), 0.015, MI["Red"], 6)
+        # marking plates (the stencils' place: «ЭМПУ-1», «НЕ СТУПАТЬ», the lifting points)
+        for sx in (-1, 1):
+            box(B, (sx * 1.475 - 0.004, 3.0, 2.85), (sx * 1.475 + 0.004, 3.9, 2.97), MI["Warn"])
+            box(B, (sx * 2.025 - 0.004, -1.5, 2.25), (sx * 2.025 + 0.004, -0.6, 2.31), MI["Warn"])
+    if V == "B":
+        # bolted armour plates over the airlock's flat sides and round the hatch
+        for sx in (-1, 1):
+            x = sx * 1.50
+            box(B, (min(x, sx * 1.476), 2.55, 2.15), (max(x, sx * 1.476), 4.15, 3.00), MI["Hull"])
+            for z in (2.20, 2.95): ind_bolts(B, (x, 2.62, z), (x, 4.08, z), 7, (sx, 0, 0), MI["Metal"])
+        for sx in (-1, 1): box(B, (sx * 0.58, 4.268, DE + 0.02), (sx * 1.10, 4.31, 3.30), MI["Hull"])   # (its back on the wall's plane flickered in the airlock)
+        # guard tubes along the bays (they take the knocks, not the bays' hatches)
+        for sx in (-1, 1):
+            x = sx * 2.14
+            for z in (2.30, 2.85): ind_bar(B, (x, -2.6, z), (x, 2.5, z), 0.035, MI["Metal"])
+            for y in (-2.6, -1.2, 0.0, 1.2, 2.5): ind_bar(B, (sx * 2.02, y, 2.57), (x, y, 2.57), 0.03, MI["Metal"]); ind_bar(B, (x, y, 2.30), (x, y, 2.85), 0.03, MI["Metal"])
+        # a bull bar before the front bumper
+        y = -4.75
+        for x in (-1.20, 1.20): ind_bar(B, (x, -4.45, 1.00), (x, y, 1.00), 0.05, MI["Hull"], 10); ind_bar(B, (x, y, 1.00), (x, y, 1.75), 0.05, MI["Hull"], 10)
+        ind_bar(B, (-1.20, y, 1.75), (1.20, y, 1.75), 0.05, MI["Hull"], 10); ind_bar(B, (-1.20, y, 1.40), (1.20, y, 1.40), 0.04, MI["Hull"], 10)
+        for x in (-0.55, 0.0, 0.55): ind_bar(B, (x, y, 1.40), (x, y, 1.75), 0.035, MI["Hull"], 10)
+    if V == "C":
+        # deep panel joints round the cabin every 1.2 m: a dark recessed band with a lip each side
+        for y in (-2.40, -1.20, 0.0, 1.20, 2.40, 3.35):
+            for dy, mi, g in ((0.0, MI["Seam"], 0.006), (-0.03, MI["White"], 0.012), (0.03, MI["White"], 0.012)):
+                loft(B, [oct_ring(y + dy - 0.012, 1.47 + g, DE + 0.01, 3.55 + g, 0.50), oct_ring(y + dy + 0.012, 1.47 + g, DE + 0.01, 3.55 + g, 0.50)], mi, cap=False, closed=True, smooth=False)
+    # all three: the armoured belly with its ramps fore and aft, the tow eyes
+    box(B, (-0.95, -3.6, 0.52), (0.95, 3.6, 0.60), MI["Metal"])
+    for sy in (-1, 1):
+        a0, a1 = Vector((-0.95, sy * 3.6, 0.52)), Vector((0.95, sy * 3.6, 0.52))
+        b0, b1 = Vector((-0.95, sy * 4.20, 0.90)), Vector((0.95, sy * 4.20, 0.90))
+        Q = [a0, a1, b1, b0]; add_poly(B, Q, MI["Metal"]); add_poly(B, Q[::-1], MI["Metal"])
+        ind_bolts(B, (-0.85, sy * 3.65, 0.535), (0.85, sy * 3.65, 0.535), 6, (0, 0, -1), MI["Hull"])
+        for x in (-0.55, 0.55):                                              # the tow eyes: shackles
+            c0 = Vector((x, sy * 4.62, 1.15))
+            pts = [c0 + Vector((0.07 * math.cos(2 * math.pi * k / 10), 0, 0.09 * math.sin(2 * math.pi * k / 10))) for k in range(10)]
+            for p, q in zip(pts, pts[1:] + pts[:1]): ind_bar(B, p, q, 0.018, MI["Red"], 6)
+
 def empu_c():
     B = "Body"
     nose, nin = e_shell(B, E_NOSE, E_GLASS)
     hab, hin = e_shell(B, E_HAB, {})
     lock, lin = e_shell(B, E_LOCK, {})
-    add_poly(B, list(reversed(nose[0])), MI["White"])                         # the nose's tip
+    add_poly(B, list(nose[0]), MI["White"]); add_poly(B, list(reversed(nose[0])), MI["White"])   # the nose's tip, both faces (it is seen through the panes)
     e_beams(B, nose, (0, 1, 2), 0.08)                                          # the nose's load frame
     # the bulkhead between the habitat and the airlock, its door (a dark opening frame, the passage itself stays open)
     # (the wall follows the lining's octagon; the door 0.90 x 1.80 m, its top just under the ceiling)
@@ -477,9 +579,9 @@ def empu_c():
     for y, f in ((2.45, 1), (2.55, -1)):
         for sx in (-1, 1):
             Q = [Vector((sx * x, y, z)) for x, z in ((0.45, DE), (0.90, DE), (1.40, DE + 0.50), (1.40, zc - 0.50), (0.90, zc), (0.45, zc))]
-            add_poly(B, Q if sx * f > 0 else Q[::-1], MI["Lining"])
+            add_poly(B, Q, MI["Lining"]); add_poly(B, Q[::-1], MI["Lining"])      # both faces (one side faced away, 2026-10-20)
         Q = [Vector(p) for p in ((-0.45, y, dt), (0.45, y, dt), (0.45, y, zc), (-0.45, y, zc))]
-        add_poly(B, Q if f > 0 else Q[::-1], MI["Lining"])
+        add_poly(B, Q, MI["Lining"]); add_poly(B, Q[::-1], MI["Lining"])
     for sx in (-1, 1): box(B, (sx * 0.45 - 0.04, 2.43, DE), (sx * 0.45 + 0.04, 2.57, dt), MI["Hull"])
     box(B, (-0.49, 2.43, dt - 0.04), (0.49, 2.57, dt + 0.04), MI["Hull"])
     e_inner_door(B, dt)
@@ -491,7 +593,7 @@ def empu_c():
     # the stern: its end wall with the outer door (opens inwards), a port, the handle; the stairs below (stowed under the deck
     # would be the chassis' business - here out, parked)
     yd = 4.25
-    add_poly(B, list(lock[-1]), MI["White"]); add_poly(B, list(reversed(lin[-1])), MI["Lining"])
+    add_poly(B, list(reversed(lock[-1])), MI["White"]); add_poly(B, list(lin[-1]), MI["Lining"])   # (both faced the wrong way, 2026-10-20)
     # the outer hatch, both faces: an octagonal coaming in warning yellow, the leaf with its bolt ring, the locking wheel,
     # the port, two heavy hinges (left from outside); a lamp and a small control box beside it outside
     e_outer_hatch(B, yd)
@@ -519,6 +621,7 @@ def empu_c():
     box(B, (-0.9, -3.30, 3.55), (0.9, -3.18, 3.65), MI["Hull"])
     for x in (-0.75, -0.25, 0.25, 0.75): box(B, (x - 0.12, -3.31, 3.57), (x + 0.12, -3.30, 3.63), MI["Lamp"])
     # ---- inside ----
+    inside0 = {mi: len(v) for mi, (v, f) in part(B).items()}                # (checked below: all of it under the lining)
     box(B, (-0.88, -3.88, DE + 0.04), (0.88, -3.62, DE + 0.40), MI["Hull"]); box(B, (-1.18, -3.88, DE + 0.40), (1.18, -3.62, DE + 0.78), MI["Hull"])   # the console
     P = [Vector((-1.25, -3.62, DE + 0.78)), Vector((1.25, -3.62, DE + 0.78)), Vector((1.15, -3.90, DE + 1.00)), Vector((-1.15, -3.90, DE + 1.00))]
     add_poly(B, P, MI["Hull"]); add_poly(B, P[::-1], MI["Hull"])
@@ -549,19 +652,39 @@ def empu_c():
         for y in (y0, y1): box(B, (-0.84, y - 0.03, DE), (-0.78, y + 0.03, DE + 1.40), MI["Metal"])
     box(B, (0.80, -2.20, DE), (1.38, -1.40, DE + 0.48), MI["Seat"]); box(B, (0.80, -0.30, DE), (1.38, 0.50, DE + 0.48), MI["Seat"])   # benches, left
     box(B, (0.75, -1.20, DE + 0.70), (1.38, -0.50, DE + 0.76), MI["Lining"]); cyl(B, (1.05, -0.85, DE), (1.05, -0.85, DE + 0.70), 0.05, MI["Metal"], 10)   # the table
-    box(B, (0.85, 1.00, DE), (1.38, 2.35, DE + 0.92), MI["Lining"]); box(B, (0.85, 1.00, DE + 1.45), (1.38, 2.35, DE + 1.80), MI["Lining"])   # the galley
+    box(B, (0.85, 1.00, DE), (1.38, 2.35, DE + 0.92), MI["Lining"])                                    # the galley
+    # its wall cabinet under the roof's chamfer (2026-10-20: the square one cut through the roof - «торчит что-то»)
+    G = [(0.85, DE + 1.45), (1.31, DE + 1.45), (0.98, DE + 1.78), (0.85, DE + 1.78)]
+    for y, f in ((1.00, -1), (2.35, 1)):
+        Q = [Vector((x, y, z)) for x, z in G]; add_poly(B, Q, MI["Lining"]); add_poly(B, Q[::-1], MI["Lining"])
+    for k in range(4):                                                                       # (both faces: the ray check)
+        (x0, z0), (x1, z1) = G[k], G[(k + 1) % 4]
+        Q = [Vector((x0, 1.00, z0)), Vector((x1, 1.00, z1)), Vector((x1, 2.35, z1)), Vector((x0, 2.35, z0))]
+        add_poly(B, Q, MI["Lining"]); add_poly(B, Q[::-1], MI["Lining"])
     for k in range(3): box(B, (0.845, 1.05 + k * 0.43, DE + 0.10), (0.85, 1.42 + k * 0.43, DE + 0.85), MI["Seam"])
     box(B, (-0.25, -2.9, 3.43), (0.25, 2.3, 3.46), MI["LampIn"])                            # the ceiling light strip
     box(B, (-0.20, 2.9, 3.43), (0.20, 3.9, 3.46), MI["LampIn"])                              # the airlock's
-    x = -1.05
-    for y in (3.15, 3.80):                                                                   # the suits on stands along the right wall
+    x = -0.80                                                                                # (was -1.05: the helmets and shoulders
+    for y in (3.15, 3.80):                                                                   # cut the roof's chamfer) the suits on stands, right wall
         cyl(B, (x - 0.22, y, DE), (x - 0.22, y, DE + 1.60), 0.04, MI["Metal"], 8)
         cyl(B, (x, y, DE + 0.85), (x, y, DE + 1.50), 0.24, MI["White"], 16); cyl(B, (x, y, DE + 1.50), (x, y, DE + 1.72), 0.16, MI["White"], 16)
         for dy in (-0.1, 0.1): cyl(B, (x, y + dy, DE + 0.08), (x, y + dy, DE + 0.85), 0.08, MI["White"], 10)
+    # everything inside must lie under the lining (its octagon: half-width 1.40, ceiling DE..3.48, 45 deg chamfers from |x|
+    # 0.90) - what pokes out is logged (2026-10-20: the suits and the galley's cabinet stood through the roof)
+    bad = 0
+    for mi, (vs, fs) in part(B).items():
+        for p, n in vs[inside0.get(mi, 0):]:
+            if -3.05 < p.y < 4.25 and p.z > DE + 0.01:
+                lim = 3.48 - max(0.0, abs(p.x) - 0.90)
+                if abs(p.x) > 1.405 or p.z > lim + 0.005:
+                    bad += 1
+                    if bad <= 20: log.append("INSIDE POKES OUT: %s at x %.2f y %.2f z %.2f (limit z %.2f)" % (MATS[mi][0], p.x, p.y, p.z, lim))
+    log.append("inside check: %d vertices out of the lining" % bad)
 
 def post():
     box(TOP, (-0.45, -4.15, 1.42), (0.45, -3.85, 2.30), MI["Hull"])
-    add_poly(TOP, [Vector((-0.42, -3.85, 2.30)), Vector((0.42, -3.85, 2.30)), Vector((0.42, -4.12, 2.42)), Vector((-0.42, -4.12, 2.42))], MI["Glass"])
+    Q = [Vector((-0.42, -3.85, 2.30)), Vector((0.42, -3.85, 2.30)), Vector((0.42, -4.12, 2.42)), Vector((-0.42, -4.12, 2.42))]
+    add_poly(TOP, Q, MI["Glass"]); add_poly(TOP, Q[::-1], MI["Glass"])                        # both faces (2026-10-20)
     box(TOP, (-0.45, -4.15, 2.30), (0.45, -4.12, 2.44), MI["Hull"])
     cyl(TOP, (0.22, -3.78, 2.20), (0.22, -3.62, 2.42), 0.018, MI["Metal"], 10)                          # joystick
     cyl(TOP, (0.22, -3.62, 2.42), (0.22, -3.60, 2.50), 0.035, MI["Hull"], 12)
@@ -582,6 +705,8 @@ try:
     # a cartridge is absent. Keep both shoulders around the opening intact.
     shell_cut = {(2, 6)} if VAR == "EMPU" else set()
     loft(B, [oct_ring(y, hw, z0, z1, ch) for y, hw, z0, z1, ch in st], MI["Hull"], smooth=False, omit_faces=shell_cut)
+    # its inside too: through the cells' opening the far walls were seen from behind - culled, a hole (2026-10-20)
+    loft(B, [oct_ring(y, hw, z0, z1, ch) for y, hw, z0, z1, ch in reversed(st)], MI["Hull"], smooth=False, omit_faces={(len(st) - 2 - a, b) for a, b in shell_cut})
     for yy in (-3.0, -1.0, 1.0, 3.0):
         loft(B, [oct_ring(yy - 0.01, 0.455, 0.645, 1.305, 0.14), oct_ring(yy + 0.01, 0.455, 0.645, 1.305, 0.14)], MI["Seam"], smooth=False)
     box(B, (-0.50, -4.0, 0.62), (0.50, 4.0, 0.65), MI["Metal"])                                    # skid plate
@@ -683,7 +808,7 @@ try:
             for (y0, z0), (y1, z1) in zip(prof, prof[1:]):
                 for zz in (0.0, T):                                    # top and under faces
                     Q = [Vector((xi, y0, z0 + zz)), Vector((xo, y0, z0 + zz)), Vector((xo, y1, z1 + zz)), Vector((xi, y1, z1 + zz))]
-                    add_poly(B, Q if (zz > 0) == (sx > 0) else Q[::-1], MI["Hull"])
+                    add_poly(B, Q, MI["Hull"]); add_poly(B, Q[::-1], MI["Hull"])   # both faces (one side's were wound away, 2026-10-20)
                 Q = [Vector((xi, y0, z0)), Vector((xi, y1, z1)), Vector((xi, y1, z1 + T)), Vector((xi, y0, z0 + T))]           # inner edge
                 add_poly(B, Q, MI["Hull"]); add_poly(B, Q[::-1], MI["Hull"])
                 # the outer edge rolled down: a turned-down lip with a round bead along its bottom
@@ -701,6 +826,8 @@ try:
             Q = [Vector((sx * 1.60, yf, 0.42)), Vector((sx * 2.28, yf, 0.42)), Vector((sx * 2.28, yf, FZ - 0.40)), Vector((sx * 1.60, yf, FZ - 0.40))]
             add_poly(B, Q, MI["Tread"]); add_poly(B, Q[::-1], MI["Tread"])
             box(B, (sx * 1.60 - 0.01, yf - 0.03, FZ - 0.48), (sx * 2.28 + 0.01, yf + 0.03, FZ - 0.40), MI["Metal"])
+    if IND: industrial(IND)
+    elif VAR == "EMPU": industrial(IND_GAME)
     # steps on the left (orbiter -x), between the axles: their own part, built deployed (treads 0.36 .. 1.32, the deck at
     # 1.62); driving, they slide up 0.45 m and in 0.20 m under the deck's side (STEPS_STOW, in the header)
     for k in range(4):
@@ -852,11 +979,11 @@ try:
         sc = bpy.context.scene; sc.render.resolution_x, sc.render.resolution_y = 1600, 900; cam.data.clip_end = 300
         cam.data.type = 'ORTHO'; cam.data.ortho_scale = 13.0
         cam.location = (-60, 5.9, 1.9); cam.rotation_mode = 'QUATERNION'; cam.rotation_quaternion = Vector((1, 0, 0)).to_track_quat('-Z', 'Y')
-        bpy.context.view_layer.update(); sc.render.filepath = os.path.join(OUT, "%s_test_side.png" % VAR.lower()); bpy.ops.render.render(write_still=True)
+        bpy.context.view_layer.update(); sc.render.filepath = os.path.join(OUT, ("mock_ind_%s_side.png" % IND) if IND else "%s_test_side.png" % VAR.lower()); bpy.ops.render.render(write_still=True)
         cam.data.type = 'PERSP'; cam.data.lens = 35
         loc = Vector((-9.5, -6.5, 5.0)); tgt = Vector((OFF.x, OFF.y - 1.0, 1.4))
         cam.location = loc; cam.rotation_quaternion = (tgt - loc).to_track_quat('-Z', 'Y')
-        bpy.context.view_layer.update(); sc.render.filepath = os.path.join(OUT, "%s_test_34.png" % VAR.lower()); bpy.ops.render.render(write_still=True)
+        bpy.context.view_layer.update(); sc.render.filepath = os.path.join(OUT, ("mock_ind_%s_34.png" % IND) if IND else "%s_test_34.png" % VAR.lower()); bpy.ops.render.render(write_still=True)
         if VAR == "EMPU":                                       # close-ups: the nose outside, the cockpit, the door to the airlock
             pl = bpy.data.lights.new("MIn", 'POINT'); pl.energy = 400; pl.shadow_soft_size = 1.0
             po = bpy.data.objects.new("MIn", pl); bpy.context.scene.collection.objects.link(po); po.location = OFF + Vector((0, -1.0, 3.2))
@@ -955,12 +1082,15 @@ try:
                 shots = (("scr_cockpit", (0.0, -2.2, 3.15), (0.0, -3.8, 2.45), 20), ("scr_term", (0.25, -2.95, 3.05), (0.0, -3.78, 2.55), 24), ("scr_driver", (0.65, -3.05, 3.12), (0.35, -4.2, 2.45), 16), ("scr_nav", (-0.65, -3.05, 3.12), (-0.4, -4.0, 2.4), 16),
                          ("scr_table", (-0.7, -0.9, 2.95), (1.38, -0.85, 2.65), 16), ("scr_lock", (-0.3, 4.05, 3.05), (0.6, 2.5, 2.7), 14))
             for nm, loc, tgt, lens in shots + (("nose", (-3.0, -6.6, 1.2), (0.0, -4.0, 2.2), 30), ("front", (1.6, -7.5, 3.6), (0.0, -3.6, 2.4), 40), ("cockpit", (0.65, -2.9, 3.20), (0.4, -4.4, 2.6), 16),
-                                       ("door", (0.0, -0.6, 2.9), (0.0, 3.0, 2.4), 22), ("lock", (0.4, 2.2, 3.0), (-0.2, 4.2, 2.2), 14), ("rear", (2.6, 9.5, 2.6), (0.0, 4.3, 1.9), 30), ("rearin", (0.0, 2.7, 3.1), (0.0, 4.3, 2.4), 18)):
+                                       ("door", (0.0, -0.6, 2.9), (0.0, 3.0, 2.4), 22), ("lock", (0.4, 2.2, 3.0), (-0.2, 4.2, 2.2), 14), ("rear", (2.6, 9.5, 2.6), (0.0, 4.3, 1.9), 30), ("rearin", (0.0, 2.7, 3.1), (0.0, 4.3, 2.4), 18), ("top", (6.5, 8.0, 8.0), (0.0, 0.5, 2.4), 30)):
                 loc = Vector(loc) + OFF; tgt = Vector(tgt) + OFF; cam.data.lens = lens; cam.data.clip_start = 0.05
                 cam.location = loc; cam.rotation_quaternion = (tgt - loc).to_track_quat('-Z', 'Y')
                 bpy.context.view_layer.update(); sc.render.filepath = os.path.join(OUT, "empu_%s%s.png" % (nm, ("_t" + os.environ["MPU_TERM"]) if nm.startswith("scr") and "MPU_TERM" in os.environ else ""))
                 if os.environ.get("MPU_TERM") and nm not in ("scr_cockpit", "scr_term", "scr_driver"): continue
                 if HV and nm not in ("rear", "rearin", "door", "lock"): continue
+                if IND:
+                    if nm not in ("front", "rear", "top"): continue
+                    sc.render.filepath = os.path.join(OUT, "mock_ind_%s_%s.png" % (IND, nm))
                 if HV: sc.render.filepath = os.path.join(OUT, "empu_hatch%d_%s.png" % (HV, nm))
                 bpy.ops.render.render(write_still=True)
         log.append("rendered")

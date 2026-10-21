@@ -104,6 +104,7 @@ namespace ocrew
 		std::string& name; std::string& role; std::string& sex;
 		double& age; double& heightM;
 		Figure bodyFig, suitFig;
+		LightEmitter* mfdLight[2]{};   // the MFDs' glow on the helmet's lining (cockpit-only point lights, the D3D11 client)
 		Motion motion;
 		CrewSound sound;
 		oc::HeadSway headSway;               // the eyes on the neck aboard a ship: lag and vibration
@@ -172,7 +173,12 @@ namespace ocrew
 		bool titanEnv{};
 		PSTREAM_HANDLE stepDust{}, iceStream{};
 		double stepDustLvl{}, stepPuff{}, iceLvl{}, iceT{};
-		double stepKick{}; bool stepJetOn{};   // the footfall's puff through the AtmoFX client: the boot's down speed, the "jet" running
+		double stepKick{}; bool stepJetOn{};
+		// wading in a sea (Titan's methane): the liquid's depth over the ground under her, its level per body (the client's
+		// AtmoFX_LiquidLevel), the wake nodes last sent, the foot that steps next
+		double liqDepth{}, liqLevel{}; std::string liqBody; bool liqHas{};
+		double wakeSent[3]{ -1, -1, -1 }, wadePrevPuff{}, wadeImpT{}; int wadeFoot{};
+		void UpdateWading(double dt);   // the footfall's puff through the AtmoFX client: the boot's down speed, the "jet" running
 		void IceVent(const VECTOR3& pos, const VECTOR3& dir, double kgps, double seconds);
 		void UpdateTitanFx(double dt);
 		// what the suit's N2 thrusters leave in the air, through the AtmoFX client's free particles (AtmoFXPart): nothing in
@@ -202,6 +208,7 @@ namespace ocrew
 		OBJHANDLE useShip{}; int useId{ -1 }, useKind{}; std::string useHint; double useScan{};
 		bool useFallback{};   // the exit offered from anywhere aboard (OcInteriorExt::ExitAnywhere): context actions go first
 		void FindUse(double dt);
+		bool AimsAtDoor(OBJHANDLE ship, const VECTOR3& shipPos, const VECTOR3& shipNormal) const;   // OC_DOORWAY: her look in its opening
 	public:
 		// inside a ship (user 2026-10-03: the person walks inside with her own body): the body hangs on the ship's
 		// attachment point, which we move each frame; the ship gives floors, walls and items (OcInterior)
@@ -311,6 +318,7 @@ namespace ocrew
 		struct CtxBox { double x0, y0, x1, y1; DWORD col; };
 		std::vector<CtxRun> plateRuns; std::vector<CtxBox> plateBoxes; bool plateOn{}, plateMarks{};
 		void CtxPaintPlate(oapi::Sketchpad* skp, double vw, double vh, double kx, double ky);   // (SuitHud's overlay)
+		void CtxPaintPlateNative(const D3D11Hud::Api* gx, D3D11Hud::Canvas cv, double vw, double vh, double kx, double ky);   // the same on the D3D11 canvas
 		void CtxPaint();
 		bool CtxRay(VECTOR3& o, VECTOR3& d) const;    // global: through the cursor (Alt), the view's middle, or her look
 		ShipInterior* CtxInterior() const;
@@ -359,9 +367,25 @@ namespace ocrew
 
 		// helmet: sun shade (V) and lamps (L)
 		double shade{}, shadeTarget{};        // 0 raised over the crown .. 1 lowered over the visor
+		// a visor with its own light filter (VisorMtrl in the class's cfg: its material, 0-based): no shade - the suit's button
+		// (shadeTarget) darkens the glass itself. photo: its darkness 0 clear .. ~0.94
+		int visorMtrl{ -1 }; double photo{}, photoSent{ -1 };
+		// the view from inside the helmet (HelmetView in the class's cfg): its liner, rim, chin bar and neck ring frame the
+		// view, fixed on the torso, the head (the camera) turning inside it; only under the D3D11 client (its near plane
+		// comes to 1.5 cm in a cockpit view; D3D9's 10 cm would cut them)
+		bool helmetView{}, inHelmView{};
+		// the eye there: her real eyes (the head hidden), not the camera point before her face - the visor 7-8 cm ahead, the
+		// chin bar 5-6 cm under and before them: it comes into view as she looks down (HelmetEye in the cfg)
+		VECTOR3 helmEye{ 0, 0.700, 0.150 };   // between the helmet's lamps (LampPos +-0.165 0.700), at her eyes' depth (InHelm is built round it)
 		// a helmet whose upper part lifts on a hinge (the heavy suit's V1, HEAVY_SUIT.md): the mesh groups "HelmCap..." turned
 		// about HelmCapHinge (rest pose, model frame) round HelmCapAxis by HelmCapOpen degrees at full open (body cfg)
 		VECTOR3 capHinge{}, capAxis{ 1, 0, 0 };
+		int synthCam{};
+		bool pzWindow{};
+		bool pzAutoShut{}; std::string pzShutReason;
+		double louvreT{ 1 }; bool louvreMoving{};   // the louvres: 1 closed .. 0 open (1.2 s), moving: their drives heard   // the louvres closed by the suit itself, and why (lava / radiation / heat)   // the heavy suit: louvres open, she looks through the window herself (Shift+V); closed: the cameras   // the heavy suit's synthetic vision: 0 the stereo pair, +1 / -1 the right / left side module (her look +yaw = right, model +x = right)
+		VECTOR3 lampRest{ 0.162, 0.707, 0.11 };   // the helmet lamps (the +x one; mirrored), rest pose, model frame: cfg LampPos
+		bool hideHair{};                            // cfg HideHair: under this suit's closed helmet the hair is tucked away
 		double capOpen{};
 		// parts that can get red-hot (HEAVY_SUIT.md): their material indices in the suit mesh (body cfg HeatCeram, HeatSole,
 		// HeatRad; -1 none) - ceramic at the surroundings' temperature, the soles at the ground's, the fins at the radiator's

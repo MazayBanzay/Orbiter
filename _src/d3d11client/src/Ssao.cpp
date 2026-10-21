@@ -17,6 +17,31 @@ ComPtr<ID3D11UnorderedAccessView> g_uav[2];
 ComPtr<ID3D11ShaderResourceView> g_srv[2];
 UINT g_w = 0, g_h = 0;
 bool g_tried = false;
+// the sky's share of the light at each pixel (R8, the scene's samples): the opaque terrain and vessels write it beside their
+// colour (mesh.hlsl, planet.hlsl target 2); resolved to one sample for the apply pass
+ComPtr<ID3D11Texture2D> g_shTex, g_shRes;
+ComPtr<ID3D11RenderTargetView> g_shRTV;
+ComPtr<ID3D11ShaderResourceView> g_shSRV;
+UINT g_shW = 0, g_shH = 0, g_shN = 0; unsigned g_shGen = 0; bool g_shFail = false;
+}
+
+ID3D11RenderTargetView* D3D11Client::AOShareTarget()
+{
+    if (!g_cfg.ao || !hdrTex) return nullptr;
+    D3D11_TEXTURE2D_DESC hd; hdrTex->GetDesc(&hd);
+    if (g_shGen != g_devGen || g_shW != hd.Width || g_shH != hd.Height || g_shN != hd.SampleDesc.Count) {
+        g_shTex.Reset(); g_shRes.Reset(); g_shRTV.Reset(); g_shSRV.Reset();
+        g_shGen = g_devGen; g_shW = hd.Width; g_shH = hd.Height; g_shN = hd.SampleDesc.Count; g_shFail = false;
+        D3D11_TEXTURE2D_DESC td = { hd.Width, hd.Height, 1, 1, DXGI_FORMAT_R8_UNORM, hd.SampleDesc, D3D11_USAGE_DEFAULT,
+                                    D3D11_BIND_RENDER_TARGET | (hd.SampleDesc.Count > 1 ? 0u : (UINT)D3D11_BIND_SHADER_RESOURCE), 0, 0 };
+        bool ok = SUCCEEDED(dev->CreateTexture2D(&td, nullptr, &g_shTex)) && SUCCEEDED(dev->CreateRenderTargetView(g_shTex.Get(), nullptr, &g_shRTV));
+        if (ok && hd.SampleDesc.Count > 1) {
+            td.SampleDesc = { 1, 0 }; td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+            ok = SUCCEEDED(dev->CreateTexture2D(&td, nullptr, &g_shRes)) && SUCCEEDED(dev->CreateShaderResourceView(g_shRes.Get(), nullptr, &g_shSRV));
+        } else if (ok) ok = SUCCEEDED(dev->CreateShaderResourceView(g_shTex.Get(), nullptr, &g_shSRV));
+        if (!ok) { g_shTex.Reset(); g_shRes.Reset(); g_shRTV.Reset(); g_shSRV.Reset(); g_shFail = true; LOGC("ambient occlusion: the light's share target (R8 x %u) NOT made", g_shN); }
+    }
+    return g_shRTV.Get();
 }
 
 void D3D11Client::RenderAO(const XMMATRIX& proj)
@@ -61,6 +86,8 @@ void D3D11Client::RenderAO(const XMMATRIX& proj)
         g_w = w; g_h = h;
     }
     static const bool dbg = getenv("D3D11CLIENT_AODBG") != nullptr;
+    if (!g_shSRV) return;    // (AOShareTarget: the scene wrote no share - nothing to scale)
+    if (g_shRes) ctx->ResolveSubresource(g_shRes.Get(), 0, g_shTex.Get(), 0, DXGI_FORMAT_R8_UNORM);
     ResolveDepth();          // MSAA: the depth single-sampled
     XMFLOAT4X4 P; XMStoreFloat4x4(&P, proj);
     AoCB c;
@@ -103,10 +130,10 @@ void D3D11Client::RenderAO(const XMMATRIX& proj)
     ctx->VSSetShader(vsAA.Get(), nullptr, 0);
     ctx->PSSetShader(g_ps.Get(), nullptr, 0);
     ctx->PSSetConstantBuffers(11, 1, g_cb.GetAddressOf());
-    ID3D11ShaderResourceView* srv[2] = { depthSRV.Get(), g_srv[0].Get() };
-    ctx->PSSetShaderResources(0, 2, srv);
+    ID3D11ShaderResourceView* srv[3] = { depthSRV.Get(), g_srv[0].Get(), g_shSRV.Get() }, *ns3[3] = {};
+    ctx->PSSetShaderResources(0, 3, srv);
     ctx->Draw(3, 0);
-    ctx->PSSetShaderResources(0, 2, ns);
+    ctx->PSSetShaderResources(0, 3, ns3);
     ctx->OMSetBlendState(bsOpaque.Get(), nullptr, ~0u);
     ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
 }

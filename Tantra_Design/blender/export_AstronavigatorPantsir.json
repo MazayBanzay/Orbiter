@@ -1,58 +1,33 @@
 {
  "textures": [
   {
-   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_metal.png",
-   "dds": "Tantra\\AstronavigatorPantsir\\surf_metal.dds",
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\pz_frame.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\pz_frame.dds",
    "alpha": false
   },
   {
-   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_boraz.png",
-   "dds": "Tantra\\AstronavigatorPantsir\\surf_boraz.dds",
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\pz_boraz.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\pz_boraz.dds",
    "alpha": false
   },
   {
-   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_enamel.png",
-   "dds": "Tantra\\AstronavigatorPantsir\\surf_enamel.dds",
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\pz_shell.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\pz_shell.dds",
    "alpha": false
   },
   {
-   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_graphite.png",
-   "dds": "Tantra\\AstronavigatorPantsir\\surf_graphite.dds",
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\pz_sole.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\pz_sole.dds",
    "alpha": false
   },
   {
-   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_mirror.png",
-   "dds": "Tantra\\AstronavigatorPantsir\\surf_mirror.dds",
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\pz_visor.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\pz_visor.dds",
    "alpha": false
   },
   {
-   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_rubber.png",
-   "dds": "Tantra\\AstronavigatorPantsir\\surf_rubber.dds",
-   "alpha": false
-  },
-  {
-   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_red.png",
-   "dds": "Tantra\\AstronavigatorPantsir\\surf_red.dds",
-   "alpha": false
-  },
-  {
-   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_sole.png",
-   "dds": "Tantra\\AstronavigatorPantsir\\surf_sole.dds",
-   "alpha": false
-  },
-  {
-   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_visor.png",
-   "dds": "Tantra\\AstronavigatorPantsir\\surf_visor.dds",
-   "alpha": false
-  },
-  {
-   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_slit.png",
-   "dds": "Tantra\\AstronavigatorPantsir\\surf_slit.dds",
-   "alpha": false
-  },
-  {
-   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\surf_rad.png",
-   "dds": "Tantra\\AstronavigatorPantsir\\surf_rad.dds",
+   "src": "C:\\Games\\Orbiter-2024\\Tantra_Design\\heavy_suit\\game\\tex\\pz_rad.png",
+   "dds": "Tantra\\AstronavigatorPantsir\\pz_rad.dds",
    "alpha": false
   }
  ],

@@ -163,6 +163,14 @@ private:
     UINT tw = 0, th = 0;
     ComPtr<ID3D11Query> qDis[4], qT0[4], qT1[4];
     double gpuMs = 0; UINT qFrame = 0;
+    // by stage (ExGpuMark): 1 the particles' update, 2 the smoke's advection..divergence, 3 its pressure iterations, 4 its
+    // projection, light and occupancy, 5 the targets, the depth and the glow, 6 the shimmer, 7 the plumes, 8 the particles,
+    // 9 the smoke's ray-march, 10 the spray, the regolith, the vessels' exhausts. Each mark is set once a frame (a stage
+    // that did not run: a zero)
+    static const int kSt = 11;
+    ComPtr<ID3D11Query> qSt[4][kSt]; bool stDone[kSt] = {}; double stMs[kSt] = {}; ID3D11DeviceContext* stCtx = nullptr;
+    void Mark(int k) { if (stCtx && k > 0 && k < kSt && !stDone[k] && qSt[qFrame % 4][k]) { stCtx->End(qSt[qFrame % 4][k].Get()); stDone[k] = true; } }
+    void MarkTo(int k) { for (int i = 1; i <= k; i++) Mark(i); }     // the stages up to k not yet marked: zero long
     LARGE_INTEGER tLog = {};
     double fpsAcc = 0; int fpsN = 0;
     std::vector<ExJet> jets;
@@ -229,6 +237,7 @@ bool ExhaustFx::Init(D3D11Client* gc)
     for (int i = 0; i < 4; i++) {
         qd.Query = D3D11_QUERY_TIMESTAMP_DISJOINT; dev->CreateQuery(&qd, &qDis[i]);
         qd.Query = D3D11_QUERY_TIMESTAMP; dev->CreateQuery(&qd, &qT0[i]); dev->CreateQuery(&qd, &qT1[i]);
+        for (int k = 1; k < kSt; k++) dev->CreateQuery(&qd, &qSt[i][k]);
     }
     partsOk = cfg.particles && parts.Init(gc);
     ok = true;
@@ -247,7 +256,8 @@ void ExhaustFx::Release()
     vsGlow.Reset(); vsPlume.Reset(); vsProxy.Reset(); vsFull.Reset(); psGlow.Reset(); psPlume.Reset(); psProxy.Reset(); psComp.Reset();
     cbGlow.Reset(); cbPlume.Reset(); cbShim.Reset(); bsAdd.Reset(); bsDual.Reset(); bsOpaque.Reset(); sLin.Reset(); bbSRV.Reset();
     copyTex.Reset(); offTex.Reset(); copySRV.Reset(); offSRV.Reset(); offRTV.Reset(); tw = th = 0;
-    for (int i = 0; i < 4; i++) { qDis[i].Reset(); qT0[i].Reset(); qT1[i].Reset(); }
+    for (int i = 0; i < 4; i++) { qDis[i].Reset(); qT0[i].Reset(); qT1[i].Reset(); for (int k = 0; k < kSt; k++) qSt[i][k].Reset(); }
+    stCtx = nullptr;
     ok = partsOk = false;
 }
 
@@ -679,6 +689,9 @@ void ExhaustFx::Log(const ExScene& sc)
     }
     LOGC("exhaust: GPU %.2f ms | fps %.0f | jets %zu, hot nodes %zu | particles alive %u, born %u/frame | gas %.3g kg/m3 %.0f K, kE %.3g%s",
          gpuMs, fpsN ? fpsAcc / fpsN : 0.0, jets.size(), heat.size(), parts.AliveLast(), parts.SpawnedLast(), sc.rhoG, sc.Tg, sc.kE, js.c_str());
+    LOGC("exhaust GPU by stage (ms): particles' update %.2f | smoke: advection + forces %.2f, pressure %.2f, projection + light %.2f | "
+         "targets + depth + glow %.2f, shimmer %.2f, plumes %.2f, particles %.2f, smoke ray-march %.2f, spray + regolith + vessel exhausts %.2f",
+         stMs[1], stMs[2], stMs[3], stMs[4], stMs[5], stMs[6], stMs[7], stMs[8], stMs[9], stMs[10]);
     fpsAcc = 0; fpsN = 0;
 }
 
@@ -693,6 +706,7 @@ void ExhaustFx::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, co
     g_exViewProj = V * proj;
     UINT qi = qFrame % 4;
     ctx->Begin(qDis[qi].Get()); ctx->End(qT0[qi].Get());
+    stCtx = ctx; for (bool& d : stDone) d = false;
     {
         PipeState saved(ctx);      // everything as it was on return
         if (partsOk) {   // (the universal jets: no ejecta of their own in a gas - the flow carries what they move; in a
@@ -700,7 +714,9 @@ void ExhaustFx::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, co
             std::vector<ExJet> pj; for (const ExJet& j : jets) if (!j.universal || !sc.dense) pj.push_back(j);
             parts.Update(gc, sc, pj);
         }
+        MarkTo(1);
         SmokeUpdate(gc, sc, smoke);
+        MarkTo(4);
         ComPtr<ID3D11RenderTargetView> rtv; ComPtr<ID3D11DepthStencilView> dsv;
         ctx->OMGetRenderTargets(1, &rtv, &dsv);
         bool any = (cfg.glow && !heat.empty()) || (cfg.plumes && !jets.empty()) || partsOk;
@@ -718,13 +734,18 @@ void ExhaustFx::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, co
             ctx->PSSetShaderResources(5, 2, srv);
             ctx->PSSetSamplers(3, 1, sLin.GetAddressOf());
             DrawGlow(gc, sc);
+            MarkTo(5);
             if (copyTex && offRTV && DrawShimmer(gc, sc, proj, rtv.Get())) {
                 ctx->OMSetRenderTargets(1, rtv.GetAddressOf(), nullptr);
                 ctx->PSSetShaderResources(5, 2, srv);
             }
+            MarkTo(6);
             DrawPlumes(gc, sc);
+            MarkTo(7);
             if (partsOk) parts.Render(gc, sc, gc->depthSRV.Get());
+            MarkTo(8);
             SmokeRender(gc);
+            MarkTo(9);
             SprayRender(gc, sc, gc->depthSRV.Get());
             RegolithRender(gc, sc, gc->depthSRV.Get());
             RenderVesselExhausts(gc, sc.cp);
@@ -732,6 +753,7 @@ void ExhaustFx::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, co
             ctx->PSSetShaderResources(5, 2, nul);
         }
     }
+    MarkTo(kSt - 1);
     ctx->End(qT1[qi].Get()); ctx->End(qDis[qi].Get());
     qFrame++;
     if (qFrame >= 4) {
@@ -739,7 +761,12 @@ void ExhaustFx::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, co
         D3D11_QUERY_DATA_TIMESTAMP_DISJOINT dj; UINT64 a, b;
         if (ctx->GetData(qDis[pf].Get(), &dj, sizeof dj, D3D11_ASYNC_GETDATA_DONOTFLUSH) == S_OK && !dj.Disjoint &&
             ctx->GetData(qT0[pf].Get(), &a, 8, D3D11_ASYNC_GETDATA_DONOTFLUSH) == S_OK && ctx->GetData(qT1[pf].Get(), &b, 8, D3D11_ASYNC_GETDATA_DONOTFLUSH) == S_OK)
+        {
             gpuMs = 0.9 * gpuMs + 0.1 * (double)(b - a) * 1000.0 / dj.Frequency;
+            UINT64 t[kSt]; t[0] = a; bool okS = true;
+            for (int k = 1; k < kSt; k++) okS = okS && ctx->GetData(qSt[pf][k].Get(), &t[k], 8, D3D11_ASYNC_GETDATA_DONOTFLUSH) == S_OK;
+            if (okS) for (int k = 1; k < kSt; k++) stMs[k] = 0.9 * stMs[k] + 0.1 * (double)(t[k] - t[k - 1]) * 1000.0 / dj.Frequency;
+        }
     }
     if (g_cfg.statsLog) Log(sc);
 }
@@ -747,6 +774,8 @@ void ExhaustFx::Render(D3D11Client* gc, const VECTOR3& cp, const MATRIX3& cr, co
 ExhaustFx fx;
 
 }  // namespace
+
+void ExGpuMark(int k) { fx.Mark(k); }
 
 // ------------------------------------------------------------------------------------------ the client's hooks
 void ExhaustInit(D3D11Client* gc) { if (!fx.Init(gc)) { LOGC("exhaust effects FAILED (shaders or resources; see above)"); fx.Release(); } }

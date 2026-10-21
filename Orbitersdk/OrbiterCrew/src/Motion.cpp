@@ -82,7 +82,7 @@ namespace ocrew
 		// to the top walking speed; the run takes over only above it - never a half-walk, half-run mix while walking
 		// a heavy suit (in.heavy): its speeds are scaled down by its class, so the clips' speeds are too - the run still
 		// takes over, and the stride (below) is the same at the matching speed: a slower, heavier cadence, not short steps
-		const double hk = 1.0 - std::clamp(in.heavy, 0.0, 0.6);
+		const double hk = in.suitModel == 2 ? 1.0 - std::clamp(in.heavy, 0.0, 0.6) : 1.0;   // the heavy suit only
 		const double tRunSuit = Smooth(1.3 * walk.speed * hk, 0.9 * run.speed * hk, speed);
 		const double top = in.walkTop > 0 ? in.walkTop : walk.speed;
 		const double tRunCov = Smooth(1.04 * top, 1.04 * top + 0.6, speed);
@@ -206,7 +206,18 @@ namespace ocrew
 
 		// ---- suit: arms held clear of the pack and struts, wider stance, a heavy footfall at every step ----
 		suitW = Follow(suitW, in.suited ? 1.0 : 0.0, 0.5, dt);
-		if (suitW > 1e-3)
+		// The two suits are separate models (the user, 2026-10-19): «Каркас» keeps its own layer exactly as it was before the
+		// heavy suit existed; «Панцирь» has its own (its stance from its class and its retargeted clips, the heavy carriage)
+		if (suitW > 1e-3 && in.suitModel != 2)   // ---- «Каркас» ----
+		{
+			const double armOut = 0.13, legOut = 0.035;
+			skin.Turn(pOut, bLArm, AX_FWD, F(-armOut * suitW)); skin.Turn(pOut, bRArm, AX_FWD, F(armOut * suitW));     // left arm is on -x
+			skin.Turn(pOut, bLUpLeg, AX_FWD, F(-legOut * suitW)); skin.Turn(pOut, bRUpLeg, AX_FWD, F(legOut * suitW));
+			skin.Turn(pOut, bLFoot, AX_FWD, F(legOut * suitW)); skin.Turn(pOut, bRFoot, AX_FWD, F(-legOut * suitW));  // soles stay flat
+			if (in.grounded && std::floor(before * 2) != std::floor(phase * 2) && !settling)
+				crouchV += suitW * (0.25 + 0.12 * (std::min)(speed, 6.0));                                                 // the step lands: knees give
+		}
+		else if (suitW > 1e-3)                   // ---- «Панцирь» ----
 		{
 			// a heavy suit's walls hold her arms and legs a little apart inside it. Rev. S of the Pantsir (HEAVY_SUIT.md) is built
 			// round her own limbs (the sleeves on her arm bones, the legs on hers): the arms only clear the thigh plates (~11 deg
@@ -348,8 +359,17 @@ namespace ocrew
 			const double ang = std::acos(std::clamp(1 - drop / (THIGH + SHIN), -1.0, 1.0));
 			crouchV += ang * 9.0 / 0.46;
 		}
-		crouch = std::clamp(crouch + crouchV * dt, 0.0, 0.9);
-		crouchV += (-81 * crouch - 12.6 * crouchV) * dt;   // w 9 rad/s, damping 0.7
+		{
+			// the spring (w 9 rad/s, damping 0.7) stepped by its exact solution: right for any dt. Stepped by Euler it was stable
+			// only below ~0.16 s - under time acceleration (x10: 0.17 s a frame) it swung up to the 0.9 stop and stayed there:
+			// they walked squatting, and stood up slowly after (2026-10-20)
+			const double w = 9.0, a = 0.7 * w, wd = w * std::sqrt(1.0 - 0.49), h = (std::min)(dt, 2.0);
+			const double e = std::exp(-a * h), c = std::cos(wd * h), sn = std::sin(wd * h), x0 = crouch, v0 = crouchV;
+			crouch = e * (x0 * c + (v0 + a * x0) / wd * sn);
+			crouchV = e * (v0 * c - (a * v0 + w * w * x0) / wd * sn);
+			if (crouch < 0.0) { crouch = 0.0; if (crouchV < 0.0) crouchV = 0.0; }   // at the stops: no push past them
+			if (crouch > 0.9) { crouch = 0.9; if (crouchV > 0.0) crouchV = 0.0; }
+		}
 		tuck = Follow(tuck, in.grounded || in.floating || in.lying ? 0.0 : 0.45, in.grounded || in.lying ? 0.08 : 0.15, dt);   // lying: legs out, not tucked as in a jump
 		const double knee = (std::max)(crouch, tuck);
 		if (knee > 1e-3)

@@ -369,7 +369,13 @@ void GpuParticles::SpawnSource(ExScene& sc, OBJHANDLE h, Source& s, std::vector<
     VECTOR3 axG; v->GlobalRot(speed > 0 ? velV / speed : _V(0, -1, 0), axG);
     VECTOR3 p0 = sc.ToLocal(pg); const VECTOR3 ax = Unit(sc.DirToLocal(axG));
     VECTOR3 gs; v->GetGroundspeedVector(FRAME_GLOBAL, gs);
-    const VECTOR3 gsL = sc.DirToLocal(gs);
+    VECTOR3 gsL = sc.DirToLocal(gs);
+    {   // (test runs only, FxTest = drive: the wheels' sources roll forward at DriveV while the vessel stands - their ground speed)
+        double FxTestNum(const char* key);
+        static const double dv = FxTestNum("DriveV");
+        const uintptr_t sid = srcKey - (uintptr_t)h * 40503u;
+        if (dv > 0 && sid >= 9030 && sid < 9034) { VECTOR3 zg; v->GlobalRot(_V(0, 0, 1), zg); gsL += sc.DirToLocal(zg) * dv; }
+    }
     const double Rground = length(vp - sc.pp) - v->GetAltitude(ALTMODE_GROUND);
     const bool inLiq = sc.Rliq > Rground;
     const double gy = (inLiq ? sc.Rliq : Rground) - length(sc.aP);

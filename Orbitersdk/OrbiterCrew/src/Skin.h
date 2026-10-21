@@ -83,6 +83,11 @@ namespace ocrew
 		// the same glow through the emission map (_emis) and the material's emission colour - both D3D9Client shaders
 		// draw it (the _heat path only the Metalness one). Returns oapiSetMaterialEx's code (0 = done; -1 not attached)
 		int SetGlow(int mtrl, float r, float g, float b);
+		// a material's diffuse colour and opacity (0-based index): a tinted glass. Returns oapiSetMaterialEx's code
+		int SetDiffuse(int mtrl, float r, float g, float b, float a);
+		bool HasPart(const char* prefix) const;   // a group whose label starts so
+		// its specular colour and power (a): the glints on a glass
+		int SetSpecular(int mtrl, float r, float g, float b, float power);
 		// timing of Apply over all skins (DebugLog perf line): microseconds and calls since the last read
 		static double perfUs, perfEditUs; static int perfN;
 

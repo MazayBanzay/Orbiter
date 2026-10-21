@@ -271,7 +271,7 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
     XMMATRIX VP = shadowPass ? *lightVP : mirrorPass ? mirrorM * V * proj : V * proj;   // the liquid's mirror: the view reflected in its plane
     bool internal = oapiCameraInternal() && oapiGetFocusObject() == vv->hObj;
     bool vc = oapiCockpitMode() == COCKPIT_VIRTUAL;
-    if (internal && !shadowPass && diagFrames > 0) {
+    if (internal && !shadowPass && !prepass && diagFrames > 0) {
         VECTOR3 cpos; oapiCameraGlobalPos(&cpos);
         VECTOR3 lc = tmul(R, cpos - gp);
         LOGC("diag cockpit: vessel %s camera at %.3f %.3f %.3f (vessel frame), cockpit mode %d, meshes %zu", vv->v->GetName(), lc.x, lc.y, lc.z, oapiCockpitMode(), vv->mesh.size());
@@ -280,7 +280,7 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
     // (oapiVCRegisterHUD, FLAG 2 - not drawn with the mesh) the HUD's surface, added over the glass in the alpha pass
     struct VcScreen { DWORD mesh, grp; Surf* s; bool hud; };
     VcScreen vcs[MAXMFD + 1]; int nvcs = 0;
-    if (internal && vc && !shadowPass && !mirrorPass) {
+    if (internal && vc && !shadowPass && !mirrorPass && !prepass) {
         for (int i = 0; i < MAXMFD; i++) {
             const VCMFDSPEC* ms = nullptr;
             Surf* s = (Surf*)GetVCMFDSurface(i, &ms);
@@ -294,11 +294,11 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
     ctx->IASetInputLayout(ilMesh.Get());
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     ctx->VSSetShader(vsMesh.Get(), nullptr, 0);
-    ctx->PSSetShader(shadowPass ? nullptr : psMesh.Get(), nullptr, 0);
+    ctx->PSSetShader(shadowPass || prepass ? nullptr : mirrorPass || !psMeshMain ? psMesh.Get() : psMeshMain.Get(), nullptr, 0);   // the mirror cuts under its plane (discard)
     ctx->VSSetConstantBuffers(1, 1, cbObj.GetAddressOf());
     ctx->PSSetConstantBuffers(1, 1, cbObj.GetAddressOf());
     ctx->RSSetState(shadowPass ? rsShadow.Get() : mirrorPass ? rsMirror.Get() : rsBack.Get());   // mirrored: the winding turns
-    if (!shadowPass) {     // this vessel's dirt (b7), or none
+    if (!shadowPass && !prepass) {     // this vessel's dirt (b7), or none
         if (dirtDev != dev.Get()) { dirtCB.Reset(); dirtDev = dev.Get(); }
         if (!dirtCB) { D3D11_BUFFER_DESC bd = { 80, D3D11_USAGE_DYNAMIC, D3D11_BIND_CONSTANT_BUFFER, D3D11_CPU_ACCESS_WRITE, 0, 0 }; dev->CreateBuffer(&bd, nullptr, &dirtCB); }
         XMFLOAT4 dc[5] = {};
@@ -344,22 +344,32 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
             if (scr) mt = { { 1, 1, 1, 1 }, { 0, 0, 0, 1 }, { 0, 0, 0, 1 }, { 0, 0, 0, 0 }, 0 };   // a screen: its picture as it is
             bool transparent = scr && scr->hud ? true : mt.diffuse.a < 0.99f;
             if (transparent != alphaPass) continue;
+            Surf* s = scr ? scr->s : g.tex && g.tex < m->tex.size() ? (Surf*)m->tex[g.tex] : nullptr;
+            // the prepass: only what hides what lies behind it - no screens, no added (8) or filter (0x100) layers, no
+            // overlays (4), a texture known to have no see-through texels (or none)
+            const bool solid = !alphaPass && !scr && !(g.usrFlag & (2 | 4 | 8 | 0x100)) && !(s && s->srv && s->alpha != 0);
+            if (prepass && !solid) continue;
             XMMATRIX W = XMLoadFloat4x4(&g.xf) * W0;
             MeshCB c;
             XMStoreFloat4x4(&c.wvp, XMMatrixTranspose(W * VP));
-            if (!shadowPass && !mirrorPass) {
+            if (!shadowPass && !mirrorPass && !prepass) {
                 XMMATRIX cur = W * XMLoadFloat4x4(&curVPNoJit);
                 XMStoreFloat4x4(&c.curNJ, XMMatrixTranspose(cur));
                 if (g.hasPrev) XMStoreFloat4x4(&c.prevNJ, XMMatrixTranspose(XMLoadFloat4x4(&g.prevWVP))); else c.prevNJ = c.curNJ;
                 XMStoreFloat4x4(&g.prevWVP, cur); g.hasPrev = true;
             } else { c.curNJ = c.wvp; c.prevNJ = c.wvp; }
             XMStoreFloat4x4(&c.w, XMMatrixTranspose(W));
+            if (prepass) {     // the same vertex shader, the same matrices: the colour pass meets this depth exactly
+                D3D11_MAPPED_SUBRESOURCE pm;
+                ctx->Map(cbObj.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &pm); memcpy(pm.pData, &c, sizeof c); ctx->Unmap(cbObj.Get(), 0);
+                ctx->DrawIndexed(g.ni, g.ib0, g.vb0);
+                continue;
+            }
             c.sun = { (float)sd.x, (float)sd.y, (float)sd.z, 0 };
             c.diff = { mt.diffuse.r, mt.diffuse.g, mt.diffuse.b, mt.diffuse.a };
             c.amb = { mt.ambient.r, mt.ambient.g, mt.ambient.b, mt.ambient.a };
             c.spec = { mt.specular.r, mt.specular.g, mt.specular.b, mt.power };
             c.emis = { mt.emissive.r, mt.emissive.g, mt.emissive.b, mt.emissive.a };
-            Surf* s = scr ? scr->s : g.tex && g.tex < m->tex.size() ? (Surf*)m->tex[g.tex] : nullptr;
             ID3D11ShaderResourceView* srv = s && s->srv ? s->srv.Get() : whiteTex.Get();
             // the mesh file's FLAG (UsrFlag) 4: not lit. In the cockpit such a group (a display, the helmet's light layer) is
             // seen by the eye as it is: the eye's adaptation to a dim scene (the FX exposure) must not brighten it
@@ -372,7 +382,10 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
             c.maps = { msrv[0] ? 1.0f : 0.0f, msrv[1] ? 1.0f : 0.0f, msrv[2] ? 1.0f : 0.0f, msrv[3] ? 1.0f : 0.0f };
             // skin: the texture's name (a head, a face, a hand) - its light scatters under the surface (mesh.hlsl)
             bool skin = false;
-            if (s && !s->name.empty()) { std::string ln = s->name; for (char& ch : ln) ch = (char)tolower((unsigned char)ch); skin = ln.find("skin") != std::string::npos; }
+            if (s && !s->name.empty()) {
+                if (s->isSkin < 0) { std::string ln = s->name; for (char& ch : ln) ch = (char)tolower((unsigned char)ch); s->isSkin = ln.find("skin") != std::string::npos ? 1 : 0; }
+                skin = s->isSkin > 0;
+            }
             const bool filter = (g.usrFlag & 0x100) != 0;      // a filter group (the visor's sun spot): Dest x transmittance
             if (filter && !shadowPass) {   // ... over the Sun: the glare in the eye goes through it too (its transmittance, mesh.hlsl)
                 extern bool g_sunFilterSeen; extern float g_sunFilterT; extern int g_sunFilterCount; extern float g_sunCoreD;
@@ -380,7 +393,8 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
                 g_sunFilterT = std::min(g_sunFilterT, exp2f(-g_sunCoreD * std::clamp(mt.diffuse.a / 0.7f, 0.0f, 1.0f)));
             }
             if (filter && (g.usrFlag & 0x200) && !shadowPass) { extern bool g_sunHAlphaSeen; g_sunHAlphaSeen = true; }   // ... an H-alpha one: Sun.cpp draws the H-alpha Sun
-            c.maps2 = { msrv[4] ? 1.0f : 0.0f, skin ? 1.0f : 0.0f, filter ? 1.0f : 0.0f, 0 };
+            // w: an added layer (FLAG 8, the HUD): it adds no share of light for the AO (mesh.hlsl AOShare); a filter's w is its own
+            c.maps2 = { msrv[4] ? 1.0f : 0.0f, skin ? 1.0f : 0.0f, filter ? 1.0f : 0.0f, ((g.usrFlag & 8) || (scr && scr->hud)) ? 1.0f : 0.0f };
             if (filter) {   // the filter's own: y its density over the Sun's disc [log2], w the disc's angular radius (Sun.cpp, the frame before)
                 extern float g_sunCoreD, g_sunDiscRad;
                 c.maps2.y = g_sunCoreD; c.maps2.w = g_sunDiscRad;
@@ -401,7 +415,11 @@ void D3D11Client::RenderVessel(VesselVis* vv, const VECTOR3& cp, const MATRIX3& 
             if (!shadowPass) {
                 static ComPtr<ID3D11BlendState> bsFilt; static ID3D11Device* bfDev = nullptr;
                 if (bfDev != dev.Get()) { bfDev = dev.Get(); bsFilt.Reset(); D3D11_BLEND_DESC b = {}; b.RenderTarget[0] = { TRUE, D3D11_BLEND_ZERO, D3D11_BLEND_SRC_COLOR, D3D11_BLEND_OP_ADD, D3D11_BLEND_ZERO, D3D11_BLEND_ONE, D3D11_BLEND_OP_ADD, D3D11_COLOR_WRITE_ENABLE_RED | D3D11_COLOR_WRITE_ENABLE_GREEN | D3D11_COLOR_WRITE_ENABLE_BLUE }; dev->CreateBlendState(&b, &bsFilt); }
-                ctx->OMSetBlendState((g.usrFlag & 0x100) ? bsFilt.Get() : ((g.usrFlag & 8) || (scr && scr->hud)) ? bsAdd.Get() : bsAlpha.Get(), nullptr, ~0u);   // FLAG 8 and the HUD: added; 0x100: a filter
+                // a solid group (in the prepass: nothing of it is see-through) is written, not blended - blending 8 samples of
+                // RGBA16F per pixel costs the ROPs; its alpha is left as it was (1, as the blend left it)
+                static ComPtr<ID3D11BlendState> bsSolid; static ID3D11Device* bsDev = nullptr;
+                if (bsDev != dev.Get()) { bsDev = dev.Get(); bsSolid.Reset(); D3D11_BLEND_DESC b = {}; b.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_RED | D3D11_COLOR_WRITE_ENABLE_GREEN | D3D11_COLOR_WRITE_ENABLE_BLUE; dev->CreateBlendState(&b, &bsSolid); }
+                ctx->OMSetBlendState((g.usrFlag & 0x100) ? bsFilt.Get() : ((g.usrFlag & 8) || (scr && scr->hud)) ? bsAdd.Get() : solid && !mirrorPass && bsSolid ? bsSolid.Get() : bsAlpha.Get(), nullptr, ~0u);   // FLAG 8 and the HUD: added; 0x100: a filter
             }
             // diagnostics (test runs): in the cockpit view, the groups whose box covers much of the screen near the camera
             if (internal && !shadowPass && diagFrames > 0 && !g.vtx.empty()) {

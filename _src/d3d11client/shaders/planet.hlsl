@@ -274,7 +274,7 @@ float CobbleVis(float3 Lg)
     return lerp(1, saturate(1 - occ / 0.008), gdK);
 }
 // the local lights on the ground (lights.hlsli's list and photometry), each shadowed by the cobbles
-float3 LocalLightsGround(float3 wp, float3 n, float3 ng, float3 alb, float encl)
+float3 LocalLightsGround(float3 wp, float3 n, float3 ng, float3 alb, float encl, float inR)
 {
     if (!LocalLightsOn()) return 0;
     float3 s = 0, Ld, fl = 0;
@@ -289,8 +289,11 @@ float3 LocalLightsGround(float3 wp, float3 n, float3 ng, float3 alb, float encl)
         if (!any(E > 0)) continue;
         s += E * saturate(dot(n, Ld)) * CobbleVis(Ld);
     }
-    return alb * (s + fl * encl);
+    gLLDirE += s; gLLIndE += fl * encl * (1 - inR);     // (the AO's share: Shade)
+    return alb * (s + fl * encl * (1 - inR));
 }
+
+static float gAOShare = 0;      // Shade's: the sky's share of the light for the AO (mesh.hlsl AOShare)
 
 float4 Shade(VSOut i)
 {
@@ -302,13 +305,19 @@ float4 Shade(VSOut i)
     float sunVis = 1, skyOcc = 1;
     if (gGm.w > 0 && gShadow.z < 10.5) GroundDetail(i, alb, n, sunVis, skyOcc);   // (test runs: SHADOWDBG 11 profiles without it)
     float nl = saturate(dot(n, gSunDir.xyz)) * (gShadow.z > 12.5 ? 1 : ShadowAtN(i.wp, normalize(i.n))) * sunVis * InteriorSun(i.wp);   // (13: without the shadow; inside a declared interior: through its openings only)
-    float3 sky = SkyLightShaded(n, i.wp, normalize(i.n)) * skyOcc * SkyVisibility(i.wp, normalize(i.n)) * (1 - VolumeWeight(i.wp));   // (none inside a declared interior)   // under a vehicle less sky (lights.hlsli)
-    float3 col = alb * (nl * SunLight(i.wp) + sky);
+    const float vol = VolumeWeight(i.wp);
+    float3 sky = SkyLightShaded(n, i.wp, normalize(i.n)) * skyOcc * SkyVisibility(i.wp, normalize(i.n)) * (1 - vol);   // (none inside a declared interior)   // under a vehicle less sky (lights.hlsli)
+    float inRoomS; const float3 roomSky = RoomSky(i.wp, n, inRoomS);     // a declared room's own "sky" (a hangar's floor: lights.hlsli)
+    float3 col = alb * (nl * SunLight(i.wp) + sky + roomSky * skyOcc);
     {   // headlights, lamps on the ground: the material's albedo (no sky occlusion in it), the detail normal softened (a near,
         // low light: the full one turns the cobbles to 0/1 patches), the cobbles' shadows towards each lamp
         float3 nL = normalize(lerp(normalize(i.n), n, 0.6));
-        const float enclG = gSkyK.z > 0.5 ? max(1 - SkyVisibility(i.wp, normalize(i.n)), VolumeWeight(i.wp)) : 0;   // airless: the bounce in an enclosed room (a hangar's floor)
-        col += LocalLightsGround(i.wp, nL, normalize(i.n), alb / max(gdF, 0.05) * gdFL, enclG);
+        const float enclG = gSkyK.z > 0.5 ? max(1 - SkyVisibility(i.wp, normalize(i.n)), vol) : 0;   // airless: the bounce in an enclosed room (a hangar's floor)
+        col += LocalLightsGround(i.wp, nL, normalize(i.n), alb / max(gdF, 0.05) * gdFL, enclG, inRoomS);
+    }
+    {   // the AO's share of the light (Ssao.cpp): as mesh.hlsl's AOShare
+        float ls = dot(nl * SunLight(i.wp) + gLLDirE, 1.0 / 3), lk = dot(SkyLight(normalize(i.n), i.wp) * (1 - vol) + roomSky + gLLIndE, 1.0 / 3);
+        gAOShare = lk / max(ls + lk, 1e-9);
     }
     if (gShadow.z > 1.5 && gShadow.z < 9.5) {
         float sl = dot(saturate(dot(n, gSunDir.xyz)) * sunVis * SunLight(i.wp), 1.0 / 3), kl = dot(SkyLight(n, i.wp) * skyOcc, 1.0 / 3);
@@ -337,5 +346,8 @@ float4 ShadowDbg(VSOut i)
     float3 c = d < gCascFar.y ? float3(1, 0.4, 0.4) : d < gCascFar.z ? float3(0.4, 1, 0.4) : d < gCascFar.w ? float3(0.4, 0.4, 1) : float3(1, 1, 1);
     return float4(s * c * 0.5 / max(gHazeRGB.w * gAdapt.rgb, 1e-4), 1);
 }
-float4 PS(VSOut i) : SV_Target { if (gShadow.z > 14.5) return float4(0.02, 0.02, 0.02, 1);   // (test runs, SHADOWDBG 15: the raster alone, for timing)
+float4 PSColour(VSOut i) { if (gShadow.z > 14.5) return float4(0.02, 0.02, 0.02, 1);   // (test runs, SHADOWDBG 15: the raster alone, for timing)
     if (gShadow.z > 0.5 && gShadow.z < 1.5) return ShadowDbg(i); return abs(gMisc.w - 1) < 0.5 ? TileDbg(i) : Shade(i); }
+// ao (target 2): the sky's share of the light for the AO after the pass (Ssao.cpp); 0 in the test views
+struct POut { float4 c : SV_Target0; float4 ao : SV_Target2; };
+POut PS(VSOut i) { POut o; o.c = PSColour(i); o.ao = float4(gAOShare, 0, 0, 1); return o; }

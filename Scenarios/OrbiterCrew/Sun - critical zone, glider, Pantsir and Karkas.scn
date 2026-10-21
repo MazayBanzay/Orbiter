@@ -1,0 +1,125 @@
+BEGIN_DESC
+Near the Sun, 0.278 AU (41.57 million km, 59.8 solar radii): the critical mark of the light suit.
+Kaira Rean (Karkas, Suit_T10, set Boron: sunlight absorptance 0.22) is at its rated limit here: the suit's surroundings
+are +121 C (the radiative balance in full sunlight, 17.6 kW/m2 = 12.9 Suns). Any closer and the environment is out of
+the suit's limits.
+Niza Krit (Pantsir, Suit_T30, rated to +430 C) has margin: her own critical mark lies at 0.083 AU (17.9 solar radii).
+The Delta-glider GL-01 is a few metres away, all three on a circular orbit round the Sun.
+END_DESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 61333.5
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship KairaRean
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET KairaRean
+  MODE Extern
+  POS 6.000000 150.000000 10.000000
+  TRACKMODE TargetRelative
+  FOV 60.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Orbit
+  REF AUTO
+END_HUD
+
+BEGIN_SHIPS
+GL-01:DeltaGlider
+  STATUS Orbiting Sun
+  RPOS 41574683001.00 0.00 0.00
+  RVEL 0.000 0.000 56499.076
+  AROT 0.00 90.00 0.00
+  PRPLEVEL 0:1.000 1:1.000
+  NOSECONE 0 0.0000
+  GEAR 0 0.0000
+  AIRLOCK 1 1.0000
+END
+KairaRean:OrbiterCrew\AstronavigatorT2
+  STATUS Orbiting Sun
+  RPOS 41574682975.00 6.00 -8.00
+  RVEL 0.000 0.000 56499.076
+  AROT 0.00 90.00 0.00
+  RCSMODE 0
+  AFCMODE 7
+  PRPLEVEL 0:1.000000 1:1.000000
+  NAVFREQ 0 0
+  NAME Kaira Rean
+  ROLE astronavigator
+  SEX female
+  PHYS 0.0 1.740 62.00 48.00 100.0
+  CLASS OrbiterCrew\AstronavigatorT2
+  STAMINA 1.000000
+  DOSE 0.00000 0.00000
+  NOURISH 0.0000 7996749 12.000 0.001
+  HURT 0.000 0.000 0.000 0.000
+  RESERVE 1.000000
+  CORE 310.150
+  INJURY 0.000000
+  BODY 0
+  VIEW 1 2.00
+  SUIT 1
+  SUIT_SET Boron
+  SUIT_O2 1.0
+  SUIT_WATER 2.0
+  SUIT_SORBENT 0.0
+  SUIT_BATTERY 6.0
+  SUIT_N2 1.5
+  SUIT_SERVO 1
+  SUIT_TEQ 295.0
+  FIELD 0
+  HUD 1 1 1 0 0 1 1 1 1 0.60 1 0 3 0
+  JETPACK 1
+  JET_FUEL 13.0
+  JET_MODEL 3
+  SHADE 0.0
+  LAMP 0
+  LAMP_MODE 1
+END
+Niza_Krit:OrbiterCrew\AstronavigatorPantsir
+  STATUS Orbiting Sun
+  RPOS 41574682975.00 -4.00 -14.00
+  RVEL 0.000 0.000 56499.076
+  AROT 0.00 90.00 0.00
+  RCSMODE 0
+  AFCMODE 7
+  PRPLEVEL 0:1.000000
+  NAVFREQ 0 0
+  NAME Niza Krit
+  ROLE Spe
+  SEX female
+  PHYS 0.0 1.740 62.00 48.00 100.0
+  CLASS OrbiterCrew\AstronavigatorPantsir
+  STAMINA 1.000000
+  DOSE 0.00000 0.00000
+  NOURISH 0.0000 7996918 12.000 0.001
+  HURT 0.000 0.000 0.000 0.000
+  RESERVE 1.000000
+  CORE 310.150
+  INJURY 0.000000
+  BODY 0
+  VIEW 1 2.00
+  SUIT 1
+  SUIT_CLASS Suit_T30
+  SUIT_O2 2.0
+  SUIT_WATER 3.0
+  SUIT_SORBENT 0.0
+  SUIT_BATTERY 20.0
+  SUIT_N2 1.5
+  SUIT_SERVO 1
+  SUIT_TEQ 295.0
+  FIELD 0
+  FIELD_LEVEL 1.0
+  SUIT_EVAP 6.0
+  HUD 1 1 1 0 0 1 1 1 1 0.60 1 0 3 0
+  JETPACK 0
+  SHADE 0.0
+  LAMP 0
+  LAMP_MODE 1
+END
+END_SHIPS

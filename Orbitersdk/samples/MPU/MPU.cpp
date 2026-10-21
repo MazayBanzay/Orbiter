@@ -16,7 +16,7 @@ protected:
     void ModuleCaps(FILEHANDLE cfg) override {
         char var[32] = "";
         cab_ = cfg && oapiReadItem_string(cfg, const_cast<char*>("Variant"), var) && !_stricmp(var, "EMPU");
-        bz0_ = kBodyZ0; bz1_ = kBodyZ1; btop_ = cab_ ? 2.85 : kBodyTop;
+        bz0_ = cab_ ? -4.65 : kBodyZ0; bz1_ = cab_ ? 4.80 : kBodyZ1; btop_ = cab_ ? 3.0 : kBodyTop;   // Э.МПУ «тяжёлый» (2026-10-20): the bull bar, the stern's guards, the roof rack
         char lg[16] = "";
         if (cfg && oapiReadItem_string(cfg, const_cast<char*>("Language"), lg)) ru_ = lg[0] == 'r' || lg[0] == 'R';
         if (cab_) LightsInit();
@@ -396,7 +396,9 @@ protected:
             if (cab_) { ext_.Seated = &MPU::cSeatedE; ext_.SeatHands = &MPU::cSeatHandsE; }
             if (!cab_) ext_.SeatGauges = &MPU::cSeatGaugesE;     // Э.МПУ: on the glass instead (the user: «не внизу»)
             ext_.OuterWalls = &TVChassis::cOuterWalls;
-            ext_.ExitAnywhere = &TVChassis::cExitAnywhere;       // F aboard with nothing in reach: step off (the simulators' way)
+            // F aboard with nothing in reach: step off (the simulators' way) - the MPU's open deck only; the Э.МПУ only through
+            // its door (the user, 2026-10-21: «не надо выход в любой точке ЭМПУ»)
+            if (!cab_) ext_.ExitAnywhere = &TVChassis::cExitAnywhere;
             if (cab_) { ext_.Click = &MPU::cClickE; ext_.Ceiling = &MPU::cCeilingE; }
             ext_.NodeCount = [](void* c) { return Self(c)->NodeCountE(); };
             ext_.Node = [](void* c, int i, OcNode* o) { return Self(c)->NodeE(i, o) ? 1 : 0; };
@@ -438,9 +440,11 @@ protected:
         if (i <= 2) {
             out->id = kItemBoard; out->kind = OC_AIRLOCK;   // from outside OrbiterCrew offers only entrances (lift, airlock, exit)
             out->dir = _V(1, 0, 0);
-            // anywhere round it: OrbiterCrew measures from her feet to this point, so the three points (front, middle,
-            // rear) sit deep under the platform - from the ground each reaches ~4.2 m round, from the deck not at all
-            out->pos = _V(0.0, -8.0, i == 0 ? 2.6 : i == 1 ? 0.0 : -2.6); out->radius = 8.25;
+            // at its steps (the left side, mid-way): within 2 m of the steps' foot, F always (the user, 2026-10-21: «у лестницы
+            // всегда вход-выход на F»; the old points round the whole platform reached unevenly with its height - hard to
+            // find). The other two items: none
+            if (i == 0) { out->pos = kStepFoot; out->radius = 2.0; }
+            else { out->id = -1; out->kind = OC_BUTTON; out->pos = _V(0.0, -50.0, 0.0); out->radius = 0.0; }
             std::snprintf(out->label, sizeof out->label, "%s", m->L("подняться на МПУ", "climb onto the MPU"));
         } else if (i == 3) {
             out->id = kItemPost; out->kind = OC_TERMINAL; out->pos = _V(0.0, kDeckY + 1.0, 3.6); out->dir = _V(0, 0, 1); out->radius = 1.0;
@@ -492,7 +496,7 @@ protected:
         {-1.38, -0.80, 1.40, 2.20}, {-1.38, -0.80, -0.50, 0.30},     // the benches (left)
         {-1.38, -0.75, 0.50, 1.20},                                  // the table
         {-1.38, -0.85, -2.35, -1.00},                                // the galley
-        {0.78, 1.38, -4.05, -2.90}};                                 // the two suits on their stands along the airlock's right wall
+        {0.54, 1.38, -4.05, -2.90}};                                 // the two suits on their stands along the airlock's right wall (moved in, 2026-10-20)
     static constexpr double kSolidTop[] = {1.32, 1.32, 1.42, 0.48, 0.48, 0.76, 1.80, 1.75};   // their tops above the floor, m
     // seats: hips (x, z), their height above the floor, facing along z; the driver's first
     struct SeatE { double x, z, hips, fz; const char* label; const char* labelEn; };
@@ -553,6 +557,8 @@ protected:
     static int cSeatGaugesE(void* c, int seatId, int, OcGauge* out, int max) {
         MPU* m = Self(c);
         if (seatId != (m->cab_ ? int(kItemSeat0) : -1)) return 0;
+        // МПУ: only in the driver's own eyes - none over the outside view (V: the platform's camera; the user, 2026-10-21)
+        if (!m->cab_ && (!oapiCameraInternal() || oapiCameraTarget() == m->GetHandle())) return 0;
         int n = 0;
         auto add = [&](const char* label, double frac, int state, const char* fmt, auto... v) {
             if (n >= max) return;
@@ -609,15 +615,14 @@ protected:
         if (i < m->ChassisItemCount()) return m->ChassisItem(i, out) ? 1 : 0;
         i -= m->ChassisItemCount();
         *out = OcItem{};
-        if (i == 0) {                                            // from outside: anywhere round it (as the MPU), into the airlock
-            // three points deep under the hull, as the MPU's: from the ground each reaches ~4.2 m round
-            out->id = kItemHatchOut; out->kind = OC_AIRLOCK; out->pos = _V(0.0, -8.0, 0.0); out->dir = _V(0, 0, 1); out->radius = 8.25;
+        if (i == 0) {                                            // from outside: the stern door (OC_DOORWAY: where she aims at it)
+            // its opening 0.9 x 1.8 m over the deck at the stern; within 3.3 m of her feet - from the ladder's foot and round it
+            out->id = kItemHatchOut; out->kind = OC_DOORWAY; out->pos = _V(0.0, kDeckY + 0.92, -4.32); out->dir = _V(0, 0, -1); out->radius = 3.3;
             std::snprintf(out->label, sizeof out->label, "%s", m->L("войти в Э.МПУ (шлюз)", "enter the EMPU (airlock)"));
-        } else if (i == 2 + kSeatsN || i == 3 + kSeatsN) {          // the other two entry points, fore and aft
-            out->id = kItemHatchOut; out->kind = OC_AIRLOCK; out->pos = _V(0.0, -8.0, i == 2 + kSeatsN ? 2.6 : -2.6); out->dir = _V(0, 0, 1); out->radius = 8.25;
-            std::snprintf(out->label, sizeof out->label, "%s", m->L("войти в Э.МПУ (шлюз)", "enter the EMPU (airlock)"));
-        } else if (i == 1) {                                     // inside the airlock: out through the stern door
-            out->id = kItemHatchIn; out->kind = OC_EXIT; out->pos = _V(0.0, kDeckY + 1.0, -4.00); out->dir = _V(0, 0, -1); out->radius = 0.8;
+        } else if (i == 2 + kSeatsN || i == 3 + kSeatsN) {          // (the old entry points round it: none now)
+            out->id = -1; out->kind = OC_BUTTON; out->pos = _V(0.0, -50.0, 0.0); out->radius = 0.0;
+        } else if (i == 1) {                                     // inside the airlock: out through the stern door, aimed at
+            out->id = kItemHatchIn; out->kind = OC_DOORWAY; out->pos = _V(0.0, kDeckY + 0.92, -4.16); out->dir = _V(0, 0, -1); out->radius = 1.9;
             std::snprintf(out->label, sizeof out->label, "%s", m->L("выйти наружу", "go outside"));
         } else if (i >= 2 && i < 2 + kSeatsN) {
             const SeatE& se = kSeatsE[i - 2];
@@ -977,7 +982,7 @@ protected:
                 TC(alarm); Txt(k, x0, 420, (ru_ ? sr : se)[bellyStage_ > 4 ? 4 : bellyStage_]); TC(Ink());
             }
             { double cl = 0.0; for (double c : clog_) cl = (std::max)(cl, c);                  // Titan's damp sand in the mesh
-              if (cl > 0.05) { TC(cl > 0.5 ? warn : Ink()); std::snprintf(b, sizeof b, Tl("налип песка до %.0f %%", "sand stuck up to %.0f %%"), cl * 100.0); Txt(k, x0, 444, b); TC(Ink()); } }
+              if (cl > 0.05) { TC(cl > 0.5 ? warn : Ink()); std::snprintf(b, sizeof b, regolith_ ? Tl("налип реголита до %.0f %%", "regolith stuck up to %.0f %%") : Tl("налип песка до %.0f %%", "sand stuck up to %.0f %%"), cl * 100.0); Txt(k, x0, 444, b); TC(Ink()); } }
             if (BuoyFrac() > 0.0 || FloodV() > 0.01) {                                         // in the sea
                 if (Floating()) std::snprintf(b, sizeof b, Tl("НА ПЛАВУ, хода нет%s", "AFLOAT, no drive%s"), FloodV() > 0.01 ? Tl(", ЗАТОПЛЕНИЕ", ", FLOODING") : "");
                 else std::snprintf(b, sizeof b, Tl("брод %.1f м, всплытие %.0f %%%s", "wading %.1f m, lift %.0f %%%s"), WadeDepth(), BuoyFrac() * 100.0, FloodV() > 0.01 ? Tl(", ЗАТОПЛЕНИЕ", ", FLOODING") : "");

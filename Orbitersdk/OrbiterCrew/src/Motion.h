@@ -34,7 +34,8 @@ namespace ocrew
 		bool suited{};                 // space suit: arms out, wider stance, heavy footfall
 		double heavy{};                // a heavy suit class (1 - its WalkFactor; Pantsir 0.3): the same stride at a slower
 		                               // cadence, the run blended in at its lower speeds, a deeper knee at each footfall
-		double armOutDeg{ -1 }, legOutDeg{ -1 }, foreArmInDeg{};   // the suit mesh's own rest stance (class ArmOutDeg / LegOutDeg); -1: by heavy
+		double armOutDeg{ -1 }, legOutDeg{ -1 }, foreArmInDeg{};
+		int suitModel{};               // 0 none, 1 «Каркас» (the light suit, its own layer as it always was), 2 «Панцирь»   // the suit mesh's own rest stance (class ArmOutDeg / LegOutDeg); -1: by heavy
 		double bound{};                // 0..1 servo boost bounding
 		bool floating{};               // free fall in space (not a jump): neutral body posture
 		VECTOR3 thrustAcc{};           // acceleration from thrusters, vessel frame (m/s^2): the limbs lag behind it

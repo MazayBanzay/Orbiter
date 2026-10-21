@@ -90,8 +90,22 @@ void Model::Step(double dt, const Flight& f, const Exposure& x, const Ground& g,
     expo[kZoneGear] = x.gear;
     expo[kZonePods] = x.pods;
     const double base = kSG * std::sqrt(std::max(0.0, f.rho)) * f.v * f.v * f.v;  // per sqrt(Rn)
+    // sunlight: each zone's facing to the Sun times its absorptance (the iridium nose ~0.35, the ceramics ~0.5, the
+    // gear and pods' metal ~0.6; stowed parts are inside)
+    double sun[kZoneCount] = {};
+    if (f.sunFlux > 0.0) {
+        const double sx = f.sunX, sy = f.sunY, sz = f.sunZ;
+        sun[kZoneNose] = 0.35 * std::max(0.0, sz);
+        sun[kZoneBelly] = 0.55 * std::max(0.0, -sy);
+        sun[kZoneCrestEdge] = 0.50 * x.crests * std::max(0.0, std::max(0.66 * sx, -0.66 * sx) + 0.75 * sz);
+        sun[kZoneFin] = 0.50 * x.fin * std::max(std::fabs(sx), 0.3 * std::max(0.0, sy));
+        sun[kZoneStern] = 0.50 * std::max(0.0, -sz);
+        sun[kZoneGear] = 0.60 * x.gear * std::max(0.0, -sy);
+        sun[kZonePods] = 0.60 * x.pods * std::fabs(sx);
+        for (double& s : sun) s *= f.sunFlux;
+    }
     for (int z = 0; z < kZoneCount; ++z) {
-        flux_[z] = base / std::sqrt(kZone[z].rn) * expo[z];
+        flux_[z] = base / std::sqrt(kZone[z].rn) * expo[z] + sun[z];
         const double tEq = std::pow(flux_[z] / (kEps * kSigma) + std::pow(f.ambientT, 4.0), 0.25);
         temp_[z] += (tEq - temp_[z]) * std::min(1.0, dt / kZone[z].tau);
         const double over = (temp_[z] - kZone[z].limit) / kZone[z].limit;

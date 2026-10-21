@@ -55,14 +55,40 @@ def normal_from(h, strength):
     return n / np.linalg.norm(n, axis=-1, keepdims=True)
 
 
+def dds(path, rgba, normal=False):
+    """an uncompressed 32-bit DDS with its full mip chain (box-filtered; normals renormalised each level). PIL wrote no
+    mips: far away and at grazing angles the GPU sampled the full-size fine weaves every few texels - they shimmered and
+    flickered as the camera moved (the user, 2026-10-19: «мерцание этих текстур»). As build_battery_cell.py writes them"""
+    arr = np.asarray(rgba, dtype=np.float32)
+    if arr.shape[2] == 3: arr = np.concatenate([arr, np.full((*arr.shape[:2], 1), 255.0)], axis=2)
+    levels = [np.clip(arr, 0, 255)]
+    while levels[-1].shape[0] > 1 or levels[-1].shape[1] > 1:
+        src = Image.fromarray(np.clip(levels[-1], 0, 255).astype(np.uint8), "RGBA")
+        dst = np.asarray(src.resize((max(1, src.width // 2), max(1, src.height // 2)), Image.Resampling.BOX), dtype=np.float32)
+        if normal:
+            v = dst[..., :3] / 127.5 - 1.0
+            v /= np.maximum(1e-6, np.linalg.norm(v, axis=2, keepdims=True))
+            dst = dst.copy(); dst[..., :3] = (v * 0.5 + 0.5) * 255.0
+        levels.append(dst)
+    h, w = levels[0].shape[:2]
+    header = bytearray(128); header[0:4] = b"DDS "
+    for off, val in {4: 124, 8: 0x000A100F, 12: h, 16: w, 20: w * 4, 28: len(levels), 76: 32, 80: 0x41, 88: 32,
+                     92: 0x00FF0000, 96: 0x0000FF00, 100: 0x000000FF, 104: 0xFF000000, 108: 0x401008}.items():
+        header[off:off + 4] = int(val).to_bytes(4, "little")
+    with open(path, "wb") as f:
+        f.write(header)
+        for level in levels:
+            f.write(np.ascontiguousarray(np.clip(np.round(level), 0, 255).astype(np.uint8)[..., [2, 1, 0, 3]]).tobytes())
+
+
 def save(name, rgb, h, strength, spec_rgb, power):
-    Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB").save(os.path.join(DST, name + ".dds"))
+    dds(os.path.join(DST, name + ".dds"), np.clip(rgb, 0, 255))
     nrm = normal_from(h, strength)
-    Image.fromarray((np.clip(nrm * 0.5 + 0.5, 0, 1) * 255).astype(np.uint8), "RGB").save(os.path.join(DST, name + "_norm.dds"))
+    dds(os.path.join(DST, name + "_norm.dds"), np.clip(nrm * 0.5 + 0.5, 0, 1) * 255, normal=True)
     s = np.clip(np.broadcast_to(spec_rgb, rgb.shape), 0, 1) * 255
     a = np.clip(np.broadcast_to(power, h.shape) / 4.0, 0, 255)
-    Image.fromarray(np.concatenate([s, a[..., None]], 2).astype(np.uint8), "RGBA").save(os.path.join(DST, name + "_spec.dds"))
-    print("%-16s colour, normal, spec" % name)
+    dds(os.path.join(DST, name + "_spec.dds"), np.concatenate([s, a[..., None]], 2))
+    print("%-16s colour, normal, spec (with mips)" % name)
 
 
 # ---- CNT composite of the backbone, frame, bumpers, fenders: a fine twill, panel seams every 0.5 m, bolts on them ----
@@ -74,12 +100,12 @@ bl = bolts(bp, 5.0)
 dirt = pnoise(0.15, 1.0)
 h = 0.04 * tw - 1.0 * sm + 0.8 * bl + 0.05 * pnoise(0.02)
 col = np.empty((N, N, 3))
-col[:] = (36, 39, 44)
-col += (6 * tw + 5 * dirt)[..., None]
+col[:] = (44, 47, 52)                                                    # natural graphite (the user, 2026-10-19: a shade lighter,
+col += (7 * tw + 5 * dirt)[..., None]                                     # so its form reads in Titan's dim light)
 col[sm > 0.3] *= 0.45
 col += (bl * 28)[..., None]
 col[..., 0] += dirt * 4; col[..., 1] += dirt * 3                         # a hint of regolith in the hollows
-save("mpu_composite", col, h, 6.0, (0.20, 0.21, 0.23), 18.0)
+save("mpu_composite", col, h, 6.0, (0.32, 0.33, 0.35), 26.0)          # satin, its weave catching the light
 
 # ---- deck plates: non-slip tread plate (raised lozenges, alternating), seams every 0.5 m ----
 P = 32
@@ -98,22 +124,31 @@ save("mpu_deck", col, h, 5.0, (0.35, 0.36, 0.38), 30.0)
 # ---- machined metal of the wishbones, brackets, wheel blades: brushed along u, faint machining rings ----
 br = aniso(0.02, 1.2, 1.0)
 h = 0.25 * br + 0.05 * pnoise(0.05)
-col = np.empty((N, N, 3)); col[:] = (112, 115, 120)
+col = np.empty((N, N, 3)); col[:] = (118, 113, 104)                   # titanium, a faint warm anodised tint
 col += (14 * br + 6 * pnoise(0.2))[..., None]
-save("mpu_metal", col, h, 2.0, (0.70, 0.71, 0.74), 60.0)
+save("mpu_metal", col, h, 2.0, (0.66, 0.63, 0.58), 50.0)
 
-# ---- rubber of the tread and the mud flaps: fine grain, small cuts, worn lighter ----
-gr = pnoise(0.004, 1.0)
-cuts = np.zeros((N, N))
-for _ in range(60):
-    x0, y0, L, a = rng.integers(0, N), rng.integers(0, N), rng.integers(6, 22), rng.uniform(0, np.pi)
-    for t in range(L):
-        cuts[int(y0 + t * np.sin(a)) % N, int(x0 + t * np.cos(a)) % N] = 1.0
-h = 0.4 * gr - 0.8 * cuts
-col = np.empty((N, N, 3)); col[:] = (22, 22, 24)
-col += (6 * gr + 10 * pnoise(0.25))[..., None]
-col[cuts > 0] *= 0.5
-save("mpu_rubber", col, h, 3.0, (0.06, 0.06, 0.06), 6.0)
+# ---- the tyre (kept in mpu_rubber.dds, the mesh's name for it): the airless wheel's woven spring mesh of Mo-47.5Re wire
+# (TVHeat.h - the heat model's material): silver-grey wire over and under in a plain weave, dark where you look through
+# the gaps into the wheel, the running surface polished bright by the ground, the wire's own scuffs. Metallic sheen
+P = 16                                                                       # a weave cell: ~1.6 cm at 0.5 m a tile... 512 px
+cu, cv = (xx % P) / P, (yy % P) / P
+over = ((xx // P + yy // P) % 2) == 0
+wu = np.exp(-((cv - 0.5) / 0.22) ** 2)                                       # a wire along u in each cell's middle band
+wv = np.exp(-((cu - 0.5) / 0.22) ** 2)                                       # a wire along v
+hu = wu * (0.6 + 0.4 * np.where(over, 1.0, -0.2) * np.sin(np.pi * cu))     # over / under: the crossing wire rises
+hv_ = wv * (0.6 + 0.4 * np.where(over, -0.2, 1.0) * np.sin(np.pi * cv))
+wire = np.maximum(hu, hv_)
+gap = np.clip(1.0 - (wu + wv) * 1.4, 0, 1)                                    # the holes between the wires
+polish = np.clip(pnoise(0.25, 1.0) * 0.5 + 0.6, 0, 1)                         # the running surface, polished unevenly
+scuff = np.clip(aniso(0.8, 0.02, 1.0), 0, 1) ** 4
+h = 0.9 * wire - 0.8 * gap + 0.05 * pnoise(0.02)
+col = np.empty((N, N, 3)); col[:] = (150, 150, 156)
+col *= (0.75 + 0.35 * wire * polish)[..., None]
+col[..., :] *= (1.0 - 0.85 * gap)[..., None]                                 # into the wheel: dark
+col += (25 * scuff)[..., None]
+spec = np.stack([0.75 * (1 - gap)] * 3, -1)
+save("mpu_rubber", col, h, 4.0, spec, 45.0)
 
 # ---- white sandwich panels of the cabins: matt, panel seams every 0.5 m, rivet lines ----
 sm = seams(256, 2.5)
@@ -121,11 +156,11 @@ bp = [(x, y) for x in (8, 248, 264, 504) for y in range(24, N, 48)]
 bl = bolts(bp, 3.5)
 dirt = pnoise(0.12, 1.0)
 h = -1.0 * sm + 0.6 * bl + 0.03 * pnoise(0.02)
-col = np.empty((N, N, 3)); col[:] = (212, 214, 216)
+col = np.empty((N, N, 3)); col[:] = (194, 190, 180)                      # warm off-white enamel (Lunokhod, Soyuz): ~0.75, not snow
 col += (6 * dirt)[..., None]; col[..., 2] -= np.clip(dirt, 0, 1) * 10
 col[sm > 0.3] *= 0.55
 col -= (bl * 25)[..., None]
-save("mpu_white", col, h, 5.0, (0.25, 0.25, 0.26), 22.0)
+save("mpu_white", col, h, 5.0, (0.30, 0.30, 0.29), 28.0)
 # ---- the cabin's lining (Э.МПУ): powder-coated panels 0.5 m, quarter-turn fasteners in the corners, scuffs ----
 sm = seams(256, 2.0)
 fp = [(x, y) for x in (16, 240, 272, 496) for y in (16, 240, 272, 496)]

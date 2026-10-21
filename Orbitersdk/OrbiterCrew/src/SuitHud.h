@@ -6,6 +6,7 @@
 // (Jura, SIL OFL) so Cyrillic works on any Windows; the lines use the D3D9 client's extended Sketchpad with alpha and glow.
 #pragma once
 #include <Orbitersdk.h>
+#include "D3D11Hud.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -75,6 +76,9 @@ namespace ocrew
 		bool radValid{}; double radRate{}, radDose{}, radCareer{}; bool fieldOn{}; double fieldW{};
 		// walking
 		bool landed{}, servo{}; double speed{};
+		// the Pantsir's view (CrewMember fills it): the camera it shows (-1 left wide, 0 stereo, +1 right wide), the window
+		// open (the shutter up: her eyes through the glass), the shutter closed by the suit itself and why
+		int pzCam{}; bool pzWindow{}, pzAutoShut{}; std::string pzShutReason;
 		// talk
 		std::string warning, message;    // UTF-8, Russian
 		double simt{};
@@ -120,7 +124,7 @@ namespace ocrew
 
 		// ---- the helmet display: the suit's HUD is light projected on the visor - Orbiter's own VC HUD (drawn additively,
 		// no instruments of Orbiter's), on a plate that rides the head and exactly covers the view ----
-		struct HelmetView { VECTOR3 eye; double yaw{}, pitch{}; bool show{}; };   // vessel frame: eye point, gaze yaw/pitch (rad)
+		struct HelmetView { VECTOR3 eye; double yaw{}, pitch{}; bool show{}, glass{}; bool helm{}; VECTOR3 hX{}, hY{}, hZ{}, hO{}; bool ext{}; };   // hO: the helmet's eye point (vessel frame); ext: the glass layer seen from outside (the light suit worn, the helmet closed)   // glass: the closed visor is before her eyes; helm: the head turns inside a helmet fixed to the body - its axes (vessel frame: right, up, forward)   // glass: the closed visor is before her eyes   // vessel frame: eye point, gaze yaw/pitch (rad)
 		UINT HelmetMesh(VESSEL* v);            // once, before the VC is loaded (clbkSetClassCaps): adds the plate, returns its mesh index
 		void RegisterVC();                     // in clbkLoadVC: the plate's group is the VC HUD
 		// every step, after the head is aimed; with the display's data the whole HUD is drawn into the light layer
@@ -132,10 +136,44 @@ namespace ocrew
 		// the visor's modulator: the photonic layer in the glass that dims the outside light locally (behind the panels, along
 		// the visor's edges, over the sun, the whole view when the shade is down) - drawn into its own texture each step
 		SURFHANDLE modSrf{}; int modW{}, modH{}; DEVMESHHANDLE modDm{}; bool modLogged{};
-		double modKey[8]{}; bool modKeyed{};   // what the modulator drew last: drawn again only when that changes
+		double modKey[11]{}; bool modKeyed{};
+		int alertLines{};
+		int lastPzCam{ -9 }; double camSwitchT{ -1 };
+		// the helmet the head turns inside (HelmetView = TRUE): its axes in the vessel frame, this frame. The MFDs and the
+		// lower plates are set on the helmet's glass then, not on the view - the look slides across them
+		bool helmOk{}; VECTOR3 helmX{}, helmY{}, helmZ{};
+		double helmPx[2]{};
+		// ---- the glass layer: the MFDs and the lower plates drawn on the visor itself (the user, 2026-10-20: «строго на
+		// стекле, повторяя его форму»). Meshes\Tantra\VisorGlassHud.msh (Tantra_Design\blender\make_visor_glass_hud.py): the
+		// visor's own geometry, 1.5 mm in, its texture coordinates seen from the eye - an angular picture (yaw, pitch) the
+		// panels are drawn into (the glass canvas). Group 0 seen from inside, group 1 from outside (dim). Carried with the
+		// helmet each step; the panels are then fixed on the glass whatever the view's angle or zoom
+		bool glassWanted{}; VECTOR3 glassEye{}; UINT glassIdx{ static_cast<UINT>(-1) }; VESSEL* glassOwner{}; MESHHANDLE glassTpl{};
+		std::vector<VECTOR3> glassRest; D3D11Hud::Canvas glassCv{}; DEVMESHHANDLE glassMeshDm{}; int glassShown{ -1 }; bool glassPass{}, glassLive{};
+		void GlassSource(VESSEL* v, const VECTOR3& eyeRest);   // the suit has the glass layer (HelmetView): its mesh added now, with the vessel's others
+		bool glassLogged{};
+		bool mfdSide{}, hideLadder{}, hudMin{}, glassExtPass{}; double glassExtT{ -1 };   // glassExtPass: the glass drawn for the outside view   // the MFDs at the sides; the pitch ladder hidden; the HUD down to its top arc
+		HelmetView lastHv{};   // the helmet of the last step: PlaceVisor carries the glass with the camera (the moment the view is drawn)        // the MFDs on the glass: 0 in front (the corners), 1 at the sides (by the cheeks) - SuitDisplay.cfg MFD_SIDE
+		LightEmitter* glassGlow{};   // the glass seen from outside: a small light of its own
+		void GlassFrame(VESSEL* v, VISHANDLE vis, const HelmetView& hv);
+		bool GlassOn() const { return glassLive && glassCv && helmOk; }
+		struct GlassLine { std::string text; int col; double y, size; };
+		std::vector<GlassLine> glassLines;   // the lines low on the glass (the flight module, the autopilot, messages): collected in the view's pass, drawn on the glass   // the helmet's forward in the view, pixels from the centre (the modulator's window follows it)
+		// a direction fixed in the helmet (yaw right, pitch up, rad) in camera space (x right, y down, z forward), with the
+		// panel's right and down axes facing the eye: out[0..2] centre, [3..5] right, [6..8] down. False: no helmet frame
+		bool HelmDir(VESSEL* v, double yaw, double pitch, double out[9]) const;
+		// the glow of MFD i (0, 1) on the helmet's lining: where it sits (yaw right, pitch up, rad, in the helmet), its colour
+		// (sRGB 0..1) and level 0..1. False: no light (folded, not «Буран», the display dark)
+		bool MfdGlow(int i, double& yaw, double& pitch, double rgb[3], double& level) const;   // the Pantsir's camera view: the camera shown last, when it changed (a flash)   // «Буран»: the lines of dangers and messages under the lamps (the modulator darkens the glass behind them)   // what the modulator drew last: drawn again only when that changes
 		// the sun's spot: a small sprite of its own (group 0), set on the sun's line every frame with the plate - it never
 		// trails behind a turn of the head; its texture is drawn once (and again only when its density changes)
 		SURFHANDLE sunSrf{}; DEVMESHHANDLE sunDm{}; double sunAmp{ -1 };
+		// the visor's filter over the sun (D3D11, group 0's flag 0x200): grey (neutral, 10^-4.5) or H-alpha (the chromosphere,
+		// filaments, prominences); the user's setting (SuitDisplay.cfg SUN_FILTER), applied to the group when it changes
+		bool sunHAlpha{}; int sunHAlphaSet{ -1 };
+		// the glass before the eyes (group 0's flag 0x400, for the client's drops on the visor - VisorDrops.cpp): the suit
+		// on, the helmet closed, her own view
+		int glassSet{ -1 }; DEVMESHHANDLE glassDm{};
 		void SunSprite(VESSEL* v, DEVMESHHANDLE dm, const VECTOR3& eye, const VECTOR3& r, const VECTOR3& up, const VECTOR3& f, double dist);
 		double lastShade{}; bool lastSunlit{};
 		// particles through the optics: short sparks and streaks on the image, as dense as the dose rate (the field thins
@@ -149,6 +187,14 @@ namespace ocrew
 		// 1:1, independent of Orbiter's PanelMfdHudSize. Group 2 of the visor plate
 		SURFHANDLE lightSrc{}, lightOut{}; int lightW{}, lightH{}; DEVMESHHANDLE lightDm{}; void* ipi{}; bool ipiTried{}, lightLogged{};
 		void LightLayer(VESSEL* v, const HudData* d);
+		// the D3D11 client's own drawing (D3D11Hud.h): the light layer, the modulator and the sun's spot are GPU canvases
+		// drawn directly - no Sketchpad, no image-processing shader. Under another client the table is absent (null) and
+		// everything above is used as it was
+		const D3D11Hud::Api* gx{}; bool gxTried{};
+		D3D11Hud::Canvas lightCv{}, modCv{}, sunCv{}, drawCv{};   // drawCv: the canvas Draw() draws into now (else its Sketchpad)
+		D3D11Hud::Font sdf[2]{};                                  // the display's font as signed distances: Jura 600, 700
+		const D3D11Hud::Api* Native();                            // the table, the fonts loaded once; null: the Sketchpad path
+		void NightVisionNative(VESSEL* v, double W, double H, double SW, double SH);
 		// the cost kept down without losing quality: the display redrawn 30 times a second (at once after a click), the
 		// modulator 15; between them the plate shows the last picture and still follows the camera every frame
 		double lightT{ -1 }, modT{ -1 }; unsigned clickSeq{}, drawnSeq{};
@@ -164,7 +210,8 @@ namespace ocrew
 		// others' signs on the helmet display (the crew's context menu and its Alt marks): called at the end of every frame
 		// the display is drawn, into the same surface - the light layer (or Orbiter's VC HUD while paused). W x H the view in
 		// pixels; kx, ky the surface's pixels per view pixel (draw at x * kx, y * ky)
-		std::function<void(oapi::Sketchpad* skp, double W, double H, double kx, double ky)> overlay;       // the light layer 2x smoothed (the default, the user's choice) or 1:1 with the screen
+		std::function<void(oapi::Sketchpad* skp, double W, double H, double kx, double ky)> overlay;
+		std::function<void(const D3D11Hud::Api* gx, D3D11Hud::Canvas cv, double W, double H, double kx, double ky)> overlayNative;   // the same signs on the native canvas       // the light layer 2x smoothed (the default, the user's choice) or 1:1 with the screen
 		// the display's settings are the user's, not the scenario's: kept for good in Config\OrbiterCrew\SuitDisplay.cfg
 		// (look, palette, brightness, the map, the resolution) - read once, written on every change
 		bool prefsLoaded{};
@@ -186,7 +233,7 @@ namespace ocrew
 		void Load(const std::string& line);
 
 		enum Mode { EVA, FLIGHT, RDV, SYS };
-		enum LPage { L_LOCAL, L_ORBIT, L_POWER, L_OPTS, L_COUNT };
+		enum LPage { L_LOCAL, L_ORBIT, L_POWER, L_RES, L_OPTS, L_COUNT };
 		enum RPage { R_TARGETS, R_TRANSFER, R_LANDING, R_APPROACH, R_DOCK, R_BODY, R_FLIGHT, R_MACHINE, R_LINKS };
 		enum { AP_CRUISE = 200 };   // + 0..3: height -10 -1 +1 +10 m; + 10..14: speed -5 -1 stop +1 +5 m/s
 
@@ -211,6 +258,15 @@ namespace ocrew
 		// ---- ui state (saved) ----
 		int pal{ 1 }, mode{ FLIGHT }, lpage{ L_LOCAL }, rpage{ R_TARGETS }, zoom{ 1 };
 		bool autoMode{ true }, openL{ true }, openR{ true };
+		// the light suit's layout «Буран» (2026-10-20; the one before it stays in the code as legacy, not drawn): the two MFDs
+		// at eye level in the upper corners, the reserves' counters low left, the suit's mechanization low right, all four
+		// as flat plates turned to the eye; the brow's analogue scales; the journal folded, opening by itself on a warning.
+		// Its themes (SuitDisplay.cfg HUD_THEME): 0 laser (green), 1 projector (cyan, soft glow), 2 augmented reality (white
+		// and blue, flat), 3 high contrast (orange)
+		int hudTheme{};
+		double shadeK{ 0.1 };   // the visor's shading behind the display, 0 .. 2 (SuitDisplay.cfg SHADE)
+		bool logOpen{}; int logPage{}; double logShowT{ -1 }; bool logUnacked{};
+		void BuranRects(double W, double H, double r[4][4]) const;   // the four plates in view pixels: x0, y0, x1, y1
 		int pzTab{ 1 };   // the heavy suit's own panel «ПАНЦИРЬ»: 0 data, 1 radiator, 2 drives, 3 field, 4 damage
 		// ---- nav state ----
 		std::vector<Target> targets;
@@ -232,7 +288,8 @@ namespace ocrew
 		double lastRR{ -1 };
 
 		// what can be clicked, from the last frame (pixels)
-		enum HitKind { H_LTAB, H_RTAB, H_LFOLD, H_RFOLD, H_TGT, H_AP, H_PAL, H_ZOOM, H_MODE, H_NVG, H_NEXT, H_BRIGHT, H_LOOK, H_ACK, H_SUIT, H_RES, H_HORIZON, H_MPU, H_LANG, H_LINK, H_PZTAB, H_SYNTH };
+		enum HitKind { H_LTAB, H_RTAB, H_LFOLD, H_RFOLD, H_TGT, H_AP, H_PAL, H_ZOOM, H_MODE, H_NVG, H_NEXT, H_BRIGHT, H_LOOK, H_ACK, H_SUIT, H_RES, H_HORIZON, H_MPU, H_LANG, H_LINK, H_PZTAB, H_SYNTH,
+			H_LOG, H_LOGPG, H_SUNF, H_THEME, H_SHADEK, H_MFDSIDE, H_LADDER, H_HUDMIN };
 		struct Hit { double x0, y0, x1, y1; int kind, arg; };
 		std::vector<Hit> hits;
 		int request{ -1 };

@@ -99,6 +99,7 @@ void SmokeRender(D3D11Client* gc);                     // in the exhaust pass (t
 bool SmokeLive();                // the flow ran this frame
 void SmokeShimmer(D3D11Client* gc);                    // its hot gas's refraction into the bound offset target (additive)
 void SmokeRelease();             // with the device
+void ExGpuMark(int k);           // the exhaust pass's GPU time by stage (Exhaust.cpp, the log's "exhaust GPU by stage"): 2, 3 in the smoke's solver
 void VesselExhaustRelease();     // with the device (VesselExhaust.cpp)
 
 class GpuParticles

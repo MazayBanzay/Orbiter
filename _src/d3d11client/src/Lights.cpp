@@ -15,13 +15,13 @@
 
 namespace {
 struct LightG { XMFLOAT4 p, c, d, a, e; };
-struct LightsCB { XMFLOAT4X4 lvp; XMFLOAT4 grid, z; XMFLOAT4X4 skyVP[12]; XMFLOAT4 skyDir[12]; XMFLOAT4 skyC, skyK; XMFLOAT4 volC, volX, volY, volZ, volK; XMFLOAT4 room[32]; XMFLOAT4 open[32]; };
+struct LightsCB { XMFLOAT4X4 lvp; XMFLOAT4 grid, z; XMFLOAT4X4 skyVP[12]; XMFLOAT4 skyDir[12]; XMFLOAT4 skyC, skyK; XMFLOAT4 volC, volX, volY, volZ, volK; XMFLOAT4 room[32]; XMFLOAT4 open[32]; XMFLOAT4 roomSky[48]; };
 struct SpriteG { XMFLOAT4 p, c, d, e; };
 struct SpriteCB { XMFLOAT4X4 vp; XMFLOAT4 view, right, up, fwd; };
 constexpr int TX = 16, TY = 9, TZ = 24, NCL = TX * TY * TZ;
 constexpr int SKY_N = 256, NSKY = 12;
 constexpr int MAXL = 256, MAXIDX = 65536, MAXSPR = 256, MAXBEAM = 8;
-constexpr int ATLAS = 4096, UNIT = 512, NBIG = 4, NSMALL = 48, MAXSPOTSH = 16, MAXCUBE = 6, MAXREC = 64, SHADOW_BUDGET = 12;
+constexpr int ATLAS = 4096, UNIT = 512, NBIG = 4, NSMALL = 48, MAXSPOTSH = 16, MAXCUBE = 6, MAXRECTSH = 16, MAXREC = 64, SHADOW_BUDGET = 12;
 struct ShadowRecG { XMFLOAT4X4 vp; XMFLOAT4 rect, k, ax, ay; };
 constexpr float Z0 = 0.5f, ZF = 5000.0f;
 constexpr double SUN_LUX_1AU = 128000.0;     // the Sun's illuminance at 1 AU (AU: OrbiterAPI.h)
@@ -53,6 +53,7 @@ ID3D11Device* g_dev = nullptr;
 bool g_ok = false;
 ComPtr<ID3D11Buffer> g_cb, g_sprCB, g_light, g_cl, g_idx, g_spr;
 ComPtr<ID3D11ShaderResourceView> g_lightSRV, g_clSRV, g_idxSRV, g_sprSRV;
+ComPtr<ID3D11RasterizerState> g_rsSpotSh;
 ComPtr<ID3D11Texture2D> g_spotTex; ComPtr<ID3D11DepthStencilView> g_spotDSV; ComPtr<ID3D11ShaderResourceView> g_spotSRV;
 ComPtr<ID3D11Texture2D> g_skyTex; ComPtr<ID3D11DepthStencilView> g_skyDSV; ComPtr<ID3D11ShaderResourceView> g_skySRV;
 ComPtr<ID3D11VertexShader> g_vsFull, g_vsSpr; ComPtr<ID3D11PixelShader> g_psBeams, g_psSpr;
@@ -187,6 +188,10 @@ void D3D11Client::LightsFrame(const VECTOR3& cp)
         dev->CreateBuffer(&bc, nullptr, &g_beamCB);
         D3D11_RASTERIZER_DESC rd = {}; rd.FillMode = D3D11_FILL_SOLID; rd.CullMode = D3D11_CULL_NONE; rd.DepthClipEnable = TRUE; rd.ScissorEnable = TRUE;
         dev->CreateRasterizerState(&rd, &g_rsScissor);
+        // the lamps' maps: perspective, 16-bit, wide cones over large flat walls at grazing angles - a constant bias and a
+        // steeper slope-scaled one than the Sun's (its clamp 0.002 left acne on the hangar's vault and the halls' walls)
+        { D3D11_RASTERIZER_DESC rs = {}; rs.FillMode = D3D11_FILL_SOLID; rs.CullMode = D3D11_CULL_NONE; rs.DepthClipEnable = TRUE;
+          rs.DepthBias = 24; rs.SlopeScaledDepthBias = 3.0f; rs.DepthBiasClamp = 0.02f; dev->CreateRasterizerState(&rs, &g_rsSpotSh); }
         {
             auto bc2 = CompileShaderFile("lights_vol.hlsl", "CSProbe", "cs_5_0");
             if (bc2) dev->CreateComputeShader(bc2->GetBufferPointer(), bc2->GetBufferSize(), nullptr, &g_csProbe);
@@ -446,6 +451,45 @@ void D3D11Client::LightsFrame(const VECTOR3& cp)
         }
     }
     std::sort(g_cand.begin(), g_cand.end(), [](const Cand& a, const Cand& b) { return a.imp > b.imp; });
+    // ---- each room's "sky" (an ambient cube): the light its 6 walls send back, from that room's own lamps - each wall's mean
+    // illuminance (3 x 3 points, inset) x rho / (1 - rho) (rho 0.4: the walls' light and its further bounces); what a surface
+    // facing a wall receives from it. Directional indirect light where outdoors the sky's is (lights.hlsli RoomSky)
+    for (const RoomK& rk : rooms) {
+        const int k = rk.slot;
+        const VECTOR3 C = _V(cb.room[k * 4].x, cb.room[k * 4].y, cb.room[k * 4].z);
+        VECTOR3 ax[3]; double h[3];
+        for (int i = 0; i < 3; i++) { const XMFLOAT4& a = cb.room[k * 4 + 1 + i]; ax[i] = _V(a.x, a.y, a.z); h[i] = a.w; }
+        for (int f = 0; f < 6; f++) {
+            const int i = f / 2; const double sg = (f & 1) ? -1 : 1;
+            const int iu = (i + 1) % 3, iv = (i + 2) % 3;
+            const VECTOR3 nIn = ax[i] * (-sg);                // the wall's normal, into the room
+            VECTOR3 E = _V(0, 0, 0);
+            for (int a = -1; a <= 1; a++) for (int b = -1; b <= 1; b++) {
+                const VECTOR3 P = C + ax[i] * (sg * h[i] * 0.98) + ax[iu] * (a * h[iu] * 0.6) + ax[iv] * (b * h[iv] * 0.6);
+                for (const Cand& c : g_cand) {
+                    // the room's own lamps (inside its box, half a metre to spare)
+                    const VECTOR3 lc = c.pos - C;
+                    if (fabs(dotp(lc, ax[0])) > h[0] + 0.5 || fabs(dotp(lc, ax[1])) > h[1] + 0.5 || fabs(dotp(lc, ax[2])) > h[2] + 0.5) continue;
+                    VECTOR3 l = c.pos - P; const double d2 = std::max(dotp(l, l), 0.04), d = sqrt(d2); l = l / d;
+                    const double cosR = dotp(nIn, l);
+                    if (cosR <= 0) continue;
+                    double I = 1;
+                    if (c.rect) {
+                        const double ce = c.g.e.w > 0 ? std::max(0.0, dotp(-l, c.dir)) : 0;
+                        I = c.g.e.w / 3.14159265 * ((int)c.g.c.w & 16 ? fabs(dotp(-l, c.dir)) : ce);
+                    } else if (c.spot) {
+                        const double cd = dotp(-l, c.dir);
+                        const double t = std::clamp((cd - c.cosOut) / std::max((double)c.g.a.x - c.cosOut, 1e-4), 0.0, 1.0);
+                        I = t * t * (3 - 2 * t); I *= I;
+                    }
+                    if (d > c.range) continue;
+                    E = E + _V(c.g.c.x, c.g.c.y, c.g.c.z) * (I * cosR / d2);
+                }
+            }
+            E = E * (0.667 / 9.0);
+            cb.roomSky[k * 6 + f] = { (float)E.x, (float)E.y, (float)E.z, 1 };
+        }
+    }
     if (g_cand.size() > (size_t)MAXL) g_cand.resize(MAXL);
 
     // the light's bounds (the cone's sphere when smaller) seen by the camera, and near enough (shadows, beams: a few
@@ -537,8 +581,12 @@ void D3D11Client::LightsFrame(const VECTOR3& cp)
         // the choice
         struct Pick { Cand* c; int kind; };
         std::vector<Pick> picks; int nBig = 0, nSmall = 0, nCubeP = 0;
+        int nRect = 0;
         for (Cand& c : g_cand) {
-            if (c.rect) continue;      // (rectangle lamps: no shadow map yet)
+            if (c.rect) {      // a panel: a soft spot map (its slot kind 1, a small tile)
+                if (nRect < MAXRECTSH && length(c.pos) < 60) { picks.push_back({ &c, 1 }); nRect++; }
+                continue;
+            }
             if (c.spot) {
                 if (c.cosOut < cos(75 * RAD) || c.range < 2 || !inView(c)) continue;
                 if (nBig < NBIG) { picks.push_back({ &c, 0 }); nBig++; }
@@ -584,6 +632,8 @@ void D3D11Client::LightsFrame(const VECTOR3& cp)
             ctx->VSSetShader(g_vsClearZ.Get(), nullptr, 0); ctx->PSSetShader(nullptr, nullptr, 0);
             ctx->Draw(3, 0);
         };
+        ComPtr<ID3D11RasterizerState> rsSun = rsShadow;            // (the meshes' shadow pass takes rsShadow: the lamps' own bias meanwhile)
+        if (g_rsSpotSh) rsShadow = g_rsSpotSh;
         for (const Pick& pk : picks) {
             ShadowSlot* sl = findSlot(pk);
             Cand& c = *pk.c;
@@ -592,10 +642,12 @@ void D3D11Client::LightsFrame(const VECTOR3& cp)
             const bool cube = sl->kind == 2;
             const int nf = cube ? 6 : 1;
             // the casters in reach: the static ones (and their signature with the lamp's), the people
-            const double half = cube ? 45 * RAD : acos(c.cosOut) + 2 * RAD, tanH = tan(half);
+            const double half = cube ? 45 * RAD : c.rect ? 75 * RAD : acos(c.cosOut) + 2 * RAD, tanH = tan(half);
             std::vector<VesselVis*> stat, dyn;
             uint64_t sig = 1469598103934665603ull;
-            const VECTOR3 eL = ptL(c.pos), dL = toL(c.dir);
+            // (a panel's map from its centre pulled back along -n, so the 150 deg cone takes the whole rectangle in)
+            const double pull = c.rect ? sqrt((double)c.g.d.x * c.g.d.x + c.g.d.y * c.g.d.y + c.g.d.z * c.g.d.z + c.g.e.x * c.g.e.x + c.g.e.y * c.g.e.y + c.g.e.z * c.g.e.z) / tan(75 * RAD) : 0;
+            const VECTOR3 eL = ptL(c.pos - c.dir * pull), dL = toL(c.dir);
             Fnv64(sig, (int64_t)llround(eL.x * 1000)); Fnv64(sig, (int64_t)llround(eL.y * 1000)); Fnv64(sig, (int64_t)llround(eL.z * 1000));
             Fnv64(sig, (int64_t)llround(dL.x * 1e4)); Fnv64(sig, (int64_t)llround(dL.y * 1e4)); Fnv64(sig, (int64_t)llround(dL.z * 1e4));
             Fnv64(sig, (int64_t)llround(c.range * 100));
@@ -635,7 +687,7 @@ void D3D11Client::LightsFrame(const VECTOR3& cp)
             if (statDirty && budget >= nf) {
                 budget -= nf; g_nDrawn += nf; drawStat = true;
                 sl->sig = sig; sl->valid = true;
-                sl->eyeL = eL; sl->farZ = c.range; sl->nearZ = cube ? 0.25 : 0.20;     // the fixture round the lamp casts no shadow
+                sl->eyeL = eL; sl->farZ = c.range; sl->nearZ = cube ? 0.25 : c.rect ? pull + 0.03 : 0.20;     // the fixture round the lamp casts no shadow (a panel: the near plane 3 cm past its face - its housing and the ceiling over it never block it; 21.10.2026: they did, behind the pulled-back eye, and only a band at the cone's edge stayed lit)
                 sl->fov = cube ? 2 * atan(1.04) : std::min(2 * half, 160 * RAD);
                 sl->fwdL = dL; sl->upL = fabs(dL.y) < 0.9 ? _V(0, 1, 0) : _V(1, 0, 0);
             }
@@ -705,6 +757,7 @@ void D3D11Client::LightsFrame(const VECTOR3& cp)
             c.tile = first; c.g.a.z = (float)first;
             if (cube) g_nCube++; else g_nSpot++;
         }
+        rsShadow = rsSun;
         ctx->OMSetRenderTargets(0, nullptr, nullptr);
         if (!recs.empty()) Upload(ctx.Get(), g_rec.Get(), recs.data(), recs.size());
     }
@@ -1067,15 +1120,15 @@ void D3D11Client::LightsAdaptEye(XMFLOAT4& adapt, float& exposure)
         ev = log2(std::max(Lp, 1e-6) * 100 / 12.5);
         const double evc = std::clamp(ev, g_volEvMin, g_volEvMax);
         const double Leff = pow(2.0, evc) * 12.5 / 100 * 3.14159265 / g_Esun;
-        up = 0.08 / Leff / std::max((double)adapt.w, 1e-6);
-        if (g_lumP95 > 0) up = std::min(up, 0.35 / (g_lumP95 * std::max((double)adapt.w, 1e-6)));
+        up = 0.18 / Leff / std::max((double)adapt.w, 1e-6);     // the log-mean at middle grey (Reinhard's key 0.18; 0.08 left the halls dull and flat, the user 21.10.2026: as bright and contrasty as Titan's light)
+        if (g_lumP95 > 0) up = std::min(up, 0.9 / (g_lumP95 * std::max((double)adapt.w, 1e-6)));     // the lit 5 % up to the tone curve's shoulder: lamp-lit walls bright
         up = std::clamp(up, 1.0 / 256, 4096.0);
         tExp = 1;          // (the image's metering takes the local lights in)
     } else if (g_ok && cfg.on && g_airless && g_lumOk && g_lumView > 0) {
-        up = 0.08 / g_lumView;
+        up = 0.18 / g_lumView;
         // ... but the lit parts not burnt out: the brightest 5 % of the view kept under ~0.35 before the tone curve (its
         // shoulder ~ 1 at x1.6) - a lamp-lit wall stays a wall, the dark corners stay dark (as a camera's metering does)
-        if (g_lumP95 > 0) up = std::min(up, 0.35 / g_lumP95);
+        if (g_lumP95 > 0) up = std::min(up, 0.9 / g_lumP95);
         up = std::clamp(up, 1.0, 4096.0);
     }
     tExp *= up;

@@ -44,6 +44,9 @@ cbuffer LocalLights : register(b9)
                             // (camera-centred; w: the blend [m]), then the 3 axes (global, unit) with the half extents (w)
     float4 gOpen[32];       // up to 8 openings (gVolK.y of them) of the interior the camera is in: centre (camera-centred),
                             // then the axes (global, unit) with the half extents (w)
+    float4 gRoomSky[48];    // each room's "sky" (Lights.cpp): the light its walls, floor and ceiling send back, an ambient cube
+                            // of 6 values per room - +x -x +y -y +z -z along the room's axes (rgb: the irradiance a surface facing
+                            // that wall gets from it, client units; w: 1 = set)
 };
 StructuredBuffer<LocalLightG> tLights : register(t17);
 StructuredBuffer<uint2> tLCluster : register(t18);
@@ -83,7 +86,50 @@ float VolumeWeight(float3 wp)
     float3 r = wp - gVolC.xyz;
     float3 o = abs(float3(dot(r, gVolX.xyz), dot(r, gVolY.xyz), dot(r, gVolZ.xyz))) - float3(gVolX.w, gVolY.w, gVolZ.w);
     float dmax = max(o.x, max(o.y, o.z));
-    return saturate(-dmax / max(gVolK.x, 0.01));
+    // 1 inside the box and on its faces (the walls lie on them: a weight fading inward let the Sun's cascade texels in along
+    // every wall and corner - the saw-teeth), fading over the blend outside it
+    return saturate(1 - dmax / max(gVolK.x, 0.01));
+}
+
+// the room's own "sky" at wp for a surface of normal n: the ambient cube of the room wp is in (its walls' bounce: directional -
+// a floor under the lamps lights the ceiling, a lit wall the opposite one), over the rooms' blends. Used where outdoors the
+// sky's light is (Lagarde & de Rousiers 2014, 4.9: a local light probe), so the AO and the specular occlusion act on it
+float3 RoomSky(float3 wp, float3 n, out float inRoom)
+{
+    float3 s = 0; inRoom = 0;
+    [loop] for (int r = 0; r < 8; r++) {
+        if (gRoomSky[r * 6].w < 0.5) continue;
+        float4 c = gRoom[r * 4], ax = gRoom[r * 4 + 1], ay = gRoom[r * 4 + 2], az = gRoom[r * 4 + 3];
+        float3 q = wp - c.xyz;
+        float3 o = abs(float3(dot(q, ax.xyz), dot(q, ay.xyz), dot(q, az.xyz))) - float3(ax.w, ay.w, az.w);
+        float wgt = saturate(1 - max(o.x, max(o.y, o.z)) / max(c.w, 0.05));
+        if (wgt <= 0) continue;
+        float3 nl = float3(dot(n, ax.xyz), dot(n, ay.xyz), dot(n, az.xyz)), n2 = nl * nl;
+        // a surface facing +x gets the +x wall's light ... (the ambient cube: the squared normal's components, summing to 1)
+        float3 e = n2.x * (nl.x >= 0 ? gRoomSky[r * 6 + 0].rgb : gRoomSky[r * 6 + 1].rgb)
+                 + n2.y * (nl.y >= 0 ? gRoomSky[r * 6 + 2].rgb : gRoomSky[r * 6 + 3].rgb)
+                 + n2.z * (nl.z >= 0 ? gRoomSky[r * 6 + 4].rgb : gRoomSky[r * 6 + 5].rgb);
+        s += e * wgt; inRoom = max(inRoom, wgt);
+        if (wgt >= 1) break;
+    }
+    return s;
+}
+
+// what a glossy surface inside a declared room mirrors: the room's walls along the mirrored direction R - the ambient cube
+// read along R is the irradiance a surface facing that way gets, the walls' radiance x pi; a rough lobe sees the cube
+// averaged towards the normal's side (Frostbite's dominant direction, Lagarde & de Rousiers 2014, 4.9.3). Specular
+// occlusion: no reflection from below the surface's own plane (horizon occlusion, ng the geometric normal); the small-scale
+// occlusion (GTAO) comes after the pass and darkens the pixel as a whole (gtao.hlsl)
+float3 RoomReflect(float3 wp, float3 R, float3 ng, float3 V, float3 n, float rough)
+{
+    if (gRoomSky[0].w < 0.5 && gRoomSky[6].w < 0.5 && gRoomSky[12].w < 0.5 && gRoomSky[18].w < 0.5
+        && gRoomSky[24].w < 0.5 && gRoomSky[30].w < 0.5 && gRoomSky[36].w < 0.5 && gRoomSky[42].w < 0.5) return 0;
+    float a = rough * rough;
+    float3 Rd = normalize(lerp(R, n, a * (sqrt(1 - a) + a)));     // the dominant direction of the GGX lobe
+    float inRoom; float3 L = RoomSky(wp, Rd, inRoom) / 3.14159265;
+    if (inRoom <= 0) return 0;
+    float ho = saturate(1 + 1.3 * dot(Rd, ng)); ho *= ho;         // the horizon
+    return L * ho;
 }
 
 // the Sun inside the interior volume: only along rays that leave by a declared opening (a window, a door, a gate) - the
@@ -107,6 +153,42 @@ float InteriorSun(float3 wp)
         if (t1 >= t0) { through = 1; break; }
     }
     return lerp(1, through, w);
+}
+
+// the record of light L's shadow map seen from wp: a spot's own, a point light's cube face (the major axis of wp - the lamp)
+int ShadowRecFor(LocalLightG L, float3 wp)
+{
+    int r = (int)L.a.z;
+    if (r < 0 || LightIsSpot(L) || ((uint)L.c.w & 8) != 0) return r;
+    ShadowRec f = tShadowRec[r];
+    float3 v = wp - L.p.xyz;
+    float3 az = cross(f.ax.xyz, f.ay.xyz);
+    float3 l = float3(dot(v, f.ax.xyz), dot(v, f.ay.xyz), dot(v, az)), al = abs(l);
+    int face = al.x >= al.y && al.x >= al.z ? (l.x > 0 ? 0 : 1) : al.y >= al.z ? (l.y > 0 ? 2 : 3) : (l.z > 0 ? 4 : 5);
+    return r + face;
+}
+// the map r's visibility at p: 3 x 3 hardware-compared bilinear taps inside its tile; outside the map: lit
+float ShadowTap(int r, float3 p, int taps)
+{
+    ShadowRec R = tShadowRec[r];
+    float4 q = mul(float4(p, 1), R.vp);
+    if (q.w <= 1e-4) return 1;
+    float3 c = q.xyz / q.w;
+    float2 uv = c.xy * float2(0.5, -0.5) + 0.5;
+    if (any(uv < 0.001) || any(uv > 0.999) || c.z > 1) return 1;
+    float2 lo = R.rect.xy + R.rect.w * 1.5, hi = R.rect.xy + R.rect.z - R.rect.w * 1.5;
+    float2 a = clamp(R.rect.xy + uv * R.rect.z, lo, hi);
+    if (taps <= 1) return tSpotShadow.SampleCmpLevelZero(sShadow, a, c.z);
+    if (gSkyK.z < 0.5) {      // (with an air - Titan: the 3 x 3 grid as approved)
+        float s9 = 0;
+        [unroll] for (int j = -1; j <= 1; j++) [unroll] for (int i = -1; i <= 1; i++)
+            s9 += tSpotShadow.SampleCmpLevelZero(sShadow, a + float2(i, j) * R.rect.w, c.z);
+        return s9 / 9;
+    }
+    // airless: 4 hardware-compared bilinear taps half a texel round the point - a 3 x 3 tent's softness at less than half the cost
+    const float h = 0.5 * R.rect.w;
+    return 0.25 * (tSpotShadow.SampleCmpLevelZero(sShadow, a + float2(-h, -h), c.z) + tSpotShadow.SampleCmpLevelZero(sShadow, a + float2(h, -h), c.z)
+                 + tSpotShadow.SampleCmpLevelZero(sShadow, a + float2(-h, h), c.z) + tSpotShadow.SampleCmpLevelZero(sShadow, a + float2(h, h), c.z));
 }
 
 // ---- rectangle lamps (Lagarde & de Rousiers 2014, "Moving Frostbite to PBR", 4.7 and appendix E): the diffuse light by the
@@ -144,37 +226,24 @@ float RectSide(LocalLightG L, float3 wp)
     return ((uint)L.c.w & 16) != 0 ? 1 : saturate(s * 20);
 }
 // its illuminance on a surface of normal n at wp [client units]: radiance x n.F / pi
-float3 RectIrradiance(LocalLightG L, float3 wp, float3 n)
+// a panel's shadow: soft as the panel is large (percentage-closer soft shadows, Fernando 2005; Frostbite 4.10.4 - the area
+// lights' shadows blurred by their size). The blockers' mean depth found round the point (12 loads, the panel's size seen
+// from the point as the reach), the penumbra's width at the point from it (a lamp of half-size lr: w = lr (zr - zb) / (zb - zl)),
+// then 16 compared taps over that width. No blocker: lit, all blockers inside: the umbra (both without the filter)
+static const float2 kRectDisk[16] = {
+    float2(-0.942, -0.399), float2(0.946, -0.769), float2(-0.094, -0.929), float2(0.345, 0.294),
+    float2(-0.916, 0.458), float2(-0.815, -0.879), float2(-0.383, 0.277), float2(0.975, 0.756),
+    float2(0.443, -0.975), float2(0.537, -0.474), float2(-0.265, -0.419), float2(0.792, 0.191),
+    float2(-0.242, 0.997), float2(-0.814, 0.914), float2(0.200, 0.786), float2(0.144, -0.141) };
+float RectShadow(LocalLightG L, float3 wp, float3 n)
 {
-    float3 v = L.p.xyz - wp;
-    float r2 = L.p.w * L.p.w, d2 = dot(v, v);
-    if (d2 >= r2) return 0;
-    float w = saturate(1 - (d2 / r2) * (d2 / r2)); w *= w;
-    float side = RectSide(L, wp) * RoomWeight(L, wp);
-    if (side <= 0) return 0;
-    return L.c.rgb * (max(dot(n, RectFormVector(L, wp)), 0) / 3.14159265 * w * side);
-}
-
-// set by mesh.hlsl for the camera's own cockpit (its helmet, its cabin): 1 there, 0 for the world
-static float gLLOwn = 0;
-bool LocalLightsOn() { return gLZ.z > 0.5 && gLGrid.w > 0.5; }
-
-// the record of light L's shadow map seen from wp: a spot's own, a point light's cube face (the major axis of wp - the lamp)
-int ShadowRecFor(LocalLightG L, float3 wp)
-{
+    if (L.a.z < 0) return 1;
     int r = (int)L.a.z;
-    if (r < 0 || LightIsSpot(L)) return r;
-    ShadowRec f = tShadowRec[r];
-    float3 v = wp - L.p.xyz;
-    float3 az = cross(f.ax.xyz, f.ay.xyz);
-    float3 l = float3(dot(v, f.ax.xyz), dot(v, f.ay.xyz), dot(v, az)), al = abs(l);
-    int face = al.x >= al.y && al.x >= al.z ? (l.x > 0 ? 0 : 1) : al.y >= al.z ? (l.y > 0 ? 2 : 3) : (l.z > 0 ? 4 : 5);
-    return r + face;
-}
-// the map r's visibility at p: 3 x 3 hardware-compared bilinear taps inside its tile; outside the map: lit
-float ShadowTap(int r, float3 p, int taps)
-{
     ShadowRec R = tShadowRec[r];
+    float3 lv = L.p.xyz - wp; float d = length(lv); float3 l = lv / max(d, 1e-4);
+    float tx = R.k.x * d;
+    float gl = saturate(dot(n, l));
+    float3 p = wp + n * (tx * (1.5 + 1.0 * (1 - gl))) + l * (tx * 0.75);    // the normal offset, as for the spots
     float4 q = mul(float4(p, 1), R.vp);
     if (q.w <= 1e-4) return 1;
     float3 c = q.xyz / q.w;
@@ -182,18 +251,50 @@ float ShadowTap(int r, float3 p, int taps)
     if (any(uv < 0.001) || any(uv > 0.999) || c.z > 1) return 1;
     float2 lo = R.rect.xy + R.rect.w * 1.5, hi = R.rect.xy + R.rect.z - R.rect.w * 1.5;
     float2 a = clamp(R.rect.xy + uv * R.rect.z, lo, hi);
-    if (taps <= 1) return tSpotShadow.SampleCmpLevelZero(sShadow, a, c.z);
-    if (gSkyK.z < 0.5) {      // (with an air - Titan: the 3 x 3 grid as approved)
-        float s9 = 0;
-        [unroll] for (int j = -1; j <= 1; j++) [unroll] for (int i = -1; i <= 1; i++)
-            s9 += tSpotShadow.SampleCmpLevelZero(sShadow, a + float2(i, j) * R.rect.w, c.z);
-        return s9 / 9;
+    const float zn = R.k.y, zf = R.k.z, zr = q.w;                  // the map's near and far, the point's depth in it
+    const float zl = max(zn - 0.03, 0.01);                         // the panel's face (Lights.cpp: the near plane 3 cm past it)
+    const float lr = 0.5 * (length(L.d.xyz) + length(L.e.xyz));    // the panel's half-size
+    const float texW = R.k.x * zr;                                 // a texel's width at the point [m]
+    // the blockers: within the panel's cone at half the way, in texels of the point's depth
+    float sr = clamp(lr * 0.5 / max(texW, 1e-5), 1, 24);
+    float zb = 0, nb = 0;
+    [unroll] for (int i = 0; i < 12; i++) {
+        float2 t = clamp(a + kRectDisk[i] * sr * R.rect.w, lo, hi);
+        float z = tSpotShadow.Load(int3(t / R.rect.w, 0));
+        if (z < c.z) { zb += z; nb += 1; }
     }
-    // airless: 4 hardware-compared bilinear taps half a texel round the point - a 3 x 3 tent's softness at less than half the cost
-    const float h = 0.5 * R.rect.w;
-    return 0.25 * (tSpotShadow.SampleCmpLevelZero(sShadow, a + float2(-h, -h), c.z) + tSpotShadow.SampleCmpLevelZero(sShadow, a + float2(h, -h), c.z)
-                 + tSpotShadow.SampleCmpLevelZero(sShadow, a + float2(-h, h), c.z) + tSpotShadow.SampleCmpLevelZero(sShadow, a + float2(h, h), c.z));
+    if (nb < 0.5) return 1;
+    zb /= nb;
+    zb = zn * zf / max(zf - zb * (zf - zn), 1e-6);                 // to the depth [m]
+    float w = lr * max(zr - zb, 0) / max(zb - zl, 0.05);           // the penumbra's width at the point [m]
+    float fr = clamp(w / max(texW, 1e-5), 1, 24);
+    float s = 0;
+    [unroll] for (int j = 0; j < 16; j++)
+        s += tSpotShadow.SampleCmpLevelZero(sShadow, clamp(a + kRectDisk[j] * fr * R.rect.w, lo, hi), c.z);
+    return s / 16;
 }
+// sh: the shadow it took (-1: none looked up - too faint, or out of reach), for RectShade's specular (one lookup, not two)
+float3 RectIrradianceS(LocalLightG L, float3 wp, float3 n, out float sh)
+{
+    sh = -1;
+    float3 v = L.p.xyz - wp;
+    float r2 = L.p.w * L.p.w, d2 = dot(v, v);
+    if (d2 >= r2) return 0;
+    float w = saturate(1 - (d2 / r2) * (d2 / r2)); w *= w;
+    float side = RectSide(L, wp) * RoomWeight(L, wp);
+    if (side <= 0) return 0;
+    float3 E = L.c.rgb * (max(dot(n, RectFormVector(L, wp)), 0) / 3.14159265 * w * side);
+    if (dot(E, 1) * gHazeRGB.w > 1e-3) { sh = RectShadow(L, wp, n); E *= sh; }
+    return E;
+}
+float3 RectIrradiance(LocalLightG L, float3 wp, float3 n) { float sh; return RectIrradianceS(L, wp, n, sh); }
+
+// set by mesh.hlsl for the camera's own cockpit (its helmet, its cabin): 1 there, 0 for the world
+static float gLLOwn = 0;
+// what the lamps gave the point in the same walk (LocalLights, LocalLightsGround), for the AO's share of the light
+// (mesh.hlsl, planet.hlsl -> Ssao.cpp): their direct illuminance on the surface, and their bounce as it lights the point
+static float3 gLLDirE = 0, gLLIndE = 0;
+bool LocalLightsOn() { return gLZ.z > 0.5 && gLGrid.w > 0.5; }
 
 // the illuminance [Sun = 1] from light L at wp (direction to it in Ldir), its shadow included (ng: the geometric normal)
 float3 LocalLightE(LocalLightG L, float3 wp, float3 ng, out float3 Ldir)
@@ -303,7 +404,8 @@ float3 RectShade(LocalLightG L, float3 wp, float3 n, float3 V, float3 albedo, fl
 {
     uint fl = (uint)L.c.w;
     if (gLLOwn > 0.5 ? (fl & 2) != 0 : (fl & 4) != 0) return 0;
-    float3 E = RectIrradiance(L, wp, n);
+    float shE; float3 E = RectIrradianceS(L, wp, n, shE);
+    gLLDirE += E;
     if (dot(E, 1) * gHazeRGB.w < 1e-4) return 0;
     // the specular: the most representative point
     float3 nL = normalize(cross(L.d.xyz, L.e.xyz));
@@ -323,7 +425,7 @@ float3 RectShade(LocalLightG L, float3 wp, float3 n, float3 V, float3 albedo, fl
     float aP = saturate(a + sqrt(L.e.w / 3.14159265) / (2 * d));     // the lobe widened by the lamp's size at d
     float norm = (a / max(aP, 1e-4)) * (a / max(aP, 1e-4));
     float cosE = abs(dot(-Ld, nL)) * (((fl & 16) != 0) ? 1 : step(0, dot(-Ld, nL)));
-    float3 Es = L.c.rgb * (L.e.w * cosE / (3.14159265 * d2)) * RoomWeight(L, wp);   // the panel's intensity towards wp over d^2
+    float3 Es = L.c.rgb * (L.e.w * cosE / (3.14159265 * d2)) * RoomWeight(L, wp) * (dot(E, 1) > 0 ? (shE >= 0 ? shE : RectShadow(L, wp, n)) : 0);   // the panel's intensity towards wp over d^2 (shadowed: the diffuse's lookup)
     float3 H = normalize(V + Ld);
     float nv = saturate(dot(n, V)) + 1e-4, nh = saturate(dot(n, H));
     float3 Fs = F0 + (1 - F0) * pow(1 - saturate(dot(V, H)), 5);
@@ -338,6 +440,7 @@ float3 LocalLightShade(LocalLightG L, float3 wp, float3 n, float3 ng, float3 V, 
     float3 Ld;
     float3 E = LocalLightE(L, wp, ng, Ld);
     float nl = saturate(dot(n, Ld));
+    gLLDirE += E * nl;
     if (nl <= 0 || dot(E, 1) * gHazeRGB.w < 1e-3) return 0;    // too faint to see here (under 1/1000 of white): no GGX
     float3 H = normalize(V + Ld);
     float nv = saturate(dot(n, V)) + 1e-4, nh = saturate(dot(n, H));
@@ -352,6 +455,7 @@ float3 LightFillOne(LocalLightG L, float3 wp)
 {
     uint fl = (uint)L.c.w;
     if (gLLOwn > 0.5 ? (fl & 2) != 0 : (fl & 4) != 0) return 0;
+    if (gLLOwn > 0.5 && (fl & 6) == 0) return 0;    // the camera's own cabin: no bounce from the lamps outside it (they shine in through the windows, shadowed, as direct light)
     float3 v = L.p.xyz - wp;
     float d2 = dot(v, v), r2 = L.p.w * L.p.w;
     if (d2 >= r2) return 0;
@@ -359,10 +463,14 @@ float3 LightFillOne(LocalLightG L, float3 wp)
     float share = LightIsSpot(L) ? 0.5 * (1 - L.d.w) : 1;
     float3 I = LightIsRect(L) ? L.c.rgb * (L.e.w / 3.14159265) * RoomWeight(L, wp) : L.c.rgb;   // a rectangle: its intensity along its normal (one hemisphere), in its room
     if (LightIsRect(L)) share = 0.5;
-    return I * (0.667 * share * w / (d2 + 4));
+    // a point the lamp cannot see (its shadow map: behind a hull - a vehicle's closed cabin in the hangar) gets a quarter of
+    // its bounce: the room's walls still bounce some round a pillar, a closed cabin's inside gets it through its windows only
+    float vis = L.a.z >= 0 && !LightIsRect(L) ? lerp(0.25, 1, ShadowTap(ShadowRecFor(L, wp), wp, 1)) : 1;
+    return I * (0.667 * share * w * vis / (d2 + 4));
 }
-// the lamps on a surface; encl > 0 (how enclosed the point is, on airless bodies) adds their bounce fill in the same walk
-float3 LocalLights(float3 wp, float3 n, float3 ng, float3 V, float3 albedo, float3 F0, float a, float encl)
+// the lamps on a surface; encl > 0 (how enclosed the point is, on airless bodies) adds their bounce fill in the same walk.
+// inRoom: RoomSky's for wp (the caller has it: it depends on the position only)
+float3 LocalLightsR(float3 wp, float3 n, float3 ng, float3 V, float3 albedo, float3 F0, float a, float encl, float inRoom)
 {
     if (!LocalLightsOn()) return 0;
     float3 s = 0;
@@ -378,9 +486,16 @@ float3 LocalLights(float3 wp, float3 n, float3 ng, float3 V, float3 albedo, floa
             s += LocalLightShade(L, wp, n, ng, V, albedo, F0, a);
             if (fill) f += LightFillOne(L, wp);
         }
-        s += albedo * f * encl;
+        gLLIndE += f * encl * (1 - inRoom);
+        s += albedo * f * encl * (1 - inRoom);       // the radial estimate only outside the rooms that have their own sky
     }
     return s;
+}
+float3 LocalLights(float3 wp, float3 n, float3 ng, float3 V, float3 albedo, float3 F0, float a, float encl)
+{
+    float inRoom = 0;
+    if (LocalLightsOn()) RoomSky(wp, n, inRoom);
+    return LocalLightsR(wp, n, ng, V, albedo, F0, a, encl, inRoom);
 }
 // the diffuse part only (the terrain): albedo x the illuminance on the surface
 float3 LocalLightsDiffuse(float3 wp, float3 n, float3 ng, float3 albedo)

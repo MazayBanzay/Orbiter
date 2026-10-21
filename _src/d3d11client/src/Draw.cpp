@@ -817,6 +817,7 @@ void D3D11Client::UploadSurface(Surf* s)
         D3D11_SHADER_RESOURCE_VIEW_DESC sd = {}; sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB; sd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D; sd.Texture2D.MipLevels = 1;
         dev->CreateShaderResourceView(s->tex.Get(), &sd, &s->srv);
         s->immutable = false;
+        s->alpha = -1;       // drawn on now: what it holds is not known any more (Mesh.cpp's depth prepass)
     }
     ctx->UpdateSubresource(s->tex.Get(), 0, nullptr, s->bits, s->w * 4, 0);
     s->gpuNewer = false;

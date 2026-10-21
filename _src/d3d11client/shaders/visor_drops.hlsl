@@ -529,7 +529,7 @@ float4 PSOut(OOut i, bool front : SV_IsFrontFace) : SV_Target
     float3 H = normalize(V + gSunDir.xyz);
     float spec = D_GGX_L(saturate(dot(nd, H)), 0.004) * F * saturate(dot(nd, gSunDir.xyz)) * 0.25;
     col += SunLight(i.wp) * ShadowAt(i.wp) * spec;
-    col += LocalLights(i.wp, nd, n, V, 0, f0, 0.004);
+    col += LocalLights(i.wp, nd, n, V, 0, f0, 0.004, 0);   // (no room bounce on the drops; encl was added to LocalLights - the 7-argument call stopped the whole file compiling)
     // a drop on the glass darkens what is seen through it at its rim (total reflection), barely at its centre
     float a = cov * lerp(0.12, 0.7, rr * rr);
     col = ApplyHaze(col, i.wp);

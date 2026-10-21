@@ -18,7 +18,7 @@ LOG = os.path.join(HERE, "uvbake_pantsir.log"); log = []
 STAGE = os.environ.get("UVBAKE_STAGE", "bake")
 # atlas -> (size, Orbiter materials); the glow materials (Borazon 6, Sole 12, Rad 15) stay separate materials: they may share
 # a file (Metalness.fx: heat = saturate(_heat.g - 1 + specialfx^3) per material, _emis x the material's own emission)
-ATLAS = {"pz_shell": (2048, ("Enamel", "Red", "Rubber")), "pz_frame": (2048, ("Graphite", "Metal")),
+ATLAS = {"pz_shell": (4096, ("Enamel", "Red", "Rubber")), "pz_frame": (2048, ("Graphite", "Metal")),
          "pz_boraz": (1024, ("Borazon", "Mirror")), "pz_sole": (1024, ("Sole",)), "pz_rad": (1024, ("Rad",)),
          "pz_visor": (512, ("GoldVisor", "Slit"))}
 MID = {"Enamel": 1, "Red": 2, "Rubber": 3, "Graphite": 4, "Metal": 5, "Borazon": 6, "Mirror": 7, "Sole": 8, "Rad": 9, "GoldVisor": 10, "Slit": 11}

@@ -29,12 +29,17 @@ struct OcInfo {
 // OC_BUTTON: a control pressed with the MOUSE (the user's rule: buttons are clicked, not F): pos = its centre, radius =
 // its size on the panel (~0.02-0.05 m); the person must stand within arm's reach. The others are used with F.
 // OC_HELM: a seat the ship is controlled from (as OC_SEAT; there V shows the ship from outside)
-enum OcItemKind { OC_SEAT = 1, OC_TERMINAL, OC_DOOR, OC_LIFT, OC_AIRLOCK, OC_EXIT, OC_BUTTON, OC_HELM };
+enum OcItemKind { OC_SEAT = 1, OC_TERMINAL, OC_DOOR, OC_LIFT, OC_AIRLOCK, OC_EXIT, OC_BUTTON, OC_HELM, OC_DOORWAY };
 struct OcItem {
     int id;                     // the ship's own id (given back in Use / Seat)
     int kind;                   // OcItemKind
     VECTOR3 pos, dir;           // where it is; which way one faces to use it
     double radius;              // m: within reach
+                                // OC_DOORWAY (2026-10-21): a door used where one aims at it - pos its centre, dir its normal
+                                // (either way), radius the reach from her feet; the hint and F only while her look (the view's
+                                // middle, the cursor with Alt, her eyes from outside) meets its opening (1.3 x 2.1 m round
+                                // pos), from outside as an entrance and from inside as the exit; F there wins over the
+                                // action wheel
     char label[64];             // shown in the hint ("F - кресло пилота"), in the ship's code page
 };
 struct OcInterior {

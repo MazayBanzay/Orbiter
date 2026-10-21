@@ -1,0 +1,68 @@
+BEGIN_HYPERDESC
+Kaira at Cape Canaveral (LC-39A) under the eyewall of a hurricane standing just off the coast: the downpour, the storm's wind, the eye over the sea to the east (D3D11 client, Storm.cfg)
+END_HYPERDESC
+
+BEGIN_ENVIRONMENT
+  System Sol
+  Date MJD 51982.8330000000
+END_ENVIRONMENT
+
+BEGIN_FOCUS
+  Ship KairaRean
+END_FOCUS
+
+BEGIN_CAMERA
+  TARGET KairaRean
+  MODE Extern
+  POS 2.000000 175.545319 -21.969158
+  TRACKMODE TargetRelative
+  FOV 70.00
+END_CAMERA
+
+BEGIN_HUD
+  TYPE Surface
+END_HUD
+
+BEGIN_SHIPS
+KairaRean:OrbiterCrew\AstronavigatorT2
+  STATUS Landed Earth
+  POS -80.6041000 28.6083000
+  HEADING 90.00
+  ALT 0.930
+  RCSMODE 0
+  AFCMODE 7
+  PRPLEVEL 0:1.000000 1:1.000000
+  NAVFREQ 0 0
+  NAME Kaira Rean
+  ROLE astronavigator
+  SEX female
+  PHYS 0.0 1.740 62.00 48.00 100.0
+  CLASS OrbiterCrew\AstronavigatorT2
+  STAMINA 1.000000
+  DOSE 0.00000 0.00000
+  NOURISH 0.0000 7996749 12.000 0.001
+  HURT 0.000 0.000 0.000 0.000
+  RESERVE 1.000000
+  CORE 310.143
+  INJURY 0.000000
+  BODY 0
+  VIEW 1 2.00
+  SUIT 1
+  SUIT_SET Boron
+  SUIT_O2 0.999615
+  SUIT_WATER 1.99869
+  SUIT_SORBENT 0.00045
+  SUIT_BATTERY 5.9923
+  SUIT_N2 1.5
+  SUIT_SERVO 1
+  SUIT_TEQ 304.469312
+  FIELD 0
+  HUD 1 1 1 0 0 1 1 1 1 0.60 1 0 3 0
+  JETPACK 1
+  JET_FUEL 13.0
+  JET_MODEL 3
+  SHADE 0.0
+  LAMP 0
+  LAMP_MODE 1
+END
+END_SHIPS

@@ -29,6 +29,9 @@ namespace {
     bool tessTried = false;
 }
 
+// whether SaveLiquidBed will copy the terrain's depth this frame: the vessels' depth prepass (Client.cpp) waits for it
+bool LiquidBedWanted() { return liquidLast && g_cfg.liquids; }
+
 void D3D11Client::SaveLiquidBed()
 {
     bedSaved = false;

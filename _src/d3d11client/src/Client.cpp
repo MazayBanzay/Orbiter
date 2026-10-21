@@ -470,6 +470,7 @@ bool D3D11Client::CreateDevice()
         for (int i = 0; i < 4; i++) dev->CreateQuery(&qd, &qTs[f][i]);
         for (int i = 0; i < kMarks; i++) dev->CreateQuery(&qd, &qMk[f][i]);
         for (int i = 0; i < kSub; i++) dev->CreateQuery(&qd, &qSub[f][i]);
+        for (int i = 0; i < kEx; i++) dev->CreateQuery(&qd, &qEx[f][i]);
     }
     return true;
 }
@@ -514,6 +515,10 @@ bool D3D11Client::CreateShaders()
     };
     ComPtr<ID3DBlob> bm, bp;
     if (!vs("mesh.hlsl", vsMesh, &bm) || !ps("mesh.hlsl", psMesh)) return false;
+    {   // the colour pass's variant without the mirror's discard (early depth rejection after the prepass); none: psMesh
+        psMeshMain.Reset();
+        if (auto b = CompileFile(shaderDir + "mesh.hlsl", "PSMain", "ps_5_0")) dev->CreatePixelShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &psMeshMain);
+    }
     if (!vs("planet.hlsl", vsPlanet, &bp) || !ps("planet.hlsl", psPlanet)) return false;
     if (!vs("post.hlsl", vsPost, nullptr) || !ps("post.hlsl", psPost)) return false;
     if (!vs("blit.hlsl", vsBlit, nullptr) || !ps("blit.hlsl", psBlit)) return false;
@@ -673,7 +678,8 @@ SURFHANDLE D3D11Client::clbkLoadTexture(const char* fname, DWORD flags)
     if (!srv) srv = LoadDDSFile(dev.Get(), ctx.Get(), p1.c_str(), true, &w, &h);
     if (!srv) srv = LoadDDSFile(dev.Get(), ctx.Get(), fname, true, &w, &h);
     if (!srv) { LOGC("texture not loaded: %s", fname); return nullptr; }
-    Surf* s = new Surf; s->srv = srv; s->w = w; s->h = h; s->name = key; s->immutable = true;
+    extern thread_local int g_ddsAlpha;
+    Surf* s = new Surf; s->srv = srv; s->w = w; s->h = h; s->name = key; s->immutable = true; s->alpha = (signed char)g_ddsAlpha;
     texCache[key] = s;
     if (g_traceAlloc && (size_t)w * h >= (512u << 10)) LOGC("trace: texture %s %ux%u", fname, w, h);
     return (SURFHANDLE)s;
@@ -939,6 +945,7 @@ struct ObjCB { XMFLOAT4X4 wvp, w; XMFLOAT4 sun, diff, amb, spec, emis, flags; };
 void D3D11Client::clbkRenderScene()
 {
     if (!dev || !sc || !shadersOk) return;     // a shader that failed to compile is in Orbiter.log; nothing is drawn
+    QueryPerformanceCounter(&tSceneBeg);
     frameNo++;
     if (testMode) diagFrames = (frameNo >= 300 && frameNo < 302) ? 1 : 0;
     if (testMode && frameNo == 600) {      // D3D11CLIENT_TEST_HANG: one frame held 6 s (the hang watchdog's own check)
@@ -996,6 +1003,7 @@ void D3D11Client::clbkRenderScene()
     FxFrame(this, cp, cr, proj, oapiGetSimStep());   // effects' compute work (waves, spray) before the scene
     GpuMark(fi, 1);
     RenderShadows(cp);
+    GpuEx(fi, 0);
     LightsFrame(cp);      // the vessels' local lights: gathered, clustered, the spots' shadows (Lights.cpp)
     GpuMark(fi, 2);
     D3D11_VIEWPORT vp = { 0, 0, (float)RW, (float)RH, 0, 1 };    // the scene's size (TAA render scale)
@@ -1023,6 +1031,36 @@ void D3D11Client::clbkRenderScene()
     RenderStars(cr, proj, starVis);
     GpuMark(fi, 3);
 
+    // the depth prepass (as Frostbite, id Tech, Unreal's early Z pass): the opaque vessels' depth first, no pixel shader;
+    // their colour pass and the terrain then light only what is seen. Before the planets unless a liquid needs the
+    // terrain's depth alone (SaveLiquidBed) - indoors the ground under the floor is not lit at all then.
+    // Client.cfg NoDepthPrepass = 1: off (a comparison)
+    OBJHANDLE own = oapiCameraInternal() ? oapiGetFocusObject() : nullptr;
+    auto depthPrepass = [&]() {
+        GpuEx(fi, 1);
+        double FxTestNum(const char* key);
+        static const bool off = FxTestNum("NoDepthPrepass") > 0.5;
+        if (!off) {
+            ctx->OMSetRenderTargets(0, nullptr, dsv.Get());
+            prepass = true;
+            for (auto& kv : visuals) if (kv.first != own) RenderVessel(kv.second, cp, cr, proj, false);
+            prepass = false;
+            ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
+        }
+        GpuEx(fi, 2);
+    };
+    bool LiquidBedWanted();
+    const bool preEarly = !LiquidBedWanted();
+    if (preEarly) depthPrepass();
+    // the opaque terrain and vessels also write the sky's share of their light (target 2) for the AO after them (Ssao.cpp)
+    ID3D11RenderTargetView* aoRT = AOShareTarget();
+    if (aoRT) { const float z[4] = {}; ctx->ClearRenderTargetView(aoRT, z); }
+    auto bindScene = [&](bool mv) {
+        ID3D11RenderTargetView* rt[3] = { hdrRTV.Get(), mv ? mvRTV.Get() : nullptr, aoRT };
+        ctx->OMSetRenderTargets(aoRT ? 3 : mv && mvRTV ? 2 : 1, rt, dsv.Get());
+    };
+    bindScene(false);
+
     // planets, the farthest first (one reverse-Z depth range holds them all; the order only helps early depth rejection)
     std::vector<std::pair<double, Planet*>> order;
     for (Planet* p : planets) { VECTOR3 pp; oapiGetGlobalPos(p->hObj, &pp); order.push_back({ -length(pp - cp), p }); }
@@ -1032,6 +1070,7 @@ void D3D11Client::clbkRenderScene()
     for (auto& o : order) { o.second->Render(ctx.Get(), cp, cr, proj, tanY, (int)H); tiles += o.second->tilesDrawn; }
     for (Planet* p : planets) p->Purge(frameNo);
     SaveLiquidBed();     // the bed under a liquid, before the vessels go into the depth (waves fade on the shore, not at a leg)
+    if (!preEarly) depthPrepass();
     ctx->End(qTs[fi][1].Get());
     GpuMark(fi, 4);
 
@@ -1039,14 +1078,12 @@ void D3D11Client::clbkRenderScene()
     if (mvRTV) {         // the opaque vessels also write their motion vectors
         float none[4] = { 1000, 1000, 0, 0 };
         ctx->ClearRenderTargetView(mvRTV.Get(), none);
-        ID3D11RenderTargetView* rt2[2] = { hdrRTV.Get(), mvRTV.Get() };
-        ctx->OMSetRenderTargets(2, rt2, dsv.Get());
     }
+    bindScene(true);
     // the camera's own vessel seen from inside (a cockpit, a helmet with its visor layers) comes last, after the air and
     // the effects: its near meshes must not end the other vessels' or the sky's rays (as D3D9 draws the cockpit)
-    OBJHANDLE own = oapiCameraInternal() ? oapiGetFocusObject() : nullptr;
     for (auto& kv : visuals) if (kv.first != own) RenderVessel(kv.second, cp, cr, proj, false);
-    if (mvRTV) ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
+    ctx->OMSetRenderTargets(1, hdrRTV.GetAddressOf(), dsv.Get());
     GpuSub(fi, 0);
     RenderAO(proj);      // the folds and the contacts darken (before the liquid and the air: those are not)
     GpuMark(fi, 5);
@@ -1127,6 +1164,14 @@ void D3D11Client::clbkRenderScene()
                 const UINT64 b[kSub + 1] = { s[0], m[6], s[1], s[2], s[3], s[4], s[5], s[6] };
                 for (int i = 0; i <= kSub; i++) subMs[i] = 0.9 * subMs[i] + 0.1 * (double)(e[i] - b[i]) * 1000.0 / dj.Frequency;
             }
+            UINT64 x[kEx]; bool okx = okm;
+            for (int i = 0; i < kEx; i++) okx = okx && ctx->GetData(qEx[pf][i].Get(), &x[i], 8, 0) == S_OK;
+            if (okx) {      // the Sun's shadows | the local lights (mark 2); the vessels' depth prepass
+                const double k = 1000.0 / dj.Frequency;
+                exMs[0] = 0.9 * exMs[0] + 0.1 * (double)(x[0] - m[1]) * k;
+                exLightsMs = 0.9 * exLightsMs + 0.1 * (double)(m[2] - x[0]) * k;
+                exMs[1] = 0.9 * exMs[1] + 0.1 * (double)(x[2] - x[1]) * k;
+            }
         }
     }
     // self-check: a line in Orbiter.log every 10 s, a screenshot 15 s after the start
@@ -1141,6 +1186,16 @@ void D3D11Client::clbkRenderScene()
              markMs[1], markMs[2], markMs[3], markMs[4], markMs[5], markMs[6], markMs[7], markMs[8], markMs[9], markMs[10], markMs[11]);
         LOGC("GPU ms within: AO %.2f | the Sun %.2f, transparent vessels %.2f, storm shadow %.2f, air %.2f, storm %.2f, clouds %.2f, lights in the air %.2f",
              subMs[0], subMs[1], subMs[2], subMs[3], subMs[4], subMs[5], subMs[6], subMs[7]);
+        LOGC("GPU ms split: the Sun's shadows %.2f, local lights (their shadows, sky maps) %.2f | vessels' depth prepass %.2f",
+             exMs[0], exLightsMs, exMs[1]);
+        // the CPU's side of the same passes (the time to issue them) and round the frame; the frame's own sum is the
+        // Present to Present time: a long "present" - the GPU's frame, a long "outside" or passes - the CPU's
+        LOGC("CPU ms: frame %.2f | outside the client (Orbiter, modules) %.2f, surfaces + 2D layer %.2f | fx compute %.2f, "
+             "Sun shadows %.2f, local lights %.2f, sky %.2f, planets %.2f, vessels opaque %.2f (prepass %.2f), liquid %.2f, "
+             "transparent + air %.2f, exhaust/AR/particles %.2f, own vessel %.2f, resolve + post %.2f, 2D panels %.2f | "
+             "HUD (Sketchpad) %.2f, HUD procs + layer %.2f, present %.2f",
+             cpuFrameMs, cpuOutMs, cpuPreMs, cpuMs[1], cpuExMs[0], cpuExLightsMs, cpuMs[3], cpuMs[4], cpuMs[5], cpuExMs[1],
+             cpuMs[6], cpuMs[7], cpuMs[8], cpuMs[9], cpuMs[10], cpuMs[11], cpuHudMs, cpuDispMs, cpuPresentMs);
         std::string ls = Planet::LoadStats();
         if (!ls.empty()) LOGC("%s", ls.c_str());
         LogMemory("now");     // a leak shows as a steady climb from one of these lines to the next
@@ -1148,11 +1203,13 @@ void D3D11Client::clbkRenderScene()
         static int nNow = 0;
         ++nNow; { double FxTestNum(const char*); const int mc = (int)FxTestNum("MemCensus"); if (mc > 0 && (nNow == 2 || nNow == mc)) { void LogMemoryCensus(); LogMemoryCensus(); } }   // MemCensus = N: also at the N-th tick (after a test script's actions)   // MemCensus.cpp: who holds the address space (a ~1.5 s hitch: test runs only, -Set "MemCensus = 1")
     }
+    QueryPerformanceCounter(&tSceneEnd);
 }
 
 bool D3D11Client::clbkDisplayFrame()
 {
     if (!sc) return false;
+    QueryPerformanceCounter(&tDispBeg);
     if (testMode && IsWindowVisible(hWnd)) ShowWindow(hWnd, SW_HIDE);
     CallRenderProcs();    // the modules' HUD procs (gcCore RegisterRenderProc)
     CompositeScreenLayer();
@@ -1179,7 +1236,20 @@ bool D3D11Client::clbkDisplayFrame()
         char fn[128]; sprintf_s(fn, "Modules\\D3D11Client\\shots\\burst_%lu_%02d.png", GetCurrentProcessId(), burstK++);
         SaveShot(fn);
     }
+    LARGE_INTEGER tPres; QueryPerformanceCounter(&tPres);
     sc->Present(testMode || GetVideoData()->novsync ? 0 : 1, 0);   // uncapped when vsync is off (and in test runs)
+    {   // the CPU's frame (the stats line "CPU ms"): the marks of clbkRenderScene, the time round it
+        LARGE_INTEGER pe; QueryPerformanceCounter(&pe);
+        const double k = 1000.0 / (double)qpf.QuadPart;
+        auto sm = [&](double& v, const LARGE_INTEGER& a, const LARGE_INTEGER& b) { v = 0.9 * v + 0.1 * (double)(b.QuadPart - a.QuadPart) * k; };
+        if (tPresentEnd.QuadPart && tSceneBeg.QuadPart > tPresentEnd.QuadPart && tSceneEnd.QuadPart > tSceneBeg.QuadPart) {
+            sm(cpuOutMs, tPresentEnd, tSceneBeg); sm(cpuPreMs, tSceneBeg, cpuMk[0]);
+            for (int i = 1; i < kMarks; i++) sm(cpuMs[i], cpuMk[i - 1], cpuMk[i]);
+            sm(cpuExMs[0], cpuMk[1], cpuEx[0]); sm(cpuExLightsMs, cpuEx[0], cpuMk[2]); sm(cpuExMs[1], cpuEx[1], cpuEx[2]);
+            sm(cpuHudMs, tSceneEnd, tDispBeg); sm(cpuDispMs, tDispBeg, tPres); sm(cpuPresentMs, tPres, pe); sm(cpuFrameMs, tPresentEnd, pe);
+        }
+        tPresentEnd = pe;
+    }
     return true;
 }
 

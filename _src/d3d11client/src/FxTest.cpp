@@ -4,7 +4,7 @@
 //   splash  - drops and wet clods thrown up and back, as a wheel through the shallows
 //   jet     - a 800 N hydrogen jet straight down from 1 m (ground ejecta, or the cavity, spray and mist over a liquid)
 //   wheels  - soil off four wheels as the EMPU's rear ones throw it (6 m/s rims, the arc 20-60 deg up, 2.5 kg/s each)
-//   drive   - the same wheels rolling forward at 6 m/s (no slip: the source moves, the vessel stays), over 80 m and back
+//   drive   - the same wheels rolling forward at DriveV (else 6 m/s; no slip: the source moves, the vessel stays), over 16 m and back
 //   dirt    - the tholin film on the vessel up to 0.5 m
 //   orbit   - the external camera pulled out to ~2000 km
 //   far     - the external camera pulled back ~4x
@@ -112,11 +112,15 @@ void FxTestFrame()
     if (wheels || drive) {   // the rim's tangent 40 deg up and back, the arc +-20 deg (TVChassis DustClient on regolith)
         const double xs[4] = { 1.85, -1.85, 1.85, -1.85 }, zs[4] = { -1.65, -1.65, -3.3, -3.3 };
         const double ph = 40 * PI / 180, R = 0.8;
-        // driving: the hubs carried forward at the rim's speed (the throw then has the vessel's 6 m/s added)
-        const double z0 = drive ? -40 + fmod(6 * t, 80.0) : 0, vz = drive ? 6 : 0;
+        // driving: the hubs carried forward at V (DriveV, else 6 m/s) over 16 m past the vessel and back; the throw is the
+        // rim's own (TVChassis), the vessel's ground speed the client adds (GpuParticles: DriveV)
+        double FxTestNum(const char* key);
+        static const double dv = FxTestNum("DriveV") > 0 ? FxTestNum("DriveV") : 6;
+        const double V = drive ? dv : 6, z0 = drive ? -8 + fmod(V * t, 16.0) : 0;
         for (int i = 0; i < 4; i++) {
-            const double p[3] = { xs[i], -alt + R - R * cos(ph), z0 + zs[i] - R * sin(ph) }, vel[3] = { 0, 6 * sin(ph), vz - 6 * cos(ph) };
-            AtmoFX_Emit(h, 9030 + i, p, vel, 20 * PI / 180, 0.35, 2.5, 0, 3, 0.0, 0.0, 0.0);
+            const double p[3] = { xs[i], -alt + R - R * cos(ph), z0 + zs[i] - R * sin(ph) }, vel[3] = { 0, V * sin(ph), -V * cos(ph) };
+            // (the mass as TVChassis throws it on the regolith: rho w delta v - 1500 kg/m3, 0.35 m, 0.1 mm)
+            AtmoFX_Emit(h, 9030 + i, p, vel, 20 * PI / 180, 0.35, drive ? 1500 * 0.35 * 1e-4 * V : 2.5, 0, 3, 0.0, 0.0, 0.0);
         }
     }
     if (splash) {
