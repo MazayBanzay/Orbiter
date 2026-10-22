@@ -351,7 +351,7 @@ private:
     // one intensity per light from it (Lights.cpp: the curve at range/4 x (range/4)^2 x LightLux 10)
     static double Att2(double cd, double range) { const double d = range / 4, a0 = 1e-3; return (std::max)(1e-6, (10.0 * d * d / cd - a0) / (d * d)); }
     void Lights() {
-        static const double cd[tp::kCircuitN] = {900, 700, 600, 600, 9000, 160, 26000, 22000, 60};   // hall .. beacon
+        static const double cd[tp::kCircuitN] = {1800, 1400, 600, 600, 9000, 160, 26000, 22000, 60};   // hall .. beacon (the hall 4 panels, a room 1)
         for (int i = 0; i < tp::kLightN; ++i) {
             const tp::Light& l = tp::kLights[i];
             const VECTOR3 p = _V(l.pos[0], l.pos[1], l.pos[2]), d = _V(l.dir[0], l.dir[1], l.dir[2]);
@@ -373,7 +373,7 @@ private:
     // rooms' and the locks' point emitters stay off (the panels light them, as area lights); without (another client,
     // an older D3D11 build) the point emitters light the rooms as before
     const D3D11Lights::Api* dl_ = nullptr;
-    bool areaShown_[8] = {}; int areaKnown_ = 0;
+    bool areaShown_[16] = {}; int areaKnown_ = 0;     // [room 1..5]: the main panels, [10 + room]: the duty strips
     static int RoomCircuit(int room) { return room == 1 ? tp::kCHall : room == 2 || room == 3 ? tp::kCRooms : room == 4 ? tp::kCLock1 : room == 5 ? tp::kCLock2 : -1; }
     static bool AreaCircuit(int c) { return c == tp::kCHall || c == tp::kCRooms || c == tp::kCLock1 || c == tp::kCLock2; }
     void Interiors() {
@@ -393,6 +393,8 @@ private:
         }
         const int nv = dl_->SetInteriorVolumes(GetHandle(), v, tp::kVolN), na = dl_->SetAreaLights(GetHandle(), a, tp::kAreaN);
         oapiWriteLogV("TVehicles Building %s: D3D11 interiors: %d volumes, %d area lamps handed over", GetName(), nv, na);
+        // the real-time radiosity: the light transport precomputed for this mesh (Tantra_Design/blender/gi_techpoint.py)
+        if (dl_->version >= 3 && dl_->SetRadiosity) dl_->SetRadiosity(GetHandle(), "Meshes/TVehicles/TechPoint.gi");
         areaKnown_ = 0;
     }
     // the openings the Sun comes in through (D3D11Lights Opening: inside a volume it lights a point only along a ray through
@@ -425,12 +427,19 @@ private:
             add(float(mid - half), 0.0f, float(tp::kGateZ0 - 0.1), float(mid + half), float(tp::kGateH), float(tp::kHangar[2] + tp::kHangarWall + 0.1), 6);
         }
         dl_->SetOpenings(GetHandle(), o, n);
+        if (dl_->version >= 3 && dl_->SetPortals) {              // the radiosity's portals (the .gi file's order: the doors, the gate)
+            float pf[tp::kDoorN + 1];
+            for (int d = 0; d < tp::kDoorN; ++d) pf[d] = float(door_[d]);
+            pf[tp::kDoorN] = float(gate_);
+            dl_->SetPortals(GetHandle(), pf, tp::kDoorN + 1);
+        }
     }
     bool CircuitOn(int c) const {
         if (c == tp::kCBeacon) return Cycling() && std::fmod(sysT_, 1.0) < 0.5;
         if (c == tp::kCWork && emerg_) return false;
         return light_[c];
     }
+    bool Watch() const { return light_[tp::kCDuty] && !light_[tp::kCHall] && !light_[tp::kCRooms]; }
     bool Cycling() const { return mode_[0] || mode_[1] || seq_[0] || seq_[1] || doorsMoving_ || std::fabs(gateT_ - gate_) > 1e-6; }
     void ApplyLights() {
         for (Lamp& l : lamps_) {
@@ -442,6 +451,12 @@ private:
                 const bool on = CircuitOn(RoomCircuit(room));
                 if (areaKnown_ & (1 << room) && areaShown_[room] == on) continue;
                 dl_->AreaLightOn(GetHandle(), room, on ? 1 : 0); areaShown_[room] = on; areaKnown_ |= 1 << room;
+            }
+        if (dl_)                                                  // the duty (watch) strips: circuit 10 + room, with the duty light
+            for (int room = 1; room <= 5; ++room) {
+                const int c = 10 + room; const bool on = light_[tp::kCDuty] && !emerg_;
+                if (areaKnown_ & (1 << c) && areaShown_[c] == on) continue;
+                dl_->AreaLightOn(GetHandle(), c, on ? 1 : 0); areaShown_[c] = on; areaKnown_ |= 1 << c;
             }
         if (dl_) Openings();
         if (!dev_) return;
@@ -513,7 +528,11 @@ private:
             case kPDuty:
                 if (k == 0) light_[tp::kCHall] = !light_[tp::kCHall];
                 else if (k == 1) light_[tp::kCRooms] = !light_[tp::kCRooms];
-                else if (k == 2) light_[tp::kCYard] = !light_[tp::kCYard];
+                else if (k == 2) {                                // the watch: the main lamps off, the duty strips on - and back
+                    const bool w = !Watch();
+                    light_[tp::kCHall] = light_[tp::kCRooms] = !w; light_[tp::kCDuty] = w;
+                    Msg(panel, "%s", w ? L("вахта: дежурное освещение (полумрак)", "watch: duty lighting (half-light)") : L("рабочее освещение", "full lighting"));
+                }
                 else if (k == 3) Call(0, 2, panel);
                 else if (k == 4) Call(1, 2, panel);
                 else { for (double& t : msgT_) t = 0.0; alertT_ = 0.0; overrideT_[0] = overrideT_[1] = 0.0; Msg(panel, "%s", L("сигнализация сброшена", "the alarm reset")); }
@@ -550,7 +569,7 @@ private:
             }
             case kPLights: { const int c[5] = {tp::kCWork, tp::kCDuty, -1, tp::kCGate, tp::kCYard}; return k == 2 ? (emerg_ ? 2 : 0) : light_[c[k]] ? 1 : 0; }
             case kPDuty: {
-                if (k == 0) return light_[tp::kCHall]; if (k == 1) return light_[tp::kCRooms]; if (k == 2) return light_[tp::kCYard];
+                if (k == 0) return light_[tp::kCHall]; if (k == 1) return light_[tp::kCRooms]; if (k == 2) return Watch() ? 1 : 0;
                 if (k == 3) return seq_[0] ? 2 : 0; if (k == 4) return seq_[1] ? 2 : 0;
                 return alertT_ > 0.0 || overrideT_[0] > 0.0 || overrideT_[1] > 0.0 ? 3 : 0;
             }
@@ -649,10 +668,10 @@ private:
                               "ШК-1", mode_[0] ? '*' : ' ', p_[0], L("КПА", "KPA"), Cycle(0),
                               "ШК-2", mode_[1] ? '*' : ' ', p_[1], L("КПА", "KPA"), Cycle(1),
                               L("ВОРОТА ВА-1", "GATE ВА-1"), std::fabs(gateT_ - gate_) > 1e-6 ? '*' : ' ', gate_ * 100.0,
-                              L("ОСВЕЩЕНИЕ", "LIGHTING"), light_[tp::kCHall] ? L("ХОЛЛ", "HALL") : "-", light_[tp::kCWork] && !emerg_ ? L("АНГАР", "HANGAR") : emerg_ ? L("АВАРИЙНОЕ", "EMERG.") : "-", light_[tp::kCYard] ? L("ДВОР", "YARD") : "-",
+                              L("ОСВЕЩЕНИЕ", "LIGHTING"), light_[tp::kCHall] ? L("ХОЛЛ", "HALL") : Watch() ? L("ВАХТА", "WATCH") : "-", light_[tp::kCWork] && !emerg_ ? L("АНГАР", "HANGAR") : emerg_ ? L("АВАРИЙНОЕ", "EMERG.") : "-", light_[tp::kCYard] ? L("ДВОР", "YARD") : "-",
                               L("СОЛНЦЕ НАД ГОРИЗОНТОМ", "SUN ELEVATION"), se < 0 ? '!' : se < 10 ? '*' : '+', se,
                               L("ВОЗДУХ ХОЛЛА", "HALL AIR"), kHallKPa, L("КПА  O2 21 %", "KPA  O2 21 %"),
-                              msgOr(L("1 ХОЛЛ  2 ПОМЕЩЕНИЯ  3 ДВОР  4/5 ВЫЗОВ ШК  6 СБРОС", "1 HALL  2 ROOMS  3 YARD  4/5 CALL  6 RESET")));
+                              msgOr(L("1 ХОЛЛ  2 ПОМЕЩЕНИЯ  3 ВАХТА  4/5 ВЫЗОВ ШК  6 СБРОС", "1 HALL  2 ROOMS  3 WATCH  4/5 CALL  6 RESET")));
                 return;
             }
             default: out[0] = 0;

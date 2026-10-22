@@ -141,7 +141,9 @@ const Soil kEarthSoil = {"firm loam",        1.01,  60.0, 5880000.0, 3100.0, 29.
 // rounded ice pebbles: no cohesion, interlocking friction 38 deg, stiff (gravel's kphi); bedrock water ice at 94 K: no
 // sinkage worth the name, ice on ice ~0.5 (27 deg); the wet margin: sand saturated with liquid methane, weaker and softer;
 // the liquid's bed (the sea's own floor): soft sediment - the liquid's buoyancy and drag are not modelled
-const Soil kTitanSand    = {"Titan damp sand",     0.9, 2000.0,   400000.0, 2000.0, 25.0 * RAD, 0.020, 1000.0};
+// (2026-10-21, the user: «по титану еле едет, хуже чем на Луне» - the dunes' sand firmed up to the lunar regolith's bearing:
+// dry ground off the shore drives well; soft and slippery only at the water - the wet margin and the bed)
+const Soil kTitanSand    = {"Titan damp sand",     1.0, 1000.0,   800000.0, 1500.0, 30.0 * RAD, 0.020, 1000.0};
 const Soil kTitanPebbles = {"Titan ice pebbles",   1.0,    0.0,  5000000.0,    0.0, 38.0 * RAD, 0.030,  600.0};
 const Soil kTitanIce     = {"Titan bedrock ice",   1.0,    0.0, 50000000.0,    0.0, 27.0 * RAD, 0.010,  930.0};
 const Soil kTitanWet     = {"Titan wet margin",    0.8, 1000.0,   150000.0, 1000.0, 20.0 * RAD, 0.025, 1300.0};
@@ -490,6 +492,15 @@ public:
 
         // where each wheel meets the ground
         double nSum = 0.0;
+        // Orbiter's own contact (Vessel::AddSurfaceForces, the open source): each point below the ground pushes
+        //   fn = depth * stiffness - gv_n * damping       (depth radial, to the elevation; at most 1 m; never clamped)
+        // all along ONE normal - the terrain's under the vessel's centre (its surfnml, GetSurfaceNormal), gv_n the point's
+        // ground speed along it (the vessel's + crossp(pos, omega)). Our soft ride takes exactly that off and puts our spring
+        // and damper in, along the same normal (2026-10-22: taken off along the vessel's y, then along each wheel's own
+        // normal, with the damper left in, the rest of Orbiter's push struck the machine - 15-190 kN, hops, near roll-overs)
+        VECTOR3 hnL; HorizonInvRot(GetSurfaceNormal(), hnL);
+        if (length(hnL) < 0.5) hnL = _V(0.0, 1.0, 0.0); else normalise(hnL);
+        VECTOR3 vgL, omL; GetGroundspeedVector(FRAME_LOCAL, vgL); GetAngularVel(omL);
         for (int i = 0; i < mpu::kWheels; ++i) {
             const auto& W = mpu::kWheel[i];
             VECTOR3 c = _V(W.hub[0], W.hub[1] - mpu::kWheelR - ride_, W.hub[2]), gp;
@@ -500,23 +511,30 @@ public:
             wLat_[i] = lat; wLng_[i] = lng;                                      // where it stands (the lava field, HeatStep)
             soilW_[i] = &SoilAt(ref, lat, lng, gndKind_[i]);                      // and on what (a site's ground raster)
             const double x = -height_[i];                                        // compression from the free wheel
+            gNrm_[i] = hnL;                                                       // our spring's line: Orbiter's normal
             // above 2x time warp the step is too long for our soft spring (it pumped the body over): Orbiter's stiff
             // points alone, which it integrates itself
             if (st.status != 1 && drivingMode_ && oapiGetTimeAcceleration() <= 2.0) {
-                // the soft ride: Orbiter's point pushes k_ x (stiff, its static sag kSag); we take (k_ - kS)(x - kSag) off it
-                // and add our damper - together a preloaded soft spring (the static load at kSag, kTravel of soft travel):
-                // the body squats, dives, rolls and rocks on it
+                // the soft ride: Orbiter's stiff point's push taken off, a preloaded soft spring and our damper put in
+                // (the static load at kSag, kTravel of soft travel): the body squats, dives, rolls and rocks on it
                 const double m = GetMass(), kS = m * g / (mpu::kWheels * kTravel);
                 const double cS = 2.0 * 0.30 * std::sqrt(kS * m / mpu::kWheels);   // light damping: it squats and rocks
                 const double xd = xPrev_[i] < -1e8 ? 0.0 : (x - xPrev_[i]) / simdt;
                 if (x > 0.0) {
-                    const double orb = k_ * (std::min)(x, 0.6);
-                    // the hole it dug (dig_): the ground under it is that much lower - the body settles into it on the soft
-                    // spring (kS per metre), down to its belly's own points
-                    double add = (-(k_ - kS) * (x - kSag) - kS * dig_[i] + cS * xd) * softBlend_;   // eased in over 1 s after it starts
-                    add = Clamp(add, -orb, 4.0 * m * g / mpu::kWheels);                // never pulling the wheel off the ground
+                    // Orbiter's point: its stiff spring and its damper (c of the stiff spring, ~7 kN s/m per wheel)
+                    const double gvn = dotp(vgL + crossp(c, omL), hnL);
+                    const double orb = k_ * (std::min)(x, 1.0) - gvn * cOrb_;        // Orbiter's, exactly as it computes it
+                    // ours instead: the preloaded soft spring (the static load at kSag, kTravel of travel) and a light
+                    // damper - a bump lifts the wheel, the body sinks a little and rocks, as on real wishbones.
+                    // The hole it dug (dig_): the ground under it is that much lower, the body settles into it - capped at
+                    // 12 cm (deeper, Orbiter's rigid wheel points went 0.4-0.8 m into the ground)
+                    const double xs = x - (std::min)(dig_[i], 0.12);
+                    const double over = xs - (kSag + kTravel);                          // past the travel: the bump stop
+                    double T = m * g / mpu::kWheels + kS * (xs - kSag) + cS * xd + (over > 0.0 ? 20.0 * kS * over : 0.0);
+                    T = Clamp(T, 0.0, 6.0 * m * g / mpu::kWheels);                      // never pulling the wheel off the ground
+                    const double add = (T - orb) * softBlend_;                          // eased in over 1 s after it starts
                     susp_[i] = add;
-                    n_[i] = orb + add;
+                    n_[i] = (std::max)(0.0, orb + add);
                 } else { susp_[i] = 0.0; n_[i] = 0.0; }
             } else { susp_[i] = 0.0; n_[i] = x > 0.0 ? k_ * (std::min)(x, 0.6) : 0.0; }   // no stale soft force left
             xPrev_[i] = x;
@@ -604,7 +622,10 @@ public:
                 delta_[i] = d;
                 sink_[i] = n_[i] > 0.0 ? ws[i].z : 0.0;
                 sinkMean_ += sink_[i] / mpu::kWheels;
-                if (n_[i] <= 0.0) { slip_[i] = 0.0; FreeWheel(i, d, v, fCmd, simdt); continue; }   // off the ground (or the sea's bed)
+                if (n_[i] <= 0.0) {                                               // off the ground (or the sea's bed)
+                    if (susp_[i] != 0.0) AddForce(gNrm_[i] * susp_[i], _V(W.hub[0], W.hub[1] - mpu::kWheelR - ride_, W.hub[2]));   // Orbiter's push still taken off
+                    slip_[i] = 0.0; FreeWheel(i, d, v, fCmd, simdt); continue;
+                }
                 const double vx = v.x + yawRate_ * axle, vz = v.z - yawRate_ * W.hub[0];
                 const double sd = std::sin(d), cd = std::cos(d);
                 const double vf = vx * sd + vz * cd, vl = vx * cd - vz * sd;   // along / across the wheel
@@ -643,8 +664,16 @@ public:
                 fl = Clamp(fl, -fyMax, fyMax);
                 const double fRest = std::sqrt((std::max)(0.0, w.Hmax * w.Hmax - (std::min)(fl * fl, w.Hmax * w.Hmax)));
                 ff = Clamp(ff, -fRest - w.Rc, fRest + w.Rc);
-                const VECTOR3 F = _V(ff * sd + fl * cd, susp_[i], ff * cd - fl * sd);   // the soil and our part of the spring
+                // soft wet ground (Titan's wet margin, the bed): a wheel revved up in it paddles - its chevrons throw the mud back,
+                // the reaction pushes (rho_mud ~1300, ~0.05 m2 of chevron in it, 1/2 rho A v_slip^2, up to 0.3 of its load): rev it
+                // and it crawls out, as in the off-road simulators (the user, 2026-10-21: «надо добавить обороты»)
+                if (SoftGround(i) && sl >= 0.999) {
+                    const double vsl = wRim_[i] - vf;
+                    ff += (vsl >= 0.0 ? 1.0 : -1.0) * (std::min)(0.3 * n_[i], 0.5 * 1300.0 * 0.05 * vsl * vsl);
+                }
+                const VECTOR3 F = _V(ff * sd + fl * cd, 0.0, ff * cd - fl * sd) + gNrm_[i] * susp_[i];   // the soil and our part of the spring
                 AddForce(F, _V(W.hub[0], W.hub[1] - mpu::kWheelR - ride_, W.hub[2]));
+                tlmOurZ_ += F.z; tlmHmax_ += w.Hmax; tlmN_ += n_[i]; tlmSlip_ += std::fabs(sl); tlmRc_ += w.Rc; ++tlmK_;
                 const double rim = WheelSpin(i, S, w, sl, vf, wantF, fCmd, brake, simdt);   // the wheel's own rim speed (inertia, spin-up)
                 Marks(i, vf, d, simdt);                                                     // its rut and its pit on the ground
                 if (!brake) {                                                     // driving or ABS braking by the motors
@@ -658,6 +687,7 @@ public:
             // standing still with no drive asked for (half a second): Orbiter's landed state - no physics, it does not
             // move or tremble (the tyre forces round zero speed made it twitch along the wheels). Time warp above 10x:
             // landed at once, nothing computed
+            DriveProbe(simdt, v.z, ref);
             const bool contact = nSum > 0.0;
             still_ = std::fabs(drive_) < 0.05 && contact && length(v) < 0.15 ? still_ + simdt : 0.0;
             // and only once the soft ride has settled (no bounce left, the body at its height - the re-seat puts it at its
@@ -1796,7 +1826,7 @@ protected:
             Local2Global(lp, gp);
             double lng, lat, rad;
             oapiGlobalToEqu(ref, gp, &lng, &lat, &rad);
-            const double e = oapiSurfaceElevation(ref, lng, lat) - dig_[i];   // the ground under it: the bottom of its hole
+            const double e = oapiSurfaceElevation(ref, lng, lat) - (std::min)(dig_[i], 0.12);   // the ground under it: its hole (as the ride)
             const double row[3] = {1.0, dotp(hp, fH), dotp(hp, rH)};
             for (int a = 0; a < 3; ++a) { B[a] += row[a] * e; for (int b = 0; b < 3; ++b) A[a][b] += row[a] * row[b]; }
         }
@@ -1900,6 +1930,55 @@ protected:
     // rut's compaction resistance - a spinning wheel digs itself in, as real ones do (estimates)
     static constexpr double kRimMass = 215.0;
     double dig_[mpu::kWheels] = {}, wRim_[mpu::kWheels] = {};
+    // ---------------- the drive's telemetry (the user, 2026-10-22: «на Титане 5 км/ч предел... от малейшей кочки теряет
+    // её, как врезается» - measured, not assumed): once a second while driven, into Orbiter.log «MPU drive <name>»: the speed,
+    // the wheels' push along (ours), what the soil can give (Hmax) and what resists (Rc) per newton of load, the slip, and
+    // what the rest of the world pushes along: Orbiter's own ground contact (its touchdown points: the wheels' and the
+    // belly's, with their friction), the air's drag, the slope (weight). A hard slowing (< -1.5 m/s2) is logged at once with
+    // the lowest clearance of the belly's and the bumpers' touchdown points over the ground
+    double tlmOurZ_ = 0.0, tlmHmax_ = 0.0, tlmN_ = 0.0, tlmSlip_ = 0.0, tlmRc_ = 0.0, tlmT_ = 0.0, tlmV_ = 0.0, tlmOurPrev_ = 0.0;
+    double tlmImmZ_ = 0.0, tlmImmPrev_ = 0.0, tlmSum_[8] = {}; int tlmK_ = 0, tlmSteps_ = 0, tlmEv_ = 0; double tlmEvT_ = 0.0;
+    void DriveProbe(double dt, double vz, OBJHANDLE ref) {
+        if (dt <= 0.0) return;
+        const bool driven = driverBody_ != nullptr || std::fabs(drive_) > 0.05 || std::fabs(vz) > 0.3;
+        VECTOR3 Ft, Fd, Fw; GetForceVector(Ft); GetDragVector(Fd); GetWeightVector(Fw);
+        const double ground = Ft.z - Fw.z - Fd.z - tlmOurPrev_ - tlmImmPrev_;   // Orbiter's touchdown points (last step's forces)
+        tlmOurPrev_ = tlmOurZ_; tlmImmPrev_ = tlmImmZ_;
+        VECTOR3 air; GetAirspeedVector(FRAME_LOCAL, air);
+        const double a = (vz - tlmV_) / dt; tlmV_ = vz;
+        tlmEvT_ -= dt;
+        if (driven && a < -1.5 && std::fabs(vz) > 0.3 && tlmEvT_ <= 0.0 && oapiGetTimeAcceleration() <= 2.0) {
+            tlmEvT_ = 0.5;
+            static const VECTOR3 pts[8] = {{-0.5, -0.37, 4.0}, {0.5, -0.37, 4.0}, {-0.5, -0.37, -4.0}, {0.5, -0.37, -4.0},
+                                           {-1.25, -0.06, 4.35}, {1.25, -0.06, 4.35}, {-1.25, -0.06, -4.35}, {1.25, -0.06, -4.35}};
+            const double R = oapiGetSize(ref); double minC = 1e9; int minK = -1;
+            for (int k = 0; k < 8; ++k) {
+                VECTOR3 gp; Local2Global(pts[k], gp); double lng, lat, rad; oapiGlobalToEqu(ref, gp, &lng, &lat, &rad);
+                const double c = rad - (R + oapiSurfaceElevation(ref, lng, lat)); if (c < minC) { minC = c; minK = k; }
+            }
+            double hMin = 1e9; for (double h : height_) hMin = (std::min)(hMin, h);
+            oapiWriteLogV("MPU drive %s HARD SLOWING %.1f m/s2 at %.2f m/s: ground (Orbiter's points) %+.0f N, ours %+.0f N, drag %+.0f, slope %+.0f; "
+                          "belly/bumper point %d clearance %+.3f m; lowest wheel %+.3f m; pitch %.1f bank %.1f",
+                          GetName(), a, vz, ground, tlmOurZ_, Fd.z, Fw.z, minK, minC, hMin, GetPitch() * DEG, GetBank() * DEG);
+        }
+        tlmSum_[0] += vz; tlmSum_[1] += tlmOurZ_; tlmSum_[2] += ground; tlmSum_[3] += Fd.z; tlmSum_[4] += Fw.z; tlmSum_[5] += drive_; tlmSum_[6] += tlmImmPrev_; tlmSum_[7] += air.z; ++tlmSteps_;
+        if ((tlmT_ += dt) >= 1.0) {
+            if (driven && tlmSteps_ > 0 && tlmK_ > 0) {
+                const double k = 1.0 / tlmSteps_;
+                int cnt[6] = {}; for (int i = 0; i < mpu::kWheels; ++i) ++cnt[gndKind_[i] + 1 >= 0 && gndKind_[i] + 1 < 6 ? gndKind_[i] + 1 : 0];
+                oapiWriteLogV("MPU drive %s: v %.2f m/s (%.1f km/h) drive %.2f %s | per N of load: soil gives %.2f, rut resists %.3f, slip %.2f | "
+                              "along (N): ours %+.0f, Orbiter's ground %+.0f, liquid %+.0f, air drag %+.0f (airspeed %+.2f), slope %+.0f | wheel load %.0f N; ground kinds -/0..4 %d %d %d %d %d %d; dig %.3f; wade %.2f",
+                              GetName(), tlmSum_[0] * k, tlmSum_[0] * k * 3.6, tlmSum_[5] * k, cruise_ ? "cruise" : "FULL",
+                              tlmHmax_ / (std::max)(tlmN_, 1.0), tlmRc_ / (std::max)(tlmN_, 1.0), tlmSlip_ / tlmK_,
+                              tlmSum_[1] * k, tlmSum_[2] * k, tlmSum_[6] * k, tlmSum_[3] * k, tlmSum_[7] * k, tlmSum_[4] * k, tlmN_ / tlmK_,
+                              cnt[0], cnt[1], cnt[2], cnt[3], cnt[4], cnt[5], [&] { double d = 0; for (double x : dig_) d = (std::max)(d, x); return d; }(), wadeDepth_);
+            }
+            tlmT_ = 0.0; tlmSteps_ = 0; for (double& x : tlmSum_) x = 0.0;
+            tlmHmax_ = tlmN_ = tlmSlip_ = tlmRc_ = 0.0; tlmK_ = 0;
+        }
+        tlmOurZ_ = 0.0; tlmImmZ_ = 0.0;
+    }
+    bool SoftGround(int i) const { return gndKind_[i] == tvground::WET || gndKind_[i] == tvground::LIQUID; }   // Titan's shore mud
     double WheelSpin(int i, const Soil& S, const WheelSoil& w, double sl, double vf, double wantF, double fCmd, bool brake, double dt) {
         double& r = wRim_[i];
         const double dir = fCmd >= 0.0 ? 1.0 : -1.0;
@@ -1927,17 +2006,20 @@ protected:
         // the slip the soil is sheared at: the traction's own (sl) - at a standstill the kinematic ratio is always 1 and made
         // every start dig the full hole (the user, 2026-10-19: stuck on the wet margin even without Shift); a true spin: 1
         const double s = sl >= 0.999 ? 1.0 : Clamp(std::fabs(sl), 0.0, 0.999);
-        const double digT = w.z * ((1.0 + s) / (1.0 - 0.5 * s) - 1.0);
+        // the slip digs deep only in soft wet ground (Titan's wet margin and bed); on the regolith, sand, pebbles, ice a spinning
+        // wheel throws out a little - half its sinkage at most (2026-10-21: the EMPU sat to its hubs on the Moon, «ралли»)
+        const bool soft = SoftGround(i);
+        const double digT = w.z * ((1.0 + s) / (1.0 - 0.5 * s) - 1.0) * (soft ? 1.0 : 0.17);
         const double kDig = 0.01 * Clamp(4.0e5 / (std::max)(S.kphi, 1.0), 0.05, 2.0);
         if (dig_[i] < digT) dig_[i] = (std::min)(digT, dig_[i] + kDig * vs * dt);
         // spinning in place (the machine not moving) it goes on throwing the soil out past that: a third as fast, until the
         // belly lies on the ground (the user, 2026-10-19: «закопаться она может глубже») - out of that, only a tow
-        else if (sl >= 0.999 && std::fabs(vf) < 0.1 && vs > 0.5) dig_[i] += 0.3 * kDig * vs * dt;   // only a true spin
+        else if (soft && sl >= 0.999 && std::fabs(vf) < 0.1 && vs > 0.5) dig_[i] += 0.3 * kDig * vs * dt;   // a true spin, in mud only
         // rolling on, it leaves the hole behind (over ~3 m) - always, not only without slip: on the cruise drive's 8 % the
         // hole had grown on the move to its 0.32 m cap within a minute on Titan's sand and the machine bogged in its own rut
         // (the user, 2026-10-19: «иногда застревают»); now with a steady slip s it holds kDig s/(1-s) 3 m - ~1 mm at 8 %
         dig_[i] -= dig_[i] * std::fabs(vf) * dt / 3.0;
-        dig_[i] = Clamp(dig_[i], 0.0, 0.5);                                       // ~ the belly's clearance
+        dig_[i] = Clamp(dig_[i], 0.0, soft ? 0.25 : 0.5 * w.z + 0.01);           // mud: a deep rut; elsewhere shallow
         return r;
     }
     // ---------------- in a liquid (the user, 2026-10-19: Titan's seas, «как есть в реалиях») ----------------
@@ -2031,7 +2113,7 @@ protected:
                 if (c.kind == 3) { A *= 0.5; cd = 0.8; }
                 F -= vL * (0.5 * kLiqRho * cd * A * sp + kLiqRho * A * 0.3);
             }
-            AddForce(F, c.c);
+            AddForce(F, c.c); tlmImmZ_ += F.z;
         }
         icellPrevOk_ = true;
         // the cabin floods through its holes where they are under the surface (the floor, the worst case)
@@ -2337,6 +2419,7 @@ protected:
         const double m = GetMass() > 0.0 ? GetMass() : kMass;
         k_ = m * g / (mpu::kWheels * kSag);
         const double c = 2.0 * 0.7 * std::sqrt(k_ * m / mpu::kWheels);
+        cOrb_ = c;
         const int order[8] = {1, 7, 6, 0, 2, 3, 4, 5};   // front left, rear left, rear right, then the rest
         TOUCHDOWNVTX t[32];
         int n = 0;
@@ -2344,7 +2427,10 @@ protected:
             const auto& W = mpu::kWheel[k];
             // Orbiter's wheel points never change (moved or softened, Orbiter re-seated the platform on them - sunk 0.3-0.9 m,
             // then thrown up and over); the soft ride is our force taken off their stiffness (see the loads)
-            t[n++] = {_V(W.hub[0], W.hub[1] - mpu::kWheelR - ride_, W.hub[2]), k_, c, 0.05, 0.05};
+            // its friction: across (holds it on a slope, standing) 0.05; along the wheel none to speak of - the rolling, the rut and
+            // the brakes are ours (Orbiter's 0.05 along, of its own stiff load, braked it by up to 2.6 kN - the telemetry, 2026-10-22)
+            // (Orbiter brakes along with mu_lng only on the first three points, the rest with mu - both small here)
+            t[n++] = {_V(W.hub[0], W.hub[1] - mpu::kWheelR - ride_, W.hub[2]), k_, c, 0.01, 0.003};
         }
         const VECTOR3 hull[8] = {{-0.5, -0.37, 4.0}, {0.5, -0.37, 4.0}, {-0.5, -0.37, -4.0}, {0.5, -0.37, -4.0},
                                  {-1.25, -0.06, 4.35}, {1.25, -0.06, 4.35}, {-1.25, -0.06, -4.35}, {1.25, -0.06, -4.35}};
@@ -2839,7 +2925,7 @@ protected:
     double obstHitT_ = 0.0, carHitT_ = 0.0;
     bool rideMoving_ = false, drivingMode_ = false, holding_ = true;
     double holdT_ = 0.0, stableT_ = 0.0, elevPrev_ = -1e9, softBlend_ = 0.0;
-    double xPrev_[mpu::kWheels] = {}, susp_[mpu::kWheels] = {};
+    double xPrev_[mpu::kWheels] = {}, susp_[mpu::kWheels] = {}; VECTOR3 gNrm_[mpu::kWheels] = {}; double cOrb_ = 0.0;
     double sink_[mpu::kWheels] = {}, slip_[mpu::kWheels] = {}, muEff_ = 0.5, sinkMean_ = 0.0;
     double knockCool_ = 0.0, hPrev_[mpu::kWheels] = {};
     PSTREAM_HANDLE dust_[mpu::kWheels] = {};

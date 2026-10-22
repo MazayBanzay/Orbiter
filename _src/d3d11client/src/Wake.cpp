@@ -214,8 +214,10 @@ bool WakeField(D3D11Client* c, OBJHANDLE body, double Rl, const VECTOR3& cam, do
     VECTOR3 pp; oapiGetGlobalPos(body, &pp);
     MATRIX3 Rp; oapiGetRotationMatrix(body, &Rp);
     const double g = GGRAV * oapiGetMass(body) / (Rl * Rl);
-    // the focus vessel at the liquid: the window around it
-    OBJHANDLE fo = oapiGetFocusObject();
+    // the vessel the camera looks at (else the focus) at the liquid: the window around it - the focus may stand on the
+    // shore while the camera follows a rover going into the sea
+    OBJHANDLE fo = oapiCameraTarget();
+    if (!fo || !oapiIsVessel(fo)) fo = oapiGetFocusObject();
     VESSEL* fv = fo && oapiIsVessel(fo) ? oapiGetVesselInterface(fo) : nullptr;
     if (!fv || fv->GetSurfaceRef() != body) { F.active = false; return false; }
     VECTOR3 fg; fv->GetGlobalPos(fg);

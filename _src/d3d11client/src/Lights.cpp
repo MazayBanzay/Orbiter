@@ -15,7 +15,7 @@
 
 namespace {
 struct LightG { XMFLOAT4 p, c, d, a, e; };
-struct LightsCB { XMFLOAT4X4 lvp; XMFLOAT4 grid, z; XMFLOAT4X4 skyVP[12]; XMFLOAT4 skyDir[12]; XMFLOAT4 skyC, skyK; XMFLOAT4 volC, volX, volY, volZ, volK; XMFLOAT4 room[32]; XMFLOAT4 open[32]; XMFLOAT4 roomSky[48]; };
+struct LightsCB { XMFLOAT4X4 lvp; XMFLOAT4 grid, z; XMFLOAT4X4 skyVP[12]; XMFLOAT4 skyDir[12]; XMFLOAT4 skyC, skyK; XMFLOAT4 volC, volX, volY, volZ, volK; XMFLOAT4 room[32]; XMFLOAT4 open[32]; XMFLOAT4 roomSky[48]; XMFLOAT4 gi[29]; };   // gi: the radiosity's (Radiosity.cpp GIShade)
 struct SpriteG { XMFLOAT4 p, c, d, e; };
 struct SpriteCB { XMFLOAT4X4 vp; XMFLOAT4 view, right, up, fwd; };
 constexpr int TX = 16, TY = 9, TZ = 24, NCL = TX * TY * TZ;
@@ -889,6 +889,20 @@ void D3D11Client::LightsFrame(const VECTOR3& cp)
 
     // ---- the clusters
     g_nLights = (int)g_cand.size();
+    {   // the real-time radiosity (Radiosity.cpp): the vessel with its light transport near the camera - its lamps go to the
+        // patches with their precomputed visibility (flag 32: the compute pass leaves them out of its walk over this list)
+        const OBJHANDLE giV = GIVessel(cp);
+        std::vector<float> own;
+        if (giV)
+            for (Cand& c : g_cand) {
+                if (c.h != giV) continue;
+                c.g.c.w = (float)((int)c.g.c.w | 32);
+                const float e[4] = { (float)c.lp.x, (float)c.lp.y, (float)c.lp.z, c.rect ? 1.0f : 0.0f };
+                own.insert(own.end(), e, e + 4);
+                const float* g = &c.g.p.x; own.insert(own.end(), g, g + 20);
+            }
+        GILamps(own, std::min(g_nLights, 64));
+    }
     const VECTOR3 rgt = _V(cr.m11, cr.m21, cr.m31), upv = _V(cr.m12, cr.m22, cr.m32);
     const double tanY = tan(oapiCameraAperture()), tanX = tanY * (double)RW / std::max<double>(RH, 1);
     const double sx = 1 / tanX, sy = 1 / tanY, kz = (TZ - 1) / log((double)ZF / Z0);
@@ -963,7 +977,8 @@ void D3D11Client::LightsFrame(const VECTOR3& cp)
     if (g_nSpr) Upload(ctx.Get(), g_spr.Get(), g_sprites.data(), g_sprites.size());
     cb.grid.w = (float)g_nLights;
     cb.z.z = 1;
-    cb.skyK.z = (g_airless || g_inVol) ? 1.0f : 0.0f;     // the lamps' bounce fill: airless bodies, declared interiors (Titan's open look stays as approved)
+    cb.skyK.z = (g_airless || g_inVol) ? 1.0f : 0.0f;
+    GIShade(cb.gi);     // the lamps' bounce fill: airless bodies, declared interiors (Titan's open look stays as approved)
     Upload(ctx.Get(), g_cb.Get(), &cb, 1);
     if (diagFrames > 0 || (g_frame % 600) == 300) {
         LOGC("local lights: %d (beams %d, shadows: spots %d, point cubes %d, tiles drawn this frame %d; sprites %d), cluster entries %zu, Sun here %.0f lux",
@@ -984,6 +999,21 @@ void D3D11Client::LightsBind()
     ctx->PSSetConstantBuffers(9, 1, g_cb.GetAddressOf());
     ctx->PSSetShaderResources(17, 5, srv);
     ctx->PSSetShaderResources(26, 1, g_recSRV.GetAddressOf());     // the shadow records (t22..t25 are the smoke's)
+    // the radiosity: its compute passes once a frame (they read this list, its shadows, the Sun's - all made by now), then
+    // its probes for the scene (t27, s4)
+    static UINT giFrame = ~0u;
+    if (giFrame != g_frame && GIProbeSRV()) {
+        giFrame = g_frame;
+        ctx->CSSetConstantBuffers(9, 1, g_cb.GetAddressOf());
+        ctx->CSSetShaderResources(17, 5, srv);
+        ctx->CSSetShaderResources(26, 1, g_recSRV.GetAddressOf());
+        GIRun();
+        ID3D11ShaderResourceView* nul[6] = {};
+        ctx->CSSetShaderResources(17, 5, nul); ctx->CSSetShaderResources(26, 1, nul);
+    }
+    ID3D11ShaderResourceView* gi = GIProbeSRV();
+    ctx->PSSetShaderResources(27, 1, &gi);
+    ctx->PSSetSamplers(4, 1, sampClamp.GetAddressOf());
 }
 
 // ------------------------------------------------------------------------------------------ after the air: beams, lenses, beacons

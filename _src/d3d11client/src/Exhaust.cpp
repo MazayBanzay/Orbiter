@@ -169,8 +169,10 @@ private:
     // that did not run: a zero)
     static const int kSt = 11;
     ComPtr<ID3D11Query> qSt[4][kSt]; bool stDone[kSt] = {}; double stMs[kSt] = {}; ID3D11DeviceContext* stCtx = nullptr;
+public:
     void Mark(int k) { if (stCtx && k > 0 && k < kSt && !stDone[k] && qSt[qFrame % 4][k]) { stCtx->End(qSt[qFrame % 4][k].Get()); stDone[k] = true; } }
     void MarkTo(int k) { for (int i = 1; i <= k; i++) Mark(i); }     // the stages up to k not yet marked: zero long
+private:
     LARGE_INTEGER tLog = {};
     double fpsAcc = 0; int fpsN = 0;
     std::vector<ExJet> jets;

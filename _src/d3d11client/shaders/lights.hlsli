@@ -47,7 +47,14 @@ cbuffer LocalLights : register(b9)
     float4 gRoomSky[48];    // each room's "sky" (Lights.cpp): the light its walls, floor and ceiling send back, an ambient cube
                             // of 6 values per room - +x -x +y -y +z -z along the room's axes (rgb: the irradiance a surface facing
                             // that wall gets from it, client units; w: 1 = set)
+    // the real-time radiosity (Radiosity.cpp, radiosity.hlsl) of one vessel: its rooms' probe grids, read in RoomSky
+    float4 gGIO;            // the vessel's origin (camera-centred); w: 1 = on
+    float4 gGIX, gGIY, gGIZ;// its axes (global)
+    float4 gGIG[24];        // up to 8 grids (vessel frame): lo.xyz + their x0 in the texture, the cell.xyz, dims.xyz + room
+    float4 gGITex;          // the probes' texture: 1 / width, 1 / height, a face's slab depth, the grids
 };
+Texture3D<float4> tGI : register(t27);          // the probes' ambient cubes: the grids side by side along x, face f the slab f
+SamplerState sGI : register(s4);                // (linear, clamp)
 StructuredBuffer<LocalLightG> tLights : register(t17);
 StructuredBuffer<uint2> tLCluster : register(t18);
 StructuredBuffer<uint> tLIndex : register(t19);
@@ -91,11 +98,42 @@ float VolumeWeight(float3 wp)
     return saturate(1 - dmax / max(gVolK.x, 0.01));
 }
 
+// the radiosity's indirect light at wp for a surface facing n: the probes of the room's own grid (trilinear, never across a
+// wall: each room its grid), the ambient cube read along n (Valve's: the squared normal's components). w: 1 in a room or its
+// doorway (0.45 m past the grid's box: the jambs, the sills - not a wall's outer face, which looks away from the room), else 0
+float3 GISample(float3 wp, float3 n, out float w)
+{
+    w = 0;
+    if (gGIO.w < 0.5) return 0;
+    float3 r = wp - gGIO.xyz;
+    float3 pl = float3(dot(r, gGIX.xyz), dot(r, gGIY.xyz), dot(r, gGIZ.xyz));
+    float3 nl = float3(dot(n, gGIX.xyz), dot(n, gGIY.xyz), dot(n, gGIZ.xyz));
+    [loop] for (int g = 0; g < (int)gGITex.w; g++) {
+        float3 lo = gGIG[g * 3].xyz, cs = gGIG[g * 3 + 1].xyz, dm = gGIG[g * 3 + 2].xyz, hi = lo + cs * dm;
+        float3 o3 = max(lo - pl, pl - hi);
+        float out1 = max(o3.x, max(o3.y, o3.z));
+        if (out1 > 0.45) continue;
+        if (out1 > 0.02 && dot(nl, normalize(0.5 * (lo + hi) - pl)) < -0.2) continue;
+        float3 gc = clamp((pl - lo) / cs, 0.5, dm - 0.5);
+        float D = gGITex.z, k = 1 / (6 * D);
+        float2 xy = float2((gGIG[g * 3].w + gc.x) * gGITex.x, gc.y * gGITex.y);
+        float3 n2 = nl * nl;
+        float3 e = n2.x * tGI.SampleLevel(sGI, float3(xy, ((nl.x >= 0 ? 0 : 1) * D + gc.z) * k), 0).rgb
+                 + n2.y * tGI.SampleLevel(sGI, float3(xy, ((nl.y >= 0 ? 2 : 3) * D + gc.z) * k), 0).rgb
+                 + n2.z * tGI.SampleLevel(sGI, float3(xy, ((nl.z >= 0 ? 4 : 5) * D + gc.z) * k), 0).rgb;
+        w = 1;
+        return e;
+    }
+    return 0;
+}
+
 // the room's own "sky" at wp for a surface of normal n: the ambient cube of the room wp is in (its walls' bounce: directional -
 // a floor under the lamps lights the ceiling, a lit wall the opposite one), over the rooms' blends. Used where outdoors the
 // sky's light is (Lagarde & de Rousiers 2014, 4.9: a local light probe), so the AO and the specular occlusion act on it
 float3 RoomSky(float3 wp, float3 n, out float inRoom)
 {
+    float giW; const float3 gi = GISample(wp, n, giW);     // a room with radiosity: its probes (light transport, not a fill)
+    if (giW >= 1) { inRoom = 1; return gi; }
     float3 s = 0; inRoom = 0;
     [loop] for (int r = 0; r < 8; r++) {
         if (gRoomSky[r * 6].w < 0.5) continue;
@@ -122,7 +160,7 @@ float3 RoomSky(float3 wp, float3 n, out float inRoom)
 // occlusion (GTAO) comes after the pass and darkens the pixel as a whole (gtao.hlsl)
 float3 RoomReflect(float3 wp, float3 R, float3 ng, float3 V, float3 n, float rough)
 {
-    if (gRoomSky[0].w < 0.5 && gRoomSky[6].w < 0.5 && gRoomSky[12].w < 0.5 && gRoomSky[18].w < 0.5
+    if (gGIO.w < 0.5 && gRoomSky[0].w < 0.5 && gRoomSky[6].w < 0.5 && gRoomSky[12].w < 0.5 && gRoomSky[18].w < 0.5
         && gRoomSky[24].w < 0.5 && gRoomSky[30].w < 0.5 && gRoomSky[36].w < 0.5 && gRoomSky[42].w < 0.5) return 0;
     float a = rough * rough;
     float3 Rd = normalize(lerp(R, n, a * (sqrt(1 - a) + a)));     // the dominant direction of the GGX lobe

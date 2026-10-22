@@ -43,6 +43,9 @@ bool Inside(int3 c) { return all(c >= 0) && all(c < Dim()); }
 float3 CellPos(int3 c) { return (c + 0.5) * kN.w; }                 // [m] in the box
 bool Solid(float3 p) { return p.y < kAmb.x; }                       // under the ground (or a liquid's surface)
 float4 LoadV(int3 c) { return Inside(c) ? tVel.Load(int4(c, 0)) : 0; }
+// The box is a window on an open flow, not a container: a mass reaching its sides leaves it. A round margin (in the
+// ground plane) where the visible mass is drawn away (the flow) and faded (the drawing), so its edge is never the box's.
+float EdgeKeep(float3 uvw) { float r = length(uvw.xz * 2 - 1); return 1 - smoothstep(0.6, 0.98, r); }
 float3 SampleV(float3 g) { return tVel.SampleLevel(sLin3, g / kN.xyz, 0).xyz; }   // g in cells (continuous)
 
 // ------------------------------------------------------------------------------------------ advection
@@ -157,6 +160,7 @@ void CSForces(uint3 id : SV_DispatchThreadID)
         v.w = max(v.w, m.w * wv);
     }
     rho *= exp(-dt * kDt.w);
+    rho *= lerp(exp(-dt * 1.5), 1, EdgeKeep((c + 0.5) / kN.xyz));   // the margin: the mass flows on out of the window
     uVel[c] = v;
     uDen[c] = rho;
 }
@@ -323,7 +327,7 @@ float4 PSDraw(VSOut i) : SV_Target
         float3 q = ro + rd * t;
         t += ds;
         float3 uvw = q / size;
-        float m = tDenR.SampleLevel(sLin3, uvw, 0);
+        float m = tDenR.SampleLevel(sLin3, uvw, 0) * EdgeKeep(uvw);
         if (m <= 1e-7) continue;
         float sig = m * kSun.w;
         float a = 1 - exp(-sig * ds);

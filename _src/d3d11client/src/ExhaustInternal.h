@@ -73,10 +73,13 @@ void SprayRender(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResourceView* d
 // the vessels' own exhausts (AddExhaust), volumetric (VesselExhaust.cpp): in the exhaust pass, t5/s3 bound
 void RenderVesselExhausts(D3D11Client* gc, const VECTOR3& cp);
 void SprayRelease();             // with the device (Spray.cpp)
-// soil thrown in a vacuum as ballistic sheets (Regolith.cpp): fed by the SOIL sources when the air is not dense
+// soil thrown in a vacuum as GPU particles (Regolith.cpp): a wheel's, fed by the SOIL sources when the air is not dense
 void RegolithFeed(const ExScene& sc, uintptr_t key, const VECTOR3& p0, const VECTOR3& ax, const VECTOR3& gs, double speed,
                   double cone, double kgps, double gy, const std::vector<XMFLOAT4>& boxes,   // boxes: the vessel's (local; c, 3 x axis+half)
                   double ringIn = 0.5);   // a ring's inner edge (a share of its cone)
+// a jet's eroded soil (Regolith.cpp): its footprint's centre (local), the tilt's way x 1.5 sin(tilt), the footprint's radius,
+// the mass [kg/s], the three sizes' speeds [m/s], the ground's height
+void RegolithJet(const ExScene& sc, const VECTOR3& hit, const VECTOR3& lean, double r, double kgps, const double v[3], double gy);
 void RegolithRender(D3D11Client* gc, const ExScene& sc, ID3D11ShaderResourceView* depth);
 void RegolithRelease();          // with the device
 // the engines' smoke and condensate as a 3D flow (Smoke.cpp): one source per engine this frame

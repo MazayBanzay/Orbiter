@@ -320,10 +320,29 @@ void GpuParticles::SpawnJet(ExScene& sc, const ExJet& j, JetAcc& acc, std::vecto
         // few hundred m/s, the fines fastest (the Apollo landings' ejecta: Metzger et al. 2011, Lane & Metzger 2012) -
         // flown ballistic with the rest of the vacuum soil (Regolith.cpp: a ring round the vertical, its inner edge 6 deg
         // up); a lander's hover erodes tens of kg/s
-        const double mV = std::min(0.02 * (tauW - tauC) * 3.14159265 * r * r / uE, 30.0);
+        // the mass: Metzger et al. 2010 (Scaling of erosion rate in subsonic jet experiments and Apollo LM landings): m' =
+        // f int tau dA ~ 1/g; int tau dA from their LM CFD: 35.9 mN at 10 m, 17.4 mN at 20 m for ~12 kN (~1/h) - 3.0e-6 of
+        // the thrust at ~13 of its nozzle's radii (0.75 m): a jet scaled by its own nozzle. f: their optical-density value
+        // (22,000 kg/s/N) would have the LM eroding ~0.8 t/s at 10 m; Lane & Metzger 2015 (optical extinction in the
+        // Apollo 12 video) put the whole landing's erosion at ~2.6 t - tens of kg/s over its last minute: f ~ 1,000 kg/s/N
+        const double tauA = 3.0e-6 * j.thrust * cosd * 13.3 * j.rExit / std::max(hExit, 4 * j.rExit);
+        const double mV = std::min(tauA * 1000.0 * (1.62 / std::max(g, 0.1)), 300.0);
+        // each size its own speed: the jet's pressure q drags a grain over the footprint's radius L, v^2 ~ 2 a L with
+        // a = (3/4) Cd q / (rho d) (Cd ~ 1) - capped by the gas's pace (469 / 55 / 12 um: Regolith.cpp's classes); out of
+        // the footprint's ring, more of it downstream of a tilt (Regolith.cpp: RegolithJet)
         const double sp = std::clamp(8 * sqrt(q), 20.0, 600.0);
-        RegolithFeed(sc, (uintptr_t)j.h * 40503u + (uintptr_t)j.id + 0x40000000u, hit + _V(0, 0.05, 0), _V(0, 1, 0), _V(0, 0, 0),
-                     sp, 1.553, mV, gy, std::vector<XMFLOAT4>(), 0.944);
+        const double dS[3] = { 469e-6, 55e-6, 12e-6 };
+        double vS[3];
+        for (int c = 0; c < 3; c++) vS[c] = std::min(sp, sqrt(1.5 * q * r / (2650.0 * dS[c])));
+        RegolithJet(sc, hit, tilt * 1.5, r, mV, vS, gy);
+        {   // the check (every 5 s): the jets' erosion on an airless ground
+            static double logT = -1e9;
+            if (oapiGetSysTime() - logT > 5.0) {
+                logT = oapiGetSysTime();
+                LOGC("regolith: jet %.0f N at %.2f m: footprint %.2f m, q %.0f Pa, erosion %.2f kg/s; 469 / 55 / 12 um at %.0f / %.0f / %.0f m/s",
+                     j.thrust, hExit, r, q, mV, vS[0], vS[1], vS[2]);
+            }
+        }
         return;
     }
     std::pair<const Cls*, int> mix = ground == EXG_WET ? L(WET_C) : ground == EXG_REGOLITH ? L(REG_C) :
@@ -383,6 +402,10 @@ void GpuParticles::SpawnSource(ExScene& sc, OBJHANDLE h, Source& s, std::vector<
     // soil at its edge (within 0.3 m of its level) is wet - clods and wet sand, no dry dust
     const double hLiq = sc.Rliq > 0 ? length(pg - sc.pp) - sc.Rliq : 1e9;
     if (s.kind != 3 && hLiq < 0.05) return;
+    // a vessel standing in the liquid (its ground under the level: wading, a wheel in the sea) throws no soil at all - its
+    // emitter on the rim may be above the surface, the soil under it is not (the user, 2026-10-22: «пыль в воде от колёс
+    // надо отключить»); its drops are the spray's (kind 3)
+    if (s.kind == 0 && sc.Rliq > 0 && sc.Rliq > Rground) return;
     if (s.kind == 3 && hLiq < 0.02) p0.y += 0.02 - hLiq;
     // (Spray.cpp's baked sheet cards are off: the spray is the drops alone, each independent - the user, 2026-10-20)
     const int ground = s.kind == 0 && sc.Rliq > 0 && Rground - sc.Rliq < 0.3 ? (int)EXG_WET : s.ground;

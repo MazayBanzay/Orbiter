@@ -128,7 +128,7 @@ sx, sy = (xx % 32) - 16, (yy % 32) - 16
 stud = np.clip(1.0 - (np.hypot(sx, sy) / 5.0) ** 2, 0, 1) ** 0.5
 scuff = np.clip(pnoise(0.05, 1.0), 0, 1) ** 2
 h = -1.0 * jt + 0.5 * stud + 0.04 * pnoise(0.02)
-col = np.empty((N, N, 3)); col[:] = (58, 64, 70)                         # a dark blue-grey (as the lift zone of the Tantra)
+col = np.empty((N, N, 3)); col[:] = (122, 128, 132)                      # a light grey elastomer (albedo ~0.2: the floor bounces the lamps' light)
 col += (6 * stud - 8 * scuff + 4 * pnoise(0.2))[..., None]
 col[jt > 0.3] *= 0.5
 save("tp_floor", col, h, 3.5, (0.22, 0.22, 0.23), 24.0, smooth=0.55 + 0.15 * stud - 0.25 * scuff, metal=0.0)   # sealed rubber coating: the lamps glint in it   # rubber coating, the studs worn shiny
@@ -148,7 +148,34 @@ col = np.empty((N, N, 3)); col[:] = (98, 102, 102)
 col += (3 * peel + 6 * scuff)[..., None]
 col[jt > 0.3] *= 0.45
 col += (fs * 25)[..., None]; col[slot > 0] *= 0.5
+col = col * 0.0 + (206, 204, 198)                                         # 30th c.: a light ceramic-polymer lining (albedo ~0.6:
+col += (3 * peel - 10 * scuff)[..., None]                                  # the rooms bounce the lamps' light, not swallow it)
+col[jt > 0.3] *= 0.45
+col -= (fs * 40)[..., None]; col[slot > 0] *= 0.5
 save("tp_lining", col, h, 5.0, (0.25, 0.25, 0.26), 30.0, smooth=0.60 - 0.45 * (jt > 0.3) - 0.2 * scuff + 0.2 * fs, metal=np.clip(fs * 1.2, 0, 1))
+
+# ---- tp_cnt: carbon-nanotube composite (the doors, the trim bands, the frames): a fine 2x2 twill of CNT yarn (8 mm) under
+# a clear ceramic coat. Dielectric (metal 0), dark (albedo ~0.05), glossy: the lamps run along it as sharp streaks ----
+T = 16
+u, v = xx // T, yy // T
+over = ((u + v) // 2) % 2                                                  # twill: the warp over two, under two, stepped
+fx, fy = (xx % T) / T, (yy % T) / T
+bulge = np.where(over == 1, np.sin(np.pi * fx), np.sin(np.pi * fy))       # each yarn crossing bulges along its own run
+h = 0.5 * bulge + 0.03 * pnoise(0.01)
+col = np.empty((N, N, 3)); col[:] = (30, 31, 34)
+col += (np.where(over == 1, 6, -2) + 3 * pnoise(0.1))[..., None]
+save("tp_cnt", col, h, 2.5, (0.30, 0.30, 0.32), 60.0, smooth=0.82 - 0.06 * (1 - bulge), metal=0.0)
+
+# ---- tp_alloy: a titanium high-entropy alloy (the crane, the rails, the handrails, the fittings): brushed along u, bare
+# metal (metal 1, F0 ~0.5 grey with a faint warm cast), the brushing scatters the highlight across the lines ----
+brush = np.real(np.fft.ifft2(np.fft.fft2(rng.standard_normal((N, N))) *
+                np.exp(-(np.meshgrid(np.fft.fftfreq(N), np.fft.fftfreq(N), indexing="ij")[1] ** 2) * 4000.0)))   # long along u
+brush /= np.abs(brush).max() + 1e-9
+mar = np.clip(pnoise(0.06, 1.0), 0, 1) ** 2                                # handling marks
+h = 0.25 * brush + 0.02 * pnoise(0.01)
+col = np.empty((N, N, 3)); col[:] = (176, 172, 166)
+col += (10 * brush - 14 * mar)[..., None]
+save("tp_alloy", col, h, 1.5, (0.6, 0.6, 0.6), 80.0, smooth=0.70 + 0.08 * brush - 0.25 * mar, metal=1.0)
 print("written to", DST)
 
 # ---- tp_signs: the plates' atlas (build_techpoint.py writes techpoint_signs.txt: text, plate w, h in m): one row each, red

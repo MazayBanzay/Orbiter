@@ -479,6 +479,12 @@ public:
     void LightsRenderAir(const VECTOR3& cp, const MATRIX3& cr, const XMMATRIX& proj);
     void LightsProbe(ID3D11ShaderResourceView* img);     // ... measured on the finished scene (its depth, its image)
     void LightsAdaptEye(XMFLOAT4& adapt, float& exposure);   // the eye adapts to the local lights where they light what it sees
+    // Radiosity.cpp: the real-time radiosity of a vessel that sent its light transport (D3D11Lights SetRadiosity)
+    OBJHANDLE GIVessel(const VECTOR3& cp);                          // the nearest such vessel (its file loaded), null: none
+    void GILamps(const std::vector<float>& own, int nLights);       // its lamps this frame (Lights.cpp), the frame's list's length
+    void GIShade(XMFLOAT4* out);                                    // b9's 29 constants (lights.hlsli gGI*)
+    void GIRun();                                                   // the compute passes (LightsBind)
+    ID3D11ShaderResourceView* GIProbeSRV();                         // the probes (t27), null: none
     ID3D11ShaderResourceView* RenderBloom(ID3D11ShaderResourceView* src);   // Bloom.cpp: the glow for the post pass
     ComPtr<ID3D11RasterizerState> rsMirror;
     ComPtr<ID3D11Texture2D> reflTex, reflDepth; ComPtr<ID3D11RenderTargetView> reflRTV; ComPtr<ID3D11ShaderResourceView> reflSRV;

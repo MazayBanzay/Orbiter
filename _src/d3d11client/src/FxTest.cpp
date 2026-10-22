@@ -131,7 +131,9 @@ void FxTestFrame()
         AtmoFX_Emit(h, 9003, pc, vc, 0.25, 0.4, 0.6, 0, 1, 0.9, 0.0, 0.0);
     }
     if (jet) {
-        const double e[3] = { 0, -alt + 1.0, -0.3 }, d[3] = { 0, -1, 0 };
+        double FxTestNum(const char* key);
+        static const double jh = FxTestNum("JetH") > 0 ? FxTestNum("JetH") : 1.0;   // (the nozzle's height over the ground [m])
+        const double e[3] = { 0, -alt + jh, -0.3 }, d[3] = { 0, -1, 0 };
         AtmoFX_SetJet(h, 9010, e, d, 800.0, 2500.0, 900.0, 0, 0.25, 0.04);
     }
     if (heat) {        // two nozzles on the back unit at ~900 K (the module's own glow source)

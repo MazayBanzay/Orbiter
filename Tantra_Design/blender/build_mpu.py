@@ -822,7 +822,9 @@ try:
             for yy in (ya + 0.55, 0.5 * (ya + yb), yb - 0.55):        # brackets from the deck frame
                 cyl(B, (sx * 1.42, yy, 1.55), (sx * 1.90, yy, FZ - 0.01), 0.04, MI["Metal"], 8)
                 box(B, (sx * 1.40 - 0.05, yy - 0.05, 1.50), (sx * 1.47 + 0.0, yy + 0.05, 1.60), MI["Metal"])
-        for yf in (-0.66, 4.34):                                       # mud flaps behind each pair
+        # mud flaps behind each pair - the MPU without the rearmost two (the user, 2026-10-22: to see how its rear wheels
+        # throw the dust, the D3D11 client's dust colliding with the mesh)
+        for yf in ((-0.66, 4.34) if VAR == "EMPU" else (-0.66,)):
             Q = [Vector((sx * 1.60, yf, 0.42)), Vector((sx * 2.28, yf, 0.42)), Vector((sx * 2.28, yf, FZ - 0.40)), Vector((sx * 1.60, yf, FZ - 0.40))]
             add_poly(B, Q, MI["Tread"]); add_poly(B, Q[::-1], MI["Tread"])
             box(B, (sx * 1.60 - 0.01, yf - 0.03, FZ - 0.48), (sx * 2.28 + 0.01, yf + 0.03, FZ - 0.40), MI["Metal"])

@@ -11,6 +11,8 @@ std::map<OBJHANDLE, std::vector<D3D11Lights::Volume>> g_vol;
 std::map<OBJHANDLE, std::vector<D3D11Lights::AreaLight>> g_area;
 std::map<OBJHANDLE, std::map<int, bool>> g_circuit;     // a circuit's state (absent: on)
 std::map<OBJHANDLE, std::vector<D3D11Lights::Opening>> g_open;
+std::map<OBJHANDLE, std::string> g_gi;                  // the vessels' radiosity files (SetRadiosity)
+std::map<OBJHANDLE, std::vector<float>> g_portal;       // their portals' open fractions (SetPortals)
 unsigned g_gen = 1;
 
 int SetInteriorVolumes(OBJHANDLE h, const D3D11Lights::Volume* v, int n)
@@ -54,7 +56,24 @@ int SetOpenings(OBJHANDLE h, const D3D11Lights::Opening* o, int n)
     LOGC("D3D11Lights: %s - %d opening(s)", oapiGetVesselInterface(h) ? oapiGetVesselInterface(h)->GetName() : "?", n);
     return n;
 }
-const D3D11Lights::Api API = { D3D11Lights::VERSION, SetInteriorVolumes, SetAreaLights, AreaLightOn, SetOpenings };
+int SetRadiosity(OBJHANDLE h, const char* file)
+{
+    if (!h) return 0;
+    std::lock_guard<std::mutex> lk(g_mx);
+    if (!file || !*file) g_gi.erase(h); else g_gi[h] = file;
+    g_gen++;
+    LOGC("D3D11Lights: %s - radiosity %s", oapiGetVesselInterface(h) ? oapiGetVesselInterface(h)->GetName() : "?", file && *file ? file : "(cleared)");
+    return file && *file ? 1 : 0;
+}
+int SetPortals(OBJHANDLE h, const float* open, int n)
+{
+    if (!h) return 0;
+    std::lock_guard<std::mutex> lk(g_mx);
+    n = std::clamp(n, 0, 8);
+    if (!open || !n) g_portal.erase(h); else g_portal[h].assign(open, open + n);
+    return n;     // (no generation step: sent as the doors move, read every frame)
+}
+const D3D11Lights::Api API = { D3D11Lights::VERSION, SetInteriorVolumes, SetAreaLights, AreaLightOn, SetOpenings, SetRadiosity, SetPortals };
 }
 
 DLLCLBK const D3D11Lights::Api* D3D11Lights_GetApi(int version)
@@ -79,5 +98,11 @@ unsigned LightsApiData(std::map<OBJHANDLE, std::vector<D3D11Lights::Volume>>* vo
 void LightsApiForget(OBJHANDLE h)
 {
     std::lock_guard<std::mutex> lk(g_mx);
-    g_vol.erase(h); g_area.erase(h); g_circuit.erase(h); g_open.erase(h); g_gen++;
+    g_vol.erase(h); g_area.erase(h); g_circuit.erase(h); g_open.erase(h); g_gi.erase(h); g_portal.erase(h); g_gen++;
+}
+void LightsApiGI(std::map<OBJHANDLE, std::string>* files, std::map<OBJHANDLE, std::vector<float>>* portals)
+{
+    std::lock_guard<std::mutex> lk(g_mx);
+    if (files) *files = g_gi;
+    if (portals) *portals = g_portal;
 }

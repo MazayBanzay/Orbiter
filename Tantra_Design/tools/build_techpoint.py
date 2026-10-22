@@ -22,18 +22,18 @@ MI = {}
 def mat(name, col, spec=0.15, emit=0.0, tex=None, alpha=1.0, power=20):
     MI[name] = len(MATS); MATS.append((name, col, spec, emit, tex, alpha, power)); return MI[name]
 mat("Panel", (1, 1, 1), 0.2, tex=("TVehicles\\tp_panel.dds", 3.0))
-mat("Lining", (1, 1, 1), 0.3, tex=("TVehicles\\tp_lining.dds", 1.0))   # own: semi-gloss painted panels (smoothness map)
+mat("Lining", (1, 1, 1), 0.3, tex=("TVehicles\\tp_lining.dds", 1.0))   # light ceramic-polymer lining, semi-gloss (albedo ~0.6)
 mat("Floor", (1, 1, 1), 0.1, tex=("TVehicles\\tp_floor.dds", 1.2))
-mat("Steel", (0.62, 0.65, 0.70), 0.5, tex=("MPU\\mpu_metal.dds", 0.5))   # the crane: steel grey (the user: not gold)
+mat("Steel", (0.80, 0.82, 0.86), 0.5, tex=("TVehicles\\tp_alloy.dds", 1.0))   # the crane: Ti-HEA alloy, cool grey (the user: not gold)
 mat("Sinter", (1, 1, 1), 0.1, tex=("TVehicles\\tp_sinter.dds", 2.0))
-mat("Dark", (0.75, 0.78, 0.82), 0.25, tex=("MPU\\mpu_composite.dds", 1.0))
-mat("Metal", (1, 1, 1), 0.5, tex=("MPU\\mpu_metal.dds", 0.5))
+mat("Dark", (1, 1, 1), 0.3, tex=("TVehicles\\tp_cnt.dds", 0.5))    # CNT composite: dark twill under a clear ceramic coat
+mat("Metal", (1, 1, 1), 0.5, tex=("TVehicles\\tp_alloy.dds", 0.5))   # Ti high-entropy alloy, brushed
 mat("Deck", (1, 1, 1), 0.3, tex=("MPU\\mpu_deck.dds", 1.0))
 mat("Seat", (1, 1, 1), 0.08, tex=("MPU\\mpu_seat.dds", 0.6))
 mat("Red", (0.72, 0.12, 0.10), 0.2)
 mat("Warn", (0.86, 0.64, 0.08), 0.2)
 mat("Black", (0.05, 0.05, 0.055), 0.2)
-mat("Glass", (0.05, 0.09, 0.12), 0.8, alpha=0.18, power=60)
+mat("Glass", (0.04, 0.06, 0.07), 0.8, alpha=0.12, power=90)   # transparent ceramic (spinel): nearly clear, sharp reflection
 mat("O2", (0.36, 0.62, 0.86), 0.4)        # oxygen bottles: light blue (GOST 949)
 mat("N2", (0.07, 0.07, 0.08), 0.4)        # nitrogen: black
 mat("Green", (0.20, 0.42, 0.30), 0.2)     # the water line
@@ -291,14 +291,33 @@ box(lin, (-11.60, LCY - 0.02, 0.80), (-8.40, LCY, 4.00), "y")
 box(lin, (-4.00, LCY - 0.02, 7.00), (-0.40, LCY, 10.20), "y")
 lampHall = grp("LampHall", MI["LampHall"]); lampRooms = grp("LampRooms", MI["LampRooms"])
 lampL1 = grp("LampLock1", MI["LampLock1"]); lampL2 = grp("LampLock2", MI["LampLock2"])
-HALL_LAMPS = [(x, z) for z in (6.4, 9.6) for x in (-14.4, -11.6, -8.8, -6.0)]   # 8 panels: ~330 lx in the hall (D3D11 area lamps)
-ROOM_LAMPS = [(x, z) for z in (9.85, 6.15) for x in (-20.2, -17.4)]
+HALL_LAMPS = [(x, z) for z in (6.4, 9.6) for x in (-13.0, -7.0)]   # 4 long panels (2.0 x 0.36 m), 8000 lm each: ~300 lx
+ROOM_LAMPS = [(-18.8, 9.85), (-18.8, 6.15)]                          # one panel (1.4 x 0.3 m) per room
+HL, HW_, RL, RW = 0.98, 0.18, 0.68, 0.15                               # the glowing faces' half-sizes
 for x, z in HALL_LAMPS:
-    box(dark, (x - 0.75, CY - 0.10, z - 0.20), (x + 0.75, CY - 0.02, z + 0.20), "xXzZy")
-    box(lampHall, (x - 0.68, CY - 0.11, z - 0.13), (x + 0.68, CY - 0.10, z + 0.13), "y")
+    box(dark, (x - HL - 0.07, CY - 0.10, z - HW_ - 0.07), (x + HL + 0.07, CY - 0.02, z + HW_ + 0.07), "xXzZy")
+    box(lampHall, (x - HL, CY - 0.11, z - HW_), (x + HL, CY - 0.10, z + HW_), "y")
 for x, z in ROOM_LAMPS:
-    box(dark, (x - 0.55, CY - 0.10, z - 0.18), (x + 0.55, CY - 0.02, z + 0.18), "xXzZy")
-    box(lampRooms, (x - 0.48, CY - 0.11, z - 0.11), (x + 0.48, CY - 0.10, z + 0.11), "y")
+    box(dark, (x - RL - 0.07, CY - 0.10, z - RW - 0.07), (x + RL + 0.07, CY - 0.02, z + RW + 0.07), "xXzZy")
+    box(lampRooms, (x - RL, CY - 0.11, z - RW), (x + RL, CY - 0.10, z + RW), "y")
+# the duty (watch) light: warm low strips on the walls 0.3 m over the floor - the half-light of a night watch, nothing glares
+# (circuit ЩО-1 «дежурное» / БЩУ «вахта»): (room, centre, the wall's inward normal, length)
+DUTY_STRIPS = [(1, (-12.5, 11.60), (0, 0, -1), 3.0), (1, (-7.0, 11.60), (0, 0, -1), 3.0), (1, (-15.60, 8.0), (1, 0, 0), 2.0),
+               (2, (-21.60, 9.85), (1, 0, 0), 1.6), (3, (-21.60, 6.15), (1, 0, 0), 1.6),
+               (4, (-8.40, 2.4), (-1, 0, 0), 1.0), (5, (-2.2, 7.00), (0, 0, 1), 1.0)]
+lampDutyIn = grp("LampDutyIn", MI["LampDuty"])
+for room, (u, v), n, L in DUTY_STRIPS:
+    y = FY + 0.30
+    if n[2]:
+        z = v + n[2] * 0.0
+        box(dark, (u - L / 2 - 0.04, y - 0.05, min(z, z + n[2] * 0.05)), (u + L / 2 + 0.04, y + 0.05, max(z, z + n[2] * 0.05)), "xXzZyY")
+        zf = z + n[2] * 0.051
+        poly(lampDutyIn, [(u - L / 2, y - 0.02, zf), (u + L / 2, y - 0.02, zf), (u + L / 2, y + 0.02, zf), (u - L / 2, y + 0.02, zf)], n)
+    else:
+        x = u
+        box(dark, (min(x, x + n[0] * 0.05), y - 0.05, v - L / 2 - 0.04), (max(x, x + n[0] * 0.05), y + 0.05, v + L / 2 + 0.04), "xXzZyY")
+        xf = x + n[0] * 0.051
+        poly(lampDutyIn, [(xf, y - 0.02, v - L / 2), (xf, y - 0.02, v + L / 2), (xf, y + 0.02, v + L / 2), (xf, y + 0.02, v - L / 2)], n)
 for g, (x, z) in ((lampL1, (-10.0, 2.4)), (lampL2, (-2.2, 8.6))):
     box(dark, (x - 0.45, LCY - 0.10, z - 0.45), (x + 0.45, LCY - 0.02, z + 0.45), "xXzZy")
     box(g, (x - 0.38, LCY - 0.11, z - 0.38), (x + 0.38, LCY - 0.10, z + 0.38), "y")
@@ -559,7 +578,7 @@ PANELS = [
     ("ЩУ ВА-1 (двор)", (GX1 + 1.10, 1.40, HZ0 - 0.32), (0, 0, -1), (0.48, 0.24), (512, 256),
      [("1 - открыть ворота", "1 - open the gate"), ("2 - закрыть ворота", "2 - close the gate"), ("3 - стоп", "3 - stop")]),
     ("БЩУ ТП", (-10.20, FY + 1.03, 11.04), (0, 0, -1), (1.10, 0.48), (1024, 448),
-     [("1 - освещение холла", "1 - hall lighting"), ("2 - освещение помещений", "2 - rooms' lighting"), ("3 - прожектор двора", "3 - yard flood"),
+     [("1 - освещение холла", "1 - hall lighting"), ("2 - освещение помещений", "2 - rooms' lighting"), ("3 - вахта: полумрак", "3 - watch: half-light"),
       ("4 - вызов ШК-1", "4 - call airlock 1"), ("5 - вызов ШК-2", "5 - call airlock 2"), ("6 - сброс сигнализации", "6 - reset the alarm")]),
 ]
 caps, screens = [], []                     # [(panel, k, group, material index, pos, normal, label ru, en)], [(panel, group, slot, w, h)]
@@ -633,10 +652,15 @@ VOLUMES = [((-15.6, FY, 4.4, -4.4, CY, 11.6), 5.0, 8.0, 0.5, 1), ((-21.6, FY, 8.
            ((-21.6, FY, 4.4, -16.0, CY, 7.9), 5.0, 8.0, 0.5, 3), ((-11.6, FY, 0.8, -8.4, LCY, 4.0), 5.0, 8.0, 0.4, 4),
            ((-4.0, FY, 7.0, -0.4, LCY, 10.2), 5.0, 8.0, 0.4, 5), ((HX0 + HT, 0.0, HZ0 + HT, HX1 - HT, HW + HR, HZ1 - HT), 4.0, 9.0, 2.0, 6)]
 AREA = []      # (room / circuit, centre, half-axis x, half-axis z, lumen, rgb)
-for x, z in HALL_LAMPS: AREA.append((1, (x, CY - 0.112, z), (0.68, 0, 0), (0, 0, 0.13), 4000.0, (1.0, 0.95, 0.88)))
-for x, z in ROOM_LAMPS: AREA.append((2 if z > 8 else 3, (x, CY - 0.112, z), (0.48, 0, 0), (0, 0, 0.11), 3000.0, (1.0, 0.95, 0.88)))
+for x, z in HALL_LAMPS: AREA.append((1, (x, CY - 0.112, z), (HL, 0, 0), (0, 0, HW_), 8000.0, (1.0, 0.95, 0.88)))
+for x, z in ROOM_LAMPS: AREA.append((2 if z > 8 else 3, (x, CY - 0.112, z), (RL, 0, 0), (0, 0, RW), 4500.0, (1.0, 0.95, 0.88)))
 AREA.append((4, (-10.0, LCY - 0.112, 2.4), (0.38, 0, 0), (0, 0, 0.38), 3500.0, (1.0, 0.97, 0.92)))
 AREA.append((5, (-2.2, LCY - 0.112, 8.6), (0.38, 0, 0), (0, 0, 0.38), 3500.0, (1.0, 0.97, 0.92)))
+# the duty strips: circuit 10 + room (the module switches them with the duty light); the lit face = cross(ex, ey) = n
+for room, (u, v), n, L in DUTY_STRIPS:
+    y = FY + 0.30; lm = 60.0 * L                                        # ~60 lm a metre: a dim warm glow
+    if n[2]: AREA.append((10 + room, (u, y, v + n[2] * 0.052), (0, 0.02, 0), (L / 2 * -n[2], 0, 0), lm, (1.0, 0.70, 0.42)))
+    else: AREA.append((10 + room, (u + n[0] * 0.052, y, v), (0, 0.02, 0), (0, 0, L / 2 * n[0]), lm, (1.0, 0.70, 0.42)))
 LIGHTS = []   # (circuit, spot 1 / point 0, pos, dir, range m, umbra deg, penumbra deg, colour (r, g, b), intensity)
 for x, z in HALL_LAMPS: LIGHTS.append(("LampHall", 0, (x, CY - 0.25, z), (0, -1, 0), 9.0, 0, 0, (1.0, 0.95, 0.86), 1.0))
 for x, z in ROOM_LAMPS: LIGHTS.append(("LampRooms", 0, (x, CY - 0.25, z), (0, -1, 0), 7.0, 0, 0, (1.0, 0.95, 0.86), 0.8))
@@ -722,8 +746,9 @@ box(exitg, (-10.35, FY + DH + 0.62, 4.40), (-9.65, FY + DH + 0.80, 4.48), "xXZyY
 box(exitg, (-4.48, FY + DH + 0.62, 8.65), (-4.40, FY + DH + 0.80, 9.35), "xzZyY")                  # over ШК-2's inner door
 cyl(red_g, "y", (-11.20, 4.62), 0.08, FY + 0.05, FY + 0.60, 12); cyl(blk, "y", (-11.20, 4.62), 0.03, FY + 0.60, FY + 0.70, 8)
 for x, z in HALL_LAMPS:                                                # the diffuser's lip round each panel's glowing face
-    for lo, hi in (((x - 0.72, CY - 0.13, z - 0.17), (x + 0.72, CY - 0.10, z - 0.13)), ((x - 0.72, CY - 0.13, z + 0.13), (x + 0.72, CY - 0.10, z + 0.17)),
-                   ((x - 0.72, CY - 0.13, z - 0.13), (x - 0.68, CY - 0.10, z + 0.13)), ((x + 0.68, CY - 0.13, z - 0.13), (x + 0.72, CY - 0.10, z + 0.13))):
+    a, b = HL, HW_
+    for lo, hi in (((x - a - 0.04, CY - 0.13, z - b - 0.04), (x + a + 0.04, CY - 0.10, z - b)), ((x - a - 0.04, CY - 0.13, z + b), (x + a + 0.04, CY - 0.10, z + b + 0.04)),
+                   ((x - a - 0.04, CY - 0.13, z - b), (x - a, CY - 0.10, z + b)), ((x + a, CY - 0.13, z - b), (x + a + 0.04, CY - 0.10, z + b))):
         box(metal, lo, hi, "xXzZy")
 
 # ======================= write the mesh =======================
@@ -832,3 +857,58 @@ print("floors %d, solids in %d, out %d, caps %d, panels %d, buttons %d, screens 
 # the signs' atlas texts, for make_base_textures.py (it draws them with Jura)
 with open(os.path.join(os.path.dirname(__file__), "techpoint_signs.txt"), "w", encoding="utf-8") as f:
     for txt, w_, h_, _, _ in SIGNS: f.write("%s\t%.2f\t%.2f\n" % (txt, w_, h_))
+
+# ======================= the radiosity's inputs (Tantra_Design/blender/gi_techpoint.py -> Meshes\TVehicles\TechPoint.gi) =======================
+# The D3D11 client's real-time radiosity (Enlighten's scheme: precomputed light transport between surface patches, the light
+# itself every frame): what the precompute needs besides the mesh - each material's diffuse albedo (the colour x the
+# texture's mean, linear: the client samples the textures as sRGB; metals bounce their colour, rougher), which groups do
+# not stop or reflect light (glass, the lamps' glowing faces, the screens) or move (the door leaves, the gate's: the
+# portals, open or shut each frame), the lamps, the rooms' probe grids, the Moon's ground round the point
+import json
+def tex_mean_lin(rel):
+    try:
+        from PIL import Image
+        import numpy as np
+        a = np.asarray(Image.open(os.path.join(ROOT, "Textures", rel)).convert("RGB"), dtype=np.float64) / 255.0
+        a = np.where(a <= 0.04045, a / 12.92, ((a + 0.055) / 1.055) ** 2.4)
+        return [float(x) for x in a.reshape(-1, 3).mean(0)]
+    except Exception as e:
+        print("  (albedo: %s unreadable - %s; 0.5)" % (rel, e)); return [0.5, 0.5, 0.5]
+def metal_mean(rel):
+    p = os.path.join(ROOT, "Textures", rel.replace(".dds", "_metl.dds"))
+    if not os.path.exists(p): return 0.0
+    try:
+        from PIL import Image
+        import numpy as np
+        return float(np.asarray(Image.open(p).convert("RGB"), dtype=np.float64)[..., 0].mean() / 255.0)
+    except Exception: return 0.0
+alb = []
+for name, col, sp, em, tex, al, pw in MATS:
+    a = list(col)
+    if tex: t = tex_mean_lin(tex[0]); a = [a[k] * t[k] for k in range(3)]; m = metal_mean(tex[0])
+    else: m = 0.0
+    a = [x * (1 - m) + x * m * 0.5 for x in a]                       # a rough metal sends back about half its colour, not a mirror's
+    alb.append({"name": name, "albedo": [round(min(x, 0.95), 4) for x in a], "emit": em > 0, "glass": al < 0.5})
+AREA_SKIP = ("LampHall", "LampRooms", "LampLock1", "LampLock2")     # (under the D3D11 client these rooms are lit by the area lamps)
+gi_lamps = [{"type": "rect", "c": c, "ex": ex, "ey": ey, "lumen": lm, "circuit": r} for r, c, ex, ey, lm, rgb in AREA]
+for circ, spot, pos, d, rng, umb, pen, col, inten in LIGHTS:
+    if circ in AREA_SKIP: continue
+    gi_lamps.append({"type": "spot" if spot else "point", "c": pos, "dir": d, "range": rng, "cosOut": math.cos(math.radians(pen) / 2) if spot else -1.0})
+portals = []
+for name, run, c0, c1, u0, u1, sgn in DOORS:                          # a door: its leaf's mid-plane, the opening's rectangle
+    portals.append({"name": name, "axis": 2 if run == "x" else 0, "c": 0.5 * (c0 + c1), "u": [u0, u1] if run == "x" else [u0, u1], "v": [FY, FY + DH], "half": LEAF_T / 2, "albedo": alb[MI["Metal"]]["albedo"]})
+portals.append({"name": "Gate", "axis": 2, "c": 0.5 * (GZ0 + GZ1), "u": [GX0, GX1], "v": [0.0, GH], "half": GL_T / 2, "albedo": alb[MI["Panel"]]["albedo"]})
+grids = []
+for b, e0, e1, bl, r in VOLUMES:
+    cell = 1.0 if r == 6 else 0.5                                     # (the hangar: 1 m - its light varies slowly; 0.75 m cost 2x the data)
+    lo, hi = [min(b[k], b[k + 3]) for k in range(3)], [max(b[k], b[k + 3]) for k in range(3)]
+    dims = [max(1, int(round((hi[k] - lo[k]) / cell))) for k in range(3)]
+    grids.append({"room": r, "lo": lo, "hi": hi, "dims": dims})
+groups_gi = [{"label": g[0], "mat": g[1], "door": g[0].startswith("Door") or g[0].startswith("GateLeaf")} for g in used]
+json.dump({"materials": alb, "groups": groups_gi, "lamps": gi_lamps, "portals": portals, "grids": grids,
+           "windows": [list(w_) for w_ in wins],
+           "hangar_floor": [HX0 + HT, HZ0 + HT, HX1 - HT, HZ1 - HT], "regolith": 0.12,
+           "yard": [-36.0, -30.0, 40.0, 34.0],
+           "footprints": [[-22.15, 3.85, -3.85, 12.15], [-12.15, 0.25, -7.85, 4.0], [-4.0, 6.45, -0.40, 10.75], [HX0, HZ0, HX1, HZ1]]},
+          open(os.path.join(ROOT, "Tantra_Design", "base", "techpoint_gi.json"), "w"), indent=1)
+print("radiosity inputs: %d lamps, %d portals, %d grids -> Tantra_Design/base/techpoint_gi.json" % (len(gi_lamps), len(portals), len(grids)))
